@@ -251,6 +251,7 @@ struct DifferentialValueGraph {
 		probes: [DifferentialValueProbe],
 		samples: [DifferentialValueSample] = [],
 		exemptions: [DifferentialValueDifference] = [],
+		judgesRetention: Bool = false,
 	) {
 		self.name = name
 		self.feature = feature
@@ -259,6 +260,7 @@ struct DifferentialValueGraph {
 		knownRightProbes = nil
 		self.samples = samples
 		self.exemptions = exemptions
+		self.judgesRetention = judgesRetention
 	}
 
 	/// A graph whose one path builds each pair's two expressions.
@@ -276,6 +278,7 @@ struct DifferentialValueGraph {
 		knownRightProbes = probePairs.map { DifferentialValueProbe(name: $0.name, expression: $0.knownRightExpression) }
 		self.samples = samples
 		self.exemptions = exemptions
+		judgesRetention = false
 	}
 
 	let name: String
@@ -288,6 +291,9 @@ struct DifferentialValueGraph {
 	/// The sample values each path's describer calls an instantiator with forwarded properties with.
 	let samples: [DifferentialValueSample]
 	let exemptions: [DifferentialValueDifference]
+	/// Whether each probe's describer also judges what each wrapper the probe's value holds keeps alive once the value is
+	/// released (`DifferentialValueRetentionDifference`).
+	let judgesRetention: Bool
 
 	/// Whether the graph holds probe pairs in one path.
 	var isPaired: Bool {
@@ -343,12 +349,120 @@ struct DifferentialValueDifference: Equatable, CustomStringConvertible {
 	}
 }
 
+/// What a graph that judges retention (`DifferentialValueGraph.judgesRetention`) prints for each experiment, and how the
+/// comparator reads it.
+enum DifferentialValueRetention {
+	/// What each experiment's line starts with: `retained holding <path>: <Type> (2); …`, or `…: nothing`. Types are
+	/// separated by semicolons, since a generic type's name holds commas.
+	static let linePrefix = "retained holding "
+
+	/// The name of the experiment that holds no wrapper.
+	static let holdingNothing = "nothing"
+
+	/// What the comparator found of one probe's retention experiments.
+	struct Judgment: Equatable {
+		/// Each type of which the feature path keeps more instances alive than the known-right path, in an experiment both
+		/// paths ran.
+		var differences = [DifferentialValueRetentionDifference]()
+		/// The experiments holding a wrapper that both paths ran: the probe's retention is judged only when there is one.
+		var pairedWrapperExperimentCount = 0
+		/// The experiments only one path ran, which judge nothing.
+		var unpairedExperimentCount = 0
+	}
+
+	/// The experiments of a probe's description, in order, each with the instances it keeps alive per type.
+	static func experiments(in lines: [Substring]) -> [(name: String, kept: [String: Int])] {
+		var experiments = [(name: String, kept: [String: Int])]()
+		for line in lines {
+			let rest = line.dropFirst(linePrefix.count)
+			guard let separator = rest.range(of: ": ") else { continue }
+			var counts = [String: Int]()
+			for entry in rest[separator.upperBound...].components(separatedBy: "; ") where entry.hasSuffix(")") {
+				guard let open = entry.range(of: " (", options: .backwards), let count = Int(entry[open.upperBound...].dropLast()) else { continue }
+				counts[String(entry[..<open.lowerBound])] = count
+			}
+			experiments.append((String(rest[..<separator.lowerBound]), counts))
+		}
+		return experiments
+	}
+
+	/// For each experiment both descriptions hold, each type of which the feature path keeps more instances alive than the
+	/// known-right path, in the order of the feature path's experiments and then of the types' names; with how many
+	/// experiments holding a wrapper both paths ran, and how many only one ran.
+	static func judgment(probe: String, feature: [Substring], knownRight: [Substring]) -> Judgment {
+		let featureExperiments = experiments(in: feature)
+		let knownRightExperiments = experiments(in: knownRight)
+		let featureNames = Set(featureExperiments.map(\.name))
+		var knownRightCounts = [String: [String: Int]]()
+		for experiment in knownRightExperiments {
+			knownRightCounts[experiment.name] = experiment.kept
+		}
+		var judgment = Judgment()
+		judgment.unpairedExperimentCount = knownRightExperiments.filter { !featureNames.contains($0.name) }.count
+		for (experiment, kept) in featureExperiments {
+			guard let knownRightKept = knownRightCounts[experiment] else {
+				judgment.unpairedExperimentCount += 1
+				continue
+			}
+			if experiment != holdingNothing {
+				judgment.pairedWrapperExperimentCount += 1
+			}
+			for (typeName, count) in kept.sorted(by: { $0.key < $1.key }) where count > knownRightKept[typeName, default: 0] {
+				judgment.differences.append(DifferentialValueRetentionDifference(probe: probe, holding: experiment, typeName: typeName, featureCount: count, knownRightCount: knownRightKept[typeName, default: 0]))
+			}
+		}
+		return judgment
+	}
+}
+
+/// A type of which a probe's value, built by the feature path, keeps more instances alive than the known-right path's
+/// once the value is released while something holds `holding` – `nothing`, or the wrapper the labels name, with what one
+/// call of it builds: the feature retains what the known-right path frees.
+struct DifferentialValueRetentionDifference: Equatable, CustomStringConvertible {
+	let probe: String
+	let holding: String
+	let typeName: String
+	let featureCount: Int
+	let knownRightCount: Int
+
+	/// The type, what is held and both counts are written in one run of text after the probe's name, so that a known
+	/// issue's signature can name them all.
+	var description: String {
+		"probe `\(probe)` keeps \(typeName) alive holding \(holding) once the probe's value is released: \(featureCount) on the feature path, \(knownRightCount) on the known-right path"
+	}
+}
+
 /// What the comparator found: each path's canonical description, and every difference between them that the
 /// comparison does not exempt, probe by probe. The paths agree when there is none.
 struct DifferentialValueComparison {
+	init(featureDescription: String, knownRightDescription: String, differences: [DifferentialValueDifference], retentionJudgments: [(probe: String, judgment: DifferentialValueRetention.Judgment)] = []) {
+		self.featureDescription = featureDescription
+		self.knownRightDescription = knownRightDescription
+		self.differences = differences
+		self.retentionJudgments = retentionJudgments
+	}
+
 	let featureDescription: String
 	let knownRightDescription: String
 	let differences: [DifferentialValueDifference]
+	/// For a graph that judges retention, what the comparator found of each probe's retention experiments, by probe name,
+	/// in the order of the probes.
+	let retentionJudgments: [(probe: String, judgment: DifferentialValueRetention.Judgment)]
+
+	/// For a graph that judges retention, each type the feature path keeps alive more of than the known-right path.
+	var retentionDifferences: [DifferentialValueRetentionDifference] {
+		retentionJudgments.flatMap(\.judgment.differences)
+	}
+
+	/// The probes whose retention the comparator judged: those with an experiment holding a wrapper that both paths ran.
+	var retentionJudgedProbes: [String] {
+		retentionJudgments.filter { $0.judgment.pairedWrapperExperimentCount > 0 }.map(\.probe)
+	}
+
+	/// How many retention experiments only one path ran, over every probe.
+	var unpairedRetentionExperimentCount: Int {
+		retentionJudgments.reduce(0) { $0 + $1.judgment.unpairedExperimentCount }
+	}
 
 	/// The differences that are not among `exemptions`: an exemption removes exactly the differences equal to it,
 	/// with everything beneath its node, and every other difference remains.
@@ -530,8 +644,16 @@ enum DifferentialValueOracle {
 
 	/// One graph's probes, and the sample values its describer calls an instantiator with forwarded properties with.
 	private struct ProbeGroup {
+		init(probes: [DifferentialValueProbe], samples: [DifferentialValueSample], judgesRetention: Bool = false) {
+			self.probes = probes
+			self.samples = samples
+			self.judgesRetention = judgesRetention
+		}
+
 		let probes: [DifferentialValueProbe]
 		let samples: [DifferentialValueSample]
+		/// Whether each probe's describer also runs the retention experiments (`DifferentialValueGraph.judgesRetention`).
+		let judgesRetention: Bool
 	}
 
 	private struct Runtime {
@@ -646,7 +768,7 @@ enum DifferentialValueOracle {
 				featureProbes = pairedProbes.enumerated().filter { $0.offset.isMultiple(of: 2) }.map(\.element)
 				knownRightProbes = pairedProbes.enumerated().filter { !$0.offset.isMultiple(of: 2) }.map(\.element)
 			} else {
-				let probeGroups = graphs.map { ProbeGroup(probes: $0.probes, samples: $0.samples) }
+				let probeGroups = graphs.map { ProbeGroup(probes: $0.probes, samples: $0.samples, judgesRetention: $0.judgesRetention) }
 				featureProbes = try await describedProbes(of: merging(graphs.map(\.feature)), role: .feature, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
 				knownRightProbes = try await describedProbes(of: merging(graphs.map(\.knownRight)), role: .knownRight, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
 			}
@@ -659,6 +781,9 @@ enum DifferentialValueOracle {
 					comparison.compare()
 					return comparison
 				}
+				let retentionJudgments = graph.judgesRetention ? zip(featureProbes[range], knownRightProbes[range]).map { feature, knownRight in
+					(probe: knownRight.name, judgment: DifferentialValueRetention.judgment(probe: knownRight.name, feature: feature.retentionLines, knownRight: knownRight.retentionLines))
+				} : []
 				let spentTraversals = probeComparisons.flatMap(\.spentTraversals).filter { !graph.exemptions.contains($0.difference) }
 				if let firstSpentTraversal = spentTraversals.first {
 					return .failure(error(spending: firstSpentTraversal, otherSpentTraversalCount: spentTraversals.count - 1, limits: limits))
@@ -667,6 +792,7 @@ enum DifferentialValueOracle {
 						featureDescription: featureProbes[range].map(\.text).joined(),
 						knownRightDescription: knownRightProbes[range].map(\.text).joined(),
 						differences: probeComparisons.flatMap(\.differences).filter { !graph.exemptions.contains($0) },
+						retentionJudgments: retentionJudgments,
 					))
 				}
 			}
@@ -912,7 +1038,7 @@ enum DifferentialValueOracle {
 			(["describer.beginGraph()"] + group.samples.map { sample in
 				"describer.registerSample(of: (\(sample.type)).self) { \(sample.expression) }"
 			} + group.probes.map { probe in
-				"describer.describe(probe: \(swiftStringLiteral(of: probe.name))) { (\(probe.expression(in: role))) as Any }"
+				"describer.describe(probe: \(swiftStringLiteral(of: probe.name))\(group.judgesRetention ? ", judgingRetention: true" : "")) { (\(probe.expression(in: role))) as Any }"
 			}).joined(separator: "\n")
 		}.joined(separator: "\n")
 		return """
@@ -1091,7 +1217,9 @@ enum DifferentialValueOracle {
 			samples[ObjectIdentifier(type)] = { make() }
 		}
 
-		public func describe(probe name: String, value: () -> Any) {
+		/// - Parameter judgingRetention: Whether to judge, after describing the probe's value, what each SafeDI wrapper it
+		///   holds keeps alive once the value is released (`describeRetention(of:)`).
+		public func describe(probe name: String, judgingRetention: Bool = false, value: () -> Any) {
 			alarm(probeTimeLimitInSeconds)
 			probeName = name
 			numbersByIdentity.removeAll()
@@ -1104,6 +1232,162 @@ enum DifferentialValueOracle {
 			describe(probeValue, label: "", owner: "probe", indent: 0)
 			describeDeferredInstances()
 			self.probeValue = nil
+			if judgingRetention {
+				describeRetention(of: value)
+			}
+		}
+
+		// MARK: Retention
+
+		/// A class instance a retention experiment met, which the experiment does not keep alive.
+		private struct WeaklyHeldObject {
+			weak var object: AnyObject?
+			let typeName: String
+		}
+
+		/// How many of the wrappers a probe's value holds `describeRetention(of:)` holds, one experiment each, at most.
+		private static let retentionExperimentsPerProbe = 24
+
+		/// How many values the walk for a probe's wrappers (`retentionTargets(of:)`) visits at most, since it follows every
+		/// way to an instance a value shares.
+		private static let retentionWalkVisitLimit = 4_096
+
+		/// What the line of each retention experiment starts with, which the comparator reads apart from the description.
+		private static let retentionLinePrefix = "\#(DifferentialValueRetention.linePrefix)"
+
+		/// Builds the probe's value again for each experiment, holds nothing or one SafeDI wrapper the value holds
+		/// through stored properties, with what one call of it builds or its instance, releases the value, and prints,
+		/// per type, how many of the class instances the value and what is held hold through stored properties are
+		/// still alive though what is held does not reach them through stored properties: `retained holding <path>:
+		/// <Type> (2); …`. The wrappers are taken in the order a walk of the value's stored properties meets them, once
+		/// along each way to them, and named by the labels on that way, so the two paths' experiments pair by that name
+		/// whichever instances either path shares. Instances only a closure holds are not counted.
+		private func describeRetention(of make: () -> Any) {
+			emitRetention(holdingWrapperAt: nil, named: "nothing", make: make)
+			for (index, path) in retentionTargetPaths(of: make).enumerated() {
+				emitRetention(holdingWrapperAt: index, named: path, make: make)
+			}
+		}
+
+		private func retentionTargetPaths(of make: () -> Any) -> [String] {
+			let value = make()
+			return Self.retentionTargets(of: value).map(\.path)
+		}
+
+		private func emitRetention(holdingWrapperAt index: Int?, named name: String, make: () -> Any) {
+			let experiment = retentionExperiment(holdingWrapperAt: index, make: make)
+			// What the experiment holds stays alive until every instance is counted. An instance that what is held reaches
+			// through stored properties is held, not kept alive, so that a path whose held value holds more instances, which
+			// the description reports, keeps no more alive for it.
+			let countsByType = withExtendedLifetime(experiment.held) {
+				var heldObjects = [ObjectIdentifier: WeaklyHeldObject]()
+				for held in experiment.held {
+					collectWeaklyHeldObjects(of: held, into: &heldObjects)
+				}
+				var countsByType = [String: Int]()
+				for object in experiment.objects {
+					guard let instance = object.object, heldObjects[ObjectIdentifier(instance)] == nil else { continue }
+					countsByType[object.typeName, default: 0] += 1
+				}
+				return countsByType
+			}
+			let kept = countsByType.sorted { $0.key < $1.key }.map { "\($0.key) (\($0.value))" }.joined(separator: "; ")
+			emit("\(Self.retentionLinePrefix)\(name): \(kept.isEmpty ? "nothing" : kept)")
+		}
+
+		/// Builds the probe's value, notes every class instance it holds through stored properties, and returns what the
+		/// experiment holds, so that the value is released when this function returns.
+		private func retentionExperiment(holdingWrapperAt index: Int?, make: () -> Any) -> (objects: [WeaklyHeldObject], held: [Any]) {
+			let value = make()
+			var objects = [ObjectIdentifier: WeaklyHeldObject]()
+			collectWeaklyHeldObjects(of: value, into: &objects)
+			var held = [Any]()
+			let targets = index == nil ? [] : Self.retentionTargets(of: value)
+			if let index, index < targets.count {
+				let wrapper = targets[index].wrapper
+				held.append(wrapper)
+				switch wrapper.wrapperTraversal(samples: samples) {
+				case let .instantiate(instantiate, _):
+					let built = instantiate()
+					collectWeaklyHeldObjects(of: built, into: &objects)
+					held.append(built)
+				case let .readInstanceLast(read, _):
+					let instance = read()
+					collectWeaklyHeldObjects(of: instance, into: &objects)
+					held.append(instance)
+				case .notTraversed:
+					break
+				}
+			}
+			return (Array(objects.values), held)
+		}
+
+		/// The SafeDI wrappers `value` holds through stored properties, in the order a walk of its stored properties meets
+		/// them, without calling or reading any, each named by the labels on its way, at most
+		/// `retentionExperimentsPerProbe`. The walk follows every way to an instance, ending a way only where it meets an
+		/// instance it is already inside, so that a wrapper is named by each way to it whether or not a path shares the
+		/// instances on those ways: two paths whose values agree name the same wrappers alike, and their experiments pair.
+		/// It stops after `retentionWalkVisitLimit` visits, at the same place on both paths when their values agree. A set's
+		/// or a dictionary's elements are left out, since hash order would decide their order.
+		private static func retentionTargets(of value: Any) -> [(path: String, wrapper: any DescribedWrapper)] {
+			var targets = [(path: String, wrapper: any DescribedWrapper)]()
+			var instancesOnTheWay = Set<ObjectIdentifier>()
+			var visitCount = 0
+			func visit(_ value: Any, path: [String]) {
+				guard targets.count < retentionExperimentsPerProbe, visitCount < retentionWalkVisitLimit else { return }
+				visitCount += 1
+				if let wrapper = value as? any DescribedWrapper {
+					targets.append((path.joined(separator: "."), wrapper))
+				} else if type(of: value) == AnyHashable.self, let hashable = value as? AnyHashable {
+					visit(hashable.base, path: path)
+				} else {
+					let mirror = Mirror(reflecting: value)
+					switch mirror.displayStyle {
+					case .class, .foreignReference:
+						let identifier = ObjectIdentifier(value as AnyObject)
+						guard instancesOnTheWay.insert(identifier).inserted else { return }
+						let children = mirrorsOfClassHierarchy(startingAt: mirror).reversed().flatMap { Array($0.children) }
+						for (index, child) in children.enumerated() where child.label != creationStampLabel {
+							visit(child.value, path: path + [child.label ?? "\(index)"])
+						}
+						instancesOnTheWay.remove(identifier)
+					case .optional:
+						if let some = mirror.children.first {
+							visit(some.value, path: path)
+						}
+					case .struct, .tuple, .collection, .enum:
+						for (index, child) in mirror.children.enumerated() {
+							visit(child.value, path: path + [child.label ?? "\(index)"])
+						}
+					case .set, .dictionary, nil:
+						break
+					@unknown default:
+						break
+					}
+				}
+			}
+			visit(value, path: [])
+			return targets
+		}
+
+		/// Notes each class instance `value` is or holds through stored properties, wrappers' included, without keeping
+		/// any alive.
+		private func collectWeaklyHeldObjects(of value: Any, into objects: inout [ObjectIdentifier: WeaklyHeldObject]) {
+			let mirror = Mirror(reflecting: value)
+			if type(of: value) == AnyHashable.self, let hashable = value as? AnyHashable {
+				collectWeaklyHeldObjects(of: hashable.base, into: &objects)
+			} else if mirror.displayStyle == .class || mirror.displayStyle == .foreignReference {
+				let object = value as AnyObject
+				guard objects[ObjectIdentifier(object)] == nil else { return }
+				objects[ObjectIdentifier(object)] = WeaklyHeldObject(object: object, typeName: typeName(of: value))
+				for child in Self.mirrorsOfClassHierarchy(startingAt: mirror).flatMap({ Array($0.children) }) {
+					collectWeaklyHeldObjects(of: child.value, into: &objects)
+				}
+			} else {
+				for child in mirror.children {
+					collectWeaklyHeldObjects(of: child.value, into: &objects)
+				}
+			}
 		}
 
 		/// An instance of a `LazilyInstantiated` wrapper to read after the rest of the probe's value, with the calls in
@@ -1632,8 +1916,11 @@ private struct DescribedProbe {
 	/// - Parameters:
 	///   - name: The probe's name, which its heading prints on one line.
 	///   - heading: The section's heading as printed.
-	init(name: String, heading: Substring, rawLines: [Substring]) {
+	init(name: String, heading: Substring, rawLines allRawLines: [Substring]) {
 		self.name = name
+		// A retention experiment's line is read apart from the description of the probe's value.
+		retentionLines = allRawLines.filter { $0.hasPrefix(DifferentialValueRetention.linePrefix) }
+		let rawLines = allRawLines.filter { !$0.hasPrefix(DifferentialValueRetention.linePrefix) }
 		text = ([heading] + rawLines).map { "\($0)\n" }.joined()
 		var lines = [DescribedLine]()
 		var children = [[Int]]()
@@ -1675,8 +1962,10 @@ private struct DescribedProbe {
 	}
 
 	let name: String
-	/// The section as the description printed it, heading included.
+	/// The section as the description printed it, heading included, without its retention experiments' lines.
 	let text: String
+	/// The line of each retention experiment the describer ran for the probe (`DifferentialValueRetention.linePrefix`).
+	let retentionLines: [Substring]
 	let lines: [DescribedLine]
 	let children: [[Int]]
 	/// The labels from the probe's value to each line, the top-level line named by its text or its label.
@@ -1988,6 +2277,9 @@ extension GraphFuzzerFixture {
 				}
 			}
 		}
+		if let probe = handWrittenRetentionProbe(generatedFiles: generatedFiles) {
+			probes.append(probe)
+		}
 		let mockFileSuffix = "+SafeDIMock.swift"
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(mockFileSuffix) && GraphFuzzerMockOverrides.takesNoRequiredParameter(contents) {
 			// A split graph's generated files are keyed by their module's name.
@@ -1995,6 +2287,57 @@ extension GraphFuzzerFixture {
 			probes.append(DifferentialValueProbe("\(mockedType).mock()"))
 		}
 		return probes
+	}
+
+	/// What the name of the probe that builds the seam corpus's `RetainHome` through a hand-written builder ends with,
+	/// which `GraphFuzzerRetentionCounts.judgedThroughHandWrittenBuilder` reads.
+	static let handWrittenBuilderProbeNameSuffix = " built through a hand-written builder"
+
+	/// A probe building `RetainHome`, the seam of `GraphFuzzerGenerator`'s retention draw, through a builder written by
+	/// hand that reads nothing, `{ _ in RetainLive() }`, beside the inline build of the same tree, `RetainRoot().retainHome`,
+	/// so that the retention oracle judges what a hand-written builder keeps alive; `nil` when the graph has no such seam,
+	/// when its fill reads a value, which a builder that reads nothing cannot hand it, or when no generated initializer of
+	/// the seam takes the builder.
+	///
+	/// The probe calls the initializer only generated code calls, since no module of the corpus sets
+	/// `generatePlainDependencyTreeInitializers`, and hands it the builder as the readable initializer does: unchanged, since
+	/// the readable initializer takes the same builder type and forwards it as it is (`generateSeamRootCode`), so that what
+	/// the builder keeps alive through either is the same. Should the generated-only initializer come to take a builder of
+	/// another type, the probe does not compile and every graph that has it fails as
+	/// `valueComparatorCouldNotDescribeGraph`, rather than the probe dropping out: the probe must then call the readable
+	/// initializer, and the corpus must generate it. The long run pins how many graphs the probe judged
+	/// (`GraphFuzzerRetentionCounts.judgedThroughHandWrittenBuilder`).
+	private func handWrittenRetentionProbe(generatedFiles: [String: String]) -> DifferentialValueProbe? {
+		let homeName = typeNamePrefix + "RetainHome"
+		let liveName = typeNamePrefix + "RetainLive"
+		var liveReadsValue = false
+		var declaresHome = false
+		for content in swiftFileContent {
+			var typeName: String?
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				switch line {
+				case let .typeDeclaration(name):
+					typeName = name
+					declaresHome = declaresHome || name == homeName
+				case .property where typeName == liveName:
+					liveReadsValue = true
+				case .instantiableAttribute, .instantiateMethod, .property, .other:
+					break
+				}
+			}
+		}
+		let initializerPrefix = "public convenience init(__safeDI_"
+		guard declaresHome, !liveReadsValue,
+		      let homeFile = generatedFiles.first(where: { $0.key.hasSuffix("/\(homeName)+SafeDI.swift") })?.value,
+		      let initializerLine = homeFile.split(separator: "\n").lazy.map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { $0.hasPrefix(initializerPrefix) }),
+		      let separator = initializerLine.range(of: "Builder: ")
+		else { return nil }
+		let label = initializerLine[initializerLine.index(initializerLine.startIndex, offsetBy: "public convenience init(".count)..<separator.lowerBound] + "Builder"
+		return DifferentialValueProbe(
+			name: homeName + Self.handWrittenBuilderProbeNameSuffix,
+			expression: "\(homeName)(\(label): { _ in \(liveName)() })",
+			knownRightExpression: "\(typeNamePrefix)RetainRoot().retainHome",
+		)
 	}
 
 	/// A value of `type`, a plain type a host forwards, the same in every run: a standard type's fixed value, or the

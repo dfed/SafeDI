@@ -8,6 +8,9 @@ that ci.yml splits each corpus into. Each shard's long run ends its report with
     features <corpus> <feature>=<accepted graphs showing it>,… <feature>=<pinned count>,…
     inspected <graphs the value oracle inspected> <pinned count> <corpus>
     compared <graphs the value comparator compared> <corpus>
+    retention <corpus> <key>=<count>,… <key>=<pinned count>,…
+    gating <corpus> <draw>=<graphs of the draw the oracles judged>,… <floor>
+    gating-shapes <corpus> <shape>=<graphs of the shape the oracles judged>,…
     read-twins <graphs the oracle compared with their read twin> <pinned count> <corpus>
     omitted-values <graphs rejected because a caller holds a value its tier omits> <pinned count> <corpus>
     spellings <corpus> <spellings to draw, comma-separated> <spellings drawn in accepted graphs>
@@ -25,12 +28,17 @@ pinned count wherever the corpus pins them (`features`), the graphs the value or
 inspected, the graphs compared with their read twin, and the graphs rejected for an omitted value must add up to their
 pins, every spelling the corpus draws must be
 drawn in some accepted graph of some shard, each output feature with a pinned minimum must show in at least that
-percentage of the corpus's accepted graphs (the public mock corpus reports `outputs`), the accepted graphs that show
+percentage of the corpus's accepted graphs (the public mock corpus reports `outputs`), what the retention oracle judged
+must add up to its pins (`retention`: the graphs with a hole it judged, those that draw its own shape, those whose
+hand-written builder it judged, and the experiments only one path ran), the graphs of each gating draw that the
+oracles after acceptance judged must reach the floor (`gating`, a floor rather than a pin, since a draw gates only
+while that many of its graphs are judged; `gating-shapes`, the shapes each draw rolls, checks nothing), the accepted
+graphs that show
 each draw a corpus counts must add up to its pinned count (`draws`), the graphs each error a corpus pins rejects must
 add up to their pins (`errors`: a public mock's own errors, or a cycle's in a seam's tree), what the base corpus's value oracle compares and
 skips must add up to its pins (`value-oracle`: counts, and set sums whose keys end in `Sum`, which add up wrapping
 like the accepted seed-set sum), and no shard may report a failure,
-a stale known issue, a misfiled seed, or a problem. Every long run writes `features`, `inspected`, `read-twins`, `draws` and `errors` for its corpus, and
+a stale known issue, a misfiled seed, or a problem. Every long run writes `features`, `inspected`, `retention`, `gating`, `read-twins`, `draws` and `errors` for its corpus, and
 `value-oracle` for the base corpus, so a complete report that names a corpus without one of them is a problem: a
 run that stopped writing the line would otherwise skip that line's check silently. The `cpu` lines check nothing:
 the summary adds them up per corpus into a table of what each phase of the oracle cost, a phase's busy seconds being
@@ -51,6 +59,10 @@ pins_by_corpus = {}
 inspected_by_corpus = {}
 inspected_pins_by_corpus = {}
 compared_by_corpus = {}
+retention_by_corpus = {}
+retention_pins_by_corpus = {}
+gating_by_corpus = {}
+gating_floors_by_corpus = {}
 read_twins_by_corpus = {}
 read_twins_pins_by_corpus = {}
 omitted_values_by_corpus = {}
@@ -88,6 +100,8 @@ for path in report_paths:
     reported_corpora = set()
     featured_corpora = set()
     inspected_corpora = set()
+    retention_corpora = set()
+    gating_corpora = set()
     read_twin_corpora = set()
     drawn_corpora = set()
     error_corpora = set()
@@ -110,6 +124,19 @@ for path in report_paths:
                 inspected_pins_by_corpus.setdefault(fields[3], set()).add(int(fields[2]))
             elif fields[0] == "compared" and len(fields) == 3:
                 compared_by_corpus[fields[2]] = compared_by_corpus.get(fields[2], 0) + int(fields[1])
+            elif fields[0] == "retention" and len(fields) == 4:
+                retention_corpora.add(fields[1])
+                totals = retention_by_corpus.setdefault(fields[1], {})
+                for key, value in value_oracle_fields(fields[2]).items():
+                    totals[key] = totals.get(key, 0) + value
+                retention_pins_by_corpus.setdefault(fields[1], set()).add(fields[3])
+            elif fields[0] == "gating" and len(fields) in (3, 4):
+                # A corpus with no gating draw reports an empty list, an absent field.
+                gating_corpora.add(fields[1])
+                totals = gating_by_corpus.setdefault(fields[1], {})
+                for key, value in value_oracle_fields(fields[2] if len(fields) == 4 else "").items():
+                    totals[key] = totals.get(key, 0) + value
+                gating_floors_by_corpus.setdefault(fields[1], set()).add(int(fields[-1]))
             elif fields[0] == "read-twins" and len(fields) == 4:
                 read_twin_corpora.add(fields[3])
                 read_twins_by_corpus[fields[3]] = read_twins_by_corpus.get(fields[3], 0) + int(fields[1])
@@ -180,6 +207,10 @@ for path in report_paths:
             problems.append(f"The {corpus} corpus reported no per-feature counts in {path}.")
         for corpus in sorted(reported_corpora - inspected_corpora):
             problems.append(f"The {corpus} corpus reported no count of the graphs the value oracle inspected in {path}.")
+        for corpus in sorted(reported_corpora - retention_corpora):
+            problems.append(f"The {corpus} corpus reported no count of the graphs the retention oracle judged in {path}.")
+        for corpus in sorted(reported_corpora - gating_corpora):
+            problems.append(f"The {corpus} corpus reported no count of the graphs of its gating draws the oracles judged in {path}.")
         for corpus in sorted(reported_corpora - read_twin_corpora):
             problems.append(f"The {corpus} corpus reported no count of the graphs compared with their read twin in {path}.")
         for corpus in sorted(reported_corpora - drawn_corpora):
@@ -225,6 +256,33 @@ if not problems:
                 f"The value oracle inspected {inspected_by_corpus.get(corpus, 0)} graphs of the {corpus} corpus, but "
                 f"{next(iter(inspected_pins))} are pinned."
             )
+        retention_pins = retention_pins_by_corpus.get(corpus, set())
+        if len(retention_pins) > 1:
+            problems.append(f"The shards of the {corpus} corpus disagree about the retention oracle's pins: {sorted(retention_pins)}.")
+        elif retention_pins:
+            pinned_retention = value_oracle_fields(next(iter(retention_pins)))
+            retention = retention_by_corpus.get(corpus, {})
+            mismatches = [
+                f"{key} {retention.get(key, 0)} (pinned {pinned})"
+                for key, pinned in sorted(pinned_retention.items())
+                if retention.get(key, 0) != pinned
+            ]
+            if mismatches:
+                problems.append(
+                    f"The retention oracle judged, over the {corpus} corpus, other numbers than pinned (`retentionCounts`): "
+                    f"{', '.join(mismatches)}."
+                )
+        gating_floors = gating_floors_by_corpus.get(corpus, set())
+        if len(gating_floors) > 1:
+            problems.append(f"The shards of the {corpus} corpus disagree about the gating draws' floor: {sorted(gating_floors)}.")
+        elif gating_floors:
+            floor = next(iter(gating_floors))
+            thin = [f"{draw} ({count})" for draw, count in sorted(gating_by_corpus.get(corpus, {}).items()) if count < floor]
+            if thin:
+                problems.append(
+                    f"The oracles judged fewer than {floor} graphs of the {corpus} corpus that draw {', '.join(thin)}: "
+                    "such a draw gates nothing until that many of its graphs are judged."
+                )
         read_twins_pins = read_twins_pins_by_corpus.get(corpus, set())
         if len(read_twins_pins) > 1:
             problems.append(f"The shards of the {corpus} corpus disagree about how many graphs run as a read twin: {sorted(read_twins_pins)}.")
@@ -344,6 +402,8 @@ with open(summary_path, "w") as summary:
                     f"The value oracle inspected {inspected_by_corpus[corpus]} graphs of the {corpus} corpus and compared "
                     f"{compared_by_corpus.get(corpus, 0)} of them.\n"
                 )
+            if retention_by_corpus.get(corpus, {}).get("judged", 0) > 0:
+                summary.write(f"The retention oracle judged {retention_by_corpus[corpus]['judged']} graphs with a hole of the {corpus} corpus.\n")
             if read_twins_by_corpus.get(corpus, 0) > 0:
                 summary.write(f"The oracle compared {read_twins_by_corpus[corpus]} graphs of the {corpus} corpus with their read twin.\n")
     for corpus, cost in sorted(cost_by_corpus.items()):

@@ -518,7 +518,76 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		#expect(comparisonMade.differences(exempting: [difference]).isEmpty)
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_reportsWhatTheFeaturePathKeepsAlive_whenItsInstantiatorCapturesAnInstanceTheKnownRightPathDoesNot() async throws {
+		// The feature path's builder holds the root's `b`, which the known-right path's does not, as a seam's builder function
+		// holds its levels' values: once the root is released, holding the builder and what one call of it builds keeps `b`
+		// and its `C` alive on the feature path only. The values the two paths build agree.
+		let comparison = try await Self.retentionComparison(featureGenerated: Self.graphGeneratedCode(replacing: Self.builderCapturingB), knownRightGenerated: Self.graphGeneratedCode(), filesToDelete: &filesToDelete)
+		#expect(comparison?.differences == [])
+		#expect(comparison?.retentionDifferences.map(\.description) == [
+			"probe `Root()` keeps B alive holding bBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+			"probe `Root()` keeps C alive holding bBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		])
+		#expect(comparison?.retentionJudgedProbes == ["Root()"])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_pairsAnExperimentForEachWayToAWrapper_whenOnlyTheFeaturePathSharesTheInstanceHoldingIt() async throws {
+		// The feature path's root holds one `Holder` at `first` and `second`, the known-right path's two: each path names the
+		// holder's instantiator by both ways to it, so every experiment pairs, and the probe is judged.
+		let leaf = "Leaf(first: Part(), second: Part())"
+		let shared = "let holder = Holder(leafBuilder: Instantiator { \(leaf) })\n        self.init(first: holder, second: holder)"
+		let separate = "self.init(first: Holder(leafBuilder: Instantiator { \(leaf) }), second: Holder(leafBuilder: Instantiator { \(leaf) }))"
+		let graph = DifferentialValueGraph(
+			name: "retention pairing",
+			feature: Self.holdersPath(initializerBody: shared),
+			knownRight: Self.holdersPath(initializerBody: separate),
+			probes: [DifferentialValueProbe("Holders()")],
+			judgesRetention: true,
+		)
+		let comparison = try #require(try await DifferentialValueOracle.compare(graphs: [graph], filesToDelete: &filesToDelete)?.first?.result.get())
+		#expect(comparison.retentionJudgments.map(\.judgment) == [DifferentialValueRetention.Judgment(differences: [], pairedWrapperExperimentCount: 2, unpairedExperimentCount: 0)])
+		#expect(comparison.retentionJudgedProbes == ["Holders()"])
+	}
+
 	// MARK: Acceptances
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_reportsNoRetentionDifference_whenWhatTheHeldWrapperBuildsHoldsMoreInstancesOnTheFeaturePath() async throws {
+		// The feature path's `Pair` holds two `Part`s where the known-right path's shares one: a difference of values, which
+		// the value comparison reports. What the held wrapper builds is held, so its instances are not counted as kept alive,
+		// and the paths keep alive the same.
+		let graph = DifferentialValueGraph(
+			name: "retention of what is held",
+			feature: Self.holdersPath(initializerBody: "self.init(first: Holder(leafBuilder: Instantiator { Leaf(first: Part(), second: Part()) }), second: Holder(leafBuilder: Instantiator { Leaf(first: Part(), second: Part()) }))"),
+			knownRight: Self.holdersPath(initializerBody: "self.init(first: Holder(leafBuilder: Instantiator { let part = Part(); return Leaf(first: part, second: part) }), second: Holder(leafBuilder: Instantiator { let part = Part(); return Leaf(first: part, second: part) }))"),
+			probes: [DifferentialValueProbe("Holders()")],
+			judgesRetention: true,
+		)
+		let comparison = try #require(try await DifferentialValueOracle.compare(graphs: [graph], filesToDelete: &filesToDelete)?.first?.result.get())
+		#expect(comparison.differences.map(\.description) == [
+			"probe `Holders()` at <1> Holders > first > leafBuilder > instantiate() > second:\n  feature:     second: <6> Part\n  known right: second: <5> Part (seen, first at <1> Holders > first > leafBuilder > instantiate() > first)",
+			"probe `Holders()` at <1> Holders > first > leafBuilder > instantiate() again > second:\n  feature:     second: <9> Part\n  known right: second: <7> Part (seen, first at <1> Holders > first > leafBuilder > instantiate() again > first)",
+			"probe `Holders()` at <1> Holders > second > leafBuilder > instantiate() > second:\n  feature:     second: <14> Part\n  known right: second: <11> Part (seen, first at <1> Holders > second > leafBuilder > instantiate() > first)",
+			"probe `Holders()` at <1> Holders > second > leafBuilder > instantiate() again > second:\n  feature:     second: <17> Part\n  known right: second: <13> Part (seen, first at <1> Holders > second > leafBuilder > instantiate() again > first)",
+		])
+		#expect(comparison.retentionDifferences == [])
+		#expect(comparison.retentionJudgedProbes == ["Holders()"])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_reportsNoRetentionDifference_whenOnlyTheKnownRightPathKeepsMoreAlive() async throws {
+		// Only what the feature path keeps alive beyond the known-right path's is a difference.
+		let comparison = try await Self.retentionComparison(featureGenerated: Self.graphGeneratedCode(), knownRightGenerated: Self.graphGeneratedCode(replacing: Self.builderCapturingB), filesToDelete: &filesToDelete)
+		#expect(comparison?.differences == [])
+		#expect(comparison?.retentionDifferences == [])
+		#expect(comparison?.retentionJudgedProbes == ["Root()"])
+	}
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -2948,6 +3017,61 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		DifferentialValuePath(
 			modules: [DifferentialValueModule(name: "DifferentialValueGraph", fixtureFiles: ["Graph.swift": graphFixture], generatedFiles: ["Root+SafeDI.swift": generated])],
 		)
+	}
+
+	/// The edits of `graphGeneratedCode()` that make `bBuilder`'s closure hold the root's own `b`.
+	private static let builderCapturingB: KeyValuePairs<String, String> = [
+		"let a = A()": "let a = A()\n        let b = B(a: a, c: C())",
+		"b: B(a: a, c: C()), e: a": "b: b, e: a",
+		"bBuilder: Instantiator { B(a: a, c: C()) }": "bBuilder: Instantiator { withExtendedLifetime(b) { B(a: a, c: C()) } }",
+	]
+
+	/// A path building a root that holds two `Holder`s, each holding an instantiator of `Leaf`, which holds two `Part`s, with
+	/// `initializerBody`.
+	private static func holdersPath(initializerBody: String) -> DifferentialValuePath {
+		DifferentialValuePath(
+			fixtureFiles: ["Holders.swift": """
+			public final class Holders {
+			    public init(first: Holder, second: Holder) {
+			        self.first = first
+			        self.second = second
+			    }
+			    public let first: Holder
+			    public let second: Holder
+			}
+			public final class Holder {
+			    public init(leafBuilder: Instantiator<Leaf>) {
+			        self.leafBuilder = leafBuilder
+			    }
+			    public let leafBuilder: Instantiator<Leaf>
+			}
+			public final class Leaf: Instantiable {
+			    public init(first: Part, second: Part) {
+			        self.first = first
+			        self.second = second
+			    }
+			    public let first: Part
+			    public let second: Part
+			}
+			public final class Part {
+			    public init() {}
+			}
+			"""],
+			generatedFiles: ["Holders+Make.swift": "extension Holders {\n    convenience init() {\n        \(initializerBody)\n    }\n}\n"],
+		)
+	}
+
+	/// The comparison of the graph's two paths, each with its own generated code, judging retention too.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func retentionComparison(featureGenerated: String, knownRightGenerated: String, filesToDelete: inout [URL]) async throws -> DifferentialValueComparison? {
+		let graph = DifferentialValueGraph(
+			name: "retention",
+			feature: graphPath(generated: featureGenerated),
+			knownRight: graphPath(generated: knownRightGenerated),
+			probes: [DifferentialValueProbe("Root()")],
+			judgesRetention: true,
+		)
+		return try await DifferentialValueOracle.compare(graphs: [graph], filesToDelete: &filesToDelete)?.first?.result.get()
 	}
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
