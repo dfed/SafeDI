@@ -1,0 +1,25 @@
+import Feature
+import Harness
+import SafeDI
+
+@Instantiable(fulfillingAdditionalTypes: [(any Gadget).self])
+public final class LiveGadget: Instantiable, Traced, Gadget {
+    public init(logger: Logger?) {
+        self.logger = logger
+        Registry.created(self, ["logger": logger])
+    }
+
+    public let tracker = Tracker("LiveGadget")
+    @Received(onlyIfAvailable: true) public let logger: Logger?
+}
+
+@Instantiable(isRoot: true)
+public final class Root: Instantiable, Traced {
+    public init(service: Service) {
+        self.service = service
+        Registry.created(self, ["service": service])
+    }
+
+    public let tracker = Tracker("Root")
+    @Instantiated public let service: Service
+}
