@@ -869,9 +869,9 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func handWrittenCall_createsArgumentBeforeSeamIsBuilt_whenHoleImplementationReadsItsStructField() async throws {
-		// The Manual's hand-written call: the implementation reads the struct's field only when a `Job` is built, but the
-		// argument is a value, so it exists already.
+	mutating func handWrittenCall_createsArgumentBeforeSeamIsBuilt_whenHoleImplementationReadsCallersValue() async throws {
+		// The Manual's hand-written call: the implementation reads the value the caller passes the seam only when a `Job` is
+		// built, but the argument is a value, so it exists already.
 		let path = try await jobHolePath(appFileNamedScenarios: """
 		import Feature
 		import SafeDI
@@ -890,11 +890,9 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 
 		func handWrittenCall() -> [String] {
 		    traceSink = []
-		    let seam = JobHoleSeam(c: C(), jobUploaderBuilder: { scope in
-		        switch scope {
-		        case let .uploader(values):
-		            HandWrittenUploader(jobBuilder: Instantiator { Job(c: values.c) })
-		        }
+		    let c = C()
+		    let seam = JobHoleSeam(c: c, jobUploaderBuilder: {
+		        HandWrittenUploader(jobBuilder: Instantiator { Job(c: c) })
 		    })
 		    trace("built")
 		    seam.uploader.buildJob()
