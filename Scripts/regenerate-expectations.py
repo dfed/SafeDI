@@ -178,6 +178,21 @@ def string_literal_hashes(source, index):
     return None
 
 
+def regex_literal_end(source, index):
+    """The index after an extended regex literal (`#/…/#`, `##/…/##`) starting at `index`, or None when none starts
+    there. Its content is no string, though it may hold quotation marks. A bare `/…/` regex literal is not
+    recognized; a test file holding one whose content holds a quotation mark cannot be parsed."""
+    hashes = 0
+    while index + hashes < len(source) and source[index + hashes] == "#":
+        hashes += 1
+    if hashes == 0 or index + hashes >= len(source) or source[index + hashes] != "/":
+        return None
+    closing = source.find("/" + "#" * hashes, index + hashes + 1)
+    if closing < 0:
+        raise SwiftParseError("unterminated regex literal")
+    return closing + 1 + hashes
+
+
 def skip_expression(source, index):
     """The index of the `)` that closes an interpolation whose expression starts at `index`."""
     depth = 1
@@ -190,6 +205,8 @@ def skip_expression(source, index):
             index = skip_block_comment(source, index)
         elif character in '#"' and string_literal_hashes(source, index) is not None:
             index = lex_string(source, index).end
+        elif character == "#" and regex_literal_end(source, index) is not None:
+            index = regex_literal_end(source, index)
         elif character == "(":
             depth += 1
             index += 1
@@ -344,6 +361,10 @@ def tokenize(source):
             literal = lex_string(source, index)
             tokens.append(Token("string", source[index:literal.end], index, literal.end, literal))
             index = literal.end
+        elif character == "#" and regex_literal_end(source, index) is not None:
+            end = regex_literal_end(source, index)
+            tokens.append(Token("regex", source[index:end], index, end))
+            index = end
         elif character == "`":
             closing = source.find("`", index + 1)
             if closing < 0:
@@ -1689,6 +1710,13 @@ def self_test(root):
     literal = tokenize('\t\t_ = """\n\t\tx\n\t\t"""')[2].literal
     source = checked_encoding(literal, [("text", "a\n\n\tb\n")])
     expect(source == '"""\n\t\ta\n\n\t\t\tb\n\n\t\t"""', f"lint-clean: {source!r}")
+
+    # an extended regex literal holding quotation marks is no string: the file still parses and its literal is rewritten.
+    test = case("regex-literal")
+    test.test_file(test_function('\t\tlet pattern = #/"([^"]+)"/#\n\t\t#expect(run(pattern) == "Old")'))
+    test.records([generation_record("k", 5, "Old")], [generation_record("k", 5, "New")], {"rename": [{"name": "rename", "table": {"Old": "New"}}]})
+    status, summary = test.run()
+    expect(status == 0 and summary.get("explained") == 1 and test.source() == test_function('\t\tlet pattern = #/"([^"]+)"/#\n\t\t#expect(run(pattern) == "New")'), f"regex literal: {status} {summary}")
 
     # two dry runs write the same report and no test file.
     test = case("idempotent")
