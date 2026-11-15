@@ -771,6 +771,36 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		    public enum __safeDI_Host_FF550EDAC60B5F8A {}
 		}
 		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_host() -> Host {
+		            _ = Host.__safeDI_Host_FF550EDAC60B5F8A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_impl_Api_ImplBuilder_Host(_ scope: Host.SafeDIScope_Impl_Api_Impl) -> any Api {
+		                switch scope {
+		                case .api:
+		                    let api: any Api = Impl()
+		                    return api
+		                }
+		            }
+		            func __safeDI_impl_Api_Impl_ApiBuilder_Host(_ scope: Host.SafeDIScope_Impl_Api_Impl_Api) -> any Impl_Api {
+		                switch scope {
+		                case .implApi:
+		                    let implApi: any Impl_Api = LiveImplApi()
+		                    return implApi
+		                }
+		            }
+		            return Host(__safeDI_impl_Api_ImplBuilder: __safeDI_impl_Api_ImplBuilder_Host, __safeDI_impl_Api_Impl_ApiBuilder: __safeDI_impl_Api_Impl_ApiBuilder_Host)
+		        }
+		        let host: Host = __safeDI_host()
+		        self.init(host: host)
+		    }
+		}
+		"""])
 	}
 
 	@Test(arguments: [
@@ -848,6 +878,82 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 
 		extension Host {
 		    public enum __safeDI_Host_D0F3DAA93AC73981 {}
+		}
+		"""])
+	}
+
+	@Test(arguments: [
+		["api", "implApi", "implApiSendable"], ["api", "implApiSendable", "implApi"], ["implApi", "api", "implApiSendable"], ["implApi", "implApiSendable", "api"], ["implApiSendable", "api", "implApi"], ["implApiSendable", "implApi", "api"],
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesCollidingHoleTypesAlike_whenAFillingTypeDiffersFromItsReturnedTypeAndTheirPlacesAreDeclaredInAnyOrder(order: [String]) async throws {
+		// Three hole types no declaration fulfills: `Impl` returned as `any Api` and the type `Impl_Api`, whose stems are
+		// equal, and `Impl_ApiSendable`, whose plain label is the `@Sendable` label of either. Each place is held in a
+		// `Sendable` wrapper, so its case carries only what the place forwards, and only the lines that build the places
+		// follow their order.
+		let declarations = [
+			"api": #"@Instantiated(fulfilledByType: "Impl") public let api: SendableErasedInstantiator<String, any Api>"#,
+			"implApi": "@Instantiated public let implApi: SendableInstantiator<Impl_Api>",
+			"implApiSendable": "@Instantiated public let implApiSendable: SendableInstantiator<Impl_ApiSendable>",
+		]
+		let builds = [
+			"api": """
+			        let api = SendableErasedInstantiator<String, any Api> {
+			            __safeDI_impl_Api_ImplSendableBuilder(.api($0))
+			        }
+			""",
+			"implApi": """
+			        let implApi = SendableInstantiator<Impl_Api> {
+			            __safeDI_impl_Api_Impl_ApiSendableBuilder(.implApi($0))
+			        }
+			""",
+			"implApiSendable": """
+			        let implApiSendable = SendableInstantiator<Impl_ApiSendable> {
+			            __safeDI_impl_ApiSendable_Impl_ApiSendableSendableBuilder(.implApiSendable($0))
+			        }
+			""",
+		]
+		let output = try await compiledOutput(of: [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"""
+				public protocol Api: Sendable {}
+
+				public struct Impl_Api: Instantiable, Sendable {
+				    public init() {}
+				}
+
+				public struct Impl_ApiSendable: Instantiable, Sendable {
+				    public init() {}
+				}
+				""",
+				seamFixtureType(named: "Host", isSeam: true, declarations: order.compactMap { declarations[$0] }),
+			]),
+		])
+		let body = order.compactMap { builds[$0] }.joined(separator: "\n")
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Host {
+		    @frozen public enum SafeDISendableScope_Impl_ApiSendable_Impl_ApiSendable {
+		        case implApiSendable(Impl_ApiSendable.ForwardedProperties)
+		    }
+
+		    @frozen public enum SafeDISendableScope_Impl_Api_Impl {
+		        case api(String)
+		    }
+
+		    @frozen public enum SafeDISendableScope_Impl_Api_Impl_Api {
+		        case implApi(Impl_Api.ForwardedProperties)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_impl_ApiSendable_Impl_ApiSendableSendableBuilder: @escaping @Sendable (SafeDISendableScope_Impl_ApiSendable_Impl_ApiSendable) -> Impl_ApiSendable, __safeDI_impl_Api_ImplSendableBuilder: @escaping @Sendable (SafeDISendableScope_Impl_Api_Impl) -> any Api, __safeDI_impl_Api_Impl_ApiSendableBuilder: @escaping @Sendable (SafeDISendableScope_Impl_Api_Impl_Api) -> Impl_Api) {
+		\(body)
+		        self.init(\(order.map { "\($0): \($0)" }.joined(separator: ", ")))
+		    }
+		}
+
+		extension Host {
+		    public enum __safeDI_Host_621FEB413D6DCE95 {}
 		}
 		"""])
 	}
