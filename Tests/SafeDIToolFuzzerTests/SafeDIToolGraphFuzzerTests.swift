@@ -999,6 +999,15 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func seamCorpus_acceptsTenGraphsOfEachScreenPlaceNeighbour_whenPinsAreRead() {
+		// A screen's place whose fill reads the screen's value stands in for the unit tests of the neighbours the tool must
+		// accept beside the shape it rejects (`fieldOfReenteringPlace`) only while the corpus accepts enough of each.
+		for feature in [GraphFuzzerSeamDrawFeature.holeScreenValueReadWithoutReentry, .holeScreenValueBuiltBySeam] {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) accepted in fewer than ten graphs")
+		}
+	}
+
+	@Test
 	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachErasurePlace() {
 		// The places of a builder whose filling type is not the type it returns – inside a plain fill, inside a `@Sendable`
 		// fill, and beneath the seam in the `@Sendable` family – stand in for unit tests of their labels and their builders
@@ -6354,7 +6363,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isScreenPlaceShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
@@ -6416,12 +6425,16 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`unpassableCycleLabel`), a fill that requires what its scope carries only optionally (`fieldHeldOnlyOptionally`),
 	/// and a plain wrapper captured inside a `Sendable` one (`nonSendableWrapperCaptures`). The third marker is the part of
 	/// `fieldHeldOnlyOptionally`'s message both of its causes share: the seam's tree receiving the label only if available,
-	/// and a builder function a lazy cycle closes on taking it as a parameter.
+	/// and a builder function a lazy cycle closes on taking it as a parameter. The last two are a fill that builds its seam
+	/// again and reads a value only the place it fills carries (`fieldOfReenteringPlace`), which `addingHoleShapes` draws in
+	/// a screen: a read only if available, then a required read, counted apart.
 	static let seamCorpusErrorMarkers = [
 		"holds the same values at every level of that cycle",
 		"which one value cannot carry together",
 		"carries only as `",
 		"cannot be received inside a `@Sendable` function in chain",
+		"would get `nil` or another value.",
+		"would get another value.",
 	]
 	/// How many of the seam corpus's graphs the tool rejects with each error of `seamCorpusErrorMarkers`, in its order.
 	static let seamCorpusErrorGraphCounts = [4, 11, 0, 25]
@@ -6591,8 +6604,10 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `package` initializer in another package (seed 743), two calls of the plain fill (seed 892) and mixed wrapper kinds
 	/// in the cycle (seed 1986); seeds 151, 309, 594 and 969 draw places inside a plain fill that spell their hole type
 	/// with and without `any`, seed 969 with no known issue, and seeds 68 and 84 the remedied read of a value one route
-	/// holds. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 609, 705, 743, 850, 892, 969, 1_010, 1_020, 1_450, 1_814, 1_890, 1_986]
+	/// holds. Seeds 2006 and 3575 are a fill that builds its seam again and reads a value only the place it fills,
+	/// inside an inner seam's screen, carries, which the tool rejects (`fieldOfReenteringPlace`). Pinned by
+	/// `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 609, 705, 743, 850, 892, 969, 1_010, 1_020, 1_450, 1_814, 1_890, 1_986, 2_006, 3_575]
 
 	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x00D882B413AAA30B
 
