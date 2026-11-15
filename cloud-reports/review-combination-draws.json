@@ -1,0 +1,149 @@
+[
+ {
+  "claim": "The floors cannot catch a cell that stops drawing: a cell counts as drawn whenever its marker line is present, the marker is added whether or not the row's edit took effect, and the accepted-count pins are the constant 15.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed in code at 5ad9775f, but latent and partly overstated. `declarations(of:)` inserts `marker + cell.featureName` into the root unconditionally after `adding(...)`, and `adding` returns the scaffold unchanged on `guard let hostIndex ... else { return declarations }`; `if let declarerIndex` skips silently. `seamDrawFeatures(of:)` (GraphFuzzer.swift:8719) and the public mock `drawFeatures(of:)` read the cell only through `GraphFuzzerCombinationDraw.cell(drawnIn:)`, i.e. the marker, whereas `retentionDrawFeatures` and the Forms features read declared properties. Both `...CombinationCorpusAcceptedDrawFeatureCounts` are built as `counts[feature] = 15`. No test asserts a cell's content (only the name-uniqueness test references the cells). Overstated part: 15 is exactly what CI would derive (1350/90 and 345/23, all accepted), and the run still compares the observed count, so a cell whose graphs become rejected is caught; what is not caught is a row edit that silently has no effect. Today every host and declarer name resolves in every scaffold (checked each (position, column) pair against `scaffold(of:)`), so no cell currently draws the bare scaffold. Hence latent robustness, not a present defect.",
+  "fix": "Make `adding` fail loudly (throw or record an infrastructure failure) when the host or declarer is missing instead of returning the scaffold, and read each cell from drawn content (the row's property or argument on the position's host) in addition to the marker, as `retentionDrawFeatures` does."
+ },
+ {
+  "claim": "A cell's position-specific variant has no floor; several cells draw their distinct shape in very few graphs or none they judge, and the judged floor is met by graphs identical across positions.",
+  "real": true,
+  "severity": "should-fix",
+  "reason": "Confirmed by an independent Python reimplementation of `GraphFuzzerRandomNumberGenerator`, the FNV-1a mask, the cell order and the roll order (hasParent, wrapper, variant, secondVariant; sendability from the first roll of the seed's own stream). It reproduces the branch's known-issue lists exactly: FulfillerSeamPlaceInsideFillAtBoundary is-a-seam = 99,189,639,1089 (D3 list); ActorIsolationInnerSeamAtBoundary nonisolated = 858,1128,1218 (the @MainActor list); BuiltAgainPlaceInsideFillAtBoundary Sendable wrapper = 0,450,810 (in the unproduced-case list). Same simulation: ActorIsolationHoleFillAtBoundary nonisolated only 170,1160; FulfillerSeamPlaceInsideFillBeneath is-a-seam only 10, ...InsideFill only 1271; BuiltAgainPlaceInsideFillBeneath never draws a Sendable wrapper; SharedInstancePlaceInsideFillInsideFill onlyIfAvailable only 1199. The actorIsolation `else` branch sets `isMainActor` on every declaration regardless of position, so AtBoundary and InsideFill cells of a column draw the same shape there (differing only by hasParent). For ActorIsolationInnerSeamAtBoundary all three position-specific graphs carry a `.compilerError` known issue, which `gatingDrawsJudged` excludes via `masksNoLaterFailure`, so its judged floor is met entirely by all-@MainActor graphs. Mitigation: existing gating draws also leave rolled shapes unfloored (`gating-shapes` line, 'against no floor'), so this matches precedent, but the corpus's stated purpose is ten judged graphs of each combination.",
+  "fix": "Draw the shape-changing variants by the seed's index within its cell (seed / cellCount) so each appears a fixed number of times, and collapse or separately name the position-independent all-@MainActor branch; at minimum report the variants on the `gating-shapes` line and ensure the Sendable-wrapper and nonisolated variants appear in every cell that claims them."
+ },
+ {
+  "claim": "The 12 AdditionalMock cells never draw `additionalMocksToGenerate` as the manual defines it; each lists the host in its own module's configuration, which the generator treats like `generateMock: true`.",
+  "real": true,
+  "severity": "should-fix",
+  "reason": "Confirmed. The draw appends `#SafeDIConfiguration(additionalMocksToGenerate: [\"<hostName>\"])` to the host's own declaration, so its own module's file (the row's doc comment says so: 'The host's module lists it'). Manual.md:438 defines the parameter as 'Type names from dependent modules', and the Cross-module mock generation section describes a module listing a type another module declares. In DependencyTreeGenerator.swift:330-358 an own-module listed type just passes `instantiable.generatesMock || isAdditionalMock` and becomes a mock root; only the reported reason differs. I ran a cached SafeDITool (tool-cache build of today; the branch changes no Sources) on a one-module fixture with a seam `ComboHome` (generateMock: true) and a seam `ComboHome2` listed in its own module's `additionalMocksToGenerate`: both generated the identical `static func mock(comboService: ComboService)`. The distinct cross-module path (mock of a dependent module's seam, fill or inner seam built in the listing module) is not drawn; the only other fuzzer draw of the parameter (`addingMockVocabulary`, base corpus, single module) is own-module too.",
+  "fix": "Put the configuration in a module above the host (the roots' module, `.samePackageCaller`) listing ComboHome, ComboNestImpl, ComboInner or ComboBelow, keeping the type visible there; or rename/drop the row so it does not claim the cross-module feature."
+ },
+ {
+  "claim": "In AdditionalMock and GeneratedAttributes (mock variants) cells at the boundary of SeamTree, InnerSeam and PlaceInsideFill, the feature lives only in a generated mock the value oracle never calls, yet the graphs count as judged.",
+  "real": true,
+  "severity": "should-fix",
+  "reason": "Confirmed, including the part the reviewer only inferred. `differentialValueProbes` adds `<Type>.mock()` only where `GraphFuzzerMockOverrides.takesNoRequiredParameter(contents)` holds (every parameter has ` = `). Running the cached SafeDITool on a seam holding `@Instantiated comboService: any ComboService` with no fulfiller in its module (the boundary host's situation: ComboLive is in the roots' module above) generated `static func mock(comboService: ComboService) -> ComboHome` with a required parameter, for both the `generateMock: true` and the own-module `additionalMocksToGenerate` form, so no probe is added. `gatingDrawsJudged` filters on graph-level `result.isComparedByValueOracle`, which the root probes satisfy. So these cells' judged count reflects the root's tree, and the mock is gated by acceptance, compilation and the mirror model only. fuzzer-gating-checks.md already accepts that for the passed-up public mock variants ('no probe builds it and it is gated by acceptance and compilation only'), but the new Combination corpora section says each cell is 'a gating draw judged by value' without that exception.",
+  "fix": "Have the comparator call such a mock with a sample builder/stub for the place (as it passes samples for forwarded values), or count these cells as judged only when a probe of the host's mock ran; failing that, state in fuzzer-gating-checks.md which cells are gated by acceptance and compilation only."
+ },
+ {
+  "claim": "Both ConditionalCompilation variants put ComboFlagged under a clause active in every run, so no cell draws a declaration the build leaves inactive.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed: the condition is `canImport(Foundation)` or `!COMBO_FLAG`, and `COMBO_FLAG` appears nowhere else under Tests or .github (git grep at 5ad9775f), so no run defines it and both clauses are always active. The host also unconditionally declares `@Instantiated comboFlagged`, so an inactive clause would not compile as drawn; the row's doc only promises a type 'declared inside a platform-conditioned or a flag-conditioned #if block', which it delivers. A coverage gap relative to the manual's inactive-clause behavior, not a defect.",
+  "fix": "Optionally add a variant with an `#else` clause declaring the type differently, or a condition the corpus reports as active for some seeds, so the tool must choose a clause."
+ },
+ {
+  "claim": "The Run Graph Fuzzer step's timeout comment does not cover the new shards: the seam combination estimate is local only and the public mock combination shard has none.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed in .github/workflows/ci.yml at 5ad9775f: the comment beside `timeout-minutes: 25` still reads 'A shard's fuzzer has taken 7 to 12 minutes' and is unchanged by the diff; the matrix comment adds only '1.46 seconds a seed on four cores locally, about 11 minutes a shard' for seamCombination and no figure for publicMockCombination's 345 seeds. CLAUDE.md asks for a step timeout of about twice the measured duration with the measurements beside it. 11 minutes still fits within the existing 7-12 range and 25-minute limit, so nothing is at risk of timing out on the stated numbers; the gap is the missing CI measurement.",
+  "fix": "After the first CI run, record each combination shard's measured duration in the comment beside `timeout-minutes: 25` and confirm 25 is still about twice the longest."
+ },
+ {
+  "claim": "Two new known-issue entries (unproducedSendableFillCaseReason, mainActorSeamWithNonisolatedInitializerReason) name a defect with no owner, plan or filed issue.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed at 5ad9775f, SafeDIToolGraphFuzzerTests.swift:6491 and :6500: both reasons state the defect and stop, while the reused ones say \"until \u2026\" or \"(D3)\". The MainActorSeamWithNonisolatedInitializer README offers only \"The likely fix\". Downgraded because no rule requires a reason string to name a plan. CLAUDE.md puts plans in the pull request's \"Found and not fixed\" list, and the branch has no pull request yet (`gh pr list` returns none). The substance still holds: the @MainActor seam generates code that does not compile in a shape an adopter can write, so the leftover rule gives it a pull request of its own.",
+  "fix": "When the pull request is opened, list both in \"Found and not fixed\" with a plan each: a named follow-up pull request for the @MainActor seam initializer isolation, and a named pull request or a \"left, and why\" for the unproduced @Sendable fill case. Optionally end the two reason strings with \"until <that fix>\", as the leak reasons do."
+ },
+ {
+  "claim": "The branch adds known-issue entries for fuzzer findings but no rows to Tests/GraphFuzzerFindings.md, which requires them in the same pull request.",
+  "real": true,
+  "severity": "should-fix",
+  "reason": "Confirmed. `git diff --stat 307019f85..5ad9775f -- Tests/GraphFuzzerFindings.md` is empty. Line 9 of the file reads \"When a fix or a new known-issue entry lands for something the fuzzer found, add its row in the same pull request.\" Searching the file at 5ad9775f for MainActor, \"never produce\", combination, leak and D3 matches only the header lines. Main's table (4e13987c) has no row for these either. The @MainActor seam (seamCombination 858, 1128, 1218) and the unproduced @Sendable fill case (0, 93, 273, 363, 450, 810, 993, 1173) are new fuzzer-found defects with new entries; the combination corpora's D3 and leak entries are new entries too.",
+  "fix": "Add a row per finding in this pull request: corpus and seeds, the combination cell as the draw, the oracle (compile; `declaredCaseNeverProduced` and `scopeCaseNamesNoProperty`; `seamRetainsWhatInlineFrees` and `publicMockRetainsWhatKnownRightFrees`), and the known-issue list as the outcome."
+ },
+ {
+  "claim": "The new `.scopeCase(kind, containing:)` signature matches when any one joined description line contains its text, so in the 8 listed seeds a new unproduced or misnamed case of the same kind is hidden.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed by reading the code at 5ad9775f. `scopeCaseFailures` (GraphFuzzer.swift:10930-10944) joins every description of a kind into one failure's details, and the matcher (:10505-10506) is `failure.kind == kind && failure.details.contains(text)`. For a listed seed the builder-surface failure comes first, so each later failure only needs `knownIssue.matches`, and one documented line covers any other line of that kind. Downgraded because only 8 of 1350 seeds are affected, the other seeds of the same cells still report a new case, and substring matching is how every non-value signature already works (`.compilerError`, `.holeNamesChangeWithSecondPlace`).",
+  "fix": "Match per description: split the details before \"\\nThis graph:\" and require every line to contain one of the issue's `.scopeCase` texts of that kind, as the value signatures require of every difference."
+ },
+ {
+  "claim": "Rebased onto main (4e13987c), the branch does not compile and silently diverges from #714 in five places: BuilderSurfaceSeeds, documentsLeak, drawnHolePlaces, toolRun/splitToolRun, and builderSurfaceFlooredKinds.",
+  "real": true,
+  "severity": "blocking",
+  "reason": "All five points confirmed against origin/main; the branch cannot land as it is. (1) Main's `BuilderSurfaceSeeds` has `sameSupplyReason: String` and no `sameSupplyRejectedLegitimately`; the branch passes `sameSupplyRejectedLegitimately: []` at SafeDIToolGraphFuzzerTests.swift:6441 and :6550. (2) Main's `documentsLeak` (GraphFuzzer.swift:10248) is an exhaustive switch with no `.scopeCase`. (3) Main's `drawnHolePlaces(forSeed:features:)` (:2022) does not exist on the branch and has no `combinationDraws` guard, unlike the siblings the branch guards at :2151-2222. (4) Main has `toolRun` and `splitToolRun` (:12083, :12126); the branch's `|| GraphFuzzerCombinationDraw.cell(drawnIn:) != nil` and `mainActorSeamTypeNames` edits sit in `toolOutcome` and `splitToolOutcome` (:12266, :12285, :12345). (5) Main documents `builderSurfaceFlooredKinds` as \"every kind the corpus draws, none for a corpus without holes\"; both combination corpora leave it empty while listing every seed under the base check. The compiler catches (1) and (2); (3) to (5) are silent. The practical effect of (3) is small, since `holeKinds` also requires the place's returned type name to match. `gh run list --branch` shows no CI run for the branch, so every pin and leak seed list is locally derived and predates main's per-entry `staleLeakEntry` check.",
+  "fix": "Rebase onto main. Pass `sameSupplyReason` and drop `sameSupplyRejectedLegitimately`. Add `.scopeCase` to `documentsLeak`'s false arm. Give `drawnHolePlaces` a `combinationDraws` branch that returns the cell's lazy and forwarding places, or none. Move the two overrides into `toolRun` and `splitToolRun`. Floor the base kinds the combination corpora draw. Then build, and take the pins and leak seed lists from CI's combine job on the rebased head."
+ },
+ {
+  "claim": "The new shards' durations are not CI measurements, the comment beside `timeout-minutes: 25` was not updated, and the public mock combination shard has no measurement.",
+  "real": true,
+  "severity": "should-fix",
+  "reason": "Confirmed. The comment beside the step (ci.yml:1236 at 5ad9775f) still reads \"A shard's fuzzer has taken 7 to 12 minutes\". The only figure for the new shards is the matrix comment's \"1.46 seconds a seed on four cores locally, about 11 minutes a shard\", repeated in the rule file as \"measured locally\". Nothing is given for publicMockCombination's 345 seeds. `gh run list --branch claude/project-thread-q55hef` is empty, so no CI timing exists. CLAUDE.md asks for a step timeout of about twice the measured duration with the measurements beside it, and CI runs a coverage-instrumented bundle that the local figure does not represent.",
+  "fix": "After the first CI run on the rebased head, read each new shard's wall time, record it in the comment beside `timeout-minutes` (and replace the local figure in fuzzer-gating-checks.md), and confirm 25 minutes is still about twice the longest shard, or split a shard."
+ },
+ {
+  "claim": "Nothing in the branch records a deliberate mutation per cell group or a seed that a hand mutation makes fail.",
+  "real": true,
+  "severity": "should-fix",
+  "reason": "Confirmed. `git diff 307019f85..5ad9775f | grep -i mutat` matches only Swift `mutating` keywords plus one unchanged context line. None of the 8 commit messages, the new \"Combination corpora\" rule section or any test names a mutated generator line or the seed that fails under it, and no pull request body exists to hold one. fuzzer-corpora.md:20 states the requirement for a new oracle (\"An oracle that has never failed may be unable to\"). The branch adds no oracle kind, but the brief lists per-group mutations as a deliverable, and the 113 new gating cells, the `.scopeCase` signature and the `@MainActor` seam-caller change have no evidence they can fail on a generator regression beyond the known issues they found.",
+  "fix": "For each cell group (seam tree, hole fill, place inside a fill, inner seam, public mock), break one generator line the group exercises, run that group's seeds with Scripts/fuzz-corpus.sh under `heavy`, and record the mutation, the failing seed and its oracle in the \"Combination corpora\" section and the pull request description."
+ },
+ {
+  "claim": "Treating `.scopeCase` as masking later failures drops its seeds from the judged count for nothing and leaves cell 3 exactly at the floor of ten.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed. `.scopeCase` is in the false arm of `masksNoLaterFailure` (GraphFuzzer.swift:10475), and `gatingDrawsJudged` (SafeDIToolGraphFuzzerTests.swift:5383) skips a seed whose issue returns false. Only `renamedGraphFailures` and the retention failure follow `scopeCaseFailures` in the chain (:11559-11563), and `GraphFuzzerFinding.init` never masks either. Seeds 93, 273, 363, 993 and 1173 are all 3 mod 90, so cell 3 has 5 of its 15 seeds under the entry and 10 left against `gatingDrawJudgedGraphFloor = 10`; its other 10 seeds are leak entries, which mask nothing. The corpus passes today but has no margin.",
+  "fix": "Move `.scopeCase` to the true arm of `masksNoLaterFailure`, together with the per-line matching of the third verdict so the entry documents only what it matches. Otherwise note in the rule that cell 3 sits at the floor."
+ },
+ {
+  "claim": "`SAFEDI_GRAPH_FUZZER_FEATURES=combinationDraws` alone is accepted: it draws combination graphs but checks them against the base corpus's pins.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed. `corpus(for:)` (SafeDIToolGraphFuzzerTests.swift:6383-6391) returns `baseCorpus` when neither `generateMockPublic` nor `generateDependencyTree` is set, while `Builder.build()` (GraphFuzzer.swift:2464) returns `buildingCombinationCell()` whenever `.combinationDraws` is present. `GraphFuzzerLongRunConfiguration` (:7469-7471) only checks that each name is a feature. Such a run fails on the base fixture hash, so it is misleading but not silent, and no CI shard passes that combination.",
+  "fix": "Report a problem in the long run's configuration check when `combinationDraws` is set without `generateDependencyTree` or `generateMockPublic`."
+ },
+ {
+  "claim": "Tests/GraphFuzzerFindingRepros/HarnessFileNameIndexOutOfRange is debugging history of a harness bug the branch already fixes and tests, with a trace the README calls wrong and machine-local paths.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed. The folder holds README.md, crashed-thread-seed15.txt and misread-trace.txt. The README says of the misread trace \"That reading was wrong\", and the trace carries `/home/user/SafeDI/Sources/\u2026` frames. `git grep GraphFuzzerFindingRepros 5ad9775f` finds no reader, the folder does not exist on main, and commit 5ad9775f adds GraphFuzzerFileNameTests for the fix. It is the history of a test-support defect, not a SafeDI finding, and the commit message already says what a reader needs. The MainActorSeamWithNonisolatedInitializer folder is a real minimized reproduction of an open defect.",
+  "fix": "Drop the HarnessFileNameIndexOutOfRange folder and keep a sentence on the harness fix in the pull request description. Keep the @MainActor reproduction until its fix lands with a hand-written test."
+ },
+ {
+  "claim": "Cell 18 (publicMockCells[18], combinationForwardedValuePublicMockAtBoundary): the comboId sample is already registered, so 'register a sample' changes nothing; the retention blind spot is structural.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed by reading 5ad9775f, with one correction to the reviewer's mechanism and fix. I did not run seed 18.\n\n- **Sample already registered:** `combinationForwardedValueSamples` (GraphFuzzer.swift:315) registers `<Type>.ForwardedProperties` = `7` for every type with `@Forwarded comboId`. `publicMockValueGraph` passes it (GraphFuzzerPublicMocks.swift:2343). `instantiatorTraversal` keys samples by `ObjectIdentifier(ForwardedProperties.self)`, so the builder is called. A second sample would be a no-op.\n- **Cell index:** 6 rows x 3 positions = cells 0-17, then forwardedValue at boundary = 18 and beneath = 19.\n- **Oracle behaviour:** `retentionTargets(of:)` appends a wrapper and does not descend into it. `retentionExperiment` holds the wrapper plus the one value it builds, and `emitRetention` excludes everything that value reaches.\n- **Correction:** in cell 18 the built `ComboHome` holds only `comboId` and `comboService` (a `ComboLive` with no properties); it holds no wrapper. The only wrapper in the graph is `comboHomeBuilder` on `ComboApp` or `ComboParent`. So the cell has no retention surface at all: nothing exists outside the held built value for a leak to keep alive. The reviewer's fix (a), descending into the built value, would add zero targets in this cell as drawn.\n\nNothing in the branch claims retention gating for the cell; combination cells are gated by value (`gatingDrawsJudged`). So this is a note for the follow-up plan and the mutation record, not a branch defect. I could not check what the lane's thread message said, nor that mutation C passed cell 18.",
+  "fix": "Do not add a sample. In the row-7 mutation record, state that cell 18 is value-judged only and why: `ComboHome` sits behind `comboHomeBuilder` and holds no wrapper. If a retention gate is wanted there, the cell needs a surface first, for example a wrapper on `ComboHome` together with a retention walk that lists the wrappers of a value an instantiator builds. Then name the cell-18 seed that fails under mutation C."
+ },
+ {
+  "claim": "No cell draws the shape the @MainActor repro minimizes to (a @MainActor seam with a nonisolated init in the seam's own tree, built directly); the slice-2 fix is gated by 3 seeds of the inner-seam cell.",
+  "real": true,
+  "severity": "should-fix",
+  "reason": "Confirmed.\n\n- **Cell list:** `seamCells` gives `.actorIsolation` to placeInsideFill, innerSeam and holeFill. The seamTree row list is `[.erased, .handWrittenMock, .additionalMock, .generatedAttributes]`.\n- **Only one seam host:** by `name(ofHostAt:in:)`, the only actorIsolation host that is a seam is `ComboInner` (innerSeam at boundary, cell index 48). The other hosts are `ComboNestImpl`, `ComboLive` and `ComboBelow`, which are fills or plain types.\n- **Base draws none:** the seam generator in base 307019f85 GraphFuzzer.swift has no `@MainActor` or `nonisolated` initializer draw, only parsing helpers. The checkpoint-0 commit message says \"one @MainActor in GraphFuzzer.swift, none in a seam tree\", but lists only columns (2), (3), (4) as undrawn, so column (1) was missed.\n- **Three seeds:** the nonisolated variant needs `variantRoll < 50 && helperTypesAreSendable`. The known issue lists 858, 1128 and 1218, all congruent to 48 mod 90, of that cell's 15 seeds. That is below the floor of ten judged graphs the branch applies to every gating draw.\n\nThe repro's own shape (a root building the seam directly) is drawn nowhere.",
+  "fix": "Add `.actorIsolation` to the seamTree rows (boundary and beneath; +2 cells, so re-derive seed counts, pins and shard sizes on CI). Raise the nonisolated variant's share, or make it independent of sendability where the types allow, so at least ten graphs carry a @MainActor seam with a nonisolated initializer. Extend the known issue's seeds accordingly."
+ },
+ {
+  "claim": "The row-7 mutation evidence is recorded nowhere on the branch: no mutation, no failing seed, no cell-18 exception.",
+  "real": true,
+  "severity": "should-fix",
+  "reason": "Confirmed. In 307019f85..5ad9775f, searching added lines for \"mutat\" hits only Swift `mutating func` declarations. The eight commit messages contain no \"mutat\", \"cell 18\" or \"seed 18\". The new \"Combination corpora\" paragraph in .claude/rules/fuzzer-gating-checks.md names no mutation or seed. `gh pr list --head claude/project-thread-q55hef --state all` returns nothing, so no PR body carries it either.\n\nCLAUDE.md and fuzzer-corpora.md line 20 require naming the hand mutation and the seed that fails under it. The neighbouring gating draws in the same rules file do record theirs.",
+  "fix": "When the PR is opened, put in its body, per group (A3, A4, B, C): what the mutation changes (file, function, how it leaks or breaks), one named seed that fails under it, and the failure kind. State cell 18 as the exception with its reason (see the first verdict). Optionally add one sentence per group to the Combination corpora paragraph."
+ },
+ {
+  "claim": "The MainActorSeamWithNonisolatedInitializer README says that without the configuration line there is one initializer, `init()`; it is actually `init(__safeDI_token:)`.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed from the generator source; I did not rerun the tool. ScopeGenerator.swift (around 5835-5860 at 5ad9775f) emits a shared `init()` only when `takesNoArgument` (`parameters.isEmpty && signature.builders.isEmpty`). The fixture's `Inner` receives `token`, and the committed Generated.swift.txt shows `init(__safeDI_token token: Token)`. Without `generatePlainDependencyTreeInitializers`, the only seam initializer is that one, with the doc comment pointing at the setting. The README's last paragraph (\"there is one initializer, `init()`, which both kinds of caller share\") is wrong for this fixture.",
+  "fix": "Reword to: without the configuration line only `init(__safeDI_token:)` is generated, and `Root`'s generated call fails with the same error."
+ },
+ {
+  "claim": "Tests/GraphFuzzerFindingRepros/HarnessFileNameIndexOutOfRange is session history, not a reproduction.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed from the diff.\n\n- The README's \"Reproduction\" rests on \"the session's edits on top of base 307019f8\", which exist on no branch. The trap was in the old `compactMap` in `fileNames`, triggered by a draw that was changed before commit.\n- misread-trace.txt carries `/home/user/SafeDI/...` paths.\n- In crashed-thread-seed15.txt, frame 2 reads `GraphFuzzer.swift:122` while frames 5 and 8 read `:12201:115` and `:12197:83`, so the trace is truncated or hand-edited.\n- `GraphFuzzerFileNameTests.toolOutcome_runsTheTool_whenASplitGraphWritesInstantiableAboveMainActor` already reproduces the old trap: two modules, with `@Instantiable` above `@MainActor`.\n\nThe folder is harmless to the build, but it is history and machine paths in the tree, against the repo's no-history, no-local-paths convention.",
+  "fix": "Drop the folder and put the story in the commit or PR text. Or keep only a short README that names the regression test as the reproduction, without the traces."
+ },
+ {
+  "claim": "`fileName(of:)` claims to name files as `executeSafeDIToolTest` writes them but differs from `createSwiftFixtureFiles` (parsed `typeDeclaration` first; no `_2` suffix for duplicates).",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed by comparing the two.\n\n- `createSwiftFixtureFiles(from:in:)` takes the first type after the first `@Instantiable` match and suffixes repeated base names with `_2`.\n- `GraphFuzzerFixture.fileName(of:)` first tries `markedFileName`, then the first `GraphFuzzerSourceLine.typeDeclaration` (the pre-existing rule), then the new regex fallback. It never suffixes.\n\nThe doc comments added on this branch overclaim. No drawn graph diverges, since each type has its own file and `@MainActor` is written first. A divergence would also fail loudly: `fixtureDirectory(of:in:seed:)` throws `GraphFuzzerInfrastructureError` when the first name was not written, and `filesByName` throws on duplicate names. The first-rule ordering predates the branch.",
+  "fix": "Soften the doc comment on `fileNames` and `fileName(of:)` to say it names the files the fuzzer draws (one `@Instantiable` type per file, distinct names) as the harness does. Or apply the regex rule first so the two agree."
+ }
+]
