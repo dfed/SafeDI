@@ -130,8 +130,6 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 			#expect(GraphFuzzerBuilderSurface.accepts(parameterType: parameterType, facts: Self.forwardingService, form: .forwardingClosure), "\(parameterType)")
 		}
 		#expect(GraphFuzzerBuilderSurface.accepts(parameterType: "ErasedInstantiator<Int, any Service>.Builder", facts: Self.forwardingService, form: .storedClosure))
-		let instantiatorFacts = GraphFuzzerBuilderSurface.BuilderFacts(fillingType: "Screen", returnedType: "Screen", isSendable: false, forwardedType: "Screen.ForwardedProperties")
-		#expect(GraphFuzzerBuilderSurface.accepts(parameterType: "Instantiator<Screen>.Builder", facts: instantiatorFacts, form: .forwardingClosure))
 	}
 
 	@Test
@@ -206,6 +204,18 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func problems_reportNothing_whenInstantiatorBuilderCallMeetsPlainClosure() {
+		// An `Instantiator<Screen>.Builder` names `Screen.ForwardedProperties` whether or not `Screen` forwards anything, so
+		// the call writes a builder that forwards nothing, which a place moved to a plain place keeps taking.
+		let drawn = [GraphFuzzerBuilderSurface.Callable(key: "Feature public Seam.mock", parameters: [GraphFuzzerBuilderSurface.Parameter("screenBuilder: Instantiator<Screen>.Builder")])]
+		let edited = [GraphFuzzerBuilderSurface.Callable(key: "Feature public Seam.mock", parameters: [GraphFuzzerBuilderSurface.Parameter("screenBuilder: @escaping () -> Screen")])]
+		for seed in UInt64(0)..<3 {
+			#expect(GraphFuzzerBuilderSurface.calls(against: drawn, seed: seed).flatMap { GraphFuzzerBuilderSurface.problems(of: $0, against: edited) } == [], "seed \(seed)")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func problems_reportRenamedBuilderAndNewRequiredParameter_whenEditedSurfaceChangesThem() {
 		let drawn = [GraphFuzzerBuilderSurface.Callable(key: "Feature public Seam.init", parameters: [
 			GraphFuzzerBuilderSurface.Parameter("serviceImplBuilder: @escaping () -> ServiceImpl"),
@@ -250,9 +260,9 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func sameSupplyJudgment_reportsRejection_whenToolRejectsEditedGraph() {
+	func sameSupplyJudgment_reportsRejectionUnjudged_whenToolRejectsEditedGraph() {
 		let drawn = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl"])
-		#expect(GraphFuzzerBuilderSurface.sameSupplyJudgment(drawn: drawn, edited: .rejected(diagnostics: "Seam.swift:3:2: error: Cycle"), seed: 0) == .init(isJudged: true, problems: [
+		#expect(GraphFuzzerBuilderSurface.sameSupplyJudgment(drawn: drawn, edited: .rejected(diagnostics: "Seam.swift:3:2: error: Cycle"), seed: 0) == .init(isJudged: false, problems: [
 			"The tool rejects the edited graph:\nSeam.swift:3:2: error: Cycle",
 		]))
 	}
@@ -294,19 +304,19 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func addedSupplyJudgment_reportsRejection_whenToolRejectsGraphWithAddedPlaces() {
+	func addedSupplyJudgment_reportsRejectionUnjudged_whenToolRejectsGraphWithAddedPlaces() {
 		let without = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl"])
-		#expect(GraphFuzzerBuilderSurface.addedSupplyJudgment(without: without, with: .rejected(diagnostics: "Seam.swift:3:2: error: Cycle")) == .init(isJudged: true, problems: [
+		#expect(GraphFuzzerBuilderSurface.addedSupplyJudgment(without: without, with: .rejected(diagnostics: "Seam.swift:3:2: error: Cycle")) == .init(isJudged: false, problems: [
 			"The tool rejects the edited graph:\nSeam.swift:3:2: error: Cycle",
 		]))
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func rejectionJudgment_reportsAddedBuilder_whenRemedyAddsBuilderBesideDrawnOne() {
+	func remedyBuildersJudgment_reportsAddedBuilder_whenRemedyAddsBuilderBesideDrawnOne() {
 		let drawn = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl"])
 		let remedied = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl", "serviceImplForwardingBuilder: @escaping () -> ServiceImpl"])
-		let judgment = GraphFuzzerBuilderSurface.rejectionJudgment(drawn: drawn, unremedied: .rejected(diagnostics: "Fuzz/FuzzFeature/Seam.swift:3:2: error: Forwards other values"), remedied: remedied, meetingModule: .seamModule)
+		let judgment = GraphFuzzerBuilderSurface.remedyBuildersJudgment(drawn: drawn, remedied: remedied)
 		#expect(judgment == .init(isJudged: true, problems: [
 			"Feature public Seam.mock takes builders `serviceImplBuilder: @escaping () -> ServiceImpl`, `serviceImplForwardingBuilder: @escaping () -> ServiceImpl` with the remedy and `serviceImplBuilder: @escaping () -> ServiceImpl` without it, so the remedied place is not a place of the drawn builder",
 		]))
@@ -314,9 +324,15 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func rejectionJudgment_reportsRejectionElsewhere_whenMeetingModuleReportsNoError() {
+	func remedyBuildersJudgment_reportsNothing_whenRemedyKeepsDrawnBuilders() {
 		let drawn = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl"])
-		let judgment = GraphFuzzerBuilderSurface.rejectionJudgment(drawn: drawn, unremedied: .rejected(diagnostics: "Fuzz/FuzzApp/Caller.swift:3:2: error: Forwards other values"), remedied: drawn, meetingModule: .seamModule)
+		#expect(GraphFuzzerBuilderSurface.remedyBuildersJudgment(drawn: drawn, remedied: drawn) == .init(isJudged: true, problems: []))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func rejectionJudgment_reportsRejectionElsewhere_whenMeetingModuleReportsNoError() {
+		let judgment = GraphFuzzerBuilderSurface.rejectionJudgment(unremedied: .rejected(diagnostics: "Fuzz/FuzzApp/Caller.swift:3:2: error: Forwards other values"), meetingModule: .seamModule)
 		#expect(judgment == .init(isJudged: true, problems: [
 			"The tool rejects a builder whose places forward other values only outside FuzzFeature, where they meet:\nFuzz/FuzzApp/Caller.swift:3:2: error: Forwards other values",
 		]))
@@ -324,8 +340,8 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func remedyJudgment_reportsRejection_whenToolRejectsRemedy() {
-		#expect(GraphFuzzerBuilderSurface.remedyJudgment(remedied: .rejected(diagnostics: "Seam.swift:3:2: error: Cycle")) == .init(isJudged: true, problems: [
+	func remedyJudgment_reportsRejectionUnjudged_whenToolRejectsRemedy() {
+		#expect(GraphFuzzerBuilderSurface.remedyJudgment(remedied: .rejected(diagnostics: "Seam.swift:3:2: error: Cycle")) == .init(isJudged: false, problems: [
 			"The tool rejects the remedied graph, whose places forward the same values:\nSeam.swift:3:2: error: Cycle",
 		]))
 	}
@@ -408,15 +424,12 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 		}
 	}
 
-	/// Part (iii)'s judgment of `seed`'s graph with a place forwarding other values, and its remedy.
+	/// Part (iii)'s judgment of `seed`'s graph with a place forwarding other values.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private static func forwardingOtherValuesJudgment(feature: GraphFuzzerGeneratorFeature, seed: UInt64) async throws -> GraphFuzzerBuilderSurface.PairJudgment {
 		let fixture = try #require(GraphFuzzerGenerator.fixture(forSeed: seed, features: [feature], builderSurfaceEdit: .placeForwardingOtherValues))
-		let remedied = try #require(GraphFuzzerGenerator.fixture(forSeed: seed, features: [feature], builderSurfaceEdit: .placeForwardingOtherValuesRemedied))
 		return try await GraphFuzzerBuilderSurface.rejectionJudgment(
-			drawn: GraphFuzzerOracle.toolOutcome(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [feature])),
 			unremedied: GraphFuzzerOracle.toolOutcome(of: fixture),
-			remedied: GraphFuzzerOracle.toolOutcome(of: remedied),
 			meetingModule: .seamModule,
 		)
 	}

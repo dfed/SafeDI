@@ -5747,7 +5747,7 @@ struct SafeDIToolGraphFuzzerTests {
 		var issues = GraphFuzzerKnownIssue.adding(.builderSurface(.builderSurfaceNamesGeneratedType), reason: builderSurfaceReason, seeds: seeds.base, to: issues)
 		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.builderLabelBreaksContract), reason: labelReason, seeds: seeds.labels, to: issues)
 		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.sameSupplyCallStopsCompiling), reason: sameSupplyReason, seeds: seeds.sameSupply, to: issues)
-		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.sameSupplyCallStopsCompiling), reason: sameSupplyRejectedLegitimatelyReason, seeds: seeds.sameSupplyRejectedLegitimately, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.sameSupplyEditRejected), reason: sameSupplyRejectedLegitimatelyReason, seeds: seeds.sameSupplyRejectedLegitimately, to: issues)
 		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.addedBuilderChangesExistingBuilder), reason: addedSupplyReason, seeds: seeds.addedSupply, to: issues)
 		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.placesForwardingOtherValuesAccepted), reason: forwardingOtherValuesReason, seeds: seeds.forwardingOtherValues, to: issues)
 		return GraphFuzzerKnownIssue.adding(.builderSurface(.callingMockChangesBuilder), reason: callingMocksReason, seeds: seeds.callingMocks, to: issues)
@@ -5879,7 +5879,9 @@ struct SafeDIToolGraphFuzzerTests {
 			"instantiatorChangedToErasedInstantiator",
 			"erasedInstantiatorChangedToInstantiator",
 			"sendableInstantiatorPlaceMovedToPlainPlace",
+			"plainPlaceMovedToSendableInstantiator",
 			"sendableInstantiatorChangedToSendableErasedInstantiator",
+			"sendableErasedInstantiatorChangedToSendableInstantiator",
 			"placeOfNewBuilderOfExistingFillingType",
 			"placeForwardingOtherValues",
 			"secondCallOfPublicMock",
