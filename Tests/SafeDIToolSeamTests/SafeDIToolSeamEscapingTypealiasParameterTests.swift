@@ -383,10 +383,10 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		let file = try generatedFile(ofModuleNamed: "Feature", typeName: "Screen", in: output, under: integration)
 		#expect(file == Self.expectedFile(code: """
 		extension Screen {
-		    @frozen public enum SafeDIScope_Service {
+		    @frozen nonisolated public enum SafeDIScope_Service {
 		        case owner(owner_Values, SafeDIScope_Service.ServiceOwner_Scope)
 
-		        public struct owner_Values {
+		        nonisolated public struct owner_Values {
 		            public let onForward: OnTap
 		            public var config: Config { __safeDI_config.instance }
 		            let __safeDI_config: LazilyInstantiated<Config>
@@ -397,20 +397,46 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen public enum ServiceOwner_Scope {
+		        @frozen nonisolated public enum ServiceOwner_Scope {
 		            case service(service_Values)
 
-		            public struct service_Values {}
+		            nonisolated public struct service_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<Built> {
+		                public let service: (service_Values) -> Built
+
+		                public init(service: @escaping (service_Values) -> Built) {
+		                    self.service = service
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                    self.service = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<Built> {
+		            public let owner: (owner_Values) -> SafeDIScope_Service.ServiceOwner_Scope.__safeDI_Builder<Built>
+
+		            public init(owner: @escaping (owner_Values) -> SafeDIScope_Service.ServiceOwner_Scope.__safeDI_Builder<Built>) {
+		                self.owner = owner
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                self.owner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public convenience init(__safeDI_onForward onForward: @escaping OnTap, __safeDI_config: @autoclosure @escaping () -> Config, __safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
+		    public convenience init(__safeDI_onForward onForward: @escaping OnTap, __safeDI_config: @autoclosure @escaping () -> Config, __safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
 		        let config = LazilyInstantiated<Config>(__safeDI_config)
-		        let __safeDI_serviceValues_owner = SafeDIScope_Service.owner_Values(onForward: onForward, config: config)
+		        let __safeDI_serviceBuilder_owner = __safeDI_serviceBuilder.owner(SafeDIScope_Service.owner_Values(onForward: onForward, config: config))
 		        func __safeDI_owner() -> ServiceOwner {
-		            let service: any Service = __safeDI_serviceBuilder(.owner(__safeDI_serviceValues_owner, .service(SafeDIScope_Service.ServiceOwner_Scope.service_Values())))
+		            let service: any Service = __safeDI_serviceBuilder_owner.service(SafeDIScope_Service.ServiceOwner_Scope.service_Values())
 		            return ServiceOwner(onForward: onForward, config: config.instance, service: service)
 		        }
 		        let owner: ServiceOwner = __safeDI_owner()
@@ -419,7 +445,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_58D52DF2C0FE798D {}
+		    public enum __safeDI_Screen_239E7FD9F9C5644D {}
 		}
 		"""), "Unexpected output \(file)")
 	}

@@ -57,10 +57,10 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"ExportFeature": """
 			extension ExportFeature {
-			    @frozen public enum SafeDIScope_Uploader {
+			    @frozen nonisolated public enum SafeDIScope_Uploader {
 			        case uploader(uploader_Values)
 
-			        public struct uploader_Values {
+			        nonisolated public struct uploader_Values {
 			            public var exportService: ExportService { __safeDI_exportService.instance }
 			            public let screenBuilder: Instantiator<ExportScreen>
 			            let __safeDI_exportService: LazilyInstantiated<ExportService>
@@ -70,28 +70,41 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                self.screenBuilder = screenBuilder
 			            }
 			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<Built> {
+			            public let uploader: (uploader_Values) -> Built
+
+			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			                self.uploader = uploader
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                self.uploader = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-			    public init(exportService: ExportService, uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
-			        self.init(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: uploaderBuilder)
+			    public init(exportService: ExportService, uploaderBuilder: @escaping () -> any Uploader) {
+			        self.init(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: .init(__safeDI_noScope: uploaderBuilder))
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// From code you write, call the initializer above instead.
-			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: SafeDIScope_Uploader.__safeDI_Builder<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
-			        let uploader: any Uploader = __safeDI_uploaderBuilder(.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, screenBuilder: screenBuilder)))
+			        let uploader: any Uploader = __safeDI_uploaderBuilder.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, screenBuilder: screenBuilder))
 			        self.init(screenBuilder: screenBuilder, uploader: uploader)
 			    }
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_22973D5D6A377C27 {}
+			    public enum __safeDI_ExportFeature_6AB1C2F5B579DAE9 {}
 			}
 			""",
 		]))
@@ -180,28 +193,57 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"ExportFeature": """
 			extension ExportFeature {
-			    @frozen public enum SafeDIScope_Uploader {
-			        @frozen public enum Panel_Scope {
+			    @frozen nonisolated public enum SafeDIScope_Uploader {
+			        @frozen nonisolated public enum Panel_Scope {
 			            case uploader(uploader_Values)
 
-			            public struct uploader_Values {}
+			            nonisolated public struct uploader_Values {}
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<Built> {
+			                public let uploader: (uploader_Values) -> Built
+
+			                public init(uploader: @escaping (uploader_Values) -> Built) {
+			                    self.uploader = uploader
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                    self.uploader = { _ in __safeDI_builder() }
+			                }
+			            }
 			        }
 			    }
 
-			    @frozen public enum SafeDISendableScope_Uploader {
+			    @frozen nonisolated public enum SafeDISendableScope_Uploader {
 			        case panelBuilder(SafeDIScope_Uploader.Panel_Scope)
+
+			        nonisolated public struct panelBuilder_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<Built>: Sendable {
+			            public let panelBuilder: @Sendable (panelBuilder_Values) -> SafeDIScope_Uploader.Panel_Scope.__safeDI_Builder<Built>
+
+			            public init(panelBuilder: @escaping @Sendable (panelBuilder_Values) -> SafeDIScope_Uploader.Panel_Scope.__safeDI_Builder<Built>) {
+			                self.panelBuilder = panelBuilder
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> Built) {
+			                self.panelBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderSendableBuilder: @escaping @Sendable (SafeDISendableScope_Uploader) -> any Uploader) {
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderSendableBuilder: SafeDISendableScope_Uploader.__safeDI_Builder<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
-			        @Sendable func __safeDI_panelBuilder() -> Panel {
-			            let uploader: any Uploader = __safeDI_uploaderSendableBuilder(.panelBuilder(.uploader(SafeDIScope_Uploader.Panel_Scope.uploader_Values())))
+			        @Sendable nonisolated func __safeDI_panelBuilder() -> Panel {
+			            let __safeDI_uploaderSendableBuilder_panelBuilder = __safeDI_uploaderSendableBuilder.panelBuilder(SafeDISendableScope_Uploader.panelBuilder_Values())
+			            let uploader: any Uploader = __safeDI_uploaderSendableBuilder_panelBuilder.uploader(SafeDIScope_Uploader.Panel_Scope.uploader_Values())
 			            return Panel(uploader: uploader)
 			        }
 			        let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
@@ -210,7 +252,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_6AFA0E82E1FFBD43 {}
+			    public enum __safeDI_ExportFeature_564572B42FCDFB7B {}
 			}
 			""",
 		]))
@@ -363,10 +405,10 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"ExportFeature": """
 			extension ExportFeature {
-			    @frozen public enum SafeDIScope_Uploader {
+			    @frozen nonisolated public enum SafeDIScope_Uploader {
 			        case uploader(uploader_Values)
 
-			        public struct uploader_Values {
+			        nonisolated public struct uploader_Values {
 			            public var exportService: ExportService { __safeDI_exportService.instance }
 			            public var logger: Logger { __safeDI_logger.instance }
 			            public let analytics: Analytics
@@ -381,11 +423,24 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                self.screenBuilder = screenBuilder
 			            }
 			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<Built> {
+			            public let uploader: (uploader_Values) -> Built
+
+			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			                self.uploader = uploader
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                self.uploader = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_logger: @autoclosure @escaping () -> Logger, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_logger: @autoclosure @escaping () -> Logger, __safeDI_uploaderBuilder: SafeDIScope_Uploader.__safeDI_Builder<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
 			        let analytics = Analytics()
@@ -393,13 +448,13 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            ExportScreen(exportService: exportService.instance, logger: logger.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
-			        let uploader: any Uploader = __safeDI_uploaderBuilder(.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, logger: logger, analytics: analytics, screenBuilder: screenBuilder)))
+			        let uploader: any Uploader = __safeDI_uploaderBuilder.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, logger: logger, analytics: analytics, screenBuilder: screenBuilder))
 			        self.init(analytics: analytics, screenBuilder: screenBuilder, uploader: uploader)
 			    }
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_00B6A325709B1B40 {}
+			    public enum __safeDI_ExportFeature_A7FEF43CC8A37170 {}
 			}
 			""",
 		]))
@@ -462,10 +517,10 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"ExportFeature": """
 			extension ExportFeature {
-			    @frozen public enum SafeDIScope_Uploader {
+			    @frozen nonisolated public enum SafeDIScope_Uploader {
 			        case uploader(uploader_Values)
 
-			        public struct uploader_Values {
+			        nonisolated public struct uploader_Values {
 			            public var exportService: ExportService { __safeDI_exportService.instance }
 			            public var logger: Logger? { __safeDI_logger.instance }
 			            public let screenBuilder: Instantiator<ExportScreen>
@@ -478,24 +533,37 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                self.screenBuilder = screenBuilder
 			            }
 			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<Built> {
+			            public let uploader: (uploader_Values) -> Built
+
+			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			                self.uploader = uploader
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                self.uploader = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_logger: @autoclosure @escaping () -> Logger?, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_logger: @autoclosure @escaping () -> Logger?, __safeDI_uploaderBuilder: SafeDIScope_Uploader.__safeDI_Builder<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
 			        func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance, logger: logger.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
-			        let uploader: any Uploader = __safeDI_uploaderBuilder(.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, logger: logger, screenBuilder: screenBuilder)))
+			        let uploader: any Uploader = __safeDI_uploaderBuilder.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, logger: logger, screenBuilder: screenBuilder))
 			        self.init(screenBuilder: screenBuilder, uploader: uploader)
 			    }
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_E1C7C999BA863935 {}
+			    public enum __safeDI_ExportFeature_4E63D69B290913B3 {}
 			}
 			""",
 		]))
@@ -592,10 +660,10 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"ExportFeature": """
 			extension ExportFeature {
-			    @frozen public enum SafeDIScope_Uploader {
+			    @frozen nonisolated public enum SafeDIScope_Uploader {
 			        case uploader(uploader_Values)
 
-			        public struct uploader_Values {
+			        nonisolated public struct uploader_Values {
 			            public var exportService: ExportService { __safeDI_exportService.instance }
 			            public var logger: Logger! { __safeDI_logger.instance }
 			            public let screenBuilder: Instantiator<ExportScreen>
@@ -608,24 +676,37 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                self.screenBuilder = screenBuilder
 			            }
 			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<Built> {
+			            public let uploader: (uploader_Values) -> Built
+
+			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			                self.uploader = uploader
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                self.uploader = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_logger: @autoclosure @escaping () -> Logger?, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_logger: @autoclosure @escaping () -> Logger?, __safeDI_uploaderBuilder: SafeDIScope_Uploader.__safeDI_Builder<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
 			        func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance, logger: logger.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
-			        let uploader: any Uploader = __safeDI_uploaderBuilder(.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, logger: logger, screenBuilder: screenBuilder)))
+			        let uploader: any Uploader = __safeDI_uploaderBuilder.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, logger: logger, screenBuilder: screenBuilder))
 			        self.init(screenBuilder: screenBuilder, uploader: uploader)
 			    }
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_1C2D437F31039D13 {}
+			    public enum __safeDI_ExportFeature_56B3109A3997A7F5 {}
 			}
 			""",
 		]))
@@ -687,10 +768,10 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"ExportFeature": """
 			extension ExportFeature {
-			    @frozen public enum SafeDIScope_Uploader {
+			    @frozen nonisolated public enum SafeDIScope_Uploader {
 			        case uploader(uploader_Values)
 
-			        public struct uploader_Values {
+			        nonisolated public struct uploader_Values {
 			            public var exportService: ExportService { __safeDI_exportService.instance }
 			            public let reportBuilder: Instantiator<Report>
 			            public let screenBuilder: Instantiator<ExportScreen>
@@ -702,23 +783,36 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                self.screenBuilder = screenBuilder
 			            }
 			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<Built> {
+			            public let uploader: (uploader_Values) -> Built
+
+			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			                self.uploader = uploader
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                self.uploader = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_reportBuilder reportBuilder: Instantiator<Report>, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_reportBuilder reportBuilder: Instantiator<Report>, __safeDI_uploaderBuilder: SafeDIScope_Uploader.__safeDI_Builder<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance, reportBuilder: reportBuilder)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
-			        let uploader: any Uploader = __safeDI_uploaderBuilder(.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, reportBuilder: reportBuilder, screenBuilder: screenBuilder)))
+			        let uploader: any Uploader = __safeDI_uploaderBuilder.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, reportBuilder: reportBuilder, screenBuilder: screenBuilder))
 			        self.init(screenBuilder: screenBuilder, uploader: uploader)
 			    }
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_0ADF41BAF7CFEFF7 {}
+			    public enum __safeDI_ExportFeature_08CE621B79CD9445 {}
 			}
 			""",
 		]))
@@ -778,10 +872,10 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"ExportFeature": """
 			extension ExportFeature {
-			    @frozen public enum SafeDIScope_Uploader {
+			    @frozen nonisolated public enum SafeDIScope_Uploader {
 			        case uploader(uploader_Values)
 
-			        public struct uploader_Values {
+			        nonisolated public struct uploader_Values {
 			            public var exportService: ExportService { __safeDI_exportService.instance }
 			            public let screenBuilder: Instantiator<ExportScreen>
 			            let __safeDI_exportService: LazilyInstantiated<ExportService>
@@ -791,23 +885,36 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                self.screenBuilder = screenBuilder
 			            }
 			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<Built> {
+			            public let uploader: (uploader_Values) -> Built
+
+			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			                self.uploader = uploader
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                self.uploader = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: SafeDIScope_Uploader.__safeDI_Builder<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
-			        let uploader: any Uploader = __safeDI_uploaderBuilder(.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, screenBuilder: screenBuilder)))
+			        let uploader: any Uploader = __safeDI_uploaderBuilder.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, screenBuilder: screenBuilder))
 			        self.init(screenBuilder: screenBuilder, uploader: uploader)
 			    }
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_22973D5D6A377C27 {}
+			    public enum __safeDI_ExportFeature_6AB1C2F5B579DAE9 {}
 			}
 			""",
 		]))
@@ -863,18 +970,31 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"ExportFeature": """
 			extension ExportFeature {
-			    @frozen public enum SafeDIScope_Uploader {
+			    @frozen nonisolated public enum SafeDIScope_Uploader {
 			        case uploader(uploader_Values)
 
-			        public struct uploader_Values {
+			        nonisolated public struct uploader_Values {
 			            public let exportService: any Exporting
 			            public let screenBuilder: Instantiator<ExportScreen>
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<Built> {
+			            public let uploader: (uploader_Values) -> Built
+
+			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			                self.uploader = uploader
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                self.uploader = { _ in __safeDI_builder() }
+			            }
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_exportService __safeDI_exportService_: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
+			    public init(__safeDI_exportService __safeDI_exportService_: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: SafeDIScope_Uploader.__safeDI_Builder<any Uploader>) {
 			        #sourceLocation(file: "\(seamPath)", line: 9)
 			        let exportService: any Exporting = __safeDI_exportService_()
 			        #sourceLocation()
@@ -882,13 +1002,13 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            ExportScreen(exportService: exportService)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
-			        let uploader: any Uploader = __safeDI_uploaderBuilder(.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, screenBuilder: screenBuilder)))
+			        let uploader: any Uploader = __safeDI_uploaderBuilder.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, screenBuilder: screenBuilder))
 			        self.init(exportService: exportService, screenBuilder: screenBuilder, uploader: uploader)
 			    }
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_6600585188E01684 {}
+			    public enum __safeDI_ExportFeature_C9FE036F60C7AEEE {}
 			}
 			""",
 		]))
@@ -944,10 +1064,10 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"ExportFeature": """
 			extension ExportFeature {
-			    @frozen public enum SafeDIScope_Uploader {
+			    @frozen nonisolated public enum SafeDIScope_Uploader {
 			        case uploader(uploader_Values)
 
-			        public struct uploader_Values {
+			        nonisolated public struct uploader_Values {
 			            public var exportService: ExportService { __safeDI_exportService.instance }
 			            public let screenBuilder: Instantiator<ExportScreen>
 			            let __safeDI_exportService: LazilyInstantiated<ExportService>
@@ -957,23 +1077,36 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                self.screenBuilder = screenBuilder
 			            }
 			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<Built> {
+			            public let uploader: (uploader_Values) -> Built
+
+			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			                self.uploader = uploader
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                self.uploader = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: SafeDIScope_Uploader.__safeDI_Builder<any Uploader>) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
-			        let uploader: any Uploader = __safeDI_uploaderBuilder(.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, screenBuilder: screenBuilder)))
+			        let uploader: any Uploader = __safeDI_uploaderBuilder.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, screenBuilder: screenBuilder))
 			        self.init(screenBuilder: screenBuilder, uploader: uploader)
 			    }
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_22973D5D6A377C27 {}
+			    public enum __safeDI_ExportFeature_6AB1C2F5B579DAE9 {}
 			}
 			""",
 			"Shell": """
@@ -991,8 +1124,8 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let headerBuilder = Instantiator<Header>(__safeDI_headerBuilder)
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: { __safeDI_uploaderBuilder(.exportFeature($0)) })
+			            _ = ExportFeature.__safeDI_ExportFeature_6AB1C2F5B579DAE9.self
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: .init(uploader: { __safeDI_uploaderValues in __safeDI_uploaderBuilder(.exportFeature(.uploader(__safeDI_uploaderValues))) }))
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(headerBuilder: headerBuilder, exportFeature: exportFeature)
@@ -1054,10 +1187,10 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app), integration: integration, filesToDelete: &filesToDelete)
 		let seam = """
 		extension ExportFeature {
-		    @frozen public enum SafeDIScope_Uploader {
+		    @frozen nonisolated public enum SafeDIScope_Uploader {
 		        case uploader(uploader_Values)
 
-		        public struct uploader_Values {
+		        nonisolated public struct uploader_Values {
 		            public var exportService: ExportService { __safeDI_exportService.instance }
 		            public let screenBuilder: Instantiator<ExportScreen>
 		            let __safeDI_exportService: LazilyInstantiated<ExportService>
@@ -1067,23 +1200,36 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		                self.screenBuilder = screenBuilder
 		            }
 		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<Built> {
+		            public let uploader: (uploader_Values) -> Built
+
+		            public init(uploader: @escaping (uploader_Values) -> Built) {
+		                self.uploader = uploader
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                self.uploader = { _ in __safeDI_builder() }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
+		    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: SafeDIScope_Uploader.__safeDI_Builder<any Uploader>) {
 		        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 		        func __safeDI_screenBuilder() -> ExportScreen {
 		            ExportScreen(exportService: exportService.instance)
 		        }
 		        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
-		        let uploader: any Uploader = __safeDI_uploaderBuilder(.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, screenBuilder: screenBuilder)))
+		        let uploader: any Uploader = __safeDI_uploaderBuilder.uploader(SafeDIScope_Uploader.uploader_Values(exportService: exportService, screenBuilder: screenBuilder))
 		        self.init(screenBuilder: screenBuilder, uploader: uploader)
 		    }
 		}
 
 		extension ExportFeature {
-		    public enum __safeDI_ExportFeature_22973D5D6A377C27 {}
+		    public enum __safeDI_ExportFeature_6AB1C2F5B579DAE9 {}
 		}
 		"""
 		let mock = """

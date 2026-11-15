@@ -72,31 +72,23 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let session = Session()
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_BDD2A4CCA0E772F5.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-			                switch scope {
-			                case let .settings(values, scope): return __safeDI_userServiceBuilder_Service_Settings_Scope(scope, session: session, theme: values.theme)
-			                case let .home(_, scope): return __safeDI_userServiceBuilder_Service_Home_Scope(scope)
-			                }
+			            _ = Service.__safeDI_Service_A7ED340089474321.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(settings: { values in __safeDI_userServiceBuilder_Service_Settings_Scope(session: session, theme: values.theme) }, home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Settings_Scope(_ scope: Service.SafeDIScope_UserService.Settings_Scope, session: Session, theme: Theme) -> any UserService {
-			                switch scope {
-			                case let .avatar(_, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, session: session, theme: theme)
-			                }
+			            func __safeDI_userServiceBuilder_Service_Settings_Scope(session: Session, theme: Theme) -> Service.SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<any UserService> {
+			                .init(avatar: { _ in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: session, theme: theme) })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(_ scope: Service.SafeDIScope_UserService.Avatar_Scope, session: Session, theme: Theme) -> any UserService {
-			                switch scope {
-			                case .userService:
+			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(session: Session, theme: Theme) -> Service.SafeDIScope_UserService.Avatar_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
 			                    let userService: any UserService = DefaultUserService(session: session, theme: theme)
 			                    return userService
-			                }
+			                })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Home_Scope(_ scope: Service.SafeDIScope_UserService.Home_Scope) -> any UserService {
-			                switch scope {
-			                case let .avatar(values, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, session: values.session, theme: values.theme)
-			                }
+			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.SafeDIScope_UserService.Home_Scope.__safeDI_Builder<any UserService> {
+			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values.session, theme: values.theme) })
 			            }
-			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
 			        let service: Service = __safeDI_service()
 			        self.init(service: service, session: session)
@@ -132,31 +124,23 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_F4129070323CDFE2.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-			                switch scope {
-			                case let .home(_, scope): return __safeDI_userServiceBuilder_Service_Home_Scope(scope)
-			                case let .settings(_, scope): return __safeDI_userServiceBuilder_Service_Settings_Scope(scope, session: nil)
-			                }
+			            _ = Service.__safeDI_Service_32FC276B366756BE.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() }, settings: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope(session: nil) })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Home_Scope(_ scope: Service.SafeDIScope_UserService.Home_Scope) -> any UserService {
-			                switch scope {
-			                case let .avatar(values, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, session: values.session)
-			                }
+			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.SafeDIScope_UserService.Home_Scope.__safeDI_Builder<any UserService> {
+			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values.session) })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(_ scope: Service.SafeDIScope_UserService.Avatar_Scope, session: Session?) -> any UserService {
-			                switch scope {
-			                case .userService:
+			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(session: Session?) -> Service.SafeDIScope_UserService.Avatar_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
 			                    let userService: any UserService = DefaultUserService(session: session)
 			                    return userService
-			                }
+			                })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Settings_Scope(_ scope: Service.SafeDIScope_UserService.Settings_Scope, session: Session?) -> any UserService {
-			                switch scope {
-			                case let .avatar(_, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, session: session)
-			                }
+			            func __safeDI_userServiceBuilder_Service_Settings_Scope(session: Session?) -> Service.SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<any UserService> {
+			                .init(avatar: { _ in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: session) })
 			            }
-			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
 			        let service: Service = __safeDI_service()
 			        self.init(service: service)
@@ -196,32 +180,24 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_47E9FFFFF356AFE2.self // \(Self.moduleInfoComment)
-			            func __safeDI_apiBuilder_Service(_ scope: Service.SafeDIScope_Api) -> any Api {
-			                switch scope {
-			                case let .homeBuilder(_, scope): return __safeDI_apiBuilder_Service_Home_Scope(scope)
-			                case let .settings(_, scope): return __safeDI_apiBuilder_Service_Settings_Scope(scope, tab: nil)
-			                }
+			            _ = Service.__safeDI_Service_C4EFC52CB018649A.self // \(Self.moduleInfoComment)
+			            func __safeDI_apiBuilder_Service() -> Service.SafeDIScope_Api.__safeDI_Builder<any Api> {
+			                .init(homeBuilder: { _ in __safeDI_apiBuilder_Service_Home_Scope() }, settings: { _ in __safeDI_apiBuilder_Service_Settings_Scope(tab: nil) })
 			            }
-			            func __safeDI_apiBuilder_Service_Home_Scope(_ scope: Service.SafeDIScope_Api.Home_Scope) -> any Api {
-			                switch scope {
-			                case let .detailBuilder(values, scope): return __safeDI_apiBuilder_Service_Detail_Scope(scope, tab: values.tab)
-			                }
+			            func __safeDI_apiBuilder_Service_Home_Scope() -> Service.SafeDIScope_Api.Home_Scope.__safeDI_Builder<any Api> {
+			                .init(detailBuilder: { values in __safeDI_apiBuilder_Service_Detail_Scope(tab: values.tab) })
 			            }
-			            func __safeDI_apiBuilder_Service_Detail_Scope(_ scope: Service.SafeDIScope_Api.Detail_Scope, tab: String?) -> any Api {
-			                switch scope {
-			                case let .api(scope):
+			            func __safeDI_apiBuilder_Service_Detail_Scope(tab: String?) -> Service.SafeDIScope_Api.Detail_Scope.__safeDI_Builder<any Api> {
+			                .init(api: { scope in
 			                    let id = scope.id
 			                    let api: any Api = DefaultApi(id: id, tab: tab)
 			                    return api
-			                }
+			                })
 			            }
-			            func __safeDI_apiBuilder_Service_Settings_Scope(_ scope: Service.SafeDIScope_Api.Settings_Scope, tab: String?) -> any Api {
-			                switch scope {
-			                case let .detailBuilder(_, scope): return __safeDI_apiBuilder_Service_Detail_Scope(scope, tab: tab)
-			                }
+			            func __safeDI_apiBuilder_Service_Settings_Scope(tab: String?) -> Service.SafeDIScope_Api.Settings_Scope.__safeDI_Builder<any Api> {
+			                .init(detailBuilder: { _ in __safeDI_apiBuilder_Service_Detail_Scope(tab: tab) })
 			            }
-			            return Service(__safeDI_apiBuilder: __safeDI_apiBuilder_Service)
+			            return Service(__safeDI_apiBuilder: __safeDI_apiBuilder_Service())
 			        }
 			        let service: Service = __safeDI_service()
 			        self.init(service: service)
@@ -249,31 +225,23 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_E862B36C039806C6.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-			                switch scope {
-			                case let .home(_, scope): return __safeDI_userServiceBuilder_Service_Home_Scope(scope)
-			                case let .settingsBuilder(_, scope): return __safeDI_userServiceBuilder_Service_Settings_Scope(scope)
-			                }
+			            _ = Service.__safeDI_Service_8B7F57FD1D47F3E2.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() }, settingsBuilder: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope() })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Home_Scope(_ scope: Service.SafeDIScope_UserService.Home_Scope) -> any UserService {
-			                switch scope {
-			                case let .avatar(values, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, session: values.session)
-			                }
+			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.SafeDIScope_UserService.Home_Scope.__safeDI_Builder<any UserService> {
+			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values.session) })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(_ scope: Service.SafeDIScope_UserService.Avatar_Scope, session: Session?) -> any UserService {
-			                switch scope {
-			                case .userService:
+			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(session: Session?) -> Service.SafeDIScope_UserService.Avatar_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
 			                    let userService: any UserService = DefaultUserService(session: session)
 			                    return userService
-			                }
+			                })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Settings_Scope(_ scope: Service.SafeDIScope_UserService.Settings_Scope) -> any UserService {
-			                switch scope {
-			                case let .avatar(values, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, session: values.session)
-			                }
+			            func __safeDI_userServiceBuilder_Service_Settings_Scope() -> Service.SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<any UserService> {
+			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values.session) })
 			            }
-			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
 			        let service: Service = __safeDI_service()
 			        self.init(service: service)
@@ -299,31 +267,23 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_5F431683C56802AF.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-			                switch scope {
-			                case let .settingsBuilder(_, scope): return __safeDI_userServiceBuilder_Service_Settings_Scope(scope)
-			                case let .home(_, scope): return __safeDI_userServiceBuilder_Service_Home_Scope(scope)
-			                }
+			            _ = Service.__safeDI_Service_58B290B42665E063.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(settingsBuilder: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope() }, home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Settings_Scope(_ scope: Service.SafeDIScope_UserService.Settings_Scope) -> any UserService {
-			                switch scope {
-			                case let .avatar(values, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, session: values.session)
-			                }
+			            func __safeDI_userServiceBuilder_Service_Settings_Scope() -> Service.SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<any UserService> {
+			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values.session) })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(_ scope: Service.SafeDIScope_UserService.Avatar_Scope, session: Session?) -> any UserService {
-			                switch scope {
-			                case .userService:
+			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(session: Session?) -> Service.SafeDIScope_UserService.Avatar_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
 			                    let userService: any UserService = DefaultUserService(session: session)
 			                    return userService
-			                }
+			                })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Home_Scope(_ scope: Service.SafeDIScope_UserService.Home_Scope) -> any UserService {
-			                switch scope {
-			                case let .avatar(values, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, session: values.session)
-			                }
+			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.SafeDIScope_UserService.Home_Scope.__safeDI_Builder<any UserService> {
+			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values.session) })
 			            }
-			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
 			        let service: Service = __safeDI_service()
 			        self.init(service: service)
@@ -351,31 +311,23 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let logger = Logger()
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_A5FB911289C13CF5.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-			                switch scope {
-			                case let .settings(_, scope): return __safeDI_userServiceBuilder_Service_Settings_Scope(scope, logger: logger)
-			                case let .home(_, scope): return __safeDI_userServiceBuilder_Service_Home_Scope(scope)
-			                }
+			            _ = Service.__safeDI_Service_33604A2387059D3F.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(settings: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope(logger: logger) }, home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Settings_Scope(_ scope: Service.SafeDIScope_UserService.Settings_Scope, logger: Logger) -> any UserService {
-			                switch scope {
-			                case let .avatar(_, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, logger: logger)
-			                }
+			            func __safeDI_userServiceBuilder_Service_Settings_Scope(logger: Logger) -> Service.SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<any UserService> {
+			                .init(avatar: { _ in __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: logger) })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(_ scope: Service.SafeDIScope_UserService.Avatar_Scope, logger: Logger) -> any UserService {
-			                switch scope {
-			                case .userService:
+			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: Logger) -> Service.SafeDIScope_UserService.Avatar_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
 			                    let userService: any UserService = DefaultUserService(logger: logger)
 			                    return userService
-			                }
+			                })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Home_Scope(_ scope: Service.SafeDIScope_UserService.Home_Scope) -> any UserService {
-			                switch scope {
-			                case let .avatar(values, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, logger: values.logger)
-			                }
+			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.SafeDIScope_UserService.Home_Scope.__safeDI_Builder<any UserService> {
+			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: values.logger) })
 			            }
-			            return Service(__safeDI_logger: logger, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			            return Service(__safeDI_logger: logger, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
 			        let service: Service = __safeDI_service()
 			        self.init(logger: logger, service: service)
@@ -401,31 +353,23 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let logger = Logger()
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_56059E08F2BE9915.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-			                switch scope {
-			                case let .home(_, scope): return __safeDI_userServiceBuilder_Service_Home_Scope(scope)
-			                case let .settings(_, scope): return __safeDI_userServiceBuilder_Service_Settings_Scope(scope, logger: logger)
-			                }
+			            _ = Service.__safeDI_Service_CD133EEE9F18DA4F.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() }, settings: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope(logger: logger) })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Home_Scope(_ scope: Service.SafeDIScope_UserService.Home_Scope) -> any UserService {
-			                switch scope {
-			                case let .avatar(values, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, logger: values.logger)
-			                }
+			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.SafeDIScope_UserService.Home_Scope.__safeDI_Builder<any UserService> {
+			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: values.logger) })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(_ scope: Service.SafeDIScope_UserService.Avatar_Scope, logger: Logger) -> any UserService {
-			                switch scope {
-			                case .userService:
+			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: Logger) -> Service.SafeDIScope_UserService.Avatar_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
 			                    let userService: any UserService = DefaultUserService(logger: logger)
 			                    return userService
-			                }
+			                })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Settings_Scope(_ scope: Service.SafeDIScope_UserService.Settings_Scope, logger: Logger) -> any UserService {
-			                switch scope {
-			                case let .avatar(_, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, logger: logger)
-			                }
+			            func __safeDI_userServiceBuilder_Service_Settings_Scope(logger: Logger) -> Service.SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<any UserService> {
+			                .init(avatar: { _ in __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: logger) })
 			            }
-			            return Service(__safeDI_logger: logger, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			            return Service(__safeDI_logger: logger, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
 			        let service: Service = __safeDI_service()
 			        self.init(logger: logger, service: service)
@@ -465,31 +409,23 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_home() -> Home {
-			            _ = Home.__safeDI_Home_B439E14552F86528.self // \(Self.moduleInfoComment)
-			            func __safeDI_apiBuilder_Home(_ scope: Home.SafeDIScope_Api) -> any Api {
-			                switch scope {
-			                case let .aBuilder(_, scope): return __safeDI_apiBuilder_Home_A_Scope(scope)
-			                case let .b(_, scope): return __safeDI_apiBuilder_Home_B_Scope(scope, session: nil)
-			                }
+			            _ = Home.__safeDI_Home_ABA72DBCBBFD6210.self // \(Self.moduleInfoComment)
+			            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
+			                .init(aBuilder: { _ in __safeDI_apiBuilder_Home_A_Scope() }, b: { _ in __safeDI_apiBuilder_Home_B_Scope(session: nil) })
 			            }
-			            func __safeDI_apiBuilder_Home_A_Scope(_ scope: Home.SafeDIScope_Api.A_Scope) -> any Api {
-			                switch scope {
-			                case let .avatar(values, scope): return __safeDI_apiBuilder_Home_Avatar_Scope(scope, session: values.session)
-			                }
+			            func __safeDI_apiBuilder_Home_A_Scope() -> Home.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
+			                .init(avatar: { values in __safeDI_apiBuilder_Home_Avatar_Scope(session: values.session) })
 			            }
-			            func __safeDI_apiBuilder_Home_Avatar_Scope(_ scope: Home.SafeDIScope_Api.Avatar_Scope, session: Session?) -> any Api {
-			                switch scope {
-			                case .api:
+			            func __safeDI_apiBuilder_Home_Avatar_Scope(session: Session?) -> Home.SafeDIScope_Api.Avatar_Scope.__safeDI_Builder<any Api> {
+			                .init(api: { _ in
 			                    let api: any Api = LiveApi(session: session)
 			                    return api
-			                }
+			                })
 			            }
-			            func __safeDI_apiBuilder_Home_B_Scope(_ scope: Home.SafeDIScope_Api.B_Scope, session: Session?) -> any Api {
-			                switch scope {
-			                case let .avatar(_, scope): return __safeDI_apiBuilder_Home_Avatar_Scope(scope, session: session)
-			                }
+			            func __safeDI_apiBuilder_Home_B_Scope(session: Session?) -> Home.SafeDIScope_Api.B_Scope.__safeDI_Builder<any Api> {
+			                .init(avatar: { _ in __safeDI_apiBuilder_Home_Avatar_Scope(session: session) })
 			            }
-			            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home)
+			            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 			        }
 			        let home: Home = __safeDI_home()
 			        self.init(home: home)
