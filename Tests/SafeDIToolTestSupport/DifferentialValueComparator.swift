@@ -1897,11 +1897,6 @@ nonisolated(unsafe) private var runtimeDirectoryToRemoveAtExit: URL?
 /// Another SafeDI release's runtime, which a `DifferentialValuePath` compiles against in place of this checkout's: the
 /// directory of that release's `SafeDI` target's sources, and its built macros tool.
 struct DifferentialValueRuntimeSource: Hashable, Sendable {
-	init(runtimeSourcesDirectory: URL, macrosToolPath: URL) {
-		self.runtimeSourcesDirectory = runtimeSourcesDirectory
-		self.macrosToolPath = macrosToolPath
-	}
-
 	let runtimeSourcesDirectory: URL
 	let macrosToolPath: URL
 }
