@@ -12,15 +12,17 @@ as "aa" occurs twice in "aaa", are an error either way.
 
 --edits EDITS.json applies a list of edits, in order: [{"file": "path", "old": "…", "new": "…", "all": false}, …].
 A path is relative to the current directory. A later edit of a file sees the earlier ones, also when it names the
-file by another path or through a symbolic link.
+file by another path, in another case on a volume that ignores case, or through a symbolic link. A file with a
+second hard link is refused, since replacing it would leave the other name with the old content.
 
 --trim-final-newline drops one final newline from each old and new text read from a file, for an editor that ends
 every file with one. Texts of EDITS.json are taken as they are, so the option is refused beside --edits.
 
 Nothing is written unless every edit applies: a file that does not exist or cannot be written, old text that is
 empty, equal to the new text, absent, or present more than once without --all, and new text UTF-8 cannot spell, stop
-the script with exit status 1 and name the edit. Each file is then replaced whole, by a file written beside it, so
-a file is never left half written, and it keeps its permissions. Files are read and written as UTF-8, byte for byte
+the script with exit status 1 and name the edit. Every new file is then written beside the file it replaces, and
+only when all are written does each take its file's place, so a file is never left half written, and it keeps its
+permissions. A replacement that then fails stops the script, which names the files already replaced. Files are read and written as UTF-8, byte for byte
 otherwise (no newline translation). Exit status 2 on wrong usage.
 
 --self-test DIR writes fixtures into DIR, which must not exist, and checks each case.
@@ -59,15 +61,29 @@ def occurrence_starts(text, old):
     return starts
 
 
+def replace_file(temporary_path, path):
+    """Puts the file at `temporary_path` in the place of `path`. The self-test replaces it to fail a replacement."""
+    os.replace(temporary_path, path)
+
+
 def apply_edits(edits):
     """Applies `edits`, each (name, path, old, new, replaces all), and writes the files only when all apply. Returns
     the number of replacements per path as first given, in the order the files first appear."""
-    contents = {}  # the file's real path → its content
+    contents = {}  # the file's real path, as first given → its content
     given_paths = {}
     counts = {}
+    real_paths = {}  # the file's device and inode → its real path, as first given
     for name, path, old, new, replaces_all in edits:
         real_path = os.path.realpath(path)
+        try:
+            status = os.stat(real_path)
+        except OSError as error:
+            raise EditError(f"{path} cannot be read: {error}")
+        # One file has one device and inode, however its path is spelled; realpath keeps the case it is given.
+        real_path = real_paths.setdefault((status.st_dev, status.st_ino), real_path)
         if real_path not in contents:
+            if status.st_nlink > 1:
+                raise EditError(f"{path} has {status.st_nlink} hard links; replacing it would leave the others with the old content")
             contents[real_path] = read_text(real_path)
             given_paths[real_path] = path
             counts[real_path] = 0
@@ -92,17 +108,29 @@ def apply_edits(edits):
             raise EditError(f"{given_paths[real_path]}: the new text cannot be written as UTF-8: {error}")
         if not os.access(real_path, os.W_OK) or not os.access(os.path.dirname(real_path) or ".", os.W_OK):
             raise EditError(f"{given_paths[real_path]} cannot be written")
-    for real_path, data in encoded.items():
-        descriptor, temporary_path = tempfile.mkstemp(dir=os.path.dirname(real_path) or ".", prefix=".apply-edit-")
-        try:
-            with os.fdopen(descriptor, "wb") as temporary_file:
-                temporary_file.write(data)
-            shutil.copymode(real_path, temporary_path)
-            os.replace(temporary_path, real_path)
-        except OSError as error:
+    temporary_paths = {}
+    replaced = []
+    try:
+        for real_path, data in encoded.items():
+            try:
+                descriptor, temporary_paths[real_path] = tempfile.mkstemp(dir=os.path.dirname(real_path), prefix=".apply-edit-")
+                with os.fdopen(descriptor, "wb") as temporary_file:
+                    temporary_file.write(data)
+                shutil.copymode(real_path, temporary_paths[real_path])
+            except OSError as error:
+                raise EditError(f"{given_paths[real_path]} cannot be written: {error}")
+        for real_path in encoded:
+            try:
+                replace_file(temporary_paths[real_path], real_path)
+            except OSError as error:
+                written = f", after writing {', '.join(replaced)}" if replaced else ""
+                raise EditError(f"{given_paths[real_path]} cannot be replaced{written}: {error}")
+            del temporary_paths[real_path]
+            replaced.append(given_paths[real_path])
+    finally:
+        for temporary_path in temporary_paths.values():
             if os.path.exists(temporary_path):
                 os.unlink(temporary_path)
-            raise EditError(f"{given_paths[real_path]} cannot be written: {error}")
     return {given_paths[real_path]: count for real_path, count in counts.items()}
 
 
@@ -133,6 +161,8 @@ def self_test(root):
     if os.path.exists(root):
         print(f"{root} exists; --self-test writes a new directory", file=sys.stderr)
         return 2
+    # A relative link target would be read from the link's directory.
+    root = os.path.abspath(root)
     os.makedirs(root)
     failures = []
 
@@ -237,6 +267,42 @@ def self_test(root):
     expect(status == 0 and os.stat(mode).st_mode & 0o777 == 0o755 and read_text(mode) == "changed\n", "a rewritten file keeps its permissions")
     expect(not [name for name in os.listdir(root) if name.startswith(".apply-edit-")], "no temporary file is left")
 
+    # A file named in another case is the same file where the volume ignores case.
+    cased = write("cased.swift", "one two\n")
+    other_case = os.path.join(root, "CASED.swift")
+    edits = write("cased.json", json.dumps([{"file": cased, "old": "one", "new": "three"}, {"file": other_case, "old": "two", "new": "four"}]))
+    if os.path.exists(other_case):
+        expect(run("--edits", edits) == 0 and read_text(cased) == "three four\n", "one file named in two cases takes both edits")
+    else:
+        print("skipped: one file named in two cases (this volume tells cases apart)")
+
+    # A file with a second hard link is refused, and both names keep the content.
+    linked = write("linked.swift", "one\n")
+    second_name = os.path.join(root, "linked-again.swift")
+    os.link(linked, second_name)
+    status = run(linked, write("linked.old", "one"), write("linked.new", "two"))
+    expect(status == 1 and read_text(linked) == "one\n" and read_text(second_name) == "one\n", "a file with two hard links is refused")
+
+    # A replacement that fails leaves no temporary file, and names what was replaced before it.
+    global replace_file
+    earlier = write("earlier.swift", "one\n")
+    later = write("later.swift", "two\n")
+    edits = write("replace.json", json.dumps([{"file": earlier, "old": "one", "new": "three"}, {"file": later, "old": "two", "new": "four"}]))
+    genuine_replace_file = replace_file
+
+    def failing_replace_file(temporary_path, path):
+        if path == os.path.realpath(later):
+            raise OSError("the self-test fails this replacement")
+        genuine_replace_file(temporary_path, path)
+
+    replace_file = failing_replace_file
+    try:
+        status = run("--edits", edits)
+    finally:
+        replace_file = genuine_replace_file
+    expect(status == 1 and read_text(earlier) == "three\n" and read_text(later) == "two\n", "a failed replacement keeps the file it could not replace")
+    expect(not [name for name in os.listdir(root) if name.startswith(".apply-edit-")], "a failed replacement leaves no temporary file")
+
     for failure in failures:
         print(f"FAILED: {failure}", file=sys.stderr)
     if failures:
@@ -270,7 +336,7 @@ def main(argv):
     try:
         counts = apply_edits(edits_of(arguments))
     except EditError as error:
-        print(f"apply-edit: {error}; nothing was written", file=sys.stderr)
+        print(f"apply-edit: {error}" if "after writing" in str(error) else f"apply-edit: {error}; nothing was written", file=sys.stderr)
         return 1
     for path, count in counts.items():
         print(f"{path}: {count} replacement{'' if count == 1 else 's'}")
