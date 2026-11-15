@@ -3239,24 +3239,53 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Feature", imports: [], rootFiles: ["Inner": """
 		extension Inner {
-		    @frozen public enum SafeDIScope_Widget {
-		        @frozen public enum Panel_Scope {
+		    @frozen nonisolated public enum SafeDIScope_Widget {
+		        @frozen nonisolated public enum Panel_Scope {
 		            case `my widget`(`my widget_Values`)
 
-		            public struct `my widget_Values` {}
+		            nonisolated public struct `my widget_Values` {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<Built> {
+		                public let `my widget`: (`my widget_Values`) -> Built
+
+		                public init(`my widget`: @escaping (`my widget_Values`) -> Built) {
+		                    self.`my widget` = `my widget`
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                    self.`my widget` = { _ in __safeDI_builder() }
+		                }
+		            }
 		        }
 		    }
 
-		    @frozen public enum SafeDISendableScope_Widget {
+		    @frozen nonisolated public enum SafeDISendableScope_Widget {
 		        case panelBuilder(SafeDIScope_Widget.Panel_Scope)
+
+		        nonisolated public struct panelBuilder_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<Built>: Sendable {
+		            public let panelBuilder: @Sendable (panelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<Built>
+
+		            public init(panelBuilder: @escaping @Sendable (panelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<Built>) {
+		                self.panelBuilder = panelBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> Built) {
+		                self.panelBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_widgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Widget) -> any Widget) {
+		    public init(__safeDI_widgetSendableBuilder: SafeDISendableScope_Widget.__safeDI_Builder<any Widget>) {
 		        let analytics = Analytics()
-		        @Sendable func __safeDI_panelBuilder() -> Panel {
-		            let `my widget`: any Widget = __safeDI_widgetSendableBuilder(.panelBuilder(.`my widget`(SafeDIScope_Widget.Panel_Scope.`my widget_Values`())))
+		        @Sendable nonisolated func __safeDI_panelBuilder() -> Panel {
+		            let __safeDI_widgetSendableBuilder_panelBuilder = __safeDI_widgetSendableBuilder.panelBuilder(SafeDISendableScope_Widget.panelBuilder_Values())
+		            let `my widget`: any Widget = __safeDI_widgetSendableBuilder_panelBuilder.`my widget`(SafeDIScope_Widget.Panel_Scope.`my widget_Values`())
 		            return Panel(`my widget`: `my widget`)
 		        }
 		        let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
@@ -3265,7 +3294,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Inner {
-		    public enum __safeDI_Inner_49F4F850D03A197A {}
+		    public enum __safeDI_Inner_2BEB3BB0EA67737C {}
 		}
 		"""])
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """

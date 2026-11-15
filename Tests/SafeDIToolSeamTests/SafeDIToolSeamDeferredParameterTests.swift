@@ -907,15 +907,30 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			case .sendableLazilyInstantiated:
 				"""
 				extension Inner {
-				    @frozen public enum SafeDISendableScope_Panel {
+				    @frozen nonisolated public enum SafeDISendableScope_Panel {
 				        case panel
+
+				        nonisolated public struct panel_Values: Sendable {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<Built>: Sendable {
+				            public let panel: @Sendable (panel_Values) -> Built
+
+				            public init(panel: @escaping @Sendable (panel_Values) -> Built) {
+				                self.panel = panel
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> Built) {
+				                self.panel = { _ in __safeDI_builder() }
+				            }
+				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public init(__safeDI_panelSendableBuilder: @escaping @Sendable (SafeDISendableScope_Panel) -> any Panel) {
+				    public init(__safeDI_panelSendableBuilder: SafeDISendableScope_Panel.__safeDI_Builder<any Panel>) {
 				        @Sendable func __safeDI_panel() -> any Panel {
-				            __safeDI_panelSendableBuilder(.panel)
+				            __safeDI_panelSendableBuilder.panel(SafeDISendableScope_Panel.panel_Values())
 				        }
 				        let panel = SendableLazilyInstantiated<any Panel>(__safeDI_panel)
 				        self.init(panel: panel)
@@ -923,29 +938,58 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 				}
 
 				extension Inner {
-				    public enum __safeDI_Inner_3A7C0ADA472696EC {}
+				    public enum __safeDI_Inner_EAE20455A0945786 {}
 				}
 				"""
 			case .beneathSendableInstantiator:
 				"""
 				extension Inner {
-				    @frozen public enum SafeDIScope_Panel {
-				        @frozen public enum Detail_Scope {
+				    @frozen nonisolated public enum SafeDIScope_Panel {
+				        @frozen nonisolated public enum Detail_Scope {
 				            case panel(panel_Values)
 
-				            public struct panel_Values {}
+				            nonisolated public struct panel_Values {}
+
+				            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				            nonisolated public struct __safeDI_Builder<Built> {
+				                public let panel: (panel_Values) -> Built
+
+				                public init(panel: @escaping (panel_Values) -> Built) {
+				                    self.panel = panel
+				                }
+
+				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+				                    self.panel = { _ in __safeDI_builder() }
+				                }
+				            }
 				        }
 				    }
 
-				    @frozen public enum SafeDISendableScope_Panel {
+				    @frozen nonisolated public enum SafeDISendableScope_Panel {
 				        case detailBuilder(SafeDIScope_Panel.Detail_Scope)
+
+				        nonisolated public struct detailBuilder_Values: Sendable {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<Built>: Sendable {
+				            public let detailBuilder: @Sendable (detailBuilder_Values) -> SafeDIScope_Panel.Detail_Scope.__safeDI_Builder<Built>
+
+				            public init(detailBuilder: @escaping @Sendable (detailBuilder_Values) -> SafeDIScope_Panel.Detail_Scope.__safeDI_Builder<Built>) {
+				                self.detailBuilder = detailBuilder
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> Built) {
+				                self.detailBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				            }
+				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public init(__safeDI_panelSendableBuilder: @escaping @Sendable (SafeDISendableScope_Panel) -> any Panel) {
-				        @Sendable func __safeDI_detailBuilder() -> Detail {
-				            let panel: any Panel = __safeDI_panelSendableBuilder(.detailBuilder(.panel(SafeDIScope_Panel.Detail_Scope.panel_Values())))
+				    public init(__safeDI_panelSendableBuilder: SafeDISendableScope_Panel.__safeDI_Builder<any Panel>) {
+				        @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
+				            let __safeDI_panelSendableBuilder_detailBuilder = __safeDI_panelSendableBuilder.detailBuilder(SafeDISendableScope_Panel.detailBuilder_Values())
+				            let panel: any Panel = __safeDI_panelSendableBuilder_detailBuilder.panel(SafeDIScope_Panel.Detail_Scope.panel_Values())
 				            return Detail(panel: panel)
 				        }
 				        let detailBuilder = SendableInstantiator<Detail>(__safeDI_detailBuilder)
@@ -954,7 +998,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 				}
 
 				extension Inner {
-				    public enum __safeDI_Inner_7CB480475496C1B0 {}
+				    public enum __safeDI_Inner_6F608818500B54F2 {}
 				}
 				"""
 			}
@@ -1108,10 +1152,10 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == SafeDIToolSeamBuilderParameterTests.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"Service": """
 			extension Service {
-			    @frozen public enum SafeDIScope_UserService {
+			    @frozen nonisolated public enum SafeDIScope_UserService {
 			        case profileBuilder(profileBuilder_Values, SafeDIScope_UserService.Profile_Scope)
 
-			        public struct profileBuilder_Values {
+			        nonisolated public struct profileBuilder_Values {
 			            public var token: Token { __safeDI_token.instance }
 			            let __safeDI_token: LazilyInstantiated<Token>
 
@@ -1120,25 +1164,51 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen public enum Profile_Scope {
+			        @frozen nonisolated public enum Profile_Scope {
 			            case userService(userService_Values)
 
-			            public struct userService_Values {}
+			            nonisolated public struct userService_Values {}
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<Built> {
+			                public let userService: (userService_Values) -> Built
+
+			                public init(userService: @escaping (userService_Values) -> Built) {
+			                    self.userService = userService
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                    self.userService = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<Built> {
+			            public let profileBuilder: (profileBuilder_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<Built>
+
+			            public init(profileBuilder: @escaping (profileBuilder_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<Built>) {
+			                self.profileBuilder = profileBuilder
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                self.profileBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
 			        }
 			    }
 
 			    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-			    public init(token: Token, userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
-			        self.init(__safeDI_token: token, __safeDI_userServiceBuilder: userServiceBuilder)
+			    public init(token: Token, userServiceBuilder: @escaping () -> any UserService) {
+			        self.init(__safeDI_token: token, __safeDI_userServiceBuilder: .init(__safeDI_noScope: userServiceBuilder))
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// From code you write, call the initializer above instead.
-			    public init(__safeDI_token: @autoclosure @escaping () -> Token, __safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
+			    public init(__safeDI_token: @autoclosure @escaping () -> Token, __safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
-			        let __safeDI_userServiceValues_profileBuilder = SafeDIScope_UserService.profileBuilder_Values(token: token)
+			        let __safeDI_userServiceBuilder_profileBuilder = __safeDI_userServiceBuilder.profileBuilder(SafeDIScope_UserService.profileBuilder_Values(token: token))
 			        func __safeDI_profileBuilder() -> Profile {
-			            let userService: any UserService = __safeDI_userServiceBuilder(.profileBuilder(__safeDI_userServiceValues_profileBuilder, .userService(SafeDIScope_UserService.Profile_Scope.userService_Values())))
+			            let userService: any UserService = __safeDI_userServiceBuilder_profileBuilder.userService(SafeDIScope_UserService.Profile_Scope.userService_Values())
 			            return Profile(token: token.instance, userService: userService)
 			        }
 			        let profileBuilder = Instantiator<Profile>(__safeDI_profileBuilder)
@@ -1147,7 +1217,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_DA263E0F696E2E8F {}
+			    public enum __safeDI_Service_9AADC159198E5E15 {}
 			}
 			""",
 		]))
