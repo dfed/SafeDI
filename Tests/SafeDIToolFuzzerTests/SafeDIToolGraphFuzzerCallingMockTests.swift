@@ -834,6 +834,27 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(GraphFuzzerCallingMockCell.drawnCells.filter { intendedGraphsByCell[$0, default: 0] < 10 } == [])
 	}
 
+	/// The plain app-only screen cells draw the canonical loop: the seam's settings builder forwards nothing, so the twin
+	/// reports the screen's receive of the feed's builder with a note at the seam's feed builder, which a screen built by
+	/// value, a constant cycle, does not add.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func appOnlyScreenInLoopDraw_twinReportsLoopWithNoteAtSeamsFeedBuilder_whenSettingsBuilderForwardsNothing() async throws {
+		for seed: UInt64 in [4, 6] {
+			let draw = GraphFuzzerCallingMockDraw(seed: seed)
+			let feed = draw.names.feed
+			let feedBuilder = "\(feed.prefix(1).lowercased())\(feed.dropFirst())Builder: ErasedInstantiator<(), any \(draw.names.feedPage)>"
+
+			let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: seed, comparesValues: false)
+
+			#expect(draw.cell.shape == .appOnlyScreenInLoop && draw.cell.place == .plain)
+			#expect(result.twinSites == [
+				GraphFuzzerDiagnosticSite(severity: "error", file: "App/AppTypes.swift", line: 7, declaration: "@Received private let \(feedBuilder)"),
+				GraphFuzzerDiagnosticSite(severity: "note", file: "Feature/FeatureTypes.swift", line: 22, declaration: "@Instantiated(fulfilledByType: \"\(feed)\") private let \(feedBuilder)"),
+			], "seed \(seed)")
+		}
+	}
+
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
 		#expect(GraphFuzzerCallingMockCell.all.count == 28)
