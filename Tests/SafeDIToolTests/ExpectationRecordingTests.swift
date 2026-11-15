@@ -121,6 +121,18 @@ struct ExpectationRecordingTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func executeSafeDIToolTest_recordsTheCallingTestsLocation_whenCalledThroughAHelperFunction() async throws {
+		let callLine = try await generateThroughHelperFunction()
+
+		let records = try Self.records(in: recordDirectory)
+		let testLocation = try #require(Test.current?.sourceLocation)
+		#expect(!records.generation.isEmpty)
+		#expect(records.generation.allSatisfy { $0.line == callLine && $0.testFileID == #fileID && $0.testLine == testLocation.line })
+		#expect(testLocation.line != callLine)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func executeSafeDIToolTest_writesNothing_whenGivenNoRecordDirectory() async throws {
 		try FileManager.default.createDirectory(at: recordDirectory, withIntermediateDirectories: true)
 
@@ -284,6 +296,21 @@ struct ExpectationRecordingTests: ~Copyable {
 	}
 
 	// MARK: Private
+
+	/// Runs the aliased fixture, recording into `recordDirectory`, from a function that is no test, and returns the
+	/// line of that call.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func generateThroughHelperFunction() async throws -> Int {
+		let callLine = #line + 1
+		_ = try await executeSafeDIToolTest(
+			swiftFileContent: Self.aliasedReceiveFixture,
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
+			recordDirectory: recordDirectory,
+		)
+		return callLine
+	}
 
 	private var filesToDelete: [URL]
 	private let recordDirectory: URL
