@@ -1,0 +1,20 @@
+trace:
+  Logger#1()
+  LiveGadget#1(logger: Logger#1)
+  Service#1(gadget: LiveGadget#1, xBuilder: builder)
+  Root#1(logger: Logger#1, service: Service#1)
+  Logger#2()
+  LiveGadget#2(logger: Logger#2)
+  Service#2(gadget: LiveGadget#2, xBuilder: builder)
+  Root#2(logger: Logger#2, service: Service#2)
+  Logger#3()
+  X#1(logger: Logger#3, serviceBuilder: builder)
+  LiveGadget#3(logger: Logger#3)
+  Service#3(gadget: LiveGadget#3, xBuilder: builder)
+  Logger#4()
+  X#2(logger: Logger#4, serviceBuilder: builder)
+  LiveGadget#4(logger: Logger#4)
+  Service#4(gadget: LiveGadget#4, xBuilder: builder)
+alive holding everything: LiveGadget 4, Logger 4, Root 2, Service 4, X 2
+alive holding only the last value: LiveGadget 1, Logger 1, Service 1
+alive after dropping everything: none

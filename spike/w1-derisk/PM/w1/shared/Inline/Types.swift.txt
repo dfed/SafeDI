@@ -1,0 +1,63 @@
+import Harness
+import SafeDI
+
+public protocol Gadget: AnyObject {}
+
+@Instantiable
+public final class Logger: Instantiable, Traced {
+    public init() {
+        Registry.created(self, [:])
+    }
+
+    public let tracker = Tracker("Logger")
+}
+
+@Instantiable(generateMock: .public)
+public final class Service: Instantiable, Traced {
+    public init(gadget: any Gadget, xBuilder: Instantiator<X>) {
+        self.gadget = gadget
+        self.xBuilder = xBuilder
+        Registry.created(self, ["gadget": gadget, "xBuilder": xBuilder])
+    }
+
+    public let tracker = Tracker("Service")
+    @Instantiated public let gadget: any Gadget
+    @Instantiated public let xBuilder: Instantiator<X>
+}
+
+@Instantiable
+public final class X: Instantiable, Traced {
+    public init(logger: Logger, serviceBuilder: Instantiator<Service>) {
+        self.logger = logger
+        self.serviceBuilder = serviceBuilder
+        Registry.created(self, ["logger": logger, "serviceBuilder": serviceBuilder])
+    }
+
+    public let tracker = Tracker("X")
+    @Instantiated public let logger: Logger
+    @Instantiated public let serviceBuilder: Instantiator<Service>
+}
+
+@Instantiable(fulfillingAdditionalTypes: [(any Gadget).self])
+public final class LiveGadget: Instantiable, Traced, Gadget {
+    public init(logger: Logger) {
+        self.logger = logger
+        Registry.created(self, ["logger": logger])
+    }
+
+    public let tracker = Tracker("LiveGadget")
+    @Received public let logger: Logger
+}
+
+@Instantiable(isRoot: true, generateMock: .public)
+public final class Root: Instantiable, Traced {
+    public init(logger: Logger, service: Service) {
+        self.logger = logger
+        self.service = service
+        Registry.created(self, ["logger": logger, "service": service])
+    }
+
+    public let tracker = Tracker("Root")
+    @Instantiated public let logger: Logger
+    @Instantiated public let service: Service
+}
