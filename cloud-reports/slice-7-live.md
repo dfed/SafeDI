@@ -2,3 +2,4 @@
 
 - 2026-11-16T04:15Z brief draft started (Fable, wsxaai2lh, 04:13Z)
 - 2026-11-16T04:33Z brief draft done (33 done-when rows, Q1-Q14 open); adjudication next
+- 2026-11-16T04:38Z Q1-Q14 ruled (none for Dan); split 7a/7b; finalizing briefs, then 7a starts speculatively on ceed7a931
