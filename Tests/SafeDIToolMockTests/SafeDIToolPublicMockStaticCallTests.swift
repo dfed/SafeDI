@@ -704,11 +704,24 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 
 				public protocol Api: AnyObject {}
 
+				public enum Stamp {
+				    nonisolated(unsafe) private static var lastStamp = 0
+
+				    public static func next() -> Int {
+				        lastStamp += 1
+				        return lastStamp
+				    }
+				}
+
 				@Instantiable
-				public final class Logger: Instantiable { public init() {} }
+				public final class Logger: Instantiable {
+				    public init() {}
+				    let differentialValueCreationStamp = Stamp.next()
+				}
 
 				@Instantiable
 				public final class Detail: Instantiable {
+				    let differentialValueCreationStamp = Stamp.next()
 				    init(logger: Logger, api: any Api) { self.logger = logger; self.api = api }
 				    @Received public let logger: Logger
 				    @Instantiated public let api: any Api
@@ -716,6 +729,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 
 				@Instantiable(generateMock: .public)
 				public final class Inner: Instantiable {
+				    let differentialValueCreationStamp = Stamp.next()
 				    init(detail: Detail) { self.detail = detail }
 				    @Instantiated public let detail: Detail
 				}
@@ -728,6 +742,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 
 				@Instantiable(generateMock: .public)
 				public final class Outer: Instantiable {
+				    let differentialValueCreationStamp = Stamp.next()
 				    init(logger: Logger, inner: Inner) { self.logger = logger; self.inner = inner }
 				    @Instantiated public let logger: Logger
 				    @Instantiated public let inner: Inner
@@ -742,12 +757,14 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 
 				@Instantiable(fulfillingAdditionalTypes: [Api.self])
 				public final class LiveApi: Instantiable, Api {
+				    let differentialValueCreationStamp = Stamp.next()
 				    public init(logger: Logger) { self.logger = logger }
 				    @Received public let logger: Logger
 				}
 
 				@Instantiable(generateMock: true)
 				public final class Root: Instantiable {
+				    let differentialValueCreationStamp = Stamp.next()
 				    public init(logger: Logger, outer: Outer) { self.logger = logger; self.outer = outer }
 				    @Instantiated public let logger: Logger
 				    @Instantiated public let outer: Outer
@@ -969,6 +986,14 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 			#expect(knownRight == "probe probeResult()\nString \"logger is Outer’s: true\"\n")
 			#expect(feature == knownRight)
 		}
+		// Each class is stamped when it is built (`DifferentialValueCreationStamp`), so a value the mock builds earlier than the
+		// same declarations built in one module would is marked.
+		let orderProbe = DifferentialValueProbe("Root.mock()")
+		let featureOrder = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [orderProbe], filesToDelete: &filesToDelete)
+		let knownRightOrder = try await knownRightDescription(of: modules, keeping: Set(modules.map(\.name)), probeSource: "", probe: orderProbe)
+		if compileVerificationIsEnabled {
+			#expect(featureOrder == knownRightOrder)
+		}
 	}
 
 	@Test
@@ -984,14 +1009,30 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 
 				public protocol Api: AnyObject {}
 
-				@Instantiable
-				public final class Logger: Instantiable { public init() {} }
+				public enum Stamp {
+				    nonisolated(unsafe) private static var lastStamp = 0
+
+				    public static func next() -> Int {
+				        lastStamp += 1
+				        return lastStamp
+				    }
+				}
 
 				@Instantiable
-				public final class Tag: Instantiable { public init() {} }
+				public final class Logger: Instantiable {
+				    public init() {}
+				    let differentialValueCreationStamp = Stamp.next()
+				}
+
+				@Instantiable
+				public final class Tag: Instantiable {
+				    public init() {}
+				    let differentialValueCreationStamp = Stamp.next()
+				}
 
 				@Instantiable
 				public final class Detail: Instantiable {
+				    let differentialValueCreationStamp = Stamp.next()
 				    init(logger: Logger, tag: Tag?, api: any Api) { self.logger = logger; self.tag = tag; self.api = api }
 				    @Received public let logger: Logger
 				    @Received(onlyIfAvailable: true) public let tag: Tag?
@@ -1000,6 +1041,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 
 				@Instantiable(generateMock: .public)
 				public final class Inner: Instantiable {
+				    let differentialValueCreationStamp = Stamp.next()
 				    init(detailBuilder: Instantiator<Detail>) { self.detailBuilder = detailBuilder }
 				    @Instantiated public let detailBuilder: Instantiator<Detail>
 				}
@@ -1012,6 +1054,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 
 				@Instantiable(generateMock: .public)
 				public final class Middle: Instantiable {
+				    let differentialValueCreationStamp = Stamp.next()
 				    init(tag: Tag, inner: Inner) { self.tag = tag; self.inner = inner }
 				    @Instantiated public let tag: Tag
 				    @Instantiated public let inner: Inner
@@ -1026,6 +1069,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 
 				@Instantiable(generateMock: .public)
 				public final class Outer: Instantiable {
+				    let differentialValueCreationStamp = Stamp.next()
 				    init(logger: Logger, middle: Middle) { self.logger = logger; self.middle = middle }
 				    @Instantiated public let logger: Logger
 				    @Instantiated public let middle: Middle
@@ -1041,6 +1085,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 
 				@Instantiable(fulfillingAdditionalTypes: [Api.self])
 				public final class LiveApi: Instantiable, Api {
+				    let differentialValueCreationStamp = Stamp.next()
 				    public init(logger: Logger, tag: Tag?) { self.logger = logger; self.tag = tag }
 				    @Received public let logger: Logger
 				    @Received(onlyIfAvailable: true) public let tag: Tag?
@@ -1048,6 +1093,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 
 				@Instantiable(generateMock: true)
 				public final class Root: Instantiable {
+				    let differentialValueCreationStamp = Stamp.next()
 				    public init(logger: Logger, tag: Tag, outer: Outer) { self.logger = logger; self.tag = tag; self.outer = outer }
 				    @Instantiated public let logger: Logger
 				    @Instantiated public let tag: Tag
@@ -1356,6 +1402,14 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		if compileVerificationIsEnabled {
 			#expect(knownRight == "probe probeResult()\nString \"logger is Outer’s: true; tag is Middle’s: true; detail.tag is Middle’s: true\"\n")
 			#expect(feature == knownRight)
+		}
+		// Each class is stamped when it is built (`DifferentialValueCreationStamp`), so a value the mock builds earlier than the
+		// same declarations built in one module would is marked.
+		let orderProbe = DifferentialValueProbe("Root.mock()")
+		let featureOrder = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [orderProbe], filesToDelete: &filesToDelete)
+		let knownRightOrder = try await knownRightDescription(of: modules, keeping: Set(modules.map(\.name)), probeSource: "", probe: orderProbe)
+		if compileVerificationIsEnabled {
+			#expect(featureOrder == knownRightOrder)
 		}
 	}
 
