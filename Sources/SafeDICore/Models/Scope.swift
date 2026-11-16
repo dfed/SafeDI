@@ -524,11 +524,12 @@ final class Scope: Hashable {
 					scope: fill.scope,
 				))
 			} else {
-				let scopeGenerator = scopeGeneratorsUnderConstruction.removeLast().scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart)
+				let createdScope = scopeGeneratorsUnderConstruction.removeLast()
+				let scopeGenerator = createdScope.scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart)
 				if scopeGeneratorsUnderConstruction.isEmpty {
 					return scopeGenerator
 				} else {
-					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].childGenerators.append(scopeGenerator)
+					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(childGenerator: scopeGenerator, createdBy: createdScope)
 				}
 			}
 		}
@@ -969,7 +970,48 @@ private struct ScopeGeneratorUnderConstruction {
 	}
 
 	/// The generators created so far for `propertiesToGenerate`, in order, followed by those of `fillsOfThisCall`.
-	var childGenerators = [ScopeGenerator]()
+	private(set) var childGenerators = [ScopeGenerator]()
+	/// How many scopes this scope's subtree has so far: itself, and every scope created beneath it. An alias or a hole,
+	/// which generates a line or two, is not counted.
+	private var subtreeScopeCount = 1
+	/// The generators among `childGenerators` whose code starts early only if this scope's subtree is large (see
+	/// `startsCodeBeneathALargeSubtree`).
+	private var childGeneratorsStartingBeneathALargeSubtree = [ScopeGenerator]()
+
+	/// The smallest subtree, in scopes, whose root starts generating its code as soon as the tree exists, and starts the
+	/// code of each small subtree directly beneath it as well. Every other scope's code starts when the scope above it asks
+	/// for it, on a task created then and released once the code is done. A running task holds its code's async frames, so
+	/// where scopes wait on one another, as in #646's graphs of instantiators, starting every scope's code at once ran most
+	/// of the tree's frames together; a small subtree's scopes now run one after another, as each is asked for, while large
+	/// subtrees, and the small subtrees beneath each, still generate in parallel.
+	///
+	/// Measured with release builds, median of three runs, against every scope starting early: #646's 16 screens peaked at
+	/// 727 MB with 16, 634 MB with 64 and 639 MB with 256, rather than 1,054 MB, and took 2.43, 2.53 and 2.63 s rather than
+	/// 2.62 s; a tree of 265,000 lines took 1.54, 1.52 and 1.57 s rather than 1.66 s, at the same peak. The runs cannot tell
+	/// 64 from 256. 64 is the smaller, so a module of trees between 64 and 255 scopes still generates them in parallel.
+	static let scopeCountOfLargeSubtree = 64
+
+	/// Adds `childGenerator`, the generator `child` created, to this scope's children.
+	mutating func add(childGenerator: ScopeGenerator, createdBy child: ScopeGeneratorUnderConstruction) {
+		childGenerators.append(childGenerator)
+		subtreeScopeCount += child.subtreeScopeCount
+		if child.startsCodeBeneathALargeSubtree {
+			childGeneratorsStartingBeneathALargeSubtree.append(childGenerator)
+		}
+	}
+
+	/// Whether this scope's generator may start its code as soon as its tree exists, rather than when the scope above it
+	/// asks for it: a scope of a dependency tree that generates code (no mock's, no fill's, nor a tree built only to find a
+	/// seam's signature). It does when its subtree is large, or when the subtree of the scope above it is.
+	private var mayStartCodeEarly: Bool {
+		!forMockGeneration && startsCodeGeneration && fill == nil
+	}
+
+	/// Whether this scope's generator starts its code early only when the subtree of the scope above it is large: its own
+	/// subtree is small.
+	private var startsCodeBeneathALargeSubtree: Bool {
+		mayStartCodeEarly && subtreeScopeCount < Self.scopeCountOfLargeSubtree
+	}
 
 	/// The next of `propertiesToGenerate` to create a generator for, or `nil` once every one has its generator.
 	mutating func nextPropertyToGenerate() -> Scope.PropertyToGenerate? {
@@ -1402,11 +1444,19 @@ private struct ScopeGeneratorUnderConstruction {
 		} else {
 			builtGenerator
 		}
-		if !forMockGeneration, startsCodeGeneration, fill == nil {
-			if generatorsToStart != nil {
-				generatorsToStart?.append(scopeGenerator)
-			} else {
-				Self.startCodeGeneration(of: scopeGenerator)
+		// A large subtree starts its own code and that of each small subtree directly beneath it. The code of every other
+		// scope starts when the scope above it, or the caller of a small tree's root, asks for it.
+		if subtreeScopeCount >= Self.scopeCountOfLargeSubtree {
+			var generatorsStartingNow = childGeneratorsStartingBeneathALargeSubtree
+			if mayStartCodeEarly {
+				generatorsStartingNow.append(scopeGenerator)
+			}
+			for generator in generatorsStartingNow {
+				if generatorsToStart != nil {
+					generatorsToStart?.append(generator)
+				} else {
+					Self.startCodeGeneration(of: generator)
+				}
 			}
 		}
 		return scopeGenerator
@@ -1414,6 +1464,7 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// Kicks off the generation of `scopeGenerator`'s code, which a later request for the code reads from its cache.
 	static func startCodeGeneration(of scopeGenerator: ScopeGenerator) {
+		CodeTaskStart.record()
 		// A detached task inherits no task-local, so the work observer of the task that starts the code is handed on: the
 		// code a later request reads from the cache then counts its work whichever task asks for it first.
 		if let observer = GenerationWork.observer {
