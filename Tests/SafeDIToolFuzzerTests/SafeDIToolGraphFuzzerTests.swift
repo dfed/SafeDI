@@ -6116,8 +6116,10 @@ struct SafeDIToolGraphFuzzerTests {
 	/// hole type, for a hole read only if available. Seeds 309, 1010, 1020 and 1890, whose seams later draws gave a second
 	/// hole type that the move reorders, stay for the shapes above: they are listed under `seamBuilderOrderReason`, a
 	/// sanctioned order, which `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` counts as passing
-	/// (`seamBuilderOrderShape(listedBy:)`). Pinned by `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
+	/// (`seamBuilderOrderShape(listedBy:)`). Seeds 1815 and 4668 fill a hole whose fill receives a parameter of the seam in a
+	/// form the parameter does not provide, which the tool rejects as it rejects the seam whose own tree receives both forms.
+	/// Pinned by `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_815, 1_890, 4_668]
 
 	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xF131FB39F771B818
 
