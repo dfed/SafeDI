@@ -70,7 +70,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 			    }
 			}
 			""")
-			keys.insert(try PassedCompileCheckCache.key(of: [module], fixtureRoots: Array(roots.map(\.path).rotated(by: index)), toolchain: "Swift 6.2"))
+			keys.insert(try PassedCompileCheckCache.key(of: [module], fixtureRoots: Array(roots.map(\.path).rotated(by: index)), build: "Swift 6.2"))
 		}
 
 		#expect(keys.count == 1)
@@ -82,7 +82,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 		let first = try stagedModule(in: root, generatedCode: "extension Fixture { func generated() { _ = 1 } }\n")
 		let second = try stagedModule(in: root, generatedCode: "extension Fixture { func generated() { _ = 2 } }\n")
 
-		#expect(try PassedCompileCheckCache.key(of: [first], fixtureRoots: [root.path], toolchain: "Swift 6.2") != PassedCompileCheckCache.key(of: [second], fixtureRoots: [root.path], toolchain: "Swift 6.2"))
+		#expect(try PassedCompileCheckCache.key(of: [first], fixtureRoots: [root.path], build: "Swift 6.2") != PassedCompileCheckCache.key(of: [second], fixtureRoots: [root.path], build: "Swift 6.2"))
 	}
 
 	@Test
@@ -94,7 +94,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 		let same = try stagedModule(in: root, generatedCode: "// \(uuid)\n// \(uuid)\nextension Fixture {}\n")
 		let different = try stagedModule(in: root, generatedCode: "// \(uuid)\n// \(UUID().uuidString)\nextension Fixture {}\n")
 
-		#expect(try PassedCompileCheckCache.key(of: [same], fixtureRoots: [root.path], toolchain: "Swift 6.2") != PassedCompileCheckCache.key(of: [different], fixtureRoots: [root.path], toolchain: "Swift 6.2"))
+		#expect(try PassedCompileCheckCache.key(of: [same], fixtureRoots: [root.path], build: "Swift 6.2") != PassedCompileCheckCache.key(of: [different], fixtureRoots: [root.path], build: "Swift 6.2"))
 	}
 
 	@Test
@@ -115,7 +115,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 			emitsModule: false,
 		)
 
-		#expect(try PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path], toolchain: "Swift 6.2") != PassedCompileCheckCache.key(of: [staging], fixtureRoots: [root.path], toolchain: "Swift 6.2"))
+		#expect(try PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path], build: "Swift 6.2") != PassedCompileCheckCache.key(of: [staging], fixtureRoots: [root.path], build: "Swift 6.2"))
 	}
 
 	@Test
@@ -137,24 +137,25 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 			emitsModule: false,
 		)
 
-		#expect(try PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path], toolchain: "Swift 6.2") != PassedCompileCheckCache.key(of: [mainActorByDefault], fixtureRoots: [root.path], toolchain: "Swift 6.2"))
+		#expect(try PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path], build: "Swift 6.2") != PassedCompileCheckCache.key(of: [mainActorByDefault], fixtureRoots: [root.path], build: "Swift 6.2"))
 	}
 
 	@Test
-	func key_differs_whenAnotherToolchainCompilesTheCheck() throws {
-		// A pass under one compiler or SDK says nothing about another, so the cache must not hold the check for it.
+	func key_differs_whenAnotherBuildCompilesTheCheck() throws {
+		// A pass under one compiler, SDK or build of SafeDI says nothing about another, so the cache must not hold the
+		// check for it.
 		let root = try makeRoot(named: "root")
 		let module = try stagedModule(in: root, generatedCode: "extension Fixture { func generated() {} }\n")
 
-		#expect(try PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path], toolchain: "Swift 6.2 SDK 26.0") != PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path], toolchain: "Swift 6.2 SDK 26.4"))
+		#expect(try PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path], build: "Swift 6.2 SDK 26.0") != PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path], build: "Swift 6.2 SDK 26.4"))
 	}
 
-	// MARK: Tests – Describing the toolchain
+	// MARK: Tests – Describing what compiles the checks
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func describe_namesTheCompilersVersionAndTarget_inThisProcessesEnvironment() async throws {
-		let description = try await CompileCheckToolchain.describe()
+	func describe_namesTheCompilersVersionAndTarget() async throws {
+		let description = try await CompileCheckBuild.describe(artifacts: #require(SafeDIBuildArtifactLocator.locate()))
 
 		#expect(description.contains("Swift version"))
 		#expect(description.contains("\"triple\""))
@@ -163,9 +164,49 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func describe_throws_whenTheEnvironmentNamesNoCompiler() async throws {
-		// A key made from a compiler's error text would stand for no toolchain, so no description is better than one.
+		// A key made from a compiler's error text would stand for no compiler, so no description is better than one.
+		let artifacts = try #require(SafeDIBuildArtifactLocator.locate())
+
 		await #expect(throws: PassedCompileCheckCacheError.self) {
-			try await CompileCheckToolchain.describe(environment: ["PATH": "/safedi-no-compiler", "DEVELOPER_DIR": "/safedi-no-compiler"])
+			try await CompileCheckBuild.describe(artifacts: artifacts, environment: ["PATH": "/safedi-no-compiler", "DEVELOPER_DIR": "/safedi-no-compiler"])
+		}
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func describe_differs_whenTheMacroPluginDiffersByOneByte() async throws {
+		// The same sources built another way (other flags, another build system, other dependency versions) give other
+		// bytes, and a check that passed against one build has not passed against the other.
+		let artifacts = try #require(SafeDIBuildArtifactLocator.locate())
+		let otherPlugin = directory.appendingPathComponent("SafeDIMacros-tool")
+		try (Data(contentsOf: artifacts.safeDIMacrosToolPath) + Data([0])).write(to: otherPlugin)
+
+		let description = try await CompileCheckBuild.describe(artifacts: artifacts)
+		let descriptionWithOtherPlugin = try await CompileCheckBuild.describe(artifacts: SafeDIBuildArtifacts(swiftModuleSearchPath: artifacts.swiftModuleSearchPath, safeDIMacrosToolPath: otherPlugin))
+
+		#expect(description != descriptionWithOtherPlugin)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func describe_differs_whenTheSafeDIModuleDiffersByOneByte() async throws {
+		let artifacts = try #require(SafeDIBuildArtifactLocator.locate())
+		let otherModule = directory.appendingPathComponent("SafeDI.swiftmodule")
+		try Data([0]).write(to: otherModule)
+
+		let description = try await CompileCheckBuild.describe(artifacts: artifacts)
+		let descriptionWithOtherModule = try await CompileCheckBuild.describe(artifacts: SafeDIBuildArtifacts(swiftModuleSearchPath: directory, safeDIMacrosToolPath: artifacts.safeDIMacrosToolPath))
+
+		#expect(description != descriptionWithOtherModule)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func describe_throws_whenThereIsNoSafeDIModule() async throws {
+		let artifacts = try #require(SafeDIBuildArtifactLocator.locate())
+
+		await #expect(throws: PassedCompileCheckCacheError.self) {
+			try await CompileCheckBuild.describe(artifacts: SafeDIBuildArtifacts(swiftModuleSearchPath: directory, safeDIMacrosToolPath: artifacts.safeDIMacrosToolPath))
 		}
 	}
 
@@ -179,8 +220,8 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 		let cacheFile = directory.appendingPathComponent("passed.txt")
 		let module = try compilingModule(generatedCode: "extension Fixture { func generated() -> Int { 1 } }\n")
 
-		let firstRun = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
-		let secondRun = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+		let firstRun = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile, run: nil), filesToDelete: &filesToDelete)
+		let secondRun = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile, run: nil), filesToDelete: &filesToDelete)
 
 		#expect(try #require(firstRun).modules.map(\.exitCode) == [0])
 		#expect(try String(contentsOf: cacheFile, encoding: .utf8).split(separator: "\n").count == 1)
@@ -205,11 +246,11 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 			activeCompilationConditions: [],
 			mockConditionalCompilation: nil,
 		)
-		_ = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+		_ = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile, run: nil), filesToDelete: &filesToDelete)
 
 		// `withKnownIssue` fails when the call records no issue, as it would if the cache skipped the check.
 		await withKnownIssue("Generated code that does not compile records an issue") {
-			_ = try await verifyModulesCompile([moduleAfterGeneratorChange], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+			_ = try await verifyModulesCompile([moduleAfterGeneratorChange], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile, run: nil), filesToDelete: &filesToDelete)
 		}
 
 		#expect(try String(contentsOf: cacheFile, encoding: .utf8).split(separator: "\n").count == 1)
@@ -224,7 +265,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 		let module = try compilingModule(generatedCode: "extension Fixture { func generated() -> Int { undeclared } }\n")
 
 		await withKnownIssue("Generated code that does not compile records an issue") {
-			_ = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+			_ = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile, run: nil), filesToDelete: &filesToDelete)
 		}
 
 		#expect(!FileManager.default.fileExists(atPath: cacheFile.path))
@@ -239,7 +280,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 		let module = try compilingModule(generatedCode: "extension Fixture { func generated() { let unused = 1 } }\n")
 
 		await withKnownIssue("A warning in generated code records an issue") {
-			_ = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+			_ = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile, run: nil), filesToDelete: &filesToDelete)
 		}
 
 		#expect(!FileManager.default.fileExists(atPath: cacheFile.path))
@@ -253,12 +294,101 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 		defer { deleteAll(filesToDelete) }
 		let cacheFile = directory.appendingPathComponent("passed.txt")
 		let module = try compilingModule(generatedCode: "extension Fixture { func generated() -> Int { 1 } }\n")
-		_ = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+		_ = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile, run: nil), filesToDelete: &filesToDelete)
 
-		let outcome = try await verifyModulesCompile([module], recordsIssues: false, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+		let outcome = try await verifyModulesCompile([module], recordsIssues: false, passedCheckCache: PassedCompileCheckCache(file: cacheFile, run: nil), filesToDelete: &filesToDelete)
 
 		#expect(try #require(outcome).modules.map(\.exitCode) == [0])
 		#expect(try String(contentsOf: cacheFile, encoding: .utf8).split(separator: "\n").count == 1)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func verifyModulesCompile_recordsTheKeyOfTheCheckWithWhatCompilesIt() async throws {
+		// The key the verifier looks up and records must name this process's compiler and build of SafeDI: with any
+		// other text in their place, a pass would be read under a compiler that never compiled the check.
+		var filesToDelete = [URL]()
+		defer { deleteAll(filesToDelete) }
+		let cacheFile = directory.appendingPathComponent("passed.txt")
+		let module = try compilingModule(generatedCode: "extension Fixture { func generated() -> Int { 1 } }\n")
+		let build = try #require(await CompileCheckBuild.description)
+
+		_ = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile, run: nil), filesToDelete: &filesToDelete)
+
+		let check = try CompileCheckModule(sources: module, staged: stageCompileSources(of: module, filesToDelete: &filesToDelete), emitsModule: true)
+		#expect(try String(contentsOf: cacheFile, encoding: .utf8) == PassedCompileCheckCache.key(of: [check], build: build) + "\n")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func verifyGeneratedCodeCompiles_recordsTheKeyOfTheCheckWithWhatCompilesIt() async throws {
+		var filesToDelete = [URL]()
+		defer { deleteAll(filesToDelete) }
+		let cacheFile = directory.appendingPathComponent("passed.txt")
+		let module = try compilingModule(generatedCode: "extension Fixture { func generated() -> Int { 1 } }\n")
+		let build = try #require(await CompileCheckBuild.description)
+
+		try await verifyGeneratedCodeCompiles(
+			inputSwiftFiles: module.inputSwiftFiles,
+			additionalDirectorySwiftFiles: [],
+			generatedFiles: module.generatedFiles,
+			mockConditionalCompilation: nil,
+			passedCheckCache: PassedCompileCheckCache(file: cacheFile, run: nil),
+			filesToDelete: &filesToDelete,
+		)
+
+		let standaloneModule = ModuleCompileSources(
+			moduleName: standaloneVerificationModuleName,
+			packageName: nil,
+			dependencyModuleNames: [],
+			inputSwiftFiles: module.inputSwiftFiles,
+			generatedFiles: module.generatedFiles,
+			activeCompilationConditions: [],
+			mockConditionalCompilation: nil,
+		)
+		let check = try CompileCheckModule(sources: standaloneModule, staged: stageCompileSources(of: standaloneModule, filesToDelete: &filesToDelete), emitsModule: false)
+		#expect(try String(contentsOf: cacheFile, encoding: .utf8) == PassedCompileCheckCache.key(of: [check], build: build) + "\n")
+	}
+
+	// MARK: Tests – Listing the passes of this run
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func verifyModulesCompile_listsOnlyTheCheckItCompiledAsPassedInThisRun_whenTheCacheWasRestoredWithOtherChecks() async throws {
+		// CI shares the run's own list with every branch, so a line a job restored must never reach it: nothing in
+		// this run saw that check compile.
+		var filesToDelete = [URL]()
+		defer { deleteAll(filesToDelete) }
+		let cacheFile = directory.appendingPathComponent("passed.txt")
+		let restoredKey = String(repeating: "a", count: 64)
+		try (restoredKey + "\n").write(to: cacheFile, atomically: true, encoding: .utf8)
+		let cache = PassedCompileCheckCache(file: cacheFile, run: "4242")
+		let module = try compilingModule(generatedCode: "extension Fixture { func generated() -> Int { 1 } }\n")
+
+		_ = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: cache, filesToDelete: &filesToDelete)
+
+		let passedInThisRun = try String(contentsOf: directory.appendingPathComponent("passed-in-run-4242.txt"), encoding: .utf8).split(separator: "\n").map(String.init)
+		let passed = try String(contentsOf: cacheFile, encoding: .utf8).split(separator: "\n").map(String.init)
+		#expect(passedInThisRun.count == 1)
+		#expect(passed == [restoredKey] + passedInThisRun)
+	}
+
+	@Test
+	func recordPass_writesNoListOfThisRun_whenTheProcessIsPartOfNoRun() throws {
+		let cacheFile = directory.appendingPathComponent("passed.txt")
+
+		try PassedCompileCheckCache(file: cacheFile, run: nil).recordPass(of: "key")
+
+		#expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["passed.txt"])
+	}
+
+	@Test
+	func recordPass_writesNoListOfThisRun_whenTheRunsNameCouldLeaveTheDirectory() throws {
+		let cacheFile = directory.appendingPathComponent("passed.txt")
+
+		try PassedCompileCheckCache(file: cacheFile, run: "../elsewhere").recordPass(of: "key")
+
+		#expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["passed.txt"])
 	}
 
 	// MARK: Private

@@ -33,6 +33,13 @@ runs:
         key: shared-compile-checks-v1-${{ runner.os }}-${{ inputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: |
           shared-compile-checks-v1-${{ runner.os }}-${{ inputs.identity }}-
+    # The lists earlier runs wrote of their own passes came back with the
+    # branch's cache. Nothing reads another run's list, so they only take room.
+    - shell: bash
+      run: |
+        if [ -d .compile-check-cache ]; then
+          find .compile-check-cache -name 'passed-in-run-*.txt' ! -name "passed-in-run-$GITHUB_RUN_ID.txt" -delete
+        fi
     # Sorted and without duplicates, so the file a run saves does not grow by
     # the shared list on every run.
     - shell: bash

@@ -32,13 +32,16 @@ import Foundation
 /// whose key the file holds compiles nothing. A check that fails or draws a warning is never written, so it compiles,
 /// and fails, on every run.
 ///
-/// The key covers everything about a check that the test process decides (`key(of:fixtureRoots:toolchain:)`),
-/// and the compiler and SDK that process compiles it with (`CompileCheckToolchain`), asked of the compiler in the
-/// process's own environment, so a pass recorded under one Xcode, toolchain, container or SDK is never read under
-/// another, however a job came to run it. It leaves out the SafeDI module and the macro plugin the check compiles
-/// against, so a file is valid only for one build of those. CI keys its cache of the file on a hash of their sources
-/// and the sources of this verifier (`.github/scripts/compile-check-identity.sh`), and starts from an empty file
-/// whenever any of them changes.
+/// The key covers everything a check's result depends on: what the test process decides
+/// (`key(of:fixtureRoots:build:)`), and what compiles it (`CompileCheckBuild`), which is the compiler and SDK the
+/// process finds in its own environment and the bytes of the SafeDI module and macro plugin it loads. So a pass
+/// recorded under one Xcode, toolchain, container, SDK or build of SafeDI is never read under another, however a job
+/// came to run it. CI keeps one file per hash of the sources that decide what a pass is, this verifier's among them
+/// (`.github/scripts/compile-check-identity.sh`).
+///
+/// A run also lists the checks its own processes passed in a file of its own beside the first
+/// (`fileOfPassesInThisRun`), which is what CI shares with other branches: the first file also holds whatever the
+/// job restored into it.
 ///
 /// The `SAFEDI_COMPILE_CHECK_PASSED_CACHE` environment variable names the file. When it is unset, as it is by default
 /// and in "Build and Test on Latest Swift", every check compiles.
@@ -58,8 +61,16 @@ struct PassedCompileCheckCache: Sendable {
 
 	/// A cache of the checks `file` lists, which records each check that passes from now on in `file`. A missing or
 	/// unreadable file lists none.
-	init(file: URL) {
+	///
+	/// - Parameter run: A name for the run this process is part of, by default GitHub's identifier of the workflow run
+	///   (`GITHUB_RUN_ID`), or `nil` outside one. Only letters, digits and hyphens name a run.
+	init(file: URL, run: String? = ProcessInfo.processInfo.environment["GITHUB_RUN_ID"]) {
 		self.file = file
+		if let run, !run.isEmpty, run.unicodeScalars.allSatisfy({ $0.isASCII && (CharacterSet.alphanumerics.contains($0) || $0 == "-") }) {
+			fileOfPassesInThisRun = file.deletingLastPathComponent().appendingPathComponent("passed-in-run-\(run).txt")
+		} else {
+			fileOfPassesInThisRun = nil
+		}
 		keysOfChecksThatPassedBefore = Set(
 			((try? String(contentsOf: file, encoding: .utf8)) ?? "")
 				.split(separator: "\n")
@@ -69,6 +80,13 @@ struct PassedCompileCheckCache: Sendable {
 
 	/// The file of passed checks: one key per line.
 	let file: URL
+
+	/// The file of the checks that the processes of this run passed, beside `file` and named for the run, or `nil`
+	/// when the process is part of no run. `file` also lists what a job restored into it before the tests, from its
+	/// branch's cache and from the list all branches share, so only this file says what this run itself saw compile.
+	/// It is the one `.github/actions/upload-passed-compile-checks` uploads to share, so that no restored line, right
+	/// or wrong, reaches the shared list through a run that did not compile it.
+	let fileOfPassesInThisRun: URL?
 
 	/// Whether the check whose key is `key` passed in an earlier run, as the file read when this cache was made lists
 	/// it. A `true` answer counts the check as skipped.
@@ -81,24 +99,17 @@ struct PassedCompileCheckCache: Sendable {
 		return true
 	}
 
-	/// Appends `key` to the file, making the file and its directory when they do not exist yet. One `write` of one
-	/// line to a file opened for appending, so test processes that share the file do not interleave their lines.
+	/// Appends `key` to the file, and to the file of this run's passes when there is one, making each file and its
+	/// directory when they do not exist yet.
 	func recordPass(of key: String) throws {
-		try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-		let descriptor = open(file.path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
-		guard descriptor >= 0 else {
-			throw PassedCompileCheckCacheError(description: "Could not open \(file.path) to record a passed compile check (errno \(errno)).")
-		}
-		defer { close(descriptor) }
-		let line = Array((key + "\n").utf8)
-		let writtenByteCount = line.withUnsafeBytes { write(descriptor, $0.baseAddress, $0.count) }
-		guard writtenByteCount == line.count else {
-			throw PassedCompileCheckCacheError(description: "Could not record a passed compile check in \(file.path) (errno \(errno)).")
+		try Self.append(key, to: file)
+		if let fileOfPassesInThisRun {
+			try Self.append(key, to: fileOfPassesInThisRun)
 		}
 	}
 
-	/// The key of the check that compiles `modules` in order with `toolchain`: the SHA-256 of a canonical description
-	/// of the toolchain (`CompileCheckToolchain.description`, or any text that names one) and of each module's name, package, dependencies, whether it emits a module, its conditions, language mode and upcoming features,
+	/// The key of the check that compiles `modules` in order with `build`: the SHA-256 of a canonical description of
+	/// what compiles it (`CompileCheckBuild.description`, or any text that names one) and of each module's name, package, dependencies, whether it emits a module, its conditions, language mode and upcoming features,
 	/// and the name and contents of each staged file, inputs in order and generated files in name order.
 	///
 	/// A file's contents spell paths under the test process's directory, as `#sourceLocation` directives and
@@ -108,7 +119,7 @@ struct PassedCompileCheckCache: Sendable {
 	/// keeps every path's length, distinctness and which paths are the same. Whether a check compiles does not depend
 	/// on what those paths spell beyond that, so the key is the same in every run of the same check. Text that differs
 	/// between runs in another way only costs the check its cache hit.
-	static func key(of modules: [CompileCheckModule], fixtureRoots: [String] = currentFixtureRoots, toolchain: String) throws -> String {
+	static func key(of modules: [CompileCheckModule], fixtureRoots: [String] = currentFixtureRoots, build: String) throws -> String {
 		var normalization = CompileCheckTextNormalization(fixtureRoots: fixtureRoots)
 		func files(_ urls: [URL]) throws -> [CompileCheckDescription.File] {
 			try urls.map { url in
@@ -136,7 +147,7 @@ struct PassedCompileCheckCache: Sendable {
 		}
 		let encoder = JSONEncoder()
 		encoder.outputFormatting = [.sortedKeys]
-		return try sha256HexDigest(of: encoder.encode(CompileCheckDescription(formatVersion: 2, toolchain: toolchain, modules: describedModules)))
+		return try sha256HexDigest(of: encoder.encode(CompileCheckDescription(formatVersion: 2, build: build, modules: describedModules)))
 	}
 
 	/// The test process's directory, as spelled and with symbolic links resolved, under which every fixture and
@@ -149,6 +160,22 @@ struct PassedCompileCheckCache: Sendable {
 
 	private let keysOfChecksThatPassedBefore: Set<String>
 	private let tally = PassedCompileCheckTally()
+
+	/// Appends `key` to `file`. One `write` of one line to a file opened for appending, so test processes that share
+	/// the file do not interleave their lines.
+	private static func append(_ key: String, to file: URL) throws {
+		try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+		let descriptor = open(file.path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
+		guard descriptor >= 0 else {
+			throw PassedCompileCheckCacheError(description: "Could not open \(file.path) to record a passed compile check (errno \(errno)).")
+		}
+		defer { close(descriptor) }
+		let line = Array((key + "\n").utf8)
+		let writtenByteCount = line.withUnsafeBytes { write(descriptor, $0.baseAddress, $0.count) }
+		guard writtenByteCount == line.count else {
+			throw PassedCompileCheckCacheError(description: "Could not record a passed compile check in \(file.path) (errno \(errno)).")
+		}
+	}
 
 	private func printTally() {
 		let counts = tally.counts
@@ -171,27 +198,36 @@ struct PassedCompileCheckCacheError: Error, CustomStringConvertible {
 	let description: String
 }
 
-/// The compiler and SDK this process compiles its checks with, as the compiler itself reports them, which every
-/// check's key includes.
+/// What compiles this process's checks, which every check's key includes: the compiler and SDK, as the compiler
+/// itself reports them, and the SafeDI module and macro plugin each check loads, by their bytes.
 ///
-/// It is asked of `swiftCompilerCommand` in this process's environment, as each check's compile is, so it names
-/// the compiler a check would run under whatever chose it: the selected Xcode, `DEVELOPER_DIR`, `TOOLCHAINS`,
-/// `SDKROOT`, a container's image or the runner's. Nothing a workflow says about its toolchain is hashed in its
-/// place, so a workflow edit that changes none of this keeps every passed check, and one that changes it compiles
-/// every check again without anyone listing which lines count.
+/// The compiler is asked through `swiftCompilerCommand` in this process's environment, as each check's compile is,
+/// so the description names the compiler a check would run under whatever chose it: the selected Xcode,
+/// `DEVELOPER_DIR`, `TOOLCHAINS`, `SDKROOT`, a container's image or the runner's. The module and the plugin are read
+/// where the verifier loads them, so it names what was built whatever built it: another job, other flags, another
+/// build system, other dependency versions. Nothing a workflow says about either is hashed in their place, so a
+/// workflow edit that changes none of this keeps every passed check, and one that changes any of it compiles every
+/// check again without anyone listing which lines count.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-enum CompileCheckToolchain {
-	/// This process's toolchain, asked once: what `describe()` returns.
-	static var description: String {
-		get async throws {
-			try await shared.value
+enum CompileCheckBuild {
+	/// What `describe(artifacts:)` returns for the build artifacts the verifier locates, asked once per process, or
+	/// `nil` when it could not be asked, twice, which is said once on standard error. A check is then compiled without
+	/// a key: nothing is skipped and nothing recorded.
+	static var description: String? {
+		get async {
+			try? await shared.value
 		}
 	}
 
-	/// What the compiler reports of itself in `environment`: its version, its target information, which names its
+	/// What the compiler reports of itself in `environment` (its version, its target information, which names its
 	/// default target, its runtime's compatibility version and the paths it compiles against, and on Apple platforms
-	/// the version and build of the SDK `xcrun` compiles with.
-	static func describe(environment: [String: String] = ProcessInfo.processInfo.environment) async throws -> String {
+	/// the version and build of the SDK `xcrun` compiles with), on Linux the distribution the process runs on
+	/// (`/etc/os-release`), whose libraries a check compiles against, and the SHA-256 of `artifacts`' SafeDI module
+	/// and macro plugin.
+	static func describe(
+		artifacts: SafeDIBuildArtifacts,
+		environment: [String: String] = ProcessInfo.processInfo.environment,
+	) async throws -> String {
 		var commands = [
 			(swiftCompilerCommand.executable, swiftCompilerCommand.arguments + ["--version"]),
 			(swiftCompilerCommand.executable, swiftCompilerCommand.arguments + ["-print-target-info"]),
@@ -205,7 +241,7 @@ enum CompileCheckToolchain {
 			let result = try await runProcess(executable, arguments: arguments, environment: environment)
 			guard result.exitCode == 0 else {
 				throw PassedCompileCheckCacheError(description: """
-				Could not describe the toolchain that compiles the checks: \(executable.path) \(arguments.joined(separator: " ")) \
+				Could not describe the compiler that compiles the checks: \(executable.path) \(arguments.joined(separator: " ")) \
 				exited with \(result.exitCode).
 				\(result.stderr)
 				""")
@@ -213,10 +249,64 @@ enum CompileCheckToolchain {
 			description += result.stdout
 			description += result.stderr
 		}
+		#if os(Linux)
+			description += try String(contentsOf: URL(fileURLWithPath: "/etc/os-release"), encoding: .utf8)
+		#endif
+		let module = artifacts.swiftModuleSearchPath.appendingPathComponent("SafeDI.swiftmodule")
+		description += "SafeDI.swiftmodule\n"
+		for file in try regularFiles(at: module) {
+			description += try "\(file.name) \(sha256HexDigest(of: Data(contentsOf: file.url)))\n"
+		}
+		description += try "SafeDIMacros \(sha256HexDigest(of: Data(contentsOf: artifacts.safeDIMacrosToolPath)))\n"
 		return description
 	}
 
-	private static let shared = SharedTestWork { try await describe() }
+	/// `url` itself when it is a file, named by its last path component, or every regular file under it when it is a
+	/// directory, as Xcode and Swift Build write a module (one file per architecture), each named by its path under
+	/// `url`, in name order. Fails when there is none.
+	private static func regularFiles(at url: URL) throws -> [(name: String, url: URL)] {
+		var isDirectory: ObjCBool = false
+		guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+			throw PassedCompileCheckCacheError(description: "Found no SafeDI module at \(url.path) to describe the build that compiles the checks.")
+		}
+		guard isDirectory.boolValue else {
+			return [(url.lastPathComponent, url)]
+		}
+		var files = [(name: String, url: URL)]()
+		for name in try FileManager.default.subpathsOfDirectory(atPath: url.path).sorted() {
+			let file = url.appendingPathComponent(name)
+			var isDirectory: ObjCBool = false
+			if FileManager.default.fileExists(atPath: file.path, isDirectory: &isDirectory), !isDirectory.boolValue {
+				files.append((name, file))
+			}
+		}
+		guard !files.isEmpty else {
+			throw PassedCompileCheckCacheError(description: "Found no file in the SafeDI module at \(url.path) to describe the build that compiles the checks.")
+		}
+		return files
+	}
+
+	private static let shared = SharedTestWork<String?> {
+		guard let artifacts = SafeDIBuildArtifactLocator.locate() else {
+			// The verifier records an issue for every check when it finds no build.
+			return nil
+		}
+		do {
+			return try await describe(artifacts: artifacts)
+		} catch {
+			// Once more, since one failed launch of the compiler would otherwise cost the process every skip.
+			do {
+				return try await describe(artifacts: artifacts)
+			} catch {
+				FileHandle.standardError.write(Data("""
+				Compile checks: none skipped or recorded, because what compiles them could not be described.
+				\(error)
+
+				""".utf8))
+				return nil
+			}
+		}
+	}
 }
 
 /// What a compile check's key is the hash of. `JSONEncoder` with sorted keys gives it one spelling.
@@ -242,7 +332,7 @@ private struct CompileCheckDescription: Encodable {
 	}
 
 	let formatVersion: Int
-	let toolchain: String
+	let build: String
 	let modules: [Module]
 }
 

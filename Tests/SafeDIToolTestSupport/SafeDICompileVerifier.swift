@@ -84,8 +84,8 @@ func verifyGeneratedCodeCompiles(
 	)
 	let check = try CompileCheckModule(sources: module, staged: stageCompileSources(of: module, filesToDelete: &filesToDelete), emitsModule: false)
 	var passedCheckKey: String?
-	if passedCheckCache != nil {
-		passedCheckKey = try await PassedCompileCheckCache.key(of: [check], toolchain: CompileCheckToolchain.description)
+	if passedCheckCache != nil, let build = await CompileCheckBuild.description {
+		passedCheckKey = try PassedCompileCheckCache.key(of: [check], build: build)
 	}
 	if let passedCheckCache, let passedCheckKey, passedCheckCache.holds(passedCheckKey) {
 		return
@@ -134,8 +134,8 @@ func verifyModulesCompile(
 	}
 	let passedCheckCache = recordsIssues ? passedCheckCache : nil
 	var passedCheckKey: String?
-	if passedCheckCache != nil {
-		passedCheckKey = try await PassedCompileCheckCache.key(of: checks, toolchain: CompileCheckToolchain.description)
+	if passedCheckCache != nil, let build = await CompileCheckBuild.description {
+		passedCheckKey = try PassedCompileCheckCache.key(of: checks, build: build)
 	}
 	if let passedCheckCache, let passedCheckKey, passedCheckCache.holds(passedCheckKey) {
 		return nil
@@ -317,7 +317,7 @@ struct MultiModuleCompileOutcome {
 }
 
 /// Stages one module's sources as `stageCompileSources` does, with the module's staging settings.
-private func stageCompileSources(of module: ModuleCompileSources, filesToDelete: inout [URL]) throws -> StagedCompileSources {
+func stageCompileSources(of module: ModuleCompileSources, filesToDelete: inout [URL]) throws -> StagedCompileSources {
 	try stageCompileSources(
 		inputSwiftFiles: module.inputSwiftFiles,
 		generatedFiles: module.generatedFiles,
