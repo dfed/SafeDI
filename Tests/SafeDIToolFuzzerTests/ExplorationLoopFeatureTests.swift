@@ -74,3 +74,28 @@ struct ExplorationMultiModuleTests {
 		}
 	}
 }
+
+/// Local exploration only: writes seed SAFEDI_EXPLORE_EDIT_SEED's seam graph, drawn and with builder surface edit
+/// SAFEDI_EXPLORE_EDIT (a raw value), and the tool's output for each, under SAFEDI_EXPLORE_EDIT_OUTPUT.
+struct ExplorationBuilderSurfaceEditTests {
+	@Test(.enabled(if: ProcessInfo.processInfo.environment["SAFEDI_EXPLORE_EDIT_SEED"] != nil))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func writeEditedGraph() async throws {
+		let environment = ProcessInfo.processInfo.environment
+		let seed = UInt64(environment["SAFEDI_EXPLORE_EDIT_SEED"] ?? "") ?? 0
+		let output = URL(fileURLWithPath: environment["SAFEDI_EXPLORE_EDIT_OUTPUT"] ?? "")
+		let edit = try #require(GraphFuzzerBuilderSurfaceEdit(rawValue: environment["SAFEDI_EXPLORE_EDIT"] ?? ""))
+		let fixtures: [(String, GraphFuzzerFixture?)] = [
+			("drawn", GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])),
+			("edited", GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree], builderSurfaceEdit: edit)),
+		]
+		for (name, fixture) in fixtures {
+			guard let fixture else { continue }
+			let directory = output.appendingPathComponent(name)
+			try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+			try fixture.swiftFileContent.joined(separator: "\n// ----\n").write(to: directory.appendingPathComponent("fixture.txt"), atomically: true, encoding: .utf8)
+			let outcome = try await GraphFuzzerOracle.toolOutcome(of: fixture)
+			try outcome.description.write(to: directory.appendingPathComponent("outcome.txt"), atomically: true, encoding: .utf8)
+		}
+	}
+}
