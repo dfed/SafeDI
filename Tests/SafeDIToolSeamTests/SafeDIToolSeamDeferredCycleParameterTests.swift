@@ -139,84 +139,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 	/// The comment on the line of `App`'s guard of the call of `Hub`.
 	private static let callComment = MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature")
 
-	/// `Feature`'s generated file for `Hub`'s tree built behind `aBuilder: SendableInstantiator<A>`.
-	private static let sendableCycleFeatureFile = ["Feature.swift": generatedFileHeader + """
-	extension Hub {
-	    @frozen nonisolated public enum SafeDIScope_Api {
-	        @frozen nonisolated public enum A_Scope {
-	            case api(api_Values)
-
-	            nonisolated public struct api_Values {
-	                public let tag: Tag
-	                public let reader: TagReader
-	                public let bBuilder: SendableInstantiator<B>
-	            }
-
-	            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-	            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-	                public let api: (api_Values) -> __safeDI_Built
-
-	                public init(api: @escaping (api_Values) -> __safeDI_Built) {
-	                    self.api = api
-	                }
-
-	                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-	                    self.api = { _ in __safeDI_builder() }
-	                }
-	            }
-	        }
-	    }
-
-	    @frozen nonisolated public enum SafeDISendableScope_Api {
-	        case aBuilder(SafeDIScope_Api.A_Scope)
-
-	        nonisolated public struct aBuilder_Values: Sendable {}
-
-	        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-	        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-	            public let aBuilder: @Sendable (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
-
-	            public init(aBuilder: @escaping @Sendable (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
-	                self.aBuilder = aBuilder
-	            }
-
-	            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-	                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-	            }
-	        }
-	    }
-
-	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-	    public init(__safeDI_tag: @autoclosure @escaping @Sendable () -> Tag, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
-	        let tag = SendableLazilyInstantiated<Tag>(__safeDI_tag)
-	        @Sendable nonisolated func __safeDI_aBuilder(tag: Tag) -> A {
-	            let __safeDI_apiSendableBuilder_aBuilder = __safeDI_apiSendableBuilder.aBuilder(SafeDISendableScope_Api.aBuilder_Values())
-	            let reader = TagReader(tag: tag)
-	            @Sendable nonisolated func __safeDI_bBuilder(tag: Tag) -> B {
-	                let aBuilder = SendableInstantiator<A> {
-	                    __safeDI_aBuilder(tag: tag)
-	                }
-	                return B(tag: tag, aBuilder: aBuilder)
-	            }
-	            let bBuilder = SendableInstantiator<B> {
-	                __safeDI_bBuilder(tag: $0)
-	            }
-	            let api: any Api = __safeDI_apiSendableBuilder_aBuilder.api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))
-	            return A(reader: reader, api: api, bBuilder: bBuilder)
-	        }
-	        let aBuilder = SendableInstantiator<A> {
-	            __safeDI_aBuilder(tag: tag.instance)
-	        }
-	        self.init(aBuilder: aBuilder)
-	    }
-	}
-
-	extension Hub {
-	    public enum __safeDI_Hub_3697FF5A123AFB0B {}
-	}
-	"""]
-
 	// MARK: The site's struct
 
 	@Test
@@ -591,7 +513,84 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// the function's `tag`; the memo, read inside a `@Sendable` function, is a `SendableLazilyInstantiated`.
 		let modules = Self.modules(cycle: .sendableInstantiator)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.sendableCycleFeatureFile)
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			extension Hub {
+			    @frozen nonisolated public enum SafeDIScope_Api {
+			        @frozen nonisolated public enum A_Scope {
+			            case api(api_Values)
+
+			            nonisolated public struct api_Values {
+			                public let tag: Tag
+			                public let reader: TagReader
+			                public let bBuilder: SendableInstantiator<B>
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let api: (api_Values) -> __safeDI_Built
+
+			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+			                    self.api = api
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.api = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+			    }
+
+			    @frozen nonisolated public enum SafeDISendableScope_Api {
+			        case aBuilder(SafeDIScope_Api.A_Scope)
+
+			        nonisolated public struct aBuilder_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let aBuilder: @Sendable (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(aBuilder: @escaping @Sendable (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.aBuilder = aBuilder
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_tag: @autoclosure @escaping @Sendable () -> Tag, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
+			        let tag = SendableLazilyInstantiated<Tag>(__safeDI_tag)
+			        @Sendable nonisolated func __safeDI_aBuilder(tag: Tag) -> A {
+			            let __safeDI_apiSendableBuilder_aBuilder = __safeDI_apiSendableBuilder.aBuilder(SafeDISendableScope_Api.aBuilder_Values())
+			            let reader = TagReader(tag: tag)
+			            @Sendable nonisolated func __safeDI_bBuilder(tag: Tag) -> B {
+			                let aBuilder = SendableInstantiator<A> {
+			                    __safeDI_aBuilder(tag: tag)
+			                }
+			                return B(tag: tag, aBuilder: aBuilder)
+			            }
+			            let bBuilder = SendableInstantiator<B> {
+			                __safeDI_bBuilder(tag: $0)
+			            }
+			            let api: any Api = __safeDI_apiSendableBuilder_aBuilder.api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))
+			            return A(reader: reader, api: api, bBuilder: bBuilder)
+			        }
+			        let aBuilder = SendableInstantiator<A> {
+			            __safeDI_aBuilder(tag: tag.instance)
+			        }
+			        self.init(aBuilder: aBuilder)
+			    }
+			}
+
+			extension Hub {
+			    public enum __safeDI_Hub_3697FF5A123AFB0B {}
+			}
+			""",
+		])
 		#expect(output.modules["App"]?.generatedFiles == [
 			"App.swift": generatedFileHeader + """
 			#if canImport(Feature)
@@ -752,7 +751,84 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// again, `LiveApi` receives `B`'s `tag`, as inline's does, never `Root`'s.
 		let modules = Self.modules(cycle: .sendableInstantiator, liveApiDeclarations: ["@Received let tag: Tag"])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.sendableCycleFeatureFile)
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			extension Hub {
+			    @frozen nonisolated public enum SafeDIScope_Api {
+			        @frozen nonisolated public enum A_Scope {
+			            case api(api_Values)
+
+			            nonisolated public struct api_Values {
+			                public let tag: Tag
+			                public let reader: TagReader
+			                public let bBuilder: SendableInstantiator<B>
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let api: (api_Values) -> __safeDI_Built
+
+			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+			                    self.api = api
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.api = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+			    }
+
+			    @frozen nonisolated public enum SafeDISendableScope_Api {
+			        case aBuilder(SafeDIScope_Api.A_Scope)
+
+			        nonisolated public struct aBuilder_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let aBuilder: @Sendable (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(aBuilder: @escaping @Sendable (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.aBuilder = aBuilder
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_tag: @autoclosure @escaping @Sendable () -> Tag, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
+			        let tag = SendableLazilyInstantiated<Tag>(__safeDI_tag)
+			        @Sendable nonisolated func __safeDI_aBuilder(tag: Tag) -> A {
+			            let __safeDI_apiSendableBuilder_aBuilder = __safeDI_apiSendableBuilder.aBuilder(SafeDISendableScope_Api.aBuilder_Values())
+			            let reader = TagReader(tag: tag)
+			            @Sendable nonisolated func __safeDI_bBuilder(tag: Tag) -> B {
+			                let aBuilder = SendableInstantiator<A> {
+			                    __safeDI_aBuilder(tag: tag)
+			                }
+			                return B(tag: tag, aBuilder: aBuilder)
+			            }
+			            let bBuilder = SendableInstantiator<B> {
+			                __safeDI_bBuilder(tag: $0)
+			            }
+			            let api: any Api = __safeDI_apiSendableBuilder_aBuilder.api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))
+			            return A(reader: reader, api: api, bBuilder: bBuilder)
+			        }
+			        let aBuilder = SendableInstantiator<A> {
+			            __safeDI_aBuilder(tag: tag.instance)
+			        }
+			        self.init(aBuilder: aBuilder)
+			    }
+			}
+
+			extension Hub {
+			    public enum __safeDI_Hub_3697FF5A123AFB0B {}
+			}
+			""",
+		])
 		#expect(output.modules["App"]?.generatedFiles == [
 			"App.swift": generatedFileHeader + """
 			#if canImport(Feature)
