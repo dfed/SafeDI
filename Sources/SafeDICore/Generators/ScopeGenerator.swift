@@ -7795,6 +7795,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The isolation the init or customMock spells (`Initializer.spelledIsolation`), which a public mock's
 		/// construction function that calls it mirrors.
 		let constructionIsolation: String?
+		/// The global actor every mock builds this node's type on (`Instantiable.mockConstructionGlobalActor`), whose
+		/// configuration then stores each default as a closure of the actor, which the mock calls where it builds the type.
+		let configurationGlobalActor: String?
 		/// The type's declared dependencies.
 		let dependencies: [Dependency]
 		/// The received dependencies that are in scope only as the instance of a `LazilyInstantiated` property.
@@ -7899,6 +7902,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			defaultParameters: [DefaultParameter],
 			constructionArguments: [Initializer.Argument],
 			constructionIsolation: String?,
+			configurationGlobalActor: String?,
 			dependencies: [Dependency],
 			lazilyInstantiatedInstanceProperties: Set<Property>,
 			unavailableProperties: Set<Property>,
@@ -7938,6 +7942,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			self.defaultParameters = defaultParameters
 			self.constructionArguments = constructionArguments
 			self.constructionIsolation = constructionIsolation
+			self.configurationGlobalActor = configurationGlobalActor
 			self.dependencies = dependencies
 			self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 			self.unavailableProperties = unavailableProperties
@@ -8746,6 +8751,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					defaultParameters: defaultParameters,
 					constructionArguments: constructionArguments,
 					constructionIsolation: constructionInitializer?.spelledIsolation,
+					configurationGlobalActor: childInstantiable.mockConstructionGlobalActor,
 					dependencies: childInstantiable.dependencies,
 					lazilyInstantiatedInstanceProperties: childGenerator.lazilyInstantiatedInstanceProperties,
 					unavailableProperties: childConstructionUnavailableProperties,
@@ -9429,7 +9435,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let typeSource = defaultParameter.valueTypeDescription.asSource
 			// Only add @Sendable if this struct requires it AND the type doesn't already have it.
 			let closureSendable = (requiresSendable && !typeSource.contains("@Sendable")) ? "@Sendable " : ""
-			if defaultParameter.isAutoclosure, !requiresSendable {
+			if let globalActor = node.configurationGlobalActor {
+				// Every mock builds the type on `globalActor`, where its declaration evaluates the default, which may read
+				// the actor's state and so cannot be evaluated in this nonisolated initializer: the struct stores a closure
+				// of the actor that returns the value, which its initializer takes as an autoclosure, so a caller still
+				// passes a value, and the mock calls it where it builds the type (`resolveBuilderArguments`). A closure
+				// literal default is formed inside the autoclosure, on the actor, as in the declaration.
+				let attributes = "\(requiresSendable ? "@Sendable " : "")\(globalActor)"
+				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping \(attributes) () -> \(typeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
+				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(attributes) () -> \(typeSource)")
+			} else if defaultParameter.isAutoclosure, !requiresSendable {
 				// An `@autoclosure` parameter is evaluated where the type is built: the struct stores a closure that
 				// returns the value, which its initializer takes as an autoclosure, as the parameter does, and the mock
 				// calls it once per construction (`resolveBuilderArguments`).
@@ -10191,7 +10206,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// When the node's type is in `sendableConfigurationTypeNames`, its struct stores
 	/// each non-closure default as a `@Sendable` closure (`generateConfigurationStruct`),
 	/// so the argument calls it, wherever it is read from. Every struct stores the value of an
-	/// `@autoclosure` parameter as a closure, which the argument calls too.
+	/// `@autoclosure` parameter as a closure, which the argument calls too, and the struct of a type
+	/// every mock builds on a global actor (`configurationGlobalActor`) stores every default as one.
 	private static func resolveBuilderArguments(
 		for node: MockParameterNode,
 		nodePath: String,
@@ -10214,10 +10230,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 		let storesDefaultsAsClosures = sendableConfigurationTypeNames.contains(node.concreteType.asSource)
 		/// `expression`, called when the struct stores the default of `argument` as a closure: always for an
-		/// `@autoclosure` parameter, and for every value that is not a function when the struct is `@Sendable`-typed.
+		/// `@autoclosure` parameter and in the struct of a type built on a global actor, and for every value that is not
+		/// a function when the struct is `@Sendable`-typed.
 		func readingDefault(_ expression: String, of argument: Initializer.Argument) -> String {
 			let typeDescription = argument.typeDescription.strippingEscaping
-			return if typeDescription.autoclosureValueType != nil || (storesDefaultsAsClosures && !typeDescription.isClosure) {
+			return if typeDescription.autoclosureValueType != nil
+				|| node.configurationGlobalActor != nil
+				|| (storesDefaultsAsClosures && !typeDescription.isClosure)
+			{
 				"\(expression)()"
 			} else {
 				expression

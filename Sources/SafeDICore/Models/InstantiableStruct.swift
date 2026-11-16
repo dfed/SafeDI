@@ -178,6 +178,32 @@ public struct Instantiable: Codable, Hashable, Sendable {
 			?? Initializer.globalActorAttribute(in: mockAttributes)
 	}
 
+	/// The global actor every mock that builds this type builds it on, or `nil` when there is none: each member a mock can
+	/// build it with must be isolated to that one actor, which it spells, or, when it spells no isolation, which the type
+	/// declaration spells. The members are its hand-written mock (`mockInitializer`), which builds every property of the
+	/// type when it returns the type itself, and otherwise also its `init` or `instantiate(…)` (`initializer`). A mock calls
+	/// such a member synchronously, so it builds the type only on that actor, where the type's configuration evaluates the
+	/// defaults the type's declaration spells, which may read the actor's state (`mock-generation.md`). `mockAttributes`
+	/// play no part: they bind this type's own `mock()`, not the members other mocks call.
+	public var mockConstructionGlobalActor: String? {
+		let members = if let mockInitializer, mockReturnTypeIsCompatible(withPropertyType: concreteInstantiable) {
+			[mockInitializer]
+		} else {
+			[mockInitializer, initializer].compactMap(\.self)
+		}
+		var globalActors = Set<String?>()
+		for member in members {
+			switch member.spelledIsolation ?? declarationIsolation {
+			case "nonisolated"?, nil:
+				globalActors.insert(nil)
+			case let globalActor?:
+				globalActors.insert(globalActor)
+			}
+		}
+		guard globalActors.count == 1, let globalActor = globalActors.first else { return nil }
+		return globalActor
+	}
+
 	/// Whether to generate a `mock()` method for this type, and with what access: the `generateMock:` argument.
 	public let generateMock: MockGeneration
 	/// Whether a `mock()` method is generated for this type, with any access.

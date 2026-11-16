@@ -5456,7 +5456,7 @@ struct SafeDIToolGraphFuzzerTests {
 		/// The gating draws of the seam corpus (`isForwardedLabelAcrossSeamCallShape`, `isRetentionShape`), whose judged
 		/// graphs must reach `gatingDrawJudgedGraphFloor`.
 		var gatingSeamDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
-		/// The gating draws of the public mock corpus (`isCountedWhenAccepted`), as `gatingSeamDrawFeatures`.
+		/// The gating draws of the public mock corpus (`isGating`), as `gatingSeamDrawFeatures`.
 		var gatingPublicMockDrawFeatures = Set<GraphFuzzerPublicMockDrawFeature>()
 
 		/// The names of the corpus's gating draws and the shapes they roll, sorted.
@@ -6599,7 +6599,7 @@ struct SafeDIToolGraphFuzzerTests {
 		acceptedPublicMockDrawFeatureCounts: publicMockCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: publicMockCorpusReadTwinGraphCount,
 		retentionCounts: publicMockCorpusRetentionCounts,
-		gatingPublicMockDrawFeatures: Set(GraphFuzzerPublicMockDrawFeature.allCases.filter(\.isCountedWhenAccepted)),
+		gatingPublicMockDrawFeatures: Set(GraphFuzzerPublicMockDrawFeature.allCases.filter(\.isGating)),
 		builderSurfaceFlooredKinds: [
 			"base-plain",
 			"base-lazy",
@@ -6623,10 +6623,11 @@ struct SafeDIToolGraphFuzzerTests {
 		],
 	)
 
-	/// How many of the public mock corpus's accepted graphs show each gating draw (`isCountedWhenAccepted`), counted
+	/// How many of the public mock corpus's accepted graphs show each draw it counts (`isCountedWhenAccepted`), counted
 	/// whether or not the graph fails: at least ten each (`acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachGatingDraw`). Pins:
 	/// derived on CI.
 	static let publicMockCorpusAcceptedDrawFeatureCounts: [GraphFuzzerPublicMockDrawFeature: Int] = [
+		.mainActorChildDefaultReadsActorState: 0,
 		.placeInsidePublicMockFill: 323,
 		.placeInsidePublicMockFillFilledByConsumer: 236,
 		.placeInsidePublicMockFillOnForwardingRoute: 133,
@@ -7000,7 +7001,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// that stops landing, or a change in a shape's share, fails
 	/// `publicMockCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool`.
 	static let publicMockCorpusDrawFeatureCounts: [GraphFuzzerPublicMockDrawFeature: Int] = [
-		.allNonPublicConfiguration: 307,
+		.allNonPublicConfiguration: 302,
 		.allowlistedParameterType: 138,
 		.bothConsumerModules: 393,
 		.childDefaultNamingOwnStaticMember: 452,
@@ -7069,6 +7070,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,
 		.lazilyReceivedLabelWithOnlyIfAvailableByValueReceive: 227,
+		.mainActorChildDefaultReadsActorState: 62,
 		.mainActorChildInitializerSpellsIsolation: 66,
 		.mainActorLeafIsolatedByMembers: 83,
 		.mainActorChildIsolatedInitializer: 141,

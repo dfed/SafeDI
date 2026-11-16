@@ -208,6 +208,7 @@ extension ScopeGenerator {
 					defaultExpression: isNilLiteral ? "nil" : (access == .public ? forwarder : provider),
 					omittedValue: isNilLiteral ? "nil" : provider,
 					requiresSendable: requiresSendable,
+					globalActor: node.configurationGlobalActor,
 					documentation: "The default of `\(concreteType.asSource)`’s `\(defaultParameter.label.spelledWithoutBackticks)` unless set.",
 				))
 			} else {
@@ -218,6 +219,7 @@ extension ScopeGenerator {
 					defaultExpression: "nil",
 					omittedValue: "nil",
 					requiresSendable: requiresSendable,
+					globalActor: node.configurationGlobalActor,
 					documentation: "`nil` keeps the default of `\(concreteType.asSource)`’s `\(defaultParameter.label.spelledWithoutBackticks)`.",
 				))
 			}
@@ -243,8 +245,9 @@ extension ScopeGenerator {
 		lines.append("/// Configuration for how `\(concreteType.asSource)` is constructed within the public mock trees of \(context.moduleName.map { "module `\($0)`" } ?? "this module").")
 		// `nonisolated`, so that a module whose declarations default to the main actor does not put this file-scope struct
 		// there, out of reach of the nonisolated code that builds and reads it. Its defaults are `nil`, `.init()` and
-		// nonisolated providers, never an expression the configured type spells, unlike an internal mock's configuration,
-		// which keeps the configured type's isolation (`generateConfigurationStruct`).
+		// nonisolated providers, or, for a type every mock builds on a global actor, autoclosures of that actor, which
+		// this initializer does not call, never an expression the configured type spells, unlike an internal mock's
+		// configuration, which keeps the configured type's isolation (`generateConfigurationStruct`).
 		lines.append("nonisolated public struct \(configurationTypeName) {")
 		lines.append(contentsOf: publicStructBody(members: members, indent: standardIndent))
 		lines.append("}")
@@ -328,7 +331,9 @@ extension ScopeGenerator {
 
 	/// A member holding a default-valued parameter's value of `valueType`. A struct a `@Sendable` builder function reads
 	/// holds a `@Sendable` closure that returns the value, which its initializer takes as an autoclosure, so that the
-	/// function captures no value whose type may not be `Sendable`.
+	/// function captures no value whose type may not be `Sendable`. The struct of a type every mock builds on
+	/// `globalActor` holds a closure of that actor, so that its nonisolated initializer calls no provider of the actor:
+	/// the mock calls the closure where it builds the type.
 	static func publicDefaultMember(
 		name: String,
 		valueType: TypeDescription,
@@ -336,13 +341,15 @@ extension ScopeGenerator {
 		defaultExpression: String,
 		omittedValue: String,
 		requiresSendable: Bool,
+		globalActor: String?,
 		documentation: String,
 	) -> PublicStructMember {
-		if requiresSendable {
-			PublicStructMember(
+		if requiresSendable || globalActor != nil {
+			let attributes = [requiresSendable ? "@Sendable" : nil, globalActor].compactMap(\.self).joined(separator: " ")
+			return PublicStructMember(
 				name: name,
-				typeSource: "@Sendable () -> \(valueType.asSource)",
-				parameterTypeSource: "@autoclosure @escaping @Sendable () -> \(valueType.asSource)",
+				typeSource: "\(attributes) () -> \(valueType.asSource)",
+				parameterTypeSource: "@autoclosure @escaping \(attributes) () -> \(valueType.asSource)",
 				access: access,
 				defaultExpression: autoclosureDefault(defaultExpression),
 				omittedValue: "{ \(omittedValue) }",
@@ -350,7 +357,7 @@ extension ScopeGenerator {
 				documentation: documentation,
 			)
 		} else {
-			PublicStructMember(
+			return PublicStructMember(
 				name: name,
 				typeSource: valueType.asSource,
 				parameterTypeSource: valueType.asSource,
@@ -421,10 +428,14 @@ extension ScopeGenerator {
 		let returnType = node.useMockInitializer ? node.instantiatedTypeDescription.asSource : concreteType.asSource
 		let builderName = ReservedName.configurationBuilderPropertyName
 		let optionalDefaultParameters = defaultParameters.filter { $0.valueTypeDescription.isOptional && $0.defaultExpression != "nil" }
+		// A provider evaluates the default the type's declaration spells, in its isolation: on the global actor every mock
+		// builds the type on, whose configuration then holds a closure of the actor that calls it, else nonisolated, so
+		// that the configuration's nonisolated initializer can call it.
+		let providerIsolation = node.configurationGlobalActor ?? "nonisolated"
 		var lines = [String]()
 		lines.append("extension \(concreteType.asSource) {")
 		for defaultParameter in optionalDefaultParameters {
-			lines.append("\(standardIndent)nonisolated static func \(PublicMockContext.providerName(label: defaultParameter.label))() -> \(defaultParameter.valueTypeDescription.asSource) { \(defaultParameter.defaultExpression) }")
+			lines.append("\(standardIndent)\(providerIsolation) static func \(PublicMockContext.providerName(label: defaultParameter.label))() -> \(defaultParameter.valueTypeDescription.asSource) { \(defaultParameter.defaultExpression) }")
 		}
 		// The function mirrors the isolation the member it calls spells, so a caller that can call the member can call it.
 		let isolationPrefix = node.constructionIsolation.map { "\($0) " } ?? ""
@@ -439,7 +450,7 @@ extension ScopeGenerator {
 			(label: defaultParameter.label, valueType: defaultParameter.valueTypeDescription)
 		}
 		for (label, valueType) in optionalDefaultValueTypes where context.access(ofTypes: [valueType], admittedModules: admittedModules).level == .public {
-			lines.append("@usableFromInline nonisolated func \(context.forwarderName(of: concreteType, label: label))() -> \(valueType.asSource) { \(concreteType.asSource).\(PublicMockContext.providerName(label: label))() }")
+			lines.append("@usableFromInline \(providerIsolation) func \(context.forwarderName(of: concreteType, label: label))() -> \(valueType.asSource) { \(concreteType.asSource).\(PublicMockContext.providerName(label: label))() }")
 		}
 		return lines
 	}
@@ -515,7 +526,7 @@ extension ScopeGenerator {
 		let relativePath = nodePath
 			.replacingOccurrences(of: "\(ReservedName.mockOverridesParameterName).", with: "")
 			.replacingOccurrences(of: ".", with: "_")
-		let storesDefaultsAsClosures = emission.sendableConfigurationTypeNames.contains(node.concreteType.asSource)
+		let storesDefaultsAsClosures = emission.sendableConfigurationTypeNames.contains(node.concreteType.asSource) || node.configurationGlobalActor != nil
 		return node.callSiteArguments.map { argument in
 			if let dependency = dependenciesByLabel[argument.innerLabel] {
 				return dependencyArgument(
@@ -936,6 +947,8 @@ extension ScopeGenerator {
 						defaultExpression: providerCall,
 						omittedValue: providerCall,
 						requiresSendable: false,
+						// Only a `mock()` isolated to no global actor takes its type's own defaults as fields.
+						globalActor: nil,
 						documentation: isNilLiteral
 							? "The value of `\(typeName)`’s `\(rootDefault.label.spelledWithoutBackticks)`, `nil` unless set."
 							: "The default of `\(typeName)`’s `\(rootDefault.label.spelledWithoutBackticks)` unless set; `.init(\(rootDefault.label.spelledAsArgumentLabel): nil)` passes `nil`.",

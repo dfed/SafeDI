@@ -135,6 +135,9 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// A `.public` type the main actor isolates through its initializer and hand-written mock rather than its declaration,
 	/// whose public `mock()` takes the actor from the member it calls.
 	case mainActorLeafIsolatedByMembers
+	/// A `@MainActor` child with an isolated initializer whose defaults read the actor's state, which a configuration
+	/// evaluates on the actor where the mock builds the child.
+	case mainActorChildDefaultReadsActorState
 	/// A child whose only default-valued parameter is of a type narrower than `public`.
 	case allNonPublicConfiguration
 	/// A `mockConditionalCompilation` that differs between the declaring module and a consuming one, and the declaring
@@ -256,10 +259,17 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// `RetainLive`, the fill, reads `retainNavigator`, which the known-right path then keeps alive too.
 	case retentionPublicMockValueBeforeBuilderFillReadsValue
 
-	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,
-	/// `retentionPublicMockValueBeforeBuilder…`) draws this shape, whose count in accepted graphs the public mock corpus
-	/// pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
+	/// Whether the public mock corpus pins this shape's count in accepted graphs too (`acceptedPublicMockDrawFeatureCounts`),
+	/// at least ten each: a gating draw's shape (`isGating`), and a roll whose graphs must stay accepted to stand in for
+	/// unit tests of its neighbours.
 	var isCountedWhenAccepted: Bool {
+		isGating || self == .mainActorChildDefaultReadsActorState
+	}
+
+	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,
+	/// `retentionPublicMockValueBeforeBuilder…`) draws this shape, whose judged graphs must reach
+	/// `gatingDrawJudgedGraphFloor`.
+	var isGating: Bool {
 		rawValue.hasPrefix("selfBuildingPublicMock") || rawValue.hasPrefix("placeInsidePublicMockFill") || isRetentionShape
 	}
 
@@ -439,6 +449,7 @@ struct GraphFuzzerPublicMockDraw {
 		var spellingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockSpellingRandomSeedMask)
 		var requiredParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockRequiredParameterRandomSeedMask)
 		var isolationSpellingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockIsolationSpellingRandomSeedMask)
+		var isolatedDefaultRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockIsolatedDefaultRandomSeedMask)
 		var erasureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockErasureRandomSeedMask)
 		var holeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleRandomSeedMask)
 		var callShapeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockCallShapeRandomSeedMask)
@@ -456,6 +467,7 @@ struct GraphFuzzerPublicMockDraw {
 			spellingRandom: &spellingRandom,
 			requiredParameterRandom: &requiredParameterRandom,
 			isolationSpellingRandom: &isolationSpellingRandom,
+			isolatedDefaultRandom: &isolatedDefaultRandom,
 			erasureRandom: &erasureRandom,
 			holeRandom: &holeRandom,
 			callShapeRandom: &callShapeRandom,
@@ -547,6 +559,10 @@ struct GraphFuzzerPublicMockDraw {
 	/// mock's construction function mirrors, rather than taking it from its type: a roll added after the rest of the draw
 	/// was pinned, so that its other shapes are drawn as before.
 	static let publicMockIsolationSpellingRandomSeedMask: UInt64 = 0x7075626D6B69736F
+	/// Draws only whether a `@MainActor` child with an isolated initializer takes defaults that read the actor's state –
+	/// static members of its own that it does not mark `nonisolated` – which its configurations evaluate on the actor: a
+	/// roll added after the rest of the draw was pinned, so that its other shapes are drawn as before.
+	static let publicMockIsolatedDefaultRandomSeedMask: UInt64 = 0x7075626D6B696466
 	/// Draws only whether a consumer reaches a leaf it instantiates through an erasure, and which (G1: M8.19, M8.20b): rolls
 	/// added after the rest of the draw was pinned, so that its other shapes are drawn as before.
 	static let publicMockErasureRandomSeedMask: UInt64 = 0x7075626D6B657261
@@ -672,6 +688,9 @@ struct GraphFuzzerPublicMockDraw {
 		/// Static members, each spelled at the narrower of its access and the initializer's (`nonisolated` in a
 		/// `@MainActor` type): `static let defaultCapacity = 10`.
 		var staticMembers = [(access: AccessLevel, declaration: String)]()
+		/// Static members of a `@MainActor` type that it does not mark `nonisolated`, spelled at its initializer's access,
+		/// so that a default naming one reads the actor's state.
+		var isolatedStaticMembers = [String]()
 		/// The narrowest access of the types the initializer names, which caps it so that the fixture compiles.
 		var narrowestNamedAccess = AccessLevel.public
 
@@ -809,6 +828,7 @@ struct GraphFuzzerPublicMockDraw {
 		spellingRandom: inout GraphFuzzerRandomNumberGenerator,
 		requiredParameterRandom: inout GraphFuzzerRandomNumberGenerator,
 		isolationSpellingRandom: inout GraphFuzzerRandomNumberGenerator,
+		isolatedDefaultRandom: inout GraphFuzzerRandomNumberGenerator,
 		erasureRandom: inout GraphFuzzerRandomNumberGenerator,
 		holeRandom: inout GraphFuzzerRandomNumberGenerator,
 		callShapeRandom: inout GraphFuzzerRandomNumberGenerator,
@@ -904,6 +924,13 @@ struct GraphFuzzerPublicMockDraw {
 				declaration.isMainActor = !child.initializerIsNonisolated
 				// An isolated initializer spells `@MainActor` half the time, else takes it from its type.
 				child.initializerSpellsMainActor = !child.initializerIsNonisolated && isolationSpellingRandom.percentChance(50)
+				// Half the isolated initializers take defaults that read the actor's state: static members the type does not
+				// mark `nonisolated`, one of them optional, which a public configuration evaluates through a provider.
+				if !child.initializerIsNonisolated, isolatedDefaultRandom.percentChance(50) {
+					child.isolatedStaticMembers += ["static let isolatedDefaultCount = 2", "static let isolatedDefaultLabel: String? = \"isolated\""]
+					child.defaults.append(DefaultParameter(name: "isolatedCount", type: "Int", defaultValue: "isolatedDefaultCount"))
+					child.defaults.append(DefaultParameter(name: "isolatedLabel", type: "String?", defaultValue: "isolatedDefaultLabel"))
+				}
 			}
 			// A leaf the main actor isolates spells it on its initializer and hand-written mock, not on itself, half the time.
 			if declaration.isMainActor, memberIsolationRandom.percentChance(50) {
@@ -2183,6 +2210,10 @@ struct GraphFuzzerPublicMockDraw {
 			lines.append("")
 			lines.append("\t\(typeSpellsMainActor ? "nonisolated " : "")\(rendering.modifier(min(member.access, initializerAccess)))\(member.declaration)")
 		}
+		for member in declaration.isolatedStaticMembers {
+			lines.append("")
+			lines.append("\t\(rendering.modifier(initializerAccess))\(member)")
+		}
 		if let customMockAccess = declaration.customMockAccess {
 			let access = min(customMockAccess, declaration.narrowestNamedAccess, declaration.access)
 			let mockParameters = declaration.properties.map { "\($0.label): \(parameterType($0.type))" }.joined(separator: ", ")
@@ -2751,6 +2782,9 @@ extension GraphFuzzerPublicMockDraw {
 			let defaults = child.defaultParameters
 			if defaults.contains(where: { $0.hasSuffix("= defaultCapacity") }) {
 				features.insert(.childDefaultNamingOwnStaticMember)
+			}
+			if defaults.contains(where: { $0.hasSuffix("= isolatedDefaultCount") }) {
+				features.insert(.mainActorChildDefaultReadsActorState)
 			}
 			if !defaults.isEmpty, defaults.allSatisfy({ $0.hasPrefix("policy: ") }) {
 				features.insert(.allNonPublicConfiguration)
