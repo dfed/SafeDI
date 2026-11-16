@@ -70,14 +70,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        case shell(shell_Values, SafeDIScope_Widget.Shell_Scope)
-
+			    nonisolated public enum SafeDIScope_Widget {
 			        nonisolated public struct shell_Values {}
 
-			        @frozen nonisolated public enum Shell_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum Shell_Scope {
 			            nonisolated public struct widget_Values {
 			                public let part: Part
 			                public let panelBuilder: SendableInstantiator<Panel>
@@ -97,9 +93,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum Panel_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum Panel_Scope {
 			            nonisolated public struct widget_Values {
 			                public let name: String
 			                public let part: Part
@@ -133,14 +127,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Widget {
-			        case shell_Sendable(SafeDISendableScope_Widget.Shell_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Widget {
 			        nonisolated public struct shell_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum Shell_Scope {
-			            case panelBuilder(SafeDIScope_Widget.Panel_Scope)
-
+			        nonisolated public enum Shell_Scope {
 			            nonisolated public struct panelBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -263,14 +253,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    @frozen nonisolated public enum SafeDISendableScope_DefaultWidget_Widget {
-			        case shell_Sendable(SafeDISendableScope_DefaultWidget_Widget.Shell_Scope)
-
+			    nonisolated public enum SafeDISendableScope_DefaultWidget_Widget {
 			        nonisolated public struct shell_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum Shell_Scope {
-			            case widgetBuilder(Int)
-
+			        nonisolated public enum Shell_Scope {
 			            nonisolated public struct widgetBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -372,14 +358,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        case shell(shell_Values, SafeDIScope_Widget.Shell_Scope)
-
+			    nonisolated public enum SafeDIScope_Widget {
 			        nonisolated public struct shell_Values {}
 
-			        @frozen nonisolated public enum Shell_Scope {
-			            case plainPanelBuilder(plainPanelBuilder_Values, SafeDIScope_Widget.Panel_Scope)
-
+			        nonisolated public enum Shell_Scope {
 			            nonisolated public struct plainPanelBuilder_Values {
 			                public let panelBuilder: SendableInstantiator<Panel>
 			            }
@@ -398,9 +380,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum Panel_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum Panel_Scope {
 			            nonisolated public struct widget_Values {
 			                public let name: String
 			            }
@@ -433,14 +413,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Widget {
-			        case shell_Sendable(SafeDISendableScope_Widget.Shell_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Widget {
 			        nonisolated public struct shell_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum Shell_Scope {
-			            case panelBuilder(SafeDIScope_Widget.Panel_Scope)
-
+			        nonisolated public enum Shell_Scope {
 			            nonisolated public struct panelBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -564,10 +540,8 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        @frozen nonisolated public enum Panel_Scope {
-			            case widget(widget_Values)
-
+			    nonisolated public enum SafeDIScope_Widget {
+			        nonisolated public enum Panel_Scope {
 			            nonisolated public struct widget_Values {
 			                public let name: String
 			            }
@@ -587,9 +561,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Widget {
-			        case panelBuilder(SafeDIScope_Widget.Panel_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Widget {
 			        nonisolated public struct panelBuilder_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -678,10 +650,8 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        @frozen nonisolated public enum Panel_Scope {
-			            case widget(widget_Values)
-
+			    nonisolated public enum SafeDIScope_Widget {
+			        nonisolated public enum Panel_Scope {
 			            nonisolated public struct widget_Values {
 			                public let name: String
 			            }
@@ -701,15 +671,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Widget {
-			        case shell_Sendable(SafeDISendableScope_Widget.Shell_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Widget {
 			        nonisolated public struct shell_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum Shell_Scope {
-			            case screen_Sendable_(SafeDISendableScope_Widget.Screen_Scope)
-			            case screen_Sendable(SafeDIScope_Widget.Panel_Scope)
-
+			        nonisolated public enum Shell_Scope {
 			            nonisolated public struct screen_Sendable__Values: Sendable {}
 
 			            nonisolated public struct screen_Sendable_Values: Sendable {}
@@ -731,9 +696,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum Screen_Scope {
-			            case panelBuilder(SafeDIScope_Widget.Panel_Scope)
-
+			        nonisolated public enum Screen_Scope {
 			            nonisolated public struct panelBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -937,10 +900,8 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			probes: [DifferentialValueProbe("{ () -> [Any] in let root = Root(); return [root, root.home.mid.screenBuilder.instantiate()] }()")],
 			expectedFeature: """
 			extension Home {
-			    @frozen nonisolated public enum SafeDIScope_Api {
-			        @frozen nonisolated public enum Screen_Scope {
-			            case api(api_Values)
-
+			    nonisolated public enum SafeDIScope_Api {
+			        nonisolated public enum Screen_Scope {
 			            nonisolated public struct api_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -958,14 +919,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Api {
-			        case mid_Sendable(SafeDISendableScope_Api.Mid_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Api {
 			        nonisolated public struct mid_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum Mid_Scope {
-			            case screenBuilder(SafeDIScope_Api.Screen_Scope)
-
+			        nonisolated public enum Mid_Scope {
 			            nonisolated public struct screenBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1123,10 +1080,8 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Hub {
-			    @frozen nonisolated public enum SafeDIScope_Api {
-			        @frozen nonisolated public enum C_Scope {
-			            case api(api_Values)
-
+			    nonisolated public enum SafeDIScope_Api {
+			        nonisolated public enum C_Scope {
 			            nonisolated public struct api_Values {
 			                public let tag: Tag
 			            }
@@ -1146,14 +1101,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Api {
-			        case aBuilder_Sendable(SafeDISendableScope_Api.A_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Api {
 			        nonisolated public struct aBuilder_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum A_Scope {
-			            case cBuilder(SafeDIScope_Api.C_Scope)
-
+			        nonisolated public enum A_Scope {
 			            nonisolated public struct cBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1351,20 +1302,29 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		#endif
 
 		extension Mid {
-		    @frozen public enum SafeDISendableScope_Api {
-		        case hub_Sendable(Hub.SafeDISendableScope_Api)
+		    nonisolated public enum SafeDISendableScope_Api {
+		        nonisolated public struct hub_Sendable_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let hub_Sendable: @Sendable (hub_Sendable_Values) -> Hub.SafeDISendableScope_Api.__safeDI_Builder<__safeDI_Built>
+
+		            public init(hub_Sendable: @escaping @Sendable (hub_Sendable_Values) -> Hub.SafeDISendableScope_Api.__safeDI_Builder<__safeDI_Built>) {
+		                self.hub_Sendable = hub_Sendable
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.hub_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_tag tag: Tag, __safeDI_apiSendableBuilder: @escaping @Sendable (SafeDISendableScope_Api) -> any Api) {
+		    public init(__safeDI_tag tag: Tag, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
 		        func __safeDI_hub() -> Hub {
 		            _ = Hub.__safeDI_Hub_6C9C0998745FE12B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub(__safeDI_tag: tag, __safeDI_apiSendableBuilder: .init(
-		                aBuilder: { _ in
-		                    .init(api: { __safeDI_apiValues in __safeDI_apiSendableBuilder(.hub_Sendable(.aBuilder(.api(__safeDI_apiValues)))) })
-		                }
-		            ))
+		            return Hub(__safeDI_tag: tag, __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder.hub_Sendable(SafeDISendableScope_Api.hub_Sendable_Values()))
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        self.init(tag: tag, hub: hub)
@@ -1372,7 +1332,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_ED297296080C8B89 {}
+		    public enum __safeDI_Mid_F725DF89F69CD9BD {}
 		}
 		""")
 		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
@@ -1387,25 +1347,20 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		    public init() {
 		        let tag = Tag()
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_ED297296080C8B89.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable func __safeDI_apiSendableBuilder_Mid(_ scope: Mid.SafeDISendableScope_Api) -> any Api {
-		                switch scope {
-		                case let .hub_Sendable(scope): return __safeDI_apiSendableBuilder_Hub(scope)
-		                }
+		            _ = Mid.__safeDI_Mid_F725DF89F69CD9BD.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Mid() -> Mid.SafeDISendableScope_Api.__safeDI_Builder<any Api> {
+		                .init(hub_Sendable: { _ in __safeDI_apiSendableBuilder_Hub() })
 		            }
-		            @Sendable func __safeDI_apiSendableBuilder_Hub(_ scope: Hub.SafeDISendableScope_Api) -> any Api {
-		                switch scope {
-		                case let .aBuilder(scope): return __safeDI_apiBuilder_Hub_A_Scope(scope)
-		                }
+		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableScope_Api.__safeDI_Builder<any Api> {
+		                .init(aBuilder: { _ in __safeDI_apiBuilder_Hub_A_Scope() })
 		            }
-		            @Sendable func __safeDI_apiBuilder_Hub_A_Scope(_ scope: Hub.SafeDIScope_Api.A_Scope) -> any Api {
-		                switch scope {
-		                case .api:
+		            @Sendable nonisolated func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { _ in
 		                    let api: any Api = LiveApi(tag: tag)
 		                    return api
-		                }
+		                })
 		            }
-		            return Mid(__safeDI_tag: tag, __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Mid)
+		            return Mid(__safeDI_tag: tag, __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Mid())
 		        }
 		        let mid: Mid = __safeDI_mid()
 		        self.init(tag: tag, mid: mid)
@@ -1512,14 +1467,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    @frozen nonisolated public enum SafeDISendableScope_DefaultWidget_Widget {
-			        case shell_Sendable(SafeDISendableScope_DefaultWidget_Widget.Shell_Scope_)
-
+			    nonisolated public enum SafeDISendableScope_DefaultWidget_Widget {
 			        nonisolated public struct shell_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum Shell_Scope_ {
-			            case widgetBuilder(Shell_Scope)
-
+			        nonisolated public enum Shell_Scope_ {
 			            nonisolated public struct widgetBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
