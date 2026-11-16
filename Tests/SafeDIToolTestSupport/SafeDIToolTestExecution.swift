@@ -78,6 +78,8 @@ func executeSafeDIToolTest(
 	verificationCompilationConditions: [String]? = nil,
 	verificationCompilerSettings: VerificationCompilerSettings = VerificationCompilerSettings(),
 	swiftFileContentAfterScan: [String]? = nil,
+	recordDirectory: URL? = ExpectationRecording.directoryFromEnvironment,
+	sourceLocation: SourceLocation = #_sourceLocation,
 ) async throws -> TestOutput {
 	await ProcessSlots.shared.takePlaceInLine(for: Test.current?.id)
 	// Create additional directory first so its path can be substituted into target file content.
@@ -316,6 +318,20 @@ func executeSafeDIToolTest(
 			paths: inputSwiftFilePaths + additionalDirectoryFiles.map(\.path),
 			compilerPaths: compilerSwiftFilePaths + additionalDirectoryFiles.map(\.path),
 		)
+		// The directories this call made, which a record names by placeholders.
+		var recordingRunDirectories = [
+			ExpectationRecording.RunDirectory(path: swiftFixtureDirectory.path, placeholder: "$TARGET_DIRECTORY", includesCurrentDirectoryRelativeSpelling: true),
+		]
+		if let additionalFixtureDirectory {
+			recordingRunDirectories.append(ExpectationRecording.RunDirectory(path: additionalFixtureDirectory.path, placeholder: "$ADDITIONAL_DIRECTORY", includesCurrentDirectoryRelativeSpelling: true))
+		}
+		recordingRunDirectories.append(ExpectationRecording.RunDirectory(path: outputDirectory.path, placeholder: "$OUTPUT_DIRECTORY"))
+		if let reportedFixtureDirectoryPath {
+			recordingRunDirectories.append(ExpectationRecording.RunDirectory(path: reportedFixtureDirectoryPath, placeholder: "$REPORTED_TARGET_DIRECTORY"))
+		}
+		if let reportedProjectRootPath {
+			recordingRunDirectories.append(ExpectationRecording.RunDirectory(path: reportedProjectRootPath, placeholder: "$REPORTED_PROJECT_ROOT"))
+		}
 		let generateOutput: Generate.Output
 		do {
 			// Every place's levels must hold its scope struct's fields (`SeamPlaceLevels.pathStructMismatches`).
@@ -323,7 +339,7 @@ func executeSafeDIToolTest(
 				try await tool.generate()
 			}
 		} catch {
-			throw SafeDIToolTestError(underlyingError: error, fixtures: fixtures)
+			throw SafeDIToolTestError(underlyingError: error, fixtures: fixtures, recordingRunDirectories: recordingRunDirectories)
 		}
 
 		filesToDelete.append(swiftFileCSV)
@@ -375,6 +391,51 @@ func executeSafeDIToolTest(
 		}
 
 		let moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		if let recordDirectory {
+			// Recorded before compiling, so a compile that fails still leaves the outputs it was given.
+			var outputs = (generatedFiles ?? [:]).sorted { $0.key < $1.key }.map {
+				ExpectationRecording.Output(integration: nil, module: nil, outputName: $0.key, content: $0.value)
+			}
+			if buildDOTFileOutput, let dotTree = try String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) {
+				outputs.append(ExpectationRecording.Output(integration: nil, module: nil, outputName: ExpectationRecording.dotTreeOutputName, content: dotTree))
+			}
+			if buildCombinedOutput, let combined = try String(data: Data(contentsOf: combinedOutput), encoding: .utf8) {
+				outputs.append(ExpectationRecording.Output(integration: nil, module: nil, outputName: ExpectationRecording.combinedOutputName, content: combined))
+			}
+			let encoder = JSONEncoder()
+			// Slashes unescaped, so the fixture paths the graph spells are replaced by placeholders before the digest.
+			encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+			let encodedTargetGraph = try pluginTargetGraph.map { try String(decoding: encoder.encode($0(inputSwiftFilePaths)), as: UTF8.self) }
+			ExpectationRecording.recordGeneration(
+				of: outputs,
+				inputs: [
+					("swiftFileContent", swiftFileContent.joinedForRecording),
+					("swiftFileContentByFilePath", swiftFileContentByFilePath.sorted { $0.key < $1.key }.flatMap { [$0.key, $0.value] }.joinedForRecording),
+					("additionalDirectorySwiftFileContent", additionalDirectorySwiftFileContent.joinedForRecording),
+					("dependentModuleInfoPaths", dependentModuleInfoPaths.joinedForRecording),
+					("additionalImportedModules", additionalImportedModules.joinedForRecording),
+					("buildSwiftOutputDirectory", "\(buildSwiftOutputDirectory)"),
+					("pluginInvocation", pluginInvocation.map { "\($0)" }),
+					("buildDOTFileOutput", "\(buildDOTFileOutput)"),
+					("buildCombinedOutput", "\(buildCombinedOutput)"),
+					("includeFolders", includeFolders.joinedForRecording),
+					("skipCompileVerification", "\(skipCompileVerification)"),
+					("inputPathsRelativeToCurrentDirectory", "\(inputPathsRelativeToCurrentDirectory)"),
+					("compilerReceivesInputPathsUnchanged", "\(compilerReceivesInputPathsUnchanged)"),
+					("activeCompilationConditions", activeCompilationConditions.joinedForRecording),
+					("buildSettingArguments", buildSettingArguments.joinedForRecording),
+					("moduleMembershipArguments", moduleMembershipArguments.joinedForRecording),
+					("pluginTargetGraph", encodedTargetGraph),
+					("verificationCompilationConditions", verificationCompilationConditions?.joinedForRecording),
+					("verificationCompilerSettings", verificationCompilerSettings.descriptionForRecording),
+					("swiftFileContentAfterScan", swiftFileContentAfterScan?.joinedForRecording),
+				],
+				skipsCompileVerification: skipCompileVerification,
+				runDirectories: recordingRunDirectories,
+				into: recordDirectory,
+				sourceLocation: sourceLocation,
+			)
+		}
 		if let generatedFiles, !generatedFiles.isEmpty, !skipCompileVerification {
 			try await verifyGeneratedCodeCompiles(
 				inputSwiftFiles: swiftFiles,
@@ -642,9 +703,11 @@ func realPath(of url: URL) throws -> String {
 
 /// An error thrown by `executeSafeDIToolTest` when `generate` fails. Carries the fixture file paths exactly as
 /// the tool read them so diagnostics that cite those paths can be asserted in full.
-struct SafeDIToolTestError: Error, CustomStringConvertible {
+struct SafeDIToolTestError: Error, CustomStringConvertible, RecordingRunDirectoriesCarrying {
 	let underlyingError: any Error
 	let fixtures: FixturePaths
+	/// The directories the call made, which an assertion helper's record names by placeholders.
+	var recordingRunDirectories = [ExpectationRecording.RunDirectory]()
 
 	var description: String {
 		"\(underlyingError)"
@@ -653,6 +716,7 @@ struct SafeDIToolTestError: Error, CustomStringConvertible {
 
 func assertThrowsError(
 	_ errorDescription: String,
+	recordDirectory: URL? = ExpectationRecording.directoryFromEnvironment,
 	sourceLocation: SourceLocation = #_sourceLocation,
 	block: () async throws -> some Sendable,
 ) async {
@@ -660,7 +724,15 @@ func assertThrowsError(
 		_ = try await block()
 		Issue.record("Did not throw error!", sourceLocation: sourceLocation)
 	} catch {
-		#expect(errorDescription == "\(error)", sourceLocation: sourceLocation)
+		if let recordDirectory {
+			let actualDescription = "\(error)"
+			#expect(errorDescription == actualDescription, sourceLocation: sourceLocation)
+			if errorDescription != actualDescription {
+				ExpectationRecording.recordAssertionMismatch(overload: "plain", module: nil, expected: errorDescription, actual: actualDescription, error: error, into: recordDirectory, sourceLocation: sourceLocation)
+			}
+		} else {
+			#expect(errorDescription == "\(error)", sourceLocation: sourceLocation)
+		}
 	}
 }
 
@@ -669,6 +741,7 @@ func assertThrowsError(
 /// tool read so it can cite their paths in `<path>:<line>:<column>` locations.
 func assertThrowsError(
 	diagnostics expectedDiagnostics: (_ fixtures: FixturePaths) -> String,
+	recordDirectory: URL? = ExpectationRecording.directoryFromEnvironment,
 	sourceLocation: SourceLocation = #_sourceLocation,
 	block: () async throws -> some Sendable,
 ) async {
@@ -676,7 +749,18 @@ func assertThrowsError(
 		_ = try await block()
 		Issue.record("Did not throw error!", sourceLocation: sourceLocation)
 	} catch let error as SafeDIToolTestError {
-		#expect(expectedDiagnostics(error.fixtures) == "\(error.underlyingError)", sourceLocation: sourceLocation)
+		if let recordDirectory {
+			// The expected diagnostics are evaluated once, as without recording, since a fixture they name that the
+			// harness did not write records an issue.
+			let expected = expectedDiagnostics(error.fixtures)
+			let actual = "\(error.underlyingError)"
+			#expect(expected == actual, sourceLocation: sourceLocation)
+			if expected != actual {
+				ExpectationRecording.recordAssertionMismatch(overload: "diagnostics", module: nil, expected: expected, actual: actual, error: error, into: recordDirectory, sourceLocation: sourceLocation)
+			}
+		} else {
+			#expect(expectedDiagnostics(error.fixtures) == "\(error.underlyingError)", sourceLocation: sourceLocation)
+		}
 	} catch {
 		Issue.record("Threw an error that does not carry fixture paths: \(error)", sourceLocation: sourceLocation)
 	}

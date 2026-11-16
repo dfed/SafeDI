@@ -265,7 +265,7 @@ struct MultiModuleTestOutput {
 /// paths of every module the tool ran for, the failing one included, so diagnostics that cite those paths can
 /// be asserted in full, and the output of every module processed before the failing one.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-struct SafeDIToolMultiModuleTestError: Error, CustomStringConvertible {
+struct SafeDIToolMultiModuleTestError: Error, CustomStringConvertible, RecordingRunDirectoriesCarrying {
 	let underlyingError: any Error
 	/// The module whose `generate` failed.
 	let moduleName: String
@@ -274,6 +274,8 @@ struct SafeDIToolMultiModuleTestError: Error, CustomStringConvertible {
 	/// The output of each module processed before the failing one, by module name: the harness stops at the
 	/// first module whose `generate` fails, so the modules after it have none.
 	let outputs: [String: ModuleTestOutput]
+	/// The directories the call made, which an assertion helper's record names by placeholders.
+	var recordingRunDirectories = [ExpectationRecording.RunDirectory]()
 
 	var description: String {
 		"\(underlyingError)"
@@ -289,6 +291,7 @@ func assertThrowsMultiModuleError(
 	inModule expectedModuleName: String,
 	diagnostics expectedDiagnostics: (_ fixtures: [String: FixturePaths]) -> String,
 	inspectingOutputs: (_ outputs: [String: ModuleTestOutput]) -> Void = { _ in },
+	recordDirectory: URL? = ExpectationRecording.directoryFromEnvironment,
 	sourceLocation: SourceLocation = #_sourceLocation,
 	block: () async throws -> some Sendable,
 ) async {
@@ -297,7 +300,18 @@ func assertThrowsMultiModuleError(
 		Issue.record("Did not throw error!", sourceLocation: sourceLocation)
 	} catch let error as SafeDIToolMultiModuleTestError {
 		#expect(error.moduleName == expectedModuleName, sourceLocation: sourceLocation)
-		#expect(expectedDiagnostics(error.fixtures) == "\(error.underlyingError)", sourceLocation: sourceLocation)
+		if let recordDirectory {
+			// The expected diagnostics are evaluated once, as without recording, since a fixture they name that the
+			// harness did not write records an issue.
+			let expected = expectedDiagnostics(error.fixtures)
+			let actual = "\(error.underlyingError)"
+			#expect(expected == actual, sourceLocation: sourceLocation)
+			if expected != actual {
+				ExpectationRecording.recordAssertionMismatch(overload: "multiModuleDiagnostics", module: expectedModuleName, expected: expected, actual: actual, error: error, into: recordDirectory, sourceLocation: sourceLocation)
+			}
+		} else {
+			#expect(expectedDiagnostics(error.fixtures) == "\(error.underlyingError)", sourceLocation: sourceLocation)
+		}
 		inspectingOutputs(error.outputs)
 	} catch {
 		Issue.record("Threw an error that does not carry fixture paths: \(error)", sourceLocation: sourceLocation)
@@ -346,6 +360,7 @@ func executeSafeDIToolMultiModuleTest(
 	writesDOTTrees: Bool = false,
 	modulesBeneath: ((_ moduleNames: [String]) -> [String])? = nil,
 	filesToDelete: inout [URL],
+	recordDirectory: URL? = ExpectationRecording.directoryFromEnvironment,
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) async throws -> MultiModuleTestOutput {
 	await ProcessSlots.shared.takePlaceInLine(for: Test.current?.id)
@@ -388,6 +403,8 @@ func executeSafeDIToolMultiModuleTest(
 	let writtenModulesByName = Dictionary(uniqueKeysWithValues: writtenModules.map { ($0.fixture.name, $0) })
 
 	var outputs = [String: ModuleTestOutput]()
+	// What `modulesBeneath` gave for each module it was asked about, which a record's inputs hold.
+	var modulesBeneathByModuleName = [String: [String]]()
 	for module in writtenModules {
 		let moduleName = module.fixture.name
 		let swiftFileCSV = fixtureRoot.appendingPathComponent("Inputs").appendingPathComponent("\(moduleName).csv")
@@ -470,7 +487,9 @@ func executeSafeDIToolMultiModuleTest(
 				arguments += ["--dependent-module-info-file-path", dependentModuleInfoFileCSV.path]
 				if let modulesBeneath {
 					let modulesBeneathCSV = moduleInfoDirectory.appendingPathComponent("\(moduleName)-beneath.csv")
-					try modulesBeneath(module.transitiveDependencies.filter { writtenModulesByName[$0]?.fixture.runsSafeDI != false })
+					let modulesBeneathModule = modulesBeneath(module.transitiveDependencies.filter { writtenModulesByName[$0]?.fixture.runsSafeDI != false })
+					modulesBeneathByModuleName[moduleName] = modulesBeneathModule
+					try modulesBeneathModule
 						.map { moduleInfoDirectory.appendingPathComponent("\($0).safedi").path }
 						.joined(separator: ",")
 						.write(to: modulesBeneathCSV, atomically: true, encoding: .utf8)
@@ -567,7 +586,13 @@ func executeSafeDIToolMultiModuleTest(
 			} catch {
 				var fixturesByModuleName = outputs.mapValues(\.fixtures)
 				fixturesByModuleName[moduleName] = fixtures
-				throw SafeDIToolMultiModuleTestError(underlyingError: error, moduleName: moduleName, fixtures: fixturesByModuleName, outputs: outputs)
+				throw SafeDIToolMultiModuleTestError(
+					underlyingError: error,
+					moduleName: moduleName,
+					fixtures: fixturesByModuleName,
+					outputs: outputs,
+					recordingRunDirectories: [ExpectationRecording.RunDirectory(path: fixtureRoot.path, placeholder: "$FIXTURE_ROOT")],
+				)
 			}
 		}
 
@@ -590,6 +615,37 @@ func executeSafeDIToolMultiModuleTest(
 			generatedFiles: try generatedSwiftFiles(in: outputDirectory),
 			generateOutput: generateOutput,
 			dotTree: writesDOTTrees ? try String(contentsOf: outputDirectory.appendingPathComponent("\(moduleName).dot"), encoding: .utf8) : nil,
+		)
+	}
+
+	if let recordDirectory {
+		// Recorded before compiling, so a compile that fails still leaves the outputs it was given.
+		var recordedOutputs = [ExpectationRecording.Output]()
+		var inputs = [(name: String, value: String?)]()
+		for module in writtenModules {
+			let moduleName = module.fixture.name
+			let output = outputs[moduleName]
+			for (fileName, content) in (output?.generatedFiles ?? [:]).sorted(by: { $0.key < $1.key }) {
+				recordedOutputs.append(ExpectationRecording.Output(integration: "\(integration)", module: moduleName, outputName: fileName, content: content))
+			}
+			if let dotTree = output?.dotTree {
+				recordedOutputs.append(ExpectationRecording.Output(integration: "\(integration)", module: moduleName, outputName: ExpectationRecording.dotTreeOutputName, content: dotTree))
+			}
+			inputs.append(("module \(moduleName)", module.fixture.descriptionForRecording))
+			inputs.append(("modulesBeneath \(moduleName)", modulesBeneathByModuleName[moduleName]?.joinedForRecording))
+		}
+		inputs.append(("moduleOrder", modules.map(\.name).joinedForRecording))
+		inputs.append(("writesTargetGraph", "\(writesTargetGraph)"))
+		inputs.append(("scansDuringGenerate", "\(scansDuringGenerate)"))
+		inputs.append(("moduleInfoOverrides", moduleInfoOverrides.sorted { $0.key < $1.key }.flatMap { [$0.key, $0.value] }.joinedForRecording))
+		inputs.append(("writesDOTTrees", "\(writesDOTTrees)"))
+		ExpectationRecording.recordGeneration(
+			of: recordedOutputs,
+			inputs: inputs,
+			skipsCompileVerification: compileVerification == .skipped || !moduleInfoOverrides.isEmpty,
+			runDirectories: [ExpectationRecording.RunDirectory(path: fixtureRoot.path, placeholder: "$FIXTURE_ROOT")],
+			into: recordDirectory,
+			sourceLocation: sourceLocation,
 		)
 	}
 
