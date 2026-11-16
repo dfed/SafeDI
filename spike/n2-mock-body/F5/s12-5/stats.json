@@ -1,0 +1,80 @@
+[
+ {
+  "places": 672,
+  "functions": 150,
+  "types": 12,
+  "fixed_paths": 169
+ },
+ {
+  "places": 2077,
+  "functions": 203,
+  "types": 12,
+  "fixed_paths": 177
+ },
+ {
+  "places": 2607,
+  "functions": 234,
+  "types": 12,
+  "fixed_paths": 212
+ },
+ {
+  "places": 1753,
+  "functions": 169,
+  "types": 12,
+  "fixed_paths": 125
+ },
+ {
+  "places": 2223,
+  "functions": 214,
+  "types": 12,
+  "fixed_paths": 200
+ },
+ {
+  "places": 2172,
+  "functions": 92,
+  "types": 12,
+  "fixed_paths": 50
+ },
+ {
+  "places": 3330,
+  "functions": 129,
+  "types": 12,
+  "fixed_paths": 62
+ },
+ {
+  "places": 2163,
+  "functions": 227,
+  "types": 12,
+  "fixed_paths": 213
+ },
+ {
+  "places": 2828,
+  "functions": 126,
+  "types": 12,
+  "fixed_paths": 88
+ },
+ {
+  "places": 1648,
+  "functions": 232,
+  "types": 12,
+  "fixed_paths": 223
+ },
+ {
+  "places": 1704,
+  "functions": 370,
+  "types": 12,
+  "fixed_paths": 388
+ },
+ {
+  "places": 1714,
+  "functions": 285,
+  "types": 12,
+  "fixed_paths": 260
+ },
+ {
+  "places": 2284,
+  "functions": 118,
+  "types": 12,
+  "fixed_paths": 65
+ }
+]

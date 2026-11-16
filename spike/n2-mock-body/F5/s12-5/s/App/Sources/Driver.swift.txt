@@ -1,0 +1,244 @@
+import Harness
+import SafeDI
+
+func configurationScreen0(_ path: String) -> Screen0.SafeDIMockConfiguration {
+    .init(context: { Registry.note("override \(path).context"); return Context() }, screen5Builder: configurationScreen5(path + ".screen5Builder"), screen6Builder: configurationScreen6(path + ".screen6Builder"), screen10Builder: configurationScreen10(path + ".screen10Builder"), { p0, p1, p2, p3, p4, p5 in Registry.note("override \(path).safeDIBuilder"); return Screen0(id: p0, service: p1, context: p2, screen5Builder: p3, screen6Builder: p4, screen10Builder: p5) })
+}
+func configurationScreen1(_ path: String) -> Screen1.SafeDIMockConfiguration {
+    .init(screen4Builder: configurationScreen4(path + ".screen4Builder"), screen8Builder: configurationScreen8(path + ".screen8Builder"), { p0, p1, p2, p3, p4, p5 in Registry.note("override \(path).safeDIBuilder"); return Screen1(id: p0, service: p1, context: p2, screen0Builder: p3, screen4Builder: p4, screen8Builder: p5) })
+}
+func configurationScreen10(_ path: String) -> Screen10.SafeDIMockConfiguration {
+    .init(screen2Builder: configurationScreen2(path + ".screen2Builder"), screen3Builder: configurationScreen3(path + ".screen3Builder"), screen6Builder: configurationScreen6(path + ".screen6Builder"), { p0, p1, p2, p3, p4, p5 in Registry.note("override \(path).safeDIBuilder"); return Screen10(id: p0, service: p1, context: p2, screen2Builder: p3, screen3Builder: p4, screen6Builder: p5) })
+}
+func configurationScreen11(_ path: String) -> Screen11.SafeDIMockConfiguration {
+    .init(screen6Builder: configurationScreen6(path + ".screen6Builder"), { p0, p1, p2, p3, p4, p5 in Registry.note("override \(path).safeDIBuilder"); return Screen11(id: p0, service: p1, context: p2, screen0Builder: p3, screen5Builder: p4, screen6Builder: p5) })
+}
+func configurationScreen2(_ path: String) -> Screen2.SafeDIMockConfiguration {
+    .init(screen1Builder: configurationScreen1(path + ".screen1Builder"), screen6Builder: configurationScreen6(path + ".screen6Builder"), screen8Builder: configurationScreen8(path + ".screen8Builder"), { p0, p1, p2, p3, p4, p5 in Registry.note("override \(path).safeDIBuilder"); return Screen2(id: p0, service: p1, context: p2, screen1Builder: p3, screen6Builder: p4, screen8Builder: p5) })
+}
+func configurationScreen3(_ path: String) -> Screen3.SafeDIMockConfiguration {
+    .init(screen7Builder: configurationScreen7(path + ".screen7Builder"), screen9Builder: configurationScreen9(path + ".screen9Builder"), { p0, p1, p2, p3, p4, p5 in Registry.note("override \(path).safeDIBuilder"); return Screen3(id: p0, service: p1, context: p2, screen1Builder: p3, screen7Builder: p4, screen9Builder: p5) })
+}
+func configurationScreen4(_ path: String) -> Screen4.SafeDIMockConfiguration {
+    .init(screen3Builder: configurationScreen3(path + ".screen3Builder"), screen7Builder: configurationScreen7(path + ".screen7Builder"), { p0, p1, p2, p3, p4, p5 in Registry.note("override \(path).safeDIBuilder"); return Screen4(id: p0, service: p1, context: p2, screen0Builder: p3, screen3Builder: p4, screen7Builder: p5) })
+}
+func configurationScreen5(_ path: String) -> Screen5.SafeDIMockConfiguration {
+    .init(context: { Registry.note("override \(path).context"); return Context() }, screen7Builder: configurationScreen7(path + ".screen7Builder"), screen11Builder: configurationScreen11(path + ".screen11Builder"), { p0, p1, p2, p3, p4, p5 in Registry.note("override \(path).safeDIBuilder"); return Screen5(id: p0, service: p1, context: p2, screen2Builder: p3, screen7Builder: p4, screen11Builder: p5) })
+}
+func configurationScreen6(_ path: String) -> Screen6.SafeDIMockConfiguration {
+    .init(screen8Builder: configurationScreen8(path + ".screen8Builder"), { p0, p1, p2, p3, p4, p5 in Registry.note("override \(path).safeDIBuilder"); return Screen6(id: p0, service: p1, context: p2, screen2Builder: p3, screen8Builder: p4, screen10Builder: p5) })
+}
+func configurationScreen7(_ path: String) -> Screen7.SafeDIMockConfiguration {
+    .init({ p0, p1, p2, p3, p4, p5 in Registry.note("override \(path).safeDIBuilder"); return Screen7(id: p0, service: p1, context: p2, screen0Builder: p3, screen2Builder: p4, screen10Builder: p5) })
+}
+func configurationScreen8(_ path: String) -> Screen8.SafeDIMockConfiguration {
+    .init({ p0, p1, p2, p3, p4, p5 in Registry.note("override \(path).safeDIBuilder"); return Screen8(id: p0, service: p1, context: p2, screen2Builder: p3, screen3Builder: p4, screen10Builder: p5) })
+}
+func configurationScreen9(_ path: String) -> Screen9.SafeDIMockConfiguration {
+    .init(screen5Builder: configurationScreen5(path + ".screen5Builder"), screen8Builder: configurationScreen8(path + ".screen8Builder"), { p0, p1, p2, p3, p4, p5 in Registry.note("override \(path).safeDIBuilder"); return Screen9(id: p0, service: p1, context: p2, screen3Builder: p3, screen5Builder: p4, screen8Builder: p5) })
+}
+func walk(_ s: Screen0, _ depth: Int, _ keep: inout [AnyObject]) {
+    keep.append(s)
+    guard depth > 0 else { return }
+    walk(s.screen5Builder.instantiate(5), depth - 1, &keep)
+    walk(s.screen6Builder.instantiate(6), depth - 1, &keep)
+    walk(s.screen10Builder.instantiate(10), depth - 1, &keep)
+}
+func walk(_ s: Screen1, _ depth: Int, _ keep: inout [AnyObject]) {
+    keep.append(s)
+    guard depth > 0 else { return }
+    walk(s.screen0Builder.instantiate(0), depth - 1, &keep)
+    walk(s.screen4Builder.instantiate(4), depth - 1, &keep)
+    walk(s.screen8Builder.instantiate(8), depth - 1, &keep)
+}
+func walk(_ s: Screen2, _ depth: Int, _ keep: inout [AnyObject]) {
+    keep.append(s)
+    guard depth > 0 else { return }
+    walk(s.screen1Builder.instantiate(1), depth - 1, &keep)
+    walk(s.screen6Builder.instantiate(6), depth - 1, &keep)
+    walk(s.screen8Builder.instantiate(8), depth - 1, &keep)
+}
+func walk(_ s: Screen3, _ depth: Int, _ keep: inout [AnyObject]) {
+    keep.append(s)
+    guard depth > 0 else { return }
+    walk(s.screen1Builder.instantiate(1), depth - 1, &keep)
+    walk(s.screen7Builder.instantiate(7), depth - 1, &keep)
+    walk(s.screen9Builder.instantiate(9), depth - 1, &keep)
+}
+func walk(_ s: Screen4, _ depth: Int, _ keep: inout [AnyObject]) {
+    keep.append(s)
+    guard depth > 0 else { return }
+    walk(s.screen0Builder.instantiate(0), depth - 1, &keep)
+    walk(s.screen3Builder.instantiate(3), depth - 1, &keep)
+    walk(s.screen7Builder.instantiate(7), depth - 1, &keep)
+}
+func walk(_ s: Screen5, _ depth: Int, _ keep: inout [AnyObject]) {
+    keep.append(s)
+    guard depth > 0 else { return }
+    walk(s.screen2Builder.instantiate(2), depth - 1, &keep)
+    walk(s.screen7Builder.instantiate(7), depth - 1, &keep)
+    walk(s.screen11Builder.instantiate(11), depth - 1, &keep)
+}
+func walk(_ s: Screen6, _ depth: Int, _ keep: inout [AnyObject]) {
+    keep.append(s)
+    guard depth > 0 else { return }
+    walk(s.screen2Builder.instantiate(2), depth - 1, &keep)
+    walk(s.screen8Builder.instantiate(8), depth - 1, &keep)
+    walk(s.screen10Builder.instantiate(10), depth - 1, &keep)
+}
+func walk(_ s: Screen7, _ depth: Int, _ keep: inout [AnyObject]) {
+    keep.append(s)
+    guard depth > 0 else { return }
+    walk(s.screen0Builder.instantiate(0), depth - 1, &keep)
+    walk(s.screen2Builder.instantiate(2), depth - 1, &keep)
+    walk(s.screen10Builder.instantiate(10), depth - 1, &keep)
+}
+func walk(_ s: Screen8, _ depth: Int, _ keep: inout [AnyObject]) {
+    keep.append(s)
+    guard depth > 0 else { return }
+    walk(s.screen2Builder.instantiate(2), depth - 1, &keep)
+    walk(s.screen3Builder.instantiate(3), depth - 1, &keep)
+    walk(s.screen10Builder.instantiate(10), depth - 1, &keep)
+}
+func walk(_ s: Screen9, _ depth: Int, _ keep: inout [AnyObject]) {
+    keep.append(s)
+    guard depth > 0 else { return }
+    walk(s.screen3Builder.instantiate(3), depth - 1, &keep)
+    walk(s.screen5Builder.instantiate(5), depth - 1, &keep)
+    walk(s.screen8Builder.instantiate(8), depth - 1, &keep)
+}
+func walk(_ s: Screen10, _ depth: Int, _ keep: inout [AnyObject]) {
+    keep.append(s)
+    guard depth > 0 else { return }
+    walk(s.screen2Builder.instantiate(2), depth - 1, &keep)
+    walk(s.screen3Builder.instantiate(3), depth - 1, &keep)
+    walk(s.screen6Builder.instantiate(6), depth - 1, &keep)
+}
+func walk(_ s: Screen11, _ depth: Int, _ keep: inout [AnyObject]) {
+    keep.append(s)
+    guard depth > 0 else { return }
+    walk(s.screen0Builder.instantiate(0), depth - 1, &keep)
+    walk(s.screen5Builder.instantiate(5), depth - 1, &keep)
+    walk(s.screen6Builder.instantiate(6), depth - 1, &keep)
+}
+public func runFixture() {
+    for overridden in [false, true] {
+        do {
+            var keep = [AnyObject]()
+            let root = overridden ? Root.mock(safeDIOverrides: .init(service: { Registry.note("override service"); return Service() }, context: { Registry.note("override context"); return Context() }, screen0Builder: configurationScreen0("screen0Builder"))) : Root.mock()
+            walk(root.screen0Builder.instantiate(0), 3, &keep)
+            print("Root.mock, overridden \(overridden):")
+            Registry.printTrace()
+            withExtendedLifetime((root, keep)) {}
+        }
+        Registry.printAlive("after dropping everything")
+        do {
+            var keep = [AnyObject]()
+            let screen = overridden ? Screen0.mock(id: 0, safeDIOverrides: .init(context: { Registry.note("override context"); return Context() }, service: { Registry.note("override service"); return Service() }, screen5Builder: configurationScreen5("screen5Builder"), screen6Builder: configurationScreen6("screen6Builder"), screen10Builder: configurationScreen10("screen10Builder"))) : Screen0.mock(id: 0)
+            walk(screen, 3, &keep)
+            print("Screen0.mock, overridden \(overridden):")
+            Registry.printTrace()
+            withExtendedLifetime(keep) {}
+        }
+        Registry.printAlive("after dropping everything")
+        do {
+            var keep = [AnyObject]()
+            let screen = overridden ? Screen1.mock(id: 1, safeDIOverrides: .init(service: { Registry.note("override service"); return Service() }, screen0Builder: configurationScreen0("screen0Builder"), context: { Registry.note("override context"); return Context() }, screen4Builder: configurationScreen4("screen4Builder"), screen8Builder: configurationScreen8("screen8Builder"))) : Screen1.mock(id: 1)
+            walk(screen, 3, &keep)
+            print("Screen1.mock, overridden \(overridden):")
+            Registry.printTrace()
+            withExtendedLifetime(keep) {}
+        }
+        Registry.printAlive("after dropping everything")
+        do {
+            var keep = [AnyObject]()
+            let screen = overridden ? Screen2.mock(id: 2, safeDIOverrides: .init(service: { Registry.note("override service"); return Service() }, context: { Registry.note("override context"); return Context() }, screen1Builder: configurationScreen1("screen1Builder"), screen6Builder: configurationScreen6("screen6Builder"), screen8Builder: configurationScreen8("screen8Builder"))) : Screen2.mock(id: 2)
+            walk(screen, 3, &keep)
+            print("Screen2.mock, overridden \(overridden):")
+            Registry.printTrace()
+            withExtendedLifetime(keep) {}
+        }
+        Registry.printAlive("after dropping everything")
+        do {
+            var keep = [AnyObject]()
+            let screen = overridden ? Screen3.mock(id: 3, safeDIOverrides: .init(service: { Registry.note("override service"); return Service() }, context: { Registry.note("override context"); return Context() }, screen1Builder: configurationScreen1("screen1Builder"), screen7Builder: configurationScreen7("screen7Builder"), screen9Builder: configurationScreen9("screen9Builder"))) : Screen3.mock(id: 3)
+            walk(screen, 3, &keep)
+            print("Screen3.mock, overridden \(overridden):")
+            Registry.printTrace()
+            withExtendedLifetime(keep) {}
+        }
+        Registry.printAlive("after dropping everything")
+        do {
+            var keep = [AnyObject]()
+            let screen = overridden ? Screen4.mock(id: 4, safeDIOverrides: .init(service: { Registry.note("override service"); return Service() }, screen0Builder: configurationScreen0("screen0Builder"), context: { Registry.note("override context"); return Context() }, screen3Builder: configurationScreen3("screen3Builder"), screen7Builder: configurationScreen7("screen7Builder"))) : Screen4.mock(id: 4)
+            walk(screen, 3, &keep)
+            print("Screen4.mock, overridden \(overridden):")
+            Registry.printTrace()
+            withExtendedLifetime(keep) {}
+        }
+        Registry.printAlive("after dropping everything")
+        do {
+            var keep = [AnyObject]()
+            let screen = overridden ? Screen5.mock(id: 5, safeDIOverrides: .init(context: { Registry.note("override context"); return Context() }, service: { Registry.note("override service"); return Service() }, screen2Builder: configurationScreen2("screen2Builder"), screen7Builder: configurationScreen7("screen7Builder"), screen11Builder: configurationScreen11("screen11Builder"))) : Screen5.mock(id: 5)
+            walk(screen, 3, &keep)
+            print("Screen5.mock, overridden \(overridden):")
+            Registry.printTrace()
+            withExtendedLifetime(keep) {}
+        }
+        Registry.printAlive("after dropping everything")
+        do {
+            var keep = [AnyObject]()
+            let screen = overridden ? Screen6.mock(id: 6, safeDIOverrides: .init(service: { Registry.note("override service"); return Service() }, context: { Registry.note("override context"); return Context() }, screen2Builder: configurationScreen2("screen2Builder"), screen8Builder: configurationScreen8("screen8Builder"), screen10Builder: configurationScreen10("screen10Builder"))) : Screen6.mock(id: 6)
+            walk(screen, 3, &keep)
+            print("Screen6.mock, overridden \(overridden):")
+            Registry.printTrace()
+            withExtendedLifetime(keep) {}
+        }
+        Registry.printAlive("after dropping everything")
+        do {
+            var keep = [AnyObject]()
+            let screen = overridden ? Screen7.mock(id: 7, safeDIOverrides: .init(service: { Registry.note("override service"); return Service() }, screen0Builder: configurationScreen0("screen0Builder"), context: { Registry.note("override context"); return Context() }, screen2Builder: configurationScreen2("screen2Builder"), screen10Builder: configurationScreen10("screen10Builder"))) : Screen7.mock(id: 7)
+            walk(screen, 3, &keep)
+            print("Screen7.mock, overridden \(overridden):")
+            Registry.printTrace()
+            withExtendedLifetime(keep) {}
+        }
+        Registry.printAlive("after dropping everything")
+        do {
+            var keep = [AnyObject]()
+            let screen = overridden ? Screen8.mock(id: 8, safeDIOverrides: .init(service: { Registry.note("override service"); return Service() }, context: { Registry.note("override context"); return Context() }, screen2Builder: configurationScreen2("screen2Builder"), screen3Builder: configurationScreen3("screen3Builder"), screen10Builder: configurationScreen10("screen10Builder"))) : Screen8.mock(id: 8)
+            walk(screen, 3, &keep)
+            print("Screen8.mock, overridden \(overridden):")
+            Registry.printTrace()
+            withExtendedLifetime(keep) {}
+        }
+        Registry.printAlive("after dropping everything")
+        do {
+            var keep = [AnyObject]()
+            let screen = overridden ? Screen9.mock(id: 9, safeDIOverrides: .init(service: { Registry.note("override service"); return Service() }, context: { Registry.note("override context"); return Context() }, screen3Builder: configurationScreen3("screen3Builder"), screen5Builder: configurationScreen5("screen5Builder"), screen8Builder: configurationScreen8("screen8Builder"))) : Screen9.mock(id: 9)
+            walk(screen, 3, &keep)
+            print("Screen9.mock, overridden \(overridden):")
+            Registry.printTrace()
+            withExtendedLifetime(keep) {}
+        }
+        Registry.printAlive("after dropping everything")
+        do {
+            var keep = [AnyObject]()
+            let screen = overridden ? Screen10.mock(id: 10, safeDIOverrides: .init(service: { Registry.note("override service"); return Service() }, context: { Registry.note("override context"); return Context() }, screen2Builder: configurationScreen2("screen2Builder"), screen3Builder: configurationScreen3("screen3Builder"), screen6Builder: configurationScreen6("screen6Builder"))) : Screen10.mock(id: 10)
+            walk(screen, 3, &keep)
+            print("Screen10.mock, overridden \(overridden):")
+            Registry.printTrace()
+            withExtendedLifetime(keep) {}
+        }
+        Registry.printAlive("after dropping everything")
+        do {
+            var keep = [AnyObject]()
+            let screen = overridden ? Screen11.mock(id: 11, safeDIOverrides: .init(service: { Registry.note("override service"); return Service() }, screen0Builder: configurationScreen0("screen0Builder"), screen5Builder: configurationScreen5("screen5Builder"), context: { Registry.note("override context"); return Context() }, screen6Builder: configurationScreen6("screen6Builder"))) : Screen11.mock(id: 11)
+            walk(screen, 3, &keep)
+            print("Screen11.mock, overridden \(overridden):")
+            Registry.printTrace()
+            withExtendedLifetime(keep) {}
+        }
+        Registry.printAlive("after dropping everything")
+    }
+}

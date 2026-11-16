@@ -5,6 +5,28 @@ import Harness
 	import Feat
 #endif
 
+#if canImport(Glibc)
+	import Glibc
+#endif
+
+if let iterations = ProcessInfoLite.benchIterations {
+	// Timing run: no trace; the median of five rounds, in nanoseconds per walk of three levels of Root.mock().
+	tracingEnabled.store(false, ordering: .relaxed)
+	var rounds = [Double]()
+	for _ in 0..<5 {
+		let start = ContinuousClock.now
+		for _ in 0..<iterations {
+			let root = rootMock()
+			let step3 = root.home.screen.stepBuilder.instantiate().screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().stepBuilder.instantiate()
+			withExtendedLifetime((root, step3)) {}
+		}
+		let elapsed = ContinuousClock.now - start
+		rounds.append(Double(elapsed.components.seconds) * 1e9 + Double(elapsed.components.attoseconds) / 1e9)
+	}
+	FileHandleLite.error("bench ns per walk: \(Int(rounds.sorted()[2] / Double(iterations)))")
+	exit(0)
+}
+
 // Walks three levels of Root.mock(): each step's Live should receive its own screen's cache.
 do {
 	let root = rootMock()
