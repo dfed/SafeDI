@@ -1470,6 +1470,8 @@ private struct ScopeGeneratorUnderConstruction {
 			},
 			builderCallArguments: builderCallArguments(fillNames: fillNames),
 			fillDispatchers: dispatchersOfThisCall,
+			// A public mock's call names a level that needs a second function apart from every name the call claimed.
+			namesTakenByCall: scope.publicMockCall == nil ? [] : namesOfThisCall.taken,
 			// A place a public mock's caller fills on some route only is passed up too.
 			passedUpHoles: holeArguments.compactMap { holeArgument in
 				switch holeArgument {

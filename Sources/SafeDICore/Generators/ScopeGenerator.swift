@@ -52,6 +52,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		holeCallArguments: [HoleCallArgument] = [],
 		builderCallArguments: [BuilderCallArgument] = [],
 		fillDispatchers: [FillDispatcher] = [],
+		namesTakenByCall: Set<String> = [],
 		passedUpHoles: [SeamSignature.Hole] = [],
 		valuesBindings: [SeamHoles.ValuesBinding] = [],
 		memberCallsInsideFunction: [SeamHoles.ValuesBinding] = [],
@@ -142,7 +143,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				dispatchers: fillDispatchers,
 				fillParametersByKey: fillParametersByKey,
 				rootKeys: builderCallArguments.compactMap(\.builderStruct?.rootDispatcherKey),
-				reservedNames: fillNames.union(builderCallArguments.compactMap(\.enclosingFill?.name)),
+				reservedNames: namesTakenByCall.union(fillNames),
 			)
 		} else {
 			publicMockLevelFunctions = nil
