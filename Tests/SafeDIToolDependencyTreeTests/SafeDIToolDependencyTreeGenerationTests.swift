@@ -8247,19 +8247,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	// MARK: What a seam's callers see: the call shape
 
-	private static let coreTokenModule = ModuleFixture(
-		name: "Core",
-		packageName: "Shop",
-		swiftFileContent: [
-			"""
-			@Instantiable
-			public struct Token: Instantiable {
-			    public init() {}
-			}
-			""",
-		],
-	)
-
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenUnseenDeclarationReceivesWhatSeenDeclarationReceivesUnderTargetGraph() async {

@@ -4977,24 +4977,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		"""
 	}
 
-	/// The files `App` generates under `integration` for `rootInstantiatingHelping` when `Helping` is fulfilled by
-	/// `helperType`, asserting that each of `assertions` is active.
-	private static func rootFiles(under integration: MultiModuleIntegration, constructing helperType: String, assertions: [String] = []) -> [String: String] {
-		let code = generatedFileHeader + importBlock("Core") + "\n\n" + assertions.map(activeAssertion).joined() + rootCode(constructing: helperType)
-		return [integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": code]
-	}
-
-	/// The compile-time assertion a generated file carries for a `#if <condition>` the tool evaluated as active, ending
-	/// with the blank line that precedes what follows.
-	private static func activeAssertion(_ condition: String) -> String {
-		"""
-		#if !(\(condition))
-		#error("SafeDI scanned this module assuming `#if \(condition)` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
-		#endif
-
-		""" + "\n"
-	}
-
 	/// Expects every module before `module` to compile, and `module`'s generated code to fail to compile alongside its
 	/// inputs with an error containing `text`.
 	private func expectModuleCompilationFails(_ output: MultiModuleTestOutput, module: String, containing text: String, sourceLocation: SourceLocation = #_sourceLocation) throws {
