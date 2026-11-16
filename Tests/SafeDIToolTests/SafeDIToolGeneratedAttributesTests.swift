@@ -469,11 +469,24 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let appFileName = switch integration {
-		case .moduleInfo: "App.swift"
-		case .swiftPackagePlugin: "Root+SafeDI.swift"
-		}
-		#expect(try #require(output.modules["App"]).generatedFiles == [appFileName: generatedFileHeader + Self.mainActorSeamCallerCode(isolation: "", integration: integration)])
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_CBF29CE484222325.self\(integration.seamCallComment(type: "Screen", declaringModule: "Core"))
+			            return Screen()
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(screen: screen)
+			    }
+			}
+			""",
+		])
 		guard compileVerificationIsEnabled else { return }
 		let compilation = try #require(output.compilation)
 		#expect(compilation.modules.map(\.moduleName) == ["Core", "App"])

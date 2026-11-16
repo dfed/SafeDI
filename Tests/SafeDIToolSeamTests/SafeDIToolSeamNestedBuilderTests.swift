@@ -118,24 +118,50 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
 			"Feature": ["Feature.swift": """
 			extension Host {
-			    @frozen public enum SafeDIScope_Service {
+			    @frozen nonisolated public enum SafeDIScope_Service {
 			        case panel(panel_Values, SafeDIScope_Service.Panel_Scope)
 
-			        public struct panel_Values {}
+			        nonisolated public struct panel_Values {}
 
-			        @frozen public enum Panel_Scope {
+			        @frozen nonisolated public enum Panel_Scope {
 			            case service(service_Values)
 
-			            public struct service_Values {}
+			            nonisolated public struct service_Values {}
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let service: (service_Values) -> __safeDI_Built
+
+			                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			                    self.service = service
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.service = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let panel: (panel_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(panel: @escaping (panel_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.panel = panel
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-			        let __safeDI_serviceValues_panel = SafeDIScope_Service.panel_Values()
+			    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+			        let __safeDI_serviceBuilder_panel = __safeDI_serviceBuilder.panel(SafeDIScope_Service.panel_Values())
 			        func __safeDI_panel() -> Panel {
-			            let service: any Service = __safeDI_serviceBuilder(.panel(__safeDI_serviceValues_panel, .service(SafeDIScope_Service.Panel_Scope.service_Values())))
+			            let service: any Service = __safeDI_serviceBuilder_panel.service(SafeDIScope_Service.Panel_Scope.service_Values())
 			            return Panel(service: service)
 			        }
 			        let panel: Panel = __safeDI_panel()
@@ -144,7 +170,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_D1514E9B0A0C3F37 {}
+			    public enum __safeDI_Host_EAEF9F76EB8B4897 {}
 			}
 			"""],
 			"App": ["App.swift": """
@@ -155,20 +181,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_D1514E9B0A0C3F37.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host(_ scope: Host.SafeDIScope_Service) -> any Service {
-			                switch scope {
-			                case let .panel(_, scope): return __safeDI_serviceBuilder_Host_Panel_Scope(scope)
-			                }
+			            _ = Host.__safeDI_Host_EAEF9F76EB8B4897.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_serviceBuilder_Host() -> Host.SafeDIScope_Service.__safeDI_Builder<any Service> {
+			                .init(panel: { _ in __safeDI_serviceBuilder_Host_Panel_Scope() })
 			            }
-			            func __safeDI_serviceBuilder_Host_Panel_Scope(_ scope: Host.SafeDIScope_Service.Panel_Scope) -> any Service {
-			                switch scope {
-			                case .service:
+			            func __safeDI_serviceBuilder_Host_Panel_Scope() -> Host.SafeDIScope_Service.Panel_Scope.__safeDI_Builder<any Service> {
+			                .init(service: { _ in
 			                    let service: any Service = DefaultService()
 			                    return service
-			                }
+			                })
 			            }
-			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host)
+			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
@@ -192,41 +215,83 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
 			"Feature": ["Feature.swift": """
 			extension Host {
-			    @frozen public enum SafeDIScope_Service {
+			    @frozen nonisolated public enum SafeDIScope_Service {
 			        case panel(panel_Values, SafeDIScope_Service.Panel_Scope)
 			        case row(row_Values, SafeDIScope_Service.Row_Scope)
 
-			        public struct panel_Values {}
+			        nonisolated public struct panel_Values {}
 
-			        public struct row_Values {
+			        nonisolated public struct row_Values {
 			            public let panel: Panel
 			        }
 
-			        @frozen public enum Panel_Scope {
+			        @frozen nonisolated public enum Panel_Scope {
 			            case service(service_Values)
 
-			            public struct service_Values {}
+			            nonisolated public struct service_Values {}
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let service: (service_Values) -> __safeDI_Built
+
+			                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			                    self.service = service
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.service = { _ in __safeDI_builder() }
+			                }
+			            }
 			        }
 
-			        @frozen public enum Row_Scope {
+			        @frozen nonisolated public enum Row_Scope {
 			            case service(service_Values)
 
-			            public struct service_Values {}
+			            nonisolated public struct service_Values {}
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let service: (service_Values) -> __safeDI_Built
+
+			                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			                    self.service = service
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.service = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let panel: (panel_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let row: (row_Values) -> SafeDIScope_Service.Row_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(panel: @escaping (panel_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>, row: @escaping (row_Values) -> SafeDIScope_Service.Row_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.panel = panel
+			                self.row = row
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.row = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-			        let __safeDI_serviceValues_panel = SafeDIScope_Service.panel_Values()
+			    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+			        let __safeDI_serviceBuilder_panel = __safeDI_serviceBuilder.panel(SafeDIScope_Service.panel_Values())
 			        func __safeDI_panel() -> Panel {
-			            let service: any Service = __safeDI_serviceBuilder(.panel(__safeDI_serviceValues_panel, .service(SafeDIScope_Service.Panel_Scope.service_Values())))
+			            let service: any Service = __safeDI_serviceBuilder_panel.service(SafeDIScope_Service.Panel_Scope.service_Values())
 			            return Panel(service: service)
 			        }
 			        let panel: Panel = __safeDI_panel()
-			        let __safeDI_serviceValues_row = SafeDIScope_Service.row_Values(panel: panel)
+			        let __safeDI_serviceBuilder_row = __safeDI_serviceBuilder.row(SafeDIScope_Service.row_Values(panel: panel))
 			        func __safeDI_row() -> Row {
-			            let service: any Service = __safeDI_serviceBuilder(.row(__safeDI_serviceValues_row, .service(SafeDIScope_Service.Row_Scope.service_Values())))
+			            let service: any Service = __safeDI_serviceBuilder_row.service(SafeDIScope_Service.Row_Scope.service_Values())
 			            return Row(service: service)
 			        }
 			        let row: Row = __safeDI_row()
@@ -235,7 +300,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_CCF8562EB1F219BD {}
+			    public enum __safeDI_Host_DBB27C7AB4CDC29D {}
 			}
 			"""],
 			"App": ["App.swift": """
@@ -246,28 +311,23 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_CCF8562EB1F219BD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host(_ scope: Host.SafeDIScope_Service) -> any Service {
-			                switch scope {
-			                case let .panel(_, scope): return __safeDI_serviceBuilder_Host_Panel_Scope(scope)
-			                case let .row(_, scope): return __safeDI_serviceBuilder_Host_Row_Scope(scope)
-			                }
+			            _ = Host.__safeDI_Host_DBB27C7AB4CDC29D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_serviceBuilder_Host() -> Host.SafeDIScope_Service.__safeDI_Builder<any Service> {
+			                .init(panel: { _ in __safeDI_serviceBuilder_Host_Panel_Scope() }, row: { _ in __safeDI_serviceBuilder_Host_Row_Scope() })
 			            }
-			            func __safeDI_serviceBuilder_Host_Panel_Scope(_ scope: Host.SafeDIScope_Service.Panel_Scope) -> any Service {
-			                switch scope {
-			                case .service:
+			            func __safeDI_serviceBuilder_Host_Panel_Scope() -> Host.SafeDIScope_Service.Panel_Scope.__safeDI_Builder<any Service> {
+			                .init(service: { _ in
 			                    let service: any Service = DefaultService()
 			                    return service
-			                }
+			                })
 			            }
-			            func __safeDI_serviceBuilder_Host_Row_Scope(_ scope: Host.SafeDIScope_Service.Row_Scope) -> any Service {
-			                switch scope {
-			                case .service:
+			            func __safeDI_serviceBuilder_Host_Row_Scope() -> Host.SafeDIScope_Service.Row_Scope.__safeDI_Builder<any Service> {
+			                .init(service: { _ in
 			                    let service: any Service = DefaultService()
 			                    return service
-			                }
+			                })
 			            }
-			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host)
+			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
@@ -290,35 +350,64 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
 			"Feature": ["Feature.swift": """
 			extension Host {
-			    @frozen public enum SafeDIScope_Service {
+			    @frozen nonisolated public enum SafeDIScope_Service {
 			        case first(first_Values, SafeDIScope_Service.Panel_Scope)
 			        case second(second_Values, SafeDIScope_Service.Panel_Scope)
 
-			        public struct first_Values {}
+			        nonisolated public struct first_Values {}
 
-			        public struct second_Values {
+			        nonisolated public struct second_Values {
 			            public let first: Panel
 			        }
 
-			        @frozen public enum Panel_Scope {
+			        @frozen nonisolated public enum Panel_Scope {
 			            case service(service_Values)
 
-			            public struct service_Values {}
+			            nonisolated public struct service_Values {}
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let service: (service_Values) -> __safeDI_Built
+
+			                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			                    self.service = service
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.service = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let first: (first_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let second: (second_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(first: @escaping (first_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>, second: @escaping (second_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.first = first
+			                self.second = second
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.first = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.second = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-			        let __safeDI_serviceValues_first = SafeDIScope_Service.first_Values()
+			    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+			        let __safeDI_serviceBuilder_first = __safeDI_serviceBuilder.first(SafeDIScope_Service.first_Values())
 			        func __safeDI_first() -> Panel {
-			            let service: any Service = __safeDI_serviceBuilder(.first(__safeDI_serviceValues_first, .service(SafeDIScope_Service.Panel_Scope.service_Values())))
+			            let service: any Service = __safeDI_serviceBuilder_first.service(SafeDIScope_Service.Panel_Scope.service_Values())
 			            return Panel(service: service)
 			        }
 			        let first: Panel = __safeDI_first()
-			        let __safeDI_serviceValues_second = SafeDIScope_Service.second_Values(first: first)
+			        let __safeDI_serviceBuilder_second = __safeDI_serviceBuilder.second(SafeDIScope_Service.second_Values(first: first))
 			        func __safeDI_second() -> Panel {
-			            let service: any Service = __safeDI_serviceBuilder(.second(__safeDI_serviceValues_second, .service(SafeDIScope_Service.Panel_Scope.service_Values())))
+			            let service: any Service = __safeDI_serviceBuilder_second.service(SafeDIScope_Service.Panel_Scope.service_Values())
 			            return Panel(service: service)
 			        }
 			        let second: Panel = __safeDI_second()
@@ -327,7 +416,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_7DC8A3AC54ABFE73 {}
+			    public enum __safeDI_Host_134ECC3437995D93 {}
 			}
 			"""],
 		], visible: Self.modules(feature: feature + [fulfiller], app: [root]))
@@ -345,28 +434,44 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
 			"Feature": ["Feature.swift": """
 			extension Host {
-			    @frozen public enum SafeDIScope_Service {
+			    @frozen nonisolated public enum SafeDIScope_Service {
 			        case first(first_Values)
 			        case second(second_Values)
 
-			        public struct first_Values {}
+			        nonisolated public struct first_Values {}
 
-			        public struct second_Values {
+			        nonisolated public struct second_Values {
 			            public let first: any Service
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let first: (first_Values) -> __safeDI_Built
+			            public let second: (second_Values) -> __safeDI_Built
+
+			            public init(first: @escaping (first_Values) -> __safeDI_Built, second: @escaping (second_Values) -> __safeDI_Built) {
+			                self.first = first
+			                self.second = second
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.first = { _ in __safeDI_builder() }
+			                self.second = { _ in __safeDI_builder() }
+			            }
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-			        let first: any Service = __safeDI_serviceBuilder(.first(SafeDIScope_Service.first_Values()))
-			        let second: any Service = __safeDI_serviceBuilder(.second(SafeDIScope_Service.second_Values(first: first)))
+			    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+			        let first: any Service = __safeDI_serviceBuilder.first(SafeDIScope_Service.first_Values())
+			        let second: any Service = __safeDI_serviceBuilder.second(SafeDIScope_Service.second_Values(first: first))
 			        self.init(first: first, second: second)
 			    }
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_C01552B299925DCC {}
+			    public enum __safeDI_Host_DD059B196FC343AC {}
 			}
 			"""],
 			"App": ["App.swift": """
@@ -377,18 +482,20 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_C01552B299925DCC.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host(_ scope: Host.SafeDIScope_Service) -> any Service {
-			                switch scope {
-			                case .first:
-			                    let first: any Service = DefaultService()
-			                    return first
-			                case .second:
-			                    let second: any Service = DefaultService()
-			                    return second
-			                }
+			            _ = Host.__safeDI_Host_DD059B196FC343AC.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_serviceBuilder_Host() -> Host.SafeDIScope_Service.__safeDI_Builder<any Service> {
+			                .init(
+			                    first: { _ in
+			                        let first: any Service = DefaultService()
+			                        return first
+			                    },
+			                    second: { _ in
+			                        let second: any Service = DefaultService()
+			                        return second
+			                    }
+			                )
 			            }
-			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host)
+			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
@@ -413,31 +520,57 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		try await expectOutput(of: Self.modules(feature: feature, app: fulfillers + [root]), [
 			"Feature": ["Feature.swift": """
 			extension Host {
-			    @frozen public enum SafeDIScope_Gadget {
+			    @frozen nonisolated public enum SafeDIScope_Gadget {
 			        case gadget(gadget_Values)
 
-			        public struct gadget_Values {
+			        nonisolated public struct gadget_Values {
 			            public let service: any Service
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let gadget: (gadget_Values) -> __safeDI_Built
+
+			            public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
+			                self.gadget = gadget
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.gadget = { _ in __safeDI_builder() }
+			            }
 			        }
 			    }
 
-			    @frozen public enum SafeDIScope_Service {
+			    @frozen nonisolated public enum SafeDIScope_Service {
 			        case service(service_Values)
 
-			        public struct service_Values {}
+			        nonisolated public struct service_Values {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
+
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			                self.service = service
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.service = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget, __safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-			        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIScope_Service.service_Values()))
-			        let gadget: any Gadget = __safeDI_gadgetBuilder(.gadget(SafeDIScope_Gadget.gadget_Values(service: service)))
+			    public init(__safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>, __safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+			        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values())
+			        let gadget: any Gadget = __safeDI_gadgetBuilder.gadget(SafeDIScope_Gadget.gadget_Values(service: service))
 			        self.init(service: service, gadget: gadget)
 			    }
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_C795FCC6DF94ECBC {}
+			    public enum __safeDI_Host_ECDC00A666682B54 {}
 			}
 			"""],
 			"App": ["App.swift": """
@@ -448,22 +581,20 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_C795FCC6DF94ECBC.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_gadgetBuilder_Host(_ scope: Host.SafeDIScope_Gadget) -> any Gadget {
-			                switch scope {
-			                case .gadget:
+			            _ = Host.__safeDI_Host_ECDC00A666682B54.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_gadgetBuilder_Host() -> Host.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+			                .init(gadget: { _ in
 			                    let gadget: any Gadget = DefaultGadget()
 			                    return gadget
-			                }
+			                })
 			            }
-			            func __safeDI_serviceBuilder_Host(_ scope: Host.SafeDIScope_Service) -> any Service {
-			                switch scope {
-			                case .service:
+			            func __safeDI_serviceBuilder_Host() -> Host.SafeDIScope_Service.__safeDI_Builder<any Service> {
+			                .init(service: { _ in
 			                    let service: any Service = DefaultService()
 			                    return service
-			                }
+			                })
 			            }
-			            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host, __safeDI_serviceBuilder: __safeDI_serviceBuilder_Host)
+			            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host(), __safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
@@ -495,31 +626,57 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		let output = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature)])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_Impl_AnyService {
+		    @frozen nonisolated public enum SafeDIScope_Impl_AnyService {
 		        case erased(erased_Values)
 
-		        public struct erased_Values {
+		        nonisolated public struct erased_Values {
 		            public let plain: any Service
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let erased: (erased_Values) -> __safeDI_Built
+
+		            public init(erased: @escaping (erased_Values) -> __safeDI_Built) {
+		                self.erased = erased
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.erased = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
-		    @frozen public enum SafeDIScope_Impl_Service {
+		    @frozen nonisolated public enum SafeDIScope_Impl_Service {
 		        case plain(plain_Values)
 
-		        public struct plain_Values {}
+		        nonisolated public struct plain_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let plain: (plain_Values) -> __safeDI_Built
+
+		            public init(plain: @escaping (plain_Values) -> __safeDI_Built) {
+		                self.plain = plain
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.plain = { _ in __safeDI_builder() }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_impl_AnyServiceBuilder: @escaping (SafeDIScope_Impl_AnyService) -> AnyService, __safeDI_impl_ServiceBuilder: @escaping (SafeDIScope_Impl_Service) -> any Service) {
-		        let plain: any Service = __safeDI_impl_ServiceBuilder(.plain(SafeDIScope_Impl_Service.plain_Values()))
-		        let erased: AnyService = __safeDI_impl_AnyServiceBuilder(.erased(SafeDIScope_Impl_AnyService.erased_Values(plain: plain)))
+		    public init(__safeDI_impl_AnyServiceBuilder: SafeDIScope_Impl_AnyService.__safeDI_Builder<AnyService>, __safeDI_impl_ServiceBuilder: SafeDIScope_Impl_Service.__safeDI_Builder<any Service>) {
+		        let plain: any Service = __safeDI_impl_ServiceBuilder.plain(SafeDIScope_Impl_Service.plain_Values())
+		        let erased: AnyService = __safeDI_impl_AnyServiceBuilder.erased(SafeDIScope_Impl_AnyService.erased_Values(plain: plain))
 		        self.init(plain: plain, erased: erased)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_D344496822705875 {}
+		    public enum __safeDI_Host_8E64E436E0136CEB {}
 		}
 		"""])
 	}
@@ -535,31 +692,57 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		let output = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature)])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_ServiceSendable_ServiceSendable {
+		    @frozen nonisolated public enum SafeDIScope_ServiceSendable_ServiceSendable {
 		        case other(other_Values)
 
-		        public struct other_Values {
+		        nonisolated public struct other_Values {
 		            public let service: any Service
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let other: (other_Values) -> __safeDI_Built
+
+		            public init(other: @escaping (other_Values) -> __safeDI_Built) {
+		                self.other = other
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.other = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
-		    @frozen public enum SafeDIScope_Service_Service {
+		    @frozen nonisolated public enum SafeDIScope_Service_Service {
 		        case service(service_Values)
 
-		        public struct service_Values {}
+		        nonisolated public struct service_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values) -> __safeDI_Built
+
+		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                self.service = service
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.service = { _ in __safeDI_builder() }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_serviceSendable_ServiceSendableBuilder: @escaping (SafeDIScope_ServiceSendable_ServiceSendable) -> any ServiceSendable, __safeDI_service_ServiceBuilder: @escaping (SafeDIScope_Service_Service) -> any Service) {
-		        let service: any Service = __safeDI_service_ServiceBuilder(.service(SafeDIScope_Service_Service.service_Values()))
-		        let other: any ServiceSendable = __safeDI_serviceSendable_ServiceSendableBuilder(.other(SafeDIScope_ServiceSendable_ServiceSendable.other_Values(service: service)))
+		    public init(__safeDI_serviceSendable_ServiceSendableBuilder: SafeDIScope_ServiceSendable_ServiceSendable.__safeDI_Builder<any ServiceSendable>, __safeDI_service_ServiceBuilder: SafeDIScope_Service_Service.__safeDI_Builder<any Service>) {
+		        let service: any Service = __safeDI_service_ServiceBuilder.service(SafeDIScope_Service_Service.service_Values())
+		        let other: any ServiceSendable = __safeDI_serviceSendable_ServiceSendableBuilder.other(SafeDIScope_ServiceSendable_ServiceSendable.other_Values(service: service))
 		        self.init(service: service, other: other)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_A81F3BCAF390161A {}
+		    public enum __safeDI_Host_DD50A7164CAB7140 {}
 		}
 		"""])
 	}
@@ -575,28 +758,44 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		let output = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature)])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_Box__P {
+		    @frozen nonisolated public enum SafeDIScope_Box__P {
 		        case first(first_Values)
 		        case second(second_Values)
 
-		        public struct first_Values {}
+		        nonisolated public struct first_Values {}
 
-		        public struct second_Values {
+		        nonisolated public struct second_Values {
 		            public let first: Box<any P>
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let first: (first_Values) -> __safeDI_Built
+		            public let second: (second_Values) -> __safeDI_Built
+
+		            public init(first: @escaping (first_Values) -> __safeDI_Built, second: @escaping (second_Values) -> __safeDI_Built) {
+		                self.first = first
+		                self.second = second
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.first = { _ in __safeDI_builder() }
+		                self.second = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_box__PBuilder: @escaping (SafeDIScope_Box__P) -> Box<any P>) {
-		        let first: Box<any P> = __safeDI_box__PBuilder(.first(SafeDIScope_Box__P.first_Values()))
-		        let second: Box<P> = __safeDI_box__PBuilder(.second(SafeDIScope_Box__P.second_Values(first: first)))
+		    public init(__safeDI_box__PBuilder: SafeDIScope_Box__P.__safeDI_Builder<Box<any P>>) {
+		        let first: Box<any P> = __safeDI_box__PBuilder.first(SafeDIScope_Box__P.first_Values())
+		        let second: Box<P> = __safeDI_box__PBuilder.second(SafeDIScope_Box__P.second_Values(first: first))
 		        self.init(first: first, second: second)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_63F695FF0BCD1BCE {}
+		    public enum __safeDI_Host_C38F53647964BD4E {}
 		}
 		"""])
 	}
@@ -612,28 +811,44 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		let output = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature)])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_P_and_Q {
+		    @frozen nonisolated public enum SafeDIScope_P_and_Q {
 		        case first(first_Values)
 		        case second(second_Values)
 
-		        public struct first_Values {}
+		        nonisolated public struct first_Values {}
 
-		        public struct second_Values {
+		        nonisolated public struct second_Values {
 		            public let first: any (P & Q)
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let first: (first_Values) -> __safeDI_Built
+		            public let second: (second_Values) -> __safeDI_Built
+
+		            public init(first: @escaping (first_Values) -> __safeDI_Built, second: @escaping (second_Values) -> __safeDI_Built) {
+		                self.first = first
+		                self.second = second
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.first = { _ in __safeDI_builder() }
+		                self.second = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_p_and_QBuilder: @escaping (SafeDIScope_P_and_Q) -> any (P & Q)) {
-		        let first: any (P & Q) = __safeDI_p_and_QBuilder(.first(SafeDIScope_P_and_Q.first_Values()))
-		        let second: any (Q & P) = __safeDI_p_and_QBuilder(.second(SafeDIScope_P_and_Q.second_Values(first: first)))
+		    public init(__safeDI_p_and_QBuilder: SafeDIScope_P_and_Q.__safeDI_Builder<any (P & Q)>) {
+		        let first: any (P & Q) = __safeDI_p_and_QBuilder.first(SafeDIScope_P_and_Q.first_Values())
+		        let second: any (Q & P) = __safeDI_p_and_QBuilder.second(SafeDIScope_P_and_Q.second_Values(first: first))
 		        self.init(first: first, second: second)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_BEDD4B9EEEB9D181 {}
+		    public enum __safeDI_Host_F940103F7714D14B {}
 		}
 		"""])
 	}
@@ -749,17 +964,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		/// The name of the guard enum `Host` generates.
 		var guardName: String {
 			switch self {
-			case .generic: "__safeDI_Host_CC41D3B2428F450E"
-			case .nested: "__safeDI_Host_54FA728246C5B100"
-			case .optional: "__safeDI_Host_413AEF7B650EB653"
-			case .array: "__safeDI_Host_1D749BFF7FDF1518"
-			case .dictionary: "__safeDI_Host_07BD41BB7FABBF0B"
-			case .tuple: "__safeDI_Host_A5FA9B2E58543DE2"
-			case .closure: "__safeDI_Host_C7F459DCA610F271"
-			case .attributed: "__safeDI_Host_F9090E6CB0F6C058"
-			case .metatype: "__safeDI_Host_8969CA9B155149F7"
-			case .variadic: "__safeDI_Host_E542022DA2AE6DC1"
-			case .void: "__safeDI_Host_CE6B0882ECDC82E2"
+			case .generic: "__safeDI_Host_181E655918D95068"
+			case .nested: "__safeDI_Host_62977D47F63CFE04"
+			case .optional: "__safeDI_Host_464D7546A32038EB"
+			case .array: "__safeDI_Host_AE86E26DF0F168F6"
+			case .dictionary: "__safeDI_Host_7918D46048698915"
+			case .tuple: "__safeDI_Host_ECC408FE814B1C54"
+			case .closure: "__safeDI_Host_8D59C8B92F9146B1"
+			case .attributed: "__safeDI_Host_CE877C9F39C27D46"
+			case .metatype: "__safeDI_Host_52760A16C394E675"
+			case .variadic: "__safeDI_Host_373D608B0E439CFB"
+			case .void: "__safeDI_Host_B318BCEF75FF1C14"
 			}
 		}
 	}
@@ -777,22 +992,38 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		let output = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature)])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_\(spelling.stem) {
+		    @frozen nonisolated public enum SafeDIScope_\(spelling.stem) {
 		        case first(first_Values)
 		        case second(second_Values)
 
-		        public struct first_Values {}
+		        nonisolated public struct first_Values {}
 
-		        public struct second_Values {
+		        nonisolated public struct second_Values {
 		            public let first: \(spelling.spelledFirst)
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let first: (first_Values) -> __safeDI_Built
+		            public let second: (second_Values) -> __safeDI_Built
+
+		            public init(first: @escaping (first_Values) -> __safeDI_Built, second: @escaping (second_Values) -> __safeDI_Built) {
+		                self.first = first
+		                self.second = second
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.first = { _ in __safeDI_builder() }
+		                self.second = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_\(spelling.label): @escaping (SafeDIScope_\(spelling.stem)) -> \(spelling.spelledFirst)) {
-		        let first: \(spelling.spelledFirst) = __safeDI_\(spelling.label)(.first(SafeDIScope_\(spelling.stem).first_Values()))
-		        let second: \(spelling.spelledSecond) = __safeDI_\(spelling.label)(.second(SafeDIScope_\(spelling.stem).second_Values(first: first)))
+		    public init(__safeDI_\(spelling.label): SafeDIScope_\(spelling.stem).__safeDI_Builder<\(spelling.spelledFirst)>) {
+		        let first: \(spelling.spelledFirst) = __safeDI_\(spelling.label).first(SafeDIScope_\(spelling.stem).first_Values())
+		        let second: \(spelling.spelledSecond) = __safeDI_\(spelling.label).second(SafeDIScope_\(spelling.stem).second_Values(first: first))
 		        self.init(first: first, second: second)
 		    }
 		}
@@ -822,28 +1053,44 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		let output = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature)])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_Box__P_and_Q_Optional_AnyService {
+		    @frozen nonisolated public enum SafeDIScope_Box__P_and_Q_Optional_AnyService {
 		        case first(first_Values)
 		        case second(second_Values)
 
-		        public struct first_Values {}
+		        nonisolated public struct first_Values {}
 
-		        public struct second_Values {
+		        nonisolated public struct second_Values {
 		            public let first: AnyService
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let first: (first_Values) -> __safeDI_Built
+		            public let second: (second_Values) -> __safeDI_Built
+
+		            public init(first: @escaping (first_Values) -> __safeDI_Built, second: @escaping (second_Values) -> __safeDI_Built) {
+		                self.first = first
+		                self.second = second
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.first = { _ in __safeDI_builder() }
+		                self.second = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_box__P_and_Q_Optional_AnyServiceBuilder: @escaping (SafeDIScope_Box__P_and_Q_Optional_AnyService) -> AnyService) {
-		        let first: AnyService = __safeDI_box__P_and_Q_Optional_AnyServiceBuilder(.first(SafeDIScope_Box__P_and_Q_Optional_AnyService.first_Values()))
-		        let second: AnyService = __safeDI_box__P_and_Q_Optional_AnyServiceBuilder(.second(SafeDIScope_Box__P_and_Q_Optional_AnyService.second_Values(first: first)))
+		    public init(__safeDI_box__P_and_Q_Optional_AnyServiceBuilder: SafeDIScope_Box__P_and_Q_Optional_AnyService.__safeDI_Builder<AnyService>) {
+		        let first: AnyService = __safeDI_box__P_and_Q_Optional_AnyServiceBuilder.first(SafeDIScope_Box__P_and_Q_Optional_AnyService.first_Values())
+		        let second: AnyService = __safeDI_box__P_and_Q_Optional_AnyServiceBuilder.second(SafeDIScope_Box__P_and_Q_Optional_AnyService.second_Values(first: first))
 		        self.init(first: first, second: second)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_67757DDB659E4BE2 {}
+		    public enum __safeDI_Host_56C3E4A5A256BB04 {}
 		}
 		"""])
 	}
@@ -876,8 +1123,8 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
 			        func __safeDI_inner() -> Inner {
-			            _ = Inner.__safeDI_Inner_9615B48675B70733.self
-			            return Inner(__safeDI_serviceBuilder: { __safeDI_serviceBuilder(.inner($0)) })
+			            _ = Inner.__safeDI_Inner_8DBB5EEFBE99D753.self
+			            return Inner(__safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder(.inner(.service(__safeDI_serviceValues))) }))
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIScope_Service.service_Values(inner: inner)))
@@ -890,22 +1137,35 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			}
 
 			extension Inner {
-			    @frozen public enum SafeDIScope_Service {
+			    @frozen nonisolated public enum SafeDIScope_Service {
 			        case service(service_Values)
 
-			        public struct service_Values {}
+			        nonisolated public struct service_Values {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
+
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			                self.service = service
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.service = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-			        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIScope_Service.service_Values()))
+			    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+			        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values())
 			        self.init(service: service)
 			    }
 			}
 
 			extension Inner {
-			    public enum __safeDI_Inner_9615B48675B70733 {}
+			    public enum __safeDI_Inner_8DBB5EEFBE99D753 {}
 			}
 			"""],
 			"App": ["App.swift": """
@@ -1003,13 +1263,13 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
 			        func __safeDI_first() -> Inner {
-			            _ = Inner.__safeDI_Inner_9615B48675B70733.self
-			            return Inner(__safeDI_serviceBuilder: { __safeDI_serviceBuilder(.first($0)) })
+			            _ = Inner.__safeDI_Inner_8DBB5EEFBE99D753.self
+			            return Inner(__safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder(.first(.service(__safeDI_serviceValues))) }))
 			        }
 			        let first: Inner = __safeDI_first()
 			        func __safeDI_second() -> Inner {
-			            _ = Inner.__safeDI_Inner_9615B48675B70733.self
-			            return Inner(__safeDI_serviceBuilder: { __safeDI_serviceBuilder(.second($0)) })
+			            _ = Inner.__safeDI_Inner_8DBB5EEFBE99D753.self
+			            return Inner(__safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder(.second(.service(__safeDI_serviceValues))) }))
 			        }
 			        let second: Inner = __safeDI_second()
 			        self.init(first: first, second: second)
@@ -1021,22 +1281,35 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			}
 
 			extension Inner {
-			    @frozen public enum SafeDIScope_Service {
+			    @frozen nonisolated public enum SafeDIScope_Service {
 			        case service(service_Values)
 
-			        public struct service_Values {}
+			        nonisolated public struct service_Values {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
+
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			                self.service = service
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.service = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-			        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIScope_Service.service_Values()))
+			    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+			        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values())
 			        self.init(service: service)
 			    }
 			}
 
 			extension Inner {
-			    public enum __safeDI_Inner_9615B48675B70733 {}
+			    public enum __safeDI_Inner_8DBB5EEFBE99D753 {}
 			}
 			"""],
 			"App": ["App.swift": """
@@ -1085,22 +1358,35 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
 			"Feature": ["Feature.swift": """
 			extension Deep {
-			    @frozen public enum SafeDIScope_Service {
+			    @frozen nonisolated public enum SafeDIScope_Service {
 			        case service(service_Values)
 
-			        public struct service_Values {}
+			        nonisolated public struct service_Values {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
+
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			                self.service = service
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.service = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-			        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIScope_Service.service_Values()))
+			    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+			        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values())
 			        self.init(service: service)
 			    }
 			}
 
 			extension Deep {
-			    public enum __safeDI_Deep_79978E20DCA01579 {}
+			    public enum __safeDI_Deep_3FE3799E6839B219 {}
 			}
 
 			extension Host {
@@ -1133,8 +1419,8 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
 			        func __safeDI_deep() -> Deep {
-			            _ = Deep.__safeDI_Deep_79978E20DCA01579.self
-			            return Deep(__safeDI_serviceBuilder: { __safeDI_serviceBuilder(.deep($0)) })
+			            _ = Deep.__safeDI_Deep_3FE3799E6839B219.self
+			            return Deep(__safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder(.deep(.service(__safeDI_serviceValues))) }))
 			        }
 			        let deep: Deep = __safeDI_deep()
 			        self.init(deep: deep)
@@ -1203,8 +1489,8 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
 		        func __safeDI_deep() -> Deep {
-		            _ = Deep.__safeDI_Deep_79978E20DCA01579.self // If this line does not compile, compile the code SafeDI generates for module Lower into Lower: under Bazel, add Lower’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Deep(__safeDI_serviceBuilder: { __safeDI_serviceBuilder(.deep($0)) })
+		            _ = Deep.__safeDI_Deep_3FE3799E6839B219.self // If this line does not compile, compile the code SafeDI generates for module Lower into Lower: under Bazel, add Lower’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Deep(__safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder(.deep(.service(__safeDI_serviceValues))) }))
 		        }
 		        let deep: Deep = __safeDI_deep()
 		        self.init(deep: deep)
@@ -1244,13 +1530,13 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service, __safeDI_serviceSendableBuilder: @escaping @Sendable (SafeDISendableScope_Service) -> any Service) {
 			        func __safeDI_plain() -> Inner {
-			            _ = Inner.__safeDI_Inner_9615B48675B70733.self
-			            return Inner(__safeDI_serviceBuilder: { __safeDI_serviceBuilder(.plain($0)) })
+			            _ = Inner.__safeDI_Inner_8DBB5EEFBE99D753.self
+			            return Inner(__safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder(.plain(.service(__safeDI_serviceValues))) }))
 			        }
 			        let plain: Inner = __safeDI_plain()
 			        @Sendable func __safeDI_held() -> Inner {
-			            _ = Inner.__safeDI_Inner_9615B48675B70733.self
-			            return Inner(__safeDI_serviceBuilder: { __safeDI_serviceSendableBuilder(.held($0)) })
+			            _ = Inner.__safeDI_Inner_8DBB5EEFBE99D753.self
+			            return Inner(__safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceSendableBuilder(.held(.service(__safeDI_serviceValues))) }))
 			        }
 			        let held = SendableInstantiator<Inner>(__safeDI_held)
 			        self.init(plain: plain, held: held)
@@ -1262,22 +1548,35 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			}
 
 			extension Inner {
-			    @frozen public enum SafeDIScope_Service {
+			    @frozen nonisolated public enum SafeDIScope_Service {
 			        case service(service_Values)
 
-			        public struct service_Values {}
+			        nonisolated public struct service_Values {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
+
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			                self.service = service
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.service = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-			        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIScope_Service.service_Values()))
+			    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+			        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values())
 			        self.init(service: service)
 			    }
 			}
 
 			extension Inner {
-			    public enum __safeDI_Inner_9615B48675B70733 {}
+			    public enum __safeDI_Inner_8DBB5EEFBE99D753 {}
 			}
 			"""],
 			"App": ["App.swift": """
@@ -1330,22 +1629,35 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
 			"Feature": ["Feature.swift": """
 			extension Deep {
-			    @frozen public enum SafeDIScope_Service {
+			    @frozen nonisolated public enum SafeDIScope_Service {
 			        case service(service_Values)
 
-			        public struct service_Values {}
+			        nonisolated public struct service_Values {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
+
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			                self.service = service
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.service = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-			        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIScope_Service.service_Values()))
+			    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+			        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values())
 			        self.init(service: service)
 			    }
 			}
 
 			extension Deep {
-			    public enum __safeDI_Deep_79978E20DCA01579 {}
+			    public enum __safeDI_Deep_3FE3799E6839B219 {}
 			}
 
 			extension Host {
@@ -1386,13 +1698,13 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service, __safeDI_serviceSendableBuilder: @escaping @Sendable (SafeDISendableScope_Service) -> any Service) {
 			        func __safeDI_plain() -> Deep {
-			            _ = Deep.__safeDI_Deep_79978E20DCA01579.self
-			            return Deep(__safeDI_serviceBuilder: { __safeDI_serviceBuilder(.plain($0)) })
+			            _ = Deep.__safeDI_Deep_3FE3799E6839B219.self
+			            return Deep(__safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder(.plain(.service(__safeDI_serviceValues))) }))
 			        }
 			        let plain: Deep = __safeDI_plain()
 			        @Sendable func __safeDI_held() -> Deep {
-			            _ = Deep.__safeDI_Deep_79978E20DCA01579.self
-			            return Deep(__safeDI_serviceBuilder: { __safeDI_serviceSendableBuilder(.held($0)) })
+			            _ = Deep.__safeDI_Deep_3FE3799E6839B219.self
+			            return Deep(__safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceSendableBuilder(.held(.service(__safeDI_serviceValues))) }))
 			        }
 			        let held = SendableInstantiator<Deep>(__safeDI_held)
 			        self.init(plain: plain, held: held)
@@ -1464,23 +1776,52 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
 			"Feature": ["Feature.swift": """
 			extension Host {
-			    @frozen public enum SafeDIScope_Service {
-			        @frozen public enum Job_Scope {
+			    @frozen nonisolated public enum SafeDIScope_Service {
+			        @frozen nonisolated public enum Job_Scope {
 			            case service(service_Values)
 
-			            public struct service_Values {}
+			            nonisolated public struct service_Values {}
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let service: (service_Values) -> __safeDI_Built
+
+			                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			                    self.service = service
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.service = { _ in __safeDI_builder() }
+			                }
+			            }
 			        }
 			    }
 
-			    @frozen public enum SafeDISendableScope_Service {
+			    @frozen nonisolated public enum SafeDISendableScope_Service {
 			        case job(SafeDIScope_Service.Job_Scope)
+
+			        nonisolated public struct job_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let job: @Sendable (job_Values) -> SafeDIScope_Service.Job_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(job: @escaping @Sendable (job_Values) -> SafeDIScope_Service.Job_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.job = job
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                self.job = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_serviceSendableBuilder: @escaping @Sendable (SafeDISendableScope_Service) -> any Service) {
-			        @Sendable func __safeDI_job() -> Job {
-			            let service: any Service = __safeDI_serviceSendableBuilder(.job(.service(SafeDIScope_Service.Job_Scope.service_Values())))
+			    public init(__safeDI_serviceSendableBuilder: SafeDISendableScope_Service.__safeDI_Builder<any Service>) {
+			        @Sendable nonisolated func __safeDI_job() -> Job {
+			            let __safeDI_serviceSendableBuilder_job = __safeDI_serviceSendableBuilder.job(SafeDISendableScope_Service.job_Values())
+			            let service: any Service = __safeDI_serviceSendableBuilder_job.service(SafeDIScope_Service.Job_Scope.service_Values())
 			            return Job(service: service)
 			        }
 			        let job = SendableInstantiator<Job>(__safeDI_job)
@@ -1489,7 +1830,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_DD5E544F2AAC1160 {}
+			    public enum __safeDI_Host_48A12C41EF2BA9A6 {}
 			}
 			"""],
 			"App": ["App.swift": """
@@ -1500,20 +1841,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_DD5E544F2AAC1160.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable func __safeDI_serviceSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Service) -> any Service {
-			                switch scope {
-			                case let .job(scope): return __safeDI_serviceBuilder_Host_Job_Scope(scope)
-			                }
+			            _ = Host.__safeDI_Host_48A12C41EF2BA9A6.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host() -> Host.SafeDISendableScope_Service.__safeDI_Builder<any Service> {
+			                .init(job: { _ in __safeDI_serviceBuilder_Host_Job_Scope() })
 			            }
-			            @Sendable func __safeDI_serviceBuilder_Host_Job_Scope(_ scope: Host.SafeDIScope_Service.Job_Scope) -> any Service {
-			                switch scope {
-			                case .service:
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Host_Job_Scope() -> Host.SafeDIScope_Service.Job_Scope.__safeDI_Builder<any Service> {
+			                .init(service: { _ in
 			                    let service: any Service = DefaultService()
 			                    return service
-			                }
+			                })
 			            }
-			            return Host(__safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder_Host)
+			            return Host(__safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
@@ -1932,8 +2270,8 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        }
 		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 		        func __safeDI_c() -> C {
-		            _ = C.__safeDI_C_B754DBFB011F6C86.self
-		            return C(__safeDI_serviceBuilder: { __safeDI_serviceBuilder(.c($0)) })
+		            _ = C.__safeDI_C_F42FE1132D0AE526.self
+		            return C(__safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder(.c(.service(__safeDI_serviceValues))) }))
 		        }
 		        let c: C = __safeDI_c()
 		        self.init(bBuilder: bBuilder, c: c)
@@ -1966,22 +2304,35 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		}
 
 		extension C {
-		    @frozen public enum SafeDIScope_Service {
+		    @frozen nonisolated public enum SafeDIScope_Service {
 		        case service(service_Values)
 
-		        public struct service_Values {}
+		        nonisolated public struct service_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values) -> __safeDI_Built
+
+		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                self.service = service
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.service = { _ in __safeDI_builder() }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-		        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIScope_Service.service_Values()))
+		    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values())
 		        self.init(service: service)
 		    }
 		}
 
 		extension C {
-		    public enum __safeDI_C_B754DBFB011F6C86 {}
+		    public enum __safeDI_C_F42FE1132D0AE526 {}
 		}
 		"""])
 	}
@@ -2127,28 +2478,44 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
 			"Feature": ["Feature.swift": """
 			extension Host {
-			    @frozen public enum SafeDIScope_Service {
+			    @frozen nonisolated public enum SafeDIScope_Service {
 			        case `default`(default_Values)
 			        case `my leaf`(`my leaf_Values`)
 
-			        public struct default_Values {}
+			        nonisolated public struct default_Values {}
 
-			        public struct `my leaf_Values` {
+			        nonisolated public struct `my leaf_Values` {
 			            public let `default`: any Service
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let `default`: (default_Values) -> __safeDI_Built
+			            public let `my leaf`: (`my leaf_Values`) -> __safeDI_Built
+
+			            public init(`default`: @escaping (default_Values) -> __safeDI_Built, `my leaf`: @escaping (`my leaf_Values`) -> __safeDI_Built) {
+			                self.`default` = `default`
+			                self.`my leaf` = `my leaf`
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.`default` = { _ in __safeDI_builder() }
+			                self.`my leaf` = { _ in __safeDI_builder() }
+			            }
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-			        let `default`: any Service = __safeDI_serviceBuilder(.`default`(SafeDIScope_Service.default_Values()))
-			        let `my leaf`: any Service = __safeDI_serviceBuilder(.`my leaf`(SafeDIScope_Service.`my leaf_Values`(default: `default`)))
+			    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+			        let `default`: any Service = __safeDI_serviceBuilder.`default`(SafeDIScope_Service.default_Values())
+			        let `my leaf`: any Service = __safeDI_serviceBuilder.`my leaf`(SafeDIScope_Service.`my leaf_Values`(default: `default`))
 			        self.init(default: `default`, `my leaf`: `my leaf`)
 			    }
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_D8763D69938799D9 {}
+			    public enum __safeDI_Host_7DE14F585CFBA339 {}
 			}
 			"""],
 		])
@@ -2178,31 +2545,57 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		let output = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature)])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_KP {
+		    @frozen nonisolated public enum SafeDIScope_KP {
 		        case kp(kp_Values)
 
-		        public struct kp_Values {
+		        nonisolated public struct kp_Values {
 		            public let loader: any URLLoader
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let kp: (kp_Values) -> __safeDI_Built
+
+		            public init(kp: @escaping (kp_Values) -> __safeDI_Built) {
+		                self.kp = kp
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.kp = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
-		    @frozen public enum SafeDIScope_URLLoader {
+		    @frozen nonisolated public enum SafeDIScope_URLLoader {
 		        case loader(loader_Values)
 
-		        public struct loader_Values {}
+		        nonisolated public struct loader_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let loader: (loader_Values) -> __safeDI_Built
+
+		            public init(loader: @escaping (loader_Values) -> __safeDI_Built) {
+		                self.loader = loader
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.loader = { _ in __safeDI_builder() }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_kpBuilder: @escaping (SafeDIScope_KP) -> any KP, __safeDI_urlLoaderBuilder: @escaping (SafeDIScope_URLLoader) -> any URLLoader) {
-		        let loader: any URLLoader = __safeDI_urlLoaderBuilder(.loader(SafeDIScope_URLLoader.loader_Values()))
-		        let kp: any KP = __safeDI_kpBuilder(.kp(SafeDIScope_KP.kp_Values(loader: loader)))
+		    public init(__safeDI_kpBuilder: SafeDIScope_KP.__safeDI_Builder<any KP>, __safeDI_urlLoaderBuilder: SafeDIScope_URLLoader.__safeDI_Builder<any URLLoader>) {
+		        let loader: any URLLoader = __safeDI_urlLoaderBuilder.loader(SafeDIScope_URLLoader.loader_Values())
+		        let kp: any KP = __safeDI_kpBuilder.kp(SafeDIScope_KP.kp_Values(loader: loader))
 		        self.init(loader: loader, kp: kp)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_740F4D9693211FD7 {}
+		    public enum __safeDI_Host_4A81AC816E3220BD {}
 		}
 		"""])
 	}
@@ -2217,24 +2610,37 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		let output = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature)])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_Service {
+		    @frozen nonisolated public enum SafeDIScope_Service {
 		        case service(service_Values)
 
-		        public struct service_Values {
+		        nonisolated public struct service_Values {
 		            public let serviceBuilder: Int
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values) -> __safeDI_Built
+
+		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                self.service = service
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.service = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_serviceBuilder serviceBuilder: Int, __safeDI_serviceBuilder_: @escaping (SafeDIScope_Service) -> any Service) {
-		        let service: any Service = __safeDI_serviceBuilder_(.service(SafeDIScope_Service.service_Values(serviceBuilder: serviceBuilder)))
+		    public init(__safeDI_serviceBuilder serviceBuilder: Int, __safeDI_serviceBuilder_: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+		        let service: any Service = __safeDI_serviceBuilder_.service(SafeDIScope_Service.service_Values(serviceBuilder: serviceBuilder))
 		        self.init(serviceBuilder: serviceBuilder, service: service)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_8A169CD58F08D376 {}
+		    public enum __safeDI_Host_CFD8FD26530CBE04 {}
 		}
 		"""])
 	}
@@ -2249,28 +2655,44 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		let output = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature)])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_Service {
+		    @frozen nonisolated public enum SafeDIScope_Service {
 		        case service(service_Values_)
 		        case service_Values(service_Values_Values)
 
-		        public struct service_Values_ {}
+		        nonisolated public struct service_Values_ {}
 
-		        public struct service_Values_Values {
+		        nonisolated public struct service_Values_Values {
 		            public let service: any Service
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values_) -> __safeDI_Built
+		            public let service_Values: (service_Values_Values) -> __safeDI_Built
+
+		            public init(service: @escaping (service_Values_) -> __safeDI_Built, service_Values: @escaping (service_Values_Values) -> __safeDI_Built) {
+		                self.service = service
+		                self.service_Values = service_Values
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.service = { _ in __safeDI_builder() }
+		                self.service_Values = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-		        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIScope_Service.service_Values_()))
-		        let service_Values: any Service = __safeDI_serviceBuilder(.service_Values(SafeDIScope_Service.service_Values_Values(service: service)))
+		    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values_())
+		        let service_Values: any Service = __safeDI_serviceBuilder.service_Values(SafeDIScope_Service.service_Values_Values(service: service))
 		        self.init(service: service, service_Values: service_Values)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_CE37D78E255C6034 {}
+		    public enum __safeDI_Host_0C829EEDDA64AB54 {}
 		}
 		"""])
 	}
@@ -2287,31 +2709,57 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		let output = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature)])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_Outer_Thing_Outer_Thing {
+		    @frozen nonisolated public enum SafeDIScope_Outer_Thing_Outer_Thing {
 		        case nested(nested_Values)
 
-		        public struct nested_Values {}
+		        nonisolated public struct nested_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let nested: (nested_Values) -> __safeDI_Built
+
+		            public init(nested: @escaping (nested_Values) -> __safeDI_Built) {
+		                self.nested = nested
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.nested = { _ in __safeDI_builder() }
+		            }
+		        }
 		    }
 
-		    @frozen public enum SafeDIScope_Outer_Thing_Outer_Thing_ {
+		    @frozen nonisolated public enum SafeDIScope_Outer_Thing_Outer_Thing_ {
 		        case joined(joined_Values)
 
-		        public struct joined_Values {
+		        nonisolated public struct joined_Values {
 		            public let nested: Outer.Thing
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let joined: (joined_Values) -> __safeDI_Built
+
+		            public init(joined: @escaping (joined_Values) -> __safeDI_Built) {
+		                self.joined = joined
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.joined = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_outer_Thing_Outer_ThingBuilder: @escaping (SafeDIScope_Outer_Thing_Outer_Thing) -> Outer.Thing, __safeDI_outer_Thing_Outer_Thing_Builder: @escaping (SafeDIScope_Outer_Thing_Outer_Thing_) -> Outer_Thing) {
-		        let nested: Outer.Thing = __safeDI_outer_Thing_Outer_ThingBuilder(.nested(SafeDIScope_Outer_Thing_Outer_Thing.nested_Values()))
-		        let joined: Outer_Thing = __safeDI_outer_Thing_Outer_Thing_Builder(.joined(SafeDIScope_Outer_Thing_Outer_Thing_.joined_Values(nested: nested)))
+		    public init(__safeDI_outer_Thing_Outer_ThingBuilder: SafeDIScope_Outer_Thing_Outer_Thing.__safeDI_Builder<Outer.Thing>, __safeDI_outer_Thing_Outer_Thing_Builder: SafeDIScope_Outer_Thing_Outer_Thing_.__safeDI_Builder<Outer_Thing>) {
+		        let nested: Outer.Thing = __safeDI_outer_Thing_Outer_ThingBuilder.nested(SafeDIScope_Outer_Thing_Outer_Thing.nested_Values())
+		        let joined: Outer_Thing = __safeDI_outer_Thing_Outer_Thing_Builder.joined(SafeDIScope_Outer_Thing_Outer_Thing_.joined_Values(nested: nested))
 		        self.init(nested: nested, joined: joined)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_D38FBC58D3290EB8 {}
+		    public enum __safeDI_Host_E2A8E28B3184DE86 {}
 		}
 		"""])
 	}
@@ -2333,34 +2781,60 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		let output = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature)])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_Outer_Thing_Outer_Thing {
+		    @frozen nonisolated public enum SafeDIScope_Outer_Thing_Outer_Thing {
 		        case nested(nested_Values)
 
-		        public struct nested_Values {
+		        nonisolated public struct nested_Values {
 		            public let outer_Thing_Outer_ThingBuilder: Int
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let nested: (nested_Values) -> __safeDI_Built
+
+		            public init(nested: @escaping (nested_Values) -> __safeDI_Built) {
+		                self.nested = nested
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.nested = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
-		    @frozen public enum SafeDIScope_Outer_Thing_Outer_Thing_ {
+		    @frozen nonisolated public enum SafeDIScope_Outer_Thing_Outer_Thing_ {
 		        case joined(joined_Values)
 
-		        public struct joined_Values {
+		        nonisolated public struct joined_Values {
 		            public let outer_Thing_Outer_ThingBuilder: Int
 		            public let nested: Outer.Thing
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let joined: (joined_Values) -> __safeDI_Built
+
+		            public init(joined: @escaping (joined_Values) -> __safeDI_Built) {
+		                self.joined = joined
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.joined = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_outer_Thing_Outer_ThingBuilder outer_Thing_Outer_ThingBuilder: Int, __safeDI_outer_Thing_Outer_ThingBuilder_: @escaping (SafeDIScope_Outer_Thing_Outer_Thing) -> Outer.Thing, __safeDI_outer_Thing_Outer_Thing_Builder: @escaping (SafeDIScope_Outer_Thing_Outer_Thing_) -> Outer_Thing) {
-		        let nested: Outer.Thing = __safeDI_outer_Thing_Outer_ThingBuilder_(.nested(SafeDIScope_Outer_Thing_Outer_Thing.nested_Values(outer_Thing_Outer_ThingBuilder: outer_Thing_Outer_ThingBuilder)))
-		        let joined: Outer_Thing = __safeDI_outer_Thing_Outer_Thing_Builder(.joined(SafeDIScope_Outer_Thing_Outer_Thing_.joined_Values(outer_Thing_Outer_ThingBuilder: outer_Thing_Outer_ThingBuilder, nested: nested)))
+		    public init(__safeDI_outer_Thing_Outer_ThingBuilder outer_Thing_Outer_ThingBuilder: Int, __safeDI_outer_Thing_Outer_ThingBuilder_: SafeDIScope_Outer_Thing_Outer_Thing.__safeDI_Builder<Outer.Thing>, __safeDI_outer_Thing_Outer_Thing_Builder: SafeDIScope_Outer_Thing_Outer_Thing_.__safeDI_Builder<Outer_Thing>) {
+		        let nested: Outer.Thing = __safeDI_outer_Thing_Outer_ThingBuilder_.nested(SafeDIScope_Outer_Thing_Outer_Thing.nested_Values(outer_Thing_Outer_ThingBuilder: outer_Thing_Outer_ThingBuilder))
+		        let joined: Outer_Thing = __safeDI_outer_Thing_Outer_Thing_Builder.joined(SafeDIScope_Outer_Thing_Outer_Thing_.joined_Values(outer_Thing_Outer_ThingBuilder: outer_Thing_Outer_ThingBuilder, nested: nested))
 		        self.init(outer_Thing_Outer_ThingBuilder: outer_Thing_Outer_ThingBuilder, nested: nested, joined: joined)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_3DE0709F21047E35 {}
+		    public enum __safeDI_Host_B7F73E86747641E7 {}
 		}
 		"""])
 	}
@@ -2539,8 +3013,8 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_C6CCA21F840AAD62.self
-		            return Inner(__safeDI_serviceBuilder: { __safeDI_serviceBuilder(.inner($0)) })
+		            _ = Inner.__safeDI_Inner_8EC1A00229835802.self
+		            return Inner(__safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder(.inner(.service(__safeDI_serviceValues))) }))
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(inner: inner)
@@ -2552,22 +3026,35 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		}
 
 		extension Inner {
-		    @frozen public enum SafeDIScope_Service {
+		    @frozen nonisolated public enum SafeDIScope_Service {
 		        case service(service_Values)
 
-		        public struct service_Values {}
+		        nonisolated public struct service_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values) -> __safeDI_Built
+
+		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                self.service = service
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.service = { _ in __safeDI_builder() }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    package init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-		        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIScope_Service.service_Values()))
+		    package init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values())
 		        self.init(service: service)
 		    }
 		}
 
 		extension Inner {
-		    public enum __safeDI_Inner_C6CCA21F840AAD62 {}
+		    public enum __safeDI_Inner_8EC1A00229835802 {}
 		}
 		"""])
 	}
@@ -2644,8 +3131,8 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
 		        func __safeDI_deep() -> Deep {
-		            _ = Deep.__safeDI_Deep_79978E20DCA01579.self // If this line does not compile, compile the code SafeDI generates for module Lower into Lower: under Bazel, add Lower’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Deep(__safeDI_serviceBuilder: { __safeDI_serviceBuilder(.deep($0)) })
+		            _ = Deep.__safeDI_Deep_3FE3799E6839B219.self // If this line does not compile, compile the code SafeDI generates for module Lower into Lower: under Bazel, add Lower’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Deep(__safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder(.deep(.service(__safeDI_serviceValues))) }))
 		        }
 		        let deep: Deep = __safeDI_deep()
 		        self.init(deep: deep)
@@ -3138,31 +3625,73 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
 			"Feature": ["Feature.swift": """
 			extension Host {
-			    @frozen public enum SafeDIScope_Service {
+			    @frozen nonisolated public enum SafeDIScope_Service {
 			        case zsvc(zsvc_Values)
 
-			        public struct zsvc_Values {
+			        nonisolated public struct zsvc_Values {
 			            public let `Type`: Kind
 			            public let `init`: Name
 			        }
 
-			        @frozen public enum Job_Scope {
+			        @frozen nonisolated public enum Job_Scope {
 			            case service(service_Values)
 
-			            public struct service_Values {}
+			            nonisolated public struct service_Values {}
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let service: (service_Values) -> __safeDI_Built
+
+			                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			                    self.service = service
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.service = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let zsvc: (zsvc_Values) -> __safeDI_Built
+
+			            public init(zsvc: @escaping (zsvc_Values) -> __safeDI_Built) {
+			                self.zsvc = zsvc
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.zsvc = { _ in __safeDI_builder() }
+			            }
 			        }
 			    }
 
-			    @frozen public enum SafeDISendableScope_Service {
+			    @frozen nonisolated public enum SafeDISendableScope_Service {
 			        case job(SafeDIScope_Service.Job_Scope)
+
+			        nonisolated public struct job_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let job: @Sendable (job_Values) -> SafeDIScope_Service.Job_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(job: @escaping @Sendable (job_Values) -> SafeDIScope_Service.Job_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.job = job
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                self.job = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_Type Type: Kind, __safeDI_init `init`: Name, __safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service, __safeDI_serviceSendableBuilder: @escaping @Sendable (SafeDISendableScope_Service) -> any Service) {
-			        let zsvc: any Service = __safeDI_serviceBuilder(.zsvc(SafeDIScope_Service.zsvc_Values(Type: Type, init: `init`)))
-			        @Sendable func __safeDI_job() -> Job {
-			            let service: any Service = __safeDI_serviceSendableBuilder(.job(.service(SafeDIScope_Service.Job_Scope.service_Values())))
+			    public init(__safeDI_Type Type: Kind, __safeDI_init `init`: Name, __safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>, __safeDI_serviceSendableBuilder: SafeDISendableScope_Service.__safeDI_Builder<any Service>) {
+			        let zsvc: any Service = __safeDI_serviceBuilder.zsvc(SafeDIScope_Service.zsvc_Values(Type: Type, init: `init`))
+			        @Sendable nonisolated func __safeDI_job() -> Job {
+			            let __safeDI_serviceSendableBuilder_job = __safeDI_serviceSendableBuilder.job(SafeDISendableScope_Service.job_Values())
+			            let service: any Service = __safeDI_serviceSendableBuilder_job.service(SafeDIScope_Service.Job_Scope.service_Values())
 			            return Job(service: service)
 			        }
 			        let job = SendableInstantiator<Job>(__safeDI_job)
@@ -3171,7 +3700,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_BEFEB8B8FB83B18C {}
+			    public enum __safeDI_Host_A2854B3AA9CE5A70 {}
 			}
 			"""],
 			"App": ["App.swift": """
@@ -3184,29 +3713,25 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        let Type = Kind()
 			        let `init` = Name()
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_BEFEB8B8FB83B18C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host(_ scope: Host.SafeDIScope_Service) -> any Service {
-			                switch scope {
-			                case let .zsvc(scope):
+			            _ = Host.__safeDI_Host_A2854B3AA9CE5A70.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_serviceBuilder_Host() -> Host.SafeDIScope_Service.__safeDI_Builder<any Service> {
+			                .init(zsvc: { scope in
 			                    let Type = scope.Type
 			                    let `init` = scope.`init`
 			                    let zsvc: any Service = DefaultService(Type: Type, init: `init`)
 			                    return zsvc
-			                }
+			                })
 			            }
-			            @Sendable func __safeDI_serviceSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Service) -> any Service {
-			                switch scope {
-			                case let .job(scope): return __safeDI_serviceBuilder_Host_Job_Scope(scope)
-			                }
+			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host() -> Host.SafeDISendableScope_Service.__safeDI_Builder<any Service> {
+			                .init(job: { _ in __safeDI_serviceBuilder_Host_Job_Scope() })
 			            }
-			            @Sendable func __safeDI_serviceBuilder_Host_Job_Scope(_ scope: Host.SafeDIScope_Service.Job_Scope) -> any Service {
-			                switch scope {
-			                case .service:
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Host_Job_Scope() -> Host.SafeDIScope_Service.Job_Scope.__safeDI_Builder<any Service> {
+			                .init(service: { _ in
 			                    let service: any Service = DefaultService(Type: Type, init: `init`)
 			                    return service
-			                }
+			                })
 			            }
-			            return Host(__safeDI_Type: Type, __safeDI_init: `init`, __safeDI_serviceBuilder: __safeDI_serviceBuilder_Host, __safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder_Host)
+			            return Host(__safeDI_Type: Type, __safeDI_init: `init`, __safeDI_serviceBuilder: __safeDI_serviceBuilder_Host(), __safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(Type: Type, init: `init`, host: host)
@@ -3229,22 +3754,35 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
 			"Feature": ["Feature.swift": """
 			extension `My Inner` {
-			    @frozen public enum SafeDIScope_Service {
+			    @frozen nonisolated public enum SafeDIScope_Service {
 			        case service(service_Values)
 
-			        public struct service_Values {}
+			        nonisolated public struct service_Values {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
+
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			                self.service = service
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.service = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-			        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIScope_Service.service_Values()))
+			    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+			        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values())
 			        self.init(service: service)
 			    }
 			}
 
 			extension `My Inner` {
-			    public enum `__safeDI_My Inner_8595EAA2793B7181` {}
+			    public enum `__safeDI_My Inner_34C2691E85410061` {}
 			}
 
 			extension Host {
@@ -3256,8 +3794,8 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
 			        func __safeDI_inner() -> `My Inner` {
-			            _ = `My Inner`.`__safeDI_My Inner_8595EAA2793B7181`.self
-			            return `My Inner`(__safeDI_serviceBuilder: { __safeDI_serviceBuilder(.inner($0)) })
+			            _ = `My Inner`.`__safeDI_My Inner_34C2691E85410061`.self
+			            return `My Inner`(__safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder(.inner(.service(__safeDI_serviceValues))) }))
 			        }
 			        let inner: `My Inner` = __safeDI_inner()
 			        self.init(inner: inner)
@@ -3324,72 +3862,92 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_094C58308C3F3C76.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_p_and_QBuilder_Host(_ scope: Host.SafeDIScope_P_and_Q) -> any (P & Q) {
-			                switch scope {
-			                case .p01:
-			                    let p01: any (P & Q) = DefaultPQ()
-			                    return p01
-			                case .p02:
-			                    let p02: any (Q & P) = DefaultPQ()
-			                    return p02
-			                case .p03:
-			                    let p03: any (Q & P) = DefaultPQ()
-			                    return p03
-			                case .p04:
-			                    let p04: any (Q & P) = DefaultPQ()
-			                    return p04
-			                case .p05:
-			                    let p05: any (Q & P) = DefaultPQ()
-			                    return p05
-			                case .p06:
-			                    let p06: any (Q & P) = DefaultPQ()
-			                    return p06
-			                case .p07:
-			                    let p07: any (Q & P) = DefaultPQ()
-			                    return p07
-			                case .p08:
-			                    let p08: any (Q & P) = DefaultPQ()
-			                    return p08
-			                case .p09:
-			                    let p09: any (Q & P) = DefaultPQ()
-			                    return p09
-			                case .p10:
-			                    let p10: any (Q & P) = DefaultPQ()
-			                    return p10
-			                case .p11:
-			                    let p11: any (Q & P) = DefaultPQ()
-			                    return p11
-			                case .p12:
-			                    let p12: any (Q & P) = DefaultPQ()
-			                    return p12
-			                case .p13:
-			                    let p13: any (Q & P) = DefaultPQ()
-			                    return p13
-			                case .p14:
-			                    let p14: any (Q & P) = DefaultPQ()
-			                    return p14
-			                case .p15:
-			                    let p15: any (Q & P) = DefaultPQ()
-			                    return p15
-			                case .p16:
-			                    let p16: any (Q & P) = DefaultPQ()
-			                    return p16
-			                case .p17:
-			                    let p17: any (Q & P) = DefaultPQ()
-			                    return p17
-			                case .p18:
-			                    let p18: any (Q & P) = DefaultPQ()
-			                    return p18
-			                case .p19:
-			                    let p19: any (Q & P) = DefaultPQ()
-			                    return p19
-			                case .p20:
-			                    let p20: any (Q & P) = DefaultPQ()
-			                    return p20
-			                }
+			            _ = Host.__safeDI_Host_9390FADD72EC1D30.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_p_and_QBuilder_Host() -> Host.SafeDIScope_P_and_Q.__safeDI_Builder<any (P & Q)> {
+			                .init(
+			                    p01: { _ in
+			                        let p01: any (P & Q) = DefaultPQ()
+			                        return p01
+			                    },
+			                    p02: { _ in
+			                        let p02: any (Q & P) = DefaultPQ()
+			                        return p02
+			                    },
+			                    p03: { _ in
+			                        let p03: any (Q & P) = DefaultPQ()
+			                        return p03
+			                    },
+			                    p04: { _ in
+			                        let p04: any (Q & P) = DefaultPQ()
+			                        return p04
+			                    },
+			                    p05: { _ in
+			                        let p05: any (Q & P) = DefaultPQ()
+			                        return p05
+			                    },
+			                    p06: { _ in
+			                        let p06: any (Q & P) = DefaultPQ()
+			                        return p06
+			                    },
+			                    p07: { _ in
+			                        let p07: any (Q & P) = DefaultPQ()
+			                        return p07
+			                    },
+			                    p08: { _ in
+			                        let p08: any (Q & P) = DefaultPQ()
+			                        return p08
+			                    },
+			                    p09: { _ in
+			                        let p09: any (Q & P) = DefaultPQ()
+			                        return p09
+			                    },
+			                    p10: { _ in
+			                        let p10: any (Q & P) = DefaultPQ()
+			                        return p10
+			                    },
+			                    p11: { _ in
+			                        let p11: any (Q & P) = DefaultPQ()
+			                        return p11
+			                    },
+			                    p12: { _ in
+			                        let p12: any (Q & P) = DefaultPQ()
+			                        return p12
+			                    },
+			                    p13: { _ in
+			                        let p13: any (Q & P) = DefaultPQ()
+			                        return p13
+			                    },
+			                    p14: { _ in
+			                        let p14: any (Q & P) = DefaultPQ()
+			                        return p14
+			                    },
+			                    p15: { _ in
+			                        let p15: any (Q & P) = DefaultPQ()
+			                        return p15
+			                    },
+			                    p16: { _ in
+			                        let p16: any (Q & P) = DefaultPQ()
+			                        return p16
+			                    },
+			                    p17: { _ in
+			                        let p17: any (Q & P) = DefaultPQ()
+			                        return p17
+			                    },
+			                    p18: { _ in
+			                        let p18: any (Q & P) = DefaultPQ()
+			                        return p18
+			                    },
+			                    p19: { _ in
+			                        let p19: any (Q & P) = DefaultPQ()
+			                        return p19
+			                    },
+			                    p20: { _ in
+			                        let p20: any (Q & P) = DefaultPQ()
+			                        return p20
+			                    }
+			                )
 			            }
-			            return Host(__safeDI_p_and_QBuilder: __safeDI_p_and_QBuilder_Host)
+			            return Host(__safeDI_p_and_QBuilder: __safeDI_p_and_QBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)

@@ -83,27 +83,6 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 		]
 	}
 
-	/// The extension `Feature` generates for `Screen` when its module does not opt in: the initializer generated code
-	/// calls, alone.
-	private static let screenWithoutPlainInitializer = """
-	extension Screen {
-	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-	    public init(__safeDI_user: @autoclosure @escaping () -> User) {
-	        let user = LazilyInstantiated<User>(__safeDI_user)
-	        func __safeDI_detailBuilder() -> Detail {
-	            Detail(user: user.instance)
-	        }
-	        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
-	        self.init(detailBuilder: detailBuilder)
-	    }
-	}
-
-	extension Screen {
-	    public enum __safeDI_Screen_08AA1A656B91D4BA {}
-	}
-	"""
-
 	/// The extension `Feature` generates for `Screen` when its module opts in: the initializer for people, then the one
 	/// generated code calls.
 	private static let screenWithPlainInitializer = """
@@ -130,10 +109,34 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 	}
 	"""
 
-	/// The file `App` generates for its root, which calls `Screen`'s initializer generated code calls, whatever either
-	/// module's configuration says.
-	private static func appFiles(_ integration: MultiModuleIntegration) -> [String: String] {
-		[
+	// MARK: Off by default
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesOnlyInitializerGeneratedCodeCalls_whenNoModuleConfiguresPlainInitializers(integration: MultiModuleIntegration) async throws {
+		// Off by default: `Feature` generates the `__safeDI_` initializer alone, and `App`'s generated call of it compiles.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(), integration: integration, filesToDelete: &filesToDelete)
+		#expect(try #require(output.modules["Feature"]).generatedFiles == [
+			integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
+			        let user = LazilyInstantiated<User>(__safeDI_user)
+			        func __safeDI_detailBuilder() -> Detail {
+			            Detail(user: user.instance)
+			        }
+			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+			        self.init(detailBuilder: detailBuilder)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_08AA1A656B91D4BA {}
+			}
+			""",
+		])
+		#expect(try #require(output.modules["App"]).generatedFiles == [
 			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
 			#if canImport(Feature)
 			import Feature
@@ -151,23 +154,7 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 			    }
 			}
 			""",
-		]
-	}
-
-	/// The files `Feature` generates under `integration` when its extension for `Screen` is `screen`.
-	private static func featureFiles(_ integration: MultiModuleIntegration, screen: String) -> [String: String] {
-		[integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + screen]
-	}
-
-	// MARK: Off by default
-
-	@Test(arguments: MultiModuleIntegration.allCases)
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_generatesOnlyInitializerGeneratedCodeCalls_whenNoModuleConfiguresPlainInitializers(integration: MultiModuleIntegration) async throws {
-		// Off by default: `Feature` generates the `__safeDI_` initializer alone, and `App`'s generated call of it compiles.
-		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(), integration: integration, filesToDelete: &filesToDelete)
-		#expect(try #require(output.modules["Feature"]).generatedFiles == Self.featureFiles(integration, screen: Self.screenWithoutPlainInitializer))
-		#expect(try #require(output.modules["App"]).generatedFiles == Self.appFiles(integration))
+		])
 	}
 
 	// MARK: On
@@ -213,7 +200,26 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 			compileVerification: .returningOutcomeOnly,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(try #require(output.modules["Feature"]).generatedFiles == Self.featureFiles(.moduleInfo, screen: Self.screenWithoutPlainInitializer))
+		#expect(try #require(output.modules["Feature"]).generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			extension Screen {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
+			        let user = LazilyInstantiated<User>(__safeDI_user)
+			        func __safeDI_detailBuilder() -> Detail {
+			            Detail(user: user.instance)
+			        }
+			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+			        self.init(detailBuilder: detailBuilder)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_08AA1A656B91D4BA {}
+			}
+			""",
+		])
 		guard compileVerificationIsEnabled else { return }
 		let failure = try #require(output.compilation?.failure)
 		#expect(failure.moduleName == "Caller")
@@ -228,7 +234,31 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(try #require(output.modules["Feature"]).generatedFiles == Self.featureFiles(.moduleInfo, screen: Self.screenWithPlainInitializer))
+		#expect(try #require(output.modules["Feature"]).generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			extension Screen {
+			    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
+			    public init(user: User) {
+			        self.init(__safeDI_user: user)
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// From code you write, call the initializer above instead.
+			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
+			        let user = LazilyInstantiated<User>(__safeDI_user)
+			        func __safeDI_detailBuilder() -> Detail {
+			            Detail(user: user.instance)
+			        }
+			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+			        self.init(detailBuilder: detailBuilder)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_08AA1A656B91D4BA {}
+			}
+			""",
+		])
 	}
 
 	/// `Feature`, with `featureConfiguration`, and `Caller`, which does not use SafeDI yet and calls `Screen` by hand.
@@ -281,8 +311,45 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 				dependencies: ["Feature"],
 			),
 		], integration: integration, filesToDelete: &filesToDelete)
-		#expect(try #require(output.modules["Feature"]).generatedFiles == Self.featureFiles(integration, screen: Self.screenWithoutPlainInitializer))
-		#expect(try #require(output.modules["App"]).generatedFiles == Self.appFiles(integration))
+		#expect(try #require(output.modules["Feature"]).generatedFiles == [
+			integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
+			        let user = LazilyInstantiated<User>(__safeDI_user)
+			        func __safeDI_detailBuilder() -> Detail {
+			            Detail(user: user.instance)
+			        }
+			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+			        self.init(detailBuilder: detailBuilder)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_08AA1A656B91D4BA {}
+			}
+			""",
+		])
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let user = User()
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_08AA1A656B91D4BA.self\(integration.seamCallComment(type: "Screen", declaringModule: "Feature"))
+			            return Screen(__safeDI_user: user)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(user: user, screen: screen)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -694,8 +761,45 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 		// The setting of the module that declares the seam decides: `App`'s does not reach `Feature`'s generation, whose
 		// own run reads only its own configuration, nor `App`'s call.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(appConfiguration: Self.optingIn), integration: integration, filesToDelete: &filesToDelete)
-		#expect(try #require(output.modules["Feature"]).generatedFiles == Self.featureFiles(integration, screen: Self.screenWithoutPlainInitializer))
-		#expect(try #require(output.modules["App"]).generatedFiles == Self.appFiles(integration))
+		#expect(try #require(output.modules["Feature"]).generatedFiles == [
+			integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
+			        let user = LazilyInstantiated<User>(__safeDI_user)
+			        func __safeDI_detailBuilder() -> Detail {
+			            Detail(user: user.instance)
+			        }
+			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+			        self.init(detailBuilder: detailBuilder)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_08AA1A656B91D4BA {}
+			}
+			""",
+		])
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let user = User()
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_08AA1A656B91D4BA.self\(integration.seamCallComment(type: "Screen", declaringModule: "Feature"))
+			            return Screen(__safeDI_user: user)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(user: user, screen: screen)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -704,8 +808,50 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 		// `Feature` opts in and generates both initializers; `App`, which reads nothing of `Feature`'s setting, generates
 		// the same call as when nothing opts in.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(featureConfiguration: Self.optingIn), integration: integration, filesToDelete: &filesToDelete)
-		#expect(try #require(output.modules["Feature"]).generatedFiles == Self.featureFiles(integration, screen: Self.screenWithPlainInitializer))
-		#expect(try #require(output.modules["App"]).generatedFiles == Self.appFiles(integration))
+		#expect(try #require(output.modules["Feature"]).generatedFiles == [
+			integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
+			    public init(user: User) {
+			        self.init(__safeDI_user: user)
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// From code you write, call the initializer above instead.
+			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
+			        let user = LazilyInstantiated<User>(__safeDI_user)
+			        func __safeDI_detailBuilder() -> Detail {
+			            Detail(user: user.instance)
+			        }
+			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+			        self.init(detailBuilder: detailBuilder)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_08AA1A656B91D4BA {}
+			}
+			""",
+		])
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let user = User()
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_08AA1A656B91D4BA.self\(integration.seamCallComment(type: "Screen", declaringModule: "Feature"))
+			            return Screen(__safeDI_user: user)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(user: user, screen: screen)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -721,7 +867,31 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 		)
 		let moduleInfoFile = try #require(output.modules["Feature"]?.moduleInfoFile)
 		#expect(moduleInfoFile.configurations.map(\.generatePlainDependencyTreeInitializers) == [false])
-		#expect(try #require(output.modules["Feature"]).generatedFiles == Self.featureFiles(.moduleInfo, screen: Self.screenWithPlainInitializer))
+		#expect(try #require(output.modules["Feature"]).generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			extension Screen {
+			    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
+			    public init(user: User) {
+			        self.init(__safeDI_user: user)
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// From code you write, call the initializer above instead.
+			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
+			        let user = LazilyInstantiated<User>(__safeDI_user)
+			        func __safeDI_detailBuilder() -> Detail {
+			            Detail(user: user.instance)
+			        }
+			        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+			        self.init(detailBuilder: detailBuilder)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_08AA1A656B91D4BA {}
+			}
+			""",
+		])
 	}
 
 	// MARK: Private

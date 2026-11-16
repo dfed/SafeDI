@@ -22,7 +22,8 @@
 
 /// The `__safeDI_` names one generated Swift scope declares. One allocator serves one scope – a seam's initializer body, a
 /// filler's body around one seam call, or a mock's scope that declares the locals its `@Sendable` builder functions read
-/// overrides into – and each name is claimed in a fixed order, so two namers can never hand one name out: a seam's body
+/// overrides into; a closure nested in it claims from a copy holding the names it can see, as a builder struct
+/// conversion's members do – and each name is claimed in a fixed order, so two namers can never hand one name out: a seam's body
 /// claims its builders' internal names, then the functions that build its wrapper places, then the payloads it binds; a
 /// filler's body claims its fills, then its dispatchers; a mock's scope claims each function's locals in the order the
 /// mock's body walk reads the overrides (`ScopeGenerator.SendableOverrideExtractor`).
@@ -215,6 +216,8 @@ extension DependencyTreeGenerator {
 		var ownEnums = [SeamSignature.ScopeEnum]()
 		var callRoutes = [SeamSignature.CallRoute]()
 		var valuesBindingKeysByStem = [String: Set<ValuesBindingKey>]()
+		var memberBindingKeysByLabel = [String: Set<ValuesBindingKey>]()
+		var holeTypesDeclaringBuilderStructs = Set<SeamSignature.HoleType>()
 		var builders = [SeamSignature.Builder]()
 		var internalNameByFamily = [SeamSignature.ScopeEnum.Key: String]()
 		for holeType in orderedHoleTypes {
@@ -238,7 +241,20 @@ extension DependencyTreeGenerator {
 					instantiables: instantiables,
 					reachedEnum: reachedEnum,
 				)
-				valuesBindingKeysByStem[loweredLeadingCapitals(of: stem)] = byType.valuesBindingKeys
+				// A public mock (`areQualified`) keeps the closure over its enum for now, a deliberate gap: its builder is handed the
+				// scope where the seam's takes nothing.
+				if !scopeTypeNames.areQualified, Self.declaresBuilderStructs(of: byType.enums, holesBySite: holesBySite) {
+					// The seam's tree calls a member per level, bound under names of their own, and binds no payload.
+					holeTypesDeclaringBuilderStructs.insert(holeType)
+					for isSendable in [false, true] {
+						memberBindingKeysByLabel[label(of: holeType, isSendable: isSendable), default: []].formUnion(byType.memberBindingKeysByFamily[isSendable, default: []])
+					}
+					for index in byType.enums.indices {
+						byType.enums[index].declaresBuilderStruct = true
+					}
+				} else {
+					valuesBindingKeysByStem[loweredLeadingCapitals(of: stem)] = byType.valuesBindingKeys
+				}
 				callRoutes += byType.callRoutes
 				for (site, enumPlace) in byType.enumPlaceBySite {
 					holesBySite[site]?.enumPlace = enumPlace
@@ -253,7 +269,9 @@ extension DependencyTreeGenerator {
 				// A root with no case of its own takes no builder, and is declared only where the `@Sendable` enum holds an enum
 				// nested in it.
 				guard !cases.isEmpty || !nestedEnums.isEmpty else { continue }
-				ownEnums.append(SeamSignature.ScopeEnum(key: key, typeName: typeName, builderLabel: label(of: holeType, isSendable: isSendable), cases: cases))
+				var ownRootEnum = SeamSignature.ScopeEnum(key: key, typeName: typeName, builderLabel: label(of: holeType, isSendable: isSendable), cases: cases)
+				ownRootEnum.declaresBuilderStruct = holeTypesDeclaringBuilderStructs.contains(holeType)
+				ownEnums.append(ownRootEnum)
 				ownEnums += nestedEnums
 				guard !cases.isEmpty else { continue }
 				let builderLabel = label(of: holeType, isSendable: isSendable)
@@ -287,13 +305,20 @@ extension DependencyTreeGenerator {
 					}
 				}
 				let enumType: TypeDescription = scopeTypeNames.areQualified ? .nested(name: typeName, parentType: seamType, generics: []) : .simple(name: typeName, generics: [])
-				let parameterType = Self.builderParameterType(takingEnum: enumType, returning: returnType(of: holeType, in: flatHoles), isSendable: isSendable)
+				let builtType = returnType(of: holeType, in: flatHoles)
+				let takesBuilderStruct = holeTypesDeclaringBuilderStructs.contains(holeType)
+				let parameterType = takesBuilderStruct
+					? .nested(name: ReservedName.builderStructTypeName, parentType: enumType, generics: [builtType])
+					: Self.builderParameterType(takingEnum: enumType, returning: builtType, isSendable: isSendable)
+				let readableFunctionType = TypeDescription.closure(arguments: [], isAsync: false, doesThrow: false, returnType: builtType)
 				builders.append(SeamSignature.Builder(
 					enumKey: key,
 					label: builderLabel,
 					internalName: internalName,
 					parameterType: parameterType,
 					parameterTypeWithoutAny: parameterType.withoutAny,
+					readableParameterType: takesBuilderStruct ? (isSendable ? readableFunctionType.asSendableFunction : readableFunctionType).asFunctionParameter : parameterType,
+					takesBuilderStruct: takesBuilderStruct,
 					tierAccess: narrowest.level,
 					accessCause: narrowest.cause,
 					narrowingInnerSeam: narrowest.seam,
@@ -339,16 +364,25 @@ extension DependencyTreeGenerator {
 		for callRoute in callRoutes {
 			innerScopes += callRoute.route.compactMap(\.innerScope)
 		}
+		// The names the seam's tree binds the structs its member calls return under, one per path and case, after the payloads'
+		// names: `__safeDI_<builder>_<case>`, after the label of the builder whose root enum the route starts at.
+		let memberBindingNamesByLabel = valuesBindingNames(
+			of: memberBindingKeysByLabel,
+			nameInfix: "_",
+			reservedNames: reservedForBindings.union(valuesBindingNamesByStem.values.flatMap(\.values)),
+		)
 		let innerScopeNames = Self.innerScopeNames(
 			of: innerScopes,
 			reservedNames: reservedForBindings.union(valuesBindingNamesByStem.values.flatMap(\.values)),
 		)
-		func namedRoute(_ route: [SeamSignature.Hole.RouteStep], ofHoleType holeType: SeamSignature.HoleType) -> [SeamSignature.Hole.RouteStep] {
+		func namedRoute(_ route: [SeamSignature.Hole.RouteStep], ofHoleType holeType: SeamSignature.HoleType, isSendable: Bool) -> [SeamSignature.Hole.RouteStep] {
 			let nameByKey = valuesBindingNamesByStem[loweredLeadingCapitals(of: stemByHoleType[holeType, default: ""]), default: [:]]
+			let memberNameByKey = memberBindingNamesByLabel[label(of: holeType, isSendable: isSendable), default: [:]]
 			return route.map { step in
 				step.named(
 					step.values.flatMap { nameByKey[ValuesBindingKey(path: $0.bindingPath, caseName: step.caseName)] },
 					innerScopeName: step.innerScope.flatMap { innerScopeNames[InnerScopeKey(callPath: $0.callPath, innerKey: $0.innerKey)] },
+					memberBindingName: step.member.flatMap { memberNameByKey[ValuesBindingKey(path: $0.bindingPath, caseName: step.caseName)] },
 				)
 			}
 		}
@@ -359,8 +393,9 @@ extension DependencyTreeGenerator {
 				rootEnumTypeName: enumPlace.rootEnumTypeName,
 				caseName: enumPlace.caseName,
 				valuesTypeName: enumPlace.valuesTypeName,
+				memberValuesTypeName: holeTypesDeclaringBuilderStructs.contains(hole.holeType) ? enumPlace.memberValuesTypeName : nil,
 				isBuiltBySendableBuilder: enumPlace.isBuiltBySendableBuilder,
-				route: namedRoute(enumPlace.route, ofHoleType: hole.holeType),
+				route: namedRoute(enumPlace.route, ofHoleType: hole.holeType, isSendable: enumPlace.isBuiltBySendableBuilder),
 				values: enumPlace.values,
 			)
 		}
@@ -369,7 +404,7 @@ extension DependencyTreeGenerator {
 				sitePath: callRoute.sitePath,
 				innerKey: callRoute.innerKey,
 				rootKey: callRoute.rootKey,
-				route: namedRoute(callRoute.route, ofHoleType: callRoute.rootKey.holeType),
+				route: namedRoute(callRoute.route, ofHoleType: callRoute.rootKey.holeType, isSendable: callRoute.rootKey.isSendable),
 				caseName: callRoute.caseName,
 			)
 		}
@@ -479,6 +514,27 @@ extension DependencyTreeGenerator {
 			}
 		}
 		return visited
+	}
+
+	/// Whether a seam's builders of a hole type, both families together, take builder structs, its enums being `enums`: when
+	/// no place they reach forwards a value – a place whose case carries a forwarded value: every `Instantiator<T>` or
+	/// `SendableInstantiator<T>` place, whatever `T` forwards, and an erased one whose forwarded type is not `Void`
+	/// (`TypeDescription.forwardedTypeOfWrapper`) – and none holds a
+	/// seam's scope – a call's case, which holds an inner seam's root enum (the seam's own, where its tree builds it again),
+	/// or a case for a builder a call fills. Every other hole type keeps the closure over its enum.
+	static func declaresBuilderStructs(of enums: [SeamSignature.ScopeEnum], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) -> Bool {
+		enums.allSatisfy { scopeEnum in
+			scopeEnum.cases.allSatisfy { enumCase in
+				switch enumCase.kind {
+				case let .place(sites):
+					sites.allSatisfy { holesBySite[$0]?.forwardedType == nil }
+				case .nested:
+					true
+				case .inner, .fill:
+					false
+				}
+			}
+		}
 	}
 
 	/// The type of a builder over an enum.

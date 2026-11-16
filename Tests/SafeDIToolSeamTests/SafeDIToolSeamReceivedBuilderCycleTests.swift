@@ -58,24 +58,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screenABuilder: Instantiator<ScreenA>", "@Instantiated let screenBBuilder: Instantiator<ScreenB>"])
 		let modules = Self.modules(feature: feature, app: [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_screenABuilder() -> ScreenA {
-		            let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
-		            _ = ScreenA.__safeDI_ScreenA_965B4443E5BE6EBC.self\(Self.callComment(module: "Feature"))
-		            return ScreenA(__safeDI_screenBBuilder: screenBBuilder)
-		        }
-		        let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
-		        func __safeDI_screenBBuilder() -> ScreenB {
-		            let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
-		            return ScreenB(screenABuilder: screenABuilder)
-		        }
-		        let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
-		        self.init(screenABuilder: screenABuilder, screenBBuilder: screenBBuilder)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_screenABuilder() -> ScreenA {
+			            let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
+			            _ = ScreenA.__safeDI_ScreenA_965B4443E5BE6EBC.self\(Self.callComment(module: "Feature"))
+			            return ScreenA(__safeDI_screenBBuilder: screenBBuilder)
+			        }
+			        let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
+			        func __safeDI_screenBBuilder() -> ScreenB {
+			            let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
+			            return ScreenB(screenABuilder: screenABuilder)
+			        }
+			        let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
+			        self.init(screenABuilder: screenABuilder, screenBBuilder: screenBBuilder)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().screenABuilder.instantiate().detail.screenBBuilder?.instantiate()"),
@@ -97,31 +103,36 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screenABuilder: Instantiator<ScreenA>", "@Instantiated let screenBBuilder: Instantiator<ScreenB>"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_screenABuilder() -> ScreenA {
-		            let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
-		            _ = ScreenA.__safeDI_ScreenA_A0792761FA8A7C8E.self\(Self.callComment(module: "Feature"))
-		            func __safeDI_widgetBuilder_ScreenA(_ scope: ScreenA.SafeDIScope_Widget) -> any Widget {
-		                switch scope {
-		                case .widget:
-		                    let widget: any Widget = DefaultWidget(screenBBuilder: screenBBuilder)
-		                    return widget
-		                }
-		            }
-		            return ScreenA(__safeDI_widgetBuilder: __safeDI_widgetBuilder_ScreenA)
-		        }
-		        let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
-		        func __safeDI_screenBBuilder() -> ScreenB {
-		            let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
-		            return ScreenB(screenABuilder: screenABuilder)
-		        }
-		        let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
-		        self.init(screenABuilder: screenABuilder, screenBBuilder: screenBBuilder)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_screenABuilder() -> ScreenA {
+			            let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
+			            _ = ScreenA.__safeDI_ScreenA_E2E61649C1295C1A.self\(Self.callComment(module: "Feature"))
+			            func __safeDI_widgetBuilder_ScreenA() -> ScreenA.SafeDIScope_Widget.__safeDI_Builder<any Widget> {
+			                .init(widget: { _ in
+			                    let widget: any Widget = DefaultWidget(screenBBuilder: screenBBuilder)
+			                    return widget
+			                })
+			            }
+			            return ScreenA(__safeDI_widgetBuilder: __safeDI_widgetBuilder_ScreenA())
+			        }
+			        let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
+			        func __safeDI_screenBBuilder() -> ScreenB {
+			            let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
+			            return ScreenB(screenABuilder: screenABuilder)
+			        }
+			        let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
+			        self.init(screenABuilder: screenABuilder, screenBBuilder: screenBBuilder)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature + fulfillers), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().screenABuilder.instantiate().widget"),
@@ -143,28 +154,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
 		let modules = Self.modules(feature: feature, app: [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", imports: [], rootFiles: ["Flow": """
-		extension Flow {
-		    /// Code you write and code SafeDI generates can both call this initializer.
-		    public init() {
-		        func __safeDI_aBuilder() -> A {
-		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		            return A(bBuilder: bBuilder)
-		        }
-		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		        func __safeDI_bBuilder() -> B {
-		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		            return B(aBuilder: aBuilder)
-		        }
-		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
-		    }
-		}
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+			"Feature.swift": generatedFileHeader + """
+			extension Flow {
+			    /// Code you write and code SafeDI generates can both call this initializer.
+			    public init() {
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return B(aBuilder: aBuilder)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
+			    }
+			}
 
-		extension Flow {
-		    public enum __safeDI_Flow_CBF29CE484222325 {}
-		}
-		"""]))
+			extension Flow {
+			    public enum __safeDI_Flow_CBF29CE484222325 {}
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().flow.aBuilder.instantiate().bBuilder.instantiate().aBuilder.instantiate()"),
@@ -189,54 +202,62 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screenBuilder_received: Thing", "@Instantiated let flow: Flow"])
 		let modules = Self.modules(feature: feature, app: [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", imports: [], rootFiles: ["Flow": """
-		extension Flow {
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_screenBuilder_received: @autoclosure @escaping () -> Thing) {
-		        let screenBuilder_received = LazilyInstantiated<Thing>(__safeDI_screenBuilder_received)
-		        let session = Session()
-		        func __safeDI_screenBuilder(session: Session) -> Screen {
-		            let screenBuilder = Instantiator<Screen> {
-		                __safeDI_screenBuilder(session: session)
-		            }
-		            func __safeDI_stepBuilder() -> Step {
-		                let session = Session()
-		                let screenBuilder = Instantiator<Screen> {
-		                    __safeDI_screenBuilder(session: session)
-		                }
-		                return Step(session: session, screenBuilder: screenBuilder)
-		            }
-		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
-		            let detail = Detail(screenBuilder: screenBuilder)
-		            return Screen(session: session, stepBuilder: stepBuilder, detail: detail)
-		        }
-		        func __safeDI_screenBuilder_received_() -> Screen {
-		            __safeDI_screenBuilder(session: session)
-		        }
-		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder_received_)
-		        let other = Other(screenBuilder_received: screenBuilder_received.instance)
-		        self.init(session: session, screenBuilder: screenBuilder, other: other)
-		    }
-		}
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+			"Feature.swift": generatedFileHeader + """
+			extension Flow {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_screenBuilder_received: @autoclosure @escaping () -> Thing) {
+			        let screenBuilder_received = LazilyInstantiated<Thing>(__safeDI_screenBuilder_received)
+			        let session = Session()
+			        func __safeDI_screenBuilder(session: Session) -> Screen {
+			            let screenBuilder = Instantiator<Screen> {
+			                __safeDI_screenBuilder(session: session)
+			            }
+			            func __safeDI_stepBuilder() -> Step {
+			                let session = Session()
+			                let screenBuilder = Instantiator<Screen> {
+			                    __safeDI_screenBuilder(session: session)
+			                }
+			                return Step(session: session, screenBuilder: screenBuilder)
+			            }
+			            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+			            let detail = Detail(screenBuilder: screenBuilder)
+			            return Screen(session: session, stepBuilder: stepBuilder, detail: detail)
+			        }
+			        func __safeDI_screenBuilder_received_() -> Screen {
+			            __safeDI_screenBuilder(session: session)
+			        }
+			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder_received_)
+			        let other = Other(screenBuilder_received: screenBuilder_received.instance)
+			        self.init(session: session, screenBuilder: screenBuilder, other: other)
+			    }
+			}
 
-		extension Flow {
-		    public enum __safeDI_Flow_F559CB2F60F73CA3 {}
-		}
-		"""]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        let screenBuilder_received = Thing()
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_F559CB2F60F73CA3.self\(Self.callComment(module: "Feature"))
-		            return Flow(__safeDI_screenBuilder_received: screenBuilder_received)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(screenBuilder_received: screenBuilder_received, flow: flow)
-		    }
-		}
-		"""]))
+			extension Flow {
+			    public enum __safeDI_Flow_F559CB2F60F73CA3 {}
+			}
+			""",
+		])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let screenBuilder_received = Thing()
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_F559CB2F60F73CA3.self\(Self.callComment(module: "Feature"))
+			            return Flow(__safeDI_screenBuilder_received: screenBuilder_received)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(screenBuilder_received: screenBuilder_received, flow: flow)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().flow.screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate()"),
@@ -259,70 +280,101 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", imports: [], rootFiles: ["Flow": """
-		extension Flow {
-		    @frozen public enum SafeDIScope_Widget {
-		        case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+			"Feature.swift": generatedFileHeader + """
+			extension Flow {
+			    @frozen nonisolated public enum SafeDIScope_Widget {
+			        case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
 
-		        public struct aBuilder_Values {}
+			        nonisolated public struct aBuilder_Values {}
 
-		        @frozen public enum A_Scope {
-		            case widget(widget_Values)
+			        @frozen nonisolated public enum A_Scope {
+			            case widget(widget_Values)
 
-		            public struct widget_Values {
-		                public let bBuilder: Instantiator<B>
-		            }
-		        }
-		    }
+			            nonisolated public struct widget_Values {
+			                public let bBuilder: Instantiator<B>
+			            }
 
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_widgetBuilder: @escaping (SafeDIScope_Widget) -> any Widget) {
-		        let __safeDI_widgetValues_aBuilder = SafeDIScope_Widget.aBuilder_Values()
-		        func __safeDI_aBuilder() -> A {
-		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		            let widget: any Widget = __safeDI_widgetBuilder(.aBuilder(__safeDI_widgetValues_aBuilder, .widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder))))
-		            return A(bBuilder: bBuilder, widget: widget)
-		        }
-		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		        func __safeDI_bBuilder() -> B {
-		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		            return B(aBuilder: aBuilder)
-		        }
-		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
-		    }
-		}
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let widget: (widget_Values) -> __safeDI_Built
 
-		extension Flow {
-		    public enum __safeDI_Flow_9367E336398C16B0 {}
-		}
-		"""]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_9367E336398C16B0.self\(Self.callComment(module: "Feature"))
-		            func __safeDI_widgetBuilder_Flow(_ scope: Flow.SafeDIScope_Widget) -> any Widget {
-		                switch scope {
-		                case let .aBuilder(_, scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
-		                }
-		            }
-		            func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
-		                    let bBuilder = scope.bBuilder
-		                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
-		                    return widget
-		                }
-		            }
-		            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(flow: flow)
-		    }
-		}
-		"""]))
+			                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
+			                    self.widget = widget
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.widget = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.aBuilder = aBuilder
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>) {
+			        let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder.aBuilder(SafeDIScope_Widget.aBuilder_Values())
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            let widget: any Widget = __safeDI_widgetBuilder_aBuilder.widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder))
+			            return A(bBuilder: bBuilder, widget: widget)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return B(aBuilder: aBuilder)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
+			    }
+			}
+
+			extension Flow {
+			    public enum __safeDI_Flow_20DCF66259ADDF0C {}
+			}
+			""",
+		])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_20DCF66259ADDF0C.self\(Self.callComment(module: "Feature"))
+			            func __safeDI_widgetBuilder_Flow() -> Flow.SafeDIScope_Widget.__safeDI_Builder<any Widget> {
+			                .init(aBuilder: { _ in __safeDI_widgetBuilder_Flow_A_Scope() })
+			            }
+			            func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.SafeDIScope_Widget.A_Scope.__safeDI_Builder<any Widget> {
+			                .init(widget: { scope in
+			                    let bBuilder = scope.bBuilder
+			                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
+			                    return widget
+			                })
+			            }
+			            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow())
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(flow: flow)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature + fulfillers), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().flow.aBuilder.instantiate().widget"),
@@ -344,69 +396,103 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", imports: [], rootFiles: ["Flow": """
-		extension Flow {
-		    @frozen public enum SafeDIScope_Widget {
-		        @frozen public enum A_Scope {
-		            case widget(widget_Values)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+			"Feature.swift": generatedFileHeader + """
+			extension Flow {
+			    @frozen nonisolated public enum SafeDIScope_Widget {
+			        @frozen nonisolated public enum A_Scope {
+			            case widget(widget_Values)
 
-		            public struct widget_Values {
-		                public let bBuilder: SendableInstantiator<B>
-		            }
-		        }
-		    }
+			            nonisolated public struct widget_Values {
+			                public let bBuilder: SendableInstantiator<B>
+			            }
 
-		    @frozen public enum SafeDISendableScope_Widget {
-		        case aBuilder(SafeDIScope_Widget.A_Scope)
-		    }
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let widget: (widget_Values) -> __safeDI_Built
 
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_widgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Widget) -> any Widget) {
-		        @Sendable func __safeDI_aBuilder() -> A {
-		            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
-		            let widget: any Widget = __safeDI_widgetSendableBuilder(.aBuilder(.widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder))))
-		            return A(bBuilder: bBuilder, widget: widget)
-		        }
-		        let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
-		        @Sendable func __safeDI_bBuilder() -> B {
-		            let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
-		            return B(aBuilder: aBuilder)
-		        }
-		        let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
-		        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
-		    }
-		}
+			                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
+			                    self.widget = widget
+			                }
 
-		extension Flow {
-		    public enum __safeDI_Flow_05DBCEB3CE79CFA6 {}
-		}
-		"""]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_05DBCEB3CE79CFA6.self\(Self.callComment(module: "Feature"))
-		            @Sendable func __safeDI_widgetSendableBuilder_Flow(_ scope: Flow.SafeDISendableScope_Widget) -> any Widget {
-		                switch scope {
-		                case let .aBuilder(scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
-		                }
-		            }
-		            @Sendable func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
-		                    let bBuilder = scope.bBuilder
-		                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
-		                    return widget
-		                }
-		            }
-		            return Flow(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Flow)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(flow: flow)
-		    }
-		}
-		"""]))
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.widget = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+			    }
+
+			    @frozen nonisolated public enum SafeDISendableScope_Widget {
+			        case aBuilder(SafeDIScope_Widget.A_Scope)
+
+			        nonisolated public struct aBuilder_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let aBuilder: @Sendable (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(aBuilder: @escaping @Sendable (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.aBuilder = aBuilder
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_widgetSendableBuilder: SafeDISendableScope_Widget.__safeDI_Builder<any Widget>) {
+			        @Sendable nonisolated func __safeDI_aBuilder() -> A {
+			            let __safeDI_widgetSendableBuilder_aBuilder = __safeDI_widgetSendableBuilder.aBuilder(SafeDISendableScope_Widget.aBuilder_Values())
+			            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
+			            let widget: any Widget = __safeDI_widgetSendableBuilder_aBuilder.widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder))
+			            return A(bBuilder: bBuilder, widget: widget)
+			        }
+			        let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
+			        @Sendable nonisolated func __safeDI_bBuilder() -> B {
+			            let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
+			            return B(aBuilder: aBuilder)
+			        }
+			        let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
+			    }
+			}
+
+			extension Flow {
+			    public enum __safeDI_Flow_5BBDD9120D0F8038 {}
+			}
+			""",
+		])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_5BBDD9120D0F8038.self\(Self.callComment(module: "Feature"))
+			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Flow() -> Flow.SafeDISendableScope_Widget.__safeDI_Builder<any Widget> {
+			                .init(aBuilder: { _ in __safeDI_widgetBuilder_Flow_A_Scope() })
+			            }
+			            @Sendable nonisolated func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.SafeDIScope_Widget.A_Scope.__safeDI_Builder<any Widget> {
+			                .init(widget: { scope in
+			                    let bBuilder = scope.bBuilder
+			                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
+			                    return widget
+			                })
+			            }
+			            return Flow(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Flow())
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(flow: flow)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature + fulfillers), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().flow.aBuilder.instantiate().widget"),
@@ -432,104 +518,157 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", imports: [], rootFiles: ["Flow": """
-		extension Flow {
-		    @frozen public enum SafeDIScope_Widget {
-		        case xBuilder(xBuilder_Values, SafeDIScope_Widget.X_Scope)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+			"Feature.swift": generatedFileHeader + """
+			extension Flow {
+			    @frozen nonisolated public enum SafeDIScope_Widget {
+			        case xBuilder(xBuilder_Values, SafeDIScope_Widget.X_Scope)
 
-		        public struct xBuilder_Values {}
+			        nonisolated public struct xBuilder_Values {}
 
-		        @frozen public enum X_Scope {
-		            case p(p_Values, SafeDIScope_Widget.P_Scope)
+			        @frozen nonisolated public enum X_Scope {
+			            case p(p_Values, SafeDIScope_Widget.P_Scope)
 
-		            public struct p_Values {}
-		        }
+			            nonisolated public struct p_Values {}
 
-		        @frozen public enum P_Scope {
-		            case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let p: (p_Values) -> SafeDIScope_Widget.P_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public struct aBuilder_Values {}
-		        }
+			                public init(p: @escaping (p_Values) -> SafeDIScope_Widget.P_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                    self.p = p
+			                }
 
-		        @frozen public enum A_Scope {
-		            case widget(widget_Values)
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.p = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                }
+			            }
+			        }
 
-		            public struct widget_Values {
-		                public let bBuilder: Instantiator<B>
-		                public let xBuilder: Instantiator<X>
-		            }
-		        }
-		    }
+			        @frozen nonisolated public enum P_Scope {
+			            case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
 
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_widgetBuilder: @escaping (SafeDIScope_Widget) -> any Widget) {
-		        let __safeDI_widgetValues_xBuilder = SafeDIScope_Widget.xBuilder_Values()
-		        func __safeDI_xBuilder() -> X {
-		            let __safeDI_widgetValues_p = SafeDIScope_Widget.X_Scope.p_Values()
-		            func __safeDI_p() -> P {
-		                let __safeDI_widgetValues_aBuilder = SafeDIScope_Widget.P_Scope.aBuilder_Values()
-		                func __safeDI_aBuilder() -> A {
-		                    let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		                    let xBuilder = Instantiator<X>(__safeDI_xBuilder)
-		                    let widget: any Widget = __safeDI_widgetBuilder(.xBuilder(__safeDI_widgetValues_xBuilder, .p(__safeDI_widgetValues_p, .aBuilder(__safeDI_widgetValues_aBuilder, .widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder, xBuilder: xBuilder))))))
-		                    return A(bBuilder: bBuilder, widget: widget, xBuilder: xBuilder)
-		                }
-		                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		                func __safeDI_bBuilder() -> B {
-		                    let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		                    return B(aBuilder: aBuilder)
-		                }
-		                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		                return P(aBuilder: aBuilder, bBuilder: bBuilder)
-		            }
-		            let p: P = __safeDI_p()
-		            return X(p: p)
-		        }
-		        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
-		        self.init(xBuilder: xBuilder)
-		    }
-		}
+			            nonisolated public struct aBuilder_Values {}
 
-		extension Flow {
-		    public enum __safeDI_Flow_3E3E253138724B42 {}
-		}
-		"""]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_3E3E253138724B42.self\(Self.callComment(module: "Feature"))
-		            func __safeDI_widgetBuilder_Flow(_ scope: Flow.SafeDIScope_Widget) -> any Widget {
-		                switch scope {
-		                case let .xBuilder(_, scope): return __safeDI_widgetBuilder_Flow_X_Scope(scope)
-		                }
-		            }
-		            func __safeDI_widgetBuilder_Flow_X_Scope(_ scope: Flow.SafeDIScope_Widget.X_Scope) -> any Widget {
-		                switch scope {
-		                case let .p(_, scope): return __safeDI_widgetBuilder_Flow_P_Scope(scope)
-		                }
-		            }
-		            func __safeDI_widgetBuilder_Flow_P_Scope(_ scope: Flow.SafeDIScope_Widget.P_Scope) -> any Widget {
-		                switch scope {
-		                case let .aBuilder(_, scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
-		                }
-		            }
-		            func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
-		                    let bBuilder = scope.bBuilder
-		                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
-		                    return widget
-		                }
-		            }
-		            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(flow: flow)
-		    }
-		}
-		"""]))
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
+
+			                public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                    self.aBuilder = aBuilder
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                }
+			            }
+			        }
+
+			        @frozen nonisolated public enum A_Scope {
+			            case widget(widget_Values)
+
+			            nonisolated public struct widget_Values {
+			                public let bBuilder: Instantiator<B>
+			                public let xBuilder: Instantiator<X>
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let widget: (widget_Values) -> __safeDI_Built
+
+			                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
+			                    self.widget = widget
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.widget = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let xBuilder: (xBuilder_Values) -> SafeDIScope_Widget.X_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(xBuilder: @escaping (xBuilder_Values) -> SafeDIScope_Widget.X_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.xBuilder = xBuilder
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.xBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>) {
+			        let __safeDI_widgetBuilder_xBuilder = __safeDI_widgetBuilder.xBuilder(SafeDIScope_Widget.xBuilder_Values())
+			        func __safeDI_xBuilder() -> X {
+			            let __safeDI_widgetBuilder_p = __safeDI_widgetBuilder_xBuilder.p(SafeDIScope_Widget.X_Scope.p_Values())
+			            func __safeDI_p() -> P {
+			                let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder_p.aBuilder(SafeDIScope_Widget.P_Scope.aBuilder_Values())
+			                func __safeDI_aBuilder() -> A {
+			                    let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			                    let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+			                    let widget: any Widget = __safeDI_widgetBuilder_aBuilder.widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder, xBuilder: xBuilder))
+			                    return A(bBuilder: bBuilder, widget: widget, xBuilder: xBuilder)
+			                }
+			                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			                func __safeDI_bBuilder() -> B {
+			                    let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			                    return B(aBuilder: aBuilder)
+			                }
+			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			                return P(aBuilder: aBuilder, bBuilder: bBuilder)
+			            }
+			            let p: P = __safeDI_p()
+			            return X(p: p)
+			        }
+			        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+			        self.init(xBuilder: xBuilder)
+			    }
+			}
+
+			extension Flow {
+			    public enum __safeDI_Flow_73CD2DC53157BB36 {}
+			}
+			""",
+		])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_73CD2DC53157BB36.self\(Self.callComment(module: "Feature"))
+			            func __safeDI_widgetBuilder_Flow() -> Flow.SafeDIScope_Widget.__safeDI_Builder<any Widget> {
+			                .init(xBuilder: { _ in __safeDI_widgetBuilder_Flow_X_Scope() })
+			            }
+			            func __safeDI_widgetBuilder_Flow_X_Scope() -> Flow.SafeDIScope_Widget.X_Scope.__safeDI_Builder<any Widget> {
+			                .init(p: { _ in __safeDI_widgetBuilder_Flow_P_Scope() })
+			            }
+			            func __safeDI_widgetBuilder_Flow_P_Scope() -> Flow.SafeDIScope_Widget.P_Scope.__safeDI_Builder<any Widget> {
+			                .init(aBuilder: { _ in __safeDI_widgetBuilder_Flow_A_Scope() })
+			            }
+			            func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.SafeDIScope_Widget.A_Scope.__safeDI_Builder<any Widget> {
+			                .init(widget: { scope in
+			                    let bBuilder = scope.bBuilder
+			                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
+			                    return widget
+			                })
+			            }
+			            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow())
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(flow: flow)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature + fulfillers), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().flow.xBuilder.instantiate().p.aBuilder.instantiate().widget"),
@@ -556,96 +695,141 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", imports: [], rootFiles: ["Flow": """
-		extension Flow {
-		    @frozen public enum SafeDIScope_Widget {
-		        case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
-		        case bBuilder(bBuilder_Values, SafeDIScope_Widget.B_Scope)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+			"Feature.swift": generatedFileHeader + """
+			extension Flow {
+			    @frozen nonisolated public enum SafeDIScope_Widget {
+			        case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
+			        case bBuilder(bBuilder_Values, SafeDIScope_Widget.B_Scope)
 
-		        public struct aBuilder_Values {}
+			        nonisolated public struct aBuilder_Values {}
 
-		        public struct bBuilder_Values {}
+			        nonisolated public struct bBuilder_Values {}
 
-		        @frozen public enum A_Scope {
-		            case widget(widget_Values)
+			        @frozen nonisolated public enum A_Scope {
+			            case widget(widget_Values)
 
-		            public struct widget_Values {
-		                public let bBuilder: Instantiator<B>
-		                public let mark: Mark
-		            }
-		        }
+			            nonisolated public struct widget_Values {
+			                public let bBuilder: Instantiator<B>
+			                public let mark: Mark
+			            }
 
-		        @frozen public enum B_Scope {
-		            case widget(widget_Values)
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let widget: (widget_Values) -> __safeDI_Built
 
-		            public struct widget_Values {
-		                public let aBuilder: Instantiator<A>
-		                public let mark: Mark
-		            }
-		        }
-		    }
+			                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
+			                    self.widget = widget
+			                }
 
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_widgetBuilder: @escaping (SafeDIScope_Widget) -> any Widget) {
-		        let __safeDI_widgetValues_aBuilder = SafeDIScope_Widget.aBuilder_Values()
-		        let __safeDI_widgetValues_bBuilder = SafeDIScope_Widget.bBuilder_Values()
-		        func __safeDI_aBuilder() -> A {
-		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		            let mark = Mark()
-		            let widget: any Widget = __safeDI_widgetBuilder(.aBuilder(__safeDI_widgetValues_aBuilder, .widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder, mark: mark))))
-		            return A(mark: mark, bBuilder: bBuilder, widget: widget)
-		        }
-		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		        func __safeDI_bBuilder() -> B {
-		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		            let mark = Mark()
-		            let widget: any Widget = __safeDI_widgetBuilder(.bBuilder(__safeDI_widgetValues_bBuilder, .widget(SafeDIScope_Widget.B_Scope.widget_Values(aBuilder: aBuilder, mark: mark))))
-		            return B(mark: mark, aBuilder: aBuilder, widget: widget)
-		        }
-		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
-		    }
-		}
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.widget = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
 
-		extension Flow {
-		    public enum __safeDI_Flow_F6CC9DA5320C1EA1 {}
-		}
-		"""]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_F6CC9DA5320C1EA1.self\(Self.callComment(module: "Feature"))
-		            func __safeDI_widgetBuilder_Flow(_ scope: Flow.SafeDIScope_Widget) -> any Widget {
-		                switch scope {
-		                case let .aBuilder(_, scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
-		                case let .bBuilder(_, scope): return __safeDI_widgetBuilder_Flow_B_Scope(scope)
-		                }
-		            }
-		            func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
-		                    let mark = scope.mark
-		                    let widget: any Widget = DefaultWidget(mark: mark)
-		                    return widget
-		                }
-		            }
-		            func __safeDI_widgetBuilder_Flow_B_Scope(_ scope: Flow.SafeDIScope_Widget.B_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
-		                    let mark = scope.mark
-		                    let widget: any Widget = DefaultWidget(mark: mark)
-		                    return widget
-		                }
-		            }
-		            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(flow: flow)
-		    }
-		}
-		"""]))
+			        @frozen nonisolated public enum B_Scope {
+			            case widget(widget_Values)
+
+			            nonisolated public struct widget_Values {
+			                public let aBuilder: Instantiator<A>
+			                public let mark: Mark
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let widget: (widget_Values) -> __safeDI_Built
+
+			                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
+			                    self.widget = widget
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.widget = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let bBuilder: (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>, bBuilder: @escaping (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.aBuilder = aBuilder
+			                self.bBuilder = bBuilder
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>) {
+			        let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder.aBuilder(SafeDIScope_Widget.aBuilder_Values())
+			        let __safeDI_widgetBuilder_bBuilder = __safeDI_widgetBuilder.bBuilder(SafeDIScope_Widget.bBuilder_Values())
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            let mark = Mark()
+			            let widget: any Widget = __safeDI_widgetBuilder_aBuilder.widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder, mark: mark))
+			            return A(mark: mark, bBuilder: bBuilder, widget: widget)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            let mark = Mark()
+			            let widget: any Widget = __safeDI_widgetBuilder_bBuilder.widget(SafeDIScope_Widget.B_Scope.widget_Values(aBuilder: aBuilder, mark: mark))
+			            return B(mark: mark, aBuilder: aBuilder, widget: widget)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
+			    }
+			}
+
+			extension Flow {
+			    public enum __safeDI_Flow_4C218B5535260BA5 {}
+			}
+			""",
+		])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_4C218B5535260BA5.self\(Self.callComment(module: "Feature"))
+			            func __safeDI_widgetBuilder_Flow() -> Flow.SafeDIScope_Widget.__safeDI_Builder<any Widget> {
+			                .init(aBuilder: { _ in __safeDI_widgetBuilder_Flow_A_Scope() }, bBuilder: { _ in __safeDI_widgetBuilder_Flow_B_Scope() })
+			            }
+			            func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.SafeDIScope_Widget.A_Scope.__safeDI_Builder<any Widget> {
+			                .init(widget: { scope in
+			                    let mark = scope.mark
+			                    let widget: any Widget = DefaultWidget(mark: mark)
+			                    return widget
+			                })
+			            }
+			            func __safeDI_widgetBuilder_Flow_B_Scope() -> Flow.SafeDIScope_Widget.B_Scope.__safeDI_Builder<any Widget> {
+			                .init(widget: { scope in
+			                    let mark = scope.mark
+			                    let widget: any Widget = DefaultWidget(mark: mark)
+			                    return widget
+			                })
+			            }
+			            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow())
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(flow: flow)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature + fulfillers), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().flow.aBuilder.instantiate()"),
@@ -671,48 +855,76 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", imports: [], rootFiles: ["Flow": """
-		extension Flow {
-		    @frozen public enum SafeDIScope_Widget {
-		        case bBuilder(bBuilder_Values, SafeDIScope_Widget.B_Scope)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+			"Feature.swift": generatedFileHeader + """
+			extension Flow {
+			    @frozen nonisolated public enum SafeDIScope_Widget {
+			        case bBuilder(bBuilder_Values, SafeDIScope_Widget.B_Scope)
 
-		        public struct bBuilder_Values {}
+			        nonisolated public struct bBuilder_Values {}
 
-		        @frozen public enum B_Scope {
-		            case widget(widget_Values)
+			        @frozen nonisolated public enum B_Scope {
+			            case widget(widget_Values)
 
-		            public struct widget_Values {
-		                public let aBuilder: Instantiator<A>
-		                public let mark: Mark
-		            }
-		        }
-		    }
+			            nonisolated public struct widget_Values {
+			                public let aBuilder: Instantiator<A>
+			                public let mark: Mark
+			            }
 
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_widgetBuilder: @escaping (SafeDIScope_Widget) -> any Widget) {
-		        let __safeDI_widgetValues_bBuilder = SafeDIScope_Widget.bBuilder_Values()
-		        func __safeDI_aBuilder() -> A {
-		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		            let mark = Mark()
-		            return A(mark: mark, bBuilder: bBuilder)
-		        }
-		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		        func __safeDI_bBuilder() -> B {
-		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		            let mark = Mark()
-		            let widget: any Widget = __safeDI_widgetBuilder(.bBuilder(__safeDI_widgetValues_bBuilder, .widget(SafeDIScope_Widget.B_Scope.widget_Values(aBuilder: aBuilder, mark: mark))))
-		            return B(mark: mark, aBuilder: aBuilder, widget: widget)
-		        }
-		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
-		    }
-		}
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let widget: (widget_Values) -> __safeDI_Built
 
-		extension Flow {
-		    public enum __safeDI_Flow_CD7A050A95E64A1A {}
-		}
-		"""]))
+			                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
+			                    self.widget = widget
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.widget = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let bBuilder: (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(bBuilder: @escaping (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.bBuilder = bBuilder
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>) {
+			        let __safeDI_widgetBuilder_bBuilder = __safeDI_widgetBuilder.bBuilder(SafeDIScope_Widget.bBuilder_Values())
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            let mark = Mark()
+			            return A(mark: mark, bBuilder: bBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            let mark = Mark()
+			            let widget: any Widget = __safeDI_widgetBuilder_bBuilder.widget(SafeDIScope_Widget.B_Scope.widget_Values(aBuilder: aBuilder, mark: mark))
+			            return B(mark: mark, aBuilder: aBuilder, widget: widget)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
+			    }
+			}
+
+			extension Flow {
+			    public enum __safeDI_Flow_B72DAC7E237022B6 {}
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature + fulfillers), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().flow.aBuilder.instantiate().bBuilder.instantiate()"),
@@ -738,110 +950,173 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", imports: [], rootFiles: ["Flow": """
-		extension Flow {
-		    @frozen public enum SafeDIScope_Widget {
-		        case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
-		        case bBuilder(bBuilder_Values, SafeDIScope_Widget.B_Scope)
-		        case leaf(leaf_Values, SafeDIScope_Widget.Leaf_Scope)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+			"Feature.swift": generatedFileHeader + """
+			extension Flow {
+			    @frozen nonisolated public enum SafeDIScope_Widget {
+			        case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
+			        case bBuilder(bBuilder_Values, SafeDIScope_Widget.B_Scope)
+			        case leaf(leaf_Values, SafeDIScope_Widget.Leaf_Scope)
 
-		        public struct aBuilder_Values {}
+			        nonisolated public struct aBuilder_Values {}
 
-		        public struct bBuilder_Values {}
+			        nonisolated public struct bBuilder_Values {}
 
-		        public struct leaf_Values {
-		            public let aBuilder: Instantiator<A>
-		            public let bBuilder: Instantiator<B>
-		            public let cBuilder: Instantiator<C>
-		        }
+			        nonisolated public struct leaf_Values {
+			            public let aBuilder: Instantiator<A>
+			            public let bBuilder: Instantiator<B>
+			            public let cBuilder: Instantiator<C>
+			        }
 
-		        @frozen public enum A_Scope {
-		            case leaf(leaf_Values, SafeDIScope_Widget.Leaf_Scope)
-		            case widget(widget_Values)
+			        @frozen nonisolated public enum A_Scope {
+			            case leaf(leaf_Values, SafeDIScope_Widget.Leaf_Scope)
+			            case widget(widget_Values)
 
-		            public struct leaf_Values {
-		                public let cBuilder: Instantiator<C>
-		                public let mark: Mark
-		            }
+			            nonisolated public struct leaf_Values {
+			                public let cBuilder: Instantiator<C>
+			                public let mark: Mark
+			            }
 
-		            public struct widget_Values {
-		                public let cBuilder: Instantiator<C>
-		                public let mark: Mark
-		                public let leaf: Leaf
-		            }
-		        }
+			            nonisolated public struct widget_Values {
+			                public let cBuilder: Instantiator<C>
+			                public let mark: Mark
+			                public let leaf: Leaf
+			            }
 
-		        @frozen public enum B_Scope {
-		            case leaf(leaf_Values, SafeDIScope_Widget.Leaf_Scope)
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let leaf: (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>
+			                public let widget: (widget_Values) -> __safeDI_Built
 
-		            public struct leaf_Values {
-		                public let aBuilder: Instantiator<A>
-		                public let cBuilder: Instantiator<C>
-		            }
-		        }
+			                public init(leaf: @escaping (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>, widget: @escaping (widget_Values) -> __safeDI_Built) {
+			                    self.leaf = leaf
+			                    self.widget = widget
+			                }
 
-		        @frozen public enum Leaf_Scope {
-		            case widget(widget_Values)
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.leaf = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.widget = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
 
-		            public struct widget_Values {}
-		        }
-		    }
+			        @frozen nonisolated public enum B_Scope {
+			            case leaf(leaf_Values, SafeDIScope_Widget.Leaf_Scope)
 
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_widgetBuilder: @escaping (SafeDIScope_Widget) -> any Widget) {
-		        let __safeDI_widgetValues_aBuilder = SafeDIScope_Widget.aBuilder_Values()
-		        let __safeDI_widgetValues_bBuilder = SafeDIScope_Widget.bBuilder_Values()
-		        func __safeDI_aBuilder() -> A {
-		            let cBuilder = Instantiator<C> {
-		                __safeDI_cBuilder(id: $0)
-		            }
-		            let mark = Mark()
-		            let __safeDI_widgetValues_leaf = SafeDIScope_Widget.A_Scope.leaf_Values(cBuilder: cBuilder, mark: mark)
-		            func __safeDI_leaf() -> Leaf {
-		                let widget: any Widget = __safeDI_widgetBuilder(.aBuilder(__safeDI_widgetValues_aBuilder, .leaf(__safeDI_widgetValues_leaf, .widget(SafeDIScope_Widget.Leaf_Scope.widget_Values()))))
-		                return Leaf(cBuilder: cBuilder, widget: widget)
-		            }
-		            let leaf: Leaf = __safeDI_leaf()
-		            let widget: any Widget = __safeDI_widgetBuilder(.aBuilder(__safeDI_widgetValues_aBuilder, .widget(SafeDIScope_Widget.A_Scope.widget_Values(cBuilder: cBuilder, mark: mark, leaf: leaf))))
-		            return A(mark: mark, leaf: leaf, widget: widget)
-		        }
-		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		        func __safeDI_bBuilder() -> B {
-		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		            let cBuilder = Instantiator<C> {
-		                __safeDI_cBuilder(id: $0)
-		            }
-		            let __safeDI_widgetValues_leaf = SafeDIScope_Widget.B_Scope.leaf_Values(aBuilder: aBuilder, cBuilder: cBuilder)
-		            func __safeDI_leaf() -> Leaf {
-		                let widget: any Widget = __safeDI_widgetBuilder(.bBuilder(__safeDI_widgetValues_bBuilder, .leaf(__safeDI_widgetValues_leaf, .widget(SafeDIScope_Widget.Leaf_Scope.widget_Values()))))
-		                return Leaf(cBuilder: cBuilder, widget: widget)
-		            }
-		            let leaf: Leaf = __safeDI_leaf()
-		            return B(aBuilder: aBuilder, leaf: leaf)
-		        }
-		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		        func __safeDI_cBuilder(id: Int) -> C {
-		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		            return C(bBuilder: bBuilder, id: id)
-		        }
-		        let cBuilder = Instantiator<C> {
-		            __safeDI_cBuilder(id: $0)
-		        }
-		        let __safeDI_widgetValues_leaf = SafeDIScope_Widget.leaf_Values(aBuilder: aBuilder, bBuilder: bBuilder, cBuilder: cBuilder)
-		        func __safeDI_leaf() -> Leaf {
-		            let widget: any Widget = __safeDI_widgetBuilder(.leaf(__safeDI_widgetValues_leaf, .widget(SafeDIScope_Widget.Leaf_Scope.widget_Values())))
-		            return Leaf(cBuilder: cBuilder, widget: widget)
-		        }
-		        let leaf: Leaf = __safeDI_leaf()
-		        self.init(aBuilder: aBuilder, bBuilder: bBuilder, cBuilder: cBuilder, leaf: leaf)
-		    }
-		}
+			            nonisolated public struct leaf_Values {
+			                public let aBuilder: Instantiator<A>
+			                public let cBuilder: Instantiator<C>
+			            }
 
-		extension Flow {
-		    public enum __safeDI_Flow_302E02075DB211F6 {}
-		}
-		"""]))
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let leaf: (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>
+
+			                public init(leaf: @escaping (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                    self.leaf = leaf
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.leaf = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                }
+			            }
+			        }
+
+			        @frozen nonisolated public enum Leaf_Scope {
+			            case widget(widget_Values)
+
+			            nonisolated public struct widget_Values {}
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let widget: (widget_Values) -> __safeDI_Built
+
+			                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
+			                    self.widget = widget
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.widget = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let bBuilder: (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let leaf: (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>, bBuilder: @escaping (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>, leaf: @escaping (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.aBuilder = aBuilder
+			                self.bBuilder = bBuilder
+			                self.leaf = leaf
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.leaf = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>) {
+			        let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder.aBuilder(SafeDIScope_Widget.aBuilder_Values())
+			        let __safeDI_widgetBuilder_bBuilder = __safeDI_widgetBuilder.bBuilder(SafeDIScope_Widget.bBuilder_Values())
+			        func __safeDI_aBuilder() -> A {
+			            let cBuilder = Instantiator<C> {
+			                __safeDI_cBuilder(id: $0)
+			            }
+			            let mark = Mark()
+			            let __safeDI_widgetBuilder_leaf = __safeDI_widgetBuilder_aBuilder.leaf(SafeDIScope_Widget.A_Scope.leaf_Values(cBuilder: cBuilder, mark: mark))
+			            func __safeDI_leaf() -> Leaf {
+			                let widget: any Widget = __safeDI_widgetBuilder_leaf.widget(SafeDIScope_Widget.Leaf_Scope.widget_Values())
+			                return Leaf(cBuilder: cBuilder, widget: widget)
+			            }
+			            let leaf: Leaf = __safeDI_leaf()
+			            let widget: any Widget = __safeDI_widgetBuilder_aBuilder.widget(SafeDIScope_Widget.A_Scope.widget_Values(cBuilder: cBuilder, mark: mark, leaf: leaf))
+			            return A(mark: mark, leaf: leaf, widget: widget)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            let cBuilder = Instantiator<C> {
+			                __safeDI_cBuilder(id: $0)
+			            }
+			            let __safeDI_widgetBuilder_leaf = __safeDI_widgetBuilder_bBuilder.leaf(SafeDIScope_Widget.B_Scope.leaf_Values(aBuilder: aBuilder, cBuilder: cBuilder))
+			            func __safeDI_leaf() -> Leaf {
+			                let widget: any Widget = __safeDI_widgetBuilder_leaf.widget(SafeDIScope_Widget.Leaf_Scope.widget_Values())
+			                return Leaf(cBuilder: cBuilder, widget: widget)
+			            }
+			            let leaf: Leaf = __safeDI_leaf()
+			            return B(aBuilder: aBuilder, leaf: leaf)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        func __safeDI_cBuilder(id: Int) -> C {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return C(bBuilder: bBuilder, id: id)
+			        }
+			        let cBuilder = Instantiator<C> {
+			            __safeDI_cBuilder(id: $0)
+			        }
+			        let __safeDI_widgetBuilder_leaf = __safeDI_widgetBuilder.leaf(SafeDIScope_Widget.leaf_Values(aBuilder: aBuilder, bBuilder: bBuilder, cBuilder: cBuilder))
+			        func __safeDI_leaf() -> Leaf {
+			            let widget: any Widget = __safeDI_widgetBuilder_leaf.widget(SafeDIScope_Widget.Leaf_Scope.widget_Values())
+			            return Leaf(cBuilder: cBuilder, widget: widget)
+			        }
+			        let leaf: Leaf = __safeDI_leaf()
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder, cBuilder: cBuilder, leaf: leaf)
+			    }
+			}
+
+			extension Flow {
+			    public enum __safeDI_Flow_A4C61C9D59943E7A {}
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature + fulfillers), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().flow.aBuilder.instantiate()"),
@@ -868,73 +1143,117 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let hub: Hub"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", imports: [], rootFiles: ["Hub": """
-		extension Hub {
-		    @frozen public enum SafeDIScope_Widget {
-		        case flow(flow_Values, SafeDIScope_Widget.Flow_Scope)
-		        case a(a_Values, SafeDIScope_Widget.A_Scope)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+			"Feature.swift": generatedFileHeader + """
+			extension Hub {
+			    @frozen nonisolated public enum SafeDIScope_Widget {
+			        case flow(flow_Values, SafeDIScope_Widget.Flow_Scope)
+			        case a(a_Values, SafeDIScope_Widget.A_Scope)
 
-		        public struct flow_Values {
-		            public let bBuilder: Instantiator<B>?
-		        }
+			        nonisolated public struct flow_Values {
+			            public let bBuilder: Instantiator<B>?
+			        }
 
-		        public struct a_Values {
-		            public let bBuilder: Instantiator<B>?
-		            public let flow: Flow
-		        }
+			        nonisolated public struct a_Values {
+			            public let bBuilder: Instantiator<B>?
+			            public let flow: Flow
+			        }
 
-		        @frozen public enum Flow_Scope {
-		            case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
+			        @frozen nonisolated public enum Flow_Scope {
+			            case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
 
-		            public struct aBuilder_Values {}
-		        }
+			            nonisolated public struct aBuilder_Values {}
 
-		        @frozen public enum A_Scope {
-		            case widget(widget_Values)
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public struct widget_Values {
-		                public let bBuilder: Instantiator<B>?
-		                public let mark: Mark
-		            }
-		        }
-		    }
+			                public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                    self.aBuilder = aBuilder
+			                }
 
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_bBuilder bBuilder: Instantiator<B>?, __safeDI_widgetBuilder: @escaping (SafeDIScope_Widget) -> any Widget) {
-		        let __safeDI_widgetValues_flow = SafeDIScope_Widget.flow_Values(bBuilder: bBuilder)
-		        func __safeDI_flow() -> Flow {
-		            let __safeDI_widgetValues_aBuilder = SafeDIScope_Widget.Flow_Scope.aBuilder_Values()
-		            func __safeDI_aBuilder() -> A {
-		                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		                let mark = Mark()
-		                let widget: any Widget = __safeDI_widgetBuilder(.flow(__safeDI_widgetValues_flow, .aBuilder(__safeDI_widgetValues_aBuilder, .widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder, mark: mark)))))
-		                return A(mark: mark, bBuilder: bBuilder, widget: widget)
-		            }
-		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		            func __safeDI_bBuilder() -> B {
-		                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		                return B(aBuilder: aBuilder)
-		            }
-		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		            return Flow(aBuilder: aBuilder, bBuilder: bBuilder)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        let __safeDI_widgetValues_a = SafeDIScope_Widget.a_Values(bBuilder: bBuilder, flow: flow)
-		        func __safeDI_a() -> A {
-		            let mark = Mark()
-		            let widget: any Widget = __safeDI_widgetBuilder(.a(__safeDI_widgetValues_a, .widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder, mark: mark))))
-		            return A(mark: mark, bBuilder: bBuilder, widget: widget)
-		        }
-		        let a: A = __safeDI_a()
-		        self.init(flow: flow, a: a)
-		    }
-		}
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                }
+			            }
+			        }
 
-		extension Hub {
-		    public enum __safeDI_Hub_3C2B120FAB051AB0 {}
-		}
-		"""]))
+			        @frozen nonisolated public enum A_Scope {
+			            case widget(widget_Values)
+
+			            nonisolated public struct widget_Values {
+			                public let bBuilder: Instantiator<B>?
+			                public let mark: Mark
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let widget: (widget_Values) -> __safeDI_Built
+
+			                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
+			                    self.widget = widget
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.widget = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let flow: (flow_Values) -> SafeDIScope_Widget.Flow_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let a: (a_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(flow: @escaping (flow_Values) -> SafeDIScope_Widget.Flow_Scope.__safeDI_Builder<__safeDI_Built>, a: @escaping (a_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.flow = flow
+			                self.a = a
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.flow = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.a = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_bBuilder bBuilder: Instantiator<B>?, __safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>) {
+			        let __safeDI_widgetBuilder_flow = __safeDI_widgetBuilder.flow(SafeDIScope_Widget.flow_Values(bBuilder: bBuilder))
+			        func __safeDI_flow() -> Flow {
+			            let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder_flow.aBuilder(SafeDIScope_Widget.Flow_Scope.aBuilder_Values())
+			            func __safeDI_aBuilder() -> A {
+			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			                let mark = Mark()
+			                let widget: any Widget = __safeDI_widgetBuilder_aBuilder.widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder, mark: mark))
+			                return A(mark: mark, bBuilder: bBuilder, widget: widget)
+			            }
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            func __safeDI_bBuilder() -> B {
+			                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			                return B(aBuilder: aBuilder)
+			            }
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return Flow(aBuilder: aBuilder, bBuilder: bBuilder)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        let __safeDI_widgetBuilder_a = __safeDI_widgetBuilder.a(SafeDIScope_Widget.a_Values(bBuilder: bBuilder, flow: flow))
+			        func __safeDI_a() -> A {
+			            let mark = Mark()
+			            let widget: any Widget = __safeDI_widgetBuilder_a.widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder, mark: mark))
+			            return A(mark: mark, bBuilder: bBuilder, widget: widget)
+			        }
+			        let a: A = __safeDI_a()
+			        self.init(flow: flow, a: a)
+			    }
+			}
+
+			extension Hub {
+			    public enum __safeDI_Hub_DA97B1A14D632C12 {}
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature + fulfillers), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().hub.flow.aBuilder.instantiate().widget"),
@@ -1233,7 +1552,485 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let modules = Self.screenModules(edges: edges, rootGeneratesMock: true)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		let generatedFiles = try #require(output.modules["App"]?.generatedFiles)
-		expectGeneratedFiles(generatedFiles, try ["App.swift": Self.expectedScreenRootFile(edges: edges, units: [Array(edges.indices)], output: output, rootGeneratesMock: true)])
+		expectGeneratedFiles(generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(M0)
+			import M0
+			#endif
+			#if canImport(M1)
+			import M1
+			#endif
+			#if canImport(M2)
+			import M2
+			#endif
+			#if canImport(M3)
+			import M3
+			#endif
+			#if canImport(M4)
+			import M4
+			#endif
+			#if canImport(M5)
+			import M5
+			#endif
+			#if canImport(M6)
+			import M6
+			#endif
+			#if canImport(M7)
+			import M7
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let service = Service()
+			        func __safeDI_screen0Builder(id: Int) -> Screen0 {
+			            let screen2Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen2Builder(id: $0)
+			            }
+			            let screen3Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen3Builder(id: $0)
+			            }
+			            let screen4Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen4Builder(id: $0)
+			            }
+			            _ = Screen0.__safeDI_Screen0_50893F9C0248B961.self // If this line does not compile, compile the code SafeDI generates for module M0 into M0: under Bazel, add M0’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Screen0(__safeDI_id: id, __safeDI_service: service, __safeDI_screen2Builder: screen2Builder, __safeDI_screen3Builder: screen3Builder, __safeDI_screen4Builder: screen4Builder)
+			        }
+			        let screen0Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen0Builder(id: $0)
+			        }
+			        func __safeDI_screen1Builder(id: Int) -> Screen1 {
+			            let screen2Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen2Builder(id: $0)
+			            }
+			            let screen3Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen3Builder(id: $0)
+			            }
+			            let screen7Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen7Builder(id: $0)
+			            }
+			            _ = Screen1.__safeDI_Screen1_2BE0865BD7D69A88.self // If this line does not compile, compile the code SafeDI generates for module M1 into M1: under Bazel, add M1’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Screen1(__safeDI_id: id, __safeDI_service: service, __safeDI_screen2Builder: screen2Builder, __safeDI_screen3Builder: screen3Builder, __safeDI_screen7Builder: screen7Builder)
+			        }
+			        let screen1Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen1Builder(id: $0)
+			        }
+			        func __safeDI_screen2Builder(id: Int) -> Screen2 {
+			            let screen1Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen1Builder(id: $0)
+			            }
+			            let screen4Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen4Builder(id: $0)
+			            }
+			            let screen7Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen7Builder(id: $0)
+			            }
+			            _ = Screen2.__safeDI_Screen2_C1C57A76086D5BFE.self // If this line does not compile, compile the code SafeDI generates for module M2 into M2: under Bazel, add M2’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Screen2(__safeDI_id: id, __safeDI_service: service, __safeDI_screen1Builder: screen1Builder, __safeDI_screen4Builder: screen4Builder, __safeDI_screen7Builder: screen7Builder)
+			        }
+			        let screen2Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen2Builder(id: $0)
+			        }
+			        func __safeDI_screen3Builder(id: Int) -> Screen3 {
+			            let screen0Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen0Builder(id: $0)
+			            }
+			            let screen2Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen2Builder(id: $0)
+			            }
+			            let screen6Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen6Builder(id: $0)
+			            }
+			            _ = Screen3.__safeDI_Screen3_524F9E2FFF78377C.self // If this line does not compile, compile the code SafeDI generates for module M3 into M3: under Bazel, add M3’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Screen3(__safeDI_id: id, __safeDI_service: service, __safeDI_screen0Builder: screen0Builder, __safeDI_screen2Builder: screen2Builder, __safeDI_screen6Builder: screen6Builder)
+			        }
+			        let screen3Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen3Builder(id: $0)
+			        }
+			        func __safeDI_screen4Builder(id: Int) -> Screen4 {
+			            let screen2Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen2Builder(id: $0)
+			            }
+			            let screen3Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen3Builder(id: $0)
+			            }
+			            let screen5Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen5Builder(id: $0)
+			            }
+			            _ = Screen4.__safeDI_Screen4_FE5AE1EC58BBBC5A.self // If this line does not compile, compile the code SafeDI generates for module M4 into M4: under Bazel, add M4’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Screen4(__safeDI_id: id, __safeDI_service: service, __safeDI_screen2Builder: screen2Builder, __safeDI_screen3Builder: screen3Builder, __safeDI_screen5Builder: screen5Builder)
+			        }
+			        let screen4Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen4Builder(id: $0)
+			        }
+			        func __safeDI_screen5Builder(id: Int) -> Screen5 {
+			            let screen3Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen3Builder(id: $0)
+			            }
+			            let screen6Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen6Builder(id: $0)
+			            }
+			            let screen7Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen7Builder(id: $0)
+			            }
+			            _ = Screen5.__safeDI_Screen5_10637ED15C1B66CA.self // If this line does not compile, compile the code SafeDI generates for module M5 into M5: under Bazel, add M5’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Screen5(__safeDI_id: id, __safeDI_service: service, __safeDI_screen3Builder: screen3Builder, __safeDI_screen6Builder: screen6Builder, __safeDI_screen7Builder: screen7Builder)
+			        }
+			        let screen5Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen5Builder(id: $0)
+			        }
+			        func __safeDI_screen6Builder(id: Int) -> Screen6 {
+			            let screen0Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen0Builder(id: $0)
+			            }
+			            let screen4Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen4Builder(id: $0)
+			            }
+			            let screen5Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen5Builder(id: $0)
+			            }
+			            _ = Screen6.__safeDI_Screen6_2D1B4945D0F7A293.self // If this line does not compile, compile the code SafeDI generates for module M6 into M6: under Bazel, add M6’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Screen6(__safeDI_id: id, __safeDI_service: service, __safeDI_screen0Builder: screen0Builder, __safeDI_screen4Builder: screen4Builder, __safeDI_screen5Builder: screen5Builder)
+			        }
+			        let screen6Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen6Builder(id: $0)
+			        }
+			        func __safeDI_screen7Builder(id: Int) -> Screen7 {
+			            let screen0Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen0Builder(id: $0)
+			            }
+			            let screen2Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen2Builder(id: $0)
+			            }
+			            let screen3Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen3Builder(id: $0)
+			            }
+			            _ = Screen7.__safeDI_Screen7_B62CF5DD79251747.self // If this line does not compile, compile the code SafeDI generates for module M7 into M7: under Bazel, add M7’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Screen7(__safeDI_id: id, __safeDI_service: service, __safeDI_screen0Builder: screen0Builder, __safeDI_screen2Builder: screen2Builder, __safeDI_screen3Builder: screen3Builder)
+			        }
+			        let screen7Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen7Builder(id: $0)
+			        }
+			        self.init(service: service, screen0Builder: screen0Builder, screen1Builder: screen1Builder, screen2Builder: screen2Builder, screen3Builder: screen3Builder, screen4Builder: screen4Builder, screen5Builder: screen5Builder, screen6Builder: screen6Builder, screen7Builder: screen7Builder)
+			    }
+			}
+
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            service: (() -> Service)? = nil,
+			            screen0Builder: Screen0.SafeDIMockConfiguration = .init(),
+			            screen1Builder: Screen1.SafeDIMockConfiguration = .init(),
+			            screen2Builder: Screen2.SafeDIMockConfiguration = .init(),
+			            screen3Builder: Screen3.SafeDIMockConfiguration = .init(),
+			            screen4Builder: Screen4.SafeDIMockConfiguration = .init(),
+			            screen5Builder: Screen5.SafeDIMockConfiguration = .init(),
+			            screen6Builder: Screen6.SafeDIMockConfiguration = .init(),
+			            screen7Builder: Screen7.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.service = service
+			            self.screen0Builder = screen0Builder
+			            self.screen1Builder = screen1Builder
+			            self.screen2Builder = screen2Builder
+			            self.screen3Builder = screen3Builder
+			            self.screen4Builder = screen4Builder
+			            self.screen5Builder = screen5Builder
+			            self.screen6Builder = screen6Builder
+			            self.screen7Builder = screen7Builder
+			        }
+
+			        let service: (() -> Service)?
+			        let screen0Builder: Screen0.SafeDIMockConfiguration
+			        let screen1Builder: Screen1.SafeDIMockConfiguration
+			        let screen2Builder: Screen2.SafeDIMockConfiguration
+			        let screen3Builder: Screen3.SafeDIMockConfiguration
+			        let screen4Builder: Screen4.SafeDIMockConfiguration
+			        let screen5Builder: Screen5.SafeDIMockConfiguration
+			        let screen6Builder: Screen6.SafeDIMockConfiguration
+			        let screen7Builder: Screen7.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
+			        func __safeDI_screen0Builder(id: Int) -> Screen {
+			            let screen2Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen2Builder(id: $0)
+			            }
+			            let screen3Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen3Builder(id: $0)
+			            }
+			            let screen4Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen4Builder(id: $0)
+			            }
+			            let model0 = if let safeDIBuilder = safeDIOverrides.screen0Builder.model0 { safeDIBuilder(id, service) } else { Model0(id: id, service: service) }
+			            return if let safeDIBuilder = safeDIOverrides.screen0Builder.safeDIBuilder { safeDIBuilder(id, service, model0, screen2Builder, screen3Builder, screen4Builder) } else { Screen0(id: id, service: service, model0: model0, screen2Builder: screen2Builder, screen3Builder: screen3Builder, screen4Builder: screen4Builder) }
+			        }
+			        func __safeDI_screen1Builder(id: Int) -> Screen {
+			            let screen2Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen2Builder(id: $0)
+			            }
+			            let screen3Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen3Builder(id: $0)
+			            }
+			            let screen7Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen7Builder(id: $0)
+			            }
+			            let model1 = if let safeDIBuilder = safeDIOverrides.screen1Builder.model1 { safeDIBuilder(id, service) } else { Model1(id: id, service: service) }
+			            return if let safeDIBuilder = safeDIOverrides.screen1Builder.safeDIBuilder { safeDIBuilder(id, service, model1, screen2Builder, screen3Builder, screen7Builder) } else { Screen1(id: id, service: service, model1: model1, screen2Builder: screen2Builder, screen3Builder: screen3Builder, screen7Builder: screen7Builder) }
+			        }
+			        func __safeDI_screen2Builder(id: Int) -> Screen {
+			            let screen1Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen1Builder(id: $0)
+			            }
+			            let screen4Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen4Builder(id: $0)
+			            }
+			            let screen7Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen7Builder(id: $0)
+			            }
+			            let model2 = if let safeDIBuilder = safeDIOverrides.screen2Builder.model2 { safeDIBuilder(id, service) } else { Model2(id: id, service: service) }
+			            return if let safeDIBuilder = safeDIOverrides.screen2Builder.safeDIBuilder { safeDIBuilder(id, service, model2, screen1Builder, screen4Builder, screen7Builder) } else { Screen2(id: id, service: service, model2: model2, screen1Builder: screen1Builder, screen4Builder: screen4Builder, screen7Builder: screen7Builder) }
+			        }
+			        func __safeDI_screen3Builder(id: Int) -> Screen {
+			            let screen0Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen0Builder(id: $0)
+			            }
+			            let screen2Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen2Builder(id: $0)
+			            }
+			            let screen6Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen6Builder(id: $0)
+			            }
+			            let model3 = if let safeDIBuilder = safeDIOverrides.screen3Builder.model3 { safeDIBuilder(id, service) } else { Model3(id: id, service: service) }
+			            return if let safeDIBuilder = safeDIOverrides.screen3Builder.safeDIBuilder { safeDIBuilder(id, service, model3, screen0Builder, screen2Builder, screen6Builder) } else { Screen3(id: id, service: service, model3: model3, screen0Builder: screen0Builder, screen2Builder: screen2Builder, screen6Builder: screen6Builder) }
+			        }
+			        func __safeDI_screen4Builder(id: Int) -> Screen {
+			            let screen2Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen2Builder(id: $0)
+			            }
+			            let screen3Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen3Builder(id: $0)
+			            }
+			            let screen5Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen5Builder(id: $0)
+			            }
+			            let model4 = if let safeDIBuilder = safeDIOverrides.screen4Builder.model4 { safeDIBuilder(id, service) } else { Model4(id: id, service: service) }
+			            return if let safeDIBuilder = safeDIOverrides.screen4Builder.safeDIBuilder { safeDIBuilder(id, service, model4, screen2Builder, screen3Builder, screen5Builder) } else { Screen4(id: id, service: service, model4: model4, screen2Builder: screen2Builder, screen3Builder: screen3Builder, screen5Builder: screen5Builder) }
+			        }
+			        func __safeDI_screen5Builder(id: Int) -> Screen {
+			            let screen3Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen3Builder(id: $0)
+			            }
+			            let screen6Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen6Builder(id: $0)
+			            }
+			            let screen7Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen7Builder(id: $0)
+			            }
+			            let model5 = if let safeDIBuilder = safeDIOverrides.screen5Builder.model5 { safeDIBuilder(id, service) } else { Model5(id: id, service: service) }
+			            return if let safeDIBuilder = safeDIOverrides.screen5Builder.safeDIBuilder { safeDIBuilder(id, service, model5, screen3Builder, screen6Builder, screen7Builder) } else { Screen5(id: id, service: service, model5: model5, screen3Builder: screen3Builder, screen6Builder: screen6Builder, screen7Builder: screen7Builder) }
+			        }
+			        func __safeDI_screen6Builder(id: Int) -> Screen {
+			            let screen0Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen0Builder(id: $0)
+			            }
+			            let screen4Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen4Builder(id: $0)
+			            }
+			            let screen5Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen5Builder(id: $0)
+			            }
+			            let model6 = if let safeDIBuilder = safeDIOverrides.screen6Builder.model6 { safeDIBuilder(id, service) } else { Model6(id: id, service: service) }
+			            return if let safeDIBuilder = safeDIOverrides.screen6Builder.safeDIBuilder { safeDIBuilder(id, service, model6, screen0Builder, screen4Builder, screen5Builder) } else { Screen6(id: id, service: service, model6: model6, screen0Builder: screen0Builder, screen4Builder: screen4Builder, screen5Builder: screen5Builder) }
+			        }
+			        func __safeDI_screen7Builder(id: Int) -> Screen {
+			            let screen0Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen0Builder(id: $0)
+			            }
+			            let screen2Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen2Builder(id: $0)
+			            }
+			            let screen3Builder = ErasedInstantiator<Int, Screen> {
+			                __safeDI_screen3Builder(id: $0)
+			            }
+			            let model7 = if let safeDIBuilder = safeDIOverrides.screen7Builder.model7 { safeDIBuilder(id, service) } else { Model7(id: id, service: service) }
+			            return if let safeDIBuilder = safeDIOverrides.screen7Builder.safeDIBuilder { safeDIBuilder(id, service, model7, screen0Builder, screen2Builder, screen3Builder) } else { Screen7(id: id, service: service, model7: model7, screen0Builder: screen0Builder, screen2Builder: screen2Builder, screen3Builder: screen3Builder) }
+			        }
+			        let screen0Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen0Builder(id: $0)
+			        }
+			        let screen1Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen1Builder(id: $0)
+			        }
+			        let screen2Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen2Builder(id: $0)
+			        }
+			        let screen3Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen3Builder(id: $0)
+			        }
+			        let screen4Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen4Builder(id: $0)
+			        }
+			        let screen5Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen5Builder(id: $0)
+			        }
+			        let screen6Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen6Builder(id: $0)
+			        }
+			        let screen7Builder = ErasedInstantiator<Int, Screen> {
+			            __safeDI_screen7Builder(id: $0)
+			        }
+			        return Root(service: service, screen0Builder: screen0Builder, screen1Builder: screen1Builder, screen2Builder: screen2Builder, screen3Builder: screen3Builder, screen4Builder: screen4Builder, screen5Builder: screen5Builder, screen6Builder: screen6Builder, screen7Builder: screen7Builder)
+			    }
+			}
+			#endif
+
+			#if DEBUG
+			extension Screen0 {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            model0: ((Int, Service) -> Model0)? = nil,
+			            _ safeDIBuilder: ((Int, Service, Model0, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen0)? = nil
+			        ) {
+			            self.model0 = model0
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let model0: ((Int, Service) -> Model0)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Int, Service, Model0, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen0)?
+			    }
+			}
+
+			extension Screen1 {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            model1: ((Int, Service) -> Model1)? = nil,
+			            _ safeDIBuilder: ((Int, Service, Model1, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen1)? = nil
+			        ) {
+			            self.model1 = model1
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let model1: ((Int, Service) -> Model1)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Int, Service, Model1, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen1)?
+			    }
+			}
+
+			extension Screen2 {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            model2: ((Int, Service) -> Model2)? = nil,
+			            _ safeDIBuilder: ((Int, Service, Model2, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen2)? = nil
+			        ) {
+			            self.model2 = model2
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let model2: ((Int, Service) -> Model2)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Int, Service, Model2, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen2)?
+			    }
+			}
+
+			extension Screen3 {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            model3: ((Int, Service) -> Model3)? = nil,
+			            _ safeDIBuilder: ((Int, Service, Model3, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen3)? = nil
+			        ) {
+			            self.model3 = model3
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let model3: ((Int, Service) -> Model3)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Int, Service, Model3, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen3)?
+			    }
+			}
+
+			extension Screen4 {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            model4: ((Int, Service) -> Model4)? = nil,
+			            _ safeDIBuilder: ((Int, Service, Model4, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen4)? = nil
+			        ) {
+			            self.model4 = model4
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let model4: ((Int, Service) -> Model4)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Int, Service, Model4, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen4)?
+			    }
+			}
+
+			extension Screen5 {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            model5: ((Int, Service) -> Model5)? = nil,
+			            _ safeDIBuilder: ((Int, Service, Model5, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen5)? = nil
+			        ) {
+			            self.model5 = model5
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let model5: ((Int, Service) -> Model5)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Int, Service, Model5, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen5)?
+			    }
+			}
+
+			extension Screen6 {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            model6: ((Int, Service) -> Model6)? = nil,
+			            _ safeDIBuilder: ((Int, Service, Model6, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen6)? = nil
+			        ) {
+			            self.model6 = model6
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let model6: ((Int, Service) -> Model6)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Int, Service, Model6, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen6)?
+			    }
+			}
+
+			extension Screen7 {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            model7: ((Int, Service) -> Model7)? = nil,
+			            _ safeDIBuilder: ((Int, Service, Model7, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen7)? = nil
+			        ) {
+			            self.model7 = model7
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let model7: ((Int, Service) -> Model7)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Int, Service, Model7, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen7)?
+			    }
+			}
+			#endif
+
+			""",
+		])
 	}
 
 	// The comparison with the file built from the edge list, which has a fixed number of lines per screen, is what fails if
@@ -1443,10 +2240,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 	private static func fulfillingType(named name: String, fulfilling fulfilledType: String, declarations: [String]) -> String {
 		SafeDIToolSeamBuilderParameterTests.fulfillingType(named: name, fulfilling: fulfilledType, declarations: declarations)
-	}
-
-	private static func generatedFiles(module: String, imports: [String], rootFiles: [String: String]) -> [String: String] {
-		SafeDIToolSeamBuilderParameterTests.generatedFiles(module: module, integration: .moduleInfo, imports: imports, rootFiles: rootFiles)
 	}
 
 	/// Expects the values `output`, the run of `modules`, builds for each probe to equal those the run of `visibleModules`

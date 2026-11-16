@@ -1069,7 +1069,70 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		"""
 		switch integration {
 		case .moduleInfo:
-			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + mockCode], "Unexpected output \(output.modules["App"]?.generatedFiles ?? [:])")
+			#expect(output.modules["App"]?.generatedFiles == (integration == .moduleInfo ? [
+				"App.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+
+				#if DEBUG
+				extension Root {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            filter: (() -> FilterProtocol)? = nil
+				        ) {
+				            self.filter = filter
+				        }
+
+				        let filter: (() -> FilterProtocol)?
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { AppFilter() }
+				        return Root(filter: filter)
+				    }
+				}
+				#endif
+				""",
+			] : [
+				"Root+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+
+				#if DEBUG
+				extension Root {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            filter: (() -> FilterProtocol)? = nil
+				        ) {
+				            self.filter = filter
+				        }
+
+				        let filter: (() -> FilterProtocol)?
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { AppFilter() }
+				        return Root(filter: filter)
+				    }
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+
+
+				""",
+			]), "Unexpected output \(output.modules["App"]?.generatedFiles ?? [:])")
 		case .swiftPackagePlugin:
 			#expect(output.modules["App"]?.generatedFiles["Root+SafeDIMock.swift"] == generatedFileHeader + mockCode, "Unexpected output \(output.modules["App"]?.generatedFiles ?? [:])")
 		}
@@ -1144,7 +1207,66 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		"""
 		switch integration {
 		case .moduleInfo:
-			#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + mockCode], "Unexpected output \(output.modules["Feature"]?.generatedFiles ?? [:])")
+			#expect(output.modules["Feature"]?.generatedFiles == (integration == .moduleInfo ? [
+				"Feature.swift": generatedFileHeader + """
+				#if DEBUG
+				extension Root {
+				    /// Overrides for the mock dependency tree.
+				    nonisolated public struct SafeDIOverrides {
+				        public init(
+				            filter: (() -> FilterProtocol)? = nil
+				        ) {
+				            self.filter = filter
+				        }
+
+				        public let filter: (() -> FilterProtocol)?
+				    }
+
+				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { AppFilter() }
+				        return Root(filter: filter)
+				    }
+				}
+
+				extension Root {
+				    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+				}
+				#endif
+				""",
+			] : [
+				"Root+SafeDIMock.swift": generatedFileHeader + """
+				#if DEBUG
+				extension Root {
+				    /// Overrides for the mock dependency tree.
+				    nonisolated public struct SafeDIOverrides {
+				        public init(
+				            filter: (() -> FilterProtocol)? = nil
+				        ) {
+				            self.filter = filter
+				        }
+
+				        public let filter: (() -> FilterProtocol)?
+				    }
+
+				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { AppFilter() }
+				        return Root(filter: filter)
+				    }
+				}
+
+				extension Root {
+				    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+
+				""",
+			]), "Unexpected output \(output.modules["Feature"]?.generatedFiles ?? [:])")
 		case .swiftPackagePlugin:
 			#expect(output.modules["Feature"]?.generatedFiles["Root+SafeDIMock.swift"] == generatedFileHeader + mockCode, "Unexpected output \(output.modules["Feature"]?.generatedFiles ?? [:])")
 		}

@@ -66,6 +66,9 @@ extension DependencyTreeGenerator {
 		var callRoutes = [SeamSignature.CallRoute]()
 		/// The payloads the seam's tree binds, each before building the last property of its path.
 		var valuesBindingKeys = Set<ValuesBindingKey>()
+		/// The member calls the seam's tree makes where the enums declare builder structs, each for the last property of its
+		/// path: one per case on a route, whether or not it carries values, by whether the route is the `@Sendable` root's.
+		var memberBindingKeysByFamily = [Bool: Set<ValuesBindingKey>]()
 
 		/// The root enum of the family `isSendable` says, if the seam declares it.
 		func rootEnum(isSendable: Bool) -> SeamSignature.ScopeEnum? {
@@ -367,7 +370,7 @@ extension DependencyTreeGenerator {
 		/// The type of each described type's enum as it is declared: a root enum, or an enum nested in its family's root.
 		var enumTypeByDescribed = [Described: TypeDescription]()
 		var caseNamesByDescribed = [Described: [String]]()
-		var valuesTypeNamesByDescribed = [Described: [String?]]()
+		var valuesTypeNamesByDescribed = [Described: [String]]()
 		for isSendable in [false, true] {
 			let rootTypeName = isSendable ? rootTypeNames.sendable : rootTypeNames.plain
 			let familyDescribed = described.filter { $0.isSendable == isSendable }
@@ -425,10 +428,10 @@ extension DependencyTreeGenerator {
 				enumTypeNameByDescribed[current] = name
 				enumTypeByDescribed[current] = SeamSignature.ScopeEnum.nestedType(named: name, in: rootTypeName)
 			}
-			// A payload struct's name is taken from its case.
+			// A payload struct's name is taken from its case, as is the name of the empty struct a builder struct's member of a
+			// case that carries no values takes.
 			for current in familyDescribed {
-				valuesTypeNamesByDescribed[current] = zip(draftCases(of: current.type, isSendable: isSendable), caseNamesByDescribed[current, default: []]).map { draftCase, caseName in
-					guard draftCase.fields != nil else { return nil }
+				valuesTypeNamesByDescribed[current] = zip(draftCases(of: current.type, isSendable: isSendable), caseNamesByDescribed[current, default: []]).map { _, caseName in
 					var valuesTypeName = "\(caseName)_Values".spelledAsJoinedIdentifier
 					while takenTypeNames.contains(valuesTypeName) {
 						valuesTypeName = "\(valuesTypeName)_".spelledAsJoinedIdentifier
@@ -470,8 +473,9 @@ extension DependencyTreeGenerator {
 			let caseNames = caseNamesByDescribed[current, default: []]
 			let valuesTypeNames = valuesTypeNamesByDescribed[current, default: []]
 			for (index, draftCase) in draftCases(of: current.type, isSendable: current.isSendable).enumerated() {
-				let values: SeamSignature.ScopeEnum.Values? = if let typeName = valuesTypeNames[index], let fields = draftCase.fields {
-					SeamSignature.ScopeEnum.Values(typeName: typeName, fields: fields, labelsBoundLater: draftCase.labelsBoundLater)
+				let memberValuesTypeName = valuesTypeNames[index]
+				let values: SeamSignature.ScopeEnum.Values? = if let fields = draftCase.fields {
+					SeamSignature.ScopeEnum.Values(typeName: memberValuesTypeName, fields: fields, labelsBoundLater: draftCase.labelsBoundLater)
 				} else {
 					nil
 				}
@@ -494,7 +498,7 @@ extension DependencyTreeGenerator {
 					// A case that leads to a `@Sendable` function inside the fill carries no value bound outside it.
 					kind = .fill(innerKey: filledBuilder.innerKey, innerEnumType: filledBuilder.carriesInnerScope ? innerEnum.type : nil, enumKey: key(of: heldDescribed), enumType: heldEnumType, isIndirect: false)
 				}
-				let enumCase = SeamSignature.ScopeEnum.Case(name: caseNames[index], kind: kind, values: values)
+				let enumCase = SeamSignature.ScopeEnum.Case(name: caseNames[index], kind: kind, values: values, memberValuesTypeName: memberValuesTypeName)
 				let caseOfProperty = CaseOfProperty(described: current, property: draftCase.property, isSendableBeneath: draftCase.isSendableBeneath, filledBuilder: draftCase.filledBuilder)
 				casesByProperty[caseOfProperty] = enumCase
 				caseIndexByProperty[caseOfProperty] = (result.enums.count, cases.count)
@@ -517,15 +521,33 @@ extension DependencyTreeGenerator {
 		var sitesByCase = [CaseOfProperty: [SeamSignature.Hole.Site]]()
 		/// The step of `caseOfProperty`'s case, whose payload the seam's tree binds before building the last property of
 		/// `bindingPrefix`, or builds where the place or the call is, when `bindingPrefix` is `nil`.
-		func routeStep(of caseOfProperty: CaseOfProperty, bindingPrefix: [Property]?) -> SeamSignature.Hole.RouteStep? {
+		/// Where the enum declares a builder struct, the step's member is called at the top of the property's own builder
+		/// function when the case is a `@Sendable` enum's and `buildsInSendableFunction` (see `RouteStep.Member`).
+		func routeStep(of caseOfProperty: CaseOfProperty, bindingPrefix: [Property]?, buildsInSendableFunction: Bool, isSendableRoute: Bool) -> SeamSignature.Hole.RouteStep? {
 			guard let enumCase = casesByProperty[caseOfProperty] else { return nil }
 			var innerScope: SeamSignature.Hole.RouteStep.InnerScope?
 			if case let .fill(innerKey, innerEnumType?, _, _, _) = enumCase.kind, let bindingPrefix {
 				innerScope = .init(callPath: bindingPrefix, innerKey: innerKey, enumType: innerEnumType, builderLabel: reachedEnum(innerKey)?.builderLabel ?? "", name: "")
 			}
 			let leadsIntoFill = caseOfProperty.filledBuilder != nil
-			guard let values = enumCase.values, let enumType = enumTypeByDescribed[caseOfProperty.described] else {
-				return SeamSignature.Hole.RouteStep(caseName: enumCase.name, values: nil, innerScope: innerScope, leadsIntoFill: leadsIntoFill)
+			let enumType = enumTypeByDescribed[caseOfProperty.described]
+			var member: SeamSignature.Hole.RouteStep.Member?
+			// Deliberate gap: a loop's level re-entered through a cycle-closing scope calls no member of its own, and re-enters
+			// the function built at its first opening with the struct bound there, which carries nothing bound above the
+			// reopened level. A read of such a value stays rejected (`declarationBoundOnCycleReentry`); do not lift that
+			// rejection before the member exists.
+			if let bindingPrefix, let enumType, let memberValuesTypeName = enumCase.memberValuesTypeName {
+				result.memberBindingKeysByFamily[isSendableRoute, default: []].insert(ValuesBindingKey(path: bindingPrefix, caseName: enumCase.name))
+				member = .init(
+					bindingName: "",
+					valuesType: .nested(name: memberValuesTypeName, parentType: enumType, generics: []),
+					fields: enumCase.values?.fields ?? [],
+					bindingPath: bindingPrefix,
+					isCalledInsideFunction: caseOfProperty.described.isSendable && buildsInSendableFunction,
+				)
+			}
+			guard let values = enumCase.values, let enumType else {
+				return SeamSignature.Hole.RouteStep(caseName: enumCase.name, values: nil, innerScope: innerScope, leadsIntoFill: leadsIntoFill, member: member)
 			}
 			if let bindingPrefix {
 				result.valuesBindingKeys.insert(ValuesBindingKey(path: bindingPrefix, caseName: enumCase.name))
@@ -535,6 +557,7 @@ extension DependencyTreeGenerator {
 				values: .init(bindingName: "", type: .nested(name: values.typeName, parentType: enumType, generics: []), fields: values.fields, bindingPath: bindingPrefix ?? []),
 				innerScope: innerScope,
 				leadsIntoFill: leadsIntoFill,
+				member: member,
 			)
 		}
 		for reached in reached {
@@ -568,7 +591,7 @@ extension DependencyTreeGenerator {
 					} else {
 						CaseOfProperty(described: Described(type: type, isSendable: false), property: property, isSendableBeneath: false, filledBuilder: reachedStep.filledBuilder)
 					}
-					guard let step = routeStep(of: caseOfProperty, bindingPrefix: index < count - 1 ? Array(reached.sitePath.prefix(reachedStep.pathLength)) : nil) else { break }
+					guard let step = routeStep(of: caseOfProperty, bindingPrefix: index < count - 1 ? Array(reached.sitePath.prefix(reachedStep.pathLength)) : nil, buildsInSendableFunction: reachedStep.buildsInSendableFunction, isSendableRoute: innermostSendableIndex != nil) else { break }
 					if index < count - 1 {
 						steps.append(step)
 						continue
@@ -592,6 +615,7 @@ extension DependencyTreeGenerator {
 							rootEnumTypeName: ownerRootTypeName,
 							caseName: enumCase.name,
 							valuesTypeName: enumCase.values?.typeName,
+							memberValuesTypeName: enumCase.memberValuesTypeName,
 							isBuiltBySendableBuilder: innermostSendableIndex != nil,
 							route: steps,
 							values: enumCase.values?.fields ?? [],
@@ -863,8 +887,12 @@ extension DependencyTreeGenerator {
 	/// and stem, `__safeDI_<stem>Values_<case>`, with `_` appended while a name in `reservedNames`, one bound on the way to
 	/// the property, or one its scope binds already has it. The keys are named shortest path first, then in the order of
 	/// their spelling, so no name depends on the order the routes are met in.
+	///
+	/// The member calls of builder structs are named the same way with `nameInfix` `_`, by the builder's label for a stem:
+	/// `__safeDI_<label>_<case>`.
 	static func valuesBindingNames(
 		of keysByStem: [String: Set<ValuesBindingKey>],
+		nameInfix: String = "Values_",
 		reservedNames: Set<String>,
 	) -> [String: [ValuesBindingKey: String]] {
 		struct Binding: Hashable {
@@ -894,7 +922,7 @@ extension DependencyTreeGenerator {
 			for length in 1..<path.count {
 				taken.formUnion(namesByPath[Array(path.prefix(length)), default: []])
 			}
-			var name = ScopeGenerator.functionName(toBuildPropertyNamed: "\(binding.stem)Values_\(binding.key.caseName)")
+			var name = ScopeGenerator.functionName(toBuildPropertyNamed: "\(binding.stem)\(nameInfix)\(binding.key.caseName)")
 			while taken.contains(name) {
 				name = "\(name)_".spelledAsJoinedIdentifier
 			}

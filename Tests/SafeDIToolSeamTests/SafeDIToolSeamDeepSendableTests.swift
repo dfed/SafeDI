@@ -63,19 +63,18 @@ struct SafeDIToolSeamDeepSendableTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		// One `carried_Sendable` case for each `@Sendable` function on the path but the wrapper's own, whose case is `held`.
-		let route = String(repeating: ".carried_Sendable(", count: carrierCount + 1) + ".held" + String(repeating: ")", count: carrierCount + 1)
+		// One call of a `carried_Sendable` member for each `@Sendable` function on the path but the wrapper's own, whose member
+		// is `held`, each at the top of its function.
 		let generatedSeam = try #require(output.modules["Feature"]?.generatedFiles["Feature.swift"])
 		let seamLines = generatedSeam.split(separator: "\n").map(String.init)
-		#expect(seamLines.filter { $0.contains("public init(") } == [
-			"    public init(__safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {",
+		#expect(seamLines.filter { $0.hasPrefix("    public init(") } == [
+			"    public init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {",
 		])
-		#expect(seamLines.filter { $0.contains("__safeDI_gadgetSendableBuilder(.") }.map { $0.trimmingCharacters(in: .whitespaces) } == [
-			"__safeDI_gadgetSendableBuilder(\(route))",
-		])
-		// One dispatcher for the root enum and one for each carrier's enum.
+		#expect(seamLines.filter { $0.contains(".carried_Sendable(SafeDISendableScope_Gadget") }.count == carrierCount + 1)
+		#expect(seamLines.filter { $0.contains(".held(SafeDISendableScope_Gadget") }.count == 1)
+		// One level function for the root enum and one for each carrier's enum.
 		let generatedFill = try #require(output.modules["App"]?.generatedFiles["App.swift"])
-		#expect(generatedFill.split(separator: "\n").filter { $0.contains("@Sendable func __safeDI_gadgetSendableBuilder_Host") }.count == carrierCount + 2)
+		#expect(generatedFill.split(separator: "\n").filter { $0.contains("@Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host") }.count == carrierCount + 2)
 	}
 
 	// MARK: Private

@@ -543,8 +543,10 @@ extension GraphFuzzerBuilderSurface {
 	/// that forwards nothing takes `() -> B`, `ErasedInstantiator<(), B>.Builder`, a `.Builder` read so, or a `Sendable`
 	/// twin, each of which takes every form but a forwarding closure; a place that forwards `F` takes `(F) -> B` or
 	/// `ErasedInstantiator<F, B>.Builder`, which takes a forwarding closure, or a stored closure of that type; a `@Sendable`
-	/// parameter takes a stored closure only when it is `@Sendable` too; a closure handed a scope takes none. The
-	/// builder-struct work can back this with a compile of the call.
+	/// parameter takes a stored closure only when it is `@Sendable` too; a closure handed a scope takes none. It judges the
+	/// differential pairs and kept builders; the compile of `C` (`addingBuilderCalls(to:seamTypeAccess:modules:)`) judges
+	/// each builder that takes a builder struct absolutely, and where the two disagree on one, the compiler is right and
+	/// this is corrected.
 	static func accepts(parameterType: String, facts: BuilderFacts, form: BuilderForm) -> Bool {
 		guard generatedTypeNamed(by: "_: " + parameterType) == nil else { return false }
 		let isSendable = isSendableBuilderType(parameterType)
@@ -606,6 +608,126 @@ extension GraphFuzzerBuilderSurface {
 			problems.append("\(call.key) requires `\(skipped.description)`, which the call does not pass")
 		}
 		return problems
+	}
+}
+
+// MARK: - The compile of the call a person writes
+
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+extension GraphFuzzerBuilderSurface {
+	/// What the name of each file `addingBuilderCalls(to:seamTypeAccess:modules:)` adds ends with.
+	static let builderCallFileSuffix = "+SafeDIBuilderCall.swift"
+
+	/// `generatedFiles` with, for each seam a generated file declares whose readable initializer takes a builder that takes a
+	/// builder struct – a switched builder, whose generated-only parameter is `SafeDIScope_….__safeDI_Builder<T>` or
+	/// `SafeDISendableScope_….__safeDI_Builder<T>` – a file of hand-written calls `C` of that readable initializer,
+	/// `<Seam>+SafeDIBuilderCall.swift`, which `GraphFuzzerOracle.compilationFailures(of:definesDebug:)` compiles with the
+	/// generated code and nothing else reads. For each tier that takes a switched builder, one function passes each such
+	/// builder a closure, `{ make() }`, and another the stored closure `make` itself, where `make` is `@escaping () -> T`, or
+	/// `@escaping @Sendable () -> T` in the `@Sendable` family: the family and `T` are read from the builder struct the
+	/// generated-only initializer takes, which the drawn graph decides, never from the readable parameter judged. Every other
+	/// parameter, a kept builder's closure over its scope enum included, is passed a value of the type the readable
+	/// initializer spells. As `GraphFuzzerOracle.addingSeamCallers` does, the calls in the seam's module call every tier, at
+	/// the narrower of its access and the seam type's (`seamTypeAccess`), and, in a graph split across `modules`, a call in
+	/// each other module calls the narrowest tier its package reaches.
+	static func addingBuilderCalls(to generatedFiles: [String: String], seamTypeAccess: [String: String] = [:], modules: Set<GraphFuzzerModule> = []) -> [String: String] {
+		var withCalls = generatedFiles
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where isGenerated(fileName) && contents.contains("enum __safeDI_") {
+			let directory = fileName.contains("/") ? String(fileName.prefix { $0 != "/" }) + "/" : ""
+			let imports = Set(contents.split(separator: "\n").filter { $0.hasPrefix("import ") }.map(String.init)).sorted()
+			var seamTypeNames = [String]()
+			var tiersBySeam = [String: [(access: String, readableParameters: [String], generatedOnlyParameters: [String])]]()
+			for tier in GraphFuzzerOracle.readableInitializerTiers(inGeneratedFile: contents) {
+				if tiersBySeam[tier.seamTypeName] == nil {
+					seamTypeNames.append(tier.seamTypeName)
+				}
+				tiersBySeam[tier.seamTypeName, default: []].append((tier.access, tier.readableParameters, tier.generatedOnlyParameters))
+			}
+			for seamTypeName in seamTypeNames {
+				let tiers = Array((tiersBySeam[seamTypeName] ?? []).enumerated())
+				let seamAccess = seamTypeAccess[seamTypeName] ?? "public"
+				let seamModuleCalls = builderCalls(named: "\(seamTypeName)BuilderCall", of: seamTypeName, calling: tiers, seamTypeAccess: seamAccess)
+				if let seamModuleCalls {
+					withCalls["\(directory)\(seamTypeName)\(builderCallFileSuffix)"] = imports.map { $0 + "\n" }.joined() + (imports.isEmpty ? "" : "\n") + seamModuleCalls
+				}
+				guard fileName.hasPrefix(GraphFuzzerModule.seamModule.name + "/") else { continue }
+				for (module, reachableAccesses, callerName) in [
+					(GraphFuzzerModule.samePackageCaller, ["public", "package"], "SamePackageBuilderCall"),
+					(GraphFuzzerModule.otherPackageCaller, ["public"], "OtherPackageBuilderCall"),
+				] where modules.contains(module) && reachableAccesses.contains(seamAccess) {
+					guard let tier = tiers.last(where: { reachableAccesses.contains($0.element.access) }),
+					      let calls = builderCalls(named: "\(seamTypeName)\(callerName)", of: seamTypeName, calling: [tier], seamTypeAccess: seamAccess)
+					else { continue }
+					let callerImports = Set(imports + ["import \(GraphFuzzerModule.seamModule.name)"]).sorted()
+					withCalls["\(module.name)/\(seamTypeName)\(builderCallFileSuffix)"] = callerImports.map { $0 + "\n" }.joined() + "\n" + calls
+				}
+			}
+		}
+		return withCalls
+	}
+
+	/// An enum named `callerName` whose functions call each of `tiers` of the seam `seamTypeName` that takes a switched
+	/// builder, twice, as `addingBuilderCalls(to:seamTypeAccess:modules:)` describes, each indexed by the tier's position
+	/// among the seam's readable initializers; `nil` where no tier takes a switched builder.
+	private static func builderCalls(named callerName: String, of seamTypeName: String, calling tiers: [(offset: Int, element: (access: String, readableParameters: [String], generatedOnlyParameters: [String]))], seamTypeAccess: String) -> String? {
+		let accessOrder = ["private", "fileprivate", "internal", "package", "public"]
+		var functions = [String]()
+		for (index, tier) in tiers {
+			var parameters = [String]()
+			var closureArguments = [String]()
+			var storedClosureArguments = [String]()
+			for (position, (readableParameter, generatedOnlyParameter)) in zip(tier.readableParameters, tier.generatedOnlyParameters).enumerated() {
+				let readable = Parameter(readableParameter)
+				let label = argumentLabel(of: readable.label)
+				let name = "parameter\(position)"
+				if let builder = switchedBuilder(ofGeneratedOnlyParameter: generatedOnlyParameter) {
+					parameters.append("_ \(name): @escaping \(builder.isSendable ? "@Sendable " : "")() -> \(builder.builtType)")
+					closureArguments.append("\(label): { \(name)() }")
+				} else {
+					parameters.append("_ \(name): \(readable.type)")
+					closureArguments.append("\(label): \(name)")
+				}
+				storedClosureArguments.append("\(label): \(name)")
+			}
+			guard closureArguments != storedClosureArguments else { continue }
+			let access = [tier.access, seamTypeAccess].min { (accessOrder.firstIndex(of: $0) ?? 2) < (accessOrder.firstIndex(of: $1) ?? 2) } ?? "internal"
+			for (formName, arguments) in [("WritingClosures", closureArguments), ("PassingStoredClosures", storedClosureArguments)] {
+				functions.append("""
+				    \(access) static func callTier\(index)\(formName)(\(parameters.joined(separator: ", "))) -> \(seamTypeName) {
+				        \(seamTypeName)(\(arguments.joined(separator: ", ")))
+				    }
+				""")
+			}
+		}
+		guard !functions.isEmpty else { return nil }
+		return """
+		public enum \(callerName) {
+		\(functions.joined(separator: "\n"))
+		}
+
+		"""
+	}
+
+	/// The family and built type `T` of the builder struct `parameter`, a parameter of an initializer only generated code
+	/// calls, takes – `SafeDIScope_….__safeDI_Builder<T>`, or `SafeDISendableScope_….__safeDI_Builder<T>` for the
+	/// `@Sendable` family – or `nil` for a parameter of another type, a kept builder's closure over its scope enum included.
+	static func switchedBuilder(ofGeneratedOnlyParameter parameter: String) -> (isSendable: Bool, builtType: String)? {
+		let type = Parameter(parameter).type
+		guard let structRange = type.range(of: #"(?<![A-Za-z0-9_])SafeDI(Sendable)?Scope_\w+(\.\w+)*\.__safeDI_Builder<"#, options: .regularExpression),
+		      let lastAngleBracket = type.lastIndex(of: ">"),
+		      structRange.upperBound <= lastAngleBracket
+		else { return nil }
+		let isSendable = type[structRange].hasPrefix("SafeDISendableScope_")
+		return (isSendable, String(type[structRange.upperBound..<lastAngleBracket]))
+	}
+
+	/// The external label of a parameter whose label clause is `labelClause`, as a call spells it: without backticks, which
+	/// an argument label needs only for `inout`, `var` and `let`.
+	private static func argumentLabel(of labelClause: String) -> String {
+		let externalLabel = labelClause.split(separator: " ").first.map(String.init) ?? labelClause
+		guard externalLabel.hasPrefix("`"), externalLabel.hasSuffix("`") else { return externalLabel }
+		let unquoted = String(externalLabel.dropFirst().dropLast())
+		return ["inout", "var", "let"].contains(unquoted) ? externalLabel : unquoted
 	}
 }
 
@@ -1147,6 +1269,7 @@ extension GraphFuzzerToolRuns {
 	}
 
 	/// The failure of a graph whose part (iii) remedy the tool accepts with other builders than the drawn graph's, or `nil`.
+	/// Known issues list it only for the transitional builder-kind flip (`knownBuilderSurfaceKinds`).
 	var remedyBuildersFailure: GraphFuzzerFailure? {
 		failure(of: .remedyAddsBuilder, kinds: [Self.remedyBuildersPairKind])
 	}
@@ -1242,14 +1365,21 @@ extension GraphFuzzerToolRuns {
 
 extension GraphFuzzerFailure {
 	/// Every kind of failure of the builder surface, which no known failure of an earlier oracle masks
-	/// (`GraphFuzzerFinding.init`): each judges only what the tool generates for the graph and its edits, so it does not
-	/// depend on how else the graph fails.
-	static let builderSurfaceKindsNeverMasked: Set<Kind> = knownBuilderSurfaceKinds.union([.remedyOfPlacesForwardingOtherValuesRejected, .remedyAddsBuilder])
+	/// (`GraphFuzzerFinding.init`): each judges only what the tool generates for the graph and its edits, or, for the
+	/// compile of the call a person writes (`builderCallDoesNotCompile`), only that call, so it does not depend on how else
+	/// the graph fails.
+	static let builderSurfaceKindsNeverMasked: Set<Kind> = knownBuilderSurfaceKinds.union([.remedyOfPlacesForwardingOtherValuesRejected, .builderCallDoesNotCompile])
 
 	/// The kinds of failure of the builder surface a known issue may list (`GraphFuzzerKnownIssue.Signature.builderSurface`).
-	/// The rejection of a remedy and a remedy's other builders are not among them: no seed lists either.
+	/// The rejection of a remedy is not among them: no seed lists it. A remedy accepted with other builders is listed only
+	/// for the transitional builder-kind flip (a seam takes builder structs only while no place of its builders forwards a
+	/// value, so the remedy, whose places forward the same values, can turn a builder that took a closure over a scope enum
+	/// into one that takes a struct); never masked (`builderSurfaceKindsNeverMasked`); emptied once every builder takes a
+	/// struct. While it is here, a graph that fails only this kind counts among the graphs that pass besides the builder
+	/// surface (`passesBesidesBuilderSurface`), listed or not; an unlisted one is still reported.
 	static let knownBuilderSurfaceKinds: Set<Kind> = [
 		.builderSurfaceNamesGeneratedType,
+		.remedyAddsBuilder,
 		.builderLabelBreaksContract,
 		.sameSupplyCallStopsCompiling,
 		.sameSupplyEditRejected,

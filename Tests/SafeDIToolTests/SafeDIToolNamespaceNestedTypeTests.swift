@@ -1736,44 +1736,151 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let imports = """
-		#if canImport(Core)
-		import Core
-		#endif
-		#if canImport(SafeDI)
-		import SafeDI
-		#endif
-
-
-		"""
-		let rootTree = """
-		extension Root {
-		    public convenience init() {
-		        let child = Core.Namespace.Child()
-		        self.init(child: child)
-		    }
-		}
-		"""
-		let childMock = """
-		#if DEBUG
-		extension Core.Namespace.Child {
-		    static func mock(
-		        mode: Core.Mode = .fromCore
-		    ) -> Core.Namespace.Child {
-		        return Core.Namespace.Child(mode: mode)
-		    }
-		}
-		#endif
-		"""
 		switch integration {
 		case .moduleInfo:
-			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + imports + rootTree + "\n\n" + childMock])
+			#expect(output.modules["App"]?.generatedFiles == (integration == .moduleInfo ? [
+				"App.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        let child = Core.Namespace.Child()
+				        self.init(child: child)
+				    }
+				}
+
+				#if DEBUG
+				extension Core.Namespace.Child {
+				    static func mock(
+				        mode: Core.Mode = .fromCore
+				    ) -> Core.Namespace.Child {
+				        return Core.Namespace.Child(mode: mode)
+				    }
+				}
+				#endif
+				""",
+			] : [
+				"Namespace+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Core.Namespace.Child {
+				    static func mock(
+				        mode: Core.Mode = .fromCore
+				    ) -> Core.Namespace.Child {
+				        return Core.Namespace.Child(mode: mode)
+				    }
+				}
+				#endif
+				""",
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        let child = Core.Namespace.Child()
+				        self.init(child: child)
+				    }
+				}
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+
+				""",
+			]))
 		case .swiftPackagePlugin:
-			#expect(output.modules["App"]?.generatedFiles == [
-				"Namespace+SafeDIMock.swift": generatedFileHeader + imports + childMock,
-				"Root+SafeDI.swift": generatedFileHeader + imports + rootTree,
-				"SafeDIMockConfiguration.swift": generatedFileHeader + imports,
-			])
+			#expect(output.modules["App"]?.generatedFiles == (integration == .moduleInfo ? [
+				"App.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        let child = Core.Namespace.Child()
+				        self.init(child: child)
+				    }
+				}
+
+				#if DEBUG
+				extension Core.Namespace.Child {
+				    static func mock(
+				        mode: Core.Mode = .fromCore
+				    ) -> Core.Namespace.Child {
+				        return Core.Namespace.Child(mode: mode)
+				    }
+				}
+				#endif
+				""",
+			] : [
+				"Namespace+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Core.Namespace.Child {
+				    static func mock(
+				        mode: Core.Mode = .fromCore
+				    ) -> Core.Namespace.Child {
+				        return Core.Namespace.Child(mode: mode)
+				    }
+				}
+				#endif
+				""",
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        let child = Core.Namespace.Child()
+				        self.init(child: child)
+				    }
+				}
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+
+				""",
+			]))
 		}
 	}
 

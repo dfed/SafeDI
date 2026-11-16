@@ -54,31 +54,55 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		for moduleName in output.moduleNames {
 			#expect(try #require(output.modules[moduleName]).warnings == [])
 		}
-		let rootCode = """
-		extension Root {
-		    public convenience init() {
-		        func __safeDI_pump() -> Pump {
-		            let engine = Engine()
-		            return Pump(engine: engine)
-		        }
-		        let pump: Pump = __safeDI_pump()
-		        self.init(pump: pump)
-		    }
-		}
-		"""
 		let expectedGeneratedFiles: [String: [String: String]] = switch integration {
 		case .moduleInfo:
 			// A combined file repeats the module's imports whether or not it holds code.
 			[
 				"Core": ["Core.swift": generatedFileHeader],
 				"Middle": ["Middle.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n"],
-				"App": ["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Middle") + "\n\n" + rootCode],
+				"App": ["App.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(Middle)
+				import Middle
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_pump() -> Pump {
+				            let engine = Engine()
+				            return Pump(engine: engine)
+				        }
+				        let pump: Pump = __safeDI_pump()
+				        self.init(pump: pump)
+				    }
+				}
+				"""],
 			]
 		case .swiftPackagePlugin:
 			[
 				"Core": [:],
 				"Middle": [:],
-				"App": ["Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Middle") + "\n\n" + rootCode],
+				"App": ["Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(Middle)
+				import Middle
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_pump() -> Pump {
+				            let engine = Engine()
+				            return Pump(engine: engine)
+				        }
+				        let pump: Pump = __safeDI_pump()
+				        self.init(pump: pump)
+				    }
+				}
+				"""],
 			]
 		}
 		#expect(output.modules.mapValues(\.generatedFiles) == expectedGeneratedFiles)
@@ -332,7 +356,11 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 			[
 				"Core": ["CoreRoot+SafeDI.swift": generatedFileHeader + coreRootCode],
 				"App": [
-					"CoreRoot+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + """
+					"CoreRoot+SafeDI.swift": generatedFileHeader + """
+					#if canImport(Core)
+					import Core
+					#endif
+
 					// SafeDI generates CoreRoot’s init() only in Core, the module that declares CoreRoot. If CoreRoot() does not compile, add the SafeDI plugin to the target that declares CoreRoot.
 					""",
 					"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + Self.rootInstantiatingEngineCode,
@@ -467,26 +495,47 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		case .swiftPackagePlugin:
 			app.fixtures.compilerPath(of: "Car.swift")
 		}
-		let rootCode = """
-		extension Root {
-		    public convenience init() {
-		        let engine = Engine()
-		        func __safeDI_car() -> Car {
-		            #sourceLocation(file: "\(carPath)", line: 8)
-		            let motor: Engine = engine
-		            #sourceLocation()
-		            return Car(motor: motor)
-		        }
-		        let car: Car = __safeDI_car()
-		        self.init(engine: engine, car: car)
-		    }
-		}
-		"""
 		let expectedGeneratedFiles: [String: String] = switch integration {
 		case .moduleInfo:
-			["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + rootCode]
+			["App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let engine = Engine()
+			        func __safeDI_car() -> Car {
+			            #sourceLocation(file: "\(carPath)", line: 8)
+			            let motor: Engine = engine
+			            #sourceLocation()
+			            return Car(motor: motor)
+			        }
+			        let car: Car = __safeDI_car()
+			        self.init(engine: engine, car: car)
+			    }
+			}
+			"""]
 		case .swiftPackagePlugin:
-			["Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + rootCode]
+			["Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let engine = Engine()
+			        func __safeDI_car() -> Car {
+			            #sourceLocation(file: "\(carPath)", line: 8)
+			            let motor: Engine = engine
+			            #sourceLocation()
+			            return Car(motor: motor)
+			        }
+			        let car: Car = __safeDI_car()
+			        self.init(engine: engine, car: car)
+			    }
+			}
+			"""]
 		}
 		#expect(app.generatedFiles == expectedGeneratedFiles)
 	}
@@ -583,7 +632,17 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 
 		let app = try #require(output.modules["App"])
 		#expect(app.generatedFiles == [
-			"Root+SafeDI.swift": generatedFileHeader + Self.inactiveConditionAssertion("FEATURE") + Self.activeConditionAssertion("Xcode"),
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if FEATURE
+			#error("SafeDI scanned this module assuming `#if FEATURE` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			#if !(Xcode)
+			#error("SafeDI scanned this module assuming `#if Xcode` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+
+			""",
 		])
 	}
 
@@ -652,7 +711,18 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 
 		let app = try #require(output.modules["App"])
 		#expect(app.generatedFiles == [
-			"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Shared") + "\n\n" + Self.rootInstantiatingEngineCode,
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Shared)
+			import Shared
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let engine = Engine()
+			        self.init(engine: engine)
+			    }
+			}
+			""",
 		])
 		// A found file outside the package is listed by its normalized path.
 		let engineFile = output.fixtureRoot.appendingPathComponent("checkouts/Toolkit/Sources/Shared/Engine.swift")
@@ -1095,17 +1165,6 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		"""
 		#if !(\(condition))
 		#error("SafeDI scanned this module assuming `#if \(condition)` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
-		#endif
-
-		""" + "\n"
-	}
-
-	/// The compile-time assertion a generated file carries for a `#if <condition>` the tool evaluated as inactive,
-	/// ending with the blank line that precedes the code.
-	private static func inactiveConditionAssertion(_ condition: String) -> String {
-		"""
-		#if \(condition)
-		#error("SafeDI scanned this module assuming `#if \(condition)` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		""" + "\n"

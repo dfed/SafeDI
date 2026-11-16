@@ -219,7 +219,27 @@ struct SafeDIToolSeamHarnessOptionTests: ~Copyable {
 		"""
 		switch integration {
 		case .moduleInfo:
-			#expect(releaseOutput.modules["Feature"]?.generatedFiles == ["Feature.swift": seamFile])
+			#expect(releaseOutput.modules["Feature"]?.generatedFiles == [
+				integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + """
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				extension Service {
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
+				        let token = LazilyInstantiated<Token>(__safeDI_token)
+				        let badge = Badge(token: token.instance)
+				        self.init(badge: badge)
+				    }
+				}
+
+				extension Service {
+				    public enum __safeDI_Service_F2F345803C710CE2 {}
+				}
+				""",
+			])
 		case .swiftPackagePlugin:
 			#expect(releaseOutput.modules["Feature"]?.generatedFiles["Service+SafeDI.swift"] == seamFile)
 		}
