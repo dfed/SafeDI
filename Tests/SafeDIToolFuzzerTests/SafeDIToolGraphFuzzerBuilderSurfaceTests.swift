@@ -644,6 +644,12 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 		(.holderMovedToInnerSeamOfAnotherModule, .generateDependencyTree, 15),
 		(.placeOfNewBuilderInInnerSeamOfAnotherModule, .generateDependencyTree, 15),
 		(.placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied, .generateDependencyTree, 15),
+		// Seed 15 holds `HoleHanded`, which forwards nothing, in an `Instantiator` on `HoleHandedHolder`.
+		(.instantiatorPlaceMovedToPlainPlace, .generateDependencyTree, 15),
+		(.instantiatorChangedToErasedInstantiator, .generateDependencyTree, 15),
+		(.instantiatorMadeSendable, .generateDependencyTree, 15),
+		(.sendableInstantiatorPlaceMovedToPlainPlace, .generateDependencyTree, 15),
+		(.sendableInstantiatorChangedToSendableErasedInstantiator, .generateDependencyTree, 15),
 		(.placeBehindLazilyInstantiated, .generateMockPublic, 3),
 		(.instantiatorPlaceMovedToPlainPlace, .generateMockPublic, 18),
 		(.instantiatorChangedToErasedInstantiator, .generateMockPublic, 18),
@@ -670,19 +676,17 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func rejectionJudgment_reportsAcceptance_whenSeamCorpusPlacesForwardOtherValues() async throws {
-		// Part (iii)'s finding on main: places of one builder that forward other values are merged into one builder, where
-		// the contract asks for a rejection, which `GraphFuzzerToolRuns.forwardedValuesFailure` reports. The builder-struct
-		// slice that rejects them changes this line to none.
-		#expect(try await Self.forwardingOtherValuesJudgment(feature: .generateDependencyTree, seed: 15) == .init(isJudged: true, problems: [
-			"The tool accepts a builder whose places forward other values",
-		]))
+	func rejectionJudgment_reportsNoProblem_whenSeamCorpusPlacesForwardOtherValues() async throws {
+		// The seam's module rejects places of one builder that forward other values, as the contract asks, where the rejected
+		// edit's error is reported: the judgment runs and finds nothing for `GraphFuzzerToolRuns.forwardedValuesFailure` to
+		// report.
+		#expect(try await Self.forwardingOtherValuesJudgment(feature: .generateDependencyTree, seed: 15) == .init(isJudged: true, problems: []))
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func rejectionJudgment_reportsAcceptance_whenPublicMockCorpusPlacesForwardOtherValues() async throws {
-		// As in the seam corpus: the builder-struct slice that rejects them changes this line to none.
+		// Public mocks still merge such places into one builder; the change that rejects them there changes this line to none.
 		#expect(try await Self.forwardingOtherValuesJudgment(feature: .generateMockPublic, seed: 3) == .init(isJudged: true, problems: [
 			"The tool accepts a builder whose places forward other values",
 		]))
