@@ -5148,18 +5148,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// closure that calls it. Empty for a scope that builds no instantiator, which no caller asks.
 	nonisolated private func instantiatorDeclaration(handing functionName: String, forwardedArguments: String) -> String {
 		guard case let .property(instantiable, property, _, _, _, _) = scopeData else { return "" }
-		let typeDescription = property.typeDescription.asSource
-		// A type constructed by annotation spells its generic arguments only in `propertyDeclaration`.
-		let unwrappedTypeDescription = property
-			.typeDescription
-			.unwrapped
-			.spelledForConstruction
-		let propertyDeclaration = if !instantiable.declarationType.isExtension, typeDescription == unwrappedTypeDescription {
-			"let \(property.label)"
-		} else {
-			"let \(property.asSource)"
-		}
-		return "\(propertyDeclaration) = \(instantiatorExpression(handing: functionName, forwardedArguments: forwardedArguments))"
+		let pattern = property.typeDescription.wrapperBindingPattern(named: property.label, isAlwaysAnnotated: instantiable.declarationType.isExtension)
+		return "let \(pattern) = \(instantiatorExpression(handing: functionName, forwardedArguments: forwardedArguments))"
 	}
 
 	/// The wrapper `instantiatorDeclaration(handing:forwardedArguments:)` declares.
@@ -6048,8 +6038,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return "let \(property.asSource) = \(buildExpression(forwarding: nil))"
 		}
 		let unwrappedType = property.typeDescription.unwrapped
-		// A type constructed by annotation spells its generic arguments only in the declaration's annotation.
-		let declaration = property.typeDescription.asSource == unwrappedType.spelledForConstruction ? "let \(property.label)" : "let \(property.asSource)"
+		let declaration = "let \(property.typeDescription.wrapperBindingPattern(named: property.label))"
 		guard !propertyType.forwardsPropertiesOfBuiltType, site.forwardedType == nil else {
 			// The wrapper's closure takes the forwarded value – `T.ForwardedProperties`, or an erased instantiator's first
 			// generic argument – escaping when it is a function type, as no parameter of a function declared here could, since
@@ -10537,7 +10526,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 	) -> String {
 		let unwrappedType = node.typeDescription.unwrapped
-		let binding = unwrappedType.isConstructedByAnnotation ? "\(bindingName): \(unwrappedType.asSource)" : bindingName
+		let binding = unwrappedType.wrapperBindingPattern(named: bindingName)
 		let construction = mockInstantiatorConstruction(
 			of: node.typeDescription,
 			handing: functionName,
@@ -10804,7 +10793,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Emit the Instantiator/ErasedInstantiator construction.
 		let unwrappedType = node.typeDescription.unwrapped
 		let unwrappedTypeDescription = unwrappedType.spelledForConstruction
-		let outerBinding = unwrappedType.isConstructedByAnnotation ? "\(outerBindingName): \(unwrappedType.asSource)" : outerBindingName
+		let outerBinding = unwrappedType.wrapperBindingPattern(named: outerBindingName)
 
 		// The builder function now returns the property type directly (including
 		// wrapping for erasedToConcreteExistential), so no outer wrapping needed.
