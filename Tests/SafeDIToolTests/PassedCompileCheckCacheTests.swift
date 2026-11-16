@@ -570,7 +570,8 @@ extension Array {
 /// Whether a check gets a key in this process: compile verification is enabled and what compiles the checks can be
 /// described. It cannot in a build whose directory holds no record of what it resolved, where the verifier compiles
 /// every check without a key, so a test that expects a recorded key has nothing to expect.
-@Sendable private func whatCompilesTheChecksCanBeDescribed() async -> Bool {
+@Sendable
+private func whatCompilesTheChecksCanBeDescribed() async -> Bool {
 	guard compileVerificationIsEnabled else { return false }
 	if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
 		return await CompileCheckBuild.description != nil
