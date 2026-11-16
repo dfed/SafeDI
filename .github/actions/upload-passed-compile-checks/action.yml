@@ -1,5 +1,5 @@
 name: Upload Passed Compile Checks
-description: Uploads the compile checks this run's own tests passed, with their identity, for "Share Passed Compile Checks" to add to the shared list.
+description: Uploads the compile checks this run's own tests passed, with their identity, for other runs to read and for "Share Passed Compile Checks" to add to the shared list.
 
 # Call it after the tests, with `if: always()`: the checks that passed before a
 # failure or a cancellation passed all the same. A run with no file uploads
@@ -30,15 +30,22 @@ runs:
           echo "$IDENTITY" > passed-compile-checks/identity.txt
         fi
     # One artifact per operating system, since CI's two test jobs each upload
-    # one. A day is long enough: the sharing workflow reads it when the run
-    # ends.
+    # one. The name ends with the identity, so that a run lists only the
+    # artifacts of its own (restore-from-artifacts.js, which spells this name
+    # too, as share-compile-checks.yml does). `v1` is what to change to leave
+    # every artifact uploaded so far unread; share-compile-checks.yml says
+    # when.
     # Sharing only saves compiles, so a failed upload never fails the job.
     - uses: actions/upload-artifact@v7
       continue-on-error: true
       with:
-        name: passed-compile-checks-${{ runner.os }}
+        name: passed-compile-checks-v1-${{ runner.os }}-${{ inputs.identity }}
         path: passed-compile-checks/
-        retention-days: 1
+        # Other runs read it for as long as it is among the newest of its
+        # identity (restore-shared-compile-checks), which a stack needs for
+        # the days it is in review. "Share Passed Compile Checks" reads it
+        # when the run ends.
+        retention-days: 7
         if-no-files-found: ignore
         # A re-run of the job replaces what an earlier attempt uploaded.
         overwrite: true
