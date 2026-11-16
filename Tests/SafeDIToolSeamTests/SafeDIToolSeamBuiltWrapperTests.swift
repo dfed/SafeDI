@@ -761,14 +761,14 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let part: (part_Values) -> __safeDI_Built
+		            public let part: (part_Values) -> ErasedInstantiator<(), __safeDI_Built>.Builder
 
-		            public init(part: @escaping (part_Values) -> __safeDI_Built) {
+		            public init(part: @escaping (part_Values) -> ErasedInstantiator<(), __safeDI_Built>.Builder) {
 		                self.part = part
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.part = { _ in __safeDI_builder() }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
+		                self.part = { _ in __safeDI_builder }
 		            }
 		        }
 		    }
@@ -777,10 +777,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_defaultGadget_GadgetBuilder: SafeDIScope_DefaultGadget_Gadget.__safeDI_Builder<any Gadget>) {
 		        let analytics = Analytics()
-		        func __safeDI_part() -> any Gadget {
-		            __safeDI_defaultGadget_GadgetBuilder.part(SafeDIScope_DefaultGadget_Gadget.part_Values(analytics: analytics))
-		        }
-		        let part = ErasedInstantiator<\(spelling), any Gadget>(__safeDI_part)
+		        let part = ErasedInstantiator<\(spelling), any Gadget>(__safeDI_defaultGadget_GadgetBuilder.part(SafeDIScope_DefaultGadget_Gadget.part_Values(analytics: analytics)))
 		        self.init(analytics: analytics, part: part)
 		    }
 		}
@@ -799,15 +796,14 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			    public init() {
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_8897BFE4AFEC13D7.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_defaultGadget_GadgetBuilder_Host_part(_ scope: Host.SafeDIScope_DefaultGadget_Gadget.part_Values) -> any Gadget {
-			                let analytics = scope.analytics
+			            func __safeDI_defaultGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<\(spelling), any Gadget>.Builder {
 			                func __safeDI_part() -> DefaultGadget {
 			                    DefaultGadget(analytics: analytics)
 			                }
-			                return __safeDI_part()
+			                return { _ in __safeDI_part() }
 			            }
 			            func __safeDI_defaultGadget_GadgetBuilder_Host() -> Host.SafeDIScope_DefaultGadget_Gadget.__safeDI_Builder<any Gadget> {
-			                .init(part: { scope in __safeDI_defaultGadget_GadgetBuilder_Host_part(scope) })
+			                .init(part: { values in __safeDI_defaultGadget_GadgetBuilder_Host_part(analytics: values.analytics) })
 			            }
 			            return Host(__safeDI_defaultGadget_GadgetBuilder: __safeDI_defaultGadget_GadgetBuilder_Host())
 			        }
