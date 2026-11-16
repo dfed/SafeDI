@@ -73,7 +73,148 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.modules["Core"]?.generatedFiles == Self.screenFiles(integration: integration))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"Core.swift": generatedFileHeader + """
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Screen {
+				    /// Overrides for the mock dependency tree.
+				    nonisolated public struct SafeDIOverrides {
+				        public init(
+				            service: __safeDI_Core_Service_MockConfiguration = .init(),
+				            leaf: ((Service) -> Leaf)? = nil
+				        ) {
+				            self.service = service
+				            self.leaf = leaf
+				        }
+
+				        public let service: __safeDI_Core_Service_MockConfiguration
+				        public let leaf: ((Service) -> Leaf)?
+				    }
+
+				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Screen {
+				        func __safeDI_service() -> Service {
+				            return Service.__safeDI_init(name: safeDIOverrides.service.name, safeDIBuilder: safeDIOverrides.service.safeDIBuilder)
+				        }
+				        let service: Service = __safeDI_service()
+				        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder(service) } else { Leaf(service: service) }
+				        return Screen(service: service, leaf: leaf)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_mock_51799E6AA5E7B634 {}
+				}
+				#endif
+
+				#if DEBUG
+				/// Configuration for how `Service` is constructed within the public mock trees of module `Core`.
+				nonisolated public struct __safeDI_Core_Service_MockConfiguration {
+				    public init(
+				        name: String? = nil,
+				        _ safeDIBuilder: ((String) -> Service)? = nil
+				    ) {
+				        self.name = name
+				        self.safeDIBuilder = safeDIBuilder
+				    }
+
+				    /// `nil` keeps the default of `Service`’s `name`.
+				    public let name: String?
+				    /// Overrides how `Service` is constructed. Parameters match the type’s initializer or custom mock method.
+				    public let safeDIBuilder: ((String) -> Service)?
+				}
+
+				extension Service {
+				    static func __safeDI_init(name: String?, safeDIBuilder: ((String) -> Service)?) -> Service {
+				        let name = name ?? ("service")
+				        return if let safeDIBuilder { safeDIBuilder(name) } else { Service(name: name) }
+				    }
+				}
+				#endif
+
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				/// Configuration for how `Service` is constructed within the public mock trees of module `Core`.
+				nonisolated public struct __safeDI_Core_Service_MockConfiguration {
+				    public init(
+				        name: String? = nil,
+				        _ safeDIBuilder: ((String) -> Service)? = nil
+				    ) {
+				        self.name = name
+				        self.safeDIBuilder = safeDIBuilder
+				    }
+
+				    /// `nil` keeps the default of `Service`’s `name`.
+				    public let name: String?
+				    /// Overrides how `Service` is constructed. Parameters match the type’s initializer or custom mock method.
+				    public let safeDIBuilder: ((String) -> Service)?
+				}
+
+				extension Service {
+				    static func __safeDI_init(name: String?, safeDIBuilder: ((String) -> Service)?) -> Service {
+				        let name = name ?? ("service")
+				        return if let safeDIBuilder { safeDIBuilder(name) } else { Service(name: name) }
+				    }
+				}
+				#endif
+
+				""",
+				"Screen+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Screen {
+				    /// Overrides for the mock dependency tree.
+				    nonisolated public struct SafeDIOverrides {
+				        public init(
+				            service: __safeDI_Core_Service_MockConfiguration = .init(),
+				            leaf: ((Service) -> Leaf)? = nil
+				        ) {
+				            self.service = service
+				            self.leaf = leaf
+				        }
+
+				        public let service: __safeDI_Core_Service_MockConfiguration
+				        public let leaf: ((Service) -> Leaf)?
+				    }
+
+				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Screen {
+				        func __safeDI_service() -> Service {
+				            return Service.__safeDI_init(name: safeDIOverrides.service.name, safeDIBuilder: safeDIOverrides.service.safeDIBuilder)
+				        }
+				        let service: Service = __safeDI_service()
+				        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder(service) } else { Leaf(service: service) }
+				        return Screen(service: service, leaf: leaf)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_mock_51799E6AA5E7B634 {}
+				}
+				#endif
+				""",
+			]
+		}
+		#expect(output.modules["Core"]?.generatedFiles == expectedFiles)
 	}
 
 	@Test(arguments: DefaultIsolationCase.allCases)

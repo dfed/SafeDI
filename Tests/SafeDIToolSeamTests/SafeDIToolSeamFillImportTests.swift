@@ -58,7 +58,20 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		case .moduleInfo: "App.swift"
 		case .swiftPackagePlugin: "Root+SafeDI.swift"
 		}
-		#expect(generatedFiles == [fileName: Self.generatedFile(importing: ["Core", "Impl", "InnerSeamModule", "OuterSeamModule"], """
+		#expect(generatedFiles == [fileName: generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Impl)
+		import Impl
+		#endif
+		#if canImport(InnerSeamModule)
+		import InnerSeamModule
+		#endif
+		#if canImport(OuterSeamModule)
+		import OuterSeamModule
+		#endif
+
 		extension Root {
 		    public init() {
 		        func __safeDI_outerSeam() -> OuterSeam {
@@ -81,7 +94,7 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		        self.init(outerSeam: outerSeam)
 		    }
 		}
-		""")], "Unexpected output \(generatedFiles)")
+		"""], "Unexpected output \(generatedFiles)")
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -104,7 +117,17 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		case .moduleInfo: "OuterSeamModule.swift"
 		case .swiftPackagePlugin: "OuterSeam+SafeDI.swift"
 		}
-		#expect(generatedFiles == [fileName: Self.generatedFile(importing: ["Core", "Impl", "InnerSeamModule"], """
+		#expect(generatedFiles == [fileName: generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Impl)
+		import Impl
+		#endif
+		#if canImport(InnerSeamModule)
+		import InnerSeamModule
+		#endif
+
 		extension OuterSeam {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
@@ -126,7 +149,7 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		extension OuterSeam {
 		    public enum __safeDI_OuterSeam_CBF29CE484222325 {}
 		}
-		""")], "Unexpected output \(generatedFiles)")
+		"""], "Unexpected output \(generatedFiles)")
 	}
 
 	@Test
@@ -143,7 +166,20 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Core", "Impl", "InnerSeamModule", "OuterSeamModule", "Sub"])
 		let generatedFiles = try #require(output.modules["App"]?.generatedFiles)
-		#expect(generatedFiles == ["App.swift": Self.generatedFile(importing: ["Core", "Impl", "InnerSeamModule", "OuterSeamModule"], """
+		#expect(generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Impl)
+		import Impl
+		#endif
+		#if canImport(InnerSeamModule)
+		import InnerSeamModule
+		#endif
+		#if canImport(OuterSeamModule)
+		import OuterSeamModule
+		#endif
+
 		extension Root {
 		    public init() {
 		        func __safeDI_outerSeam() -> OuterSeam {
@@ -166,7 +202,7 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		        self.init(outerSeam: outerSeam)
 		    }
 		}
-		""")], "Unexpected output \(generatedFiles)")
+		"""], "Unexpected output \(generatedFiles)")
 	}
 
 	// MARK: Private
