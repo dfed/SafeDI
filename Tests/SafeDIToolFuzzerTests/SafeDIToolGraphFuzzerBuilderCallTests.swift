@@ -163,6 +163,19 @@ struct SafeDIToolGraphFuzzerBuilderCallTests {
 		#expect(failures[seed]?.kind == .generatedCodeDoesNotCompile)
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func compilationFailures_reportGeneratedCodeWarning_whenGeneratedCodeDrawsWarningBesideBuilderCall() async throws {
+		// The graph's own code compiles without the failing builder call, but draws a warning: that is the finding.
+		let seed: UInt64 = 1_000_000_105
+		let toolRuns = [Self.seamGraph(seed: seed, readablePlainBuilderType: "@escaping @Sendable () -> any S1000000105_Api", extraGeneratedCode: "func drawsWarning() {\n    let unused = 1\n}\n")]
+
+		let failures = try await GraphFuzzerOracle.compilationFailures(of: toolRuns)
+
+		#expect(failures.keys.sorted() == [seed])
+		#expect(failures[seed]?.kind == .generatedCodeDrawsWarning)
+	}
+
 	// MARK: Findings
 
 	@Test
