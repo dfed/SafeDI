@@ -62,7 +62,8 @@ def main():
                 found = True; print(f'  a landing\'s CI {a["id"]} overlapped {b["name"]} {b["id"]} ({b["branch"]}) for {overlap(a, b):.0f} min')
     if not found: print("  held")
     print("Rule 2, one dispatch for tests and pins:")
-    by_hand = [r for r in fuzz if r["event"] == "workflow_dispatch"]
+    # verify.yml with pins=true dispatches Graph Fuzzer itself, on a branch named verify/pins-<commit>-<n>.
+    by_hand = [r for r in fuzz if r["event"] == "workflow_dispatch" and not r["branch"].startswith("verify/pins-")]
     for r in by_hand: print(f'  Graph Fuzzer dispatched by hand: {r["id"]} on {r["branch"]} at {r["start"]:%H:%M}')
     if not by_hand: print("  held")
     print("Rule 3, a local run before a full Verify:")
@@ -72,7 +73,11 @@ def main():
     repeated = {branch: runs for branch, runs in failed.items() if len(runs) >= 2}
     for branch, runs in repeated.items():
         print(f'  {len(runs)} failed Verify runs on {branch}: ' + ", ".join(str(r["id"]) for r in runs))
-    if not repeated: print("  held")
+    # Each dispatch runs on a branch of its own (verify/<commit>-<n>), so repeats show only as early failures:
+    # a Verify that fails inside 12 minutes failed in its build or first tests, which a local run shows sooner.
+    early = [r for r in rows if r["name"] == "Verify" and r["result"] == "failure" and (r["end"] - r["start"]).total_seconds() < 720]
+    for r in early: print(f'  Verify {r["id"]} on {r["sha"]} failed after {(r["end"] - r["start"]).total_seconds() / 60:.0f} min, started {r["start"]:%H:%M}')
+    if not repeated and not early: print("  held")
     print("Rule 4, no re-run or dispatch on main without asking the lead:")
     on_main = [r for r in rows if r["branch"] == "main" and (r["attempt"] > 1 or r["event"] == "workflow_dispatch")]
     for r in on_main: print(f'  {r["name"]} {r["id"]} on main: attempt {r["attempt"]}, {r["event"]}, started {r["start"]:%H:%M}')
