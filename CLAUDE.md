@@ -31,7 +31,7 @@ Formatting changes from `./CLI/lint.sh` go in a commit of their own, after the c
 - `Scripts/fuzzer-coverage-report.sh RUN [BASE]` lists the changed generator lines no fuzzer corpus graph executed, from a run's `fuzzer-coverage` artifact, against another base; `graph-fuzzer.yml`'s `coverage` input makes the report for a commit before review ("Coverage of a change" in `.claude/rules/fuzzer-corpora.md`).
 - `Scripts/multi-module-repro.sh [--conditions DEBUG,X] ROOT MODULE…` runs `generate` per module as Bazel and Tuist do and compiles the modules in order.
 - `Scripts/unexecuted-lines.py` is "Check Line Coverage on Linux": it needs both test jobs' reports, so it cannot check a local run. To read a CI run's result locally, download the run's reports (`gh run download RUN -p 'line-coverage-*'`) and run it as the job does, from a checkout of the commit their `commit.txt` names (for a pull request, GitHub's merge commit, which `git fetch origin SHA` fetches); `--self-test DIRECTORY` checks the script against fixtures.
-- Tools only agents run are skills under `.claude/skills/`: `verify-touched` runs the suites a branch touches, before any full Verify.
+- Tools only agents run are skills under `.claude/skills/`: `verify-touched` runs the suites a branch touches, before any full Verify; `restack-lane` rebases a branch and checks it.
 - `Scripts/check-claude-instruction-files.sh` fails when an instruction file could be truncated or would load at launch by mistake; "Check Markdown links" runs it.
 
 ### CI
