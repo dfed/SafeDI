@@ -45,6 +45,19 @@ struct GraphFuzzerBuilderStructReaderTests {
 			"Home.SafeDIScope_Api",
 			"Home.SafeDIScope_Api.api",
 			"Home.SafeDIScope_LivePanel_Panel",
+			"Home.SafeDIScope_LivePanel_Panel.inner",
+			"Home.SafeDIScope_LivePanel_Panel.panelBuilder",
+		])
+	}
+
+	@Test
+	func holeBuilderNames_readsMemberReturningWrapperBuilder_whenSeamTakesBuilderStructForPlaceThatForwards() {
+		#expect(GraphFuzzerOracle.holeBuilderNames(in: ["FuzzFeature/Home+SafeDI.swift": Self.switchedForwardingHome]) == [
+			"Home(apiBuilder:)",
+			"Home(livePanel_PanelBuilder:)",
+			"Home.SafeDIScope_Api",
+			"Home.SafeDIScope_Api.api",
+			"Home.SafeDIScope_LivePanel_Panel",
 			"Home.SafeDIScope_LivePanel_Panel.panelBuilder",
 		])
 	}
@@ -81,6 +94,14 @@ struct GraphFuzzerBuilderStructReaderTests {
 
 		#expect(file != Self.switchedAndKeptHome)
 		#expect(GraphFuzzerOracle.seamInitializers(inGeneratedFile: file).map(\.parameters) == [["apiBuilder: Home.SafeDIScope_Api.__safeDI_Builder<any Api>", "livePanel_PanelBuilder: @escaping (Home.SafeDIScope_LivePanel_Panel) -> any Panel"]])
+	}
+
+	@Test
+	func seamInitializers_readsWrapperBuilderParameter_whenPlaceForwardsValue() {
+		let initializers = GraphFuzzerOracle.seamInitializers(inGeneratedFile: Self.switchedForwardingHome)
+
+		#expect(initializers.map(\.seamTypeName) == ["Home"])
+		#expect(initializers.map(\.parameters) == [["apiBuilder: @escaping () -> any Api", "livePanel_PanelBuilder: @escaping ErasedInstantiator<String, any Panel>.Builder"]])
 	}
 
 	// MARK: seamOutputFeatures
@@ -144,6 +165,16 @@ struct GraphFuzzerBuilderStructReaderTests {
 		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["FuzzFeature/Home+SafeDI.swift": Self.switchedAndKeptHome])
 
 		#expect(declarations.valuesStructs == [
+			.init(extendedType: "Home", path: ["SafeDIScope_Api", "api_Values"], fields: ["public inner: Inner"]),
+			.init(extendedType: "Home", path: ["SafeDIScope_LivePanel_Panel", "panelBuilder_Values"], fields: ["public inner: Inner", "public api: any Api"]),
+		])
+	}
+
+	@Test
+	func valuesStructs_readsCasesPayloadBesideForwardedValue_whenSeamTakesBuilderStructForPlaceThatForwards() {
+		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["FuzzFeature/Home+SafeDI.swift": Self.switchedForwardingHome])
+
+		#expect(declarations.valuesStructs == [
 			.init(extendedType: "Home", path: ["SafeDIScope_Api", "api_Values"], fields: []),
 			.init(extendedType: "Home", path: ["SafeDIScope_LivePanel_Panel", "panelBuilder_Values"], fields: ["public api: any Api"]),
 		])
@@ -155,10 +186,11 @@ struct GraphFuzzerBuilderStructReaderTests {
 		("@escaping () -> any S1_RetainApi", "S1_RetainHome(s1_RetainApiBuilder: { S1_RetainLive() })"),
 		("@escaping @Sendable () -> any S1_RetainApi", "S1_RetainHome(s1_RetainApiBuilder: { S1_RetainLive() })"),
 		("@escaping (SafeDIScope_S1_RetainApi) -> any S1_RetainApi", "S1_RetainHome(s1_RetainApiBuilder: { _ in S1_RetainLive() })"),
+		("@escaping ErasedInstantiator<Int, any S1_RetainApi>.Builder", "S1_RetainHome(s1_RetainApiBuilder: { ticket in S1_RetainLive(retainTicket: ticket) })"),
 	])
 	func differentialValueProbes_writesBuilderAsReadableInitializerTakesIt_whenGraphHasRetentionSeam(parameterType: String, expression: String) {
-		// A builder struct's readable initializer takes a closure that takes nothing, plain or `@Sendable`; a kept builder's
-		// takes the scope.
+		// A builder struct's readable initializer takes a closure that takes nothing, plain or `@Sendable`, or a wrapper's
+		// `Builder`, which takes the value the place forwards; a kept builder's takes the scope.
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
 			"// module: FuzzFeature\n@Instantiable(generateDependencyTree: true)\npublic final class S1_RetainHome: Instantiable {\n    public init(api: any S1_RetainApi) {\n        self.api = api\n    }\n\n    @Instantiated let api: any S1_RetainApi\n}",
 			"// module: FuzzApp\n@Instantiable(fulfillingAdditionalTypes: [S1_RetainApi.self])\npublic final class S1_RetainLive: Instantiable, S1_RetainApi {\n    public init() {}\n}",
@@ -314,9 +346,71 @@ struct GraphFuzzerBuilderStructReaderTests {
 
 	"""
 
-	/// `Home`, whose place `api` takes a builder struct and whose `panelBuilder`, which forwards a `String`, keeps its
-	/// closure over its enum.
+	/// `Home`, whose place `api` takes a builder struct and whose `livePanel_PanelBuilder`, which `panelBuilder` forwards a
+	/// `String` to, keeps its closure over its enum: `Inner`, a seam of another module, passes up its own place of it.
 	private static let switchedAndKeptHome = """
+	extension Home {
+	    @frozen nonisolated public enum SafeDIScope_Api {
+	        case api(api_Values)
+
+	        nonisolated public struct api_Values {
+	            public let inner: Inner
+	        }
+
+	        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+	            public let api: (api_Values) -> __safeDI_Built
+
+	            public init(api: @escaping (api_Values) -> __safeDI_Built) {
+	                self.api = api
+	            }
+
+	            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+	                self.api = { _ in __safeDI_builder() }
+	            }
+	        }
+	    }
+
+	    @frozen public enum SafeDIScope_LivePanel_Panel {
+	        case panelBuilder(panelBuilder_Values, String)
+	        case inner(Inner.SafeDIScope_LivePanel_Panel)
+
+	        public struct panelBuilder_Values {
+	            public let inner: Inner
+	            public let api: any Api
+	        }
+	    }
+
+	    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+	    public init(apiBuilder: @escaping () -> any Api, livePanel_PanelBuilder: @escaping (SafeDIScope_LivePanel_Panel) -> any Panel) {
+	        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder), __safeDI_livePanel_PanelBuilder: livePanel_PanelBuilder)
+	    }
+
+	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+	    /// From code you write, call the initializer above instead.
+	    public init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>, __safeDI_livePanel_PanelBuilder: @escaping (SafeDIScope_LivePanel_Panel) -> any Panel) {
+	        func __safeDI_inner() -> Inner {
+	            _ = Inner.__safeDI_Inner_A92AD223E64EBA2D.self // If this line does not compile, compile the code SafeDI generates for module FuzzCore into FuzzCore: under Bazel, add FuzzCore’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+	            return Inner(__safeDI_livePanel_PanelBuilder: .init(panelBuilder: { __safeDI_panelBuilderValues in { forwarded in __safeDI_livePanel_PanelBuilder(.inner(.panelBuilder(__safeDI_panelBuilderValues, forwarded))) } }))
+	        }
+	        let inner: Inner = __safeDI_inner()
+	        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(inner: inner))
+	        let panelBuilder = ErasedInstantiator<String, any Panel> {
+	            __safeDI_livePanel_PanelBuilder(.panelBuilder(SafeDIScope_LivePanel_Panel.panelBuilder_Values(inner: inner, api: api), $0))
+	        }
+	        self.init(api: api, panelBuilder: panelBuilder, inner: inner)
+	    }
+	}
+
+	extension Home {
+	    public enum __safeDI_Home_1290934B6D80385E {}
+	}
+
+	"""
+
+	/// `Home`, whose place `api` and whose `panelBuilder`, which forwards a `String`, each take a builder struct, in a module
+	/// that generates readable initializers: the member of `panelBuilder` returns its wrapper's `Builder`.
+	private static let switchedForwardingHome = """
 	extension Home {
 	    @frozen nonisolated public enum SafeDIScope_Api {
 	        case api(api_Values)
@@ -337,32 +431,43 @@ struct GraphFuzzerBuilderStructReaderTests {
 	        }
 	    }
 
-	    @frozen public enum SafeDIScope_LivePanel_Panel {
+	    @frozen nonisolated public enum SafeDIScope_LivePanel_Panel {
 	        case panelBuilder(panelBuilder_Values, String)
 
-	        public struct panelBuilder_Values {
+	        nonisolated public struct panelBuilder_Values {
 	            public let api: any Api
+	        }
+
+	        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+	            public let panelBuilder: (panelBuilder_Values) -> ErasedInstantiator<String, __safeDI_Built>.Builder
+
+	            public init(panelBuilder: @escaping (panelBuilder_Values) -> ErasedInstantiator<String, __safeDI_Built>.Builder) {
+	                self.panelBuilder = panelBuilder
+	            }
+
+	            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
+	                self.panelBuilder = { _ in __safeDI_builder }
+	            }
 	        }
 	    }
 
 	    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-	    public init(apiBuilder: @escaping () -> any Api, livePanel_PanelBuilder: @escaping (SafeDIScope_LivePanel_Panel) -> any Panel) {
-	        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder), __safeDI_livePanel_PanelBuilder: livePanel_PanelBuilder)
+	    public init(apiBuilder: @escaping () -> any Api, livePanel_PanelBuilder: @escaping ErasedInstantiator<String, any Panel>.Builder) {
+	        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder), __safeDI_livePanel_PanelBuilder: .init(__safeDI_noScope: livePanel_PanelBuilder))
 	    }
 
 	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 	    /// From code you write, call the initializer above instead.
-	    public init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>, __safeDI_livePanel_PanelBuilder: @escaping (SafeDIScope_LivePanel_Panel) -> any Panel) {
+	    public init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>, __safeDI_livePanel_PanelBuilder: SafeDIScope_LivePanel_Panel.__safeDI_Builder<any Panel>) {
 	        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values())
-	        let panelBuilder = ErasedInstantiator<String, any Panel> {
-	            __safeDI_livePanel_PanelBuilder(.panelBuilder(SafeDIScope_LivePanel_Panel.panelBuilder_Values(api: api), $0))
-	        }
+	        let panelBuilder = ErasedInstantiator<String, any Panel>(__safeDI_livePanel_PanelBuilder.panelBuilder(SafeDIScope_LivePanel_Panel.panelBuilder_Values(api: api)))
 	        self.init(api: api, panelBuilder: panelBuilder)
 	    }
 	}
 
 	extension Home {
-	    public enum __safeDI_Home_61E1CB625FF3A2B0 {}
+	    public enum __safeDI_Home_97953C757FA68306 {}
 	}
 
 	"""

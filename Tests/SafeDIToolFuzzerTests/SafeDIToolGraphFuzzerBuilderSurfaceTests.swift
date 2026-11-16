@@ -544,6 +544,46 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 		#expect(recordedKinds.contains(.forwarding))
 	}
 
+	@Test
+	func drawnHolePlaces_recordHandConformingTypesPlaceAsForwarding_whenItsForwardedPropertiesAreNotVoid() {
+		// `HoleHanded`'s places forward what its own `ForwardedProperties` says: a value where it declares one, and nothing
+		// where it declares none, which the forwarding floor does not count.
+		var forwardingGraphCount = 0
+		var nothingForwardedGraphCount = 0
+		for seed in UInt64(0)..<100 {
+			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+			let handedName = fixture.typeNamePrefix + "HoleHanded"
+			guard let content = fixture.swiftFileContent.first(where: { $0.contains("open class \(handedName): ") }),
+			      let start = content.range(of: "open class \(handedName): "),
+			      let end = content.range(of: "\n}", range: start.upperBound..<content.endIndex)
+			else { continue }
+			let declaresForwardedProperties = content[start.lowerBound..<end.upperBound].contains("public typealias ForwardedProperties = ")
+			let recordsForwardingPlace = GraphFuzzerGenerator.drawnHolePlaces(forSeed: seed, features: [.generateDependencyTree]).contains(GraphFuzzerDrawnHolePlace(kind: .forwarding, returnedTypeName: handedName))
+			#expect(recordsForwardingPlace == declaresForwardedProperties, "seed \(seed)")
+			if declaresForwardedProperties {
+				forwardingGraphCount += 1
+			} else {
+				nothingForwardedGraphCount += 1
+			}
+		}
+		#expect(forwardingGraphCount > 0)
+		#expect(nothingForwardedGraphCount > 0)
+	}
+
+	@Test
+	func drawnHolePlaces_recordNoForwardingPlace_whenErasedPlaceForwardsEmptyTuple() {
+		// A place spelled as forwarding `()` or `Void` is judged under its own draw, `holeNothingForwardedPlace`, not toward the
+		// forwarding floor.
+		var judgedGraphCount = 0
+		for seed in UInt64(0)..<100 {
+			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+			guard fixture.swiftFileContent.contains(where: { $0.contains("let holeLaterBuilder: ") }) else { continue }
+			judgedGraphCount += 1
+			#expect(!GraphFuzzerGenerator.drawnHolePlaces(forSeed: seed, features: [.generateDependencyTree]).contains(GraphFuzzerDrawnHolePlace(kind: .forwarding, returnedTypeName: fixture.typeNamePrefix + "HoleLaterService")), "seed \(seed)")
+		}
+		#expect(judgedGraphCount > 0)
+	}
+
 	// MARK: Labels
 
 	@Test
@@ -562,6 +602,18 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 			"__safeDI_serviceBuilder: @escaping () -> any Service",
 			"serviceImpl_ServiceSendableBuilder: @escaping @Sendable () -> any Service",
 			"screenBuilder: Instantiator<Screen>.Builder",
+		]) else { return }
+		#expect(GraphFuzzerBuilderSurface.labelFindings(in: generatedFiles) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func labelFindings_reportNothing_whenMockTakesWrapperOfPropertyLabeledBuilder() {
+		// A mock that cannot build a wrapper its tree instantiates takes it as a parameter named by the property's label, an
+		// autoclosure that returns the wrapper: no builder, whatever the label ends with.
+		guard case let .accepted(generatedFiles, _) = Self.acceptedMock([
+			"holeHandedBuilder: @autoclosure @escaping @Sendable () -> SendableInstantiator<S1_HoleHanded>",
+			"holeLaterBuilder: @autoclosure @escaping () -> ErasedInstantiator<Void, any S1_HoleLaterService>",
 		]) else { return }
 		#expect(GraphFuzzerBuilderSurface.labelFindings(in: generatedFiles) == [])
 	}
@@ -644,6 +696,12 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 		(.holderMovedToInnerSeamOfAnotherModule, .generateDependencyTree, 69),
 		(.placeOfNewBuilderInInnerSeamOfAnotherModule, .generateDependencyTree, 69),
 		(.placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied, .generateDependencyTree, 69),
+		// Seed 15 holds `HoleHanded`, which forwards nothing, in an `Instantiator` on `HoleHandedHolder`.
+		(.instantiatorPlaceMovedToPlainPlace, .generateDependencyTree, 15),
+		(.instantiatorChangedToErasedInstantiator, .generateDependencyTree, 15),
+		(.instantiatorMadeSendable, .generateDependencyTree, 15),
+		(.sendableInstantiatorPlaceMovedToPlainPlace, .generateDependencyTree, 15),
+		(.sendableInstantiatorChangedToSendableErasedInstantiator, .generateDependencyTree, 15),
 		(.placeBehindLazilyInstantiated, .generateMockPublic, 3),
 		(.instantiatorPlaceMovedToPlainPlace, .generateMockPublic, 18),
 		(.instantiatorChangedToErasedInstantiator, .generateMockPublic, 18),
@@ -670,19 +728,17 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func rejectionJudgment_reportsAcceptance_whenSeamCorpusPlacesForwardOtherValues() async throws {
-		// Part (iii)'s finding on main: places of one builder that forward other values are merged into one builder, where
-		// the contract asks for a rejection, which `GraphFuzzerToolRuns.forwardedValuesFailure` reports. The builder-struct
-		// slice that rejects them changes this line to none.
-		#expect(try await Self.forwardingOtherValuesJudgment(feature: .generateDependencyTree, seed: 15) == .init(isJudged: true, problems: [
-			"The tool accepts a builder whose places forward other values",
-		]))
+	func rejectionJudgment_reportsNoProblem_whenSeamCorpusPlacesForwardOtherValues() async throws {
+		// The seam's module rejects places of one builder that forward other values, as the contract asks, where the rejected
+		// edit's error is reported: the judgment runs and finds nothing for `GraphFuzzerToolRuns.forwardedValuesFailure` to
+		// report.
+		#expect(try await Self.forwardingOtherValuesJudgment(feature: .generateDependencyTree, seed: 15) == .init(isJudged: true, problems: []))
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func rejectionJudgment_reportsAcceptance_whenPublicMockCorpusPlacesForwardOtherValues() async throws {
-		// As in the seam corpus: the builder-struct slice that rejects them changes this line to none.
+		// Public mocks still merge such places into one builder; the change that rejects them there changes this line to none.
 		#expect(try await Self.forwardingOtherValuesJudgment(feature: .generateMockPublic, seed: 3) == .init(isJudged: true, problems: [
 			"The tool accepts a builder whose places forward other values",
 		]))

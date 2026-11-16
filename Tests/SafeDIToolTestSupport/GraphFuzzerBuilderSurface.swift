@@ -323,13 +323,17 @@ extension GraphFuzzerBuilderSurface {
 
 	/// Whether `parameter` takes a hole's builder: on main, a closure handed a scope enum; once builders take no scope, a
 	/// parameter whose label ends with `Builder` (or a `Builder_<Type>` a calling mock names apart) and whose type is a
-	/// closure or a wrapper's `Builder`. The builder-struct work replaces this with what its generated code spells.
+	/// closure or a wrapper's `Builder`. The builder-struct work replaces this with what its generated code spells. A
+	/// closure that returns one of SafeDI's wrappers is a mock's parameter for a wrapper it cannot build, named by its
+	/// property's label, never a builder, which returns the value a place holds.
 	static func isBuilder(_ parameter: Parameter) -> Bool {
 		if generatedTypeNamed(by: parameter.description) != nil {
 			return true
 		}
 		let labelNamesBuilder = parameter.label.hasSuffix("Builder") || parameter.label.contains("Builder_")
-		return labelNamesBuilder && (isFunctionType(parameter.type) || parameter.type.hasSuffix(".Builder"))
+		let returnsWrapper = parameter.type.range(of: #"-> (Sendable)?(Erased)?Instantiator<"#, options: .regularExpression) != nil
+			|| parameter.type.range(of: #"-> (Sendable)?LazilyInstantiated<"#, options: .regularExpression) != nil
+		return labelNamesBuilder && !returnsWrapper && (isFunctionType(parameter.type) || parameter.type.hasSuffix(".Builder"))
 	}
 
 	/// Whether `type`, its attributes aside, is a function type, `(…) -> R`, rather than a type that only holds one, such as
@@ -822,6 +826,25 @@ extension GraphFuzzerGenerator {
 	/// nothing.
 	static func applying(_ edit: GraphFuzzerBuilderSurfaceEdit, to declarations: [TypeDeclaration], markerFreeFiles: inout [(ownerName: String, fileName: String, declaration: String)], context: BuilderSurfaceEditContext) -> [TypeDeclaration]? {
 		let prefix = context.prefix
+		switch edit {
+		case .instantiatorPlaceMovedToPlainPlace,
+		     .instantiatorChangedToErasedInstantiator,
+		     .instantiatorMadeSendable,
+		     .sendableInstantiatorPlaceMovedToPlainPlace,
+		     .sendableInstantiatorChangedToSendableErasedInstantiator:
+			return applyingToInstantiatorPlace(edit, to: declarations, context: context)
+		case .secondPlaceInAnotherType,
+		     .secondPlaceInInnerSeamOfAnotherModule,
+		     .holderMovedToInnerSeamOfAnotherModule,
+		     .placeBehindLazilyInstantiated,
+		     .placeOfNewBuilderOfExistingFillingType,
+		     .placeOfNewBuilderInInnerSeamOfAnotherModule,
+		     .placeForwardingOtherValues,
+		     .placeForwardingOtherValuesRemedied,
+		     .placeForwardingOtherValuesInInnerSeamOfAnotherModule,
+		     .placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied:
+			break
+		}
 		let serviceType = "any \(prefix)HoleService"
 		guard let holderIndex = declarations.firstIndex(where: { declaration in
 			declaration.module == .seamModule && declaration.properties.contains { $0.label == "holeService" && $0.type == serviceType }
@@ -956,9 +979,62 @@ extension GraphFuzzerGenerator {
 		     .sendableInstantiatorPlaceMovedToPlainPlace,
 		     .sendableInstantiatorChangedToSendableErasedInstantiator,
 		     .placeOfNewBuilderOfExistingFillingType:
-			// The seam corpus's holes are existentials, which no `Instantiator` wraps, and its two erasures of `HoleGadgetImpl`
-			// already draw a new builder of an existing filling type (`holeGadgetOther`, read as a pair from the graph without
-			// it).
+			// `HoleService` is an existential, which no `Instantiator` wraps: the instantiator edits apply to `HoleHanded`'s
+			// place (`applyingToInstantiatorPlace(_:to:context:)`). The two erasures of `HoleGadgetImpl` already draw a new
+			// builder of an existing filling type (`holeGadgetOther`, read as a pair from the graph without it).
+			return nil
+		}
+		return declarations
+	}
+
+	/// `declarations` with `edit`, one of the edits of an instantiator's place, applied to `HoleHandedHolder`'s
+	/// `holeHandedBuilder`, the place `addingHoleShapes` draws in an `Instantiator` or `SendableInstantiator` of `HoleHanded`, a
+	/// class that conforms to `Instantiable` by hand; or `nil` where the graph draws no such place, where the edit's base is
+	/// the other wrapper, where a plain place would be filled by a type that forwards a value, or where the seam declares a
+	/// mock, which takes the place's builder as its parameter: a wrapper change there stops a call of that mock compiling,
+	/// which the public mocks' work settles. Each edit replaces the one place, so the builder keeps one place's form.
+	static func applyingToInstantiatorPlace(_ edit: GraphFuzzerBuilderSurfaceEdit, to declarations: [TypeDeclaration], context: BuilderSurfaceEditContext) -> [TypeDeclaration]? {
+		let prefix = context.prefix
+		let handed = "\(prefix)HoleHanded"
+		guard let holderIndex = declarations.firstIndex(where: { $0.name == "\(prefix)HoleHandedHolder" }),
+		      let placeIndex = declarations[holderIndex].properties.firstIndex(where: { $0.label == "holeHandedBuilder" }),
+		      let seam = declarations.first(where: { $0.name == "\(prefix)HoleSeam" }),
+		      !seam.instantiableArguments.contains(where: { $0.contains("generateMock") })
+		else { return nil }
+		let forwardsNothing = !seam.additionalDeclarations.contains { $0.contains("open class \(handed): ") && $0.contains("ForwardedProperties = ") }
+		let placeType = declarations[holderIndex].properties[placeIndex].type
+		var declarations = declarations
+		switch edit {
+		case .instantiatorPlaceMovedToPlainPlace:
+			guard placeType == "Instantiator<\(handed)>", forwardsNothing else { return nil }
+			declarations[holderIndex].properties[placeIndex] = PropertyDeclaration(attribute: "@Instantiated", label: "holeHandedBuilder", type: handed)
+		case .instantiatorChangedToErasedInstantiator:
+			guard placeType == "Instantiator<\(handed)>" else { return nil }
+			declarations[holderIndex].properties[placeIndex] = PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(handed)\")", label: "holeHandedBuilder", type: "ErasedInstantiator<\(handed).ForwardedProperties, \(handed)>")
+		case .instantiatorMadeSendable:
+			guard placeType == "Instantiator<\(handed)>", !context.isSendableGraph else { return nil }
+			declarations[holderIndex].properties[placeIndex] = PropertyDeclaration(attribute: "@Instantiated", label: "holeHandedBuilder", type: "SendableInstantiator<\(handed)>")
+		case .sendableInstantiatorPlaceMovedToPlainPlace:
+			// The place a plain `HoleHanded` on `HoleSurfaceHost`, which the holder builds in a `SendableInstantiator`, so the
+			// place stays in the `@Sendable` family.
+			guard placeType == "Instantiator<\(handed)>", forwardsNothing, !context.isSendableGraph else { return nil }
+			var host = TypeDeclaration(name: "\(prefix)HoleSurfaceHost", instantiableArguments: [], properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeHandedValue", type: handed)], declaresHelperTypes: false)
+			host.module = .seamModule
+			declarations[holderIndex].properties[placeIndex] = PropertyDeclaration(attribute: "@Instantiated", label: "holeSurfaceHostBuilder", type: "SendableInstantiator<\(host.name)>")
+			declarations.insert(host, at: holderIndex)
+		case .sendableInstantiatorChangedToSendableErasedInstantiator:
+			guard placeType == "Instantiator<\(handed)>", !context.isSendableGraph else { return nil }
+			declarations[holderIndex].properties[placeIndex] = PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(handed)\")", label: "holeHandedBuilder", type: "SendableErasedInstantiator<\(handed).ForwardedProperties, \(handed)>")
+		case .secondPlaceInAnotherType,
+		     .secondPlaceInInnerSeamOfAnotherModule,
+		     .holderMovedToInnerSeamOfAnotherModule,
+		     .placeBehindLazilyInstantiated,
+		     .placeOfNewBuilderOfExistingFillingType,
+		     .placeOfNewBuilderInInnerSeamOfAnotherModule,
+		     .placeForwardingOtherValues,
+		     .placeForwardingOtherValuesRemedied,
+		     .placeForwardingOtherValuesInInnerSeamOfAnotherModule,
+		     .placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied:
 			return nil
 		}
 		return declarations

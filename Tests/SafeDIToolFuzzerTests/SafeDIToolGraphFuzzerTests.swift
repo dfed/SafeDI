@@ -516,6 +516,9 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Self.seamCorpusRetentionCounts.judged >= Self.gatingDrawJudgedGraphFloor)
 		#expect(Self.seamCorpusRetentionCounts.judgedDrawingRetentionShape >= Self.gatingDrawJudgedGraphFloor)
 		#expect(Self.seamCorpusRetentionCounts.judgedThroughHandWrittenBuilder >= Self.gatingDrawJudgedGraphFloor)
+		// Graphs in which an experiment held a place's `ErasedInstantiator`, the wrapper the existential places are held in:
+		// the constrained wrappers and the `Sendable` family are judged by values and by compiling, unfloored.
+		#expect(Self.seamCorpusRetentionCounts.judgedHoldingForwardingWrapper["ErasedInstantiator", default: 0] >= Self.gatingDrawJudgedGraphFloor)
 		#expect(Self.publicMockCorpusRetentionCounts.judged >= Self.gatingDrawJudgedGraphFloor)
 		#expect(Self.publicMockCorpusRetentionCounts.judgedDrawingRetentionShape >= Self.gatingDrawJudgedGraphFloor)
 	}
@@ -526,7 +529,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// place beneath, a place inside a public mock's fill, and a seam or a public mock that binds a value before an
 		// instantiator nothing beneath reads it from (the retention oracle's) – gate generator changes only while each of
 		// their shapes lands in at least ten graphs the tool accepts, which the corpus runs pin exactly.
-		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isForwardedLabelAcrossSeamCallShape || feature.isRetentionShape {
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isForwardedLabelAcrossSeamCallShape || feature.isRetentionShape || feature.isForwardingPlaceShape {
 			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
 		}
 		for feature in GraphFuzzerPublicMockDrawFeature.allCases where feature.isCountedWhenAccepted {
@@ -542,6 +545,47 @@ struct SafeDIToolGraphFuzzerTests {
 		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isErasurePlaceShape {
 			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_acceptErasedPlaceOfForwardedPropertiesOfHandConformingType_whenSeamCorpusDrawsItBesideInstantiatorPlace() async throws {
+		// Seed 135 holds `HoleHanded`, which declares that it forwards an `Int`, in a `SendableErasedInstantiator` of
+		// `HoleHanded.ForwardedProperties` beside its `Instantiator` place, and the calling module fills both with
+		// `HoleHandedImpl`, its subclass that forwards `holeHandedId`: the calling module trusts the class's conformance at
+		// the erased place as at the instantiator place, and accepts the graph.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 135, features: [.generateDependencyTree])
+		#expect(GraphFuzzerFeature.seamDrawFeatures(of: fixture).isSuperset(of: [.holeInstantiatorPlace, .holeInstantiatorPlaceBesideErased]))
+		#expect(fixture.swiftFileContent.contains { $0.contains("public typealias ForwardedProperties = Int") })
+
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
+
+		guard case .accepted = runs.firstOutcome else {
+			Issue.record("Seed 135 is expected to be accepted:\n\(runs.firstOutcome.description)")
+			return
+		}
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "The retention oracle runs compiled code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueComparisons_countGraphJudgedHoldingErasedInstantiatorAndFindNoLeak_whenRetentionDrawsLeafPlaceThatForwards() async throws {
+		// Seed 454 holds `RetainLeaf`'s place in an `ErasedInstantiator<Int, any S454_RetainApi>`, which `RetainLive` fills
+		// forwarding `retainTicket`: the retention oracle holds that wrapper, and the builder the seam keeps for it keeps
+		// alive no value of `RetainHome`'s level, as inline.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 454, features: [.generateDependencyTree])
+		#expect(GraphFuzzerFeature.seamDrawFeatures(of: fixture).contains(.retentionSeamValueBeforeBuilderForwardingPlace))
+		#expect(fixture.swiftFileContent.contains { $0.contains("let retainApiBuilder: ErasedInstantiator<Int, any S454_RetainApi>") })
+
+		let comparisons = try await GraphFuzzerOracle.valueComparisons(of: [GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])])
+
+		#expect(comparisons.retentionCounts[454] == GraphFuzzerRetentionCounts(
+			judged: 1,
+			judgedDrawingRetentionShape: 1,
+			judgedThroughHandWrittenBuilder: 1,
+			unpairedExperiments: 0,
+			judgedHoldingForwardingWrapper: ["ErasedInstantiator": 1],
+		))
+		#expect(comparisons.retentionFailures[454] == nil)
 	}
 
 	@Test
@@ -5452,10 +5496,13 @@ struct SafeDIToolGraphFuzzerTests {
 
 		/// The names of the corpus's gating draws, each on a stream of its own, whose judged graphs must reach
 		/// `gatingDrawJudgedGraphFloor`: those of `gatingDrawNames` that no other begins, since a shape a draw rolls is
-		/// named after the draw.
+		/// named after the draw, and every shape of a place held in an instantiator, its rolls included
+		/// (`GraphFuzzerSeamDrawFeature.isForwardingPlaceShape`), each of which an accepted count alone would not show judged.
 		var flooredGatingDrawNames: [String] {
 			let names = gatingDrawNames
-			return names.filter { name in !names.contains { $0 != name && name.hasPrefix($0) } }
+			return names.filter { name in
+				GraphFuzzerSeamDrawFeature(rawValue: name)?.isForwardingPlaceShape == true || !names.contains { $0 != name && name.hasPrefix($0) }
+			}
 		}
 
 		/// The gating draws of `result`'s graph that the oracles after acceptance judged: the graph is accepted, a known
@@ -5585,11 +5632,11 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
-		gatingSeamDrawFeatures: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape }),
+		gatingSeamDrawFeatures: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isForwardingPlaceShape }),
 		builderSurfaceFlooredKinds: [
 			"base-plain",
 			"base-lazy",
