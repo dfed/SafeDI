@@ -586,22 +586,21 @@ extension DependencyTreeGenerator {
 
 	/// The form of the builder a person writes for `places`, places of one hole type reached by one family's builder or
 	/// level, whose forwarded values agree (`placesForwardingOtherValues(among:comparison:)` reports those that do not). The
-	/// value the erased form takes is spelled as the first place by location spells it, or `()` where a place forwards
-	/// nothing: never by the order of names or levels. Reads nothing but the places, so a mock's builder can take the same
-	/// type over its own places.
+	/// value the erased form takes is `()` where a place forwards nothing, and otherwise the most explicit of the places'
+	/// spellings of it (`TypeDescription.mostExplicitSpelling(among:)`): chosen by the spellings' shapes, never by where the
+	/// places are, their names or the order of levels, so renaming a file or a type never respells it. Reads nothing but
+	/// the places, so a mock's builder can take the same type over its own places.
 	static func builderForm(ofPlaces places: [SeamSignature.Hole]) -> BuilderForm {
-		let orderedPlaces = places.sortedByForwardingLocation
-		guard let firstPlace = orderedPlaces.first,
-		      orderedPlaces.allSatisfy(\.property.propertyType.isAnyInstantiator)
-		else { return .value }
-		let wrapperTypes = orderedPlaces.map { $0.property.typeDescription.unwrapped.strippingEscaping }
+		guard !places.isEmpty, places.allSatisfy(\.property.propertyType.isAnyInstantiator) else { return .value }
+		let wrapperTypes = places.map(\.property.typeDescription.unwrapped.strippingEscaping)
 		if Set(wrapperTypes.map(\.asSource)).count == 1 {
 			return .wrapper(wrapperTypes[0])
 		}
-		guard !orderedPlaces.contains(where: { $0.forwardedType == nil }), let forwardedType = firstPlace.forwardedType else {
+		let forwardedTypes = places.compactMap { $0.forwardedType?.strippingEscaping }
+		guard forwardedTypes.count == places.count, let firstForwardedType = forwardedTypes.first else {
 			return .erased(forwarded: .void(.tuple))
 		}
-		return .erased(forwarded: forwardedType.strippingEscaping)
+		return .erased(forwarded: firstForwardedType.mostExplicitSpelling(among: forwardedTypes.dropFirst()))
 	}
 
 	/// The type of the builder a person writes in `form`, returning `builtType`, in the `@Sendable` family where `isSendable`,
