@@ -173,7 +173,7 @@ extension DependencyTreeGenerator {
 				let inSendableFunction = call.buildsInSendableFunction || call.buildsInSendableFunction(ofFill: fill) || fulfiller.buildsInSendableFunction
 				return (SeamDeclarationGraph.FillEdge(innerKey: innerKey, inSendableFunction: inSendableFunction, fulfillerBuildsInSendableFunction: fulfiller.buildsInSendableFunction), fulfiller)
 			}
-		})
+		}, fulfillingCallsHoldPlaces: !bindsReceivesAgain)
 		// The type the builder of the hole type returns, as the first of its places spells it, which the struct of a fill's own
 		// level is over.
 		let builtTypeOfHoleType = holesBySite.values.filter { $0.holeType == holeType }.min { $0.site.sortKey < $1.site.sortKey }?.builtType ?? holeType.builtType
@@ -220,6 +220,14 @@ extension DependencyTreeGenerator {
 		}
 		var plainDraftCasesByType = [TypeDescription: [DraftCase]]()
 		var sendableDraftCasesByType = [TypeDescription: [DraftCase]]()
+		/// For a call's case for a builder it fills with a fulfiller that is itself a call handing up an enum of the hole type,
+		/// that enum's key, by the calling type, the call's property and the filled builder's root key: the case holds it.
+		struct FillOfProperty: Hashable {
+			let type: TypeDescription
+			let property: Property
+			let innerKey: SeamSignature.ScopeEnum.Key
+		}
+		var handedUpKeyByFillOfProperty = [FillOfProperty: (plain: SeamSignature.ScopeEnum.Key?, sendable: SeamSignature.ScopeEnum.Key?)]()
 		let typesWithCases = Set(placeHolding.plainCasePropertiesByType.keys)
 			.union(placeHolding.sendableOwnCasePropertiesByType.keys)
 			.union(placeHolding.sendableBeneathCasePropertiesByType.keys)
@@ -301,6 +309,13 @@ extension DependencyTreeGenerator {
 				// A call's case for each builder it fills with a type whose tree leads to a place, after the call's own, in the
 				// order the call takes its builders.
 				guard !plainFills.isEmpty || !sendableOwnFills.isEmpty || !sendableBeneathFills.isEmpty, let calledBuilders = child.calledBuilders else { continue }
+				for fill in child.children where fill.fillEmitsCode && !bindsReceivesAgain {
+					guard let fulfiller = fill.children.first, !fulfiller.passedUpHoles.isEmpty, let filledKey = Self.filledRootKey(of: fill, in: child, keysTheCalledSeam: !bindsReceivesAgain) else { continue }
+					let handedUpKeys = (plain: innerKey(handedUpBy: fulfiller, isSendable: false), sendable: innerKey(handedUpBy: fulfiller, isSendable: true))
+					if handedUpKeys.plain != nil || handedUpKeys.sendable != nil {
+						handedUpKeyByFillOfProperty[FillOfProperty(type: type, property: property, innerKey: filledKey)] = handedUpKeys
+					}
+				}
 				// A builder whose fills differ in whether a place inside them carries the inner scope has a case for each, the one
 				// that carries it first: the inner scope is bound in the fill, outside a builder function of the fulfiller's own that
 				// is `@Sendable`.
@@ -496,6 +511,12 @@ extension DependencyTreeGenerator {
 					guard let innerEnum = reachedEnum(innerKey) else { continue }
 					kind = .inner(enumKey: innerKey, enumType: innerEnum.type, isIndirect: false)
 				case let .fill(filledBuilder, _, _, fulfiller, isSendable):
+					// A fulfiller that is itself a call handing up an enum of the hole type: the case holds that call's enum.
+					let handedUpKeys = handedUpKeyByFillOfProperty[FillOfProperty(type: current.type, property: draftCase.property, innerKey: filledBuilder.innerKey)]
+					if let handedUpKey = isSendable ? handedUpKeys?.sendable : handedUpKeys?.plain, let handedUpEnum = reachedEnum(handedUpKey), let innerEnum = reachedEnum(filledBuilder.innerKey) {
+						kind = .fill(innerKey: filledBuilder.innerKey, innerEnumType: filledBuilder.carriesInnerScope ? innerEnum.type : nil, enumKey: handedUpKey, enumType: handedUpEnum.type, isIndirect: false)
+						break
+					}
 					let heldDescribed = Described(type: fulfiller, isSendable: isSendable)
 					guard let heldEnumType = enumTypeByDescribed[heldDescribed], let innerEnum = reachedEnum(filledBuilder.innerKey) else { continue }
 					// A case that leads to a `@Sendable` function inside the fill carries no value bound outside it.
@@ -599,10 +620,24 @@ extension DependencyTreeGenerator {
 					} else {
 						CaseOfProperty(described: Described(type: type, isSendable: false), property: property, isSendableBeneath: false, filledBuilder: reachedStep.filledBuilder)
 					}
-					guard let step = routeStep(of: caseOfProperty, bindingPrefix: index < count - 1 ? Array(reached.sitePath.prefix(reachedStep.pathLength)) : nil, buildsInSendableFunction: reachedStep.buildsInSendableFunction, isSendableRoute: innermostSendableIndex != nil) else { break }
+					// A call that is itself the fulfiller of a fill ends on the case of the call it fills, whose member is bound as a
+					// step's before that call, and is handed the struct of the fill's own level.
+					let isFulfillingCall = reached.call != nil && index == count - 1 && reachedStep.filledBuilder != nil && !bindsReceivesAgain
+					guard let step = routeStep(of: caseOfProperty, bindingPrefix: index < count - 1 || isFulfillingCall ? Array(reached.sitePath.prefix(reachedStep.pathLength)) : nil, buildsInSendableFunction: reachedStep.buildsInSendableFunction, isSendableRoute: innermostSendableIndex != nil) else { break }
 					if index < count - 1 {
 						steps.append(step)
 						continue
+					}
+					if isFulfillingCall, let innerKey {
+						result.callRoutes.append(SeamSignature.CallRoute(
+							sitePath: reached.sitePath,
+							innerKey: innerKey,
+							rootKey: SeamSignature.ScopeEnum.Key(seamType: seamType, holeType: holeType, isSendable: innermostSendableIndex != nil),
+							route: steps + [step],
+							caseName: "",
+							handsFillLevelStruct: true,
+						))
+						break
 					}
 					// Every edge of a path to a place is left in the graph, so each step has its case.
 					guard let enumTypeName = enumTypeNameByDescribed[caseOfProperty.described], let enumCase = casesByProperty[caseOfProperty] else { break }

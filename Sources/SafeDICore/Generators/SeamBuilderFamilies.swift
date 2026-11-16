@@ -433,6 +433,7 @@ extension DependencyTreeGenerator {
 				route: namedRoute(callRoute.route, ofHoleType: callRoute.rootKey.holeType, isSendable: callRoute.rootKey.isSendable),
 				caseName: callRoute.caseName,
 				memberValuesType: holeTypesDeclaringBuilderStructs.contains(callRoute.rootKey.holeType) ? callRoute.memberValuesType : nil,
+				handsFillLevelStruct: callRoute.handsFillLevelStruct,
 			)
 		}
 

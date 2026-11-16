@@ -1801,8 +1801,12 @@ struct SeamHoles {
 			// builder the called type holds.
 			// Where the call's enum declares a builder struct, the call's own member returns the inner seam's struct, called on
 			// the struct the last case on its route returned, or on the builder itself.
-			let memberCall = callRoute.memberValuesType.map { memberValuesType in
-				"\(callRoute.route.last?.member?.bindingName ?? builderName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
+			let memberCall = if callRoute.handsFillLevelStruct {
+				callRoute.route.last?.innerScope?.name
+			} else {
+				callRoute.memberValuesType.map { memberValuesType in
+					"\(callRoute.route.last?.member?.bindingName ?? builderName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
+				}
 			}
 			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(
 				builderName: builderName,
