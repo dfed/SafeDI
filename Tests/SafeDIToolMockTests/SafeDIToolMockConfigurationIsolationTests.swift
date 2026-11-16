@@ -94,7 +94,7 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Parent {
 			        func __safeDI_service() -> Service {
-			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.name()) } else { Service(name: safeDIOverrides.service.name()) }
+			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.name ?? Service.__safeDI_configurationDefault_name()) } else { Service(name: safeDIOverrides.service.name ?? Service.__safeDI_configurationDefault_name()) }
 			        }
 			        let service: Service = __safeDI_service()
 			        return Parent(service: service)
@@ -108,17 +108,20 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			    /// Configuration for how this type is constructed within a mock tree.
 			    struct SafeDIMockConfiguration {
 			        init(
-			            name: @autoclosure @escaping @MainActor () -> String? = Defaults.name,
+			            name: String?? = nil,
 			            _ safeDIBuilder: ((String?) -> Service)? = nil
 			        ) {
 			            self.name = name
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        let name: @MainActor () -> String?
+			        /// `nil` keeps the default of `Service`’s `name`.
+			        let name: String??
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 			        let safeDIBuilder: ((String?) -> Service)?
 			    }
+
+			    @MainActor static func __safeDI_configurationDefault_name() -> String? { Defaults.name }
 			}
 			#endif
 
@@ -182,7 +185,7 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Parent {
 			        func __safeDI_service() -> Service {
-			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.name()) } else { Service.mock(name: safeDIOverrides.service.name()) }
+			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.name ?? Service.__safeDI_configurationDefault_name()) } else { Service.mock(name: safeDIOverrides.service.name ?? Service.__safeDI_configurationDefault_name()) }
 			        }
 			        let service: Service = __safeDI_service()
 			        return Parent(service: service)
@@ -196,17 +199,20 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			    /// Configuration for how this type is constructed within a mock tree.
 			    struct SafeDIMockConfiguration {
 			        init(
-			            name: @autoclosure @escaping @MainActor () -> String? = Defaults.name,
+			            name: String?? = nil,
 			            _ safeDIBuilder: ((String?) -> Service)? = nil
 			        ) {
 			            self.name = name
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        let name: @MainActor () -> String?
+			        /// `nil` keeps the default of `Service`’s `name`.
+			        let name: String??
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 			        let safeDIBuilder: ((String?) -> Service)?
 			    }
+
+			    @MainActor static func __safeDI_configurationDefault_name() -> String? { Defaults.name }
 			}
 			#endif
 
@@ -270,7 +276,7 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Parent {
 			        func __safeDI_clock() -> Clock {
-			            return if let safeDIBuilder = safeDIOverrides.clock.safeDIBuilder { safeDIBuilder(safeDIOverrides.clock.zone()) } else { Clock.instantiate(zone: safeDIOverrides.clock.zone()) }
+			            return if let safeDIBuilder = safeDIOverrides.clock.safeDIBuilder { safeDIBuilder(safeDIOverrides.clock.zone ?? Clock.__safeDI_configurationDefault_zone()) } else { Clock.instantiate(zone: safeDIOverrides.clock.zone ?? Clock.__safeDI_configurationDefault_zone()) }
 			        }
 			        let clock: Clock = __safeDI_clock()
 			        return Parent(clock: clock)
@@ -284,17 +290,20 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			    /// Configuration for how this type is constructed within a mock tree.
 			    struct SafeDIMockConfiguration {
 			        init(
-			            zone: @autoclosure @escaping @MainActor () -> String? = Defaults.zone,
+			            zone: String?? = nil,
 			            _ safeDIBuilder: ((String?) -> Clock)? = nil
 			        ) {
 			            self.zone = zone
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        let zone: @MainActor () -> String?
+			        /// `nil` keeps the default of `Clock`’s `zone`.
+			        let zone: String??
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 			        let safeDIBuilder: ((String?) -> Clock)?
 			    }
+
+			    @MainActor static func __safeDI_configurationDefault_zone() -> String? { Defaults.zone }
 			}
 			#endif
 
@@ -369,7 +378,7 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Parent {
 			        func __safeDI_service() -> Service {
-			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.count(), safeDIOverrides.service.onTap(), safeDIOverrides.service.retries(), safeDIOverrides.service.note()) } else { Service(count: safeDIOverrides.service.count(), onTap: safeDIOverrides.service.onTap(), retries: safeDIOverrides.service.retries(), note: safeDIOverrides.service.note()) }
+			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.count ?? Service.__safeDI_configurationDefault_count(), safeDIOverrides.service.onTap ?? Service.__safeDI_configurationDefault_onTap(), safeDIOverrides.service.retries ?? Service.__safeDI_configurationDefault_retries(), safeDIOverrides.service.note ?? Service.__safeDI_configurationDefault_note()) } else { Service(count: safeDIOverrides.service.count ?? Service.__safeDI_configurationDefault_count(), onTap: safeDIOverrides.service.onTap ?? Service.__safeDI_configurationDefault_onTap(), retries: safeDIOverrides.service.retries ?? Service.__safeDI_configurationDefault_retries(), note: safeDIOverrides.service.note ?? Service.__safeDI_configurationDefault_note()) }
 			        }
 			        let service: Service = __safeDI_service()
 			        return Parent(service: service)
@@ -383,10 +392,10 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			    /// Configuration for how this type is constructed within a mock tree.
 			    struct SafeDIMockConfiguration {
 			        init(
-			            count: @autoclosure @escaping @MainActor () -> Int = Defaults.count,
-			            onTap: @autoclosure @escaping @MainActor () -> () -> Void = ({ Defaults.log() }),
-			            retries: @autoclosure @escaping @MainActor () -> Int = Defaults.count,
-			            note: @autoclosure @escaping @MainActor () -> String? = nil,
+			            count: Int? = nil,
+			            onTap: (() -> Void)? = nil,
+			            retries: Int? = nil,
+			            note: String?? = nil,
 			            _ safeDIBuilder: ((Int, @escaping () -> Void, Int, String?) -> Service)? = nil
 			        ) {
 			            self.count = count
@@ -396,13 +405,22 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        let count: @MainActor () -> Int
-			        let onTap: @MainActor () -> () -> Void
-			        let retries: @MainActor () -> Int
-			        let note: @MainActor () -> String?
+			        /// `nil` keeps the default of `Service`’s `count`.
+			        let count: Int?
+			        /// `nil` keeps the default of `Service`’s `onTap`.
+			        let onTap: (() -> Void)?
+			        /// `nil` keeps the default of `Service`’s `retries`.
+			        let retries: Int?
+			        /// `nil` keeps the default of `Service`’s `note`.
+			        let note: String??
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 			        let safeDIBuilder: ((Int, @escaping () -> Void, Int, String?) -> Service)?
 			    }
+
+			    @MainActor static func __safeDI_configurationDefault_count() -> Int { Defaults.count }
+			    @MainActor static func __safeDI_configurationDefault_onTap() -> () -> Void { { Defaults.log() } }
+			    @MainActor static func __safeDI_configurationDefault_retries() -> Int { Defaults.count }
+			    @MainActor static func __safeDI_configurationDefault_note() -> String? { nil }
 			}
 			#endif
 
@@ -464,7 +482,7 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Parent {
 			        func __safeDI_service() -> Service {
-			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.name()) } else { Service(name: safeDIOverrides.service.name()) }
+			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.name ?? Service.__safeDI_configurationDefault_name()) } else { Service(name: safeDIOverrides.service.name ?? Service.__safeDI_configurationDefault_name()) }
 			        }
 			        let service: Service = __safeDI_service()
 			        return Parent(service: service)
@@ -478,17 +496,20 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			    /// Configuration for how this type is constructed within a mock tree.
 			    struct SafeDIMockConfiguration {
 			        init(
-			            name: @autoclosure @escaping @MainActor () -> String? = Defaults.name,
+			            name: String?? = nil,
 			            _ safeDIBuilder: ((String?) -> Service)? = nil
 			        ) {
 			            self.name = name
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        let name: @MainActor () -> String?
+			        /// `nil` keeps the default of `Service`’s `name`.
+			        let name: String??
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 			        let safeDIBuilder: ((String?) -> Service)?
 			    }
+
+			    @MainActor static func __safeDI_configurationDefault_name() -> String? { Defaults.name }
 			}
 			#endif
 
@@ -558,7 +579,7 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			    ) -> Parent {
 			        func __safeDI_service() -> Service {
 			            func __safeDI_child() -> Child {
-			                return if let safeDIBuilder = safeDIOverrides.service.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.child.name()) } else { Child(name: safeDIOverrides.service.child.name()) }
+			                return if let safeDIBuilder = safeDIOverrides.service.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.child.name ?? Child.__safeDI_configurationDefault_name()) } else { Child(name: safeDIOverrides.service.child.name ?? Child.__safeDI_configurationDefault_name()) }
 			            }
 			            let child: Child = __safeDI_child()
 			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(child, safeDIOverrides.service.retries) } else { Service(child: child, retries: safeDIOverrides.service.retries) }
@@ -575,17 +596,20 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			    /// Configuration for how this type is constructed within a mock tree.
 			    struct SafeDIMockConfiguration {
 			        init(
-			            name: @autoclosure @escaping @MainActor () -> String? = Defaults.name,
+			            name: String?? = nil,
 			            _ safeDIBuilder: ((String?) -> Child)? = nil
 			        ) {
 			            self.name = name
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        let name: @MainActor () -> String?
+			        /// `nil` keeps the default of `Child`’s `name`.
+			        let name: String??
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 			        let safeDIBuilder: ((String?) -> Child)?
 			    }
+
+			    @MainActor static func __safeDI_configurationDefault_name() -> String? { Defaults.name }
 			}
 
 			extension Service {
@@ -615,18 +639,19 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_configurationEvaluatesDefaultOnMainActor_whenInstantiatorBuildsTypeWithMainActorInitializer() async throws {
+	mutating func mock_instantiatorHandsEachBuildThePassedValueOrAFreshDefault_whenTypeHasMainActorInitializer() async throws {
+		// As in production, each build the `Instantiator` makes evaluates the default anew, on the actor, while a value
+		// the caller passes is evaluated once, where the caller passes it, and every build shares it.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
-				@MainActor
-				public enum Defaults {
-				    public static var name: String? = "name"
+				public final class Logger {
+				    @MainActor public init() {}
 				}
 
 				@Instantiable
 				public final class Service: Instantiable {
-				    @MainActor public init(name: String? = Defaults.name) {}
+				    @MainActor public init(logger: Logger = Logger()) {}
 				}
 				""",
 				"""
@@ -638,6 +663,15 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 
 				    @Instantiated let serviceBuilder: Instantiator<Service>
 				}
+				""",
+			],
+			swiftFileContentByFilePath: [
+				"MockCallSite.swift": """
+				#if DEBUG
+				@MainActor func mockParent(sharing logger: Logger) -> Parent {
+				    Parent.mock(safeDIOverrides: .init(serviceBuilder: .init(logger: logger)))
+				}
+				#endif
 				""",
 			],
 			buildSwiftOutputDirectory: true,
@@ -663,7 +697,7 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Parent {
 			        func __safeDI_serviceBuilder() -> Service {
-			            if let safeDIBuilder = safeDIOverrides.serviceBuilder.safeDIBuilder { safeDIBuilder(safeDIOverrides.serviceBuilder.name()) } else { Service(name: safeDIOverrides.serviceBuilder.name()) }
+			            if let safeDIBuilder = safeDIOverrides.serviceBuilder.safeDIBuilder { safeDIBuilder(safeDIOverrides.serviceBuilder.logger ?? Service.__safeDI_configurationDefault_logger()) } else { Service(logger: safeDIOverrides.serviceBuilder.logger ?? Service.__safeDI_configurationDefault_logger()) }
 			        }
 			        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
 			        return Parent(serviceBuilder: serviceBuilder)
@@ -677,14 +711,176 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 			    /// Configuration for how this type is constructed within a mock tree.
 			    struct SafeDIMockConfiguration {
 			        init(
-			            name: @autoclosure @escaping @MainActor () -> String? = Defaults.name,
+			            logger: Logger? = nil,
+			            _ safeDIBuilder: ((Logger) -> Service)? = nil
+			        ) {
+			            self.logger = logger
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        /// `nil` keeps the default of `Service`’s `logger`.
+			        let logger: Logger?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Logger) -> Service)?
+			    }
+
+			    @MainActor static func __safeDI_configurationDefault_logger() -> Logger { Logger() }
+			}
+			#endif
+
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_configurationStoresDefaultValue_whenTypeInTreeHasPreconcurrencyMainActorInitializer() async throws {
+		// `@preconcurrency` adds nothing: `Parent`'s nonisolated mock calls the initializer, which Swift allows there, so the
+		// configuration keeps the value that mock reads.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Service: Instantiable {
+				    @preconcurrency @MainActor public init(name: String? = "name") {}
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Parent: Instantiable {
+				    public init(service: Service) {
+				        self.service = service
+				    }
+
+				    @Instantiated let service: Service
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Parent+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Parent {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            service: Service.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.service = service
+			        }
+
+			        let service: Service.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Parent {
+			        func __safeDI_service() -> Service {
+			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.name) } else { Service(name: safeDIOverrides.service.name) }
+			        }
+			        let service: Service = __safeDI_service()
+			        return Parent(service: service)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Service {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            name: String? = "name",
 			            _ safeDIBuilder: ((String?) -> Service)? = nil
 			        ) {
 			            self.name = name
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        let name: @MainActor () -> String?
+			        let name: String?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((String?) -> Service)?
+			    }
+			}
+			#endif
+
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_configurationStoresDefaultValue_whenTypeInTreeIsDeclaredPreconcurrencyMainActor() async throws {
+		// `@preconcurrency` on the type adds nothing either: `Parent`'s nonisolated mock builds `Service`, so the
+		// configuration keeps the value that mock reads.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				@preconcurrency @MainActor
+				public final class Service: Instantiable {
+				    public init(name: String? = "name") {}
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Parent: Instantiable {
+				    public init(service: Service) {
+				        self.service = service
+				    }
+
+				    @Instantiated let service: Service
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Parent+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Parent {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            service: Service.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.service = service
+			        }
+
+			        let service: Service.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Parent {
+			        func __safeDI_service() -> Service {
+			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.name) } else { Service(name: safeDIOverrides.service.name) }
+			        }
+			        let service: Service = __safeDI_service()
+			        return Parent(service: service)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Service {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            name: String? = "name",
+			            _ safeDIBuilder: ((String?) -> Service)? = nil
+			        ) {
+			            self.name = name
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let name: String?
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 			        let safeDIBuilder: ((String?) -> Service)?
 			    }
@@ -940,7 +1136,7 @@ struct SafeDIToolMockConfigurationIsolationTests: ~Copyable {
 				"MockCallSite.swift": """
 				#if DEBUG
 				@MainActor func mockParent() -> Parent {
-				    Parent.mock(safeDIOverrides: .init(service: .init(name: nil, count: 2)))
+				    Parent.mock(safeDIOverrides: .init(service: .init(name: "custom", count: 2)))
 				}
 				#endif
 				""",

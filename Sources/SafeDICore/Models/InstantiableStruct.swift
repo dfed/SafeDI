@@ -136,7 +136,8 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// whose hand-written mock the generated `mock()` calls, contributes none.
 	public let mockAttributes: String
 	/// The isolation spelled on the type declaration this Instantiable was found on, which a member generated in an
-	/// extension of the type inherits: its global actor attribute (`"@MainActor"`), `"nonisolated"`, or `nil` when it
+	/// extension of the type inherits: its global actor attribute (`"@MainActor"`), with the `@preconcurrency` it spells
+	/// beside one (`"@preconcurrency @MainActor"`, `Initializer.memberIsolation`), `"nonisolated"`, or `nil` when it
 	/// spells neither. Always `nil` for an extension-based Instantiable, whose extension a generated member is not in.
 	public let declarationIsolation: String?
 	/// The global actor the generated `mock()` spells for the member it builds the type with, which a synchronous `mock()`
@@ -164,7 +165,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		guard !Initializer.spellsIsolation(in: attributes),
 		      let isolation = member?.spelledIsolation,
 		      isolation != "nonisolated",
-		      String(Initializer.globalActor(of: isolation)) != declarationIsolation
+		      String(Initializer.globalActor(of: isolation)) != declarationIsolation.map({ String(Initializer.globalActor(of: $0)) })
 		else { return nil }
 		return isolation
 	}
@@ -174,13 +175,13 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// `mockAttributes` spells; `nil` for none.
 	public var generatedMockGlobalActor: String? {
 		generatedMockConstructionIsolation
-			?? declarationIsolation.flatMap { $0 == "nonisolated" ? nil : $0 }
+			?? declarationIsolation.flatMap { $0 == "nonisolated" ? nil : String(Initializer.globalActor(of: $0)) }
 			?? Initializer.globalActorAttribute(in: mockAttributes)
 	}
 
 	/// The global actor every mock that builds this type builds it on, or `nil` when there is none: each member a mock can
 	/// build it with must be isolated to that one actor, which it spells, or, when it spells no isolation, which the type
-	/// declaration spells. The members are its hand-written mock (`mockInitializer`), which builds every property of the
+	/// declaration spells, without `@preconcurrency`. The members are its hand-written mock (`mockInitializer`), which builds every property of the
 	/// type when it returns the type itself, and otherwise also its `init` or `instantiate(…)` (`initializer`). A mock calls
 	/// such a member synchronously, so it builds the type only on that actor, where the type's configuration evaluates the
 	/// defaults the type's declaration spells, which may read the actor's state (`mock-generation.md`). `mockAttributes`
@@ -195,6 +196,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		for member in members {
 			switch member.spelledIsolation ?? declarationIsolation {
 			case "nonisolated"?, nil:
+				globalActors.insert(nil)
+			case let isolation? where isolation.hasPrefix("@preconcurrency "):
+				// `@preconcurrency` adds nothing: code on no actor calls such a member with a warning, so a nonisolated mock
+				// may build the type, and the configuration keeps the values it reads there.
 				globalActors.insert(nil)
 			case let globalActor?:
 				globalActors.insert(globalActor)

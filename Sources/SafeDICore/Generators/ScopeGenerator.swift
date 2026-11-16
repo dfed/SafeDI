@@ -9389,6 +9389,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Build init parameters in order: children, defaults, builder (last).
 		var initParameters = [String]()
+		/// The providers of the defaults of a type every mock builds on a global actor, declared after the struct.
+		var providers = [String]()
 		var assignments = [String]()
 		var storedProperties = [String]()
 
@@ -9437,13 +9439,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let closureSendable = (requiresSendable && !typeSource.contains("@Sendable")) ? "@Sendable " : ""
 			if let globalActor = node.configurationGlobalActor {
 				// Every mock builds the type on `globalActor`, where its declaration evaluates the default, which may read
-				// the actor's state and so cannot be evaluated in this nonisolated initializer: the struct stores a closure
-				// of the actor that returns the value, which its initializer takes as an autoclosure, so a caller still
-				// passes a value, and the mock calls it where it builds the type (`resolveBuilderArguments`). A closure
-				// literal default is formed inside the autoclosure, on the actor, as in the declaration.
-				let attributes = "\(requiresSendable ? "@Sendable " : "")\(globalActor)"
-				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping \(attributes) () -> \(typeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
-				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(attributes) () -> \(typeSource)")
+				// the actor's state and so cannot be evaluated in this nonisolated initializer. The struct holds the value a
+				// caller passes, once, or `nil` for none, and a provider of the actor in the type's extension, where the
+				// declaration's names resolve as in its default, evaluates the default where the mock builds the type, each
+				// time, as production does (`resolveBuilderArguments`). A `@Sendable` builder, on no actor, cannot build
+				// such a type at all, so `requiresSendable` changes nothing here.
+				let storedType = TypeDescription.optional(defaultParameter.valueTypeDescription).asSource
+				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(storedType) = nil")
+				storedProperties.append("\(innerIndent)/// `nil` keeps the default of `\(node.concreteType.asSource)`’s `\(defaultParameter.label.spelledWithoutBackticks)`.")
+				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(storedType)")
+				providers.append("\(indent)\(globalActor) static func \(configurationDefaultProviderName(label: defaultParameter.label))() -> \(typeSource) { \(defaultExpression(defaultParameter)) }")
 			} else if defaultParameter.isAutoclosure, !requiresSendable {
 				// An `@autoclosure` parameter is evaluated where the type is built: the struct stores a closure that
 				// returns the value, which its initializer takes as an autoclosure, as the parameter does, and the mock
@@ -9495,7 +9500,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append(contentsOf: storedProperties)
 
 		lines.append("\(indent)}")
+		if !providers.isEmpty {
+			lines.append("")
+			lines.append(contentsOf: providers)
+		}
 		return lines.joined(separator: "\n")
+	}
+
+	/// The name of the static method in the extension of a type every mock builds on a global actor that evaluates the
+	/// default of `label` for the type's configuration (`generateConfigurationStruct`).
+	static func configurationDefaultProviderName(label: String) -> String {
+		"\(ReservedName.builderFunctionNamePrefix)configurationDefault_\(label)".spelledAsJoinedIdentifier
 	}
 
 	/// `expression` as the default of an `@autoclosure` parameter: parenthesized when it is a closure literal, which
@@ -10206,8 +10221,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// When the node's type is in `sendableConfigurationTypeNames`, its struct stores
 	/// each non-closure default as a `@Sendable` closure (`generateConfigurationStruct`),
 	/// so the argument calls it, wherever it is read from. Every struct stores the value of an
-	/// `@autoclosure` parameter as a closure, which the argument calls too, and the struct of a type
-	/// every mock builds on a global actor (`configurationGlobalActor`) stores every default as one.
+	/// `@autoclosure` parameter as a closure, which the argument calls too. The struct of a type
+	/// every mock builds on a global actor (`configurationGlobalActor`) holds a value a caller passed,
+	/// or `nil`, for which the type's provider evaluates the default.
 	private static func resolveBuilderArguments(
 		for node: MockParameterNode,
 		nodePath: String,
@@ -10230,14 +10246,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 		let storesDefaultsAsClosures = sendableConfigurationTypeNames.contains(node.concreteType.asSource)
 		/// `expression`, called when the struct stores the default of `argument` as a closure: always for an
-		/// `@autoclosure` parameter and in the struct of a type built on a global actor, and for every value that is not
-		/// a function when the struct is `@Sendable`-typed.
+		/// `@autoclosure` parameter, and for every value that is not a function when the struct is `@Sendable`-typed.
 		func readingDefault(_ expression: String, of argument: Initializer.Argument) -> String {
 			let typeDescription = argument.typeDescription.strippingEscaping
-			return if typeDescription.autoclosureValueType != nil
-				|| node.configurationGlobalActor != nil
-				|| (storesDefaultsAsClosures && !typeDescription.isClosure)
-			{
+			return if typeDescription.autoclosureValueType != nil || (storesDefaultsAsClosures && !typeDescription.isClosure) {
 				"\(expression)()"
 			} else {
 				expression
@@ -10256,6 +10268,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					uncoveredDependencyNames: uncoveredDependencyNames,
 					bindingNamesPassedByName: bindingNamesPassedByName,
 				)
+			} else if node.configurationGlobalActor != nil {
+				// The value the caller passed, or the default, which the type's provider evaluates here, on the actor, each
+				// time the mock builds the type (`generateConfigurationStruct`). Beneath a pruned edge nothing is passed.
+				"\(overrideReachable ? "\(nodePath).\(argument.label) ?? " : "")\(node.concreteType.asSource).\(configurationDefaultProviderName(label: argument.label))()"
 			} else if !overrideReachable {
 				// The struct is built afresh, so nothing is read from `SafeDIOverrides`, even inside a `@Sendable` function.
 				readingDefault("\(node.configurationTypeName)().\(argument.label)", of: argument)

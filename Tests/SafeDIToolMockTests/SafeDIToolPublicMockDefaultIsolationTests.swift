@@ -424,7 +424,7 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 			        func __safeDI_panel() -> Panel {
 			            _ = Card.__safeDI_Card_mock_546AE63BE69A02EC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            let card = Card.mock(safeDIOverrides: safeDIOverrides.panel.card)
-			            return Panel.__safeDI_init(card: card, name: safeDIOverrides.panel.name(), safeDIBuilder: safeDIOverrides.panel.safeDIBuilder)
+			            return Panel.__safeDI_init(card: card, name: safeDIOverrides.panel.name, safeDIBuilder: safeDIOverrides.panel.safeDIBuilder)
 			        }
 			        let panel: Panel = __safeDI_panel()
 			        return Page(panel: panel)
@@ -441,7 +441,7 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 			nonisolated public struct __safeDI_App_Panel_MockConfiguration {
 			    public init(
 			        card: Card.SafeDIOverrides = .init(),
-			        name: @autoclosure @escaping @MainActor () -> String? = nil,
+			        name: String? = nil,
 			        _ safeDIBuilder: ((Card, String) -> Panel)? = nil
 			    ) {
 			        self.card = card
@@ -451,7 +451,7 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 
 			    public let card: Card.SafeDIOverrides
 			    /// `nil` keeps the default of `Panel`’s `name`.
-			    public let name: @MainActor () -> String?
+			    public let name: String?
 			    /// Overrides how `Panel` is constructed. Parameters match the type’s initializer or custom mock method.
 			    public let safeDIBuilder: ((Card, String) -> Panel)?
 			}

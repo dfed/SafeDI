@@ -3793,7 +3793,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Dashboard {
 			        func __safeDI_vm() -> ViewModel {
-			            return ViewModel.__safeDI_init(title: safeDIOverrides.vm.title(), safeDIBuilder: safeDIOverrides.vm.safeDIBuilder)
+			            return ViewModel.__safeDI_init(title: safeDIOverrides.vm.title, safeDIBuilder: safeDIOverrides.vm.safeDIBuilder)
 			        }
 			        let vm: ViewModel = __safeDI_vm()
 			        return Dashboard(vm: vm, label: label)
@@ -3898,14 +3898,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			/// Configuration for how `ViewModel` is constructed within the public mock trees of module `Core`.
 			nonisolated public struct __safeDI_Core_ViewModel_MockConfiguration {
 			    public init(
-			        title: @autoclosure @escaping @MainActor () -> String? = __safeDI_Core_ViewModel_mockDefault_title()
+			        title: String? = __safeDI_Core_ViewModel_mockDefault_title()
 			    ) {
 			        self.title = title
 			        self.safeDIBuilder = nil
 			    }
 
 			    package init(
-			        title: @autoclosure @escaping @MainActor () -> String? = __safeDI_Core_ViewModel_mockDefault_title(),
+			        title: String? = __safeDI_Core_ViewModel_mockDefault_title(),
 			        _ safeDIBuilder: ((String?) -> ViewModel)? = nil
 			    ) {
 			        self.title = title
@@ -3913,18 +3913,18 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// The default of `ViewModel`’s `title` unless set.
-			    public let title: @MainActor () -> String?
+			    public let title: String?
 			    /// Overrides how `ViewModel` is constructed. Parameters match the type’s initializer or custom mock method.
 			    package let safeDIBuilder: ((String?) -> ViewModel)?
 			}
 
 			extension ViewModel {
-			    @MainActor static func __safeDI_mockDefault_title() -> String? { defaultTitle }
+			    nonisolated static func __safeDI_mockDefault_title() -> String? { defaultTitle }
 			    static func __safeDI_init(title: String?, safeDIBuilder: ((String?) -> ViewModel)?) -> ViewModel {
 			        if let safeDIBuilder { safeDIBuilder(title) } else { ViewModel(title: title) }
 			    }
 			}
-			@usableFromInline @MainActor func __safeDI_Core_ViewModel_mockDefault_title() -> String? { ViewModel.__safeDI_mockDefault_title() }
+			@usableFromInline nonisolated func __safeDI_Core_ViewModel_mockDefault_title() -> String? { ViewModel.__safeDI_mockDefault_title() }
 
 			/// Configuration for how `FakeLogger` is constructed within the public mock trees of module `Core`.
 			nonisolated public struct __safeDI_Core_FakeLogger_MockConfiguration {
