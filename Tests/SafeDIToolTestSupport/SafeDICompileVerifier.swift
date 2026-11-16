@@ -84,8 +84,12 @@ func verifyGeneratedCodeCompiles(
 	)
 	let check = try CompileCheckModule(sources: module, staged: stageCompileSources(of: module, filesToDelete: &filesToDelete), emitsModule: false)
 	var passedCheckKey: String?
-	if passedCheckCache != nil, let build = await CompileCheckBuild.description {
-		passedCheckKey = try PassedCompileCheckCache.key(of: [check], build: build)
+	if let passedCheckCache {
+		if let build = await CompileCheckBuild.description {
+			passedCheckKey = try PassedCompileCheckCache.key(of: [check], build: build)
+		} else {
+			passedCheckCache.countCompiledWithoutAKey()
+		}
 	}
 	if let passedCheckCache, let passedCheckKey, passedCheckCache.holds(passedCheckKey) {
 		return
@@ -134,8 +138,12 @@ func verifyModulesCompile(
 	}
 	let passedCheckCache = recordsIssues ? passedCheckCache : nil
 	var passedCheckKey: String?
-	if passedCheckCache != nil, let build = await CompileCheckBuild.description {
-		passedCheckKey = try PassedCompileCheckCache.key(of: checks, build: build)
+	if let passedCheckCache {
+		if let build = await CompileCheckBuild.description {
+			passedCheckKey = try PassedCompileCheckCache.key(of: checks, build: build)
+		} else {
+			passedCheckCache.countCompiledWithoutAKey()
+		}
 	}
 	if let passedCheckCache, let passedCheckKey, passedCheckCache.holds(passedCheckKey) {
 		return nil

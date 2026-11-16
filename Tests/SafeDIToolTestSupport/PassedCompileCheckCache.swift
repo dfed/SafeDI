@@ -100,6 +100,12 @@ struct PassedCompileCheckCache: Sendable {
 		return true
 	}
 
+	/// Counts a check that compiled without a key, because what compiles it could not be described, so that the
+	/// process's last line says why nothing was skipped.
+	func countCompiledWithoutAKey() {
+		tally.countCompiledWithoutAKey()
+	}
+
 	/// Appends `key` to the file, and to the file of this run's passes when there is one, making each file and its
 	/// directory when they do not exist yet.
 	func recordPass(of key: String) throws {
@@ -178,13 +184,20 @@ struct PassedCompileCheckCache: Sendable {
 		}
 	}
 
-	private func printTally() {
+	/// What the process prints when it exits: how many checks compiled and how many were skipped, and how many
+	/// compiled without a key when what compiles them could not be described.
+	var tallyLine: String {
 		let counts = tally.counts
-		FileHandle.standardError.write(Data("""
-		Compile checks: \(counts.compiled) compiled, \(counts.skipped) skipped because they passed in an earlier run \
-		(\(Self.environmentVariable)=\(file.path)).
+		var line = "Compile checks: \(counts.compiled) compiled, \(counts.skipped) skipped because they passed in an earlier run"
+		if counts.compiledWithoutAKey > 0 {
+			line += ", \(counts.compiledWithoutAKey) compiled without being looked up or recorded because what compiles them could not be described"
+		}
+		line += " (\(Self.environmentVariable)=\(file.path))."
+		return line
+	}
 
-		""".utf8))
+	private func printTally() {
+		FileHandle.standardError.write(Data((tallyLine + "\n").utf8))
 	}
 }
 
@@ -217,11 +230,18 @@ struct PassedCompileCheckCacheError: Error, CustomStringConvertible {
 /// sources are SafeDI's, which CI's hash of the list covers (`.github/scripts/compile-check-identity.sh`), and
 /// swift-syntax's, which the build's own record of what it resolved names (`workspace-state.json` in the build
 /// directory), whatever `Package.resolved` says.
+///
+/// Two things about the plugin are deliberately not in the key, and `.claude/rules/passed-compile-checks.md` says
+/// so too. The compiler that built the plugin is not: CI builds it with the compiler that compiles the checks, and
+/// a job that built it with another would have to be written to. And of a build directory that holds two
+/// configurations, the description names which one the verifier chose but not when it was built, so a plugin left
+/// by an older build of the same configuration, beside a current SafeDI module, is read as current; a build of the
+/// tests rebuilds both.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 enum CompileCheckBuild {
 	/// What `describe(artifacts:)` returns for the build artifacts the verifier locates, asked once per process, or
 	/// `nil` when it could not be asked, twice, which is said once on standard error. A check is then compiled without
-	/// a key: nothing is skipped and nothing recorded.
+	/// a key: nothing is skipped and nothing recorded, and the cache counts it (`countCompiledWithoutAKey()`).
 	static var description: String? {
 		get async {
 			try? await shared.value
@@ -232,8 +252,8 @@ enum CompileCheckBuild {
 	/// default target, its runtime's compatibility version and the paths it compiles against, and on Apple platforms
 	/// the version and build of the SDK `xcrun` compiles with), on Linux the distribution the process runs on
 	/// (`/etc/os-release`), whose libraries a check compiles against, the SHA-256 of `artifacts`' SafeDI module, and
-	/// each package the build that made `artifacts`' macro plugin resolved, with the version and revision it resolved
-	/// it at.
+	/// the configuration directory that holds `artifacts`' macro plugin, by its last two names, and each package the
+	/// build that made the plugin resolved, with the version and revision it resolved it at.
 	static func describe(
 		artifacts: SafeDIBuildArtifacts,
 		environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -267,6 +287,10 @@ enum CompileCheckBuild {
 		for file in try regularFiles(at: module) {
 			description += try "\(file.name) \(sha256HexDigest(of: Data(contentsOf: file.url)))\n"
 		}
+		// Which of a build directory's configurations the verifier chose, so that a pass with one's plugin is not read
+		// with another's.
+		let products = artifacts.safeDIMacrosToolPath.deletingLastPathComponent()
+		description += "Products \(products.deletingLastPathComponent().lastPathComponent)/\(products.lastPathComponent)\n"
 		description += "Resolved packages\n"
 		description += try resolvedPackages(ofTheBuildThatMade: artifacts.safeDIMacrosToolPath)
 		return description
@@ -274,20 +298,25 @@ enum CompileCheckBuild {
 
 	/// One line per package the build that made `product` depends on, in name order: its identity and the state the
 	/// build resolved it to, which for a package under source control is its revision and version. Read from
-	/// `workspace-state.json`, which SwiftPM keeps in the build directory, two or three directories above a product;
-	/// a job that runs the tests of another job's build carries the file with the products. Fails when no directory
-	/// above `product` holds one, as in a build Xcode made: a key that leaves the dependencies out would stand for
-	/// every version of them.
+	/// `workspace-state.json`, which SwiftPM keeps in the build directory, above a product by as many directories as
+	/// the build system's layout has (two with the native build system, four with Swift Build); a job that runs the
+	/// tests of another job's build carries the file with the products. The search stops at a directory named
+	/// `.build` or one that holds a `Package.swift`. Fails when it finds none, as in a build Xcode made in its own
+	/// derived data: a key that leaves the dependencies out would stand for every version of them.
 	private static func resolvedPackages(ofTheBuildThatMade product: URL) throws -> String {
-		var directory = product.deletingLastPathComponent()
+		var directory = product.deletingLastPathComponent().standardizedFileURL
 		var workspaceState: URL?
-		for _ in 0..<3 {
+		while true {
 			let candidate = directory.appendingPathComponent("workspace-state.json")
 			if FileManager.default.fileExists(atPath: candidate.path) {
 				workspaceState = candidate
 				break
 			}
-			directory = directory.deletingLastPathComponent()
+			// No further than the build directory or the package, so that no other package's record is read.
+			let isThePackage = FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path)
+			let parent = directory.deletingLastPathComponent().standardizedFileURL
+			guard directory.lastPathComponent != ".build", !isThePackage, parent.path != directory.path else { break }
+			directory = parent
 		}
 		guard let workspaceState,
 		      let state = try JSONSerialization.jsonObject(with: Data(contentsOf: workspaceState)) as? [String: Any],
@@ -440,8 +469,12 @@ private struct CompileCheckTextNormalization {
 
 /// How many checks a cache compiled and skipped, counted from the tests that run in parallel.
 private final class PassedCompileCheckTally: Sendable {
-	var counts: (compiled: Int, skipped: Int) {
-		lock.withLock { (compiled, skipped) }
+	var counts: (compiled: Int, skipped: Int, compiledWithoutAKey: Int) {
+		lock.withLock { (compiled, skipped, compiledWithoutAKey) }
+	}
+
+	func countCompiledWithoutAKey() {
+		lock.withLock { compiledWithoutAKey += 1 }
 	}
 
 	func countCompiled() {
@@ -455,6 +488,7 @@ private final class PassedCompileCheckTally: Sendable {
 	private let lock = NSLock()
 	nonisolated(unsafe) private var compiled = 0
 	nonisolated(unsafe) private var skipped = 0
+	nonisolated(unsafe) private var compiledWithoutAKey = 0
 }
 
 /// The SHA-256 digest (FIPS 180-4) of `data`, as 64 lowercase hexadecimal digits. Foundation offers no SHA-256 on

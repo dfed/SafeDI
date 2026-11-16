@@ -155,7 +155,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func describe_namesTheCompilersVersionAndTarget() async throws {
-		let description = try await CompileCheckBuild.describe(artifacts: #require(SafeDIBuildArtifactLocator.locate()))
+		let description = try await CompileCheckBuild.describe(artifacts: buildDirectory(named: "build"))
 
 		#expect(description.contains("Swift version"))
 		#expect(description.contains("\"triple\""))
@@ -165,7 +165,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func describe_throws_whenTheEnvironmentNamesNoCompiler() async throws {
 		// A key made from a compiler's error text would stand for no compiler, so no description is better than one.
-		let artifacts = try #require(SafeDIBuildArtifactLocator.locate())
+		let artifacts = try buildDirectory(named: "build")
 
 		await #expect(throws: PassedCompileCheckCacheError.self) {
 			try await CompileCheckBuild.describe(artifacts: artifacts, environment: ["PATH": "/safedi-no-compiler", "DEVELOPER_DIR": "/safedi-no-compiler"])
@@ -189,25 +189,71 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func describe_throws_whenNoDirectoryAboveTheMacroPluginRecordsWhatTheBuildResolved() async throws {
-		let artifacts = try #require(SafeDIBuildArtifactLocator.locate())
-		let plugin = directory.appendingPathComponent("SafeDIMacros-tool")
-		try Data().write(to: plugin)
+	func describe_namesWhatTheBuildResolved_whenSwiftBuildLaidOutTheBuildDirectory() async throws {
+		// Swift Build puts products four directories below the record of what the build resolved
+		// (`.build/out/Products/Release`), where SwiftPM's native build system puts them two below.
+		let build = try buildDirectory(named: ".build", products: ["out", "Products", "Release"], resolvingSwiftSyntaxAt: "0000000000000000000000000000000000000003")
+
+		let description = try await CompileCheckBuild.describe(artifacts: build)
+
+		#expect(description.contains(#"swift-syntax {"checkoutState":{"revision":"0000000000000000000000000000000000000003","version":"1.0.0"},"name":"sourceControlCheckout"}"#))
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func describe_differs_whenTheMacroPluginIsOfAnotherConfigurationOfTheSameBuildDirectory() async throws {
+		let release = try buildDirectory(named: "build", products: ["triple", "release"])
+		let debug = try buildDirectory(named: "build", products: ["triple", "debug"])
+
+		let descriptionOfRelease = try await CompileCheckBuild.describe(artifacts: release)
+		let descriptionOfDebug = try await CompileCheckBuild.describe(artifacts: debug)
+
+		#expect(descriptionOfRelease.contains("Products triple/release\n"))
+		#expect(descriptionOfDebug.contains("Products triple/debug\n"))
+		#expect(descriptionOfRelease != descriptionOfDebug)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func describe_throws_whenOnlyADirectoryAboveTheBuildDirectoryRecordsWhatABuildResolved() async throws {
+		// A record above the build directory is another build's, so the search stops at `.build`.
+		let build = try buildDirectory(named: ".build")
+		try FileManager.default.moveItem(
+			at: directory.appendingPathComponent(".build").appendingPathComponent("workspace-state.json"),
+			to: directory.appendingPathComponent("workspace-state.json"),
+		)
 
 		await #expect(throws: PassedCompileCheckCacheError.self) {
-			try await CompileCheckBuild.describe(artifacts: SafeDIBuildArtifacts(swiftModuleSearchPath: artifacts.swiftModuleSearchPath, safeDIMacrosToolPath: plugin))
+			try await CompileCheckBuild.describe(artifacts: build)
+		}
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func describe_throws_whenOnlyADirectoryAboveThePackageRecordsWhatABuildResolved() async throws {
+		// A build directory of any name is inside its package, so the search stops at the package too.
+		let build = try buildDirectory(named: "package/scratch")
+		try FileManager.default.moveItem(
+			at: directory.appendingPathComponent("package/scratch").appendingPathComponent("workspace-state.json"),
+			to: directory.appendingPathComponent("workspace-state.json"),
+		)
+		try Data().write(to: directory.appendingPathComponent("package").appendingPathComponent("Package.swift"))
+
+		await #expect(throws: PassedCompileCheckCacheError.self) {
+			try await CompileCheckBuild.describe(artifacts: build)
 		}
 	}
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func describe_differs_whenTheSafeDIModuleDiffersByOneByte() async throws {
-		let artifacts = try #require(SafeDIBuildArtifactLocator.locate())
-		let otherModule = directory.appendingPathComponent("SafeDI.swiftmodule")
-		try Data([0]).write(to: otherModule)
+		let build = try buildDirectory(named: "build")
+		let otherModules = directory.appendingPathComponent("other-modules")
+		try FileManager.default.createDirectory(at: otherModules, withIntermediateDirectories: true)
+		try Data([0]).write(to: otherModules.appendingPathComponent("SafeDI.swiftmodule"))
 
-		let description = try await CompileCheckBuild.describe(artifacts: artifacts)
-		let descriptionWithOtherModule = try await CompileCheckBuild.describe(artifacts: SafeDIBuildArtifacts(swiftModuleSearchPath: directory, safeDIMacrosToolPath: artifacts.safeDIMacrosToolPath))
+		let description = try await CompileCheckBuild.describe(artifacts: build)
+		let descriptionWithOtherModule = try await CompileCheckBuild.describe(artifacts: SafeDIBuildArtifacts(swiftModuleSearchPath: otherModules, safeDIMacrosToolPath: build.safeDIMacrosToolPath))
 
 		#expect(description != descriptionWithOtherModule)
 	}
@@ -215,16 +261,42 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func describe_throws_whenThereIsNoSafeDIModule() async throws {
-		let artifacts = try #require(SafeDIBuildArtifactLocator.locate())
+		let build = try buildDirectory(named: "build")
+		let noModules = directory.appendingPathComponent("no-modules")
+		try FileManager.default.createDirectory(at: noModules, withIntermediateDirectories: true)
 
 		await #expect(throws: PassedCompileCheckCacheError.self) {
-			try await CompileCheckBuild.describe(artifacts: SafeDIBuildArtifacts(swiftModuleSearchPath: directory, safeDIMacrosToolPath: artifacts.safeDIMacrosToolPath))
+			try await CompileCheckBuild.describe(artifacts: SafeDIBuildArtifacts(swiftModuleSearchPath: noModules, safeDIMacrosToolPath: build.safeDIMacrosToolPath))
 		}
+	}
+
+	// MARK: Tests – Saying what the process did
+
+	@Test
+	func tallyLine_saysOnlyWhatCompiledAndWasSkipped_whenEveryCheckHadAKey() {
+		let cacheFile = directory.appendingPathComponent("passed.txt")
+
+		let cache = PassedCompileCheckCache(file: cacheFile, run: nil)
+
+		#expect(cache.tallyLine == "Compile checks: 0 compiled, 0 skipped because they passed in an earlier run (SAFEDI_COMPILE_CHECK_PASSED_CACHE=\(cacheFile.path)).")
+	}
+
+	@Test
+	func tallyLine_countsTheChecksThatCompiledWithoutAKey_whenWhatCompilesThemCouldNotBeDescribed() {
+		// Without this, a process that could describe nothing would say "0 compiled, 0 skipped" after compiling
+		// every check.
+		let cacheFile = directory.appendingPathComponent("passed.txt")
+		let cache = PassedCompileCheckCache(file: cacheFile, run: nil)
+
+		cache.countCompiledWithoutAKey()
+		cache.countCompiledWithoutAKey()
+
+		#expect(cache.tallyLine == "Compile checks: 0 compiled, 0 skipped because they passed in an earlier run, 2 compiled without being looked up or recorded because what compiles them could not be described (SAFEDI_COMPILE_CHECK_PASSED_CACHE=\(cacheFile.path)).")
 	}
 
 	// MARK: Tests – Skipping and recording checks
 
-	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@Test(.enabled("Needs a key, which a check has only when verification is enabled and what compiles it can be described", whatCompilesTheChecksCanBeDescribed))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func verifyModulesCompile_compilesNothing_whenTheCacheHoldsTheCheckFromAnEarlierPass() async throws {
 		var filesToDelete = [URL]()
@@ -240,7 +312,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 		#expect(secondRun == nil)
 	}
 
-	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@Test(.enabled("Needs a key, which a check has only when verification is enabled and what compiles it can be described", whatCompilesTheChecksCanBeDescribed))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func verifyModulesCompile_compilesTheCheck_whenTheCacheHoldsItWithOtherGeneratedCode() async throws {
 		// CI keeps the cache across changes to the generators (`.github/scripts/compile-check-identity.sh` hashes none
@@ -298,7 +370,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 		#expect(!FileManager.default.fileExists(atPath: cacheFile.path))
 	}
 
-	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@Test(.enabled("Needs a key, which a check has only when verification is enabled and what compiles it can be described", whatCompilesTheChecksCanBeDescribed))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func verifyModulesCompile_compilesAndRecordsNothing_whenItReturnsTheOutcomeOfACheckTheCacheHolds() async throws {
 		// A test that asserts on the outcome needs one, so a call that records no issues always compiles.
@@ -314,7 +386,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 		#expect(try String(contentsOf: cacheFile, encoding: .utf8).split(separator: "\n").count == 1)
 	}
 
-	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@Test(.enabled("Needs a key, which a check has only when verification is enabled and what compiles it can be described", whatCompilesTheChecksCanBeDescribed))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func verifyModulesCompile_recordsTheKeyOfTheCheckWithWhatCompilesIt() async throws {
 		// The key the verifier looks up and records must name this process's compiler and build of SafeDI: with any
@@ -331,7 +403,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 		#expect(try String(contentsOf: cacheFile, encoding: .utf8) == PassedCompileCheckCache.key(of: [check], build: build) + "\n")
 	}
 
-	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@Test(.enabled("Needs a key, which a check has only when verification is enabled and what compiles it can be described", whatCompilesTheChecksCanBeDescribed))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func verifyGeneratedCodeCompiles_recordsTheKeyOfTheCheckWithWhatCompilesIt() async throws {
 		var filesToDelete = [URL]()
@@ -364,7 +436,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 
 	// MARK: Tests – Listing the passes of this run
 
-	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@Test(.enabled("Needs a key, which a check has only when verification is enabled and what compiles it can be described", whatCompilesTheChecksCanBeDescribed))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func verifyModulesCompile_listsOnlyTheCheckItCompiledAsPassedInThisRun_whenTheCacheWasRestoredWithOtherChecks() async throws {
 		// CI shares the run's own list with every branch, so a line a job restored must never reach it: nothing in
@@ -407,11 +479,17 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 
 	private let directory: URL
 
-	/// A build directory laid out as SwiftPM lays one out, whose products are this process's SafeDI module and an
-	/// empty macro plugin, and whose `workspace-state.json` says the build resolved swift-syntax at `revision`.
-	private func buildDirectory(named name: String, resolvingSwiftSyntaxAt revision: String) throws -> SafeDIBuildArtifacts {
+	/// A build directory at `name` under the test's directory, whose products are `products` below it (SwiftPM's
+	/// native build system puts them at a target triple and a configuration): this process's SafeDI module and an
+	/// empty macro plugin. Its `workspace-state.json` says the build resolved swift-syntax at `revision`.
+	private func buildDirectory(
+		named name: String,
+		products productsPath: [String] = ["triple", "release"],
+		resolvingSwiftSyntaxAt revision: String = "0000000000000000000000000000000000000000",
+	) throws -> SafeDIBuildArtifacts {
 		let artifacts = try #require(SafeDIBuildArtifactLocator.locate())
-		let products = directory.appendingPathComponent(name).appendingPathComponent("triple").appendingPathComponent("release")
+		let build = directory.appendingPathComponent(name)
+		let products = productsPath.reduce(build) { $0.appendingPathComponent($1) }
 		try FileManager.default.createDirectory(at: products.appendingPathComponent("Modules"), withIntermediateDirectories: true)
 		try FileManager.default.copyItem(
 			at: artifacts.swiftModuleSearchPath.appendingPathComponent("SafeDI.swiftmodule"),
@@ -421,7 +499,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 		try Data().write(to: plugin)
 		try """
 		{"object":{"artifacts":[],"dependencies":[{"basedOn":null,"packageRef":{"identity":"swift-syntax","kind":"remoteSourceControl","location":"https://github.com/swiftlang/swift-syntax.git","name":"swift-syntax"},"state":{"checkoutState":{"revision":"\(revision)","version":"1.0.0"},"name":"sourceControlCheckout"},"subpath":"swift-syntax"}]},"version":7}
-		""".write(to: directory.appendingPathComponent(name).appendingPathComponent("workspace-state.json"), atomically: true, encoding: .utf8)
+		""".write(to: build.appendingPathComponent("workspace-state.json"), atomically: true, encoding: .utf8)
 		return SafeDIBuildArtifacts(swiftModuleSearchPath: products.appendingPathComponent("Modules"), safeDIMacrosToolPath: plugin)
 	}
 
@@ -486,5 +564,17 @@ extension Array {
 	/// The array with its first `count` elements moved to its end.
 	fileprivate func rotated(by count: Int) -> [Element] {
 		Array(self[(count % Swift.max(1, self.count))...] + self[..<(count % Swift.max(1, self.count))])
+	}
+}
+
+/// Whether a check gets a key in this process: compile verification is enabled and what compiles the checks can be
+/// described. It cannot in a build whose directory holds no record of what it resolved, where the verifier compiles
+/// every check without a key, so a test that expects a recorded key has nothing to expect.
+@Sendable private func whatCompilesTheChecksCanBeDescribed() async -> Bool {
+	guard compileVerificationIsEnabled else { return false }
+	if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
+		return await CompileCheckBuild.description != nil
+	} else {
+		return false
 	}
 }
