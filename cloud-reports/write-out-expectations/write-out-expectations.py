@@ -184,9 +184,20 @@ class Structure:
             start = self.operand_start(start - 2)
         while self.is_punctuation(end + 1, "+"):
             end = self.operand_end(end + 2)
-        if not (self.is_punctuation(start - 1, "=") and self.tokens[start - 2].kind == "identifier" and self.text(start - 3) == "let"):
+        if self.let_before(start) is None:
             raise Left("its fragments are not in a comparison, an argument or a `let`")
         return start, end
+
+    def let_before(self, start):
+        """(the `let` token, the name token) of `let name =` or `let name: String =` just before `start`, or None."""
+        if not self.is_punctuation(start - 1, "="):
+            return None
+        name = start - 2
+        if self.tokens[name].kind == "identifier" and self.text(name) == "String" and self.is_punctuation(name - 1, ":"):
+            name -= 2
+        if self.tokens[name].kind == "identifier" and self.text(name - 1) == "let":
+            return name - 1, name
+        return None
 
     def constant_name(self, literal_position):
         """The name of the stored constant whose whole value is the literal at `literal_position`, or None."""
@@ -215,6 +226,62 @@ class Structure:
                 first = position - 2
             ranges.append((first, position))
         return ranges
+
+    def helper_comparisons(self, function):
+        """(first token, last token, the output's variable, the module or None) of each expected side in `function`
+        that calls a helper and is compared with the generated files of a module."""
+        found = []
+        for position, token in enumerate(self.tokens):
+            if token.kind != "identifier" or token.text not in ("expect", "expectGeneratedFiles") or not function[2] <= token.start < function[3]:
+                continue
+            opening = position + 1
+            if not self.is_punctuation(opening, "("):
+                continue
+            elements = self.elements(opening)
+            if token.text == "expect":
+                if not self.is_punctuation(position - 1, "#") or not elements:
+                    continue
+                start, end = elements[0]
+                equals = [candidate for candidate in range(start, end) if self.parent[candidate] == opening and self.is_punctuation(candidate, "=") and self.is_punctuation(candidate + 1, "=") and self.tokens[candidate].end == self.tokens[candidate + 1].start]
+                if len(equals) != 1:
+                    continue
+                actual, expected = (start, equals[0] - 1), (equals[0] + 2, end)
+            else:
+                if len(elements) < 2 or self.is_punctuation(position - 1, "func"):
+                    continue
+                actual, expected = elements[0], elements[1]
+            match = re.fullmatch(r'(?:try #require\()?(\w+)(?:\.modules\[\s*"([^"\\]+)"\s*\]\)?\??)?\.generatedFiles', self.source(*actual))
+            if match is None:
+                continue
+            calls_helper = any(
+                self.tokens[candidate].kind == "identifier" and (self.text(candidate) == "Self" or self.text(candidate)[:1].isupper())
+                and self.is_punctuation(candidate + 1, ".") and self.tokens[candidate + 2].kind == "identifier" and self.is_punctuation(candidate + 3, "(")
+                for candidate in range(expected[0], expected[1] - 2)
+            )
+            if calls_helper:
+                found.append((expected[0], expected[1], match.group(1), match.group(2)))
+        return found
+
+    def line_of_let(self, name, before, function):
+        """The line of the nearest `let name` before the token at `before` in `function`, or None."""
+        for position in range(before, 0, -1):
+            if self.tokens[position].start < function[2]:
+                return None
+            if self.tokens[position].kind == "identifier" and self.text(position) == name and self.text(position - 1) == "let":
+                return self.file.line_of(self.tokens[position].start)
+        return None
+
+    def case_of(self, position):
+        """The integration whose `case .name:` of a `switch` holds the token at `position`, or None."""
+        for brace in self.ancestors(position):
+            if self.text(brace) != "{":
+                continue
+            for candidate in range(position, brace, -1):
+                if self.parent[candidate] == brace and self.tokens[candidate].kind == "identifier" and self.text(candidate) == "case":
+                    if self.is_punctuation(candidate + 1, ".") and self.text(candidate + 2) in INTEGRATION_CASES and self.is_punctuation(candidate + 3, ":"):
+                        return self.text(candidate + 2)
+                    return None
+        return None
 
     def expression(self, ranges):
         """The expression the test compares with the output tiled by the literals (or the constants read) at these
@@ -274,6 +341,11 @@ class Structure:
             # A dictionary or array literal, or a subscript.
             if self.tokens[opening - 1].kind == "identifier" and self.tokens[opening - 1].end == self.tokens[opening].start:
                 raise Left("its fragments are inside a subscript")
+            closing = self.closing(opening)
+            if self.is_punctuation(closing + 1, ".") and closing + 4 < len(self.tokens) and self.text(closing + 2) == "joined" and self.is_punctuation(closing + 3, "(") and self.is_punctuation(closing + 4, ")"):
+                # `[header, imports, """…"""].joined()`: the array's elements are the file's fragments.
+                first, last = opening, closing + 4
+                continue
             outer = self.parent[opening]
             start, end = self.element_holding(opening, first, last)
             start, is_value = self.after_label(opening, start, end, first)
@@ -344,6 +416,67 @@ def value_source(files, kind, indentation):
     return "\n".join(lines)
 
 
+MODULE_INFO_SEAM_CALL_COMMENT = re.compile(r" // If this line does not compile, compile the code SafeDI generates for module (\S+) into \1: under Bazel, add \1’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI\.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes\.$", re.MULTILINE)
+PLUGIN_SEAM_CALL_COMMENT = re.compile(r" // If this line does not compile, add the SafeDI plugin to the target that declares (.+)\.$", re.MULTILINE)
+
+
+def merged_for_integrations(first, second, parameter):
+    """One file's (has header, parts) that stands for `first` under `.moduleInfo` and `second` under
+    `.swiftPackagePlugin`: the two are the same but for the comments on calls of a seam, which become
+    `\\(parameter.seamCallComment(type:declaringModule:))`. None when they differ in more."""
+    if first == second:
+        return first
+    if first[0] != second[0] or len(first[1]) != len(second[1]):
+        return None
+    parts = []
+    for (kind, value), (other_kind, other_value) in zip(first[1], second[1]):
+        if kind != other_kind:
+            return None
+        if kind != "text":
+            if value != other_value:
+                return None
+            parts.append((kind, value))
+            continue
+        pieces, other_pieces = MODULE_INFO_SEAM_CALL_COMMENT.split(value), PLUGIN_SEAM_CALL_COMMENT.split(other_value)
+        if len(pieces) != len(other_pieces) or pieces[0::2] != other_pieces[0::2]:
+            return None
+        for index, piece in enumerate(pieces):
+            if index % 2 == 0:
+                parts.append(("text", piece))
+            else:
+                if any(character in name for name in (piece, other_pieces[index]) for character in '"\\'):
+                    return None
+                parts.append(("interpolation", f'{parameter}.seamCallComment(type: "{other_pieces[index]}", declaringModule: "{piece}")'))
+    return first[0], parts
+
+
+def keyed_by_integration(cases, indentation, parameter):
+    """The source of one dictionary for both integrations, when their files differ only in name and in the comments
+    on calls of a seam: such a key is chosen by the integration, and such a comment interpolated. None when the
+    files differ in more."""
+    first, second = (cases[case] for case in INTEGRATION_CASES)
+    if len(first) != len(second):
+        return None
+    inner = indentation + "\t"
+    lines = ["["]
+    unpaired = dict(second)
+    for name in sorted(first):
+        partners = [other for other in sorted(unpaired) if merged_for_integrations(first[name], unpaired[other], parameter) is not None]
+        if name in partners:
+            partner = name
+        elif len(partners) == 1:
+            partner = partners[0]
+        else:
+            return None
+        merged = merged_for_integrations(first[name], unpaired.pop(partner), parameter)
+        if any('"' in text or "\\" in text for text in (name, partner)):
+            return None
+        key = f'"{name}"' if partner == name else f'({parameter} == .{INTEGRATION_CASES[0]} ? "{name}" : "{partner}")'
+        lines.append(f"{inner}{key}: {file_source(*merged, inner)},")
+    lines.append(indentation + "]")
+    return "\n".join(lines)
+
+
 def migrate(arguments):
     manifest = regenerator.read_manifest(arguments.records)
     difference = regenerator.manifest_difference(manifest, regenerator.tests_manifest(arguments.checkout))
@@ -387,6 +520,7 @@ def migrate(arguments):
         return literals_by_scope[relative_path].get(function, [])
 
     left = []  # (path, line, test name, output name, reason)
+    records_of_function = {}  # (test path, test function) → its generation records
     groups = {}  # (path, first token, last token) → {"kind", "other", "function", "records": [(record, fragments)]}
     for record in sorted(records, key=lambda record: record["key"]):
         call_path = swift_file(record["fileID"])
@@ -396,6 +530,8 @@ def migrate(arguments):
         if record.get("testFileID") and record.get("testLine"):
             test_path = swift_file(record["testFileID"])
             scopes.append((test_path, files[test_path].test_function_declared_at(record["testLine"])))
+        if scopes[-1][1] is not None:
+            records_of_function.setdefault(scopes[-1], []).append(record)
         path_of_literal = {}
         for relative_path, function in scopes:
             for literal in literals_in(relative_path, function) + (literals_in(relative_path, None) if function is not None else []):
@@ -444,6 +580,7 @@ def migrate(arguments):
             if isinstance(other, Statement):
                 if any(json_module != record["module"] for json_module in [other.module.strip('"')]):
                     raise Left("a helper that compares names another module than the output’s")
+            let = None
             if other is LET:
                 other = None
                 # Nothing shows what else the test joins to a `let`, so its fragments must spell the whole output.
@@ -453,14 +590,57 @@ def migrate(arguments):
                         break
                     position = end
                 if position != len(record["content"]):
-                    raise Left("a `let` holds part of the output and code joins the rest")
+                    # Code joins the rest where the test reads the `let`: the expression is there.
+                    let_token, name_token = structure.let_before(first)
+                    name = structure.text(name_token)
+                    references = structure.references(name, test_function)
+                    chosen = [reference for reference in references if structure.case_of(reference[0]) == record.get("integration")]
+                    if not chosen:
+                        chosen = [reference for reference in references if structure.case_of(reference[0]) is None]
+                    if len(chosen) != 1:
+                        raise Left("a `let` holds part of the output and code joins the rest")
+                    let = (let_token, last, len(references), chosen[0])
+                    ranges = {(start, end) for start, end in ranges if not first <= start <= last} | {chosen[0]}
+                    first, last, kind, other = structure.expression(sorted(ranges))
+                    if not isinstance(other, str) and other is not None:
+                        raise Left("a `let` holds part of the output and another `let` joins the rest")
             after = structure.tokens[last + 1] if last + 1 < len(structure.tokens) else None
             if after is not None and after.kind == "punctuation" and after.text in ".[!?" and after.start == structure.tokens[last].end:
                 raise Left("the expression is read through a member or a subscript")
-            group = groups.setdefault((path, first, last), {"kind": kind, "other": other, "function": test_function, "records": [], "where": where})
+            group = groups.setdefault((path, first, last), {"kind": kind, "other": other, "function": test_function, "records": [], "where": where, "case": structure.case_of(first), "lets": set()})
+            if let is not None:
+                group["lets"].add(let)
             group["records"].append((record, tiling))
         except Left as reason:
             left.append(where + (str(reason),))
+
+    # Second pass: a comparison of a module's generated files with an expression that calls a helper, which no
+    # fragment of the test tiles (the helper spells the file, or builds it from arguments that are not literals).
+    # The expression stands for every file the compared generation wrote.
+    for (path, function), function_records in sorted(records_of_function.items(), key=lambda item: (item[0][0], item[0][1][0])):
+        structure = structures[path]
+        for first, last, variable, module in structure.helper_comparisons(function):
+            if any(group_path == path and group_first <= last and first <= group_last for group_path, group_first, group_last in groups):
+                continue
+            where = (path, function[0], function_records[0].get("testName", ""), f"the files of {module or variable}")
+            try:
+                chosen = [record for record in function_records if module is None or record.get("module") == module]
+                case = structure.case_of(first)
+                if case is not None:
+                    chosen = [record for record in chosen if record.get("integration") == case]
+                sites = sorted({(record["fileID"], record["line"]) for record in chosen})
+                if len(sites) > 1:
+                    line = structure.line_of_let(variable, first, function)
+                    sites = [site for site in sites if resolver.resolve(site[0]) == path and site[1] == line]
+                    chosen = [record for record in chosen if (record["fileID"], record["line"]) in sites]
+                if len(sites) != 1:
+                    raise Left("a helper builds the files, and which generation they are compared with is not clear")
+                if any(regenerator.placeholder_count([("text", record["content"])]) for record in chosen):
+                    raise Left("a helper builds the files, and the output names a run directory")
+                group = groups.setdefault((path, first, last), {"kind": "files", "other": None, "function": function, "records": [], "where": where, "case": case, "lets": set()})
+                group["records"] = [(record, []) for record in chosen]
+            except Left as reason:
+                left.append(where + (str(reason),))
 
     # An expression inside another's range would be replaced twice.
     by_path = {}
@@ -476,6 +656,7 @@ def migrate(arguments):
                         left.append(group["where"] + ("its expression overlaps another output’s",))
 
     edits = {}  # path → [(start, end, replacement)]
+    reads_replaced = {}  # (path, a `let`'s first token, its last, how often the test reads it) → the reads replaced
     names_used = {}
     written = 0
     for (path, first, last) in sorted(groups):
@@ -489,7 +670,11 @@ def migrate(arguments):
             # these fragments do not tile takes its text from code this script did not read.
             spelled = {generation_of(record) for record, _ in group["records"]}
             for record, _ in group["records"]:
-                if generations_of_site[site_of(record)] - spelled:
+                missing = generations_of_site[site_of(record)] - spelled
+                if group["case"] is not None:
+                    # Inside `case .name:` the expression stands for that integration's runs alone.
+                    missing = {generation for generation in missing if generation[6] == group["case"]}
+                if missing:
                     raise Left("these fragments spell the output for only some of the test’s arguments")
             cases = {}  # integration → {output name: (has header, parts)}
             for record, tiling in group["records"]:
@@ -505,6 +690,9 @@ def migrate(arguments):
                     kind = "files"
                 elif re.search(r"generatedFiles\??\[", other):
                     kind = "file"
+                if kind is None and all(len(case) == 1 for case in cases.values()) and not re.search(r"[Ff]iles\b", other):
+                    # One output per run, compared with a value not named as files: a wrong guess does not compile.
+                    kind = "file"
                 if kind is None:
                     raise Left("its place does not say whether it stands for one file or several")
             if kind == "files":
@@ -518,8 +706,11 @@ def migrate(arguments):
             signature = current.source[current.line_starts[group["function"][0] - 1]:group["function"][2]]
             parameter = re.search(r"(\w+): MultiModuleIntegration\b", signature)
             sources = {case: value_source(case_files, kind, indentation) for case, case_files in cases.items()}
+            keyed = keyed_by_integration(cases, indentation, parameter.group(1)) if kind == "files" and len(set(sources.values())) > 1 and parameter and sorted(cases, key=str) == INTEGRATION_CASES else None
+            if keyed is not None:
+                sources = {None: keyed}
             if len(set(sources.values())) == 1:
-                if parameter and len(cases) == 1 and re.search(rf"\b{parameter.group(1)}\b", expression_source) and next(iter(cases)) is not None:
+                if parameter and len(cases) == 1 and re.search(rf"\b{parameter.group(1)}\b", expression_source) and next(iter(cases)) is not None and group["case"] is None:
                     raise Left("only one integration’s output is built from these fragments")
                 replacement = next(iter(sources.values()))
                 if isinstance(group["other"], Statement):
@@ -551,8 +742,19 @@ def migrate(arguments):
                 edits.setdefault(path, []).append((statement_line_start, statement_line_start, "\n".join(lines) + "\n"))
                 edits[path].append((structure.tokens[first].start, structure.tokens[last].end, group["other"].comparison(name) if isinstance(group["other"], Statement) else name))
             written += 1
+            for let_first, let_last, reference_count, reference in group["lets"]:
+                reads_replaced.setdefault((path, let_first, let_last, reference_count), set()).add(reference)
         except Left as reason:
             left.append(group["where"] + (str(reason),))
+
+    # A `let` every read of which was replaced holds nothing the test still uses.
+    for (path, let_first, let_last, reference_count), replaced in reads_replaced.items():
+        if len(replaced) == reference_count:
+            current = files[path]
+            structure = structures[path]
+            start = current.line_starts[current.line_of(structure.tokens[let_first].start) - 1]
+            end = current.source.index("\n", structure.tokens[let_last].end) + 1
+            edits[path].append((start, end, ""))
 
     if not arguments.dry_run:
         for path in sorted(edits):
@@ -573,15 +775,34 @@ def migrate(arguments):
     return 1 if left else 0
 
 
+def emit(arguments):
+    """Prints, for a hand edit, the whole files each generation of the tests named `--emit` wrote."""
+    header = regenerator.read_header(arguments.records)
+    indentation = "\t" * arguments.tabs
+    generations = {}
+    for record in regenerator.read_records(arguments.records):
+        if record["kind"] == "generation" and arguments.emit in record.get("testName", ""):
+            key = (record.get("testName"), record["line"], record.get("module"), record.get("integration"), record.get("inputsDigest"))
+            generations.setdefault(key, {})[record["outputName"]] = file_parts(record["content"], header, [])
+    for key in sorted(generations, key=str):
+        print(f"// {key[0]} line {key[1]} module {key[2]} integration {key[3]} inputs {str(key[4])[:8]}")
+        print(indentation + value_source(generations[key], "files", indentation))
+    return 0
+
+
 def main(argv):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--records", required=True)
     parser.add_argument("--checkout", required=True)
-    parser.add_argument("--report", required=True)
+    parser.add_argument("--report")
+    parser.add_argument("--emit", help="print the files of the tests whose name holds this text, and change nothing")
+    parser.add_argument("--tabs", type=int, default=2)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--only")
     arguments = parser.parse_args(argv)
     try:
+        if arguments.emit:
+            return emit(arguments)
         return migrate(arguments)
     except regenerator.ApplyError as error:
         print(f"error: {error}", file=sys.stderr)
