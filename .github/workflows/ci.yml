@@ -340,7 +340,7 @@ jobs:
         name: Stop on a Draft Pull Request
         if: ${{ needs.changes.outputs.macos == 'false' }}
         run: |
-          echo "::error::A draft pull request does not run the jobs that need macOS. Mark it ready for review to run them."
+          echo "::error::A draft pull request does not run the jobs that need macOS. Mark it ready for review to run them. If it is already ready, this run began while it was a draft, and a re-run keeps that state: read the run that marking it ready started, or push a commit."
           exit 1
       - name: Checkout Repo
         uses: actions/checkout@v7
