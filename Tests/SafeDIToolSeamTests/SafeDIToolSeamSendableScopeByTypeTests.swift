@@ -1289,6 +1289,43 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: ["declarationOrder", "reversedFileNames"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsOneErrorNamingBothPlaces_whenPassingSeamCallsTwoSeamsEachPassingUpSendablePlaceThatReadsItsValue(fileNames: String) async {
+		// `Mid` instantiates `tag` and calls `Hub` and `Hub2`, each of whose places a `@Sendable` function builds, and passes
+		// both builders up: one error names both calls and both places, whatever order the files are in.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag?`, which `Mid` builds where it calls `Hub` and `Hub2`, but `Mid` passes the builders for `A`’s `api: any Api` (case `A_Scope.api` of `apiSendableBuilder`) in `Hub`’s tree and `B`’s `api: any Api` (case `B_Scope.api` of `apiSendableBuilder`) in `Hub2`’s tree on from its own caller, which cannot hand them `Mid`’s values. Instantiate `tag` outside `Mid` and declare `@Received let tag: Tag` on `Mid`, so the builders’ caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Middle` or a module it lists among its SafeDI dependencies, so `Mid` fills the builders itself.
+			\(fixtures["Middle"]!["Mid.swift"]):11:5: note: `Mid` declares `tag: Tag` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.twoPassingUpModules(swapsOwners: false, reversesFileNames: fileNames == "reversedFileNames"),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsOneErrorNamingBothPlaces_whenTwoSeamsPassingUpSendablePlacesHoldEachOthersOwnerType() async {
+		// As above, with `Hub` holding `B` and `Hub2` holding `A`: the error names the places by the seams that hold them.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag?`, which `Mid` builds where it calls `Hub2` and `Hub`, but `Mid` passes the builders for `A`’s `api: any Api` (case `A_Scope.api` of `apiSendableBuilder`) in `Hub2`’s tree and `B`’s `api: any Api` (case `B_Scope.api` of `apiSendableBuilder`) in `Hub`’s tree on from its own caller, which cannot hand them `Mid`’s values. Instantiate `tag` outside `Mid` and declare `@Received let tag: Tag` on `Mid`, so the builders’ caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Middle` or a module it lists among its SafeDI dependencies, so `Mid` fills the builders itself.
+			\(fixtures["Middle"]!["Mid.swift"]):11:5: note: `Mid` declares `tag: Tag` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.twoPassingUpModules(swapsOwners: true, reversesFileNames: false),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_fillReadsCallersValue_whenSeamThatPassesSendablePlaceUpReceivesTheValue() async throws {
@@ -1582,6 +1619,33 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 	/// `Middle` with `midDeclarations`, which calls `Hub` and passes its builder up; and `App`'s root, which holds a `tag` of
 	/// its own, and `LiveApi`, which reads `tag` only if available and fulfills `Api` in `App`, or in `Feature` where
 	/// `fulfillerInFeature`.
+	/// `Mid` instantiates `tag` and calls `Hub` and `Hub2`, which each receive `tag` and build `A`'s or `B`'s `api: any Api`
+	/// in a `SendableInstantiator`, `Hub` `A` unless `swapsOwners`; `App` fills both with `LiveApi`, which reads `tag`. With
+	/// `reversesFileNames`, `Feature`'s files are named so their order reverses.
+	private static func twoPassingUpModules(swapsOwners: Bool, reversesFileNames: Bool) -> [ModuleFixture] {
+		let liveApi = SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let tag: Tag?"])
+		let (hubOwner, hub2Owner) = swapsOwners ? ("B", "A") : ("A", "B")
+		let feature = [
+			("Api", "public protocol Api {}"),
+			("Tag", tag),
+			("A", seamFixtureType(named: "A", declarations: ["@Instantiated public let api: any Api"])),
+			("B", seamFixtureType(named: "B", declarations: ["@Instantiated public let api: any Api"])),
+			("Hub", seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Received public let tag: Tag", "@Instantiated public let ownerBuilder: SendableInstantiator<\(hubOwner)>"])),
+			("Hub2", seamFixtureType(named: "Hub2", isSeam: true, declarations: ["@Received public let tag: Tag", "@Instantiated public let ownerBuilder: SendableInstantiator<\(hub2Owner)>"])),
+		]
+		let featureModule = if reversesFileNames {
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [], swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: feature.enumerated().map { ("File\(feature.count - $0.offset).swift", $0.element.1) }))
+		} else {
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature.map(\.1))
+		}
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let mid: Mid"])
+		return [
+			featureModule,
+			ModuleFixture(name: "Middle", packageName: "Other", swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Mid", isSeam: true, declarations: ["@Instantiated public let tag: Tag", "@Instantiated public let hub: Hub", "@Instantiated public let hub2: Hub2"])], dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [liveApi, root].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+		]
+	}
+
 	private static func passingUpModules(midDeclarations: [String], fulfillerInFeature: Bool = false) -> [ModuleFixture] {
 		let liveApi = SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let tag: Tag?"])
 		let feature = [
