@@ -1354,6 +1354,15 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// instantiators `HoleRingA`'s builder function wraps again, which a level of its type leaves out
 	/// (`SeamPlaceLevels.Level.fieldsOfType`).
 	case holeLoopMemberAlsoBuiltByValue
+	/// `HoleNestImpl`, inside a plain fill, holds a place of `HoleErasureImpl`'s erasure `HoleErasureAny`: a place inside a
+	/// fill of a builder whose filling type is not the type it returns.
+	case holeErasureInsidePlainFill
+	/// `HoleDeepImpl`, inside a `@Sendable` fill, holds a place of `HoleErasureAny`: the `@Sendable` family of such a builder
+	/// inside a fill.
+	case holeErasureInsideSendableFill
+	/// The seam builds `HoleErasureOwner`, which holds a place of `HoleErasureAny`, in a `SendableInstantiator`: the
+	/// `@Sendable` family of such a builder beneath the seam.
+	case holeErasureBeneathSeamInSendableFamily
 
 	/// `addingUncreatedAliasExtensions`' second declaration of the alias's label: a lazily instantiated wrapper of the
 	/// alias's property, on `AliasLeft`, `AliasMid` or the seam.
@@ -1597,6 +1606,12 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// (`acceptedDrawFeatureCounts`), at least ten each.
 	var isRetentionShape: Bool {
 		rawValue.hasPrefix("retentionSeamValueBeforeBuilder")
+	}
+
+	/// Whether `addingHoleShapes` draws this place of `HoleErasureImpl`'s erasure, whose count in accepted graphs the seam
+	/// corpus pins too (`acceptedDrawFeatureCounts`), at least ten each.
+	var isErasurePlaceShape: Bool {
+		rawValue.hasPrefix("holeErasure")
 	}
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
@@ -5012,6 +5027,11 @@ enum GraphFuzzerGenerator {
 			let loopImplReadsMark = holeRolls.loopPlace.percentChance(60)
 			let loopPlaceThroughLeaf = holeRolls.loopPlace.percentChance(30)
 			let loopMemberBuiltByValue = holeRolls.loopPlace.percentChance(35)
+			// The places of a builder whose filling type is not the type it returns, at the positions no other roll draws one
+			// at, on a generator of their own, made whatever the base draw.
+			let drawsErasureInsidePlainFill = holeRolls.erasurePlaces.percentChance(45)
+			let drawsErasureInsideSendableFill = holeRolls.erasurePlaces.percentChance(80)
+			let drawsSendableErasureBeneathSeam = holeRolls.erasurePlaces.percentChance(60)
 			// The fillers and the root that reaches the seam are in another package than the seam's, unless the seam's module
 			// has no package, which this draw keeps apart from a caller in another package, as every other graph's draws were.
 			let fillsFromOtherPackage = drawsCrossPackage && !modulesOmittingPackageName.contains(.seamModule)
@@ -5421,7 +5441,8 @@ enum GraphFuzzerGenerator {
 			// a `SendableInstantiator`, so the fill it generates is `@Sendable`, and `HoleDeepImpl`'s own hole in it is a place
 			// of `HoleSeam`'s, built inside that function; `HoleDeepImpl` instantiates `holeAnalytics`, so that the function's
 			// scope carries the field `HoleImpl` reads. Never where the seam's module has no package, which `HoleDeep`'s module has.
-			if drawsPlaceInsideSendableFill, drawsSendableRoutes, !implReadsOwnersAlias, !modulesOmittingPackageName.contains(.seamModule) {
+			// It is also drawn wherever `HoleDeepImpl` is to hold a place of `HoleErasureAny` (below).
+			if drawsPlaceInsideSendableFill || drawsErasureInsideSendableFill, drawsSendableRoutes, !implReadsOwnersAlias, !modulesOmittingPackageName.contains(.seamModule) {
 				let deepServiceName = name("HoleDeepService")
 				var deep = instantiable("HoleDeep", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeDeepService", type: "any \(deepServiceName)")])
 				deep.instantiableArguments = ["generateDependencyTree: true"]
@@ -5528,8 +5549,9 @@ enum GraphFuzzerGenerator {
 			// place; not where `HoleImpl` reads `HoleOwner`'s alias, which the place's scope does not carry, nor where the
 			// seam's module has no package, which `HoleNest`'s module has. Where a fill calls the seam again
 			// (`fillCallsSeamAgain`), `HoleSeam` calls `HoleNest` once and `HoleNest` holds the place on one route, in
-			// `HoleNestScreen` where the roll gives both.
-			if drawsPlainFillPlace, sendability != .sendable, !implReadsOwnersAlias, !modulesOmittingPackageName.contains(.seamModule) {
+			// `HoleNestScreen` where the roll gives both. It is also drawn wherever `HoleNestImpl` is to hold a place of
+			// `HoleErasureAny` (below).
+			if drawsPlainFillPlace || drawsErasureInsidePlainFill && !fillCallsSeamAgain, sendability != .sendable, !implReadsOwnersAlias, !modulesOmittingPackageName.contains(.seamModule) {
 				let nestServiceName = name("HoleNestService")
 				let nestServiceProperty = PropertyDeclaration(attribute: "@Instantiated", label: "holeNestService", type: "any \(nestServiceName)")
 				let idProperty = PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeNestId", type: "Int?")
@@ -5641,6 +5663,47 @@ enum GraphFuzzerGenerator {
 					impl.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeRingMark", type: mark.name + "?"))
 				}
 			}
+			// Places of a builder whose filling type, `HoleErasureImpl`, is not the type it returns, `HoleErasureAny`: an erasure
+			// of a type of the fillers' module that conforms to `HoleService`, as `HoleGadgetOwner`'s are, so the seam takes
+			// `holeErasureImpl_HoleErasureAnyBuilder` and its `@Sendable` family's twin. In nine graphs in twenty `HoleNestImpl`,
+			// inside a plain fill, holds one, but where a fill calls the seam again, whose fill's reads the known re-entry
+			// shape loses (`fillCallsSeamAgain`), and in four in five `HoleDeepImpl`, inside a `@Sendable` fill, does, each roll
+			// drawing its fill where the fill's own roll did not, since a fill's graphs are too few for a floor of their own;
+			// in three in five graphs whose types may hold a `SendableInstantiator`, the seam builds `HoleErasureOwner`, which
+			// holds one, in a `SendableInstantiator`, a place beneath the seam in the `@Sendable` family. These are the positions
+			// at which no other roll draws a place of a builder whose filling type is not its returned type.
+			let plainFillHolder = drawsErasureInsidePlainFill && !fillCallsSeamAgain ? seamModuleDeclarations.firstIndex { $0.name == name("HoleNestImpl") } : nil
+			let sendableFillHolder = drawsErasureInsideSendableFill ? seamModuleDeclarations.firstIndex { $0.name == name("HoleDeepImpl") } : nil
+			let erasureHolders = [plainFillHolder, sendableFillHolder].compactMap(\.self)
+			// A root fills a builder only through a place it reaches, and its module does not list the module of `HoleNest` or
+			// `HoleDeep`, which hold the fills: the builder of each family also has a place on the way to which no type of
+			// that module is, on the seam for the plain family and on `HoleErasureOwner` for the `@Sendable` one.
+			let drawsErasureOnSeam = plainFillHolder != nil
+			let drawsErasureOwner = sendableFillHolder != nil || drawsSendableErasureBeneathSeam && drawsSendableRoutes
+			if !erasureHolders.isEmpty || drawsErasureOwner {
+				let erasedName = name("HoleErasureAny")
+				var erasureImpl = instantiable("HoleErasureImpl", module: fillerModule)
+				erasureImpl.fillsHole = true
+				erasureImpl.additionalConformances.append(serviceName)
+				let modifier = serviceAccess.modifier
+				seam.additionalDeclarations.append("\(modifier)struct \(erasedName)\(helperTypesAreSendable ? ": Sendable" : "") {\n\t\(modifier)init(_ value: any \(serviceName)) {\n\t\tself.value = value\n\t}\n\n\t\(modifier)let value: any \(serviceName)\n}")
+				if serviceAccess == .package {
+					proofTypeAccess[erasedName] = .package
+				}
+				let erasureProperty = PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(erasureImpl.name)\", erasedToConcreteExistential: true)", label: "holeErasure", type: erasedName)
+				for holderIndex in erasureHolders {
+					seamModuleDeclarations[holderIndex].properties.append(erasureProperty)
+				}
+				if drawsErasureOnSeam {
+					seam.properties.append(erasureProperty)
+				}
+				if drawsErasureOwner {
+					let owner = instantiable("HoleErasureOwner", module: .seamModule, properties: [erasureProperty])
+					seamModuleDeclarations.append(owner)
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeErasureOwnerBuilder", type: "SendableInstantiator<\(owner.name)>"))
+				}
+				callerDeclarations.append(erasureImpl)
+			}
 			// The second place of a graph that draws none of the above, which the name-stability oracle removes.
 			if secondHolePlace == nil, drawsSecondHole {
 				secondHolePlace = (seamName, "holeSettings")
@@ -5698,6 +5761,7 @@ enum GraphFuzzerGenerator {
 				plainFillPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6546696C6C)
 				loopPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6552696E67)
 				forwardingPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C65466F7277)
+				erasurePlaces = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6545726173)
 			}
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
@@ -5728,6 +5792,10 @@ enum GraphFuzzerGenerator {
 			var loopPlace: GraphFuzzerRandomNumberGenerator
 			/// A place of its own hole type whose wrapper forwards a value to the builder (`holeForwardingPlace`).
 			var forwardingPlace: GraphFuzzerRandomNumberGenerator
+			/// The places of `HoleErasureImpl`'s erasure inside a plain fill, inside a `@Sendable` fill, and beneath the seam
+			/// in the `@Sendable` family (`holeErasureInsidePlainFill`, `holeErasureInsideSendableFill`,
+			/// `holeErasureBeneathSeamInSendableFamily`).
+			var erasurePlaces: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -8975,6 +9043,15 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			if (seamProperties + properties(of: "HoleRingFlow")).contains(where: { $0.label == "holeRingAValue" }) {
 				features.insert(.holeLoopMemberAlsoBuiltByValue)
 			}
+		}
+		if properties(of: "HoleNestImpl").contains(where: { $0.label == "holeErasure" }) {
+			features.insert(.holeErasureInsidePlainFill)
+		}
+		if properties(of: "HoleDeepImpl").contains(where: { $0.label == "holeErasure" }) {
+			features.insert(.holeErasureInsideSendableFill)
+		}
+		if declares("HoleErasureOwner") {
+			features.insert(.holeErasureBeneathSeamInSendableFamily)
 		}
 		if declares("HoleMiddle") {
 			features.insert(.holeReentersSeamBeneathRedeclaredLabel)

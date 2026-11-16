@@ -356,6 +356,9 @@ struct SafeDIToolGraphFuzzerTests {
 			.holeLoopMemberLevelReadByFill,
 			.holeForwardingPlace,
 			.holeLoopMemberAlsoBuiltByValue,
+			.holeErasureInsidePlainFill,
+			.holeErasureInsideSendableFill,
+			.holeErasureBeneathSeamInSendableFamily,
 		]).subtracting(drawFeatures).sorted() == [])
 		// `addingCycleParameterShapes`' cycle, in accepted graphs: its hole between the cycle's ends at or beneath the type that
 		// declares the label again, filled by a fill that reads it (seeds 227 and 609); its hole on the seam (seed 705); the
@@ -467,6 +470,16 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 		for feature in GraphFuzzerPublicMockDrawFeature.allCases where feature.isCountedWhenAccepted {
 			#expect(Self.publicMockCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachErasurePlace() {
+		// The places of a builder whose filling type is not the type it returns – inside a plain fill, inside a `@Sendable`
+		// fill, and beneath the seam in the `@Sendable` family – stand in for unit tests of their labels and their builders
+		// only while each lands in at least ten graphs the tool accepts, which the corpus runs pin exactly.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isErasurePlaceShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
 		}
 	}
 
@@ -5484,7 +5497,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
@@ -5605,6 +5618,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.retentionSeamValueBeforeBuilderInnerSeam: 31,
 		.retentionSeamValueBeforeBuilderLeafThroughInstantiator: 60,
 		.retentionSeamValueBeforeBuilderSendable: 30,
+		.holeErasureBeneathSeamInSendableFamily: 27,
+		.holeErasureInsidePlainFill: 21,
+		.holeErasureInsideSendableFill: 18,
 	]
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
@@ -5662,7 +5678,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `seamCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool`.
 	static let seamCorpusDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
 		.collidingFormsBeneathSeam: 67,
-		.innerSeam: 598,
+		.innerSeam: 605,
 		.instanceHeldByCaller: 393,
 		.instanceReceiveBeneathSeam: 242,
 		.otherKindWrapperReceiveBeneathSeam: 32,
@@ -5791,19 +5807,19 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeInnerSendablePlaceOnSendableRoute: 26,
 		.holeLazyWrapperBesideByValuePlace: 56,
 		.holeSendableLazyWrapperBesideByValuePlace: 27,
-		.holePlaceInsideSendableFill: 31,
+		.holePlaceInsideSendableFill: 94,
 		.holeSharedTypes: 87,
 		.holeSharedTypesThroughModel: 45,
 		.holeTangleOfCycles: 82,
 		.holeTangleReadsInstantiator: 36,
 		.holeTangleTReadsMark: 73,
 		.holeTangleTBuiltByValue: 42,
-		.holePlaceInsidePlainFill: 41,
-		.holePlaceInsidePlainFillOnTwoInnerRoutes: 21,
-		.holePlaceInsidePlainFillReadsInnerLevel: 22,
-		.holePlaceInsidePlainFillTwoTypesDeep: 19,
-		.holePlaceInsidePlainFillTwoCalls: 10,
-		.holePlaceInsidePlainFillFulfillerReadsInnerLevel: 7,
+		.holePlaceInsidePlainFill: 108,
+		.holePlaceInsidePlainFillOnTwoInnerRoutes: 52,
+		.holePlaceInsidePlainFillReadsInnerLevel: 55,
+		.holePlaceInsidePlainFillTwoTypesDeep: 40,
+		.holePlaceInsidePlainFillTwoCalls: 28,
+		.holePlaceInsidePlainFillFulfillerReadsInnerLevel: 23,
 		.holeUnderLaterLoopMember: 37,
 		.holeUnderEveryLoopMember: 26,
 		.holeLoopOfThreeMembers: 8,
@@ -5811,6 +5827,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeLoopBeneathSeam: 12,
 		.holeLoopMemberLevelReadByFill: 8,
 		.holeLoopMemberAlsoBuiltByValue: 16,
+		.holeErasureInsidePlainFill: 86,
+		.holeErasureInsideSendableFill: 85,
+		.holeErasureBeneathSeamInSendableFamily: 115,
 		.uncreatedAliasLabelLazilyInstantiatedBeside: 29,
 		.uncreatedAliasLabelReceivedBeside: 20,
 		.uncreatedAliasLabelOnMid: 6,
