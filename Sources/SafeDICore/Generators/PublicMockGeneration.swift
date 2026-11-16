@@ -972,9 +972,9 @@ extension ScopeGenerator {
 		let holes = shapedBuilders?.holes ?? []
 		let builders = shapedBuilders?.builders ?? []
 		for builder in builders {
-			// The function type the builder is, without `@escaping`, which a caller's leaf receives it as: a closure over the
-			// enum, whose places a caller passes up, also where the mock takes the builder struct, which the call converts it to.
-			let functionType = Self.enumFormParameterType(of: builder).strippingEscaping
+			// The type of the builder a person writes, without `@escaping`, which a caller's leaf receives it as: an internal caller
+			// that passes the builder's places up takes it so, and hands the call its struct (`.init(__safeDI_noScope:)`).
+			let functionType = builder.readableParameterType.strippingEscaping
 			leadingParameters.append(PublicMockParameter(
 				name: builder.label,
 				type: functionType,
@@ -1042,16 +1042,6 @@ extension ScopeGenerator {
 		plan.builders = builders
 		plan.scopeEnums = shapedBuilders?.scopeEnums ?? []
 		return plan
-	}
-
-	/// The type of `builder` as a closure over its root enum: its parameter's type, or, where the mock takes the enum's builder
-	/// struct, a closure over the enum the struct is nested in, which a caller that passes the builder's places up takes.
-	static func enumFormParameterType(of builder: SeamSignature.Builder) -> TypeDescription {
-		guard builder.takesBuilderStruct, case let .nested(_, enumType, generics) = builder.parameterType, let builtType = generics.first else {
-			return builder.parameterType
-		}
-		let functionType = TypeDescription.closure(arguments: [enumType], isAsync: false, doesThrow: false, returnType: builtType)
-		return (builder.enumKey.isSendable ? functionType.asSendableFunction : functionType).asFunctionParameter
 	}
 
 	/// How visible a public mock's parameter of `type` is: as visible as the narrowest type it names, as the declarations of

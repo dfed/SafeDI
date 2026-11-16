@@ -258,9 +258,7 @@ extension DependencyTreeGenerator {
 				// `LazilyInstantiated`, or beneath a case that holds another scope, though its seam takes the struct: a deliberate
 				// difference until the mock's rule takes those too (`public-mock-builders.md`). A seam's own internal mock takes
 				// builders of its own (`ScopeGenerator.seamMockBuilders`), whatever this gives the seam's builder.
-				let takesBuilderStructs = scopeTypeNames.areQualified
-					? Self.publicMockTakesBuilderStructs(of: byType.enums, holesBySite: holesBySite)
-					: Self.declaresBuilderStructs(of: byType.enums)
+				let takesBuilderStructs = Self.declaresBuilderStructs(of: byType.enums)
 				if takesBuilderStructs {
 					// The seam's tree calls a member per level, bound under names of their own, and binds no payload.
 					holeTypesDeclaringBuilderStructs.insert(holeType)
