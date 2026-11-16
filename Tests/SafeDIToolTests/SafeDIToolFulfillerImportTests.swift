@@ -2762,19 +2762,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 	}
 	"""
 
-	private static func mockFiles(integration: MultiModuleIntegration, mockedTypeName: String, importing moduleNames: [String], _ body: String) -> [String: String] {
-		let file = generatedFile(importing: moduleNames, body)
-		return switch integration {
-		case .moduleInfo:
-			["App.swift": file]
-		case .swiftPackagePlugin:
-			[
-				"\(mockedTypeName)+SafeDIMock.swift": file,
-				"SafeDIMockConfiguration.swift": generatedFile(importing: ["Contracts"], ""),
-			]
-		}
-	}
-
 	private static let contractsSource = """
 	public protocol Thing {}
 
@@ -2862,34 +2849,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 	    \(erasedThing)
 	}
 	"""
-
-	private static func generatedFile(importing moduleNames: [String], _ body: String) -> String {
-		generatedFileHeader + moduleNames.map { "#if canImport(\($0))\nimport \($0)\n#endif" }.joined(separator: "\n") + "\n\n" + body
-	}
-
-	private static func rootFiles(integration: MultiModuleIntegration, importing moduleNames: [String], _ body: String) -> [String: String] {
-		files(integration: integration, moduleName: "App", rootFileName: "Root", importing: moduleNames, body)
-	}
-
-	private static func files(integration: MultiModuleIntegration, moduleName: String, rootFileName: String, importing moduleNames: [String], _ body: String) -> [String: String] {
-		files(
-			integration: integration,
-			moduleName: moduleName,
-			rootFileName: rootFileName,
-			header: moduleNames.map { "#if canImport(\($0))\nimport \($0)\n#endif" }.joined(separator: "\n"),
-			body: body,
-		)
-	}
-
-	private static func files(integration: MultiModuleIntegration, moduleName: String, rootFileName: String, header: String, body: String) -> [String: String] {
-		let file = generatedFileHeader + header + "\n\n" + body
-		return switch integration {
-		case .moduleInfo:
-			["\(moduleName).swift": file]
-		case .swiftPackagePlugin:
-			["\(rootFileName)+SafeDI.swift": file]
-		}
-	}
 }
 
 /// An import of the module that declares a fulfiller in a file SafeDI does not read, with how the generated file must
