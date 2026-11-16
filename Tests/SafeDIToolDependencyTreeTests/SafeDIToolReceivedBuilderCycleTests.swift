@@ -1044,6 +1044,357 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 		}
 	}
 
+	// MARK: Tests – A builder its own type receives, beside a builder that waits on it through a value
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_rebindsBuilderInsideItsOwnFunction_whenItsTypeRenamesItBesideAnOnlyIfAvailableReceiveOfABuilderWaitingOnItThroughAValue() async throws {
+		// `t4Builder`'s receive of `t2Builder` is left `nil`, since `t2Builder` waits on `t3`, which waits on `t4Builder`.
+		// That receive closes a circle through the value `t3`, so it is not given, and `t4Builder` still receives itself.
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			Self.type("Root", attributes: "(isRoot: true)", "@Instantiated let t2Builder: Instantiator<T2>", "@Instantiated let t4Builder: Instantiator<T4>", "@Instantiated let t3: T3"),
+			Self.type("T2", "@Received(onlyIfAvailable: true) let t3: T3?"),
+			Self.type("T3", "@Instantiated let t4: T4"),
+			Self.type("T4", "@Received(fulfilledByDependencyNamed: \"t4Builder\", ofType: Instantiator<T4>.self) let t4BuilderAlias: Instantiator<T4>", "@Received(onlyIfAvailable: true) let t2Builder: Instantiator<T2>?"),
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_t4Builder() -> T4 {
+			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
+			            let t4BuilderAlias: Instantiator<T4> = t4Builder
+			            #sourceLocation()
+			            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
+			        }
+			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			        func __safeDI_t3() -> T3 {
+			            func __safeDI_t4() -> T4 {
+			                #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
+			                let t4BuilderAlias: Instantiator<T4> = t4Builder
+			                #sourceLocation()
+			                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
+			            }
+			            let t4: T4 = __safeDI_t4()
+			            return T3(t4: t4)
+			        }
+			        let t3: T3 = __safeDI_t3()
+			        func __safeDI_t2Builder() -> T2 {
+			            T2(t3: t3)
+			        }
+			        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+			        self.init(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_rebindsBuilderInsideItsOwnFunction_whenItsTypeReceivesItBesideAnOnlyIfAvailableReceiveOfABuilderWaitingOnItThroughAValue() async throws {
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			Self.type("Root", attributes: "(isRoot: true)", "@Instantiated let t2Builder: Instantiator<T2>", "@Instantiated let t4Builder: Instantiator<T4>", "@Instantiated let t3: T3"),
+			Self.type("T2", "@Received(onlyIfAvailable: true) let t3: T3?"),
+			Self.type("T3", "@Instantiated let t4: T4"),
+			Self.type("T4", "@Received let t4Builder: Instantiator<T4>", "@Received(onlyIfAvailable: true) let t2Builder: Instantiator<T2>?"),
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_t4Builder() -> T4 {
+			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			            return T4(t4Builder: t4Builder, t2Builder: nil)
+			        }
+			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			        func __safeDI_t3() -> T3 {
+			            let t4 = T4(t4Builder: t4Builder, t2Builder: nil)
+			            return T3(t4: t4)
+			        }
+			        let t3: T3 = __safeDI_t3()
+			        func __safeDI_t2Builder() -> T2 {
+			            T2(t3: t3)
+			        }
+			        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+			        self.init(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_rebindsBuilderInsideItsOwnFunction_whenItsTypeRenamesItBesideAnOnlyIfAvailableReceiveOfABuilderRequiringAValueBuiltWithIt() async throws {
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			Self.type("Root", attributes: "(isRoot: true)", "@Instantiated let t2Builder: Instantiator<T2>", "@Instantiated let t4Builder: Instantiator<T4>", "@Instantiated let t3: T3"),
+			Self.type("T2", "@Received let t3: T3"),
+			Self.type("T3", "@Instantiated let t4: T4"),
+			Self.type("T4", "@Received(fulfilledByDependencyNamed: \"t4Builder\", ofType: Instantiator<T4>.self) let t4BuilderAlias: Instantiator<T4>", "@Received(onlyIfAvailable: true) let t2Builder: Instantiator<T2>?"),
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_t4Builder() -> T4 {
+			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
+			            let t4BuilderAlias: Instantiator<T4> = t4Builder
+			            #sourceLocation()
+			            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
+			        }
+			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			        func __safeDI_t3() -> T3 {
+			            func __safeDI_t4() -> T4 {
+			                #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
+			                let t4BuilderAlias: Instantiator<T4> = t4Builder
+			                #sourceLocation()
+			                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
+			            }
+			            let t4: T4 = __safeDI_t4()
+			            return T3(t4: t4)
+			        }
+			        let t3: T3 = __safeDI_t3()
+			        func __safeDI_t2Builder() -> T2 {
+			            T2(t3: t3)
+			        }
+			        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+			        self.init(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_rebindsBuilderInsideItsOwnFunction_whenItsTypeRenamesItBesideARequiredReceiveOfABuilderReceivingAValueBuiltWithItOnlyIfAvailable() async throws {
+		// Here `t2Builder` is built first, and its receive of `t3` is left `nil`.
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			Self.type("Root", attributes: "(isRoot: true)", "@Instantiated let t2Builder: Instantiator<T2>", "@Instantiated let t4Builder: Instantiator<T4>", "@Instantiated let t3: T3"),
+			Self.type("T2", "@Received(onlyIfAvailable: true) let t3: T3?"),
+			Self.type("T3", "@Instantiated let t4: T4"),
+			Self.type("T4", "@Received(fulfilledByDependencyNamed: \"t4Builder\", ofType: Instantiator<T4>.self) let t4BuilderAlias: Instantiator<T4>", "@Received let t2Builder: Instantiator<T2>"),
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_t2Builder() -> T2 {
+			            T2(t3: nil)
+			        }
+			        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+			        func __safeDI_t4Builder() -> T4 {
+			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
+			            let t4BuilderAlias: Instantiator<T4> = t4Builder
+			            #sourceLocation()
+			            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: t2Builder)
+			        }
+			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			        func __safeDI_t3() -> T3 {
+			            func __safeDI_t4() -> T4 {
+			                #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
+			                let t4BuilderAlias: Instantiator<T4> = t4Builder
+			                #sourceLocation()
+			                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: t2Builder)
+			            }
+			            let t4: T4 = __safeDI_t4()
+			            return T3(t4: t4)
+			        }
+			        let t3: T3 = __safeDI_t3()
+			        self.init(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_rebindsBuilderInsideItsOwnFunction_whenItsTypeRenamesItOnlyIfAvailableBesideAnOnlyIfAvailableReceiveOfABuilderReceivingAValueBuiltWithIt() async throws {
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			Self.type("Root", attributes: "(isRoot: true)", "@Instantiated let t2Builder: Instantiator<T2>", "@Instantiated let t4Builder: Instantiator<T4>", "@Instantiated let t3: T3"),
+			Self.type("T2", "@Received(onlyIfAvailable: true) let t3: T3?"),
+			Self.type("T3", "@Instantiated let t4: T4"),
+			Self.type("T4", "@Received(fulfilledByDependencyNamed: \"t4Builder\", ofType: Instantiator<T4>.self, onlyIfAvailable: true) let t4BuilderAlias: Instantiator<T4>?", "@Received(onlyIfAvailable: true) let t2Builder: Instantiator<T2>?"),
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_t3() -> T3 {
+			            func __safeDI_t4() -> T4 {
+			                #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
+			                let t4BuilderAlias: Instantiator<T4>? = nil
+			                #sourceLocation()
+			                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
+			            }
+			            let t4: T4 = __safeDI_t4()
+			            return T3(t4: t4)
+			        }
+			        let t3: T3 = __safeDI_t3()
+			        func __safeDI_t2Builder() -> T2 {
+			            T2(t3: t3)
+			        }
+			        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+			        func __safeDI_t4Builder() -> T4 {
+			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
+			            let t4BuilderAlias: Instantiator<T4>? = t4Builder
+			            #sourceLocation()
+			            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: t2Builder)
+			        }
+			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			        self.init(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_rebindsSendableBuilderInsideItsOwnFunction_whenItsTypeRenamesItBesideAnOnlyIfAvailableReceiveOfABuilderWaitingOnItThroughAValue() async throws {
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			Self.type("Root", attributes: "(isRoot: true)", "@Instantiated let t2Builder: SendableInstantiator<T2>", "@Instantiated let t4Builder: SendableInstantiator<T4>", "@Instantiated let t3: T3"),
+			Self.type("T2", "@Received(onlyIfAvailable: true) let t3: T3?", conformances: ", Sendable"),
+			Self.type("T3", "@Instantiated let t4: T4", conformances: ", Sendable"),
+			Self.type("T4", "@Received(fulfilledByDependencyNamed: \"t4Builder\", ofType: SendableInstantiator<T4>.self) let t4BuilderAlias: SendableInstantiator<T4>", "@Received(onlyIfAvailable: true) let t2Builder: SendableInstantiator<T2>?", conformances: ", Sendable"),
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        @Sendable func __safeDI_t4Builder() -> T4 {
+			            let t4Builder = SendableInstantiator<T4>(__safeDI_t4Builder)
+			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
+			            let t4BuilderAlias: SendableInstantiator<T4> = t4Builder
+			            #sourceLocation()
+			            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
+			        }
+			        let t4Builder = SendableInstantiator<T4>(__safeDI_t4Builder)
+			        func __safeDI_t3() -> T3 {
+			            func __safeDI_t4() -> T4 {
+			                #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
+			                let t4BuilderAlias: SendableInstantiator<T4> = t4Builder
+			                #sourceLocation()
+			                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
+			            }
+			            let t4: T4 = __safeDI_t4()
+			            return T3(t4: t4)
+			        }
+			        let t3: T3 = __safeDI_t3()
+			        @Sendable func __safeDI_t2Builder() -> T2 {
+			            T2(t3: t3)
+			        }
+			        let t2Builder = SendableInstantiator<T2>(__safeDI_t2Builder)
+			        self.init(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_rebindsSendableBuilderInsideItsOwnFunction_whenItsTypeRenamesItBesideAnOnlyIfAvailableReceiveOfABuilderThatIsNotSendableWaitingOnItThroughAValue() async throws {
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			Self.type("Root", attributes: "(isRoot: true)", "@Instantiated let t2Builder: Instantiator<T2>", "@Instantiated let t4Builder: SendableInstantiator<T4>", "@Instantiated let t3: T3"),
+			Self.type("T2", "@Received(onlyIfAvailable: true) let t3: T3?"),
+			Self.type("T3", "@Instantiated let t4: T4"),
+			Self.type("T4", "@Received(fulfilledByDependencyNamed: \"t4Builder\", ofType: SendableInstantiator<T4>.self) let t4BuilderAlias: SendableInstantiator<T4>", "@Received(onlyIfAvailable: true) let t2Builder: Instantiator<T2>?", conformances: ", @unchecked Sendable"),
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        @Sendable func __safeDI_t4Builder() -> T4 {
+			            let t4Builder = SendableInstantiator<T4>(__safeDI_t4Builder)
+			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
+			            let t4BuilderAlias: SendableInstantiator<T4> = t4Builder
+			            #sourceLocation()
+			            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
+			        }
+			        let t4Builder = SendableInstantiator<T4>(__safeDI_t4Builder)
+			        func __safeDI_t3() -> T3 {
+			            func __safeDI_t4() -> T4 {
+			                #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
+			                let t4BuilderAlias: SendableInstantiator<T4> = t4Builder
+			                #sourceLocation()
+			                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
+			            }
+			            let t4: T4 = __safeDI_t4()
+			            return T3(t4: t4)
+			        }
+			        let t3: T3 = __safeDI_t3()
+			        func __safeDI_t2Builder() -> T2 {
+			            T2(t3: t3)
+			        }
+			        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+			        self.init(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_rebindsEachBuilderOfTwoBuilderLoop_whenOneReceivesOnlyIfAvailableABuilderWaitingOnTheLoopThroughAValue() async throws {
+		// `aBuilder` and `bBuilder` receive each other. `aBuilder`'s receive of `cBuilder` is left `nil`, since `cBuilder`
+		// waits on `v`, which waits on `aBuilder`; that circle holds the value `v`, so the receive is not given, and the two
+		// builders are still a loop.
+		let output = try await executeSafeDIToolTest(swiftFileContent: Self.twoBuilderLoopBesideReceiveWaitingOnItThroughValue, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder, cBuilder: nil)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return B(aBuilder: aBuilder)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        let v = V(aBuilder: aBuilder)
+			        func __safeDI_cBuilder() -> C {
+			            C(v: v)
+			        }
+			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder, cBuilder: cBuilder, v: v)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsDependencyCycleError_whenTypeRenamesItsOwnLazilyInstantiatedWrapperBesideAnOnlyIfAvailableReceiveOfABuilderWaitingOnIt() async {
+		// A lazily instantiated dependency is validated as the constant it stands for, so receiving it inside its own tree is
+		// a cycle with no instantiator on it.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T4.swift"]):8:5: error: Dependency cycle: @Instantiated `lazyT4: T4` -> @Received `lazyT4: T4`. `lazyT4: T4` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `lazyT4: LazilyInstantiated<T4>` is validated as `lazyT4: T4`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(swiftFileContent: [
+				Self.type("Root", attributes: "(isRoot: true)", "@Instantiated let t2Builder: Instantiator<T2>", "@Instantiated let lazyT4: LazilyInstantiated<T4>", "@Instantiated let t3: T3"),
+				Self.type("T2", "@Received(onlyIfAvailable: true) let t3: T3?"),
+				Self.type("T3", "@Instantiated let t4: T4"),
+				Self.type("T4", "@Received(fulfilledByDependencyNamed: \"lazyT4\", ofType: LazilyInstantiated<T4>.self) let lazyT4Alias: LazilyInstantiated<T4>", "@Received(onlyIfAvailable: true) let t2Builder: Instantiator<T2>?"),
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
 	// MARK: Tests – Builders whose functions take cycle parameters
 
 	@Test
@@ -2018,6 +2369,16 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// `aBuilder` and `bBuilder` receive each other, and `A` receives `cBuilder` only if available; `cBuilder` waits on `v`,
+	/// which waits on `aBuilder`.
+	private static let twoBuilderLoopBesideReceiveWaitingOnItThroughValue = [
+		type("Root", attributes: "(isRoot: true)", "@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let cBuilder: Instantiator<C>", "@Instantiated let v: V"),
+		type("A", "@Received let bBuilder: Instantiator<B>", "@Received(onlyIfAvailable: true) let cBuilder: Instantiator<C>?"),
+		type("B", "@Received let aBuilder: Instantiator<A>"),
+		type("C", "@Received let v: V"),
+		type("V", "@Received let aBuilder: Instantiator<A>"),
+	]
 
 	private static func type(_ name: String, attributes: String = "", _ declarations: String..., conformances: String = "") -> String {
 		type(name, attributes: attributes, declarations, conformances: conformances)

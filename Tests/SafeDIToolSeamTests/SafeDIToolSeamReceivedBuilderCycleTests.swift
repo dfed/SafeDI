@@ -186,6 +186,141 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_rebindsBuilderInsideItsOwnFunctionInSeamsInitializerAndPublicMock_whenItsTypeRenamesItBesideAnOnlyIfAvailableReceiveOfABuilderWaitingOnItThroughAValue() async throws {
+		// `t4Builder`'s receive of `t2Builder` is left `nil`, since `t2Builder` waits on `t3`, which waits on `t4Builder`;
+		// `t4Builder` still receives itself, in the seam's initializer and in its public mock alike.
+		let feature = [
+			seamFixtureType(named: "T2", declarations: ["@Received(onlyIfAvailable: true) let t3: T3?"]),
+			seamFixtureType(named: "T3", declarations: ["@Instantiated let t4: T4"]),
+			seamFixtureType(named: "T4", declarations: ["@Received(fulfilledByDependencyNamed: \"t4Builder\", ofType: Instantiator<T4>.self) let t4BuilderAlias: Instantiator<T4>", "@Received(onlyIfAvailable: true) let t2Builder: Instantiator<T2>?"]),
+			seamFixtureType(named: "Flow", isSeam: true, declarations: ["@Instantiated let t2Builder: Instantiator<T2>", "@Instantiated let t4Builder: Instantiator<T4>", "@Instantiated let t3: T3"])
+				.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable(generateDependencyTree: true, generateMock: .public)"),
+		]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
+		let modules = Self.modules(feature: feature, app: [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let fixtures = try #require(output.modules["Feature"]).fixtures
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension Flow {
+		    /// Code you write and code SafeDI generates can both call this initializer.
+		    public init() {
+		        func __safeDI_t4Builder() -> T4 {
+		            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+		            #sourceLocation(file: "\(fixtures["T4.swift"])", line: 8)
+		            let t4BuilderAlias: Instantiator<T4> = t4Builder
+		            #sourceLocation()
+		            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
+		        }
+		        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+		        func __safeDI_t3() -> T3 {
+		            func __safeDI_t4() -> T4 {
+		                #sourceLocation(file: "\(fixtures["T4.swift"])", line: 8)
+		                let t4BuilderAlias: Instantiator<T4> = t4Builder
+		                #sourceLocation()
+		                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
+		            }
+		            let t4: T4 = __safeDI_t4()
+		            return T3(t4: t4)
+		        }
+		        let t3: T3 = __safeDI_t3()
+		        func __safeDI_t2Builder() -> T2 {
+		            T2(t3: t3)
+		        }
+		        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+		        self.init(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+		    }
+		}
+
+		extension Flow {
+		    public enum __safeDI_Flow_CBF29CE484222325 {}
+		}
+
+		#if DEBUG
+		extension Flow {
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            t4Builder: ((Instantiator<T4>, Instantiator<T2>?) -> T4)? = nil,
+		            t3: __safeDI_Feature_T3_MockConfiguration = .init(),
+		            t2Builder: ((T3?) -> T2)? = nil
+		        ) {
+		            self.t4Builder = t4Builder
+		            self.t3 = t3
+		            self.t2Builder = t2Builder
+		        }
+
+		        public let t4Builder: ((Instantiator<T4>, Instantiator<T2>?) -> T4)?
+		        public let t3: __safeDI_Feature_T3_MockConfiguration
+		        public let t2Builder: ((T3?) -> T2)?
+		    }
+
+		    public static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Flow {
+		        func __safeDI_t4Builder() -> T4 {
+		            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+		            #sourceLocation(file: "\(fixtures["T4.swift"])", line: 8)
+		            let t4BuilderAlias: Instantiator<T4> = t4Builder
+		            #sourceLocation()
+		            return if let safeDIBuilder = safeDIOverrides.t4Builder { safeDIBuilder(t4BuilderAlias, nil) } else { T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil) }
+		        }
+		        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+		        func __safeDI_t3() -> T3 {
+		            func __safeDI_t4() -> T4 {
+		                #sourceLocation(file: "\(fixtures["T4.swift"])", line: 8)
+		                let t4BuilderAlias: Instantiator<T4> = t4Builder
+		                #sourceLocation()
+		                return if let safeDIBuilder = safeDIOverrides.t3.t4 { safeDIBuilder(t4BuilderAlias, nil) } else { T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil) }
+		            }
+		            let t4: T4 = __safeDI_t4()
+		            return T3.__safeDI_init(t4: t4, safeDIBuilder: safeDIOverrides.t3.safeDIBuilder)
+		        }
+		        let t3: T3 = __safeDI_t3()
+		        func __safeDI_t2Builder() -> T2 {
+		            if let safeDIBuilder = safeDIOverrides.t2Builder { safeDIBuilder(t3) } else { T2(t3: t3) }
+		        }
+		        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+		        return Flow(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+		    }
+		}
+
+		extension Flow {
+		    public enum __safeDI_Flow_mock_51799E6AA5E7B634 {}
+		}
+		#endif
+
+		#if DEBUG
+		/// Configuration for how `T3` is constructed within the public mock trees of module `Feature`.
+		nonisolated public struct __safeDI_Feature_T3_MockConfiguration {
+		    public init(
+		        t4: ((Instantiator<T4>, Instantiator<T2>?) -> T4)? = nil,
+		        _ safeDIBuilder: ((T4) -> T3)? = nil
+		    ) {
+		        self.t4 = t4
+		        self.safeDIBuilder = safeDIBuilder
+		    }
+
+		    public let t4: ((Instantiator<T4>, Instantiator<T2>?) -> T4)?
+		    /// Overrides how `T3` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public let safeDIBuilder: ((T4) -> T3)?
+		}
+
+		extension T3 {
+		    static func __safeDI_init(t4: T4, safeDIBuilder: ((T4) -> T3)?) -> T3 {
+		        if let safeDIBuilder { safeDIBuilder(t4) } else { T3(t4: t4) }
+		    }
+		}
+		#endif
+
+		"""])
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature.map { $0.replacingOccurrences(of: "generateDependencyTree: true, ", with: "") }, app: [root]), probes: [
+			DifferentialValueProbe("Root()"),
+			DifferentialValueProbe("Root().flow.t4Builder.instantiate().t4BuilderAlias.instantiate()"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_namesReceivedFunctionApart_whenSeamTakesDeferredParameterOfItsName() async throws {
 		// `Other`, in `Flow`'s tree, receives `screenBuilder_received` from `Flow`'s caller, so `Flow`'s initializer binds the
 		// deferred parameter `__safeDI_screenBuilder_received`, which the function every wrapper of `screenBuilder` hands
