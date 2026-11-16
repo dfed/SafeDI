@@ -262,6 +262,72 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// This type with every name at every depth, a `.simple` or `.nested` one, replaced by `_`, and everything else kept:
+	/// sugar, `any`, `some`, `Void` and `()`, tuple labels, attributes, specifiers, and a spelling SafeDI does not parse.
+	/// Its spelling is the shape of this spelling, which renaming any type leaves alone. Compare with it; never spell a
+	/// type with one.
+	var withNamesErased: TypeDescription {
+		switch self {
+		case .void, .unknown:
+			self
+		case let .simple(_, generics):
+			.simple(name: "_", generics: generics.map(\.withNamesErased))
+		case let .nested(_, parentType, generics):
+			.nested(name: "_", parentType: parentType.withNamesErased, generics: generics.map(\.withNamesErased))
+		case let .composition(types):
+			.composition(UnorderedEquatingCollection(types.map(\.withNamesErased)))
+		case let .optional(type):
+			.optional(type.withNamesErased)
+		case let .implicitlyUnwrappedOptional(type):
+			.implicitlyUnwrappedOptional(type.withNamesErased)
+		case let .some(type):
+			.some(type.withNamesErased)
+		case let .any(type):
+			.any(type.withNamesErased)
+		case let .metatype(type, isType):
+			.metatype(type.withNamesErased, isType: isType)
+		case let .attributed(type, specifiers, attributes):
+			.attributed(type.withNamesErased, specifiers: specifiers, attributes: attributes)
+		case let .array(element):
+			.array(element: element.withNamesErased)
+		case let .dictionary(key, value):
+			.dictionary(key: key.withNamesErased, value: value.withNamesErased)
+		case let .tuple(elements):
+			.tuple(elements.map { TupleElement(label: $0.label, $0.typeDescription.withNamesErased) })
+		case let .closure(arguments, isAsync, doesThrow, thrownType, returnType):
+			.closure(arguments: arguments.map(\.withNamesErased), isAsync: isAsync, doesThrow: doesThrow, thrownType: thrownType?.withNamesErased, returnType: returnType.withNamesErased)
+		case let .variadic(type):
+			.variadic(type.withNamesErased)
+		}
+	}
+
+	/// Of this spelling and `others`, spellings of one type, the most explicit: the one whose name-erased spelling
+	/// (`withNamesErased`) is longest, then the one whose name-erased spelling sorts first, then the one whose own spelling
+	/// sorts first. `Swift.Int` is chosen over `Int`, `Optional<X>` over `X?`, and `Feed.Token` over `Token`. Reads the
+	/// spellings alone, never where they are written, so neither file names nor declaration order decide it, and a renaming
+	/// of types changes it only where two spellings of one shape differ in names, which the stated last tie-break decides: a
+	/// type qualified by two modules, and two orders of a composition's members (`A & B` and `B & A`, one shape since a
+	/// composition is unordered). Sorting those members would still sort them by name, so the chosen spelling keeps the
+	/// order one place wrote. Two orders of attributes are two shapes, which the second tie-break orders by shape alone.
+	func mostExplicitSpelling(among others: some Sequence<TypeDescription>) -> TypeDescription {
+		others.reduce(self) { chosen, candidate in
+			candidate.isMoreExplicitSpelling(than: chosen) ? candidate : chosen
+		}
+	}
+
+	/// Whether this spelling comes before `other` in `mostExplicitSpelling(among:)`'s order.
+	private func isMoreExplicitSpelling(than other: TypeDescription) -> Bool {
+		let shape = withNamesErased.asSource
+		let otherShape = other.withNamesErased.asSource
+		return if shape.count != otherShape.count {
+			shape.count > otherShape.count
+		} else if shape != otherShape {
+			shape < otherShape
+		} else {
+			asSource < other.asSource
+		}
+	}
+
 	/// This type with `any` stripped at every depth: the spelling `==` compares, and what the seam guard hashes.
 	var withoutAny: TypeDescription {
 		switch self {

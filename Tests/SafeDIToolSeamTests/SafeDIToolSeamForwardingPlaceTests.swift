@@ -825,14 +825,13 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 	@Test(arguments: [["A", "B", "C"], ["A", "C", "B"], ["B", "A", "C"], ["B", "C", "A"], ["C", "A", "B"], ["C", "B", "A"]])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_spellsBuildersForwardedValueAsFirstDeclaredPlaceSpellsIt_whenPlacesSpellOneValueTwoWays(order: [String]) async throws {
-		// `C` spells the value `Swift.Int`, `A` and `B` spell it `Int`: one value, which the builder takes as the place declared
-		// first spells it.
+	mutating func generate_spellsBuildersForwardedValueAsMostExplicitPlaceSpellsIt_whenPlacesInOneFileSpellOneValueTwoWays(order: [String]) async throws {
+		// `C` spells the value `Swift.Int`, `A` and `B` spell it `Int`: one value, which the builder takes as its most explicit
+		// spelling, `Swift.Int`, whichever place is declared first.
 		let placesFile = order.map { name in
 			let spelling = name == "C" ? "Swift.Int" : "Int"
 			return seamFixtureType(named: name, isFinalClass: true, declarations: [#"@Instantiated(fulfilledByType: "IntGadget") public let place: ErasedInstantiator<\#(spelling), any Gadget>"#])
 		}.joined(separator: "\n\n")
-		let forwarded = order[0] == "C" ? "Swift.Int" : "Int"
 		let modules = [
 			ModuleFixture(
 				name: "Feature",
@@ -930,7 +929,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		                self.c = c
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<\(forwarded), __safeDI_Built>.Builder) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Swift.Int, __safeDI_Built>.Builder) {
 		                self.a = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		                self.b = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		                self.c = { _ in .init(__safeDI_noScope: __safeDI_builder) }
@@ -939,7 +938,159 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public convenience init(intGadget_GadgetBuilder: @escaping ErasedInstantiator<\(forwarded), any Gadget>.Builder) {
+		    public convenience init(intGadget_GadgetBuilder: @escaping ErasedInstantiator<Swift.Int, any Gadget>.Builder) {
+		        self.init(__safeDI_intGadget_GadgetBuilder: .init(__safeDI_noScope: intGadget_GadgetBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public convenience init(__safeDI_intGadget_GadgetBuilder: SafeDIScope_IntGadget_Gadget.__safeDI_Builder<any Gadget>) {
+		        let __safeDI_intGadget_GadgetBuilder_a = __safeDI_intGadget_GadgetBuilder.a(SafeDIScope_IntGadget_Gadget.a_Values())
+		        func __safeDI_a() -> A {
+		            let place = ErasedInstantiator<Int, any Gadget>(__safeDI_intGadget_GadgetBuilder_a.place(SafeDIScope_IntGadget_Gadget.A_Scope.place_Values()))
+		            return A(place: place)
+		        }
+		        let a: A = __safeDI_a()
+		        let __safeDI_intGadget_GadgetBuilder_b = __safeDI_intGadget_GadgetBuilder.b(SafeDIScope_IntGadget_Gadget.b_Values(a: a))
+		        func __safeDI_b() -> B {
+		            let place = ErasedInstantiator<Int, any Gadget>(__safeDI_intGadget_GadgetBuilder_b.place(SafeDIScope_IntGadget_Gadget.B_Scope.place_Values()))
+		            return B(place: place)
+		        }
+		        let b: B = __safeDI_b()
+		        let __safeDI_intGadget_GadgetBuilder_c = __safeDI_intGadget_GadgetBuilder.c(SafeDIScope_IntGadget_Gadget.c_Values(a: a, b: b))
+		        func __safeDI_c() -> C {
+		            let place = ErasedInstantiator<Swift.Int, any Gadget>(__safeDI_intGadget_GadgetBuilder_c.place(SafeDIScope_IntGadget_Gadget.C_Scope.place_Values()))
+		            return C(place: place)
+		        }
+		        let c: C = __safeDI_c()
+		        self.init(a: a, b: b, c: c)
+		    }
+		}
+
+		extension Host {
+		    public enum __safeDI_Host_13AB3195FCAFFFA9 {}
+		}
+		"""])
+		try Self.expectCompiles(output)
+	}
+
+	@Test(arguments: [["A", "B", "C"], ["A", "C", "B"], ["B", "A", "C"], ["B", "C", "A"], ["C", "A", "B"], ["C", "B", "A"]])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsBuildersForwardedValueAsMostExplicitPlaceSpellsIt_whenPlacesInThreeFilesSpellOneValueTwoWays(order: [String]) async throws {
+		// `C` spells the value `Swift.Int`, `A` and `B` spell it `Int`, each in a file of its own, `File1.swift` holding
+		// `order[0]`: one value, which the builder takes as its most explicit spelling, `Swift.Int`, whichever file sorts first.
+		var placeFiles = [String: String]()
+		for (index, name) in order.enumerated() {
+			let spelling = name == "C" ? "Swift.Int" : "Int"
+			placeFiles["File\(index + 1).swift"] = seamFixtureType(named: name, isFinalClass: true, declarations: [#"@Instantiated(fulfilledByType: "IntGadget") public let place: ErasedInstantiator<\#(spelling), any Gadget>"#])
+		}
+		let modules = [
+			ModuleFixture(
+				name: "Feature",
+				packageName: "Shop",
+				swiftFileContent: Self.featureFiles + [seamFixtureType(named: "Host", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let a: A", "@Instantiated public let b: B", "@Instantiated public let c: C"])],
+				swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration.merging(placeFiles) { first, _ in first },
+			),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [Self.intGadget, Self.root].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Host {
+		    @frozen nonisolated public enum SafeDIScope_IntGadget_Gadget {
+		        case a(a_Values, SafeDIScope_IntGadget_Gadget.A_Scope)
+		        case b(b_Values, SafeDIScope_IntGadget_Gadget.B_Scope)
+		        case c(c_Values, SafeDIScope_IntGadget_Gadget.C_Scope)
+
+		        nonisolated public struct a_Values {}
+
+		        nonisolated public struct b_Values {
+		            public let a: A
+		        }
+
+		        nonisolated public struct c_Values {
+		            public let a: A
+		            public let b: B
+		        }
+
+		        @frozen nonisolated public enum A_Scope {
+		            case place(place_Values, Int)
+
+		            nonisolated public struct place_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let place: (place_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+
+		                public init(place: @escaping (place_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                    self.place = place
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                    self.place = { _ in __safeDI_builder }
+		                }
+		            }
+		        }
+
+		        @frozen nonisolated public enum B_Scope {
+		            case place(place_Values, Int)
+
+		            nonisolated public struct place_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let place: (place_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+
+		                public init(place: @escaping (place_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                    self.place = place
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                    self.place = { _ in __safeDI_builder }
+		                }
+		            }
+		        }
+
+		        @frozen nonisolated public enum C_Scope {
+		            case place(place_Values, Swift.Int)
+
+		            nonisolated public struct place_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let place: (place_Values) -> ErasedInstantiator<Swift.Int, __safeDI_Built>.Builder
+
+		                public init(place: @escaping (place_Values) -> ErasedInstantiator<Swift.Int, __safeDI_Built>.Builder) {
+		                    self.place = place
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Swift.Int, __safeDI_Built>.Builder) {
+		                    self.place = { _ in __safeDI_builder }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let a: (a_Values) -> SafeDIScope_IntGadget_Gadget.A_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let b: (b_Values) -> SafeDIScope_IntGadget_Gadget.B_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let c: (c_Values) -> SafeDIScope_IntGadget_Gadget.C_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(a: @escaping (a_Values) -> SafeDIScope_IntGadget_Gadget.A_Scope.__safeDI_Builder<__safeDI_Built>, b: @escaping (b_Values) -> SafeDIScope_IntGadget_Gadget.B_Scope.__safeDI_Builder<__safeDI_Built>, c: @escaping (c_Values) -> SafeDIScope_IntGadget_Gadget.C_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.a = a
+		                self.b = b
+		                self.c = c
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Swift.Int, __safeDI_Built>.Builder) {
+		                self.a = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.b = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.c = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public convenience init(intGadget_GadgetBuilder: @escaping ErasedInstantiator<Swift.Int, any Gadget>.Builder) {
 		        self.init(__safeDI_intGadget_GadgetBuilder: .init(__safeDI_noScope: intGadget_GadgetBuilder))
 		    }
 
