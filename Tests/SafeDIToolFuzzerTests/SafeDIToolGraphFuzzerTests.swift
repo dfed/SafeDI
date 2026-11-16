@@ -4071,6 +4071,31 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func difference_isNil_whenDiagnosticsNameTheSamePlacesOfAFillFindingInAnotherOrder() {
+		// SafeDI lists the places one fill finding holds for in the order of their types' names, then their labels, which a
+		// renaming that moves type names across wrapper names reorders (seam corpus seed 566); the same places in another
+		// order are the same diagnostic, and another place is not.
+		func reenteringCallDiagnostics(places: String) -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/a/<fixture-directory>/S566_HoleImpl.swift:14:2: error: `S566_HoleImpl` receives `holeLogger: S566_HoleLogger`, which `S566_HoleSeam`’s tree builds where it instantiates `S566_HoleSeam` again, but that call passes the builder `S566_HoleSeam` takes for \(places) on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let holeLogger: S566_HoleLogger` on `S566_HoleSeam`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `S566_HoleService` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S566_HoleSeam` fills the builder itself.\n/a/<fixture-directory>/S566_HoleLoop.swift:11:2: note: `S566_HoleLoop` declares `holeLogger: S566_HoleLogger` here.")
+		}
+		func scopeDiagnostics(places: String) -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/a/<fixture-directory>/S1_Impl.swift:9:5: error: `S1_Impl` receives `theme: S1_Theme`, which `S1_Home` builds after `profile`, since `S1_Theme` receives `profile` only if available, so the scopes SafeDI hands the builders for \(places) do not carry it. Receive `profile` on `S1_Theme` some other way, or declare an @Instantiable type that fulfills `S1_Service` in module `FuzzFeature` or a module it lists among its SafeDI dependencies.")
+		}
+		let ownerPlace = "`S566_HoleOwner`’s `holeService: any S566_HoleService`"
+		let ownerLazyPlace = "`S566_HoleOwner`’s `holeServiceLazy: LazilyInstantiated<any S566_HoleService>`"
+		let nestPlace = "`S566_HoleNestImpl`’s `holeService: any S566_HoleService`"
+		let firstSeamPlace = "`S1_Profile`’s `service: any S1_Service` (case `S1_Profile_Scope.service` of `serviceBuilder`) in `S1_SeamA`’s tree"
+		let secondSeamPlace = "`S1_Account`’s `service: any S1_Service` (case `S1_Account_Scope.service` of `serviceBuilder`) in `S1_SeamB`’s tree"
+
+		#expect(GraphFuzzerToolOutcome.difference(between: reenteringCallDiagnostics(places: "\(nestPlace), \(ownerPlace), and \(ownerLazyPlace)"), and: reenteringCallDiagnostics(places: "\(ownerPlace), \(ownerLazyPlace), and \(nestPlace)")) == nil)
+		#expect(GraphFuzzerToolOutcome.difference(between: reenteringCallDiagnostics(places: "\(nestPlace) and \(ownerPlace)"), and: reenteringCallDiagnostics(places: "\(ownerPlace) and \(nestPlace)")) == nil)
+		#expect(GraphFuzzerToolOutcome.difference(between: scopeDiagnostics(places: "\(firstSeamPlace) and \(secondSeamPlace)"), and: scopeDiagnostics(places: "\(secondSeamPlace) and \(firstSeamPlace)")) == nil)
+		#expect(GraphFuzzerToolOutcome.difference(between: reenteringCallDiagnostics(places: "\(nestPlace) and \(ownerPlace)"), and: reenteringCallDiagnostics(places: "\(ownerLazyPlace) and \(nestPlace)")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: reenteringCallDiagnostics(places: "\(nestPlace) and \(ownerPlace)"), and: reenteringCallDiagnostics(places: "\(nestPlace), \(ownerPlace), and \(ownerLazyPlace)")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: scopeDiagnostics(places: "\(firstSeamPlace) and \(secondSeamPlace)"), and: scopeDiagnostics(places: "\(secondSeamPlace.replacingOccurrences(of: "S1_SeamB", with: "S1_SeamA")) and \(firstSeamPlace)")) == "its diagnostics")
+	}
+
+	@Test
 	func difference_reportsDiagnostics_whenDiagnosticsDifferInMoreThanTheOrderOfTheirSuggestions() {
 		func diagnostics(chain: String, suggestions: String) -> GraphFuzzerToolOutcome {
 			.rejected(diagnostics: "/a/<fixture-directory>/S12_T1.swift:7:2: error: @Received property `t4: S12_T3` is not @Instantiated or @Forwarded in chain: \(chain). Did you mean one of \(suggestions)?")
