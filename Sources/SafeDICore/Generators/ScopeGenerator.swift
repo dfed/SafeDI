@@ -5549,7 +5549,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The dispatchers among `dispatchersByKey` that the root dispatcher of the enum of `enumKey` reaches, itself included,
 	/// in the order its cases first reach them.
-	private nonisolated static func dispatchers(reachedFrom enumKey: SeamSignature.ScopeEnum.Key, in dispatchersByKey: [String: FillDispatcher]) -> [FillDispatcher] {
+	nonisolated private static func dispatchers(reachedFrom enumKey: SeamSignature.ScopeEnum.Key, in dispatchersByKey: [String: FillDispatcher]) -> [FillDispatcher] {
 		var reached = [FillDispatcher]()
 		var visited = Set<String>()
 		var keysToVisit = [FillDispatcher.key(of: enumKey)]
