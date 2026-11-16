@@ -57,9 +57,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_PairGadget_Gadget {
-		        case erased(erased_Values, (count: Int, name: String))
-
+		    nonisolated public enum SafeDIScope_PairGadget_Gadget {
 		        nonisolated public struct erased_Values {
 		            public let navigator: Navigator
 		            public let analytics: Analytics
@@ -79,9 +77,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDIScope_PairPanel {
-		        case held(held_Values, PairPanel.ForwardedProperties)
-
+		    nonisolated public enum SafeDIScope_PairPanel {
 		        nonisolated public struct held_Values {
 		            public let navigator: Navigator
 		            public let analytics: Analytics
@@ -184,17 +180,13 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_LiveGadget_AnyGadget {
-		        case shell(shell_Values, SafeDIScope_LiveGadget_AnyGadget.Shell_Scope)
-
+		    nonisolated public enum SafeDIScope_LiveGadget_AnyGadget {
 		        nonisolated public struct shell_Values {
 		            public let navigator: Navigator
 		            public let theme: Theme
 		        }
 
-		        @frozen nonisolated public enum Shell_Scope {
-		            case toolbar(toolbar_Values, SafeDIScope_LiveGadget_AnyGadget.Toolbar_Scope)
-
+		        nonisolated public enum Shell_Scope {
 		            nonisolated public struct toolbar_Values {
 		                public let style: Style
 		            }
@@ -213,9 +205,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Toolbar_Scope {
-		            case panelBuilder(panelBuilder_Values, String)
-
+		        nonisolated public enum Toolbar_Scope {
 		            nonisolated public struct panelBuilder_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -324,9 +314,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_Panel {
-		        case held(held_Values, Panel.ForwardedProperties)
-
+		    nonisolated public enum SafeDIScope_Panel {
 		        nonisolated public struct held_Values {
 		            public let navigator: Navigator
 		            public let analytics: Analytics
@@ -407,9 +395,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_EmptyPanel {
-		        case held(held_Values, EmptyPanel.ForwardedProperties)
-
+		    nonisolated public enum SafeDIScope_EmptyPanel {
 		        nonisolated public struct held_Values {
 		            public let navigator: Navigator
 		            public let analytics: Analytics
@@ -498,10 +484,8 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_Panel {
-		        @frozen nonisolated public enum Owner_Scope {
-		            case held(held_Values, Panel.ForwardedProperties)
-
+		    nonisolated public enum SafeDIScope_Panel {
+		        nonisolated public enum Owner_Scope {
 		            nonisolated public struct held_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -519,10 +503,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDISendableScope_Panel {
-		        case held(Panel.ForwardedProperties)
-		        case ownerBuilder(SafeDIScope_Panel.Owner_Scope)
-
+		    nonisolated public enum SafeDISendableScope_Panel {
 		        nonisolated public struct held_Values: Sendable {}
 
 		        nonisolated public struct ownerBuilder_Values: Sendable {}
@@ -630,10 +611,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_Panel {
-		        case held(held_Values, Panel.ForwardedProperties)
-		        case erased(erased_Values, Panel.ForwardedProperties)
-
+		    nonisolated public enum SafeDIScope_Panel {
 		        nonisolated public struct held_Values {
 		            public let navigator: Navigator
 		            public let analytics: Analytics
@@ -733,10 +711,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_PairPanel {
-		        case held(held_Values, PairPanel.ForwardedProperties)
-		        case erased(erased_Values, PairPanel.ForwardedProperties)
-
+		    nonisolated public enum SafeDIScope_PairPanel {
 		        nonisolated public struct held_Values {
 		            public let navigator: Navigator
 		            public let analytics: Analytics
@@ -844,11 +819,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_IntGadget_Gadget {
-		        case a(a_Values, SafeDIScope_IntGadget_Gadget.A_Scope)
-		        case b(b_Values, SafeDIScope_IntGadget_Gadget.B_Scope)
-		        case c(c_Values, SafeDIScope_IntGadget_Gadget.C_Scope)
-
+		    nonisolated public enum SafeDIScope_IntGadget_Gadget {
 		        nonisolated public struct a_Values {}
 
 		        nonisolated public struct b_Values {
@@ -860,9 +831,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            public let b: B
 		        }
 
-		        @frozen nonisolated public enum A_Scope {
-		            case place(place_Values, Int)
-
+		        nonisolated public enum A_Scope {
 		            nonisolated public struct place_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -879,9 +848,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum B_Scope {
-		            case place(place_Values, Int)
-
+		        nonisolated public enum B_Scope {
 		            nonisolated public struct place_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -898,9 +865,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum C_Scope {
-		            case place(place_Values, Swift.Int)
-
+		        nonisolated public enum C_Scope {
 		            nonisolated public struct place_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -996,11 +961,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_IntGadget_Gadget {
-		        case a(a_Values, SafeDIScope_IntGadget_Gadget.A_Scope)
-		        case b(b_Values, SafeDIScope_IntGadget_Gadget.B_Scope)
-		        case c(c_Values, SafeDIScope_IntGadget_Gadget.C_Scope)
-
+		    nonisolated public enum SafeDIScope_IntGadget_Gadget {
 		        nonisolated public struct a_Values {}
 
 		        nonisolated public struct b_Values {
@@ -1012,9 +973,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            public let b: B
 		        }
 
-		        @frozen nonisolated public enum A_Scope {
-		            case place(place_Values, Int)
-
+		        nonisolated public enum A_Scope {
 		            nonisolated public struct place_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1031,9 +990,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum B_Scope {
-		            case place(place_Values, Int)
-
+		        nonisolated public enum B_Scope {
 		            nonisolated public struct place_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1050,9 +1007,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum C_Scope {
-		            case place(place_Values, Swift.Int)
-
+		        nonisolated public enum C_Scope {
 		            nonisolated public struct place_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1140,11 +1095,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_DefaultGadget_Gadget {
-		        case now(now_Values)
-		        case lazy(lazy_Values)
-		        case later(later_Values)
-
+		    nonisolated public enum SafeDIScope_DefaultGadget_Gadget {
 		        nonisolated public struct now_Values {
 		            public let navigator: Navigator
 		            public let analytics: Analytics
@@ -1263,10 +1214,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_EmptyPanel {
-		        case now(now_Values)
-		        case held(held_Values, EmptyPanel.ForwardedProperties)
-
+		    nonisolated public enum SafeDIScope_EmptyPanel {
 		        nonisolated public struct now_Values {
 		            public let analytics: Analytics
 		        }
@@ -1360,10 +1308,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_DefaultGadget_Gadget {
-		        case tuple(tuple_Values)
-		        case void(void_Values)
-
+		    nonisolated public enum SafeDIScope_DefaultGadget_Gadget {
 		        nonisolated public struct tuple_Values {
 		            public let analytics: Analytics
 		        }
@@ -1455,10 +1400,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_EmptyPanel {
-		        case held(held_Values, EmptyPanel.ForwardedProperties)
-		        case later(later_Values)
-
+		    nonisolated public enum SafeDIScope_EmptyPanel {
 		        nonisolated public struct held_Values {
 		            public let analytics: Analytics
 		        }
@@ -1840,9 +1782,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Inner {
-		    @frozen nonisolated public enum SafeDIScope_Panel {
-		        case part(part_Values, Panel.ForwardedProperties)
-
+		    nonisolated public enum SafeDIScope_Panel {
 		        nonisolated public struct part_Values {
 		            public let analytics: Analytics
 		        }
@@ -1861,9 +1801,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDISendableScope_Panel {
-		        case sendablePart(Panel.ForwardedProperties)
-
+		    nonisolated public enum SafeDISendableScope_Panel {
 		        nonisolated public struct sendablePart_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1899,27 +1837,53 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		}
 
 		extension Outer {
-		    @frozen public enum SafeDIScope_Panel {
-		        case inner(Inner.SafeDIScope_Panel)
+		    nonisolated public enum SafeDIScope_Panel {
+		        nonisolated public struct inner_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let inner: (inner_Values) -> Inner.SafeDIScope_Panel.__safeDI_Builder<__safeDI_Built>
+
+		            public init(inner: @escaping (inner_Values) -> Inner.SafeDIScope_Panel.__safeDI_Builder<__safeDI_Built>) {
+		                self.inner = inner
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
 		    }
 
-		    @frozen public enum SafeDISendableScope_Panel {
-		        case inner_Sendable(Inner.SafeDISendableScope_Panel)
+		    nonisolated public enum SafeDISendableScope_Panel {
+		        nonisolated public struct inner_Sendable_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let inner_Sendable: @Sendable (inner_Sendable_Values) -> Inner.SafeDISendableScope_Panel.__safeDI_Builder<__safeDI_Built>
+
+		            public init(inner_Sendable: @escaping @Sendable (inner_Sendable_Values) -> Inner.SafeDISendableScope_Panel.__safeDI_Builder<__safeDI_Built>) {
+		                self.inner_Sendable = inner_Sendable
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.inner_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public convenience init(analytics: Analytics, panelBuilder: @escaping (SafeDIScope_Panel) -> Panel, panelSendableBuilder: @escaping @Sendable (SafeDISendableScope_Panel) -> Panel) {
-		        self.init(__safeDI_analytics: analytics, __safeDI_panelBuilder: panelBuilder, __safeDI_panelSendableBuilder: panelSendableBuilder)
+		    public convenience init(analytics: Analytics, panelBuilder: @escaping Instantiator<Panel>.Builder, panelSendableBuilder: @escaping SendableInstantiator<Panel>.Builder) {
+		        self.init(__safeDI_analytics: analytics, __safeDI_panelBuilder: .init(__safeDI_noScope: panelBuilder), __safeDI_panelSendableBuilder: .init(__safeDI_noScope: panelSendableBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public convenience init(__safeDI_analytics: @autoclosure @escaping () -> Analytics, __safeDI_panelBuilder: @escaping (SafeDIScope_Panel) -> Panel, __safeDI_panelSendableBuilder: @escaping @Sendable (SafeDISendableScope_Panel) -> Panel) {
+		    public convenience init(__safeDI_analytics: @autoclosure @escaping () -> Analytics, __safeDI_panelBuilder: SafeDIScope_Panel.__safeDI_Builder<Panel>, __safeDI_panelSendableBuilder: SafeDISendableScope_Panel.__safeDI_Builder<Panel>) {
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        let navigator = Navigator()
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_CE2BE999BED711F9.self
-		            return Inner(__safeDI_analytics: analytics.instance, __safeDI_panelBuilder: .init(part: { __safeDI_partValues in { forwarded in __safeDI_panelBuilder(.inner(.part(__safeDI_partValues, forwarded))) } }), __safeDI_panelSendableBuilder: .init(sendablePart: { _ in { forwarded in __safeDI_panelSendableBuilder(.inner_Sendable(.sendablePart(forwarded))) } }))
+		            return Inner(__safeDI_analytics: analytics.instance, __safeDI_panelBuilder: __safeDI_panelBuilder.inner(SafeDIScope_Panel.inner_Values()), __safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder.inner_Sendable(SafeDISendableScope_Panel.inner_Sendable_Values()))
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(navigator: navigator, inner: inner)
@@ -1927,7 +1891,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		}
 
 		extension Outer {
-		    public enum __safeDI_Outer_DD82D811C70A37AA {}
+		    public enum __safeDI_Outer_3A841CDFE443E508 {}
 		}
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
@@ -1939,37 +1903,32 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    public convenience init() {
 		        let analytics = Analytics()
 		        func __safeDI_outer() -> Outer {
-		            _ = Outer.__safeDI_Outer_DD82D811C70A37AA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_panelBuilder_Outer(_ scope: Outer.SafeDIScope_Panel) -> Panel {
-		                switch scope {
-		                case let .inner(scope): return __safeDI_panelBuilder_Inner(scope)
+		            _ = Outer.__safeDI_Outer_3A841CDFE443E508.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_panelBuilder_Inner_part(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		                func __safeDI_part(name: String) -> DefaultPanel {
+		                    DefaultPanel(name: name, analytics: analytics)
 		                }
+		                return { forwarded in __safeDI_part(name: forwarded) }
 		            }
-		            func __safeDI_panelBuilder_Inner(_ scope: Inner.SafeDIScope_Panel) -> Panel {
-		                switch scope {
-		                case let .part(scope, __safeDI_forwarded):
-		                    let analytics = scope.analytics
-		                    func __safeDI_part(name: String) -> DefaultPanel {
-		                        DefaultPanel(name: name, analytics: analytics)
-		                    }
-		                    return __safeDI_part(name: __safeDI_forwarded)
+		            @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner_sendablePart() -> SendableInstantiator<Panel>.Builder {
+		                @Sendable nonisolated func __safeDI_sendablePart(name: String) -> DefaultPanel {
+		                    DefaultPanel(name: name, analytics: analytics)
 		                }
+		                return { forwarded in __safeDI_sendablePart(name: forwarded) }
 		            }
-		            @Sendable func __safeDI_panelSendableBuilder_Outer(_ scope: Outer.SafeDISendableScope_Panel) -> Panel {
-		                switch scope {
-		                case let .inner_Sendable(scope): return __safeDI_panelSendableBuilder_Inner(scope)
-		                }
+		            func __safeDI_panelBuilder_Outer() -> Outer.SafeDIScope_Panel.__safeDI_Builder<Panel> {
+		                .init(inner: { _ in __safeDI_panelBuilder_Inner() })
 		            }
-		            @Sendable func __safeDI_panelSendableBuilder_Inner(_ scope: Inner.SafeDISendableScope_Panel) -> Panel {
-		                switch scope {
-		                case let .sendablePart(__safeDI_forwarded):
-		                    @Sendable func __safeDI_sendablePart(name: String) -> DefaultPanel {
-		                        DefaultPanel(name: name, analytics: analytics)
-		                    }
-		                    return __safeDI_sendablePart(name: __safeDI_forwarded)
-		                }
+		            func __safeDI_panelBuilder_Inner() -> Inner.SafeDIScope_Panel.__safeDI_Builder<Panel> {
+		                .init(part: { values in __safeDI_panelBuilder_Inner_part(analytics: values.analytics) })
 		            }
-		            return Outer(__safeDI_analytics: analytics, __safeDI_panelBuilder: __safeDI_panelBuilder_Outer, __safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder_Outer)
+		            @Sendable nonisolated func __safeDI_panelSendableBuilder_Outer() -> Outer.SafeDISendableScope_Panel.__safeDI_Builder<Panel> {
+		                .init(inner_Sendable: { _ in __safeDI_panelSendableBuilder_Inner() })
+		            }
+		            @Sendable nonisolated func __safeDI_panelSendableBuilder_Inner() -> Inner.SafeDISendableScope_Panel.__safeDI_Builder<Panel> {
+		                .init(sendablePart: { _ in __safeDI_panelSendableBuilder_Inner_sendablePart() })
+		            }
+		            return Outer(__safeDI_analytics: analytics, __safeDI_panelBuilder: __safeDI_panelBuilder_Outer(), __safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
 		        self.init(analytics: analytics, outer: outer)
@@ -1998,9 +1957,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Inner {
-		    @frozen nonisolated public enum SafeDIScope_DefaultGadget_Gadget {
-		        case later(later_Values)
-
+		    nonisolated public enum SafeDIScope_DefaultGadget_Gadget {
 		        nonisolated public struct later_Values {
 		            public let analytics: Analytics
 		        }
@@ -2019,9 +1976,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDISendableScope_DefaultGadget_Gadget {
-		        case sendableLater
-
+		    nonisolated public enum SafeDISendableScope_DefaultGadget_Gadget {
 		        nonisolated public struct sendableLater_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2057,27 +2012,53 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		}
 
 		extension Outer {
-		    @frozen public enum SafeDIScope_DefaultGadget_Gadget {
-		        case inner(Inner.SafeDIScope_DefaultGadget_Gadget)
+		    nonisolated public enum SafeDIScope_DefaultGadget_Gadget {
+		        nonisolated public struct inner_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let inner: (inner_Values) -> Inner.SafeDIScope_DefaultGadget_Gadget.__safeDI_Builder<__safeDI_Built>
+
+		            public init(inner: @escaping (inner_Values) -> Inner.SafeDIScope_DefaultGadget_Gadget.__safeDI_Builder<__safeDI_Built>) {
+		                self.inner = inner
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
+		                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
 		    }
 
-		    @frozen public enum SafeDISendableScope_DefaultGadget_Gadget {
-		        case inner_Sendable(Inner.SafeDISendableScope_DefaultGadget_Gadget)
+		    nonisolated public enum SafeDISendableScope_DefaultGadget_Gadget {
+		        nonisolated public struct inner_Sendable_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let inner_Sendable: @Sendable (inner_Sendable_Values) -> Inner.SafeDISendableScope_DefaultGadget_Gadget.__safeDI_Builder<__safeDI_Built>
+
+		            public init(inner_Sendable: @escaping @Sendable (inner_Sendable_Values) -> Inner.SafeDISendableScope_DefaultGadget_Gadget.__safeDI_Builder<__safeDI_Built>) {
+		                self.inner_Sendable = inner_Sendable
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<(), __safeDI_Built>.Builder) {
+		                self.inner_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public convenience init(analytics: Analytics, defaultGadget_GadgetBuilder: @escaping (SafeDIScope_DefaultGadget_Gadget) -> any Gadget, defaultGadget_GadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_DefaultGadget_Gadget) -> any Gadget) {
-		        self.init(__safeDI_analytics: analytics, __safeDI_defaultGadget_GadgetBuilder: defaultGadget_GadgetBuilder, __safeDI_defaultGadget_GadgetSendableBuilder: defaultGadget_GadgetSendableBuilder)
+		    public convenience init(analytics: Analytics, defaultGadget_GadgetBuilder: @escaping ErasedInstantiator<(), any Gadget>.Builder, defaultGadget_GadgetSendableBuilder: @escaping SendableErasedInstantiator<(), any Gadget>.Builder) {
+		        self.init(__safeDI_analytics: analytics, __safeDI_defaultGadget_GadgetBuilder: .init(__safeDI_noScope: defaultGadget_GadgetBuilder), __safeDI_defaultGadget_GadgetSendableBuilder: .init(__safeDI_noScope: defaultGadget_GadgetSendableBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public convenience init(__safeDI_analytics: @autoclosure @escaping () -> Analytics, __safeDI_defaultGadget_GadgetBuilder: @escaping (SafeDIScope_DefaultGadget_Gadget) -> any Gadget, __safeDI_defaultGadget_GadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_DefaultGadget_Gadget) -> any Gadget) {
+		    public convenience init(__safeDI_analytics: @autoclosure @escaping () -> Analytics, __safeDI_defaultGadget_GadgetBuilder: SafeDIScope_DefaultGadget_Gadget.__safeDI_Builder<any Gadget>, __safeDI_defaultGadget_GadgetSendableBuilder: SafeDISendableScope_DefaultGadget_Gadget.__safeDI_Builder<any Gadget>) {
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        let navigator = Navigator()
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_53C7090FF45E9DD2.self
-		            return Inner(__safeDI_analytics: analytics.instance, __safeDI_defaultGadget_GadgetBuilder: .init(later: { __safeDI_laterValues in { _ in __safeDI_defaultGadget_GadgetBuilder(.inner(.later(__safeDI_laterValues))) } }), __safeDI_defaultGadget_GadgetSendableBuilder: .init(sendableLater: { _ in { _ in __safeDI_defaultGadget_GadgetSendableBuilder(.inner_Sendable(.sendableLater)) } }))
+		            return Inner(__safeDI_analytics: analytics.instance, __safeDI_defaultGadget_GadgetBuilder: __safeDI_defaultGadget_GadgetBuilder.inner(SafeDIScope_DefaultGadget_Gadget.inner_Values()), __safeDI_defaultGadget_GadgetSendableBuilder: __safeDI_defaultGadget_GadgetSendableBuilder.inner_Sendable(SafeDISendableScope_DefaultGadget_Gadget.inner_Sendable_Values()))
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(navigator: navigator, inner: inner)
@@ -2085,7 +2066,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		}
 
 		extension Outer {
-		    public enum __safeDI_Outer_07508FED33FD805D {}
+		    public enum __safeDI_Outer_E7B859174E10BAA7 {}
 		}
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
@@ -2097,37 +2078,32 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    public convenience init() {
 		        let analytics = Analytics()
 		        func __safeDI_outer() -> Outer {
-		            _ = Outer.__safeDI_Outer_07508FED33FD805D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_defaultGadget_GadgetBuilder_Outer(_ scope: Outer.SafeDIScope_DefaultGadget_Gadget) -> any Gadget {
-		                switch scope {
-		                case let .inner(scope): return __safeDI_defaultGadget_GadgetBuilder_Inner(scope)
+		            _ = Outer.__safeDI_Outer_E7B859174E10BAA7.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_defaultGadget_GadgetBuilder_Inner_later(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
+		                func __safeDI_later() -> DefaultGadget {
+		                    DefaultGadget(analytics: analytics)
 		                }
+		                return { _ in __safeDI_later() }
 		            }
-		            func __safeDI_defaultGadget_GadgetBuilder_Inner(_ scope: Inner.SafeDIScope_DefaultGadget_Gadget) -> any Gadget {
-		                switch scope {
-		                case let .later(scope):
-		                    let analytics = scope.analytics
-		                    func __safeDI_later() -> DefaultGadget {
-		                        DefaultGadget(analytics: analytics)
-		                    }
-		                    return __safeDI_later()
+		            @Sendable nonisolated func __safeDI_defaultGadget_GadgetSendableBuilder_Inner_sendableLater() -> SendableErasedInstantiator<(), any Gadget>.Builder {
+		                @Sendable nonisolated func __safeDI_sendableLater() -> DefaultGadget {
+		                    DefaultGadget(analytics: analytics)
 		                }
+		                return { _ in __safeDI_sendableLater() }
 		            }
-		            @Sendable func __safeDI_defaultGadget_GadgetSendableBuilder_Outer(_ scope: Outer.SafeDISendableScope_DefaultGadget_Gadget) -> any Gadget {
-		                switch scope {
-		                case let .inner_Sendable(scope): return __safeDI_defaultGadget_GadgetSendableBuilder_Inner(scope)
-		                }
+		            func __safeDI_defaultGadget_GadgetBuilder_Outer() -> Outer.SafeDIScope_DefaultGadget_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(inner: { _ in __safeDI_defaultGadget_GadgetBuilder_Inner() })
 		            }
-		            @Sendable func __safeDI_defaultGadget_GadgetSendableBuilder_Inner(_ scope: Inner.SafeDISendableScope_DefaultGadget_Gadget) -> any Gadget {
-		                switch scope {
-		                case .sendableLater:
-		                    @Sendable func __safeDI_sendableLater() -> DefaultGadget {
-		                        DefaultGadget(analytics: analytics)
-		                    }
-		                    return __safeDI_sendableLater()
-		                }
+		            func __safeDI_defaultGadget_GadgetBuilder_Inner() -> Inner.SafeDIScope_DefaultGadget_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(later: { values in __safeDI_defaultGadget_GadgetBuilder_Inner_later(analytics: values.analytics) })
 		            }
-		            return Outer(__safeDI_analytics: analytics, __safeDI_defaultGadget_GadgetBuilder: __safeDI_defaultGadget_GadgetBuilder_Outer, __safeDI_defaultGadget_GadgetSendableBuilder: __safeDI_defaultGadget_GadgetSendableBuilder_Outer)
+		            @Sendable nonisolated func __safeDI_defaultGadget_GadgetSendableBuilder_Outer() -> Outer.SafeDISendableScope_DefaultGadget_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(inner_Sendable: { _ in __safeDI_defaultGadget_GadgetSendableBuilder_Inner() })
+		            }
+		            @Sendable nonisolated func __safeDI_defaultGadget_GadgetSendableBuilder_Inner() -> Inner.SafeDISendableScope_DefaultGadget_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(sendableLater: { _ in __safeDI_defaultGadget_GadgetSendableBuilder_Inner_sendableLater() })
+		            }
+		            return Outer(__safeDI_analytics: analytics, __safeDI_defaultGadget_GadgetBuilder: __safeDI_defaultGadget_GadgetBuilder_Outer(), __safeDI_defaultGadget_GadgetSendableBuilder: __safeDI_defaultGadget_GadgetSendableBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
 		        self.init(analytics: analytics, outer: outer)
@@ -2184,13 +2160,26 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		#endif
 
 		extension Outer {
-		    @frozen public enum SafeDIScope_Service {
-		        case inner(Inner.SafeDIScope_Service)
+		    nonisolated public enum SafeDIScope_Service {
+		        nonisolated public struct inner_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let inner: (inner_Values) -> Inner.SafeDIScope_Service.__safeDI_Builder<__safeDI_Built>
+
+		            public init(inner: @escaping (inner_Values) -> Inner.SafeDIScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		                self.inner = inner
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public convenience init(__safeDI_analytics: @autoclosure @escaping () -> Analytics, __safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
+		    public convenience init(__safeDI_analytics: @autoclosure @escaping () -> Analytics, __safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        let navigator = Navigator()
 		        func __safeDI_inner() -> Inner {
@@ -2204,7 +2193,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            func __safeDI_panelBuilder_Inner() -> Inner.SafeDIScope_Panel.__safeDI_Builder<Panel> {
 		                .init(part: { values in __safeDI_panelBuilder_Inner_part(analytics: values.analytics) })
 		            }
-		            return Inner(__safeDI_analytics: analytics.instance, __safeDI_panelBuilder: __safeDI_panelBuilder_Inner(), __safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder(.inner(.service(__safeDI_serviceValues))) }))
+		            return Inner(__safeDI_analytics: analytics.instance, __safeDI_panelBuilder: __safeDI_panelBuilder_Inner(), __safeDI_serviceBuilder: __safeDI_serviceBuilder.inner(SafeDIScope_Service.inner_Values()))
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(navigator: navigator, inner: inner)
@@ -2212,7 +2201,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		}
 
 		extension Outer {
-		    public enum __safeDI_Outer_7764F5DC75EFEEA8 {}
+		    public enum __safeDI_Outer_B50813F8F3669606 {}
 		}
 		"""])
 		try Self.expectCompiles(output)
@@ -2232,15 +2221,10 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Home {
-		    @frozen nonisolated public enum SafeDIScope_LiveGadget_Gadget {
-		        case screenBuilder(screenBuilder_Values, SafeDIScope_LiveGadget_Gadget.Screen_Scope)
-
+		    nonisolated public enum SafeDIScope_LiveGadget_Gadget {
 		        nonisolated public struct screenBuilder_Values {}
 
-		        @frozen nonisolated public enum Screen_Scope {
-		            case panel(panel_Values, String)
-		            indirect case next(next_Values, SafeDIScope_LiveGadget_Gadget.Screen_Scope)
-
+		        nonisolated public enum Screen_Scope {
 		            nonisolated public struct panel_Values {
 		                public let id: Int
 		            }
@@ -2362,15 +2346,10 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Home {
-		    @frozen nonisolated public enum SafeDIScope_LiveGadget_Gadget {
-		        case screenBuilder(screenBuilder_Values, SafeDIScope_LiveGadget_Gadget.Screen_Scope)
-
+		    nonisolated public enum SafeDIScope_LiveGadget_Gadget {
 		        nonisolated public struct screenBuilder_Values {}
 
-		        @frozen nonisolated public enum Screen_Scope {
-		            case panel(panel_Values, String)
-		            indirect case next(next_Values, SafeDIScope_LiveGadget_Gadget.Screen_Scope)
-
+		        nonisolated public enum Screen_Scope {
 		            nonisolated public struct panel_Values {
 		                public let id: Int
 		            }
@@ -2447,27 +2426,34 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		}
 
 		extension Outer {
-		    @frozen public enum SafeDIScope_LiveGadget_Gadget {
-		        case home(Home.SafeDIScope_LiveGadget_Gadget)
+		    nonisolated public enum SafeDIScope_LiveGadget_Gadget {
+		        nonisolated public struct home_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let home: (home_Values) -> Home.SafeDIScope_LiveGadget_Gadget.__safeDI_Builder<__safeDI_Built>
+
+		            public init(home: @escaping (home_Values) -> Home.SafeDIScope_LiveGadget_Gadget.__safeDI_Builder<__safeDI_Built>) {
+		                self.home = home
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                self.home = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public convenience init(liveGadget_GadgetBuilder: @escaping (SafeDIScope_LiveGadget_Gadget) -> any Gadget) {
-		        self.init(__safeDI_liveGadget_GadgetBuilder: liveGadget_GadgetBuilder)
+		    public convenience init(liveGadget_GadgetBuilder: @escaping ErasedInstantiator<String, any Gadget>.Builder) {
+		        self.init(__safeDI_liveGadget_GadgetBuilder: .init(__safeDI_noScope: liveGadget_GadgetBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public convenience init(__safeDI_liveGadget_GadgetBuilder: @escaping (SafeDIScope_LiveGadget_Gadget) -> any Gadget) {
+		    public convenience init(__safeDI_liveGadget_GadgetBuilder: SafeDIScope_LiveGadget_Gadget.__safeDI_Builder<any Gadget>) {
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_DC6A8484651460B6.self
-		            func __safeDI_liveGadget_GadgetBuilder_Home(_ __safeDI_liveGadget_GadgetBuilder_Home_wrap: @escaping (Home.SafeDIScope_LiveGadget_Gadget) -> Home.SafeDIScope_LiveGadget_Gadget) -> Home.SafeDIScope_LiveGadget_Gadget.__safeDI_Builder<any Gadget> {
-		                .init(screenBuilder: { __safeDI_screenBuilderValues in __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope({ __safeDI_liveGadget_GadgetBuilder_Home_wrap(.screenBuilder(__safeDI_screenBuilderValues, $0)) }) })
-		            }
-		            func __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope(_ __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope_wrap: @escaping (Home.SafeDIScope_LiveGadget_Gadget.Screen_Scope) -> Home.SafeDIScope_LiveGadget_Gadget) -> Home.SafeDIScope_LiveGadget_Gadget.Screen_Scope.__safeDI_Builder<any Gadget> {
-		                .init(panel: { __safeDI_panelValues in { forwarded in __safeDI_liveGadget_GadgetBuilder(.home(__safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope_wrap(.panel(__safeDI_panelValues, forwarded)))) } }, next: { _ in __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope(__safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope_wrap) })
-		            }
-		            return Home(__safeDI_liveGadget_GadgetBuilder: __safeDI_liveGadget_GadgetBuilder_Home({ $0 }))
+		            return Home(__safeDI_liveGadget_GadgetBuilder: __safeDI_liveGadget_GadgetBuilder.home(SafeDIScope_LiveGadget_Gadget.home_Values()))
 		        }
 		        let home: Home = __safeDI_home()
 		        self.init(home: home)
@@ -2475,7 +2461,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		}
 
 		extension Outer {
-		    public enum __safeDI_Outer_B6A7D07D647AC717 {}
+		    public enum __safeDI_Outer_DEA6232FE320C465 {}
 		}
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
@@ -2486,29 +2472,23 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_outer() -> Outer {
-		            _ = Outer.__safeDI_Outer_B6A7D07D647AC717.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_liveGadget_GadgetBuilder_Outer(_ scope: Outer.SafeDIScope_LiveGadget_Gadget) -> any Gadget {
-		                switch scope {
-		                case let .home(scope): return __safeDI_liveGadget_GadgetBuilder_Home(scope)
+		            _ = Outer.__safeDI_Outer_DEA6232FE320C465.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_liveGadget_GadgetBuilder_screenBuilder_Home_Screen_Scope_panel(id: Int) -> ErasedInstantiator<String, any Gadget>.Builder {
+		                func __safeDI_panel(title: String) -> LiveGadget {
+		                    LiveGadget(title: title, id: id)
 		                }
+		                return { forwarded in __safeDI_panel(title: forwarded) }
 		            }
-		            func __safeDI_liveGadget_GadgetBuilder_Home(_ scope: Home.SafeDIScope_LiveGadget_Gadget) -> any Gadget {
-		                switch scope {
-		                case let .screenBuilder(_, scope): return __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope(scope)
-		                }
+		            func __safeDI_liveGadget_GadgetBuilder_Outer() -> Outer.SafeDIScope_LiveGadget_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(home: { _ in __safeDI_liveGadget_GadgetBuilder_Home() })
 		            }
-		            func __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope(_ scope: Home.SafeDIScope_LiveGadget_Gadget.Screen_Scope) -> any Gadget {
-		                switch scope {
-		                case let .panel(scope, __safeDI_forwarded):
-		                    let id = scope.id
-		                    func __safeDI_panel(title: String) -> LiveGadget {
-		                        LiveGadget(title: title, id: id)
-		                    }
-		                    return __safeDI_panel(title: __safeDI_forwarded)
-		                case let .next(_, scope): return __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope(scope)
-		                }
+		            func __safeDI_liveGadget_GadgetBuilder_Home() -> Home.SafeDIScope_LiveGadget_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(screenBuilder: { _ in __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope() })
 		            }
-		            return Outer(__safeDI_liveGadget_GadgetBuilder: __safeDI_liveGadget_GadgetBuilder_Outer)
+		            func __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope() -> Home.SafeDIScope_LiveGadget_Gadget.Screen_Scope.__safeDI_Builder<any Gadget> {
+		                .init(panel: { values in __safeDI_liveGadget_GadgetBuilder_screenBuilder_Home_Screen_Scope_panel(id: values.id) }, next: { _ in __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope() })
+		            }
+		            return Outer(__safeDI_liveGadget_GadgetBuilder: __safeDI_liveGadget_GadgetBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
 		        self.init(outer: outer)
@@ -2542,9 +2522,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_BuiltGadget_Gadget {
-		        case built(built_Values, Built)
-
+		    nonisolated public enum SafeDIScope_BuiltGadget_Gadget {
 		        nonisolated public struct built_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2561,9 +2539,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDISendableScope_PairBuiltGadget_Gadget {
-		        case pair((built: Built, count: Int))
-
+		    nonisolated public enum SafeDISendableScope_PairBuiltGadget_Gadget {
 		        nonisolated public struct pair_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2673,9 +2649,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_Built {
-		        case held(held_Values, Built.ForwardedProperties)
-
+		    nonisolated public enum SafeDIScope_Built {
 		        nonisolated public struct held_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2692,9 +2666,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDISendableScope_Built {
-		        case sendableHeld(Built.ForwardedProperties)
-
+		    nonisolated public enum SafeDISendableScope_Built {
 		        nonisolated public struct sendableHeld_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2872,9 +2844,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_ThemedGadget_Gadget {
-		        case panel(panel_Values, String)
-
+		    nonisolated public enum SafeDIScope_ThemedGadget_Gadget {
 		        nonisolated public struct panel_Values {
 		            public let theme: LazilyInstantiated<Theme>
 		        }
@@ -2961,10 +2931,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_EmptyPanel {
-		        case now(now_Values)
-		        case owner(owner_Values, SafeDIScope_EmptyPanel.Owner_Scope)
-
+		    nonisolated public enum SafeDIScope_EmptyPanel {
 		        nonisolated public struct now_Values {
 		            public let analytics: Analytics
 		        }
@@ -2974,9 +2941,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            public let now: EmptyPanel
 		        }
 
-		        @frozen nonisolated public enum Owner_Scope {
-		            case held(held_Values, EmptyPanel.ForwardedProperties)
-
+		        nonisolated public enum Owner_Scope {
 		            nonisolated public struct held_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3010,9 +2975,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDISendableScope_EmptyPanel {
-		        case ownerBuilder(SafeDIScope_EmptyPanel.Owner_Scope)
-
+		    nonisolated public enum SafeDISendableScope_EmptyPanel {
 		        nonisolated public struct ownerBuilder_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3121,11 +3084,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_StringPanel {
-		        case later(later_Values)
-		        case same(same_Values, StringPanel.ForwardedProperties)
-		        case owner(owner_Values, SafeDIScope_StringPanel.Owner_Scope)
-
+		    nonisolated public enum SafeDIScope_StringPanel {
 		        nonisolated public struct later_Values {}
 
 		        nonisolated public struct same_Values {
@@ -3137,9 +3096,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            public let same: ErasedInstantiator<StringPanel.ForwardedProperties, StringPanel>
 		        }
 
-		        @frozen nonisolated public enum Owner_Scope {
-		            case held(held_Values, StringPanel.ForwardedProperties)
-
+		        nonisolated public enum Owner_Scope {
 		            nonisolated public struct held_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3258,10 +3215,8 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_StringPanel {
-		        @frozen nonisolated public enum Owner_Scope {
-		            case held(held_Values, StringPanel.ForwardedProperties)
-
+		    nonisolated public enum SafeDIScope_StringPanel {
+		        nonisolated public enum Owner_Scope {
 		            nonisolated public struct held_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3279,10 +3234,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDISendableScope_StringPanel {
-		        case later
-		        case ownerBuilder(SafeDIScope_StringPanel.Owner_Scope)
-
+		    nonisolated public enum SafeDISendableScope_StringPanel {
 		        nonisolated public struct later_Values: Sendable {}
 
 		        nonisolated public struct ownerBuilder_Values: Sendable {}
@@ -3440,9 +3392,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_PairPanel {
-		        case pair(pair_Values, PairPanel.ForwardedProperties)
-
+		    nonisolated public enum SafeDIScope_PairPanel {
 		        nonisolated public struct pair_Values {
 		            public let analytics: Analytics
 		            public let held: Instantiator<Panel>
@@ -3462,9 +3412,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDIScope_Panel {
-		        case held(held_Values, Panel.ForwardedProperties)
-
+		    nonisolated public enum SafeDIScope_Panel {
 		        nonisolated public struct held_Values {
 		            public let analytics: Analytics
 		        }
@@ -3572,9 +3520,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_MainPanel {
-		        case held(held_Values, MainPanel.ForwardedProperties)
-
+		    nonisolated public enum SafeDIScope_MainPanel {
 		        nonisolated public struct held_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3591,9 +3537,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDISendableScope_MainPanel {
-		        case sendableHeld(MainPanel.ForwardedProperties)
-
+		    nonisolated public enum SafeDISendableScope_MainPanel {
 		        nonisolated public struct sendableHeld_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3701,16 +3645,12 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_Panel {
-		        case owner(owner_Values, SafeDIScope_Panel.Owner_Scope)
-
+		    nonisolated public enum SafeDIScope_Panel {
 		        nonisolated public struct owner_Values {
 		            public let analytics: Analytics
 		        }
 
-		        @frozen nonisolated public enum Owner_Scope {
-		            case held(held_Values, Panel.ForwardedProperties)
-
+		        nonisolated public enum Owner_Scope {
 		            nonisolated public struct held_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3822,9 +3762,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_TokenGadget_Gadget {
-		        case erased(erased_Values, Token)
-
+		    nonisolated public enum SafeDIScope_TokenGadget_Gadget {
 		        nonisolated public struct erased_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.

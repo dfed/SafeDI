@@ -448,9 +448,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		let file = try generatedFile(ofModuleNamed: "Feature", typeName: "Screen", in: output, under: integration)
 		#expect(file == generatedFileHeader + """
 		extension Screen {
-		    @frozen nonisolated public enum SafeDIScope_Service {
-		        case owner(owner_Values, SafeDIScope_Service.ServiceOwner_Scope)
-
+		    nonisolated public enum SafeDIScope_Service {
 		        nonisolated public struct owner_Values {
 		            public let onForward: OnTap
 		            public var config: Config { __safeDI_config.instance }
@@ -462,9 +460,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum ServiceOwner_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum ServiceOwner_Scope {
 		            nonisolated public struct service_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.

@@ -86,14 +86,10 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_NamedGadget_AnyGadget {
-		        case panel(panel_Values, SafeDIScope_NamedGadget_AnyGadget.Panel_Scope)
-
+		    nonisolated public enum SafeDIScope_NamedGadget_AnyGadget {
 		        nonisolated public struct panel_Values {}
 
-		        @frozen nonisolated public enum Panel_Scope {
-		            case maker(maker_Values, Name)
-
+		        nonisolated public enum Panel_Scope {
 		            nonisolated public struct maker_Values {
 		                public let scope: Value
 		            }
