@@ -7790,8 +7790,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let useMockInitializer: Bool
 		/// The type the construction returns: what the user-defined mock method returns (`Instantiable.mockCallReturnType`)
 		/// when `useMockInitializer`, else `concreteType`. Unlike `instantiatedTypeDescription`, it does not depend on the
-		/// property the node builds, so a public mock's construction function, which every node of the type shares, returns
-		/// it (`publicConstructionFunctions`).
+		/// property the node builds, so a public mock's construction function, which every node of the type built this way
+		/// shares, returns it (`publicConstructionFunctions`).
 		let constructionReturnType: TypeDescription
 		/// The custom mock method name (e.g., "customMock"), if any.
 		let customMockName: String?
@@ -7992,6 +7992,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// instance of the same type).
 		let needsConfigurationStruct: Bool
 
+		/// Whether a public mock builds this node with a construction function of its type (`publicConstructionExpression`):
+		/// it needs a configuration, and calls no other module's public mock that takes `safeDIOverrides`.
+		var isBuiltWithPublicConstructionFunction: Bool {
+			needsConfigurationStruct && publicMockCall?.takesOverrides != true
+		}
+
 		/// True when this node must be wrapped in a `__safeDI_<label>()` helper
 		/// function — either because it needs a configuration struct or because
 		/// it has alias children whose bindings must live in a local scope.
@@ -8082,6 +8088,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				childProperties: propertyChildren.map(\.property),
 				defaultParameters: defaultParameters.map { Property(label: $0.label, typeDescription: $0.typeDescription) },
 				builderParameterTypes: builderParameterTypes,
+				builderArgumentLabels: callSiteArguments.map(\.innerLabel),
 			)
 		}
 
@@ -8093,6 +8100,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let defaultParameters: [Property]
 			/// The parameter types of the struct's builder closure, which the node calls with its arguments.
 			let builderParameterTypes: [TypeDescription]
+			/// The labels of the values the node passes the struct's builder closure, in order: two constructions that pass
+			/// two values of one type in other orders would hand one builder each value in the other's place.
+			let builderArgumentLabels: [String]
 		}
 
 		/// The builder closure type using the concrete type for the return.
@@ -8552,6 +8562,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			// The node walked next is the last one on the stack, so the first child goes last.
 			nodesToWalk.append(contentsOf: node.propertyChildren.reversed().map { (node: $0, parent: node.concreteType) })
+		}
+		return result
+	}
+
+	/// For each type this public mock root's tree builds with a construction function of the type
+	/// (`MockParameterNode.isBuiltWithPublicConstructionFunction`), the first node it builds with the type's hand-written
+	/// mock and the first it builds without it, in the order the tree declares them. Unlike
+	/// `collectConfigurationNodesByConstruction`, a node beneath an edge in `cycleEdges` counts: it reads no overrides,
+	/// but it calls its construction's function all the same. A node that closes a cycle (`isPropertyCycle`) does not:
+	/// it calls the builder function of the declaration it repeats, and an ancestor builds that declaration with the
+	/// same construction. `generateMockCode` declares one function per construction the module's public mocks build a type with.
+	func collectPublicConstructionNodes() async -> [MockParameterNode] {
+		let parameterTree = await rootMockParameterTree
+		var seen = Set<ConstructedType>()
+		var result = [MockParameterNode]()
+		// Each node before its children, depth first, with a stack of the nodes left to walk, since a mock tree can be as
+		// deep as the module has types. The node walked next is the last one on the stack, so the first child goes last.
+		var nodesToWalk = [MockParameterNode](parameterTree.propertyNodes.reversed())
+		while let node = nodesToWalk.popLast() {
+			if node.isBuiltWithPublicConstructionFunction,
+			   !node.isPropertyCycle,
+			   seen.insert(ConstructedType(concreteType: node.concreteType, usesMockInitializer: node.useMockInitializer)).inserted
+			{
+				result.append(node)
+			}
+			nodesToWalk.append(contentsOf: node.propertyChildren.reversed())
 		}
 		return result
 	}
@@ -10916,7 +10952,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) -> String {
 		if let publicMockCall = node.publicMockCall, publicMockCall.takesOverrides {
 			node.publicMockCallExpression(arguments: arguments, overridesExpression: overrideExpression, overridesIsSendableClosure: publicMockOverridesIsSendableClosure)
-		} else if publicMock != nil, node.needsConfigurationStruct {
+		} else if publicMock != nil, node.isBuiltWithPublicConstructionFunction {
 			publicConstructionExpression(for: node, overrideExpression: overrideExpression, arguments: arguments)
 		} else {
 			node.constructionExpression(
