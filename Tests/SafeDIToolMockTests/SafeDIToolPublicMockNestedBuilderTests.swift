@@ -6147,12 +6147,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-
-
-
-
-
-
 	/// `App`'s file up to `Screen`'s `mock()`.
 	private static let screenPrelude = """
 	#if canImport(Core)
