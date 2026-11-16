@@ -1423,6 +1423,171 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		}
 	}
 
+	// MARK: Tests – a lazy value on a route, and a mocked type built again in its own tree
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsLazyValueWhenFillReadsIt_whenCallerFillsPlaceBeneathLazilyInstantiatedValues() async throws {
+		// `Page`, a public mock in `Feed`, holds `logger` and `detail` lazily, and `Detail` holds `leaf` lazily, whose `api` is
+		// the place. `Root` fills it with `LiveLogger`, which reads the page's logger: the logger is built when the leaf's
+		// fill reads it, not when the detail opens, and the fill gets the page's own, as in one module.
+		let modules = Self.countedModules(
+			feed: """
+			@Instantiable
+			public final class Leaf: Counted, Instantiable {
+			    init(api: any Api) {
+			        self.api = api
+			    }
+
+			    @Instantiated public let api: any Api
+			}
+
+			@Instantiable
+			public final class Detail: Counted, Instantiable {
+			    init(leaf: LazilyInstantiated<Leaf>) {
+			        self.leaf = leaf
+			    }
+
+			    @Instantiated public let leaf: LazilyInstantiated<Leaf>
+			}
+
+			@Instantiable(generateMock: .public)
+			public final class Page: Counted, Instantiable {
+			    init(navigator: Navigator, logger: LazilyInstantiated<Logger>, detail: LazilyInstantiated<Detail>) {
+			        self.navigator = navigator
+			        self.logger = logger
+			        self.detail = detail
+			    }
+
+			    @Instantiated public let navigator: Navigator
+			    @Instantiated public let logger: LazilyInstantiated<Logger>
+			    @Instantiated public let detail: LazilyInstantiated<Detail>
+			}
+			""",
+			app: [
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [Api.self])
+				public final class LiveLogger: Counted, Instantiable, Api {
+				    public init(logger: Logger) {
+				        self.logger = logger
+				    }
+
+				    @Received public let logger: Logger
+				}
+				""",
+				Self.root(holding: "page: Page"),
+				"""
+				func loggerBuiltWhenLeafReadsIt() -> String {
+				    var note = ""
+				    do {
+				        let page = Root.mock().page
+				        let detail = page.detail.instance
+				        page.navigator.stack.append(detail)
+				        let builtBeforeLeaf = Counted.created["Logger", default: 0]
+				        let leaf = detail.leaf.instance
+				        page.navigator.stack.append(leaf)
+				        note = "loggers built before the leaf \\(builtBeforeLeaf), the leaf’s logger is the page’s \\((leaf.api as? LiveLogger)?.logger === page.logger.instance)"
+				    }
+				    return note + ", alive after: " + Counted.alive.filter { $0.value != 0 }.sorted { $0.key < $1.key }.map { "\\($0.key) \\($0.value)" }.joined(separator: ", ")
+				}
+				""",
+			],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let probe = DifferentialValueProbe("loggerBuiltWhenLeafReadsIt()")
+		let feature = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [probe], filesToDelete: &filesToDelete)
+		let knownRight = try await knownRightDescription(of: modules, keeping: Set(modules.map(\.name)), probeSource: "", probe: probe)
+		if compileVerificationIsEnabled {
+			#expect(knownRight == "probe loggerBuiltWhenLeafReadsIt()\nString \"loggers built before the leaf 0, the leaf’s logger is the page’s true, alive after: \"\n")
+			#expect(feature == knownRight)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_freesWhatKnownRightFrees_whenPublicMockBuildsItselfAgainAndCallerFillsItsPlace() async throws {
+		// `Screen`, a public mock in `Feed`, builds itself again through `screenBuilder` and opens `Leaf`, whose `api` is the
+		// place. `Root` fills it with `LiveCache`, which reads the nearest screen's cache. Each leaf reads its own screen's
+		// cache, everything the probe built is freed when it drops it, and holding only the third screen keeps no other
+		// screen's cache alive, as in one module.
+		let modules = Self.countedModules(
+			feed: """
+			@Instantiable
+			public final class Leaf: Counted, Instantiable {
+			    init(api: any Api) {
+			        self.api = api
+			    }
+
+			    @Instantiated public let api: any Api
+			}
+
+			@Instantiable(generateMock: .public)
+			public final class Screen: Counted, Instantiable {
+			    init(cache: Cache, navigator: Navigator, leafBuilder: Instantiator<Leaf>, screenBuilder: Instantiator<Screen>) {
+			        self.cache = cache
+			        self.navigator = navigator
+			        self.leafBuilder = leafBuilder
+			        self.screenBuilder = screenBuilder
+			    }
+
+			    @Instantiated public let cache: Cache
+			    @Instantiated public let navigator: Navigator
+			    @Instantiated public let leafBuilder: Instantiator<Leaf>
+			    @Instantiated public let screenBuilder: Instantiator<Screen>
+			}
+			""",
+			app: [
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [Api.self])
+				public final class LiveCache: Counted, Instantiable, Api {
+				    public init(cache: Cache) {
+				        self.cache = cache
+				    }
+
+				    @Received public let cache: Cache
+				}
+				""",
+				Self.root(holding: "screen: Screen"),
+				"""
+				func leavesReadTheirScreensCaches() -> String {
+				    var note = ""
+				    do {
+				        let screen1 = Root.mock().screen
+				        let screen2 = screen1.screenBuilder.instantiate()
+				        screen1.navigator.stack.append(screen2)
+				        let screen3 = screen2.screenBuilder.instantiate()
+				        screen2.navigator.stack.append(screen3)
+				        let leaf3 = screen3.leafBuilder.instantiate()
+				        screen1.navigator.stack.append(leaf3)
+				        let leaf2 = screen2.leafBuilder.instantiate()
+				        let leaf1 = screen1.leafBuilder.instantiate()
+				        let caches = [leaf1, leaf2, leaf3].map { ($0.api as? LiveCache)?.cache }
+				        note = "each leaf reads its own screen’s cache \\(caches[0] === screen1.cache && caches[1] === screen2.cache && caches[2] === screen3.cache)"
+				    }
+				    var screen3: Screen?
+				    do {
+				        let screen1 = Root.mock().screen
+				        let screen2 = screen1.screenBuilder.instantiate()
+				        screen3 = screen2.screenBuilder.instantiate()
+				        _ = screen2.leafBuilder.instantiate()
+				    }
+				    let cachesWhileThirdScreenLives = withExtendedLifetime(screen3) { Counted.alive["Cache", default: 0] }
+				    screen3 = nil
+				    return note + ", caches alive while only the third screen is held \\(cachesWhileThirdScreenLives), alive after: " + Counted.alive.filter { $0.value != 0 }.sorted { $0.key < $1.key }.map { "\\($0.key) \\($0.value)" }.joined(separator: ", ")
+				}
+				""",
+			],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let probe = DifferentialValueProbe("leavesReadTheirScreensCaches()")
+		let feature = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [probe], filesToDelete: &filesToDelete)
+		let knownRight = try await knownRightDescription(of: modules, keeping: Set(modules.map(\.name)), probeSource: "", probe: probe)
+		if compileVerificationIsEnabled {
+			#expect(knownRight == "probe leavesReadTheirScreensCaches()\nString \"each leaf reads its own screen’s cache true, caches alive while only the third screen is held 1, alive after: \"\n")
+			#expect(feature == knownRight)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -1668,6 +1833,49 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 				""",
 			]),
 			ModuleFixture(name: "App", packageName: "App", swiftFileContent: app.map { "import Feature\nimport SafeDI\n\n" + $0 }, dependencies: ["Feature"]),
+		]
+	}
+
+	/// `Counted` keeps how many instances of each subclass are alive and were built; `Navigator`, `Logger` and `Cache` count.
+	private static let countedCore = """
+	import SafeDI
+
+	public protocol Api: AnyObject {}
+
+	open class Counted {
+	    public init() {
+	        Counted.alive[String(describing: type(of: self)), default: 0] += 1
+	        Counted.created[String(describing: type(of: self)), default: 0] += 1
+	    }
+
+	    deinit { Counted.alive[String(describing: type(of: self)), default: 0] -= 1 }
+	    nonisolated(unsafe) public static var alive = [String: Int]()
+	    nonisolated(unsafe) public static var created = [String: Int]()
+	}
+
+	@Instantiable
+	public final class Navigator: Counted, Instantiable {
+	    public override init() {}
+	    public var stack = [AnyObject]()
+	}
+
+	@Instantiable
+	public final class Logger: Counted, Instantiable {
+	    public override init() {}
+	}
+
+	@Instantiable
+	public final class Cache: Counted, Instantiable {
+	    public override init() {}
+	}
+	"""
+
+	/// `Core`, holding `countedCore`; `Feed`, holding `feed`; and `App`.
+	private static func countedModules(feed: String, app: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Core", packageName: "Core", swiftFileContent: [countedCore]),
+			ModuleFixture(name: "Feed", packageName: "Feed", swiftFileContent: ["import Core\nimport SafeDI\n\n" + feed], dependencies: ["Core"]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContent: app.map { "import Core\nimport Feed\nimport SafeDI\n\n" + $0 }, dependencies: ["Core", "Feed"]),
 		]
 	}
 
