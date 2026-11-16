@@ -7767,7 +7767,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		if hasOverridableTree {
-			mockParameters.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): SafeDIOverrides = .init()")
+			mockParameters.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
 		}
 
 		// Each `@Sendable` autoclosure parameter is read into a local before every builder function, under a name
@@ -8561,7 +8561,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// `nil` for every other node.
 		func publicMockOverridesMember(sendable: Bool) -> (type: String, defaultValue: String)? {
 			guard let publicMockCall, publicMockCall.takesOverrides else { return nil }
-			let overridesType = "\(concreteType.asSource).SafeDIOverrides"
+			let overridesType = "\(concreteType.asSource).\(ReservedName.mockOverridesTypeName)"
 			return sendable
 				? (type: "(@Sendable () -> \(overridesType))?", defaultValue: "nil")
 				: (type: overridesType, defaultValue: ".init()")
@@ -9904,7 +9904,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		var lines = [String]()
 		lines.append("\(indent)/// Overrides for the mock dependency tree.")
-		lines.append("\(indent)struct SafeDIOverrides {")
+		lines.append("\(indent)struct \(ReservedName.mockOverridesTypeName) {")
 
 		// Generate SafeDIOverrides init with root-level children and onlyIfAvailable entries.
 		let childFields = rootChildren.map { child in
