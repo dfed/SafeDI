@@ -1083,7 +1083,7 @@ extension ScopeGenerator {
 	/// tier is marked for `unreadTypeComment`, when there is one.
 	static func publicMockTiers(
 		of plan: PublicMockPlan,
-		typeName: String,
+		mockedType: TypeDescription,
 		returnType: String,
 		attributesPrefix: String,
 		narrowestBody: [String],
@@ -1139,7 +1139,7 @@ extension ScopeGenerator {
 					}
 					return "\(parameter.name(inTier: narrowerTier).spelledAsArgumentLabel): \(value)"
 				}
-				lines.append("\(bodyIndent)\(typeName).mock(\(arguments.joined(separator: ", ")))")
+				lines.append("\(bodyIndent)\(ConstructionTarget.mock(methodName: InstantiableVisitor.mockMethodName).call(constructing: mockedType, arguments: arguments.joined(separator: ", ")))")
 			}
 			lines.append("\(indent)}")
 			if index < plan.tiers.count - 1 {

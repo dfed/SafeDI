@@ -23,7 +23,7 @@
 /// through it, so the call takes one form wherever the type is built. Two constructions are not: the construction
 /// function a public mock declares in the configured type's extension (`__safeDI_init`, `__safeDI_mock`), a generated
 /// function rather than one of the type's, and the macro's fix-its, which the macro target spells without `Generators/`.
-enum ConstructionTarget: Hashable, Sendable {
+enum ConstructionTarget: Sendable {
 	/// The type's initializer: `T(…)`.
 	case initializer
 	/// An extension-based type's `instantiate(…)`: `T.instantiate(…)`.
@@ -69,13 +69,13 @@ extension TypeDescription {
 }
 
 extension TypeDescription {
-	/// The pattern that a `let` uses to bind, as `name`, a SafeDI wrapper of this type that generated code builds with
-	/// `unwrapped.spelledForConstruction`. It is the bare name when that construction spells this type. Otherwise it is
-	/// the name annotated with this type: an optional wrapper, or one constructed by annotation, whose generic arguments
-	/// only the annotation spells. `isAlwaysAnnotated` annotates it regardless, for production's instantiator of an
-	/// extension-based type.
-	func wrapperBindingPattern(named name: String, isAlwaysAnnotated: Bool = false) -> String {
-		if !isAlwaysAnnotated, asSource == unwrapped.spelledForConstruction {
+	/// The pattern that a `let` of this type uses to bind, as `name`, a SafeDI wrapper that generated code builds with
+	/// `constructedType.spelledForConstruction`. It is the bare name when that construction spells this type. Otherwise
+	/// it is the name annotated with this type: an optional binding of the wrapper, or a wrapper constructed by annotation,
+	/// whose generic arguments only the annotation spells. `isAlwaysAnnotated` annotates it regardless, for production's
+	/// instantiator of an extension-based type.
+	func wrapperBindingPattern(named name: String, constructedAs constructedType: TypeDescription, isAlwaysAnnotated: Bool = false) -> String {
+		if !isAlwaysAnnotated, asSource == constructedType.spelledForConstruction {
 			name
 		} else {
 			"\(name): \(asSource)"
