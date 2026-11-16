@@ -52,6 +52,11 @@ on:
 permissions: {}
 
 jobs:
+  # Not after a pull request's run: GitHub gives a `workflow_run` workflow that
+  # follows one a cache token that cannot write ("cache write denied: token has
+  # no writable scopes"), and `actions/cache/save` only warns, so every such run
+  # was green and saved nothing. A pull request's passes reach other runs through
+  # its artifact instead (.github/actions/restore-shared-compile-checks).
   find:
     name: Find the Run's Passed Compile Checks
     # A workflow of another file that takes one of these names is not one
@@ -59,6 +64,7 @@ jobs:
     if: >-
       ${{
         github.event.workflow_run.head_repository.full_name == github.repository
+        && github.event.workflow_run.event != 'pull_request'
         && (github.event.workflow_run.path == '.github/workflows/ci.yml'
           || github.event.workflow_run.path == '.github/workflows/verify.yml')
       }}
@@ -175,3 +181,14 @@ jobs:
         with:
           path: .shared-compile-check-cache
           key: shared-compile-checks-v1-${{ matrix.os }}-${{ steps.run.outputs.identity }}-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+      # `actions/cache/save` warns and succeeds when the cache refuses the save,
+      # so this looks the saved list up and fails the job when it is not there.
+      - name: Check the Shared Passed Compile Checks Were Saved
+        if: ${{ steps.add.outputs.grew == 'true' }}
+        timeout-minutes: 5
+        uses: actions/cache/restore@v6
+        with:
+          path: .shared-compile-check-cache
+          key: shared-compile-checks-v1-${{ matrix.os }}-${{ steps.run.outputs.identity }}-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          lookup-only: true
+          fail-on-cache-miss: true
