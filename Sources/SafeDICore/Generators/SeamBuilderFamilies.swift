@@ -383,13 +383,17 @@ extension DependencyTreeGenerator {
 		let reservedForBindings = names.taken.union(holesBySite.values.compactMap(\.wrapperFunctionName))
 		let valuesBindingNamesByStem = valuesBindingNames(of: valuesBindingKeysByStem, reservedNames: reservedForBindings)
 		// The names the fills of a call whose fill leads to a place take the scope value the inner seam handed them under, one
-		// per call and builder filled, whatever hole type it leads to, apart from every name above.
-		var innerScopes = [SeamSignature.Hole.RouteStep.InnerScope]()
+		// per call and builder filled, whatever hole type it leads to, apart from every name above; for a seam's builder struct,
+		// one per type of the struct of the fill's own level, each after the label of the builder whose route leads there.
+		var innerScopes = [(innerScope: SeamSignature.Hole.RouteStep.InnerScope, rootBuilderLabel: String)]()
 		for hole in holesBySite.values {
-			innerScopes += hole.enumPlace?.route.compactMap(\.innerScope) ?? []
+			guard let enumPlace = hole.enumPlace else { continue }
+			let rootBuilderLabel = label(of: hole.holeType, isSendable: enumPlace.isBuiltBySendableBuilder)
+			innerScopes += enumPlace.route.compactMap(\.innerScope).map { ($0, rootBuilderLabel) }
 		}
 		for callRoute in callRoutes {
-			innerScopes += callRoute.route.compactMap(\.innerScope)
+			let rootBuilderLabel = label(of: callRoute.rootKey.holeType, isSendable: callRoute.rootKey.isSendable)
+			innerScopes += callRoute.route.compactMap(\.innerScope).map { ($0, rootBuilderLabel) }
 		}
 		// The names the seam's tree binds the structs its member calls return under, one per path and case, after the payloads'
 		// names: `__safeDI_<builder>_<case>`, after the label of the builder whose root enum the route starts at.
@@ -408,7 +412,7 @@ extension DependencyTreeGenerator {
 			return route.map { step in
 				step.named(
 					step.values.flatMap { nameByKey[ValuesBindingKey(path: $0.bindingPath, caseName: step.caseName)] },
-					innerScopeName: step.innerScope.flatMap { innerScopeNames[InnerScopeKey(callPath: $0.callPath, innerKey: $0.innerKey)] },
+					innerScopeName: step.innerScope.flatMap { innerScopeNames[InnerScopeKey(callPath: $0.callPath, innerKey: $0.innerKey, enumType: $0.enumType)] },
 					memberBindingName: step.member.flatMap { memberNameByKey[ValuesBindingKey(path: $0.bindingPath, caseName: step.caseName)] },
 				)
 			}
@@ -490,24 +494,33 @@ extension DependencyTreeGenerator {
 		return ShapedBuilders(holes: orderedHoles, builders: builders, scopeEnums: scopeEnums, builderBySite: builderBySite, callRoutes: callRoutes)
 	}
 
-	/// A call whose fill leads to a place, and the builder filled: what one inner scope's name is per.
+	/// A call whose fill leads to a place, the builder filled, and the type of the scope value it hands: what one inner scope's
+	/// name is per. A public mock hands one inner scope per call and builder, and a seam's builder struct the struct of the
+	/// fill's own level per hole type and family whose places the fill holds.
 	private struct InnerScopeKey: Hashable {
 		let callPath: [Property]
 		let innerKey: SeamSignature.ScopeEnum.Key
+		let enumType: TypeDescription
 	}
 
 	/// The names the fills of each call and builder in `innerScopes` take the scope value the inner seam handed them under:
-	/// `__safeDI_<call>_<builder>`, with `_` appended while a name in
-	/// `reservedNames`, or one of a call on the way to this one, has it. Calls are named shortest path first, then in the
-	/// order of their spelling, so no name depends on the order the routes are met in.
-	private static func innerScopeNames(of innerScopes: [SeamSignature.Hole.RouteStep.InnerScope], reservedNames: Set<String>) -> [InnerScopeKey: String] {
+	/// `__safeDI_<call>_<builder>`, followed, where the call hands the fills of one builder more than one, by `_` and the label
+	/// of the builder whose route leads to each, with `_` appended while a name in `reservedNames`, or one of a call on the way
+	/// to this one, has it. Calls are named shortest path first, then in the order of their spelling, so no name depends on
+	/// the order the routes are met in.
+	private static func innerScopeNames(of innerScopes: [(innerScope: SeamSignature.Hole.RouteStep.InnerScope, rootBuilderLabel: String)], reservedNames: Set<String>) -> [InnerScopeKey: String] {
 		var builderLabelByKey = [InnerScopeKey: String]()
-		for innerScope in innerScopes {
-			let key = InnerScopeKey(callPath: innerScope.callPath, innerKey: innerScope.innerKey)
+		var rootBuilderLabelByKey = [InnerScopeKey: String]()
+		var countByCallAndBuilder = [[Property]: [SeamSignature.ScopeEnum.Key: Set<TypeDescription>]]()
+		for (innerScope, rootBuilderLabel) in innerScopes {
+			let key = InnerScopeKey(callPath: innerScope.callPath, innerKey: innerScope.innerKey, enumType: innerScope.enumType)
 			builderLabelByKey[key] = innerScope.builderLabel
+			// The label that sorts first, so no name depends on the order the routes are met in.
+			rootBuilderLabelByKey[key] = min(rootBuilderLabelByKey[key] ?? rootBuilderLabel, rootBuilderLabel)
+			countByCallAndBuilder[innerScope.callPath, default: [:]][innerScope.innerKey, default: []].insert(innerScope.enumType)
 		}
 		func sortKey(of key: InnerScopeKey) -> String {
-			key.callPath.map(\.asSource).joined(separator: " ") + " " + key.innerKey.spelling
+			key.callPath.map(\.asSource).joined(separator: " ") + " " + key.innerKey.spelling + " " + key.enumType.asSource
 		}
 		// Each key is spelled once, not once for every pair compared.
 		let keyedKeys = builderLabelByKey.keys.map { (key: $0, sortKey: sortKey(of: $0)) }
@@ -526,7 +539,9 @@ extension DependencyTreeGenerator {
 					NamesConsultedInTurn([reservedNames] + (1...key.callPath.count).compactMap { namesByCallPath[Array(key.callPath.prefix($0))] }),
 					by: .namingInnerScopes,
 				)
-				var name = ScopeGenerator.functionName(toBuildPropertyNamed: "\(callProperty.label.spelledWithoutBackticks)_\(builderLabelByKey[key, default: ""])".spelledAsIdentifier)
+				let isOneOfSeveral = (countByCallAndBuilder[key.callPath]?[key.innerKey]?.count ?? 0) > 1
+				let rootBuilderSuffix = isOneOfSeveral ? "_\(rootBuilderLabelByKey[key, default: ""].spelledWithoutBackticks)" : ""
+				var name = ScopeGenerator.functionName(toBuildPropertyNamed: "\(callProperty.label.spelledWithoutBackticks)_\(builderLabelByKey[key, default: ""])\(rootBuilderSuffix)".spelledAsIdentifier)
 				while taken.contains(name) {
 					name = "\(name)_".spelledAsJoinedIdentifier
 				}
@@ -553,9 +568,10 @@ extension DependencyTreeGenerator {
 		return visited
 	}
 
-	/// Whether a seam's builders of a hole type, both families together, take builder structs, its enums being `enums`: when
-	/// no place they reach holds a seam's scope – a call's case, which holds an inner seam's root enum (the seam's own, where
-	/// its tree builds it again), or a case for a builder a call fills. Every other hole type keeps the closure over its enum.
+	/// Whether a seam's builders of a hole type, both families together, take builder structs, its enums being `enums`: every
+	/// seam's do, whatever its places are – a call's case returns an inner seam's struct (the seam's own, where its tree builds
+	/// it again), and a case for a builder a call fills the called seam's struct over the struct of the fill's own level. Only a
+	/// public mock's builders keep the closure over its enum.
 	static func declaresBuilderStructs(of enums: [SeamSignature.ScopeEnum]) -> Bool {
 		enums.allSatisfy { scopeEnum in
 			scopeEnum.cases.allSatisfy { enumCase in
