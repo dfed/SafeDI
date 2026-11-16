@@ -528,10 +528,13 @@ struct ReleaseAcceptanceLongRunConfiguration {
 			problems.append("SAFEDI_RELEASE_ACCEPTANCE_REPORT must name a file in a directory that exists.")
 		}
 		let corpusSeedCount = SafeDIToolGraphFuzzerTests.corpusSeedCount
-		var seeds = UInt64(0)..<UInt64(corpusSeedCount)
+		// Local exploration beyond the corpus: SAFEDI_RELEASE_ACCEPTANCE_START and _COUNT.
+		let explorationStart = environment["SAFEDI_RELEASE_ACCEPTANCE_START"].flatMap { Int($0) } ?? 0
+		let explorationCount = environment["SAFEDI_RELEASE_ACCEPTANCE_COUNT"].flatMap { Int($0) } ?? corpusSeedCount
+		var seeds = UInt64(explorationStart)..<UInt64(explorationStart + explorationCount)
 		if let shardDescription = environment["SAFEDI_RELEASE_ACCEPTANCE_SHARD"] {
 			let parts = shardDescription.split(separator: "/", omittingEmptySubsequences: false).map { Int($0) }
-			if parts.count == 2, let index = parts[0], let count = parts[1], let shard = GraphFuzzerLongRunConfiguration.shard(index, of: count, startingSeed: 0, iterations: corpusSeedCount), shard.iterations > 0 {
+			if parts.count == 2, let index = parts[0], let count = parts[1], let shard = GraphFuzzerLongRunConfiguration.shard(index, of: count, startingSeed: UInt64(explorationStart), iterations: explorationCount), shard.iterations > 0 {
 				seeds = shard.startingSeed..<(shard.startingSeed + UInt64(shard.iterations))
 			} else {
 				problems.append("SAFEDI_RELEASE_ACCEPTANCE_SHARD must be `<index>/<count>` naming a shard with at least one seed.")
