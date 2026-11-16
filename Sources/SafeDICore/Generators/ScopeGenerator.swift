@@ -5430,13 +5430,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							return routePlan.parameters(handing: channels, from: dispatcher).allSatisfy { !$0.isOptional }
 						} else {
 							return (routePlan.parametersByKey[target.key] ?? []).allSatisfy { parameter in
+								// A candidate's every place is filled on every route, so no case finds a value nowhere (`.none`): the
+								// place would be passed up on that route. Were one found, the payload lacks the field in its own form, so
+								// it is judged as a payload that does.
 								switch routePlan.source(of: parameter.channel, in: dispatcherCase, of: dispatcher, valuesName: "") {
-								case .payload:
+								case .payload, .none:
 									dispatcherCase.values?.contains { $0.property == Property(label: parameter.channel.label, typeDescription: parameter.channel.type) } == true
 								case .parameter:
 									true
-								case .none:
-									false
 								}
 							}
 						}
