@@ -20,3 +20,11 @@ declaration, which for a passed-up place is the root's, not the passing-up seam'
 - `f3i`: the same without `generateDependencyTree`, built inline. Generated: `Impl(tag: tag.instance)`.
 - `f3b`: `f3` without `Reader`. Generated: `Impl(tag: tag.instance)`. So the second form of the label inside the seam's tree is what makes the fill pass `nil`. Moving `Impl` into Feature (the visible build) rejects the graph: "receives `tag` in two forms".
 Run: `zsh Scripts/repro-release.sh <dir> Feature App` (or `Scripts/multi-module-repro.sh`) on main 58cbc93.
+
+## F4: SwiftPM and module-info (Bazel/Tuist) mocks differ (seeds 4749, 4867) — documented behavior
+`f4`: four modules. Base: `ChainLeaf` receives `chainToken: ChainToken?` only if available. Core: `ChainBase` builds `ChainLeaf`. Session: `ChainLink` builds `ChainBase`. Feature: `Screen` (`generateMock: true`) builds `ChainLink`. Each module lists only its direct dependency.
+- Module-info flow: `Screen.mock(chainBase: ChainBase, safeDIOverrides:)` with `chainLink: ((ChainBase) -> ChainLink)?`.
+- SwiftPM plugin flow: `Screen.mock(safeDIOverrides:)` builds the whole chain, with nested `SafeDIMockConfiguration`s and `chainToken:`.
+- Neither seam matters: removing `generateDependencyTree` from `ChainBase` or `ChainLink` gives the same difference. Listing Core and Base in Feature's dependencies makes the two flows agree. Passing `--transitive-module-info-file-path` as the Bazel rule does changes nothing, because Feature declares no root or seam.
+- The Manual's "Which modules to list" documents this: "Generated mocks build only the types of the modules a run reads, and take any other type as a `mock()` parameter. Under Bazel, a run reads the modules its module’s trees need, but no others. To have a mock build a type from a module further down, list that module." `bazel/safedi.bzl` says the same. So the fuzzer's integrations oracle lacks an exemption for a mock reaching a module beneath its direct dependencies.
+Run with `ExplorationMultiModuleTests` on branch claude/project-thread-a6wosh: `SAFEDI_EXPLORE_MM_DIRECTORY=f4 SAFEDI_EXPLORE_MM_OUTPUT=out`.
