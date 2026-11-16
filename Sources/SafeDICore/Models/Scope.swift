@@ -851,6 +851,13 @@ private struct ScopeGeneratorUnderConstruction {
 					decidesPerRoute: scope.publicMockCall != nil,
 				)
 			}
+			// A fill a level function calls of an instantiator's place returns the builder its wrapper keeps.
+			for index in fillsOfThisCall.indices where fillsOfThisCall[index].fill.hole.property.propertyType.isAnyInstantiator {
+				let key = fillsOfThisCall[index].fill.key
+				fillsOfThisCall[index].fill.returnsWrapperBuilder = dispatchersOfThisCall.contains { dispatcher in
+					dispatcher.returnsBuilderStruct && dispatcher.cases.contains { $0.target?.key == key }
+				}
+			}
 		}
 		self.fillsOfThisCall = fillsOfThisCall
 		self.dispatchersOfThisCall = dispatchersOfThisCall
@@ -926,6 +933,10 @@ private struct ScopeGeneratorUnderConstruction {
 		/// seam handed it, as the parameter the fill takes it under where its tree builds such a place or a call that passes one
 		/// up (`SeamHoles.innerScope(at:innerKey:)`).
 		var innerScopeParameter: SeamSignature.Hole.Field?
+		/// Whether the fill is a member of a level function, a dispatcher that returns its enum's builder struct, and fills an
+		/// instantiator's place: it then returns the builder the wrapper keeps, which takes the forwarded value itself, rather
+		/// than the value it builds (`ScopeGenerator.fillReturnsWrapperBuilder`).
+		var returnsWrapperBuilder = false
 	}
 
 	/// The parameter a fill of `hole` takes the scope value the seam whose tree holds `hole` handed it under, for the call at
@@ -1241,6 +1252,7 @@ private struct ScopeGeneratorUnderConstruction {
 		guard let calledBuilders = scope.calledBuilders, !holeArguments.isEmpty else { return [] }
 		let filledSites = Self.filledSites(of: holeArguments)
 		let enumsByKey = calledBuilders.enumsByKey
+		let holesBySite = Dictionary(calledBuilders.holes.map { ($0.site, $0) }, uniquingKeysWith: { first, _ in first })
 		// A seam's caller calls the initializer only generated code calls, under its prefixed labels; a public mock's
 		// caller passes each builder by the leaf's argument of its label, and passes up the places its builder's routes
 		// reach that it fills on some route only (`PublicMockCall.sitesPassedUpOnSomeRoute`).
@@ -1264,7 +1276,7 @@ private struct ScopeGeneratorUnderConstruction {
 					return .init(label: label, value: route.map { route in "{ \(route.call(handing: "$0")) }" } ?? "")
 				}
 				guard let route else { return .init(label: label, value: "") }
-				let conversion = ScopeGenerator.builderStructConversion(ofEnumOf: enumKey, enumsByKey: enumsByKey, builtType: builtType, reservedNames: seamHoles.namesBoundForBuilders, names: &names, handing: route.call(handing:))
+				let conversion = ScopeGenerator.builderStructConversion(ofEnumOf: enumKey, enumsByKey: enumsByKey, holesBySite: holesBySite, builtType: builtType, reservedNames: seamHoles.namesBoundForBuilders, names: &names, handing: route.call(handing:))
 				return .init(label: label, value: conversion.value, declarations: conversion.declarations)
 			}
 			// A seam that takes a builder struct is handed the struct its root level's function returns, but where a case of the
@@ -1292,7 +1304,7 @@ private struct ScopeGeneratorUnderConstruction {
 			guard !returnsBuilderStruct else {
 				return .init(label: label, value: "\(dispatcher)()", enclosingFill: enclosingFill, isSendable: enumKey.isSendable)
 			}
-			let conversion = ScopeGenerator.builderStructConversion(ofEnumOf: enumKey, enumsByKey: enumsByKey, builtType: builtType, reservedNames: seamHoles.namesBoundForBuilders.union([dispatcher]), names: &names) { "\(dispatcher)(\($0))" }
+			let conversion = ScopeGenerator.builderStructConversion(ofEnumOf: enumKey, enumsByKey: enumsByKey, holesBySite: holesBySite, builtType: builtType, reservedNames: seamHoles.namesBoundForBuilders.union([dispatcher]), names: &names) { "\(dispatcher)(\($0))" }
 			return .init(label: label, value: conversion.value, declarations: conversion.declarations, enclosingFill: enclosingFill, isSendable: enumKey.isSendable)
 		}
 	}
@@ -1356,6 +1368,7 @@ private struct ScopeGeneratorUnderConstruction {
 			memberCallsInsideFunction: seamHoles.memberCallsInsideFunction(at: sitePath),
 			sendableFunctionsAreNonisolated: seamHoles.declaresBuilderStructs,
 			isBuiltByFill: fill != nil,
+			fillReturnsWrapperBuilder: fill?.returnsWrapperBuilder ?? false,
 			constructsWithHandWrittenMock: buildsWithHandWrittenMocks
 				&& scope.publicMockCall == nil
 				&& scope.instantiable.mockInitializer != nil
@@ -1379,6 +1392,7 @@ private struct ScopeGeneratorUnderConstruction {
 				caseHoles: fill.caseHoles,
 				emitsCode: fill.emitsCode,
 				callerReads: Self.callerReads(of: fill, child: builtGenerator),
+				returnsWrapperBuilder: fill.returnsWrapperBuilder,
 				child: builtGenerator,
 			)
 		} else {
@@ -1568,8 +1582,10 @@ extension Property {
 		      let forwardedArgument = generics?.first
 		else { return true }
 		let modulesNames = ["Swift"] + (builtInstantiable.moduleName.map { [$0] } ?? [])
-		// The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
-		return forwardedArgument == .nested(name: "ForwardedProperties", parentType: builtInstantiable.concreteInstantiable)
+		// The forwarded argument is the same as `InstantiableName.ForwardedProperties`, or names the `ForwardedProperties` of a
+		// type the fulfiller also fulfills: that type's conformance is trusted, as at an `Instantiator` of it. A mock does not
+		// share this (`mockBuildsFirstGeneric(of:)`).
+		return builtInstantiable.instantiableTypes.contains { forwardedArgument == .nested(name: Dependency.forwardedPropertiesType, parentType: $0) }
 			// The forwarded argument is the same as the type the macro generates for `InstantiableName.ForwardedProperties`:
 			// the type of the only `@Forwarded` property, or the tuple of all of them.
 			|| forwardedArgument.withoutSpellingDifferences(qualifiedByModulesNamed: modulesNames, orDeclaringModulesNamed: declaringModuleNames, declaredTypeNames: declaredTypeNames)
@@ -1583,8 +1599,8 @@ extension Property {
 	/// that builds a type with no `@Forwarded` properties.
 	///
 	/// A deliberate gap beside `firstGenericMatchesForwardedProperties(of:)`, which also accepts a tuple whose elements
-	/// are not one bare name: a mock takes a received property of such a tuple as a `mock()` parameter, as it did when
-	/// SafeDI rejected a declaration of that tuple. Building it would remove the parameter that callers of the mock pass,
+	/// are not one bare name, and `X.ForwardedProperties` for any other type `X` the fulfiller fulfills: a mock takes a
+	/// received property of either as a `mock()` parameter, as it did when SafeDI rejected a declaration of it. Building it would remove the parameter that callers of the mock pass,
 	/// and bring the built type's tree into the mock, whose cycles, hidden labels, and access no tree had to pass.
 	func mockBuildsFirstGeneric(of builtInstantiable: Instantiable) -> Bool {
 		let forwardedProperties = builtInstantiable.forwardedProperties

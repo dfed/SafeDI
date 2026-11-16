@@ -180,6 +180,8 @@ public struct Dependency: Codable, Hashable, Sendable {
 	static let sendableLazilyInstantiatedType = "SendableLazilyInstantiated"
 	/// The associated type of `Instantiable` that names what an `Instantiator` of the conforming type forwards.
 	static let forwardedPropertiesType = "ForwardedProperties"
+	/// The function type each instantiator declares, nested in it, that it is created with.
+	static let wrapperBuilderTypeName = "Builder"
 	/// The property of `LazilyInstantiated` and `SendableLazilyInstantiated` that vends the lazily instantiated instance.
 	static let lazilyInstantiatedInstancePropertyName = "instance"
 }
