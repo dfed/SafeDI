@@ -8,6 +8,9 @@ on:
     # Runs at 00:00 UTC every Monday to ensure that CI does not bitrot.
     - cron: '0 0 * * 1'
   pull_request:
+    # `ready_for_review` beside the default three, so that marking a draft
+    # ready starts the run whose jobs use macOS (see `changes`).
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -38,6 +41,7 @@ jobs:
     outputs:
       source: ${{ steps.classify.outputs.source }}
       docc: ${{ steps.classify.outputs.docc }}
+      macos: ${{ steps.classify.outputs.macos }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -51,6 +55,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DRAFT: ${{ github.event.pull_request.draft }}
         run: |
           source=false
           docc=false
@@ -86,7 +91,14 @@ jobs:
           fi
           echo "source=$source" >> "$GITHUB_OUTPUT"
           echo "docc=$docc" >> "$GITHUB_OUTPUT"
-          echo "source=$source docc=$docc"
+          # A draft pull request's run keeps off the macOS runners: see
+          # "Stop on a Draft Pull Request" in the first job that needs one.
+          macos=true
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$DRAFT" = "true" ]; then
+            macos=false
+          fi
+          echo "macos=$macos" >> "$GITHUB_OUTPUT"
+          echo "source=$source docc=$docc macos=$macos"
 
   version-consistency-check:
     name: Version Consistency Check
@@ -277,7 +289,7 @@ jobs:
     name: &xcodebuild-name Build with xcodebuild on Xcode 26 (${{ matrix.platforms }})
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
-    runs-on: macos-26
+    runs-on: ${{ needs.changes.outputs.macos == 'false' && 'ubuntu-latest' || 'macos-26' }}
     strategy:
       matrix: &xcodebuild-matrix
         # Why the non-macOS destinations build with Xcode 26.2 while
@@ -317,6 +329,19 @@ jobs:
     permissions:
       contents: read
     steps:
+      # A draft pull request's run puts this job on a Linux runner, where this
+      # step fails it, so a draft takes no macOS runner, the scarce resource
+      # every pull request and landing queues on, and its checks are red, not
+      # skipped: a skipped job would report success under a name branch
+      # protection requires. Marking the pull request ready starts a run on
+      # macOS. Every step below with an `if:` also asks for a run on macOS,
+      # since `!cancelled()` and `always()` run a step after this one fails.
+      - &stop-on-a-draft
+        name: Stop on a Draft Pull Request
+        if: ${{ needs.changes.outputs.macos == 'false' }}
+        run: |
+          echo "::error::A draft pull request does not run the jobs that need macOS. Mark it ready for review to run them. If it is already ready, this run began while it was a draft, and a re-run keeps that state: read the run that marking it ready started, or push a commit."
+          exit 1
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Select Xcode Version
@@ -347,7 +372,7 @@ jobs:
       # so `kill -0` from the runner user would report EPERM instead of
       # "alive".
       - name: Ensure Platform Is Installed
-        if: ${{ matrix.runtime }}
+        if: ${{ matrix.runtime && needs.changes.outputs.macos != 'false' }}
         env:
           RUNTIME: ${{ matrix.runtime }}
           SDK: ${{ matrix.sdk }}
@@ -410,10 +435,11 @@ jobs:
     # DocC articles under `*.docc/` are Markdown, so this job also runs
     # when only those changed.
     if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || needs.changes.outputs.docc == 'true') }}
-    runs-on: macos-26
+    runs-on: ${{ needs.changes.outputs.macos == 'false' && 'ubuntu-latest' || 'macos-26' }}
     permissions:
       contents: read
     steps:
+      - *stop-on-a-draft
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Select Xcode Version
@@ -455,10 +481,11 @@ jobs:
     name: Build Package Integration on Xcode 26
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
-    runs-on: macos-26
+    runs-on: ${{ needs.changes.outputs.macos == 'false' && 'ubuntu-latest' || 'macos-26' }}
     permissions:
       contents: read
     steps:
+      - *stop-on-a-draft
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Select Xcode Version
@@ -502,12 +529,12 @@ jobs:
             echo "swiftbuild_is_default=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Build Package Integration (swift build, native backend)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' }}
         run: |
           xcrun swift build --build-system native --scratch-path "$RUNNER_TEMP/native-debug" --package-path "Examples/Example Package Integration"
           grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/native-debug/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
       - name: Build Package Integration in release configuration (swift build, native backend)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' }}
         run: |
           xcrun swift build --build-system native -c release -Xswiftc -Onone --scratch-path "$RUNNER_TEMP/native-release" --package-path "Examples/Example Package Integration"
           grep -q "DisabledEventLogger()" "$(find "$RUNNER_TEMP/native-release/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
@@ -519,7 +546,7 @@ jobs:
       # a package's `.when(configuration:)` defines as for a debug build, and
       # only the build settings let SafeDITool wire `DisabledEventLogger`.
       - name: Build Package Integration (xcodebuild)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' }}
         run: |
           log="$RUNNER_TEMP/xcodebuild-debug.log"
           status=0
@@ -532,7 +559,7 @@ jobs:
           [ "$arguments" = expanded ]
           grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/xcodebuild-debug/Build/Intermediates.noindex/BuildToolPluginIntermediates" -path "*/RootModule/SafeDIGenerator/SafeDIOutput/Root+SafeDI.swift")"
       - name: Build Package Integration in release configuration (xcodebuild)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' }}
         run: |
           log="$RUNNER_TEMP/xcodebuild-release.log"
           status=0
@@ -551,7 +578,7 @@ jobs:
       # Manual documents.
       - name: Prepare Package Integration without the DEBUG define
         id: prepare
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' }}
         run: |
           copy="$RUNNER_TEMP/PackageIntegrationWithoutDebugDefine"
           rm -rf "$copy"
@@ -567,7 +594,7 @@ jobs:
             exit 1
           fi
       - name: Build Package Integration without the DEBUG define (swift build, native backend, expects the assertion)
-        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' && needs.changes.outputs.macos != 'false' }}
         run: |
           log="$RUNNER_TEMP/native-without-define.log"
           if xcrun swift build --build-system native -v --scratch-path "$RUNNER_TEMP/native-without-define" --package-path "$RUNNER_TEMP/PackageIntegrationWithoutDebugDefine" > "$log" 2>&1; then
@@ -587,7 +614,7 @@ jobs:
       # the arguments too, so the expectations hold whichever binary ran, and
       # the report names it.
       - name: Build Package Integration without the DEBUG define (swift build, Swift Build backend)
-        if: ${{ !cancelled() && steps.prepare.outcome == 'success' && steps.backends.outputs.swiftbuild == 'true' }}
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' && steps.backends.outputs.swiftbuild == 'true' && needs.changes.outputs.macos != 'false' }}
         env:
           SWIFTBUILD_IS_DEFAULT: ${{ steps.backends.outputs.swiftbuild_is_default }}
         run: |
@@ -613,7 +640,7 @@ jobs:
               ;;
           esac
       - name: Build Package Integration without the DEBUG define in release configuration (swift build, Swift Build backend)
-        if: ${{ !cancelled() && steps.prepare.outcome == 'success' && steps.backends.outputs.swiftbuild == 'true' }}
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' && steps.backends.outputs.swiftbuild == 'true' && needs.changes.outputs.macos != 'false' }}
         env:
           SWIFTBUILD_IS_DEFAULT: ${{ steps.backends.outputs.swiftbuild_is_default }}
         run: |
@@ -632,10 +659,11 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     # Pinned to 26.4 — project file declares package traits.
-    runs-on: macos-26
+    runs-on: ${{ needs.changes.outputs.macos == 'false' && 'ubuntu-latest' || 'macos-26' }}
     permissions:
       contents: read
     steps:
+      - *stop-on-a-draft
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Select Xcode Version
@@ -670,10 +698,11 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     # Pinned to 26.4 — project file declares package traits.
-    runs-on: macos-26
+    runs-on: ${{ needs.changes.outputs.macos == 'false' && 'ubuntu-latest' || 'macos-26' }}
     permissions:
       contents: read
     steps:
+      - *stop-on-a-draft
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Select Xcode Version
@@ -689,7 +718,7 @@ jobs:
     name: Build Tuist Integration on Xcode 26
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
-    runs-on: macos-26
+    runs-on: ${{ needs.changes.outputs.macos == 'false' && 'ubuntu-latest' || 'macos-26' }}
     permissions:
       contents: read
     # Required so mise / tuist install don't hit anonymous GitHub API
@@ -697,6 +726,7 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - *stop-on-a-draft
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Select Xcode Version
@@ -752,7 +782,7 @@ jobs:
     # with it: Xcode's Swift 6.2 and Linux's have disagreed about the same
     # code (#525; CLAUDE.md's rule on an actor's `lazy var`). It also
     # uploads the `macos` coverage flag that codecov.yml waits for.
-    runs-on: macos-26
+    runs-on: ${{ needs.changes.outputs.macos == 'false' && 'ubuntu-latest' || 'macos-26' }}
     permissions:
       contents: read
     env:
@@ -760,6 +790,7 @@ jobs:
       # identity below hashes too.
       SWIFT_TEST_ARGUMENTS: -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
     steps:
+      - *stop-on-a-draft
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Select Xcode Version
@@ -868,13 +899,13 @@ jobs:
           # shellcheck disable=SC2086 # The arguments are words to split.
           xcrun swift test $SWIFT_TEST_ARGUMENTS
       - name: Save Passed Compile Checks
-        if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' && needs.changes.outputs.macos != 'false' }}
         uses: actions/cache/save@v6
         with:
           path: .compile-check-cache
           key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Upload Passed Compile Checks to Share
-        if: ${{ always() }}
+        if: ${{ always() && needs.changes.outputs.macos != 'false' }}
         continue-on-error: true
         uses: ./.github/actions/upload-passed-compile-checks
         with:
@@ -906,7 +937,7 @@ jobs:
       - name: Remove the Staged Coverage Report
         run: rm -r line-coverage
       - name: Upload Coverage Reports
-        if: success()
+        if: ${{ success() && needs.changes.outputs.macos != 'false' }}
         uses: codecov/codecov-action@v7
         with:
           fail_ci_if_error: true
@@ -1440,6 +1471,8 @@ jobs:
       # suites a change selects and which lines of a run it reports.
       - name: Check the Touched Suites Script Against Its Fixtures
         run: python3 -I .claude/skills/verify-touched/verify-touched.py --self-test
+      - name: Check the Restack Script Against Its Fixtures
+        run: python3 -I .claude/skills/restack-lane/restack-lane.py --self-test
       # The check is the only thing between an unexecuted line and main, so
       # its script proves on fixtures that it unions the platforms, resolves
       # symbolic links and refuses missing data before it reads the reports.
@@ -1640,10 +1673,11 @@ jobs:
     #
     # Pinned to Xcode 26.0 — matches BCR's `macos_arm64` runner
     # platform defined at https://github.com/bazelbuild/continuous-integration/blob/master/buildkite/bazelci.py
-    runs-on: macos-26
+    runs-on: ${{ needs.changes.outputs.macos == 'false' && 'ubuntu-latest' || 'macos-26' }}
     permissions:
       contents: read
     steps:
+      - *stop-on-a-draft
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Select Xcode Version
