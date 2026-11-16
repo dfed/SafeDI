@@ -1327,35 +1327,35 @@ struct SafeDIToolMockConstructionIsolationTests: ~Copyable {
 	/// The public mock of `Service`, whose `construction` is on the main actor, as its module generates it.
 	private static func serviceMockFile(construction: String) -> String {
 		generatedFileHeader + """
-	#if DEBUG
-	extension Service {
-	    @usableFromInline @MainActor static func __safeDI_publicMockDefault_name() -> String? { Defaults.name }
+		#if DEBUG
+		extension Service {
+		    @usableFromInline @MainActor static func __safeDI_publicMockDefault_name() -> String? { Defaults.name }
 
-	    /// Overrides for the mock dependency tree.
-	    nonisolated public struct SafeDIOverrides {
-	        public init(
-	            child: (() -> Child)? = nil
-	        ) {
-	            self.child = child
-	        }
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            child: (() -> Child)? = nil
+		        ) {
+		            self.child = child
+		        }
 
-	        public let child: (() -> Child)?
-	    }
+		        public let child: (() -> Child)?
+		    }
 
-	    @MainActor public static func mock(
-	        name: String? = Service.__safeDI_publicMockDefault_name(),
-	        safeDIOverrides: SafeDIOverrides = .init()
-	    ) -> Service {
-	        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder() } else { Child() }
-	        return \(construction)
-	    }
-	}
+		    @MainActor public static func mock(
+		        name: String? = Service.__safeDI_publicMockDefault_name(),
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Service {
+		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder() } else { Child() }
+		        return \(construction)
+		    }
+		}
 
-	extension Service {
-	    public enum __safeDI_Service_mock_ECE674C8C1745A31 {}
-	}
-	#endif
-	"""
+		extension Service {
+		    public enum __safeDI_Service_mock_ECE674C8C1745A31 {}
+		}
+		#endif
+		"""
 	}
 
 	private static func serviceFiles(integration: MultiModuleIntegration, construction: String) -> [String: String] {
