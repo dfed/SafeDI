@@ -7445,9 +7445,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		/// A builder the internal mock of a type that generates its dependency tree takes for one hole type: a closure that
 		/// takes nothing, which the builder function of each type that instantiates a place of it calls once per build, as the
-		/// type's own tree calls the builder its initializer takes. It differs from that initializer's parameter where the
-		/// initializer keeps the closure over the hole type's scope enum: the mock builds every seam inline, so it hands no
-		/// scope on.
+		/// type's own tree calls the builder its initializer takes. The mock builds every seam inline, so it hands no struct
+		/// on.
 		struct SeamMockBuilder {
 			/// The parameter's label.
 			let label: String
@@ -7457,9 +7456,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			/// The uncovered dependencies the builder builds, which `mock()` takes no parameter for.
 			let places: [UncoveredParameter]
 
-			/// The parameter's type: a closure that takes nothing and returns what the builder builds.
+			/// The parameter's type, the type a seam's builder of these places takes from a person
+			/// (`DependencyTreeGenerator.builderForm(ofPlaces:)`): a closure that takes nothing and returns what the builder
+			/// builds, or, where every place is an erased instantiator, that wrapper's `Builder`.
 			var parameterType: TypeDescription {
-				TypeDescription.closure(arguments: [], isAsync: false, doesThrow: false, returnType: holeType.builtType).asFunctionParameter
+				let wrapperTypes = places.map(\.property.typeDescription.unwrapped.strippingEscaping)
+				let form: DependencyTreeGenerator.BuilderForm = if let wrapperType = wrapperTypes.first, places.allSatisfy({ $0.property.propertyType.isAnyInstantiator }) {
+					Set(wrapperTypes.map(\.asSource)).count == 1 ? .wrapper(wrapperType) : .erased(forwarded: .void(.tuple))
+				} else {
+					.value
+				}
+				return DependencyTreeGenerator.readableBuilderType(of: form, returning: holeType.builtType, isSendable: false)
 			}
 		}
 
