@@ -497,7 +497,8 @@ struct GraphFuzzerLevelFunctionCaptureTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func captures_findNothing_inToolsOutputWhenRouteBindsPropertiesLabeledValuesAndScope() async throws {
 		// `Home` binds `values` before `detailBuilder`, and `Detail` binds `scope` before `leafBuilder`; `LiveApi` reads both,
-		// so the level functions take parameters of those labels beside the member closures' own.
+		// so the level functions take parameters of those labels, the member closures name theirs `values_` and `scope_`,
+		// and the fill is a fill function, `(_ scope_:, values:, scope:)`, which reads only its other parameters.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.featureAndApp(
 			feature: [
 				"public protocol Api: AnyObject {}",
