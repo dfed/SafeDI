@@ -3258,6 +3258,136 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_convertsOnlyBuilderThatReachesErasedInstantiator_whenCallerFillsEveryPlaceOfTwoBuilders() async throws {
+		// `App` sees `LiveGadget` and `LiveApi` and fills every place of both of `Panel`'s builders. The place of `Gadget` is
+		// held in an erased instantiator, so its builder's call converts the closure over the enum its dispatcher switches
+		// over; the place of `Api` is plain, so its builder is handed its level function's struct. Each `instantiate()` of
+		// the erased instantiator builds one `LiveGadget`. `Panel`'s initializer is internal, so `App` calls its public mock,
+		// whose overrides configure `logger`, so no override closure takes either builder.
+		let modules = [
+			ModuleFixture(name: "Feed", packageName: "Feed", swiftFileContent: [
+				"""
+				import SafeDI
+
+				public protocol Gadget {}
+				public struct AnyGadget: Gadget {
+				    public init(_ gadget: any Gadget) {}
+				}
+
+				public protocol Api {}
+
+				@Instantiable
+				public struct Logger: Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: .public)
+				public struct Panel: Instantiable {
+				    init(gadgetBuilder: ErasedInstantiator<(), AnyGadget>, api: any Api, logger: Logger) {
+				        self.gadgetBuilder = gadgetBuilder
+				        self.api = api
+				        self.logger = logger
+				    }
+
+				    @Instantiated(fulfilledByType: "LiveGadget", erasedToConcreteExistential: true) public let gadgetBuilder: ErasedInstantiator<(), AnyGadget>
+				    @Instantiated public let api: any Api
+				    @Instantiated let logger: Logger
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+				"""
+				import Feed
+				import SafeDI
+
+				@Instantiable
+				public final class LiveGadget: Gadget, Instantiable {
+				    public init() { LiveGadget.made += 1 }
+				    nonisolated(unsafe) public static var made = 0
+				}
+
+				@Instantiable(fulfillingAdditionalTypes: [Api.self])
+				public final class LiveApi: Api, Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(panel: Panel) {
+				        self.panel = panel
+				    }
+
+				    @Instantiated let panel: Panel
+				}
+
+				func gadgetsEachInstantiateBuilds() -> String {
+				    let panel = Screen.mock().panel
+				    let before = LiveGadget.made
+				    _ = panel.gadgetBuilder.instantiate()
+				    _ = panel.gadgetBuilder.instantiate()
+				    return "LiveGadget \\(before), then \\(LiveGadget.made)"
+				}
+				""",
+			], dependencies: ["Feed"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feed)
+		import Feed
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            panel: Panel.SafeDIOverrides = .init()
+		        ) {
+		            self.panel = panel
+		        }
+
+		        let panel: Panel.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_panel() -> Panel {
+		            func __safeDI_apiBuilder_Panel() -> Panel.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(api: { _ in
+		                    let api: any Api = LiveApi()
+		                    return api
+		                })
+		            }
+		            func __safeDI_liveGadget_AnyGadgetBuilder_Panel(_ scope: Panel.SafeDIMockScope_LiveGadget_AnyGadget) -> AnyGadget {
+		                switch scope {
+		                case .gadgetBuilder:
+		                    func __safeDI_gadgetBuilder() -> LiveGadget {
+		                        LiveGadget()
+		                    }
+		                    return AnyGadget(__safeDI_gadgetBuilder())
+		                }
+		            }
+		            _ = Panel.__safeDI_Panel_mock_EF014F3E7845DA5D.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Panel.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Panel(), liveGadget_AnyGadgetBuilder: .init(gadgetBuilder: { __safeDI_gadgetBuilderValues in { _ in __safeDI_liveGadget_AnyGadgetBuilder_Panel(.gadgetBuilder(__safeDI_gadgetBuilderValues)) } }), safeDIOverrides: safeDIOverrides.panel)
+		        }
+		        let panel: Panel = __safeDI_panel()
+		        return Screen(panel: panel)
+		    }
+		}
+		#endif
+		"""])
+		let description = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("gadgetsEachInstantiateBuilds()")], filesToDelete: &filesToDelete)
+		if compileVerificationIsEnabled {
+			#expect(description == "probe gadgetsEachInstantiateBuilds()\nString \"LiveGadget 0, then 2\"\n")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesErasedInstantiatorsBuilder_whenEveryPlaceOfHoleTypeIsErasedInstantiatorThatForwardsNothing() async throws {
 		// An erased instantiator of `()` forwards nothing, so its places take the builder struct; every place is one, so
 		// `mock()` takes the builder a seam's readable initializer takes for them, the erased instantiator's `Builder`.
