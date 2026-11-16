@@ -9240,26 +9240,43 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// nor already given to an earlier entry. `entriesKeepingTheirNames` are not named: they list
 	/// their suffix types only so that an entry is named apart from them as from a sibling, and
 	/// list as many as each entry.
+	///
+	/// - Parameter step: The step whose work the naming counts as (`GenerationWork`), or `nil` where it is not counted: the
+	///   callers that name builder functions and a mock's parameters as code is emitted, which no test of the work measures.
 	static func identifierSafeNames(
 		for entries: [(label: String, suffixTypes: [TypeDescription])],
 		besideEntriesKeepingTheirNames entriesKeepingTheirNames: [(label: String, suffixTypes: [TypeDescription])] = [],
 		reservedNames: Set<String>,
+		countingWorkAs step: GenerationWork.Step? = nil,
 	) -> [String] {
 		let suffixesPerEntry = entries.map { $0.suffixTypes.map(\.asIdentifier) }
-		let suffixesPerEntryKeepingItsName = entriesKeepingTheirNames.map { $0.suffixTypes.map(\.asIdentifier) }
+		// How many entries share each label and suffix at each position, and the suffixes of the entries keeping their
+		// names, found once for every entry to look up: scanning every entry for every entry grew with the square of the
+		// entries, which a seam with a place at thousands of sites has.
+		var entryCounts = [LabeledSuffix: Int]()
+		for (entry, suffixes) in zip(entries, suffixesPerEntry) {
+			for (position, suffix) in suffixes.enumerated() {
+				entryCounts[LabeledSuffix(label: entry.label, position: position, suffix: suffix), default: 0] += 1
+			}
+		}
+		var suffixesKeepingTheirNames = Set<LabeledSuffix>()
+		for entry in entriesKeepingTheirNames {
+			for (position, suffixType) in entry.suffixTypes.enumerated() {
+				suffixesKeepingTheirNames.insert(LabeledSuffix(label: entry.label, position: position, suffix: suffixType.asIdentifier))
+			}
+		}
+		GenerationWork.record(suffixesPerEntry.joined().count + entriesKeepingTheirNames.map(\.suffixTypes.count).reduce(0, +), by: step)
+		let sharedEntryCounts = GenerationWork.Shared(entryCounts)
+		let sharedSuffixesKeepingTheirNames = GenerationWork.Shared(suffixesKeepingTheirNames)
 		var takenNames = reservedNames
 		return entries.indices.map { index in
 			let suffixes = suffixesPerEntry[index]
 			let suffix = suffixes.indices.first { position in
-				!entries.indices.contains { otherIndex in
-					otherIndex != index
-						&& entries[otherIndex].label == entries[index].label
-						&& suffixesPerEntry[otherIndex][position] == suffixes[position]
-				}
-					&& !entriesKeepingTheirNames.indices.contains { otherIndex in
-						entriesKeepingTheirNames[otherIndex].label == entries[index].label
-							&& suffixesPerEntryKeepingItsName[otherIndex][position] == suffixes[position]
-					}
+				let entryCountBySuffix = GenerationWork.taking(sharedEntryCounts, by: step)
+				let suffixesOfEntriesKeepingTheirNames = GenerationWork.taking(sharedSuffixesKeepingTheirNames, by: step)
+				let labeledSuffix = LabeledSuffix(label: entries[index].label, position: position, suffix: suffixes[position])
+				// The entry itself is the one entry with its label and suffix at this position.
+				return entryCountBySuffix[labeledSuffix, default: 0] == 1 && !suffixesOfEntriesKeepingTheirNames.contains(labeledSuffix)
 			}.map { suffixes[$0] } ?? suffixes[suffixes.count - 1]
 			var name = "\(entries[index].label)_\(suffix)".spelledAsJoinedIdentifier
 			while takenNames.contains(name) {
@@ -9268,6 +9285,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			takenNames.insert(name)
 			return name
 		}
+	}
+
+	/// A suffix an entry of `identifierSafeNames(for:besideEntriesKeepingTheirNames:reservedNames:countingWorkAs:)` could be
+	/// named with: its label, the suffix type's position among the entry's, and that type's `asIdentifier`.
+	private struct LabeledSuffix: Hashable {
+		let label: String
+		let position: Int
+		let suffix: String
 	}
 
 	/// Collects all unique types from the `MockParameterNode` tree, deduplicated

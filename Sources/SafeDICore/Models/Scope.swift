@@ -555,6 +555,7 @@ private struct ScopeGeneratorUnderConstruction {
 		seamHoles: SeamHoles,
 		sitePath: [Property],
 		enclosingFills: [String: String] = [:],
+		enclosingFillNames: GenerationWork.Shared<Set<String>> = .init([]),
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
 		startsCodeGeneration: Bool,
@@ -749,6 +750,7 @@ private struct ScopeGeneratorUnderConstruction {
 		// call inside a fill of a seam that holds the fill's site, or that passes the site's builder up, passes that fill
 		// by name, so every instance of the seam calls the same fills with its own scopes.
 		self.enclosingFills = enclosingFills
+		self.enclosingFillNames = enclosingFillNames
 		holeArguments = isPropertyCycle ? [] : scope.holeArguments
 		// The call's own fills are those no enclosing call fills, and its own dispatchers those no enclosing call declares. One
 		// pass names both, fills first, then dispatchers, apart from what encloses the call: the
@@ -764,7 +766,13 @@ private struct ScopeGeneratorUnderConstruction {
 		}
 		if !holeArguments.isEmpty {
 			let callPath = self.sitePath
-			var names = GeneratedNameAllocator(reserving: Set(enclosingFills.values).union(seamHoles.namesBoundForBuilders))
+			// The names are asked of each set in turn, never of their union: a union made for every call holds every name the
+			// seam whose tree holds the calls binds, so a seam's tree that calls another seam at every place grew with its
+			// square.
+			var names = GeneratedNameAllocator(reserving: GenerationWork.taking(
+				NamesConsultedInTurn([GenerationWork.taking(enclosingFillNames, by: .reservingNamesOfACall), seamHoles.namesBoundForBuilders]),
+				by: .reservingNamesOfACall,
+			))
 			defer { namesOfThisCall = names }
 			var fillNames = enclosingFills
 			// Every other place of a case nested by type is filled by one function, the first place's: it can read whatever
@@ -856,6 +864,26 @@ private struct ScopeGeneratorUnderConstruction {
 		self.dispatchersOfThisCall = dispatchersOfThisCall
 		self.namesOfThisCall = namesOfThisCall
 		self.builderKeysDispatchedOverTheEnum = builderKeysDispatchedOverTheEnum
+		// Gathered once for the call, not once for each of its fills, each of which is handed all of them: gathered for each
+		// fill, a call's fills grew with the square of the places of the seam it calls.
+		var enclosingFillsOfThisCall = enclosingFills
+		if !holeArguments.isEmpty {
+			for (fill, _) in fillsOfThisCall {
+				enclosingFillsOfThisCall[fill.key] = fill.functionName
+			}
+			for dispatcher in dispatchersOfThisCall {
+				enclosingFillsOfThisCall[dispatcher.key] = dispatcher.functionName
+			}
+			GenerationWork.record(enclosingFillsOfThisCall.count, by: .gatheringFillsOfACall)
+		}
+		self.enclosingFillsOfThisCall = GenerationWork.Shared(enclosingFillsOfThisCall)
+		// The names of those fills, which a call inside one of them avoids, gathered once for the call's fills to share.
+		if fillsOfThisCall.isEmpty {
+			enclosingFillNamesOfThisCall = enclosingFillNames
+		} else {
+			enclosingFillNamesOfThisCall = GenerationWork.Shared(Set(enclosingFillsOfThisCall.values))
+			GenerationWork.record(enclosingFillsOfThisCall.count, by: .gatheringFillsOfACall)
+		}
 		childGenerators.reserveCapacity(propertiesToGenerate.count + fillsOfThisCall.count)
 	}
 
@@ -1001,7 +1029,8 @@ private struct ScopeGeneratorUnderConstruction {
 			seamRoot: nil,
 			seamHoles: seamHoles,
 			sitePath: sitePath + hole.pathBeforePropertyInItsFill,
-			enclosingFills: enclosingFillsOfThisCall,
+			enclosingFills: GenerationWork.taking(enclosingFillsOfThisCall, by: .gatheringFillsOfACall),
+			enclosingFillNames: enclosingFillNamesOfThisCall,
 			erasedToConcreteExistential: hole.erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
 			startsCodeGeneration: startsCodeGeneration,
@@ -1060,6 +1089,7 @@ private struct ScopeGeneratorUnderConstruction {
 			seamHoles: seamHoles,
 			sitePath: sitePath,
 			enclosingFills: enclosingFills,
+			enclosingFillNames: enclosingFillNames,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
 			startsCodeGeneration: startsCodeGeneration,
@@ -1103,18 +1133,6 @@ private struct ScopeGeneratorUnderConstruction {
 		      previousPassChildren.indices.contains(childGenerators.count)
 		else { return nil }
 		return previousPassChildren[childGenerators.count]
-	}
-
-	/// The fills inside one of this scope's fills can refer to: those of enclosing calls, and every fill of this call.
-	private var enclosingFillsOfThisCall: [String: String] {
-		var fills = enclosingFills
-		for (fill, _) in fillsOfThisCall {
-			fills[fill.key] = fill.functionName
-		}
-		for dispatcher in dispatchersOfThisCall {
-			fills[dispatcher.key] = dispatcher.functionName
-		}
-		return fills
 	}
 
 	/// Creates the generator of an alias this scope declares.
@@ -1301,7 +1319,7 @@ private struct ScopeGeneratorUnderConstruction {
 	/// its code, or adds it to `generatorsToStart` when that is not `nil`.
 	func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [ScopeGenerator]?) -> ScopeGenerator {
 		// Every fill this call passes is an enclosing call's or its own.
-		let fillNames = holeArguments.isEmpty ? [:] : enclosingFillsOfThisCall
+		let fillNames = holeArguments.isEmpty ? [:] : GenerationWork.taking(enclosingFillsOfThisCall, by: .gatheringFillsOfACall)
 		let builtGenerator = ScopeGenerator(
 			instantiable: scope.instantiable,
 			property: property,
@@ -1366,7 +1384,7 @@ private struct ScopeGeneratorUnderConstruction {
 			callSiteLazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties,
 			reboundProperties: reboundProperties,
 			previousPassReceivedBuilderLoops: previousPassGenerator?.receivedBuilderLoops,
-			namesBoundBySeam: seamHoles.namesBoundForBuilders.union(seamHoles.namesBoundForDeferredParameters),
+			namesBoundBySeam: GenerationWork.taking(seamHoles.namesBoundBySeam, by: .joiningNamesBoundBySeam),
 			placeHoldingProperties: placeHoldingPropertiesByType.map { $0[scope.instantiable.concreteInstantiable] ?? [] },
 		)
 		let scopeGenerator = if let fill {
@@ -1396,8 +1414,18 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// Kicks off the generation of `scopeGenerator`'s code, which a later request for the code reads from its cache.
 	static func startCodeGeneration(of scopeGenerator: ScopeGenerator) {
-		_ = Task.detached {
-			try await scopeGenerator.generateCode()
+		// A detached task inherits no task-local, so the work observer of the task that starts the code is handed on: the
+		// code a later request reads from the cache then counts its work whichever task asks for it first.
+		if let observer = GenerationWork.observer {
+			_ = Task.detached {
+				try await GenerationWork.$observer.withValue(observer) {
+					try await scopeGenerator.generateCode()
+				}
+			}
+		} else {
+			_ = Task.detached {
+				try await scopeGenerator.generateCode()
+			}
 		}
 	}
 
@@ -1486,6 +1514,13 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The fills enclosing this scope, by `ScopeGenerator.fillKey(of:)`, each with its function's name, which a call
 	/// inside them of a seam that holds or passes up their site passes by name.
 	private let enclosingFills: [String: String]
+	/// The function names of `enclosingFills`, which this scope's seam call names its fills and dispatchers apart from.
+	private let enclosingFillNames: GenerationWork.Shared<Set<String>>
+	/// The fills inside one of this scope's fills can refer to: those of enclosing calls, and every fill and dispatcher of
+	/// this call, shared by each of its fills.
+	private let enclosingFillsOfThisCall: GenerationWork.Shared<[String: String]>
+	/// The function names of `enclosingFillsOfThisCall`, shared by each of this call's fills.
+	private let enclosingFillNamesOfThisCall: GenerationWork.Shared<Set<String>>
 	/// The index in `fillsOfThisCall` of the next fill to create a generator for.
 	private var nextFillIndex = 0
 	private let erasedToConcreteExistential: Bool
@@ -1625,6 +1660,7 @@ struct SeamHoles {
 		namesBoundForBuilders = []
 		namesBoundForDeferredParameters = []
 		declaresBuilderStructs = false
+		namesBoundBySeam = GenerationWork.Shared([])
 	}
 
 	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = []) {
@@ -1703,6 +1739,8 @@ struct SeamHoles {
 		self.valuesBindingsByPath = valuesBindingsByPath
 		self.namesBoundForBuilders = namesBoundForBuilders
 		namesBoundForDeferredParameters = Set(parameters.filter(\.isDeferred).map(\.internalName))
+		namesBoundBySeam = GenerationWork.Shared(namesBoundForBuilders.union(namesBoundForDeferredParameters))
+		GenerationWork.record(namesBoundForBuilders.count + namesBoundForDeferredParameters.count, by: .joiningNamesBoundBySeam)
 	}
 
 	/// The arguments of a payload struct's initializer that the seam's tree calls with `fields`, each read as the tree's
@@ -1799,6 +1837,9 @@ struct SeamHoles {
 	/// Whether a builder of the seam takes a builder struct, so its tree spells every `@Sendable` local function it declares
 	/// `@Sendable nonisolated`, as a builder struct's `@Sendable` member is called at the top of one.
 	let declaresBuilderStructs: Bool
+	/// `namesBoundForBuilders` and `namesBoundForDeferredParameters`, joined once for every scope of the tree to share: the
+	/// payloads' names grow with the tree, so a join for each scope grew with the square of the tree.
+	let namesBoundBySeam: GenerationWork.Shared<Set<String>>
 
 	/// Whether the seam has no hole.
 	var isEmpty: Bool {
