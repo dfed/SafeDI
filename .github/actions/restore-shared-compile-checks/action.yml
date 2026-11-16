@@ -14,8 +14,19 @@ description: Adds the compile checks that passed in any run of this repository, 
 # identity, the hash of what compiles it (compile-check-identity.sh), so a
 # check that passed in any run passes in this one.
 #
+# A `workflow_run` workflow that follows a pull request's run may not save a
+# cache ("cache write denied: token has no writable scopes"), so that list
+# holds only what runs on main and Verify runs passed, and a pull request's
+# passes reached no other run: each pull request of a stack compiled what the
+# one below it had passed. The last step therefore also reads the lists the
+# newest runs of this identity uploaded as artifacts (restore-from-artifacts.js,
+# which says which artifacts it trusts and how many requests it makes), which
+# every run can read whatever branch made them.
+#
 # Call it after "Restore Passed Compile Checks", which restores
-# `.compile-check-cache`.
+# `.compile-check-cache`, from a job with `actions: read`, and give the step a
+# `timeout-minutes`. Without the permission the last step warns and adds
+# nothing.
 
 inputs:
   identity:
@@ -54,3 +65,19 @@ runs:
         else
           echo "No shared passed compile checks for this identity yet."
         fi
+    - uses: actions/github-script@v8
+      env:
+        IDENTITY: ${{ inputs.identity }}
+        OPERATING_SYSTEM: ${{ runner.os }}
+      with:
+        script: |
+          const path = require('path')
+          const restore = require(path.join(process.env.GITHUB_WORKSPACE, '.github/actions/restore-shared-compile-checks/restore-from-artifacts.js'))
+          await restore({
+            github,
+            context,
+            core,
+            identity: process.env.IDENTITY,
+            os: process.env.OPERATING_SYSTEM,
+            directory: path.join(process.env.GITHUB_WORKSPACE, '.compile-check-cache'),
+          })

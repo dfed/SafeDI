@@ -1,8 +1,9 @@
 name: Share Passed Compile Checks
 
-# Adds the compile checks that passed in a finished run of CI or Verify to a
-# list every later run restores, whatever branch it runs on
-# (.github/actions/restore-shared-compile-checks says why). A cache is readable
+# Adds the compile checks that passed in a finished run of CI or Verify, other
+# than a pull request's, to a list every later run restores, whatever branch it
+# runs on (.github/actions/restore-shared-compile-checks says why, and how a
+# pull request's passes reach other runs without this workflow). A cache is readable
 # from the branch that saved it, from pull requests based on that branch, and,
 # when main saved it, from everywhere. A `workflow_run` workflow runs as main,
 # from main's copy of this file, so the list it saves is main's.
@@ -39,8 +40,15 @@ name: Share Passed Compile Checks
 # starts with `compile-checks-v1-<OS>-<identity>-` and every one that starts
 # with `shared-compile-checks-v1-<OS>-<identity>-` (`gh cache list --key
 # PREFIX`, `gh cache delete KEY`), on main and on the branches that hold one,
-# or change `v1` in both keys wherever they are spelled: this file, the two
-# actions, and the test jobs of ci.yml and verify.yml.
+# and every artifact named `passed-compile-checks-v1-<OS>-<identity>` that a
+# run of the last seven days uploaded, or the next run reads the check back
+# from one and main's save keeps it (`gh api
+# "repos/OWNER/REPOSITORY/actions/artifacts?name=NAME&per_page=100" --jq
+# '.artifacts[].id'`, then `gh api -X DELETE
+# repos/OWNER/REPOSITORY/actions/artifacts/ID` for each). Or change `v1` in
+# the two keys and the artifact's name wherever they are spelled: this file,
+# the two actions, restore-from-artifacts.js, and the test jobs of ci.yml and
+# verify.yml.
 on:
   workflow_run:
     workflows:
@@ -52,6 +60,11 @@ on:
 permissions: {}
 
 jobs:
+  # Not after a pull request's run: GitHub gives a `workflow_run` workflow that
+  # follows one a cache token that cannot write ("cache write denied: token has
+  # no writable scopes"), and `actions/cache/save` only warns, so every such run
+  # was green and saved nothing. A pull request's passes reach other runs through
+  # its artifact instead (.github/actions/restore-shared-compile-checks).
   find:
     name: Find the Run's Passed Compile Checks
     # A workflow of another file that takes one of these names is not one
@@ -59,6 +72,7 @@ jobs:
     if: >-
       ${{
         github.event.workflow_run.head_repository.full_name == github.repository
+        && github.event.workflow_run.event != 'pull_request'
         && (github.event.workflow_run.path == '.github/workflows/ci.yml'
           || github.event.workflow_run.path == '.github/workflows/verify.yml')
       }}
@@ -84,12 +98,16 @@ jobs:
           RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           names=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" --paginate --jq '.artifacts[].name')
+          # A name ends with the identity the run computed, which only the
+          # pattern's characters can spell.
+          linux=$(echo "$names" | grep -Ex 'passed-compile-checks-v1-Linux-[0-9a-f]{64}' | head -n 1 || true)
+          macos=$(echo "$names" | grep -Ex 'passed-compile-checks-v1-macOS-[0-9a-f]{64}' | head -n 1 || true)
           legs=
-          if echo "$names" | grep -qx 'passed-compile-checks-Linux'; then
-            legs='{"os":"Linux","container":"swift:6.2"}'
+          if [ -n "$linux" ]; then
+            legs="{\"os\":\"Linux\",\"container\":\"swift:6.2\",\"artifact\":\"$linux\"}"
           fi
-          if echo "$names" | grep -qx 'passed-compile-checks-macOS'; then
-            legs="${legs:+$legs,}{\"os\":\"macOS\",\"container\":\"\"}"
+          if [ -n "$macos" ]; then
+            legs="${legs:+$legs,}{\"os\":\"macOS\",\"container\":\"\",\"artifact\":\"$macos\"}"
           fi
           echo "legs=[$legs]" >> "$GITHUB_OUTPUT"
           echo "Lists to add to: [$legs]"
@@ -121,7 +139,7 @@ jobs:
         timeout-minutes: 5
         uses: actions/download-artifact@v8
         with:
-          name: passed-compile-checks-${{ matrix.os }}
+          name: ${{ matrix.artifact }}
           path: run-passed-compile-checks
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
@@ -175,3 +193,14 @@ jobs:
         with:
           path: .shared-compile-check-cache
           key: shared-compile-checks-v1-${{ matrix.os }}-${{ steps.run.outputs.identity }}-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+      # `actions/cache/save` warns and succeeds when the cache refuses the save,
+      # so this looks the saved list up and fails the job when it is not there.
+      - name: Check the Shared Passed Compile Checks Were Saved
+        if: ${{ steps.add.outputs.grew == 'true' }}
+        timeout-minutes: 5
+        uses: actions/cache/restore@v6
+        with:
+          path: .shared-compile-check-cache
+          key: shared-compile-checks-v1-${{ matrix.os }}-${{ steps.run.outputs.identity }}-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          lookup-only: true
+          fail-on-cache-miss: true
