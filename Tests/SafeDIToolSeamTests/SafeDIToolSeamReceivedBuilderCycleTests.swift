@@ -321,6 +321,117 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesBuilderToTypeItBuildsInSeamsInitializer_whenThatTypeReceivesItOnlyIfAvailableBesideAReceiveLeftNilThroughAValue() async throws {
+		// `t4Builder`'s receive of `t2Builder` is left `nil`, since `t2Builder` waits on `t3`, which requires `t4Builder`;
+		// `T4` still gets `t4Builder`, which builds it.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(feature: Self.typeReceivingItsBuilderBesideReceiveLeftNilFeature(seamAttributes: ""), app: [Self.flowRoot]), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension Flow {
+		    /// Code you write and code SafeDI generates can both call this initializer.
+		    public init() {
+		        func __safeDI_t4Builder() -> T4 {
+		            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+		            return T4(t4Builder: t4Builder, t2Builder: nil)
+		        }
+		        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+		        let t3 = T3(t4Builder: t4Builder)
+		        func __safeDI_t2Builder() -> T2 {
+		            T2(t3: t3)
+		        }
+		        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+		        self.init(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+		    }
+		}
+
+		extension Flow {
+		    public enum __safeDI_Flow_CBF29CE484222325 {}
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesBuilderToTypeItBuildsInSeamsPublicMock_whenThatTypeReceivesItOnlyIfAvailableBesideAReceiveLeftNilThroughAValue() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(feature: Self.typeReceivingItsBuilderBesideReceiveLeftNilFeature(seamAttributes: ", generateMock: .public"), app: [Self.flowRoot]), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension Flow {
+		    /// Code you write and code SafeDI generates can both call this initializer.
+		    public init() {
+		        func __safeDI_t4Builder() -> T4 {
+		            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+		            return T4(t4Builder: t4Builder, t2Builder: nil)
+		        }
+		        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+		        let t3 = T3(t4Builder: t4Builder)
+		        func __safeDI_t2Builder() -> T2 {
+		            T2(t3: t3)
+		        }
+		        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+		        self.init(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+		    }
+		}
+
+		extension Flow {
+		    public enum __safeDI_Flow_CBF29CE484222325 {}
+		}
+
+		#if DEBUG
+		extension Flow {
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            t4Builder: ((Instantiator<T4>?, Instantiator<T2>?) -> T4)? = nil,
+		            t3: ((Instantiator<T4>) -> T3)? = nil,
+		            t2Builder: ((T3?) -> T2)? = nil
+		        ) {
+		            self.t4Builder = t4Builder
+		            self.t3 = t3
+		            self.t2Builder = t2Builder
+		        }
+
+		        public let t4Builder: ((Instantiator<T4>?, Instantiator<T2>?) -> T4)?
+		        public let t3: ((Instantiator<T4>) -> T3)?
+		        public let t2Builder: ((T3?) -> T2)?
+		    }
+
+		    public static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Flow {
+		        func __safeDI_t4Builder() -> T4 {
+		            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+		            return if let safeDIBuilder = safeDIOverrides.t4Builder { safeDIBuilder(t4Builder, nil) } else { T4(t4Builder: t4Builder, t2Builder: nil) }
+		        }
+		        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+		        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder(t4Builder) } else { T3(t4Builder: t4Builder) }
+		        func __safeDI_t2Builder() -> T2 {
+		            if let safeDIBuilder = safeDIOverrides.t2Builder { safeDIBuilder(t3) } else { T2(t3: t3) }
+		        }
+		        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+		        return Flow(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+		    }
+		}
+
+		extension Flow {
+		    public enum __safeDI_Flow_mock_51799E6AA5E7B634 {}
+		}
+		#endif
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsWhatTheVisibleBuildBuilds_whenTypeInSeamsTreeReceivesItsBuilderOnlyIfAvailableBesideAReceiveLeftNilThroughAValue() async throws {
+		let feature = Self.typeReceivingItsBuilderBesideReceiveLeftNilFeature(seamAttributes: "")
+		let modules = Self.modules(feature: feature, app: [Self.flowRoot])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature.map { $0.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable") }, app: [Self.flowRoot]), probes: [
+			DifferentialValueProbe("Root()"),
+			DifferentialValueProbe("Root().flow.t4Builder.instantiate().t4Builder?.instantiate()"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_namesReceivedFunctionApart_whenSeamTakesDeferredParameterOfItsName() async throws {
 		// `Other`, in `Flow`'s tree, receives `screenBuilder_received` from `Flow`'s caller, so `Flow`'s initializer binds the
 		// deferred parameter `__safeDI_screenBuilder_received`, which the function every wrapper of `screenBuilder` hands
@@ -2189,6 +2300,22 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 	}
 
 	// MARK: Private
+
+	/// The feature module of a seam, `Flow`, declared with `generateDependencyTree: true` and `seamAttributes`, whose `T4`
+	/// receives `t4Builder`, which builds it, only if available, and `t2Builder` only if available, which waits on `t3`,
+	/// which requires `t4Builder`.
+	private static func typeReceivingItsBuilderBesideReceiveLeftNilFeature(seamAttributes: String) -> [String] {
+		[
+			seamFixtureType(named: "T2", declarations: ["@Received(onlyIfAvailable: true) let t3: T3?"]),
+			seamFixtureType(named: "T3", declarations: ["@Received let t4Builder: Instantiator<T4>"]),
+			seamFixtureType(named: "T4", declarations: ["@Received(onlyIfAvailable: true) let t4Builder: Instantiator<T4>?", "@Received(onlyIfAvailable: true) let t2Builder: Instantiator<T2>?"]),
+			seamFixtureType(named: "Flow", isSeam: true, declarations: ["@Instantiated let t2Builder: Instantiator<T2>", "@Instantiated let t4Builder: Instantiator<T4>", "@Instantiated let t3: T3"])
+				.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable(generateDependencyTree: true\(seamAttributes))"),
+		]
+	}
+
+	/// The root of the app module that instantiates `Flow`.
+	private static let flowRoot = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
 
 	private var filesToDelete: [URL]
 

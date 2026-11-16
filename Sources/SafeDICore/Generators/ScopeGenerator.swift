@@ -4042,9 +4042,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// by its owner is freed. Validation rejects a cycle of required receives with any other property on it.
 	///
 	/// A receive only if available is decided in two passes. The first is the order's (see `siblingGraph(of:)`), in sibling
-	/// order. The second takes every receive the first left `nil` whose receiver and received sibling are both builders, adds
-	/// them all to the graph at once, and gives each one exactly when its strongly connected component holds only builders,
-	/// so it reads no order: renaming or reordering cannot change it. The loops are then found in the graph of the arrows
+	/// order. The second takes every receive the first left `nil` whose receiver and received sibling are both builders. It
+	/// gives a child's receive of its own property always, since that closes no circle but the builder's own, and adds every
+	/// other one to the graph at once and gives each exactly when its strongly connected component holds only builders, so
+	/// it reads no order: renaming or reordering cannot change it. The loops are then found in the graph of the arrows
 	/// the order keeps and the receives the second pass gives, never with a receive it leaves `nil`, which reads nothing: a
 	/// loop of builders, one member included, beside a receive left `nil` that closes a circle through a value is still a loop.
 	struct ReceivedBuilderLoops: Equatable, Sendable {
@@ -4137,12 +4138,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			arrowsWithEveryCandidate[candidate.receiver].insert(candidate.sibling)
 		}
 		let candidateComponents = components(of: arrowsWithEveryCandidate)
-		// A candidate is given when its component holds only builders; every other one stays `nil`.
+		// A child's receive of its own property is always given: it closes no circle but the builder's own, which holds only
+		// that builder, whatever a receive left `nil` beside it joins the child's component to. Any other candidate is given
+		// when its component holds only builders; every other one stays `nil`.
 		var givenArrows = siblingGraph.dependencies
 		var givenSelfArrows = siblingGraph.childrenRequiringThemselves
 		for candidate in candidates
-			where candidateComponents.componentByIndex[candidate.receiver] == candidateComponents.componentByIndex[candidate.sibling]
-			&& candidateComponents.holdsOnlyBuilders(candidate.receiver)
+			where candidate.receiver == candidate.sibling
+			|| (candidateComponents.componentByIndex[candidate.receiver] == candidateComponents.componentByIndex[candidate.sibling]
+				&& candidateComponents.holdsOnlyBuilders(candidate.receiver))
 		{
 			if candidate.receiver == candidate.sibling {
 				givenSelfArrows.insert(candidate.receiver)

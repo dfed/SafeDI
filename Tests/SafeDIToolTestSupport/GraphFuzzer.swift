@@ -2298,6 +2298,7 @@ enum GraphFuzzerGenerator {
 			cycleParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.cycleParameterRandomSeedMask)
 			forwardedLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.forwardedLabelRandomSeedMask)
 			retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionRandomSeedMask)
+			builderReceivedBesideReceiveLeftNilRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.builderReceivedBesideReceiveLeftNilRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2550,6 +2551,8 @@ enum GraphFuzzerGenerator {
 				sendableBuilderMotifMockedTypeName = typeName(7)
 			} else if roll >= 30, roll < 35 {
 				appendReceivedBuilderLoopMotif(to: &declarations)
+			} else if roll >= 35, builderReceivedBesideReceiveLeftNilRandom.percentChance(3) {
+				appendBuilderReceivedBesideReceiveLeftNilMotif(to: &declarations)
 			}
 		}
 
@@ -2605,6 +2608,38 @@ enum GraphFuzzerGenerator {
 				))
 			}
 		}
+
+		/// A type that receives only if available the instantiator that builds it, beside a receive only if available of
+		/// another instantiator its scope declares, which the order leaves `nil` because that instantiator waits on the
+		/// first through a value: `T7` receives `t7Builder` and `t8Builder`, `T8` receives `t9` only if available, and `T9`
+		/// requires `t7Builder`, which `Root0` declares after `t8Builder`. `T7` still gets `t7Builder`. Three times in ten it
+		/// receives it through a rename. The wrappers are `Sendable` in a `Sendable` graph and in half the mixed ones. It is
+		/// drawn from a stream of its own, `builderReceivedBesideReceiveLeftNilRandom`, only in a graph without another
+		/// motif, whose indices 7 through 9 are free, so every other graph is drawn as before.
+		private mutating func appendBuilderReceivedBesideReceiveLeftNilMotif(to declarations: inout [TypeDeclaration]) {
+			let wrapper = sendability == .sendable || sendability == .mixed && builderReceivedBesideReceiveLeftNilRandom.percentChance(50) ? "SendableInstantiator" : "Instantiator"
+			let ownBuilderType = "\(wrapper)<\(typeName(7))>"
+			let ownReceive = builderReceivedBesideReceiveLeftNilRandom.percentChance(30)
+				? PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"t7Builder\", ofType: \(ownBuilderType).self, onlyIfAvailable: true)", label: "t7Next", type: "\(ownBuilderType)?")
+				: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "t7Builder", type: "\(ownBuilderType)?")
+			declarations[0].properties += [
+				PropertyDeclaration(attribute: "@Instantiated", label: "t8Builder", type: "\(wrapper)<\(typeName(8))>"),
+				PropertyDeclaration(attribute: "@Instantiated", label: "t7Builder", type: ownBuilderType),
+				PropertyDeclaration(attribute: "@Instantiated", label: "t9", type: typeName(9)),
+			]
+			declarations.append(TypeDeclaration(name: typeName(7), instantiableArguments: [], properties: [
+				ownReceive,
+				PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "t8Builder", type: "\(wrapper)<\(typeName(8))>?"),
+			], declaresHelperTypes: true))
+			declarations.append(TypeDeclaration(name: typeName(8), instantiableArguments: [], properties: [
+				PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "t9", type: "\(typeName(9))?"),
+			], declaresHelperTypes: true))
+			declarations.append(TypeDeclaration(name: typeName(9), instantiableArguments: [], properties: [
+				PropertyDeclaration(attribute: "@Received", label: "t7Builder", type: ownBuilderType),
+			], declaresHelperTypes: true))
+		}
+
+		private static let builderReceivedBesideReceiveLeftNilRandomSeedMask: UInt64 = 0x73656C6652656376
 
 		/// The name of a helper type the `Sendable` builder motif declares, which is never `Sendable`.
 		private func nonSendableHelperTypeName(_ name: String) -> String {
@@ -2707,6 +2742,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingRetentionShapes`' choices: whether a split graph gains `RetainHome`'s tree, whose seam binds a
 		/// value nothing beneath its instantiator reads, and every shape of that tree.
 		private var retentionRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `appendBuilderReceivedBesideReceiveLeftNilMotif`'s choices: whether a graph without another motif
+		/// ends with it, and its shapes.
+		private var builderReceivedBesideReceiveLeftNilRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -7625,6 +7663,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case builderReceivedInsideItsTree
 	/// The same, of `Sendable` wrappers.
 	case sendableBuilderReceivedInsideItsTree
+	/// A type that receives only if available the instantiator that builds it, beside a receive of an instantiator its
+	/// scope declares that the order leaves `nil` (`T(tBuilder: tBuilder, uBuilder: nil)`): the instantiator's builder
+	/// function still wraps it again first. Read from an accepted graph's generated code, with which receives are only if
+	/// available from its fixture (`features(of:outcome:)`).
+	case builderReceivedInsideItsTreeBesideBuilderLeftNil
 	/// Instantiators of one scope whose trees receive one another, so that each one's builder function wraps again the
 	/// function of another first.
 	case buildersReceivingEachOther
@@ -7705,8 +7748,13 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				features.insert(.constantCycleCloser)
 			}
 			let instantiatedLabelsByTypeName = instantiatedLabelsByTypeName(of: fixture)
+			let onlyIfAvailableReceivedLabelsByTypeName = onlyIfAvailableReceivedLabelsByTypeName(of: fixture)
 			for fileName in generatedFiles.keys.sorted() {
-				features.formUnion(receivedBuilderLoopFeatures(of: generatedFiles[fileName, default: ""], instantiatedLabelsByTypeName: instantiatedLabelsByTypeName))
+				features.formUnion(receivedBuilderLoopFeatures(
+					of: generatedFiles[fileName, default: ""],
+					instantiatedLabelsByTypeName: instantiatedLabelsByTypeName,
+					onlyIfAvailableReceivedLabelsByTypeName: onlyIfAvailableReceivedLabelsByTypeName,
+				))
 			}
 		}
 		return features
@@ -7744,6 +7792,27 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			guard let labels = labelsByTypeName[typeName] else { continue }
 			for erasedTypeName in erasedTypeNamesByTypeName[typeName, default: []].sorted() {
 				labelsByTypeName[erasedTypeName, default: []].formUnion(labels)
+			}
+		}
+		return labelsByTypeName
+	}
+
+	/// The labels of the properties each `@Instantiable` type of `fixture` receives with `@Received(onlyIfAvailable: true)`,
+	/// by the type's name.
+	static func onlyIfAvailableReceivedLabelsByTypeName(of fixture: GraphFuzzerFixture) -> [String: Set<String>] {
+		var labelsByTypeName = [String: Set<String>]()
+		for content in fixture.swiftFileContent {
+			var currentTypeName: String?
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				switch line {
+				case let .typeDeclaration(name):
+					currentTypeName = name
+				case let .property(attribute, label, _):
+					guard attribute == "@Received(onlyIfAvailable: true)", let currentTypeName else { break }
+					labelsByTypeName[currentTypeName, default: []].insert(label)
+				case .instantiableAttribute, .instantiateMethod, .other:
+					break
+				}
 			}
 		}
 		return labelsByTypeName
@@ -7817,7 +7886,15 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// its own type wraps its own function too, so a binding of a label the built type instantiates
 	/// (`instantiatedLabelsByTypeName`) is none; one that closes a longer cycle wraps a function declared further out
 	/// than the siblings of the function it is in.
-	static func receivedBuilderLoopFeatures(of generatedCode: String, instantiatedLabelsByTypeName: [String: Set<String>]) -> Set<GraphFuzzerFeature> {
+	///
+	/// A builder function that wraps its own function again, for a type that receives that label only if available
+	/// (`onlyIfAvailableReceivedLabelsByTypeName`), and passes `nil` for a label a sibling builder function is named for, is
+	/// `builderReceivedInsideItsTreeBesideBuilderLeftNil`.
+	static func receivedBuilderLoopFeatures(
+		of generatedCode: String,
+		instantiatedLabelsByTypeName: [String: Set<String>],
+		onlyIfAvailableReceivedLabelsByTypeName: [String: Set<String>] = [:],
+	) -> Set<GraphFuzzerFeature> {
 		let instantiatorPrefixes = ["Instantiator<", "SendableInstantiator<", "ErasedInstantiator<", "SendableErasedInstantiator<"]
 		var features = Set<GraphFuzzerFeature>()
 		func visit(_ body: [GeneratedCodeLine]) {
@@ -7848,6 +7925,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					let isSendableWrapper = wrapper.hasPrefix("Sendable")
 					if wrappedName == name || wrappedName.hasPrefix(name + "_received") {
 						features.insert(isSendableWrapper ? .sendableBuilderReceivedInsideItsTree : .builderReceivedInsideItsTree)
+						let receivesOwnLabelOnlyIfAvailable = line.returnedTypeName.map { onlyIfAvailableReceivedLabelsByTypeName[String($0), default: []].contains(String(label)) } == true
+						let construction = line.block.last?.content ?? ""
+						if receivesOwnLabelOnlyIfAvailable, siblingNames.contains(where: { $0 != name && construction.contains("\($0.dropFirst("__safeDI_".count)): nil") }) {
+							features.insert(.builderReceivedInsideItsTreeBesideBuilderLeftNil)
+						}
 					} else {
 						features.insert(isSendableWrapper ? .sendableBuildersReceivingEachOther : .buildersReceivingEachOther)
 					}

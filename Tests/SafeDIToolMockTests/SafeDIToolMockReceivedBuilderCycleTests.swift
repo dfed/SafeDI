@@ -476,6 +476,60 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesBuilderToTypeItBuilds_whenThatTypeReceivesItOnlyIfAvailableBesideAReceiveLeftNilThroughAValue() async throws {
+		let output = try await executeSafeDIToolTest(swiftFileContent: Self.typeReceivingItsBuilderOnlyIfAvailableBesideReceiveLeftNilThroughValueFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.mockFiles == [
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            t4Builder: ((Instantiator<T4>?, Instantiator<T2>?) -> T4)? = nil,
+			            t3: ((Instantiator<T4>) -> T3)? = nil,
+			            t2Builder: ((T3?) -> T2)? = nil
+			        ) {
+			            self.t4Builder = t4Builder
+			            self.t3 = t3
+			            self.t2Builder = t2Builder
+			        }
+
+			        let t4Builder: ((Instantiator<T4>?, Instantiator<T2>?) -> T4)?
+			        let t3: ((Instantiator<T4>) -> T3)?
+			        let t2Builder: ((T3?) -> T2)?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_t4Builder() -> T4 {
+			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			            return if let safeDIBuilder = safeDIOverrides.t4Builder { safeDIBuilder(t4Builder, nil) } else { T4(t4Builder: t4Builder, t2Builder: nil) }
+			        }
+			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder(t4Builder) } else { T3(t4Builder: t4Builder) }
+			        func __safeDI_t2Builder() -> T2 {
+			            if let safeDIBuilder = safeDIOverrides.t2Builder { safeDIBuilder(t3) } else { T2(t3: t3) }
+			        }
+			        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+			        return Root(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+			    }
+			}
+			#endif
+			""",
+		], "Unexpected output \(output.mockFiles)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWhatProductionBuilds_whenTypeReceivesItsBuilderOnlyIfAvailableBesideAReceiveLeftNilThroughAValue() async throws {
+		let fixture = Self.typeReceivingItsBuilderOnlyIfAvailableBesideReceiveLeftNilThroughValueFixture
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output)
+	}
+
 	// MARK: Tests – Promotion
 
 	@Test
@@ -1036,6 +1090,26 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsSendableCaptureError_whenTypeInsideSendableBuilderReceivesBuilderThatIsNotSendableOnlyIfAvailableInsideTreeItBuilds() async {
+		// The root's mock reports the error production does.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Inner.swift"]):7:5: error: @Received property `t4Builder: Instantiator<T4>?` cannot be received inside a `@Sendable` function in chain: Root -> T4 -> Inner. SafeDI builds `innerBuilder: SendableInstantiator<Inner>` on `T4` in a `@Sendable` function, which cannot capture `t4Builder: Instantiator<T4>` on `Root`, because `Instantiator<T4>` is not `Sendable`. Declare `t4Builder` on `Root`, and this property, as `SendableInstantiator<T4>` to fix. `SendableInstantiator<T4>` builds `T4` in a `@Sendable` function, so what the tree of `T4` receives from outside that function must be `Sendable` too.
+				\(fixtures["Root.swift"]):7:5: note: `t4Builder: Instantiator<T4>` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(swiftFileContent: [
+				Self.type("Root", attributes: "(isRoot: true, generateMock: true)", "@Instantiated let t4Builder: Instantiator<T4>"),
+				Self.type("T4", "@Instantiated let innerBuilder: SendableInstantiator<Inner>"),
+				Self.type("Inner", "@Received(onlyIfAvailable: true) let t4Builder: Instantiator<T4>?"),
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
 	}
 
 	// MARK: Tests – A label promoted in two forms
@@ -3267,6 +3341,15 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 		type("Detail", "@Received let screenBuilder: Instantiator<Screen>"),
 		type("Step", "@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"),
 		type("Root", attributes: "(isRoot: true, generateMock: true)", "@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"),
+	]
+
+	/// `T4` receives `t4Builder`, which builds it, only if available, and `t2Builder` only if available, which waits on
+	/// `t3`, which requires `t4Builder`: that receive is left `nil`, and `t4Builder` still receives itself.
+	private static let typeReceivingItsBuilderOnlyIfAvailableBesideReceiveLeftNilThroughValueFixture = [
+		type("Root", attributes: "(isRoot: true, generateMock: true)", "@Instantiated let t2Builder: Instantiator<T2>", "@Instantiated let t4Builder: Instantiator<T4>", "@Instantiated let t3: T3"),
+		type("T2", "@Received(onlyIfAvailable: true) let t3: T3?"),
+		type("T3", "@Received let t4Builder: Instantiator<T4>"),
+		type("T4", "@Received(onlyIfAvailable: true) let t4Builder: Instantiator<T4>?", "@Received(onlyIfAvailable: true) let t2Builder: Instantiator<T2>?"),
 	]
 
 	/// `T4` receives `t4Builder`, which builds it, through a rename, and `t2Builder` only if available, which waits on `t3`,
