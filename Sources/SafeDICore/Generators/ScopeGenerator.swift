@@ -4192,6 +4192,29 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		Self.localFunctionPrefix(isSendable: true, isNonisolated: sendableFunctionsAreNonisolated)
 	}
 
+	/// A builder function a production scope declares for its property.
+	enum DeclaredBuilderFunction {
+		/// The function that builds the property, `__safeDI_<label>`.
+		case building
+		/// The `__safeDI_<label>_received` function of a member of a loop of builders, which its wrapper and every
+		/// rebinding of it wrap.
+		case receivedByLoopMember
+	}
+
+	/// How this scope spells the attributes of a builder function it declares: `@Sendable` exactly where
+	/// `buildsInSendableFunction` holds, with one named difference. A cycle-closing scope never builds in a `@Sendable`
+	/// function of its own, since it declares none, but where it is a loop member held in a `Sendable` wrapper, the
+	/// wrapper's closure calls its `_received` function, which must then be `@Sendable` too.
+	nonisolated private func decorator(of function: DeclaredBuilderFunction) -> String {
+		let isSendable = switch function {
+		case .building:
+			buildsInSendableFunction
+		case .receivedByLoopMember:
+			buildsInSendableFunction || property?.propertyType.isSendable == true
+		}
+		return isSendable ? sendableFunctionDecorator : ""
+	}
+
 	/// How generated code spells the attributes of a local function it declares: `@Sendable` where the function is, and
 	/// `nonisolated` beside it where the code is a seam's that takes a builder struct, or the calling module's code for one,
 	/// whose `@Sendable` functions are called from closures no actor isolates. A hole type that keeps its closure over the
@@ -4654,11 +4677,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return propertiesGeneratedLater.subtracting(bodyProvidedForms.map(\.asUnwrappedProperty))
 	}
 
-	/// The name of the builder function this scope, which closes a property cycle on `closedOnDeclaration` and is built for
-	/// `property`, calls or hands its wrapper: the function of the declaration it repeats, as the scopes enclosing it named
-	/// it. The two properties share a label, which the function is named after unless a rename moved it.
-	nonisolated private func closedOnFunctionName(builtFor property: Property, enclosingFunctionNames: [BuiltDeclaration: String]) -> String {
-		closedOnDeclaration.flatMap { enclosingFunctionNames[$0] } ?? Self.functionName(toBuild: property)
+	/// The builder function this scope names for `property`, in every form – constant, instantiator, lazily instantiated,
+	/// and a loop member's wrapper: the one it declares, as `builderFunctionNames` renames it, or, for a scope that closes
+	/// a cycle on `closedOnDeclaration` and so declares none, the function of the declaration it repeats, as the scopes
+	/// enclosing it named it. The two properties share a label, which the function is named after unless a rename moved it.
+	nonisolated private func builderFunctionName(for property: Property, functionName: String?, enclosingFunctionNames: [BuiltDeclaration: String]) -> String {
+		if closesPropertyCycle {
+			closedOnDeclaration.flatMap { enclosingFunctionNames[$0] } ?? Self.functionName(toBuild: property)
+		} else {
+			functionName ?? Self.functionName(toBuild: property)
+		}
 	}
 
 	/// The arguments this scope passes the builder function a lazy cycle closes on, labeled by parameter: the binding of
@@ -4752,11 +4780,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for (index, child) in orderedChildren.enumerated() where !child.generator.isAlias {
 				guard let property = child.generator.property, let loop = loopByGenerator[ObjectIdentifier(child.generator)] else { continue }
 				let childBuilderFunctionNames = childBuilderFunctionNames?[index] ?? nil
-				var functionName = if child.generator.closesPropertyCycle {
-					child.generator.closedOnFunctionName(builtFor: property, enclosingFunctionNames: childBuilderFunctionNames?.enclosingFunctionNames ?? [:])
-				} else {
-					childBuilderFunctionNames?.functionName ?? Self.functionName(toBuild: property)
-				}
+				var functionName = child.generator.builderFunctionName(
+					for: property,
+					functionName: childBuilderFunctionNames?.functionName,
+					enclosingFunctionNames: childBuilderFunctionNames?.enclosingFunctionNames ?? [:],
+				)
 				if !child.generator.cycleParameters.isEmpty {
 					functionName = names.claim(ReservedName.receivedBuilderFunctionName(of: functionName))
 					receivedFunctionNameByIndex[index] = functionName
@@ -5537,11 +5565,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// A member of a loop of builders first wraps again the functions of the members its tree receives inside the
 				// loop, each as the member's own declaration wraps it, so each receiver beneath reads a wrapper this call made.
 				// A cycle-closing scope declares no function: it refers to the enclosing one it closes on.
-				let functionName = if isPropertyCycle {
-					closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
-				} else {
-					builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
-				}
+				let functionName = builderFunctionName(for: property, functionName: builderFunctionNames.functionName, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
 				let rebindingLines = reboundProperties.compactMap { reboundProperty in
 					if reboundProperty == property, declaresCycleParameters {
 						// The function's own property is wrapped again with the function's own parameters: where a cycle-closing
@@ -5570,11 +5594,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else {
 					functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
 				}
-				let functionDecorator = if buildsInSendableFunction {
-					sendableFunctionDecorator
-				} else {
-					""
-				}
+				let functionDecorator = decorator(of: .building)
 				let functionDeclaration = if isPropertyCycle {
 					""
 				} else {
@@ -5612,7 +5632,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						? ""
 						: forwardedProperties.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
 					let callArguments = (forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments).joined(separator: ", ")
-					let receivedFunctionDecorator = buildsInSendableFunction || property.propertyType.isSendable ? sendableFunctionDecorator : ""
+					let receivedFunctionDecorator = decorator(of: .receivedByLoopMember)
 					let receivedFunctionDeclaration = """
 					\(receivedFunctionDecorator)func \(receivedFunctionName)(\(receivedFunctionParameters)) -> \(concreteTypeName) {
 					\((memberLines + ["\(Self.standardIndent)\(memberLines.isEmpty ? "" : "return ")\(functionName)(\(callArguments))"]).joined(separator: "\n"))
@@ -5644,11 +5664,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					.unwrapped
 					.asSource
 				let cycleArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
-				let functionName = if isPropertyCycle {
-					closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
-				} else {
-					builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
-				}
+				let functionName = builderFunctionName(for: property, functionName: builderFunctionNames.functionName, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
 				let lazilyInstantiatedInstantiation = if erasedToConcreteExistential {
 					"""
 					\(unwrappedTypeDescription) {
@@ -5673,11 +5689,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 					leadingMemberWhitespace: Self.standardIndent,
 				) + builderCallArguments.flatMap(\.declarations)
-				let functionDecorator = if buildsInSendableFunction {
-					sendableFunctionDecorator
-				} else {
-					""
-				}
+				let functionDecorator = decorator(of: .building)
 				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
 				let functionParameters = cycleParameters.map(\.property)
 				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
@@ -5701,7 +5713,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// A scope that closes a cycle declares no function: it calls the function of the declaration it repeats
 					// with that function's cycle parameters, typed as a constant with content is. A closer builds nothing, so
 					// it holds no seam's site and `valuesBindingLines` is empty, as it is for every closer.
-					let call = "\(closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames))(\(callArguments))"
+					let call = "\(builderFunctionName(for: property, functionName: builderFunctionNames.functionName, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames))(\(callArguments))"
 					return if erasedToConcreteExistential {
 						"\(valuesBindingLines)let \(property.label) = \(property.typeDescription.erasing(call))\n"
 					} else {
@@ -5714,11 +5726,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 					leadingMemberWhitespace: Self.standardIndent,
 				) + builderCallArguments.flatMap(\.declarations)
-				let functionDecorator = if buildsInSendableFunction {
-					sendableFunctionDecorator
-				} else {
-					""
-				}
+				let functionDecorator = decorator(of: .building)
 				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
 				let functionParameters = cycleParameters.map(\.property)
 				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
@@ -5737,7 +5745,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 				// Ideally we would be able to use an anonymous closure rather than a named function here.
 				// Unfortunately, there's a bug in Swift Concurrency that prevents us from doing this: https://github.com/swiftlang/swift/issues/75003
-				let functionName = builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
+				let functionName = builderFunctionName(for: property, functionName: builderFunctionNames.functionName, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
 				let functionDeclaration = if !hasGeneratedContent {
 					""
 				} else {
