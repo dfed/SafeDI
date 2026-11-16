@@ -94,4 +94,19 @@ the new `mock()` signature. W1 stays at about 22–30 lane-hours.
 
 ## 3. macOS and Xcode
 
-See the section added after the Mac probe runs.
+**Yes.** The Mac probe ran `run-all.sh` at 6c578de on macos-26 (arm64) with Xcode 26.0 (Swift 6.2, swiftlang-6.2.0.19.9);
+it exited 0 after 811 s. The log is `cloud-reports/w1-mac-probe/w1-6c578de1c-xcode26.log` on
+`dfed--claude/productivity-retros`.
+
+- Every verdict line equals Linux's once macOS `wc`'s leading spaces are removed: every `a` and `d` trace equals `a`,
+  `c2` and `b2` differ as on Linux, the `b` variants fail to compile with the same error counts, and every `d`
+  builds with library evolution and a verified interface.
+- After the run, `git status` showed no change to any committed trace (`a-*.txt`, `d-*.txt`, …) or stored generated
+  file (`stored/*.swift.txt`). So macOS traces and SafeDITool's generated code are byte-identical to Linux's.
+- The only changed files were 16 `summary.txt` files (the `wc` padding, two lines each) and the four `b-*.error.txt`
+  files of `PMG/`. Those four files hold absolute output paths, because `PMG/` sits outside the folder the harness
+  strips from error paths, and the paths differ between the machines. The error counts match. Whether the wording also
+  differs was not checked, and it does not bear on W1, since these are today's tool failing on the fixture's own
+  `Root.mock()` call.
+
+`run-fixture.zsh` now strips `wc`'s padding. No change to the estimate.

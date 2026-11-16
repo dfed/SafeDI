@@ -21,7 +21,7 @@ for variant in "$@"; do
 			rm -f "$result.build.log"
 		else
 			grep -E "error:" "$result.build.log" | sed -e "s|$output_root/${fixture#$spike/}/||g" -e "s|$fixture/||g" | sort -u >"$result.error.txt"
-			echo "$variant -$optimization: does not compile ($(wc -l <"$result.error.txt") distinct errors)"
+			echo "$variant -$optimization: does not compile ($(wc -l <"$result.error.txt" | tr -d " ") distinct errors)"
 			rm -f "$result.build.log"
 		fi
 	done
