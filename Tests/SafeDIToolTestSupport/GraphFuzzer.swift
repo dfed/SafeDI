@@ -2129,6 +2129,12 @@ enum GraphFuzzerGenerator {
 		/// takes every parameter its initializer takes, with the same defaults, and passes each on to it: `mock`, or the
 		/// method its `customMockName` names. `nil` for a type without one.
 		var handWrittenMockName: String?
+		/// Whether the hand-written mock `handWrittenMockName` names is bound to the main actor, which binds the generated
+		/// `mock()` that calls it there too.
+		var handWrittenMockIsMainActor = false
+		/// Whether the type's initializer is bound to the main actor, which binds the generated `mock()` that calls it there
+		/// too.
+		var initializerIsMainActor = false
 
 		/// The type's access as the compiler reads it: its own, capped by the type its extension extends.
 		var effectiveAccess: AccessLevel {
@@ -2295,6 +2301,7 @@ enum GraphFuzzerGenerator {
 			unreadBoundaryRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unreadBoundaryRandomSeedMask)
 			mockOnlyBlockRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockOnlyBlockRandomSeedMask)
 			mockVocabularyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockVocabularyRandomSeedMask)
+			mockIsolationRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockIsolationRandomSeedMask)
 			cycleParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.cycleParameterRandomSeedMask)
 			forwardedLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.forwardedLabelRandomSeedMask)
 			retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionRandomSeedMask)
@@ -2426,6 +2433,8 @@ enum GraphFuzzerGenerator {
 			let drawnSources = finalDeclarations.map(source(of:))
 				+ [extensionSource.map { isSplit ? GraphFuzzerModule.samePackageCaller.fileHeader(omitsPackageName: modulesOmittingPackageName.contains(.samePackageCaller), presentModules: presentModules) + $0 : $0 }].compactMap(\.self)
 				+ markerFreeSources
+				// Drawn only in the base corpus, which is never split.
+				+ [mainActorExtensionSource].compactMap(\.self)
 			let declaresNothingPackage = { (source: String) in GraphFuzzerModule(declaredIn: source).map(modulesDeclaringNothingPackage.contains) == true }
 			raisingPackageTypeAccess(declaredIn: drawnSources.filter(declaresNothingPackage), notIn: drawnSources.filter { !declaresNothingPackage($0) })
 			let sources = drawnSources.map { declaresNothingPackage($0) ? GraphFuzzerModule.droppingPackageAccess(from: $0) : $0 }
@@ -2658,6 +2667,9 @@ enum GraphFuzzerGenerator {
 		var builderSurfaceEdit: GraphFuzzerBuilderSurfaceEdit?
 		/// Whether `build()` made `builderSurfaceEdit`: the graph has the place it edits.
 		private(set) var appliesBuilderSurfaceEdit = false
+		/// The file of `addingMockVocabulary`'s `@MainActor` extension of `Clock`, when it draws one: a file of its own, so
+		/// that the tool names the extension's mock file after the type, as the mirror model expects.
+		private var mainActorExtensionSource: String?
 		/// The places of holes `addingHoleShapes` drew beneath a lazy wrapper or forwarding a value, which the builder
 		/// surface's floors count (`GraphFuzzerGenerator.drawnHolePlaces(forSeed:features:)`).
 		private(set) var drawnHolePlaces = [GraphFuzzerDrawnHolePlace]()
@@ -2697,6 +2709,9 @@ enum GraphFuzzerGenerator {
 		/// declared in a block that guards mock-only declarations, and how the clauses where `DEBUG` is inactive declare it.
 		private var mockOnlyBlockRandom: GraphFuzzerRandomNumberGenerator
 		private var mockVocabularyRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingMockVocabulary` binds to the main actor the hand-written mock of the second type whose
+		/// `mock()` is generated, and the initializer of a mocked root without one.
+		private var mockIsolationRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingCycleParameterShapes`' choices: whether a split graph gains `CycleSeam`'s tree, a lazy cycle that
 		/// closes through a cycle parameter with a hole beneath it, and every shape of that tree.
 		private var cycleParameterRandom: GraphFuzzerRandomNumberGenerator
@@ -6382,7 +6397,15 @@ enum GraphFuzzerGenerator {
 		///   `#if DEBUG` in its body, which takes every parameter its initializer takes and passes each on to it: `mock`, or,
 		///   on a type whose `mock()` is generated, `customMock`, which `customMockName` names. A listed type never has one,
 		///   since the macro accepts `customMockName` only beside `generateMock: true` or `mockOnly: true`.
-		/// - A second type whose `mock()` is generated declares one named by `customMockName` too.
+		/// - A second type whose `mock()` is generated declares one named by `customMockName` too. When no other type
+		///   builds it or names it in a property, so that only its own generated `mock()` calls the hand-written one, that
+		///   one is `@MainActor` in half of those graphs (`mockIsolationRandom`), which binds the generated
+		///   `mock()` to the main actor too. A mock that builds the type would need `mockAttributes` to call it.
+		/// - A mocked type without a hand-written mock that only its own `mock()` builds has a `@MainActor` initializer in
+		///   half of the graphs that have one (`mockIsolationRandom`), which binds its generated `mock()` to the main actor.
+		/// - In a quarter of the graphs, `Clock`, a type nothing builds, has a `@MainActor` `@Instantiable(generateMock: true)`
+		///   extension in a file of its own (`mainActorExtensionSource`), whose `instantiate()` – or, half the time, a `customMock` that
+		///   `customMockName` names – spells no isolation and has the extension's, which binds the generated `mock()` too.
 		/// - `Service`, a leaf `final class` or `struct` every root instantiates and one to three types receive, required
 		///   or only if available, has a `mockOnly` extension under `#if DEBUG` in its file, before or after its
 		///   production declaration, whose `mock()` builds it as production does, so that a mock builds the received
@@ -6415,9 +6438,46 @@ enum GraphFuzzerGenerator {
 			if mockVocabularyRandom.percentChance(40), !builtIndices.isEmpty {
 				addHandWrittenMock(to: mockVocabularyRandom.element(of: builtIndices))
 			}
+			/// Whether only the type's own generated `mock()` builds it: no other type builds it or names it in a property.
+			func isBuiltOnlyByItsOwnMock(_ index: Int) -> Bool {
+				let name = declarations[index].name
+				return !builtTypeNames.contains(name) && !declarations.contains { declaration in
+					declaration.name != name && declaration.properties.contains { $0.type.contains(name) || $0.attribute.contains(name) }
+				}
+			}
 			let mockedIndices = graphTypeIndices.filter { generatesMock($0) && declarations[$0].handWrittenMockName == nil }
 			if mockVocabularyRandom.percentChance(30), !mockedIndices.isEmpty {
-				addHandWrittenMock(to: mockVocabularyRandom.element(of: mockedIndices))
+				let index = mockVocabularyRandom.element(of: mockedIndices)
+				addHandWrittenMock(to: index)
+				if isBuiltOnlyByItsOwnMock(index), mockIsolationRandom.percentChance(50) {
+					declarations[index].handWrittenMockIsMainActor = true
+				}
+			}
+			// A mocked type without a hand-written mock that only its own `mock()` builds, whose initializer is `@MainActor`,
+			// so that its generated `mock()` calls it on the main actor. No production tree builds it.
+			let mainActorInitializerCandidates = graphTypeIndices.filter { index in
+				generatesMock(index) && declarations[index].handWrittenMockName == nil && isBuiltOnlyByItsOwnMock(index)
+			}
+			if !mainActorInitializerCandidates.isEmpty, mockIsolationRandom.percentChance(50) {
+				declarations[mockIsolationRandom.element(of: mainActorInitializerCandidates)].initializerIsMainActor = true
+			}
+			// A mocked `@MainActor` extension of a type nothing builds, whose `instantiate()`, or the hand-written mock
+			// `customMockName` names, spells no isolation and has the extension's.
+			if mockIsolationRandom.percentChance(25) {
+				let clockName = "\(prefix)Clock"
+				let hasHandWrittenMock = mockIsolationRandom.percentChance(50)
+				var lines = [
+					hasHandWrittenMock ? "@Instantiable(generateMock: true, customMockName: \"customMock\")" : "@Instantiable(generateMock: true)",
+					"@MainActor extension \(clockName): Instantiable {",
+					"\tpublic static func instantiate() -> \(clockName) {",
+					"\t\t\(clockName)()",
+					"\t}",
+				]
+				if hasHandWrittenMock {
+					lines += ["", "\tpublic static func customMock() -> \(clockName) {", "\t\t\(clockName)()", "\t}"]
+				}
+				lines += ["}", "", "public final class \(clockName): Sendable {", "\tpublic init() {}", "}"]
+				mainActorExtensionSource = lines.joined(separator: "\n") + "\n"
 			}
 			if mockVocabularyRandom.percentChance(40) {
 				let serviceName = "\(prefix)Service"
@@ -6463,6 +6523,7 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let mockVocabularyRandomSeedMask: UInt64 = 0x6D6F636B566F6361
+		private static let mockIsolationRandomSeedMask: UInt64 = 0x6D6F636B49736F6C
 
 		// MARK: Cycle parameters
 
@@ -7413,9 +7474,9 @@ enum GraphFuzzerGenerator {
 			let initializerAccess = min(spelledInitializerAccess, declaration.effectiveAccess) <= narrowestNamedAccess ? spelledInitializerAccess : narrowestNamedAccess
 			let storedParameters = storesEveryParameter ? declaration.defaultValuedParameters : []
 			if declaration.properties.isEmpty, storedParameters.isEmpty {
-				lines.append("\t\(initializerAccess.modifier)init(\(parameters)) {}")
+				lines.append("\t\(declaration.initializerIsMainActor ? "@MainActor " : "")\(initializerAccess.modifier)init(\(parameters)) {}")
 			} else {
-				lines.append("\t\(initializerAccess.modifier)init(\(parameters)) {")
+				lines.append("\t\(declaration.initializerIsMainActor ? "@MainActor " : "")\(initializerAccess.modifier)init(\(parameters)) {")
 				lines += declaration.properties.map { "\t\tself.\($0.label) = \($0.label)" }
 				lines += storedParameters.map { "\t\tself.\($0.name) = \($0.name)" }
 				lines.append("\t}")
@@ -7430,7 +7491,7 @@ enum GraphFuzzerGenerator {
 				lines += [
 					"",
 					"\t#if DEBUG",
-					"\t\(initializerAccess.modifier)static func \(handWrittenMockName)(\(parameters)) -> \(declaration.name) {",
+					"\t\(declaration.handWrittenMockIsMainActor ? "@MainActor " : "")\(initializerAccess.modifier)static func \(handWrittenMockName)(\(parameters)) -> \(declaration.name) {",
 					"\t\t\(declaration.name)(\(arguments.joined(separator: ", ")))",
 					"\t}",
 					"\t#endif",
@@ -7672,6 +7733,15 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// A type with `generateMock: true` whose hand-written mock `customMockName` names, which its generated `mock()`
 	/// calls through to.
 	case customMockNameBesideGeneratedMock
+	/// A `@MainActor` hand-written mock that `customMockName` names on a type that spells no isolation, whose generated
+	/// `mock()` it binds to the main actor.
+	case mainActorCustomMockBesideGeneratedMock
+	/// A `@MainActor` initializer of a type that spells no isolation and has no hand-written mock, whose generated `mock()`
+	/// calls it and so is bound to the main actor.
+	case mainActorInitializerBesideGeneratedMock
+	/// A `@MainActor` `@Instantiable(generateMock: true)` extension whose `instantiate()` or hand-written mock spells no
+	/// isolation and has the extension's, which binds the generated `mock()` that calls it.
+	case mainActorExtensionBesideGeneratedMock
 	/// A `mockOnly` extension of a type with a production declaration that another type receives, so that a mock that
 	/// builds the received type builds it with the extension's mock.
 	case mockOnlyExtensionOfReceivedType
@@ -8181,6 +8251,15 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 				if line.hasPrefix("@Instantiable("), line.contains("generateMock: true"), line.contains("customMockName: ") {
 					features.insert(.customMockNameBesideGeneratedMock)
+				}
+				if line.hasPrefix("@MainActor "), line.contains("static func customMock(") {
+					features.insert(.mainActorCustomMockBesideGeneratedMock)
+				}
+				if line.hasPrefix("@MainActor "), line.contains(" init(") {
+					features.insert(.mainActorInitializerBesideGeneratedMock)
+				}
+				if line.hasPrefix("@Instantiable("), line.contains("generateMock: true"), nextLine.hasPrefix("@MainActor extension ") {
+					features.insert(.mainActorExtensionBesideGeneratedMock)
 				}
 				if line.hasPrefix("@Instantiable"), !line.contains("mockOnly: true") {
 					let declaration = nextLine.split(separator: " ").drop { ["public", "package", "internal", "final"].contains($0) }

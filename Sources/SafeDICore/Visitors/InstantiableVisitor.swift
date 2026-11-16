@@ -249,6 +249,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		instantiableType = node.extendedType.typeDescription
 		instantiableDeclarationLocation = declarationLocation(of: node)
 		instantiableAccess = node.modifiers.access(introducedBy: node.extensionKeyword, sourceLocationConverter: sourceLocationConverter)
+		extensionIsolation = Initializer.memberIsolation(modifiers: node.modifiers, attributes: node.attributes)
 		if let instantiableMacro = node.attributes.instantiableMacro {
 			instantiableConstruction = .instantiateMethod
 			processAttributes(node.attributes, on: instantiableMacro)
@@ -268,7 +269,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				// Already found one mock() method — this is a duplicate.
 				duplicateMockFunctionSyntaxes.append(node)
 			} else {
-				mockInitializer = Initializer(node, sourceLocationConverter: sourceLocationConverter)
+				mockInitializer = Initializer(node, sourceLocationConverter: sourceLocationConverter).inheritingIsolation(extensionIsolation)
 				mockReturnType = node.signature.returnClause?.type.typeDescription
 				mockDeclarationLocation = declarationLocation(of: node)
 				mockDeclarationAccess = instantiableAccess
@@ -317,7 +318,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			))
 		}
 
-		let initializer = Initializer(node, sourceLocationConverter: sourceLocationConverter)
+		let initializer = Initializer(node, sourceLocationConverter: sourceLocationConverter).inheritingIsolation(extensionIsolation)
 		if let instantiableType = node.signature.returnClause?.type.typeDescription {
 			// Each parameter without a default value is a dependency named by its inner name. Its argument label
 			// binds nothing. A parameter with a default value is not a dependency, as for an initializer: the
@@ -692,6 +693,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	private var instantiableAccess = AccessDeclaration(level: .internal)
 	/// See `Instantiable.declarationIsolation`.
 	private var declarationIsolation: String?
+	/// The isolation the extension this visitor reads spells (`Initializer.memberIsolation`), which a method declared in it
+	/// that spells none takes (`Initializer.spelledIsolation`). `nil` for a type declaration.
+	private var extensionIsolation: String?
 
 	/// Diagnoses each of `parameters` whose name is encoded differently from a name SafeDI matches it by, as
 	/// `diagnoseNameEncodedDifferently(_:at:)` does. A parameter named `_` names nothing.

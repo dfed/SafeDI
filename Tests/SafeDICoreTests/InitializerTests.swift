@@ -28,6 +28,8 @@ struct InitializerTests {
 		("init() {}", nil),
 		("nonisolated init() {}", "nonisolated"),
 		("@MainActor init() {}", "@MainActor"),
+		("@preconcurrency @MainActor init() {}", "@preconcurrency @MainActor"),
+		("@preconcurrency init() {}", nil),
 		("@available(iOS 17, *) init() {}", nil),
 	] as [(String, String?)])
 	func init_recordsSpelledIsolation_whenInitializerSpellsModifierOrGlobalActor(source: String, spelledIsolation: String?) throws {

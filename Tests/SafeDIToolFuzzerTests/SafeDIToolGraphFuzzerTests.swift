@@ -545,6 +545,17 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func acceptedFeatureCounts_holdAtLeastTenGraphs_forEachMainActorConstruction() {
+		// The base corpus draws a `@MainActor` hand-written mock, a `@MainActor` initializer of a type without one, and a
+		// `@MainActor` extension whose members spell no isolation, beside a generated `mock()`, which takes the actor of the
+		// member it calls; each draw stands in for unit tests of its shape's neighbours only while it lands in at least ten
+		// graphs the tool accepts, which the corpus runs pin exactly.
+		for feature in [GraphFuzzerFeature.mainActorCustomMockBesideGeneratedMock, .mainActorInitializerBesideGeneratedMock, .mainActorExtensionBesideGeneratedMock] {
+			#expect(Self.corpusAcceptedFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
 	func forwardedLabelAcrossSeamCallSamples_registerASampleOfEachForwardedLabel_whenSeamCorpusGraphDrawsTheShape() {
 		// The comparator calls an instantiator whose type forwards a value only with a sample of that value, so every graph
 		// of the forwarded-label draw must register one for `ForwardedOuter`'s label and `ForwardedInner`'s, or the value and
@@ -5378,6 +5389,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.nonSendableValuesInsideSendableBuilder: 135,
 		.handWrittenMockUnderMockCondition: 658,
 		.customMockNameBesideGeneratedMock: 776,
+		.mainActorCustomMockBesideGeneratedMock: 75,
+		.mainActorInitializerBesideGeneratedMock: 0,
+		.mainActorExtensionBesideGeneratedMock: 0,
 		.mockOnlyExtensionOfReceivedType: 978,
 		.instantiableStruct: 482,
 		.additionalMockToGenerate: 596,
@@ -7056,6 +7070,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.lazilyInstantiatedOmittedValueProvider: 58,
 		.lazilyReceivedLabelWithOnlyIfAvailableByValueReceive: 227,
 		.mainActorChildInitializerSpellsIsolation: 66,
+		.mainActorLeafIsolatedByMembers: 83,
 		.mainActorChildIsolatedInitializer: 141,
 		.mainActorChildNonisolatedInitializer: 40,
 		.mockConditionDiffers: 103,

@@ -139,10 +139,43 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// extension of the type inherits: its global actor attribute (`"@MainActor"`), `"nonisolated"`, or `nil` when it
 	/// spells neither. Always `nil` for an extension-based Instantiable, whose extension a generated member is not in.
 	public let declarationIsolation: String?
-	/// Whether the `mock()` generated for this type is isolated to a global actor: the type declaration spells one, or
-	/// `mockAttributes` does.
-	public var generatedMockIsGlobalActorIsolated: Bool {
-		(declarationIsolation.map { $0 != "nonisolated" } ?? false) || Initializer.globalActorAttribute(in: mockAttributes) != nil
+	/// The global actor the generated `mock()` spells for the member it builds the type with, which a synchronous `mock()`
+	/// can call only from that actor: the one its hand-written mock (`mockInitializer`), or, for a type without one, its
+	/// `init` or `instantiate(…)` (`initializer`), has (`constructionIsolation(of:beside:declarationIsolation:)`). The mocks of the types whose
+	/// trees build this type take nothing from it: like a root's `init()`, which takes nothing from the initializers its
+	/// tree calls, each opts in through its own `mockAttributes` (`mock-generation.md`).
+	public var generatedMockConstructionIsolation: String? {
+		Self.constructionIsolation(of: mockInitializer ?? initializer, beside: mockAttributes, declarationIsolation: declarationIsolation)
+	}
+
+	/// The global actor a root's generated `init()` and each initializer generated for a type with
+	/// `generateDependencyTree: true` spell for the type's own `init`, which they call synchronously
+	/// (`constructionIsolation(of:beside:declarationIsolation:)`), as `generatedMockConstructionIsolation` does for `mock()`.
+	public var generatedInitializerConstructionIsolation: String? {
+		Self.constructionIsolation(of: initializer, beside: generatedInitializerAttributes, declarationIsolation: declarationIsolation)
+	}
+
+	/// The global actor a generated function that calls `member` synchronously spells, after `attributes`: the one
+	/// `member` has (`Initializer.spelledIsolation`), with the `@preconcurrency` it spells beside it, so that code on no
+	/// actor can still call the function. `nil` when `member` has none or `nonisolated`, when `attributes` spell an
+	/// isolation, which wins, and when the type declaration spells the same actor, which a function generated in the
+	/// type's extension takes already.
+	private static func constructionIsolation(of member: Initializer?, beside attributes: String, declarationIsolation: String?) -> String? {
+		guard !Initializer.spellsIsolation(in: attributes),
+		      let isolation = member?.spelledIsolation,
+		      isolation != "nonisolated",
+		      String(Initializer.globalActor(of: isolation)) != declarationIsolation
+		else { return nil }
+		return isolation
+	}
+
+	/// The global actor the `mock()` generated for this type is isolated to: the one it spells for the member it builds
+	/// the type with (`generatedMockConstructionIsolation`), else the one the type declaration spells, else the one
+	/// `mockAttributes` spells; `nil` for none.
+	public var generatedMockGlobalActor: String? {
+		generatedMockConstructionIsolation
+			?? declarationIsolation.flatMap { $0 == "nonisolated" ? nil : $0 }
+			?? Initializer.globalActorAttribute(in: mockAttributes)
 	}
 
 	/// Whether to generate a `mock()` method for this type, and with what access: the `generateMock:` argument.

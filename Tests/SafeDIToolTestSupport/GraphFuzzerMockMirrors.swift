@@ -194,12 +194,21 @@ struct GraphFuzzerMockMirrorModel {
 		var pendingArguments: String?
 		var currentTypeName: String?
 		for content in fixture.swiftFileContent {
-			for line in GraphFuzzerSourceLine.lines(of: content) {
+			// `lines(of:)` reads one line of `content` for each line it holds, empty ones included.
+			let rawLines = content.split(separator: "\n", omittingEmptySubsequences: false)
+			for (line, rawLine) in zip(GraphFuzzerSourceLine.lines(of: content), rawLines) {
 				switch line {
 				case let .instantiableAttribute(arguments):
 					pendingArguments = arguments
 					currentTypeName = nil
 				case let .typeDeclaration(name):
+					// A `@MainActor` type or extension isolates the initializer or `instantiate()` declared in it.
+					let declarationIsMainActor = rawLine.trimmingCharacters(in: .whitespaces).hasPrefix("@MainActor ")
+					defer {
+						if declarationIsMainActor, let currentTypeName {
+							types[currentTypeName]?.initializerIsMainActor = true
+						}
+					}
 					let arguments = pendingArguments ?? ""
 					pendingArguments = nil
 					currentTypeName = name
@@ -264,6 +273,10 @@ struct GraphFuzzerMockMirrorModel {
 					))
 				case .other:
 					pendingArguments = nil
+					let trimmedLine = rawLine.trimmingCharacters(in: .whitespaces)
+					if let currentTypeName, trimmedLine.hasPrefix("@MainActor "), trimmedLine.contains(" init(") {
+						types[currentTypeName]?.initializerIsMainActor = true
+					}
 				}
 			}
 			currentTypeName = nil
@@ -331,11 +344,13 @@ struct GraphFuzzerMockMirrorModel {
 		}
 	}
 
-	/// A hand-written mock method: its name, the type it returns, and the label each of its parameters is passed by.
+	/// A hand-written mock method: its name, the type it returns, the label each of its parameters is passed by, and
+	/// whether it is bound to the main actor.
 	struct HandWrittenMock: Equatable {
 		let name: String
 		let returnTypeName: String
 		let parameterLabels: [String]
+		let isMainActor: Bool
 	}
 
 	struct TypeDeclaration {
@@ -355,6 +370,9 @@ struct GraphFuzzerMockMirrorModel {
 		var customMockName: String?
 		/// The type's hand-written mock, which its generated `mock()` calls through to.
 		var handWrittenMock: HandWrittenMock?
+		/// Whether the type's initializer, or the type or extension declaring it or its `instantiate()`, is bound to the main
+		/// actor.
+		var initializerIsMainActor = false
 
 		var forwardedReceivableProperties: Set<GraphFuzzerMirrorProperty> {
 			Set(dependencies.filter { $0.source == .forwarded }.flatMap(\.receivableProperties))
@@ -442,6 +460,7 @@ struct GraphFuzzerMockMirrorModel {
 					name: String(line[start.upperBound..<open]),
 					returnTypeName: String(line[close.upperBound...].dropLast(" {".count)),
 					parameterLabels: parameters.compactMap { parameter in parameter.split(separator: ":").first?.split(separator: " ").first.map(String.init) },
+					isMainActor: line[..<start.lowerBound].contains("@MainActor "),
 				)
 			}
 		}
@@ -917,6 +936,9 @@ struct GraphFuzzerMockMirror: Equatable {
 	/// The expression building the mocked type from the declarations.
 	let construction: String
 	let shapes: Set<GraphFuzzerValueOracleShape>
+	/// Whether `construction` calls a hand-written mock bound to the main actor, as the generated `mock()` the mirror
+	/// mirrors then is, so that the mirror is bound to it too.
+	var isMainActor = false
 	/// The arguments of the mock's required parameters, each a sample value, in the mock's order: empty for a mock that
 	/// takes none.
 	var mockArguments = [String]()
@@ -966,7 +988,12 @@ struct GraphFuzzerMockMirror: Equatable {
 	///   - conformance: What the mirror conforms to beyond `Instantiable`, as the graph's roots and types do.
 	///   - stamp: The creation stamp's stored property, in a fixture that stamps every class.
 	func source(conformance: String, stamp: String?) -> String {
-		var lines = [isForwarding ? "@Instantiable" : "@Instantiable(isRoot: true)", "public final class \(name): Instantiable\(conformance) {"]
+		// A mirror whose initializer calls a hand-written mock bound to the main actor is bound to it, as is the root that
+		// builds a forwarding one, through an `Instantiator`, which builds on its root's actor. A class on the main actor is
+		// `Sendable` already.
+		let isolation = isMainActor ? "@MainActor " : ""
+		let conformance = isMainActor ? "" : conformance
+		var lines = [isForwarding ? "@Instantiable" : "@Instantiable(isRoot: true)", "\(isolation)public final class \(name): Instantiable\(conformance) {"]
 		if let stamp {
 			lines += ["\t\(stamp)", ""]
 		}
@@ -981,7 +1008,7 @@ struct GraphFuzzerMockMirror: Equatable {
 		if isForwarding {
 			// A `Sendable` root stores only `Sendable` wrappers.
 			let builderType = "\(conformance == ", Sendable" ? "SendableInstantiator" : "Instantiator")<\(name)>"
-			lines += ["", "@Instantiable(isRoot: true)", "public final class \(hostName): Instantiable\(conformance) {"]
+			lines += ["", "@Instantiable(isRoot: true)", "\(isolation)public final class \(hostName): Instantiable\(conformance) {"]
 			if let stamp {
 				lines += ["\t\(stamp)", ""]
 			}
@@ -1183,6 +1210,8 @@ extension GraphFuzzerMockMirrorModel {
 			declarations: declarations,
 			construction: construction,
 			shapes: shapes(of: mockRoot, mockedTypeName: typeName),
+			// A mirror on the main actor builds what one off it builds, so it is there when either member may need it.
+			isMainActor: (mockedType.handWrittenMock?.isMainActor ?? false) || mockedType.initializerIsMainActor,
 		))
 	}
 

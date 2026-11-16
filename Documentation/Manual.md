@@ -282,7 +282,9 @@ SafeDI generates a root’s `init()`, the initializers of a [seam](#generating-a
 | `mockAttributes` | The generated `mock()`. |
 | `generatedAttributes` | Both. |
 
-If a root is not bound to the main actor, and its tree builds a type whose initializer is `@MainActor`, give the root `generatedInitializerAttributes: "@MainActor"`:
+Each generated declaration calls one method of the type directly. A root’s `init()` and a seam’s initializers call the type’s initializer. A `mock()` calls its [hand-written mock](#hand-written-mocks), or else its initializer or `instantiate()`. When that method, or the extension that declares it, is bound to a global actor that the type is not, the generated declaration is bound to that actor too, unless its arguments above name an isolation (a global actor or `nonisolated`). SafeDI recognizes a global actor attribute whose name ends in `Actor`, and keeps a method’s `@preconcurrency`, so code on no actor can still call the generated declaration.
+
+A generated declaration also builds the type’s tree, which SafeDI does not read for isolation. If a root is not bound to the main actor, and its tree builds a type whose initializer is `@MainActor`, give the root `generatedInitializerAttributes: "@MainActor"`:
 
 ```swift
 @Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor")
@@ -309,12 +311,17 @@ extension Root {
 }
 ```
 
-Likewise, if a type is not bound to the main actor, and its own initializer is `@MainActor`, or its tree builds a type whose initializer is, give it `mockAttributes: "@MainActor"`:
+Likewise, if a type is not bound to the main actor, and its tree builds a type whose initializer or hand-written mock is `@MainActor`, give it `mockAttributes: "@MainActor"`:
 
 ```swift
 @Instantiable(mockAttributes: "@MainActor", generateMock: true)
-public final class MyPresenter: Instantiable {
-    @MainActor public init() { … }
+public final class Screen: Instantiable {
+    public init(presenter: Presenter) {
+        self.presenter = presenter
+    }
+
+    /// `Presenter`’s initializer is `@MainActor`.
+    @Instantiated private let presenter: Presenter
 }
 ```
 
@@ -620,7 +627,7 @@ public final class Screen: Instantiable {
 
 Declare the initializer `public nonisolated init()` to fix it. For a type with `generateDependencyTree: true`, its generated initializers need to be `nonisolated` too: give it `generatedInitializerAttributes: "nonisolated"` ([Attributes for generated declarations](#attributes-for-generated-declarations)). The initializer’s isolation counts, not the type’s: a `@MainActor` class with a `nonisolated init` is fine when its stored properties are `Sendable`. [Attributes for generated declarations](#attributes-for-generated-declarations) do not help, since the function runs on no actor whatever the generated `init()` or `mock()` around it is isolated to.
 
-**If you need a `@MainActor` initializer**, declare the wrapper as its non-`Sendable` twin – `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated` – instead. SafeDI builds a non-`Sendable` wrapper’s dependency with the isolation of the generated `init()` or `mock()` around it, so that `init()` or `mock()` must be `@MainActor`: the root or mocked type is, or [attributes for generated declarations](#attributes-for-generated-declarations) say so. This does not work inside a `Sendable` wrapper’s subtree, where nothing runs on an actor.
+**If you need a `@MainActor` initializer**, declare the wrapper as its non-`Sendable` twin – `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated` – instead. SafeDI builds a non-`Sendable` wrapper’s dependency with the isolation of the generated `init()` or `mock()` around it, so that `init()` or `mock()` must be `@MainActor`: the root or mocked type is, or the method it calls is, as [Attributes for generated declarations](#attributes-for-generated-declarations) describes, or its attributes say so. This does not work inside a `Sendable` wrapper’s subtree, where nothing runs on an actor.
 
 Generated mocks follow the same rules; [Overriding dependencies](#overriding-dependencies) says what a `Sendable` wrapper changes in a mock.
 
@@ -1173,6 +1180,8 @@ public struct NetworkClient: Instantiable {
 
 When the hand-written method returns an additional type the `@Instantiable` declaration fulfills (for example, a protocol declared in `fulfillingAdditionalTypes`), the generated `mock()` method also returns that type.
 
+A hand-written method bound to a global actor binds the generated `mock()` that calls it, as [Attributes for generated declarations](#attributes-for-generated-declarations) describes.
+
 ### The `mockOnly` parameter
 
 The `mockOnly` parameter lets you create a declaration that participates only in mock generation. It provides a hand-written `mock()` method without contributing a production instantiation path. Here’s an example that provides a default mock for a protocol:
@@ -1319,7 +1328,7 @@ The parameters come in this order: `@Forwarded` properties; default-valued initi
 - A non-optional default-valued parameter is `T? = nil`, where `nil` means the declaration’s default. A magic literal such as `#fileID` keeps its default.
 - An `@autoclosure` one, `retries: @autoclosure () -> Int = 3`, becomes `retries: (() -> Int)? = nil`: pass a closure, which the mock calls each time it builds the type. A field of a type’s configuration takes it the same way.
 - An optional-typed default-valued parameter is a `SafeDIOverrides` field with the declaration’s default. It is a parameter of `mock()` instead when the mock has no `SafeDIOverrides`, or when the mock is bound to a global actor, which then evaluates the default in its isolation.
-- If a type is on the main actor only through a conformance or superclass, such as a SwiftUI `View` or a `UIViewController` subclass, give it `mockAttributes: "@MainActor"`. SafeDI sees only a global actor the declaration or `mockAttributes` spells. Without it, the type’s optional-typed defaults are evaluated outside the actor, and one that reads the actor’s state does not compile; the comment SafeDI writes there says so. A default in the configuration of a type in the tree that reads global-actor-isolated state does not compile either, as in an internal mock.
+- If a type is on the main actor only through a conformance or superclass, such as a SwiftUI `View` or a `UIViewController` subclass, give it `mockAttributes: "@MainActor"`. SafeDI sees only a global actor that the declaration, its initializer or hand-written mock, or `mockAttributes` spells. Without it, the type’s optional-typed defaults are evaluated outside the actor, and one that reads the actor’s state does not compile; the comment SafeDI writes there says so. A default in the configuration of a type in the tree that reads global-actor-isolated state does not compile either, as in an internal mock.
 
 **Received dependencies.**
 

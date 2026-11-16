@@ -880,11 +880,7 @@ extension ScopeGenerator {
 		// A `mock()` isolated to a global actor evaluates the type's own defaults as an internal mock does, in its own
 		// isolation, where a default may read the actor's state: each is a parameter of `mock()`, never a field of the
 		// nonisolated `SafeDIOverrides` initializer, and its provider shares the isolation.
-		let mockIsolation: String? = if instantiable.generatedMockIsGlobalActorIsolated {
-			instantiable.declarationIsolation.flatMap { $0 == "nonisolated" ? nil : $0 } ?? Initializer.globalActorAttribute(in: instantiable.mockAttributes)
-		} else {
-			nil
-		}
+		let mockIsolation = instantiable.generatedMockGlobalActor
 		let ownDefaultsAreFields = hasOverrides && mockIsolation == nil
 		/// The provider of an optional-typed default, and how a declaration names it.
 		func provider(named label: String, type: TypeDescription, access: AccessLevel, expression: String) -> String {

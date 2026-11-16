@@ -5394,6 +5394,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	static let standardIndent = "    "
 
+	/// `attributes`, followed by `isolation` when there is one, and a space: what a generated declaration's line begins with.
+	static func attributesPrefix(_ attributes: String, isolation: String?) -> String {
+		let spelled = [attributes, isolation ?? ""].filter { !$0.isEmpty }.joined(separator: " ")
+		return spelled.isEmpty ? "" : "\(spelled) "
+	}
+
 	// MARK: Code Generation
 
 	/// Generates code for this scope. Dependency-tree mode emits the full subtree
@@ -5423,8 +5429,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				if instantiable.dependencies.isEmpty {
 					return ""
 				} else {
-					// Attributes precede the initializer's modifiers on its line, as `mockAttributes` precede a mock's.
-					let attributesPrefix = instantiable.generatedInitializerAttributes.isEmpty ? "" : "\(instantiable.generatedInitializerAttributes) "
+					// Attributes precede the initializer's modifiers on its line, as `mockAttributes` precede a mock's, followed by
+					// the global actor of the type's own `init`, which this one calls synchronously, as `mock()` takes its
+					// construction's. A type its tree builds gives it nothing (`mock-generation.md`).
+					let attributesPrefix = Self.attributesPrefix(instantiable.generatedInitializerAttributes, isolation: instantiable.generatedInitializerConstructionIsolation)
 					return try await """
 					extension \(instantiable.concreteInstantiable.asSource) {
 					    \(attributesPrefix)public \(instantiable.declarationType == .classType ? "convenience " : "")init() {
@@ -5504,7 +5512,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let valuesBindingLines = builderFunctionNames.loopValuesBindingLines ?? valuesBindingLines
 			// What ends the line that constructs the type, after the construction. A seam built inline here is built with the
 			// caller's isolation; across modules, its generated initializer builds its tree with the type's isolation, or the
-			// one `generatedInitializerAttributes` spells. A deliberate gap, which
+			// one `generatedInitializerAttributes` or its own initializer spells. A deliberate gap, which
 			// `generateSeamRootCode`'s comment on the generated initializers' isolation states too.
 			let constructionLineEnd = builtInlineSeamComment.map { " \($0)" } ?? ""
 			// A call to a seam's generated initializer refers to the enum the seam's module generated for the
@@ -6187,9 +6195,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let typeName = instantiable.concreteInstantiable.asSource
 		let initializerKeyword = "\(instantiable.declarationType == .classType ? "convenience " : "")init"
 		let bodyIndent = "\(Self.standardIndent)\(Self.standardIndent)"
-		// Every initializer carries the attributes a root's generated `init()` carries: a caller can reach any of them,
-		// and each calls another.
-		let attributesPrefix = instantiable.generatedInitializerAttributes.isEmpty ? "" : "\(instantiable.generatedInitializerAttributes) "
+		// Every initializer carries the attributes a root's generated `init()` carries, and the global actor of the seam's
+		// own initializer, which the narrowest calls synchronously: a caller can reach any of them, and each calls another.
+		let attributesPrefix = Self.attributesPrefix(instantiable.generatedInitializerAttributes, isolation: instantiable.generatedInitializerConstructionIsolation)
 		// Every tier takes every builder, after its parameters: a hole is required. Each tier takes a builder under its own
 		// label (`SeamSignature.Builder.narrowerTierLabels`). An initializer people call declares no underscored name, which
 		// would keep it out of the module's symbol graph.
@@ -6259,9 +6267,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let marker = tier == .public
 				? seamRoot.unreadTypeComment?.markerLine(namedBy: parameters.map(\.property.typeDescription) + signature.holes.map(\.property.typeDescription), indent: Self.standardIndent).map { "\($0)\n" }
 				: nil
-			// Each initializer has the type's isolation, or the one `generatedInitializerAttributes` spells, never the seam's own
-			// initializer's: it builds the tree, whose isolation the own initializer, which only stores built values, does not
-			// tell. A deliberate gap against the tree built in one module, where the caller's isolation builds it.
+			// Each initializer has the type's isolation, or the one `generatedInitializerAttributes` spells, or the global actor
+			// the seam's own initializer spells, never that initializer's `nonisolated`: it builds the tree, whose isolation the
+			// own initializer, which only stores built values, does not tell, though a global actor it spells binds the call of
+			// it. A deliberate gap against the tree built in one module, where the caller's isolation builds it.
 			let declarationPrefix = "\(Self.standardIndent)\(attributesPrefix)\(tier.spelledOnGeneratedDeclaration) \(initializerKeyword)"
 			// A builder the caller passes can be held by a wrapper the seam builds, such as an instantiator, and called later.
 			let plainDocumentation = if signature.builders.isEmpty {
@@ -6963,7 +6972,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		context: MockContext,
 	) async throws -> String {
 		let typeName = instantiable.concreteInstantiable.asSource
-		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
+		// `mock()` calls the member it builds the type with (its hand-written mock, `init` or `instantiate(…)`)
+		// synchronously, so it takes the global actor that member has, after the `mockAttributes`, which spell no isolation
+		// where it does. A mock whose tree builds the type takes nothing from it (`mock-generation.md`).
+		let mockAttributesPrefix = Self.attributesPrefix(instantiable.mockAttributes, isolation: instantiable.generatedMockConstructionIsolation)
 		let indent = Self.standardIndent
 		let bodyIndent = "\(indent)\(indent)"
 

@@ -132,6 +132,9 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case mainActorChildIsolatedInitializer
 	case mainActorChildNonisolatedInitializer
 	case mainActorChildInitializerSpellsIsolation
+	/// A `.public` type the main actor isolates through its initializer and hand-written mock rather than its declaration,
+	/// whose public `mock()` takes the actor from the member it calls.
+	case mainActorLeafIsolatedByMembers
 	/// A child whose only default-valued parameter is of a type narrower than `public`.
 	case allNonPublicConfiguration
 	/// A `mockConditionalCompilation` that differs between the declaring module and a consuming one, and the declaring
@@ -447,6 +450,7 @@ struct GraphFuzzerPublicMockDraw {
 		var holeLoopRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleLoopRandomSeedMask)
 		var holeForwardingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleForwardingRandomSeedMask)
 		drawsHoleForwardingValue = holeForwardingRandom.percentChance(60)
+		memberIsolationRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockMemberIsolationRandomSeedMask)
 		draw(
 			random: &random,
 			spellingRandom: &spellingRandom,
@@ -521,6 +525,10 @@ struct GraphFuzzerPublicMockDraw {
 	private let builderSurfaceEdit: GraphFuzzerBuilderSurfaceEdit?
 	/// Whether an `ErasedInstantiator` hole forwards `holeTicket: Int`, which `HoleFill` forwards.
 	private var drawsHoleForwardingValue = false
+	/// Draws only whether a leaf the main actor isolates spells it on its members (`isolationSpelledOnMembers`): a roll
+	/// added after the rest of the draw was pinned, so that its other shapes are drawn as before.
+	private var memberIsolationRandom = GraphFuzzerRandomNumberGenerator(seed: 0)
+	static let publicMockMemberIsolationRandomSeedMask: UInt64 = 0x7075626D6B6D6973
 	/// Whether the hole is an `ErasedInstantiator` that forwards `holeTicket: Int` (`drawsHoleForwardingValue`).
 	private var holeForwardsValue = false
 	/// Whether the draw made `builderSurfaceEdit`: the graph has the hole spelling the edit changes.
@@ -651,6 +659,10 @@ struct GraphFuzzerPublicMockDraw {
 		/// The access of a `customMockName` method, `customMock`, when the type has one.
 		var customMockAccess: AccessLevel?
 		var isMainActor = false
+		/// Whether an `isMainActor` type spells `@MainActor` on its initializer and hand-written mock rather than on itself,
+		/// and is `@unchecked Sendable` in place of the `Sendable` the actor gave it, so that its public `mock()` takes the
+		/// actor from the member it calls.
+		var isolationSpelledOnMembers = false
 		var initializerIsNonisolated = false
 		/// Whether the initializer spells the `@MainActor` its type has.
 		var initializerSpellsMainActor = false
@@ -892,6 +904,10 @@ struct GraphFuzzerPublicMockDraw {
 				declaration.isMainActor = !child.initializerIsNonisolated
 				// An isolated initializer spells `@MainActor` half the time, else takes it from its type.
 				child.initializerSpellsMainActor = !child.initializerIsNonisolated && isolationSpellingRandom.percentChance(50)
+			}
+			// A leaf the main actor isolates spells it on its initializer and hand-written mock, not on itself, half the time.
+			if declaration.isMainActor, memberIsolationRandom.percentChance(50) {
+				declaration.isolationSpelledOnMembers = true
 			}
 			if random.percentChance(20) {
 				// A configuration whose only member is of a package type.
@@ -2130,9 +2146,14 @@ struct GraphFuzzerPublicMockDraw {
 			arguments.append("customMockName: \"customMock\"")
 		}
 		let attribute = arguments.isEmpty ? "@Instantiable" : "@Instantiable(\(arguments.joined(separator: ", ")))"
-		// A type isolated to a global actor is `Sendable` already.
-		let conformances = (["Instantiable"] + declaration.conformances.filter { !declaration.isMainActor || $0 != "@unchecked Sendable" }).joined(separator: ", ")
-		var lines = [attribute, "\(declaration.isMainActor ? "@MainActor " : "")\(rendering.modifier(declaration.access))final class \(declaration.name): \(conformances) {"]
+		// A type isolated to a global actor is `Sendable` already; one whose members spell the actor stands in for that
+		// with `@unchecked Sendable`.
+		let typeSpellsMainActor = declaration.isMainActor && !declaration.isolationSpelledOnMembers
+		let ownConformances = declaration.isolationSpelledOnMembers
+			? declaration.conformances.map { $0 == "Sendable" ? "@unchecked Sendable" : $0 }
+			: declaration.conformances.filter { !typeSpellsMainActor || $0 != "@unchecked Sendable" }
+		let conformances = (["Instantiable"] + ownConformances).joined(separator: ", ")
+		var lines = [attribute, "\(typeSpellsMainActor ? "@MainActor " : "")\(rendering.modifier(declaration.access))final class \(declaration.name): \(conformances) {"]
 		/// A function-typed parameter is stored, so it escapes.
 		func parameterType(_ type: String) -> String {
 			GraphFuzzerSpelling.isFunctionType(type) ? "@escaping \(type)" : type
@@ -2141,7 +2162,7 @@ struct GraphFuzzerPublicMockDraw {
 			+ declaration.defaults.map { "\($0.argumentLabel.map { "\($0) " } ?? "")\($0.name): \(parameterType($0.type)) = \($0.defaultValue)" }
 		// The initializer is no wider than its type, nor than the narrowest type it names, so that the fixture compiles.
 		let initializerAccess = min(declaration.initializerAccess ?? declaration.access, declaration.narrowestNamedAccess, declaration.access)
-		let nonisolated = declaration.initializerIsNonisolated ? "nonisolated " : declaration.initializerSpellsMainActor ? "@MainActor " : ""
+		let nonisolated = declaration.initializerIsNonisolated ? "nonisolated " : declaration.initializerSpellsMainActor || declaration.isolationSpelledOnMembers ? "@MainActor " : ""
 		let storedDefaults = rendering.storesEveryParameter ? declaration.defaults : []
 		if rendering.storesEveryParameter {
 			lines.append("\t\(DifferentialValueCreationStamp.property(counterNamed: rendering.counterName))")
@@ -2160,13 +2181,13 @@ struct GraphFuzzerPublicMockDraw {
 		}
 		for member in declaration.staticMembers {
 			lines.append("")
-			lines.append("\t\(declaration.isMainActor ? "nonisolated " : "")\(rendering.modifier(min(member.access, initializerAccess)))\(member.declaration)")
+			lines.append("\t\(typeSpellsMainActor ? "nonisolated " : "")\(rendering.modifier(min(member.access, initializerAccess)))\(member.declaration)")
 		}
 		if let customMockAccess = declaration.customMockAccess {
 			let access = min(customMockAccess, declaration.narrowestNamedAccess, declaration.access)
 			let mockParameters = declaration.properties.map { "\($0.label): \(parameterType($0.type))" }.joined(separator: ", ")
 			let mockArguments = declaration.properties.map { "\($0.label): \($0.label)" }.joined(separator: ", ")
-			lines += ["", "\t\(rendering.modifier(access))static func customMock(\(mockParameters)) -> \(declaration.name) {", "\t\t\(declaration.name)(\(mockArguments))", "\t}"]
+			lines += ["", "\t\(declaration.isolationSpelledOnMembers ? "@MainActor " : "")\(rendering.modifier(access))static func customMock(\(mockParameters)) -> \(declaration.name) {", "\t\t\(declaration.name)(\(mockArguments))", "\t}"]
 		}
 		lines.append("}")
 		return lines.joined(separator: "\n")
@@ -2704,6 +2725,9 @@ extension GraphFuzzerPublicMockDraw {
 			leafNames.contains(property.type) ? property.type : leafNames.first { property.attribute.contains("fulfilledByType: \"\($0)\"") }
 		}
 		for leafName in leafNames {
+			if let leaf = types.declarations[leafName], !leaf.isMainActor, leaf.initializerLine.hasPrefix("@MainActor ") {
+				features.insert(.mainActorLeafIsolatedByMembers)
+			}
 			switch types.declarations[leafName]?.initializerAccess {
 			case "package": features.insert(.packageInitializer)
 			case "internal": features.insert(.internalInitializer)
