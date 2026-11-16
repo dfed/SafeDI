@@ -877,12 +877,13 @@ extension DependencyTreeGenerator {
 				bindings.insert(Binding(stem: stem, key: key))
 			}
 		}
-		func sortKey(of binding: Binding) -> String {
-			binding.key.path.map(\.asSource).joined(separator: " ") + " " + binding.key.caseName + " " + binding.stem
-		}
-		let orderedBindings = bindings.sorted { first, second in
-			first.key.path.count != second.key.path.count ? first.key.path.count < second.key.path.count : sortKey(of: first) < sortKey(of: second)
-		}
+		// Each binding's key is spelled once, not once for every pair compared.
+		let orderedBindings = bindings
+			.map { (binding: $0, sortKey: $0.key.path.map(\.asSource).joined(separator: " ") + " " + $0.key.caseName + " " + $0.stem) }
+			.sorted { first, second in
+				first.binding.key.path.count != second.binding.key.path.count ? first.binding.key.path.count < second.binding.key.path.count : first.sortKey < second.sortKey
+			}
+			.map(\.binding)
 		var namesByPath = [[Property]: Set<String>]()
 		var nameByBinding = [Binding: String]()
 		var namesByScope = [[Property]: Set<String>]()

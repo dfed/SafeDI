@@ -158,13 +158,17 @@ extension DependencyTreeGenerator {
 		// name, which would shadow it. Nor may it equal a deferred parameter's name, which the parameters take first, or a name
 		// another builder binds.
 		let builderFunctionNames = builderFunctionNamesOfProperties(in: generator).union(parameters.filter(\.isDeferred).map(\.internalName))
-		let unrenamedBuilderNames = builderLabels.map(ScopeGenerator.functionName(toBuildPropertyNamed:))
+		let unrenamedBuilderNames = Set(builderLabels.map(ScopeGenerator.functionName(toBuildPropertyNamed:)))
 		var namesBoundByEarlierBuilders = Set<String>()
 		func internalName(ofBuilderLabeled builderLabel: String) -> String {
 			let unrenamedName = ScopeGenerator.functionName(toBuildPropertyNamed: builderLabel)
-			let reservedNames = builderFunctionNames.union(namesBoundByEarlierBuilders).union(unrenamedBuilderNames.filter { $0 != unrenamedName })
+			// Asked of each collection, never of their union: a union made for every builder costs the count of builders
+			// each time, which made a seam's generation grow with the square of its places.
 			var name = unrenamedName
-			while reservedNames.contains(name) {
+			while builderFunctionNames.contains(name)
+				|| namesBoundByEarlierBuilders.contains(name)
+				|| (name != unrenamedName && unrenamedBuilderNames.contains(name))
+			{
 				name = "\(name)_".spelledAsJoinedIdentifier
 			}
 			namesBoundByEarlierBuilders.insert(name)

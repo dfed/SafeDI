@@ -303,7 +303,9 @@ extension DependencyTreeGenerator {
 		}
 		// Every place carries the names of the builder of its family, a fill's among them: a place in a `@Sendable` enum is
 		// built by the `@Sendable` builder, which its fill is handed to, so the fill is `@Sendable`.
-		for site in holesBySite.keys.sorted(by: { $0.sortKey < $1.sortKey }) {
+		// Each site's key is spelled once: spelled inside the comparison, a path was spelled again for every pair compared.
+		let sitesInOrder = holesBySite.keys.map { (site: $0, sortKey: $0.sortKey) }.sorted { $0.sortKey < $1.sortKey }.map(\.site)
+		for site in sitesInOrder {
 			guard let hole = holesBySite[site], hole.innerSeamType == nil else { continue }
 			let isSendable = hole.enumPlace?.isBuiltBySendableBuilder ?? false
 			let key = SeamSignature.ScopeEnum.Key(seamType: seamType, holeType: hole.holeType, isSendable: isSendable)
@@ -318,7 +320,7 @@ extension DependencyTreeGenerator {
 		// share a function name, since neither function is in scope where the other is declared; none may equal a builder,
 		// which is in scope throughout the body.
 		let namesOfBuilders = names.taken.subtracting(namesDeclaredBeforeTheBuilders)
-		for site in holesBySite.keys.sorted(by: { $0.sortKey < $1.sortKey }) {
+		for site in sitesInOrder {
 			guard let hole = holesBySite[site], hole.innerSeamType == nil, !hole.property.propertyType.isConstant else { continue }
 			var name = ScopeGenerator.functionName(toBuildPropertyNamed: hole.property.label)
 			while namesOfBuilders.contains(name) {
@@ -442,12 +444,13 @@ extension DependencyTreeGenerator {
 			let key = InnerScopeKey(callPath: innerScope.callPath, innerKey: innerScope.innerKey)
 			builderLabelByKey[key] = innerScope.builderLabel
 		}
-		func sortKey(of key: InnerScopeKey) -> String {
-			key.callPath.map(\.asSource).joined(separator: " ") + " " + key.innerKey.spelling
-		}
-		let orderedKeys = builderLabelByKey.keys.sorted { first, second in
-			first.callPath.count != second.callPath.count ? first.callPath.count < second.callPath.count : sortKey(of: first) < sortKey(of: second)
-		}
+		// Each key is spelled once, not once for every pair compared.
+		let orderedKeys = builderLabelByKey.keys
+			.map { (key: $0, sortKey: $0.callPath.map(\.asSource).joined(separator: " ") + " " + $0.innerKey.spelling) }
+			.sorted { first, second in
+				first.key.callPath.count != second.key.callPath.count ? first.key.callPath.count < second.key.callPath.count : first.sortKey < second.sortKey
+			}
+			.map(\.key)
 		var namesByCallPath = [[Property]: Set<String>]()
 		var nameByKey = [InnerScopeKey: String]()
 		for key in orderedKeys {
