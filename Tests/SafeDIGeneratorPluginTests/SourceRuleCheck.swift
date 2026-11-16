@@ -57,10 +57,14 @@ enum SourceRule: String, CaseIterable {
 	/// emits spells an apostrophe ’ (U+2019). `Scripts/sweep-apostrophes.py` rewrites each site and the tests that
 	/// compare it.
 	case apostrophe
+	/// `@testable import` in `Tests/SafeDIToolTestSupport`: a plain `swift build` of the package builds that regular
+	/// target in release without `-enable-testing`, which rejects the import, so its helpers import `SafeDIToolLibrary`
+	/// plainly, through the declarations the library makes `public` for them.
+	case testableImport
 
 	/// Whether the rule applies to the file at `path`, relative to the repository root. SafeDI ships its sources and
 	/// plugins, so neither traps; the Tuist plugin's build script prints SafeDI's errors too, so it spells their
-	/// apostrophes.
+	/// apostrophes; and a plain release build of the package builds the test support target.
 	func applies(toFileAt path: String) -> Bool {
 		switch self {
 		case .forceUnwrap, .forceTry, .forceCast, .trap, .uniqueKeysWithValues:
@@ -75,6 +79,8 @@ enum SourceRule: String, CaseIterable {
 			path.hasPrefix("Sources/") && path != "Sources/SafeDICore/Extensions/IdentifierSpellingExtensions.swift"
 		case .apostrophe:
 			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/") || path.hasPrefix("TuistPlugins/")
+		case .testableImport:
+			path.hasPrefix("Tests/SafeDIToolTestSupport/")
 		}
 	}
 }
@@ -307,6 +313,15 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 		return .visitChildren
 	}
 
+	override func visit(_ node: AttributeSyntax) -> SyntaxVisitorContinueKind {
+		// `@testable` in an import's attributes, directly or inside an `#if` among them, reported at the `import` keyword's
+		// line, where a waiver goes.
+		if node.attributeName.trimmedDescription == "testable", let importDeclaration = Self.importDeclaration(whoseAttributesHold: node) {
+			record(.testableImport, at: importDeclaration.importKeyword, "a release build compiles `SafeDIToolTestSupport` without `-enable-testing`, which rejects `@testable import`")
+		}
+		return .visitChildren
+	}
+
 	override func visit(_ node: RegexLiteralExprSyntax) -> SyntaxVisitorContinueKind {
 		if node.regex.text.contains(Self.builderFunctionNamePrefix) {
 			record(.builderFunctionNamePrefix, at: node.regex, Self.builderFunctionNamePrefixMessage)
@@ -381,6 +396,22 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 			rule: rule,
 			message: message,
 		))
+	}
+
+	/// The import declaration whose attributes hold `attribute`, directly or inside an `#if` among them, or `nil` when
+	/// `attribute` belongs to another declaration.
+	private static func importDeclaration(whoseAttributesHold attribute: AttributeSyntax) -> ImportDeclSyntax? {
+		var ancestor = attribute.parent
+		while let node = ancestor {
+			if let importDeclaration = node.as(ImportDeclSyntax.self) {
+				return importDeclaration
+			} else if node.is(DeclSyntax.self), !node.is(IfConfigDeclSyntax.self) {
+				return nil
+			} else {
+				ancestor = node.parent
+			}
+		}
+		return nil
 	}
 
 	/// `key` as written when it is a string literal without interpolation, or an integer, floating-point, or Boolean
