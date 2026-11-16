@@ -100,7 +100,6 @@ NEW_BUILDER_OUTPUT_FEATURES = [
     "generatedOnlyMockFunction",
     "consumerPassesLevelFunctionsStruct",
     "consumerConvertsClosureOverEnum",
-    "consumerConvertsOverReopenedLevel",
     "holeLoopBuilderOfBuilderStruct",
 ]
 NEW_BUILDER_OUTPUT_FLOOR = 10
