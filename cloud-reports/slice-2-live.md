@@ -6,3 +6,4 @@
 - 2026-11-16T05:21Z fix round 2 handed back a6c44bdc9 (verify+coverage green); final run started (w6806lapv): review of round 2 || rebase onto main 58cbc934c + compile-of-C -> one final pins -> pins/lists commit
 - 2026-11-16T05:47Z rebased on main 7e94f056b (snapshot pushed); round-2 reviews: no blockers; pins dispatched on 7e94f056b; nit commit agent started; plan: nits+pins+migration -> one Verify -> PR
 - 2026-11-16T06:05Z nit commit 1be7d779b done (Manual isolation wording, 2.9 cell distinguishes rulings, rules split); waiting on pins
+- 2026-11-16T06:20Z pins run on 7e94f056b done (43812452993): hash moved + 69 rename-order findings to classify; pins-and-lists + migration + final Verify agent started
