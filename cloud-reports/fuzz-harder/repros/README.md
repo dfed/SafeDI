@@ -33,3 +33,19 @@ Run with `ExplorationMultiModuleTests` on branch claude/project-thread-a6wosh: `
 `f5`: Feature's `T0` has `generateMock: .public, customMockName: "customMock"`. Feature's `AnyT0(_: any T0Protocol)` erases it. Other's `T8` has `generateMock: .public` and declares `@Instantiated(fulfilledByType: "T0", erasedToConcreteExistential: true) let anyT0: AnyT0`. Other's generated `extension T0 { static func __safeDI_mock(…) -> AnyT0 { … T0.customMock(…) } }` doesn't compile: "cannot convert value of type 'T0' to specified type 'AnyT0'". It fails under both integrations. The caller already wraps the result as `AnyT0(T0.__safeDI_mock(…))`.
 `f5b`: the same without `customMockName` compiles. The custom mock is the trigger.
 Run with `ExplorationMultiModuleTests`: `SAFEDI_EXPLORE_MM_DIRECTORY=f5`.
+
+## F6: a builder that its built type's alias receives captures itself before it is declared, and Swift 6.2 crashes (base seeds 5889, 6388)
+`f6`: `Root` instantiates `t2Builder: Instantiator<T2>`, `t4Builder: Instantiator<T4>` and `t3: T3`. `T3` instantiates `T4`. `T4` receives `@Received(fulfilledByDependencyNamed: "t4Builder", ofType: Instantiator<T4>.self) let t4BuilderAlias` and `t2Builder: Instantiator<T2>?` only if available. `T2` receives `t3: T3?` only if available.
+The generated `Root.init()` declares `func __safeDI_t4Builder()`, which reads `t4Builder` before the `let t4Builder = Instantiator<T4>(__safeDI_t4Builder)` that follows it. It does not rebind `t4Builder` inside itself, as the same graph without `T2` does. swiftc 6.2 crashes in the SendNonSendable pass (signal 6) on `Root.init()`.
+2.2.0 rejects the graph as a dependency cycle. So this is a newly accepted shape whose generated code does not compile: a new-feature bug, not a regression.
+Run with `Scripts/multi-module-repro.sh f6 Feature`.
+
+## F7: a mock captures a non-Sendable LazilyInstantiated parameter in a @Sendable builder (base seed 9457)
+`f7`: `M` (`generateMock: true`) instantiates `t0: LazilyInstantiated<U>`, where `U` is not `@Instantiable`, and `cBuilder: SendableInstantiator<C>`. `C` receives `t0: U`.
+The mock takes `t0: LazilyInstantiated<U>` and reads `t0.instance` inside `@Sendable func __safeDI_cBuilder()`. That fails with "capture of 't0' with non-Sendable type 'LazilyInstantiated<U>' in a '@Sendable' local function".
+Production rejects the same tree, with `U` `@Instantiable`, as a `@Sendable`-capture error. 2.2.0 generates the same mock, so this is not a regression.
+Run with `Scripts/multi-module-repro.sh f7 Mock`.
+
+## F8: a root's mock rejects an unprovided only-if-available non-Sendable receive inside a @Sendable builder (base seeds 5160, 6381)
+`f8/All.swift`: `Root` (`isRoot: true, generateMock: true`) instantiates `t2Builder: SendableInstantiator<T2>`. `T2` receives `t1Builder: Instantiator<T1>?` only if available, and nothing declares it.
+Production accepts the graph and passes `nil`. With `generateMock: true` the tool rejects it: "cannot be received inside a `@Sendable` function … which the tree of `Root` receives from outside it". The advice to declare it as `SendableInstantiator` "where it is declared" names a declaration that does not exist. 2.2.0 behaves the same.
