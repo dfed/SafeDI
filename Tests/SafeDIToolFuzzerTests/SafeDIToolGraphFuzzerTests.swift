@@ -5855,6 +5855,7 @@ struct SafeDIToolGraphFuzzerTests {
 			"lazilyInstantiatedPlaceMovedBack",
 			"secondErasureOfFillingType",
 			"remedyKeepsDrawnBuilders",
+			GraphFuzzerBuilderSurface.wrapperBuilderCallKind,
 		],
 		seedsTraversingPastTheBatchBudget: seamCorpusSeedsTraversingPastTheBatchBudget,
 	)

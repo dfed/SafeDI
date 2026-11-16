@@ -12040,9 +12040,18 @@ enum GraphFuzzerOracle {
 				retentionCounts: valueComparisons.retentionCounts[runs.fixture.seed] ?? GraphFuzzerRetentionCounts(),
 				valueOracle: runs.valueOracle,
 				remedyRuns: runs.remedyRuns,
-				builderSurfaceFloorKinds: runs.builderSurfaceFloorKinds,
+				builderSurfaceFloorKinds: runs.builderSurfaceFloorKinds + Self.builderCallFloorKinds(of: runs, isCompiled: compileVerificationIsEnabled && runs.runsDifferFailure == nil && codeCompilationFailures[runs.fixture.seed] == nil),
 			)
 		}
+	}
+
+	/// The kinds a graph whose code compiled (`isCompiled`) counts toward the builder surface's floors for the compile of the
+	/// call a person writes, `C`, whether `C` compiled or not: `wrapperBuilderCall` where `C` called a builder whose
+	/// readable type is a wrapper's `Builder`.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	static func builderCallFloorKinds(of runs: GraphFuzzerToolRuns, isCompiled: Bool) -> [String] {
+		guard isCompiled, GraphFuzzerBuilderSurface.callsWrapperBuilder(in: runs.generatedFiles) else { return [] }
+		return [GraphFuzzerBuilderSurface.wrapperBuilderCallKind]
 	}
 
 	/// The failures of each graph of `toolRuns` the tool accepts with its seam and without it whose seam build

@@ -630,6 +630,24 @@ extension GraphFuzzerBuilderSurface {
 	/// What the name of each file `addingBuilderCalls(to:seamTypeAccess:modules:)` adds ends with.
 	static let builderCallFileSuffix = "+SafeDIBuilderCall.swift"
 
+	/// The kind a graph counts toward the builder surface's floors when the compile of `C` judged a builder whose places are
+	/// all held in instantiators, whose readable type is a wrapper's `Builder` (`callsWrapperBuilder(in:)`).
+	static let wrapperBuilderCallKind = "wrapperBuilderCall"
+
+	/// Whether `addingBuilderCalls(to:seamTypeAccess:modules:)` calls, in `generatedFiles`, a readable initializer that takes
+	/// a builder whose places are all held in instantiators, which takes the value they forward.
+	static func callsWrapperBuilder(in generatedFiles: [String: String]) -> Bool {
+		generatedFiles.contains { fileName, contents in
+			guard isGenerated(fileName), contents.contains("enum __safeDI_") else { return false }
+			let membersByStruct = builderStructMembers(inGeneratedFile: contents)
+			return GraphFuzzerOracle.readableInitializerTiers(inGeneratedFile: contents).contains { tier in
+				tier.generatedOnlyParameters.contains { parameter in
+					switchedBuilder(ofGeneratedOnlyParameter: parameter).flatMap { forwardedValue(ofBuilderStruct: $0.structPath, membersByStruct: membersByStruct) } != nil
+				}
+			}
+		}
+	}
+
 	/// `generatedFiles` with, for each seam a generated file declares whose readable initializer takes a builder that takes a
 	/// builder struct – a switched builder, whose generated-only parameter is `SafeDIScope_….__safeDI_Builder<T>` or
 	/// `SafeDISendableScope_….__safeDI_Builder<T>` – a file of hand-written calls `C` of that readable initializer,
@@ -637,7 +655,11 @@ extension GraphFuzzerBuilderSurface {
 	/// generated code and nothing else reads. For each tier that takes a switched builder, one function passes each such
 	/// builder a closure, `{ make() }`, and another the stored closure `make` itself, where `make` is `@escaping () -> T`, or
 	/// `@escaping @Sendable () -> T` in the `@Sendable` family: the family and `T` are read from the builder struct the
-	/// generated-only initializer takes, which the drawn graph decides, never from the readable parameter judged. Every other
+	/// generated-only initializer takes, which the drawn graph decides, never from the readable parameter judged. A builder
+	/// whose places are all held in instantiators takes the value they forward, `F`, which the struct's members read
+	/// (`forwardedValue(ofBuilderStruct:membersByStruct:)`): `make` is `@escaping (F) -> T`, the closure
+	/// `{ value in make(value) }`, or `{ make(()) }` where `F` is `()`, and where `F` is a labeled tuple, two more functions
+	/// pass it a closure that destructures the tuple and one that reads it by label. Every other
 	/// parameter, a kept builder's closure over its scope enum included, is passed a value of the type the readable
 	/// initializer spells. As `GraphFuzzerOracle.addingSeamCallers` does, the calls in the seam's module call every tier, at
 	/// the narrower of its access and the seam type's (`seamTypeAccess`), and, in a graph split across `modules`, a call in
@@ -647,6 +669,7 @@ extension GraphFuzzerBuilderSurface {
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where isGenerated(fileName) && contents.contains("enum __safeDI_") {
 			let directory = fileName.contains("/") ? String(fileName.prefix { $0 != "/" }) + "/" : ""
 			let imports = Set(contents.split(separator: "\n").filter { $0.hasPrefix("import ") }.map(String.init)).sorted()
+			let membersByStruct = builderStructMembers(inGeneratedFile: contents)
 			var seamTypeNames = [String]()
 			var tiersBySeam = [String: [(access: String, readableParameters: [String], generatedOnlyParameters: [String])]]()
 			for tier in GraphFuzzerOracle.readableInitializerTiers(inGeneratedFile: contents) {
@@ -658,7 +681,7 @@ extension GraphFuzzerBuilderSurface {
 			for seamTypeName in seamTypeNames {
 				let tiers = Array((tiersBySeam[seamTypeName] ?? []).enumerated())
 				let seamAccess = seamTypeAccess[seamTypeName] ?? "public"
-				let seamModuleCalls = builderCalls(named: "\(seamTypeName)BuilderCall", of: seamTypeName, calling: tiers, seamTypeAccess: seamAccess)
+				let seamModuleCalls = builderCalls(named: "\(seamTypeName)BuilderCall", of: seamTypeName, calling: tiers, seamTypeAccess: seamAccess, membersByStruct: membersByStruct)
 				if let seamModuleCalls {
 					withCalls["\(directory)\(seamTypeName)\(builderCallFileSuffix)"] = imports.map { $0 + "\n" }.joined() + (imports.isEmpty ? "" : "\n") + seamModuleCalls
 				}
@@ -668,7 +691,7 @@ extension GraphFuzzerBuilderSurface {
 					(GraphFuzzerModule.otherPackageCaller, ["public"], "OtherPackageBuilderCall"),
 				] where modules.contains(module) && reachableAccesses.contains(seamAccess) {
 					guard let tier = tiers.last(where: { reachableAccesses.contains($0.element.access) }),
-					      let calls = builderCalls(named: "\(seamTypeName)\(callerName)", of: seamTypeName, calling: [tier], seamTypeAccess: seamAccess)
+					      let calls = builderCalls(named: "\(seamTypeName)\(callerName)", of: seamTypeName, calling: [tier], seamTypeAccess: seamAccess, membersByStruct: membersByStruct)
 					else { continue }
 					let callerImports = Set(imports + ["import \(GraphFuzzerModule.seamModule.name)"]).sorted()
 					withCalls["\(module.name)/\(seamTypeName)\(builderCallFileSuffix)"] = callerImports.map { $0 + "\n" }.joined() + "\n" + calls
@@ -679,31 +702,60 @@ extension GraphFuzzerBuilderSurface {
 	}
 
 	/// An enum named `callerName` whose functions call each of `tiers` of the seam `seamTypeName` that takes a switched
-	/// builder, twice, as `addingBuilderCalls(to:seamTypeAccess:modules:)` describes, each indexed by the tier's position
-	/// among the seam's readable initializers; `nil` where no tier takes a switched builder.
-	private static func builderCalls(named callerName: String, of seamTypeName: String, calling tiers: [(offset: Int, element: (access: String, readableParameters: [String], generatedOnlyParameters: [String]))], seamTypeAccess: String) -> String? {
+	/// builder, once per form, as `addingBuilderCalls(to:seamTypeAccess:modules:)` describes, each indexed by the tier's
+	/// position among the seam's readable initializers, the builders' forwarded values read from `membersByStruct`
+	/// (`builderStructMembers(inGeneratedFile:)`); `nil` where no tier takes a switched builder.
+	private static func builderCalls(named callerName: String, of seamTypeName: String, calling tiers: [(offset: Int, element: (access: String, readableParameters: [String], generatedOnlyParameters: [String]))], seamTypeAccess: String, membersByStruct: [String: [String]]) -> String? {
 		let accessOrder = ["private", "fileprivate", "internal", "package", "public"]
 		var functions = [String]()
 		for (index, tier) in tiers {
 			var parameters = [String]()
 			var closureArguments = [String]()
 			var storedClosureArguments = [String]()
+			var destructuringArguments = [String]()
+			var labelReadingArguments = [String]()
+			var forwardsLabeledTuple = false
 			for (position, (readableParameter, generatedOnlyParameter)) in zip(tier.readableParameters, tier.generatedOnlyParameters).enumerated() {
 				let readable = Parameter(readableParameter)
 				let label = argumentLabel(of: readable.label)
 				let name = "parameter\(position)"
 				if let builder = switchedBuilder(ofGeneratedOnlyParameter: generatedOnlyParameter) {
-					parameters.append("_ \(name): @escaping \(builder.isSendable ? "@Sendable " : "")() -> \(builder.builtType)")
-					closureArguments.append("\(label): { \(name)() }")
+					let attributes = "@escaping \(builder.isSendable ? "@Sendable " : "")"
+					if let forwarded = forwardedValue(ofBuilderStruct: builder.structPath, membersByStruct: membersByStruct) {
+						parameters.append("_ \(name): \(attributes)(\(forwarded)) -> \(builder.builtType)")
+						let closure = forwarded == "()" ? "\(label): { \(name)(()) }" : "\(label): { value in \(name)(value) }"
+						closureArguments.append(closure)
+						if let labels = tupleLabels(of: forwarded) {
+							forwardsLabeledTuple = true
+							let rebuilt = labels.map { "\($0): \($0)" }.joined(separator: ", ")
+							destructuringArguments.append("\(label): { \(labels.joined(separator: ", ")) in \(name)((\(rebuilt))) }")
+							labelReadingArguments.append("\(label): { \(name)((\(labels.map { "\($0): $0.\($0)" }.joined(separator: ", ")))) }")
+						} else {
+							destructuringArguments.append(closure)
+							labelReadingArguments.append(closure)
+						}
+					} else {
+						parameters.append("_ \(name): \(attributes)() -> \(builder.builtType)")
+						closureArguments.append("\(label): { \(name)() }")
+						destructuringArguments.append("\(label): { \(name)() }")
+						labelReadingArguments.append("\(label): { \(name)() }")
+					}
 				} else {
 					parameters.append("_ \(name): \(readable.type)")
 					closureArguments.append("\(label): \(name)")
+					destructuringArguments.append("\(label): \(name)")
+					labelReadingArguments.append("\(label): \(name)")
 				}
 				storedClosureArguments.append("\(label): \(name)")
 			}
 			guard closureArguments != storedClosureArguments else { continue }
 			let access = [tier.access, seamTypeAccess].min { (accessOrder.firstIndex(of: $0) ?? 2) < (accessOrder.firstIndex(of: $1) ?? 2) } ?? "internal"
-			for (formName, arguments) in [("WritingClosures", closureArguments), ("PassingStoredClosures", storedClosureArguments)] {
+			var forms = [("WritingClosures", closureArguments), ("PassingStoredClosures", storedClosureArguments)]
+			if forwardsLabeledTuple {
+				forms.append(("DestructuringTuples", destructuringArguments))
+				forms.append(("ReadingTupleLabels", labelReadingArguments))
+			}
+			for (formName, arguments) in forms {
 				functions.append("""
 				    \(access) static func callTier\(index)\(formName)(\(parameters.joined(separator: ", "))) -> \(seamTypeName) {
 				        \(seamTypeName)(\(arguments.joined(separator: ", ")))
@@ -720,17 +772,107 @@ extension GraphFuzzerBuilderSurface {
 		"""
 	}
 
-	/// The family and built type `T` of the builder struct `parameter`, a parameter of an initializer only generated code
-	/// calls, takes – `SafeDIScope_….__safeDI_Builder<T>`, or `SafeDISendableScope_….__safeDI_Builder<T>` for the
-	/// `@Sendable` family – or `nil` for a parameter of another type, a kept builder's closure over its scope enum included.
-	static func switchedBuilder(ofGeneratedOnlyParameter parameter: String) -> (isSendable: Bool, builtType: String)? {
+	/// The family, built type `T` and enum path (`SafeDIScope_Api`, `SafeDIScope_Api.Worker_Scope`) of the builder struct
+	/// `parameter`, a parameter of an initializer only generated code calls, takes – `SafeDIScope_….__safeDI_Builder<T>`, or
+	/// `SafeDISendableScope_….__safeDI_Builder<T>` for the `@Sendable` family – or `nil` for a parameter of another type, a
+	/// kept builder's closure over its scope enum included.
+	static func switchedBuilder(ofGeneratedOnlyParameter parameter: String) -> (isSendable: Bool, builtType: String, structPath: String)? {
 		let type = Parameter(parameter).type
 		guard let structRange = type.range(of: #"(?<![A-Za-z0-9_])SafeDI(Sendable)?Scope_\w+(\.\w+)*\.__safeDI_Builder<"#, options: .regularExpression),
 		      let lastAngleBracket = type.lastIndex(of: ">"),
 		      structRange.upperBound <= lastAngleBracket
 		else { return nil }
 		let isSendable = type[structRange].hasPrefix("SafeDISendableScope_")
-		return (isSendable, String(type[structRange.upperBound..<lastAngleBracket]))
+		let structPath = String(type[structRange].dropLast(".__safeDI_Builder<".count))
+		return (isSendable, String(type[structRange.upperBound..<lastAngleBracket]), structPath)
+	}
+
+	/// The type each member of each builder struct `contents`, a generated file, declares returns, keyed by the path of the
+	/// enums that declare the struct from the outermost scope enum (`SafeDIScope_Api`, `SafeDIScope_Api.Worker_Scope`):
+	/// `__safeDI_Built` for a plain or lazy place, a wrapper's `Builder` over it for a place held in an instantiator, or a
+	/// level's struct.
+	static func builderStructMembers(inGeneratedFile contents: String) -> [String: [String]] {
+		var membersByStruct = [String: [String]]()
+		// Each open scope enum, and the builder struct open inside the innermost, by indentation.
+		var openEnums = [(indentation: Int, name: String)]()
+		var openStructIndentation: Int?
+		for line in contents.split(separator: "\n", omittingEmptySubsequences: false) {
+			let indentation = line.prefix { $0 == " " }.count
+			let trimmed = line.trimmingCharacters(in: .whitespaces)
+			if trimmed == "}" {
+				if indentation == openStructIndentation {
+					openStructIndentation = nil
+				} else if indentation == openEnums.last?.indentation {
+					openEnums.removeLast()
+				}
+			} else if let enumRange = trimmed.range(of: #"enum \w+ \{$"#, options: .regularExpression) {
+				let name = String(trimmed[enumRange].dropFirst("enum ".count).dropLast(" {".count))
+				if !openEnums.isEmpty || name.range(of: #"^SafeDI(Sendable)?Scope_"#, options: .regularExpression) != nil {
+					openEnums.append((indentation, name))
+				}
+			} else if !openEnums.isEmpty, trimmed.range(of: #"struct __safeDI_Builder<"#, options: .regularExpression) != nil {
+				openStructIndentation = indentation
+			} else if openStructIndentation != nil,
+			          trimmed.hasPrefix("public let "),
+			          let arrow = trimmed.range(of: ") -> ")
+			{
+				membersByStruct[openEnums.map(\.name).joined(separator: "."), default: []].append(String(trimmed[arrow.upperBound...]))
+			}
+		}
+		return membersByStruct
+	}
+
+	/// The value a builder that takes the builder struct of the enums `structPath` takes, read from the members of that
+	/// struct and of every level's struct it reaches in `membersByStruct`: `nil` where a place among them is plain or lazy,
+	/// whose builder takes nothing; otherwise `()` where one forwards nothing, or else the first place's forwarded value.
+	static func forwardedValue(ofBuilderStruct structPath: String, membersByStruct: [String: [String]]) -> String? {
+		var forwardedValues = [String]()
+		var visited = Set<String>()
+		var pathsToVisit = [structPath]
+		while !pathsToVisit.isEmpty {
+			let path = pathsToVisit.removeFirst()
+			guard visited.insert(path).inserted else { continue }
+			for returnType in membersByStruct[path] ?? [] {
+				if let levelRange = returnType.range(of: #"SafeDI(Sendable)?Scope_\w+(\.\w+)*(?=\.__safeDI_Builder<)"#, options: .regularExpression) {
+					pathsToVisit.append(String(returnType[levelRange]))
+				} else if let wrapperRange = returnType.range(of: #"^(Sendable)?ErasedInstantiator<"#, options: .regularExpression),
+				          let builtRange = returnType.range(of: ", __safeDI_Built>.Builder", options: .backwards)
+				{
+					forwardedValues.append(String(returnType[wrapperRange.upperBound..<builtRange.lowerBound]))
+				} else {
+					return nil
+				}
+			}
+		}
+		guard let firstValue = forwardedValues.first else { return nil }
+		return forwardedValues.contains { $0 == "()" || $0 == "Void" } ? "()" : firstValue
+	}
+
+	/// The labels of `type`, a tuple type each of whose elements is labeled, such as `(id: Int, name: String)`, or `nil`.
+	private static func tupleLabels(of type: String) -> [String]? {
+		guard type.hasPrefix("("), type.hasSuffix(")") else { return nil }
+		var labels = [String]()
+		var depth = 0
+		var element = ""
+		var previous: Character = " "
+		for character in type.dropFirst().dropLast() + [","] {
+			defer { previous = character }
+			if character == ",", depth == 0 {
+				guard let colon = element.firstIndex(of: ":") else { return nil }
+				let label = element[..<colon].trimmingCharacters(in: .whitespaces)
+				guard !label.isEmpty, label.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }) else { return nil }
+				labels.append(label)
+				element = ""
+				continue
+			}
+			if "(<[".contains(character) {
+				depth += 1
+			} else if ")>]".contains(character), !(character == ">" && previous == "-") {
+				depth -= 1
+			}
+			element.append(character)
+		}
+		return labels.count > 1 ? labels : nil
 	}
 
 	/// The external label of a parameter whose label clause is `labelClause`, as a call spells it: without backticks, which
@@ -1389,6 +1531,7 @@ extension GraphFuzzerBuilderSurface {
 			GraphFuzzerToolRuns.secondErasurePairKind,
 			GraphFuzzerToolRuns.callingMockPairKind,
 			GraphFuzzerToolRuns.remedyBuildersPairKind,
+			wrapperBuilderCallKind,
 		]
 
 	/// The kinds of hole whose builders the base check judges in a graph.
