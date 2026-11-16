@@ -834,8 +834,9 @@ extension GraphFuzzerGenerator {
 		     .sendableInstantiatorPlaceMovedToPlainPlace,
 		     .sendableInstantiatorChangedToSendableErasedInstantiator,
 		     .placeOfNewBuilderOfExistingFillingType:
-			// The seam corpus's holes are existentials, which no `Instantiator` wraps, and its colliding erasures already
-			// draw a new builder of an existing filling type (`holeGadgetOther`, read as a pair from the graph without it).
+			// The seam corpus's holes are existentials, which no `Instantiator` wraps, and its two erasures of `HoleGadgetImpl`
+			// already draw a new builder of an existing filling type (`holeGadgetOther`, read as a pair from the graph without
+			// it).
 			return nil
 		}
 		return declarations

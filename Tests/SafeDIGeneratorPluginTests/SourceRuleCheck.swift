@@ -41,6 +41,12 @@ enum SourceRule: String, CaseIterable {
 	case uniqueKeysWithValues
 	/// `try?` in a generator, which discards an error the generator must report.
 	case optionalTry
+	/// A trap spelled in a string literal under `Sources`, which may be text of the code SafeDI generates: `fatalError`,
+	/// `precondition`, `preconditionFailure`, `assert`, `assertionFailure` or `unsafelyUnwrapped` as a whole word, or `try!`
+	/// or `as!`. Generated code never traps, so a diagnostic or a generated comment that spells one is reworded or, on a
+	/// one-line literal, waived; a waiver cannot name a line inside a multi-line literal, whose `//` is text, so a site
+	/// there is reworded.
+	case generatedTrap
 	/// `__safeDI_` in a literal: `ReservedName` spells the prefix of generated builder functions, so a name cannot be
 	/// generated without being reserved.
 	case builderFunctionNamePrefix
@@ -61,6 +67,8 @@ enum SourceRule: String, CaseIterable {
 			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/")
 		case .optionalTry:
 			path.hasPrefix("Sources/SafeDICore/Generators/")
+		case .generatedTrap:
+			path.hasPrefix("Sources/")
 		case .builderFunctionNamePrefix:
 			path.hasPrefix("Sources/") && path != "Sources/SafeDICore/Models/ReservedName.swift"
 		case .backtick:
@@ -293,6 +301,9 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 		if Self.containsStraightApostrophe(node) {
 			record(.apostrophe, at: node.content, "the text SafeDI emits spells an apostrophe ’, never '")
 		}
+		for trap in Self.trapsSpelled(in: node.content.text) {
+			record(.generatedTrap, at: node.content, "a literal in `Sources` spells `\(trap)`, so the code it generates could trap")
+		}
 		return .visitChildren
 	}
 
@@ -306,6 +317,38 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 	// MARK: Private
 
 	private static let trappingFunctionNames: Set = ["fatalError", "precondition", "preconditionFailure", "assert", "assertionFailure"]
+
+	/// The traps `text` spells, in the order they first appear: a name in `trappingFunctionNames`, or `unsafelyUnwrapped`, as
+	/// a whole word, neither preceded nor followed by a letter, a digit or `_`; or `try` or `as` as a whole word followed by
+	/// `!`.
+	private static func trapsSpelled(in text: String) -> [String] {
+		let characters = Array(text)
+		func isIdentifierCharacter(_ character: Character) -> Bool {
+			character.isLetter || character.isNumber || character == "_"
+		}
+		var traps = [String]()
+		var wordStart: Int?
+		for index in 0...characters.count {
+			if index < characters.count, isIdentifierCharacter(characters[index]) {
+				wordStart = wordStart ?? index
+			} else if let start = wordStart {
+				let word = String(characters[start..<index])
+				let trap: String? = if trappingFunctionNames.contains(word) || word == "unsafelyUnwrapped" {
+					word
+				} else if ["try", "as"].contains(word), index < characters.count, characters[index] == "!" {
+					word + "!"
+				} else {
+					nil
+				}
+				if let trap, !traps.contains(trap) {
+					traps.append(trap)
+				}
+				wordStart = nil
+			}
+		}
+		return traps
+	}
+
 	/// The argument labels of the `Dictionary` initializers that trap on a duplicate key, each with its message.
 	private static let duplicateKeyTrappingLabels = [
 		"uniqueKeysWithValues": "`Dictionary(uniqueKeysWithValues:)` traps on a duplicate key",
