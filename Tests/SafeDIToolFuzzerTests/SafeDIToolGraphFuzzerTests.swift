@@ -6700,11 +6700,14 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `holeContext` under that loop, which the loop does not declare again (seed 836); declarations moved
 	/// beneath the declaring module (seed 98) and a chain of public mocks through the three modules beneath it (seed 208),
 	/// which a consumer computes from the declaring module's view (`GraphFuzzerSeamDependencyDraw`). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
-	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Pinned by
-	/// `publicMockSmokeAndKnownIssueFixtureHash`.
-	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836]
+	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Beyond the corpus, seeds
+	/// 1339, 1649, 2687 and 2840 build a type whose public mock names `customMockName` erased to a concrete existential in
+	/// another module's public mock, whose shared construction function returned the eraser and did not compile
+	/// (`SafeDIToolPublicMockCustomMockConstructionTests`); no corpus graph showed it, and they fail the builder surface as
+	/// `publicMockSmokeKnownIssues` lists. Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
+	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x5CB794B9CA7167C0
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x3B5C0B05DB7F36A4
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -6943,6 +6946,23 @@ struct SafeDIToolGraphFuzzerTests {
 		callingMocks: [
 			19, 211, 230, 299, 307, 333, 406, 456, 486, 510, 597, 658, 692, 743, 748, 845, 960,
 		],
+	)
+
+	/// `publicMockKnownIssues`, with the smoke seeds beyond the public mock corpus that fail the builder surface, which the
+	/// corpus's list, bounded by its size, cannot hold.
+	static let publicMockSmokeKnownIssues = addingBuilderSurfaceShapes(
+		seeds: BuilderSurfaceSeeds(
+			base: [1_339, 1_649, 2_687, 2_840],
+			labels: [],
+			sameSupply: [],
+			sameSupplyReason: callingMockTakesHoleValueReason,
+			sameSupplyBuilderKindFlips: [],
+			remedyBuilderKindFlips: [],
+			addedSupply: [],
+			forwardingOtherValues: [1_649],
+			callingMocks: [],
+		),
+		to: publicMockKnownIssues,
 	)
 
 	/// What a public mock's leak keeps alive in the public mock corpus's graphs, each type after its graph's prefix with what
