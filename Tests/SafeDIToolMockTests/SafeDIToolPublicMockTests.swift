@@ -1013,45 +1013,156 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		"""
 		let pluginComment = integration.seamCallComment(type: "Holder", declaringModule: "Core")
-		let screenMock = """
-		#if DEBUG
-		extension Screen {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            x: (() -> X)? = nil,
-		            holder: Holder.SafeDIOverrides = .init()
-		        ) {
-		            self.x = x
-		            self.holder = holder
-		        }
-
-		        let x: (() -> X)?
-		        let holder: Holder.SafeDIOverrides
-		    }
-
-		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Screen {
-		        let x = if let safeDIBuilder = safeDIOverrides.x { safeDIBuilder() } else { X() }
-		        _ = Holder.__safeDI_Holder_mock_23D9BF4A31F0CAE5.self\(pluginComment)
-		        let holder = Holder.mock(x: x, safeDIOverrides: safeDIOverrides.holder)
-		        return Screen(x: x, holder: holder)
-		    }
-		}
-		#endif
-		"""
 		switch integration {
 		case .moduleInfo:
 			#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + coreImports + holderMock + "\n\n" + childConfiguration])
-			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + appImports + screenMock])
+			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            x: (() -> X)? = nil,
+			            holder: Holder.SafeDIOverrides = .init()
+			        ) {
+			            self.x = x
+			            self.holder = holder
+			        }
+
+			        let x: (() -> X)?
+			        let holder: Holder.SafeDIOverrides
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        let x = if let safeDIBuilder = safeDIOverrides.x { safeDIBuilder() } else { X() }
+			        _ = Holder.__safeDI_Holder_mock_23D9BF4A31F0CAE5.self\(pluginComment)
+			        let holder = Holder.mock(x: x, safeDIOverrides: safeDIOverrides.holder)
+			        return Screen(x: x, holder: holder)
+			    }
+			}
+			#endif
+			"""])
 		case .swiftPackagePlugin:
 			#expect(output.modules["Core"]?.generatedFiles == [
-				"Holder+SafeDIMock.swift": generatedFileHeader + coreImports + holderMock,
-				"SafeDIMockConfiguration.swift": generatedFileHeader + coreImports + childConfiguration,
+				"Holder+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Holder {
+				    /// Overrides for the mock dependency tree.
+				    nonisolated public struct SafeDIOverrides {
+				        public init(
+				            child: __safeDI_Core_Child_MockConfiguration = .init()
+				        ) {
+				            self.child = child
+				        }
+
+				        public let child: __safeDI_Core_Child_MockConfiguration
+				    }
+
+				    public static func mock(
+				        x: X? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Holder {
+				        func __safeDI_child() -> Child {
+				            #sourceLocation(file: "\(holderPath)", line: 24)
+				            let ax: X? = x
+				            #sourceLocation()
+				            let grand = if let safeDIBuilder = safeDIOverrides.child.grand { safeDIBuilder(ax) } else { Grand(ax: ax) }
+				            return Child.__safeDI_init(ax: ax, grand: grand, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+				        }
+				        let child: Child = __safeDI_child()
+				        return Holder(child: child)
+				    }
+				}
+
+				extension Holder {
+				    public enum __safeDI_Holder_mock_23D9BF4A31F0CAE5 {}
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				/// Configuration for how `Child` is constructed within the public mock trees of module `Core`.
+				nonisolated public struct __safeDI_Core_Child_MockConfiguration {
+				    public init() {
+				        self.grand = nil
+				        self.safeDIBuilder = nil
+				    }
+
+				    init(
+				        grand: ((X?) -> Grand)? = nil,
+				        _ safeDIBuilder: ((X?, Grand) -> Child)? = nil
+				    ) {
+				        self.grand = grand
+				        self.safeDIBuilder = safeDIBuilder
+				    }
+
+				    let grand: ((X?) -> Grand)?
+				    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
+				    let safeDIBuilder: ((X?, Grand) -> Child)?
+				}
+
+				extension Child {
+				    static func __safeDI_init(ax: X?, grand: Grand, safeDIBuilder: ((X?, Grand) -> Child)?) -> Child {
+				        if let safeDIBuilder { safeDIBuilder(ax, grand) } else { Child(ax: ax, grand: grand) }
+				    }
+				}
+				#endif
+
+				""",
 			])
 			#expect(output.modules["App"]?.generatedFiles == [
-				"Screen+SafeDIMock.swift": generatedFileHeader + appImports + screenMock,
+				"Screen+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Screen {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            x: (() -> X)? = nil,
+				            holder: Holder.SafeDIOverrides = .init()
+				        ) {
+				            self.x = x
+				            self.holder = holder
+				        }
+
+				        let x: (() -> X)?
+				        let holder: Holder.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Screen {
+				        let x = if let safeDIBuilder = safeDIOverrides.x { safeDIBuilder() } else { X() }
+				        _ = Holder.__safeDI_Holder_mock_23D9BF4A31F0CAE5.self\(pluginComment)
+				        let holder = Holder.mock(x: x, safeDIOverrides: safeDIOverrides.holder)
+				        return Screen(x: x, holder: holder)
+				    }
+				}
+				#endif
+				""",
 				"SafeDIMockConfiguration.swift": generatedFileHeader + appImports,
 			])
 		}
@@ -1191,7 +1302,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 			"Service+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
@@ -1354,7 +1466,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 		])
 	}
 
@@ -1647,7 +1760,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 			"Service+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
@@ -1940,7 +2054,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 			@usableFromInline nonisolated func __safeDI_Feed_ViewModel__mockDefault_title() -> String? { Feed_ViewModel.__safeDI_mockDefault_title() }
 			#endif
-			""" + "\n",
+
+			""",
 		])
 	}
 
@@ -2060,7 +2175,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 		])
 	}
 
@@ -2395,7 +2511,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 		])
 	}
 
@@ -8634,48 +8751,95 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#endif
 		"""
 		let pluginComment = integration.seamCallComment(type: "Service", declaringModule: "Core")
-		let screenMock = """
-		#if DEBUG
-		extension Screen {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            analytics: (() -> Analytics)? = nil,
-		            theme: (() -> Theme)? = nil,
-		            service: Service.SafeDIOverrides = .init()
-		        ) {
-		            self.analytics = analytics
-		            self.theme = theme
-		            self.service = service
-		        }
-
-		        let analytics: (() -> Analytics)?
-		        let theme: (() -> Theme)?
-		        let service: Service.SafeDIOverrides
-		    }
-
-		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Screen {
-		        func __safeDI_analytics() -> Analytics {
-		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        }
-		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        let theme = if let safeDIBuilder = safeDIOverrides.theme { safeDIBuilder() } else { Theme() }
-		        _ = Service.__safeDI_Service_mock_209346FEA041FD20.self\(pluginComment)
-		        let service = Service.mock(analytics: analytics.instance, theme: theme, safeDIOverrides: safeDIOverrides.service)
-		        return Screen(analytics: analytics, theme: theme, service: service)
-		    }
-		}
-		#endif
-		"""
 		switch integration {
 		case .moduleInfo:
-			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + imports + "\n\n" + screenMock])
+			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            analytics: (() -> Analytics)? = nil,
+			            theme: (() -> Theme)? = nil,
+			            service: Service.SafeDIOverrides = .init()
+			        ) {
+			            self.analytics = analytics
+			            self.theme = theme
+			            self.service = service
+			        }
+
+			        let analytics: (() -> Analytics)?
+			        let theme: (() -> Theme)?
+			        let service: Service.SafeDIOverrides
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_analytics() -> Analytics {
+			            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+			        }
+			        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+			        let theme = if let safeDIBuilder = safeDIOverrides.theme { safeDIBuilder() } else { Theme() }
+			        _ = Service.__safeDI_Service_mock_209346FEA041FD20.self\(pluginComment)
+			        let service = Service.mock(analytics: analytics.instance, theme: theme, safeDIOverrides: safeDIOverrides.service)
+			        return Screen(analytics: analytics, theme: theme, service: service)
+			    }
+			}
+			#endif
+			"""])
 		case .swiftPackagePlugin:
 			#expect(output.modules["App"]?.generatedFiles == [
 				"SafeDIMockConfiguration.swift": generatedFileHeader + imports + "\n\n",
-				"Caller+SafeDIMock.swift": generatedFileHeader + imports + "\n\n" + screenMock,
+				"Caller+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Screen {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            analytics: (() -> Analytics)? = nil,
+				            theme: (() -> Theme)? = nil,
+				            service: Service.SafeDIOverrides = .init()
+				        ) {
+				            self.analytics = analytics
+				            self.theme = theme
+				            self.service = service
+				        }
+
+				        let analytics: (() -> Analytics)?
+				        let theme: (() -> Theme)?
+				        let service: Service.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Screen {
+				        func __safeDI_analytics() -> Analytics {
+				            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+				        }
+				        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+				        let theme = if let safeDIBuilder = safeDIOverrides.theme { safeDIBuilder() } else { Theme() }
+				        _ = Service.__safeDI_Service_mock_209346FEA041FD20.self\(pluginComment)
+				        let service = Service.mock(analytics: analytics.instance, theme: theme, safeDIOverrides: safeDIOverrides.service)
+				        return Screen(analytics: analytics, theme: theme, service: service)
+				    }
+				}
+				#endif
+				""",
 			])
 		}
 		guard integration == .moduleInfo else { return }
@@ -10298,7 +10462,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		"""
 		#expect(output.modules["App"]?.generatedFiles == [
-			"Screen+SafeDIMock.swift": header + """
+			"Screen+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
 			#if DEBUG
 			extension Screen {
 			    /// Overrides for the mock dependency tree.
@@ -11311,8 +11482,102 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#expect(output.modules["FeedModule"]?.generatedFiles == ["FeedModule.swift": generatedFileHeader + imports + seamCode + "\n\n" + mockCode])
 		case .swiftPackagePlugin:
 			#expect(output.modules["FeedModule"]?.generatedFiles == [
-				"FeedScreen+SafeDI.swift": generatedFileHeader + imports + seamCode,
-				"FeedScreen+SafeDIMock.swift": generatedFileHeader + imports + mockCode,
+				"FeedScreen+SafeDI.swift": generatedFileHeader + """
+				#if canImport(SharedModule)
+				import SharedModule
+				#endif
+
+				extension FeedScreen {
+				    @frozen nonisolated public enum SafeDIScope_FeedService {
+				        case service(service_Values)
+
+				        nonisolated public struct service_Values {
+				            public let shared: SharedThing
+				            internal let store: FeedStore
+				        }
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let service: (service_Values) -> __safeDI_Built
+
+				            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+				                self.service = service
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.service = { _ in __safeDI_builder() }
+				            }
+				        }
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: SafeDIScope_FeedService.__safeDI_Builder<FeedService>) {
+				        let store = FeedStore(shared: shared)
+				        let service: FeedService = __safeDI_feedServiceBuilder.service(SafeDIScope_FeedService.service_Values(shared: shared, store: store))
+				        self.init(shared: shared, store: store, service: service)
+				    }
+				}
+
+				extension FeedScreen {
+				    public enum __safeDI_FeedScreen_F057834D041E69F6 {}
+				}
+				""",
+				"FeedScreen+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(SharedModule)
+				import SharedModule
+				#endif
+
+				#if DEBUG
+				extension FeedScreen {
+				    @frozen public enum SafeDIMockScope_FeedService {
+				        case service(service_Values)
+
+				        public struct service_Values {
+				            public let shared: SharedThing
+				            internal let store: FeedStore
+				        }
+				    }
+
+				    /// Overrides for the mock dependency tree.
+				    nonisolated public struct SafeDIOverrides {
+				        public init(
+				            shared: (() -> SharedThing)? = nil
+				        ) {
+				            self.shared = shared
+				            self.store = nil
+				        }
+
+				        init(
+				            shared: (() -> SharedThing)? = nil,
+				            store: ((SharedThing) -> FeedStore)? = nil
+				        ) {
+				            self.shared = shared
+				            self.store = store
+				        }
+
+				        public let shared: (() -> SharedThing)?
+				        let store: ((SharedThing) -> FeedStore)?
+				    }
+
+				    public static func mock(
+				        feedServiceBuilder: @escaping (FeedScreen.SafeDIMockScope_FeedService) -> FeedService,
+				        shared: SharedThing? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> FeedScreen {
+				        let __safeDI_feedServiceBuilder = feedServiceBuilder
+				        let shared = if let shared { shared } else if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { SharedThing() }
+				        let store = if let safeDIBuilder = safeDIOverrides.store { safeDIBuilder(shared) } else { FeedStore(shared: shared) }
+				        let service: FeedService = __safeDI_feedServiceBuilder(.service(SafeDIMockScope_FeedService.service_Values(shared: shared, store: store)))
+				        return FeedScreen(shared: shared, store: store, service: service)
+				    }
+				}
+
+				extension FeedScreen {
+				    public enum __safeDI_FeedScreen_mock_502D070780B5872C {}
+				}
+				#endif
+				""",
 				"SafeDIMockConfiguration.swift": generatedFileHeader + imports,
 			])
 		}
