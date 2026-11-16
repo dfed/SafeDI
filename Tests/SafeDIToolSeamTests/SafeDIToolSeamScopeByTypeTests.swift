@@ -1782,8 +1782,12 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 	/// Shape E with `screenCount` screens in layers of four: screen `i` opens the three screens of the next layer but the one
 	/// at its own position, every screen forwards an `id` and receives `Service`, and each screen of the last layer
 	/// instantiates a model with the hole `api`, which `App` fills. Screen `i` is named `screenNames[i]` and its model
-	/// `<name>Model`, or `Screen<i>` and `Model<i>`.
-	private static func shapeEModules(screenCount: Int, screenNames: [String]? = nil) -> [ModuleFixture] {
+	/// `<name>Model`, or `Screen<i>` and `Model<i>`. With `placesInFillsOfInnerSeam`, each model of the last layer instead
+	/// instantiates `ApiHolder`, a seam of module `Inner` whose hole `client` `Home`'s tree fills with `LiveClient`, which
+	/// holds `api`: so `Home` calls a seam at each path, and its places are in the fills of those calls. With
+	/// `opensScreensOfItsOwn`, the `screenCount / 4` layers form a tree instead: each screen but the last layer's opens three
+	/// screens no other screen opens, so every path reaches a screen, a model and a place of its own.
+	static func shapeEModules(screenCount: Int, screenNames: [String]? = nil, placesInFillsOfInnerSeam: Bool = false, opensScreensOfItsOwn: Bool = false) -> [ModuleFixture] {
 		func screen(_ index: Int) -> String {
 			screenNames?[index] ?? "Screen\(index)"
 		}
@@ -1794,38 +1798,70 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 			typeName.prefix(1).lowercased() + typeName.dropFirst()
 		}
 		let layerCount = screenCount / 4
+		// The screens each screen opens, by index.
+		var openedByScreen = [[Int]]()
+		if opensScreensOfItsOwn {
+			var layer = Array(0..<4)
+			openedByScreen = layer.map { _ in [] }
+			for _ in 1..<layerCount {
+				var nextLayer = [Int]()
+				for index in layer {
+					let opened = Array(openedByScreen.count..<(openedByScreen.count + 3))
+					openedByScreen[index] = opened
+					openedByScreen += opened.map { _ in [] }
+					nextLayer += opened
+				}
+				layer = nextLayer
+			}
+		} else {
+			openedByScreen = (0..<screenCount).map { index in
+				let layer = index / 4
+				return layer < layerCount - 1 ? (0..<4).filter { $0 != index % 4 }.map { (layer + 1) * 4 + $0 } : []
+			}
+		}
 		var feature = [
 			"@Instantiable public final class Service: Instantiable { public init() {} }",
 			"public protocol Api {}",
 		]
-		for index in 0..<screenCount {
-			let layer = index / 4
-			let opened = layer < layerCount - 1 ? (0..<4).filter { $0 != index % 4 }.map { (layer + 1) * 4 + $0 } : []
+		for (index, opened) in openedByScreen.enumerated() {
 			var screenProperties = ["@Forwarded let id: Int", "@Received let service: Service", "@Instantiated let \(label(model(index))): \(model(index))"]
 			screenProperties += opened.map { "@Instantiated let \(label(screen($0)))Builder: Instantiator<\(screen($0))>" }
 			feature.append(Self.type(named: screen(index), properties: screenProperties))
 			var modelProperties = ["@Received let id: Int", "@Received let service: Service"]
 			if opened.isEmpty {
-				modelProperties.append("@Instantiated let api: any Api")
+				modelProperties.append(placesInFillsOfInnerSeam ? "@Instantiated let apiHolder: ApiHolder" : "@Instantiated let api: any Api")
 			}
 			feature.append(Self.type(named: model(index), properties: modelProperties))
 		}
 		feature.append(Self.type(named: "Home", attributes: "@Instantiable(generateDependencyTree: true)", properties: (0..<4).map { "@Instantiated let \(label(screen($0)))Builder: Instantiator<\(screen($0))>" }))
-		return SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: [
+		let app = [
 			"@Instantiable(fulfillingAdditionalTypes: [Api.self]) final class LiveApi: Api, Instantiable { init(id: Int, service: Service) { self.id = id; self.service = service }\n    @Received let id: Int\n    @Received let service: Service\n}",
 			Self.type(named: "Root", attributes: "@Instantiable(isRoot: true)", properties: ["@Instantiated let service: Service", "@Instantiated let home: Home"]),
-		])
+		]
+		guard placesInFillsOfInnerSeam else {
+			return SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app)
+		}
+		feature.append(Self.type(named: "LiveClient", attributes: "@Instantiable(fulfillingAdditionalTypes: [Client.self])", conformances: ", Client", properties: ["@Received let id: Int", "@Received let service: Service", "@Instantiated let api: any Api"]))
+		return [
+			ModuleFixture(name: "Inner", packageName: "Shop", swiftFileContent: [
+				"public protocol Client {}",
+				Self.type(named: "ApiHolder", attributes: "@Instantiable(generateDependencyTree: true)", properties: ["@Instantiated let client: any Client"]),
+			]),
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature.map { "import Inner\n\n" + $0 }, dependencies: ["Inner"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Feature\nimport Inner\n\n" + $0 }, dependencies: ["Inner", "Feature"]),
+		]
 	}
 
-	/// A `public final class` named `name` whose initializer takes `properties`, each of `@Attribute let label: Type`.
-	private static func type(named name: String, access: String = "public", initializerAccess: String? = nil, attributes: String = "@Instantiable", properties: [String]) -> String {
+	/// A `public final class` named `name`, conforming to `Instantiable` and then `conformances`, whose initializer takes
+	/// `properties`, each of `@Attribute let label: Type`.
+	private static func type(named name: String, access: String = "public", initializerAccess: String? = nil, attributes: String = "@Instantiable", conformances: String = "", properties: [String]) -> String {
 		let parameters = properties.map { property in
 			property.components(separatedBy: " let ").last ?? ""
 		}
 		let labels = parameters.map { String($0.prefix { $0 != ":" }) }
 		return """
 		\(attributes)
-		\(access) final class \(name): Instantiable {
+		\(access) final class \(name): Instantiable\(conformances) {
 		    \(initializerAccess ?? access) init(\(parameters.joined(separator: ", "))) {
 		\(labels.map { "        self.\($0) = \($0)" }.joined(separator: "\n"))
 		    }

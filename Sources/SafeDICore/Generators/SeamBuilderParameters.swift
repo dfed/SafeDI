@@ -146,10 +146,12 @@ extension DependencyTreeGenerator {
 		let collidingIndices = candidates.indices.filter { index in
 			parameterLabels.contains(candidates[index].label) || candidateIndicesByLabel[candidates[index].label, default: []].count > 1
 		}
-		let keptLabels = Set(candidates.indices.filter { !collidingIndices.contains($0) }.map { candidates[$0].label })
+		let collidingIndexSet = Set(collidingIndices)
+		let keptLabels = Set(candidates.indices.filter { !collidingIndexSet.contains($0) }.map { candidates[$0].label })
 		let collidingNames = ScopeGenerator.identifierSafeNames(
 			for: collidingIndices.map { (label: candidates[$0].label, suffixTypes: candidates[$0].suffixTypes) },
 			reservedNames: parameterLabels.union(keptLabels),
+			countingWorkAs: .namingEntriesApart,
 		)
 		for (index, name) in zip(collidingIndices, collidingNames) {
 			builderLabels[index] = name
@@ -158,15 +160,24 @@ extension DependencyTreeGenerator {
 		// name, which would shadow it. Nor may it equal a deferred parameter's name, which the parameters take first, or a name
 		// another builder binds.
 		let builderFunctionNames = builderFunctionNamesOfProperties(in: generator).union(parameters.filter(\.isDeferred).map(\.internalName))
-		let unrenamedBuilderNames = builderLabels.map(ScopeGenerator.functionName(toBuildPropertyNamed:))
+		let unrenamedBuilderNames = Set(builderLabels.map(ScopeGenerator.functionName(toBuildPropertyNamed:)))
 		var namesBoundByEarlierBuilders = Set<String>()
 		func internalName(ofBuilderLabeled builderLabel: String) -> String {
 			let unrenamedName = ScopeGenerator.functionName(toBuildPropertyNamed: builderLabel)
-			let reservedNames = builderFunctionNames.union(namesBoundByEarlierBuilders).union(unrenamedBuilderNames.filter { $0 != unrenamedName })
-			var name = unrenamedName
-			while reservedNames.contains(name) {
-				name = "\(name)_".spelledAsJoinedIdentifier
-			}
+			// The names are released before this builder's is inserted, which would copy the set they share otherwise.
+			let name: String = {
+				// Each name is asked of each set, never of their union: a union made for every builder holds every builder's
+				// name, so naming the builders grew with the square of the seam's places.
+				let reservedNames = GenerationWork.taking(
+					NamesConsultedInTurn([builderFunctionNames, namesBoundByEarlierBuilders, unrenamedBuilderNames], exceptFromTheLast: unrenamedName),
+					by: .namingSeamBuilders,
+				)
+				var name = unrenamedName
+				while reservedNames.contains(name) {
+					name = "\(name)_".spelledAsJoinedIdentifier
+				}
+				return name
+			}()
 			namesBoundByEarlierBuilders.insert(name)
 			return name
 		}

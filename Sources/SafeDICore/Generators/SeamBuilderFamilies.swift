@@ -30,12 +30,19 @@
 struct GeneratedNameAllocator {
 	init(reserving names: Set<String>) {
 		taken = names
+		consulted = NamesConsultedInTurn([])
+	}
+
+	/// An allocator that asks `names` in turn, never copying them, beside what it takes.
+	init(reserving names: NamesConsultedInTurn) {
+		taken = []
+		consulted = names
 	}
 
 	/// Claims `base`, with `_` appended while it or any name `occupied` gives for it is taken, and returns what it claimed.
 	mutating func claim(_ base: String, occupying occupied: (String) -> [String] = { [$0] }) -> String {
 		var name = base
-		while occupied(name).contains(where: taken.contains) {
+		while occupied(name).contains(where: { taken.contains($0) || consulted.contains($0) }) {
 			name = "\(name)_".spelledAsJoinedIdentifier
 		}
 		taken.formUnion(occupied(name))
@@ -47,7 +54,10 @@ struct GeneratedNameAllocator {
 		taken.formUnion(names)
 	}
 
+	/// The names taken: those reserved as a set, those reserved later, and those claimed; never the names `consulted` holds.
 	private(set) var taken: Set<String>
+	/// The names reserved without being copied, asked in turn.
+	private let consulted: NamesConsultedInTurn
 }
 
 // MARK: - Shaping a seam's builders
@@ -210,7 +220,8 @@ extension DependencyTreeGenerator {
 		// The names the initializer's body declares for its builders, in a fixed order. Every other name of the tree is
 		// claimed first: a builder function of a property the tree builds, and a deferred parameter's closure.
 		let namesDeclaredBeforeTheBuilders = treeFunctionNames.union(parameters.filter(\.isDeferred).map(\.internalName))
-		var names = GeneratedNameAllocator(reserving: namesDeclaredBeforeTheBuilders)
+		// The allocator copies them, once for the seam's builders.
+		var names = GeneratedNameAllocator(reserving: GenerationWork.taking(namesDeclaredBeforeTheBuilders, by: .namingSeamBuilders))
 		// The own enums and their names, in builder order: per hole type in label order, then plain, `@Sendable`.
 		let orderedHoleTypes = holeTypes.sorted { label(of: $0, isSendable: false) < label(of: $1, isSendable: false) }
 		var ownEnums = [SeamSignature.ScopeEnum]()
@@ -328,7 +339,10 @@ extension DependencyTreeGenerator {
 		}
 		// Every place carries the names of the builder of its family, a fill's among them: a place in a `@Sendable` enum is
 		// built by the `@Sendable` builder, which its fill is handed to, so the fill is `@Sendable`.
-		for site in holesBySite.keys.sorted(by: { $0.sortKey < $1.sortKey }) {
+		// Each site's key is spelled once: spelled inside the comparison, a path was spelled again for every pair compared.
+		let keyedSites = holesBySite.keys.map { (site: $0, sortKey: $0.sortKey) }
+		let sitesInOrder = keyedSites.sorted { $0.sortKey < $1.sortKey }.map(\.site)
+		for site in sitesInOrder {
 			guard let hole = holesBySite[site], hole.innerSeamType == nil else { continue }
 			let isSendable = hole.enumPlace?.isBuiltBySendableBuilder ?? false
 			let key = SeamSignature.ScopeEnum.Key(seamType: seamType, holeType: hole.holeType, isSendable: isSendable)
@@ -343,7 +357,7 @@ extension DependencyTreeGenerator {
 		// share a function name, since neither function is in scope where the other is declared; none may equal a builder,
 		// which is in scope throughout the body.
 		let namesOfBuilders = names.taken.subtracting(namesDeclaredBeforeTheBuilders)
-		for site in holesBySite.keys.sorted(by: { $0.sortKey < $1.sortKey }) {
+		for site in sitesInOrder {
 			guard let hole = holesBySite[site], hole.innerSeamType == nil, !hole.property.propertyType.isConstant else { continue }
 			var name = ScopeGenerator.functionName(toBuildPropertyNamed: hole.property.label)
 			while namesOfBuilders.contains(name) {
@@ -480,21 +494,29 @@ extension DependencyTreeGenerator {
 		func sortKey(of key: InnerScopeKey) -> String {
 			key.callPath.map(\.asSource).joined(separator: " ") + " " + key.innerKey.spelling
 		}
-		let orderedKeys = builderLabelByKey.keys.sorted { first, second in
-			first.callPath.count != second.callPath.count ? first.callPath.count < second.callPath.count : sortKey(of: first) < sortKey(of: second)
-		}
+		// Each key is spelled once, not once for every pair compared.
+		let keyedKeys = builderLabelByKey.keys.map { (key: $0, sortKey: sortKey(of: $0)) }
+		let orderedKeys = keyedKeys.sorted { first, second in
+			first.key.callPath.count != second.key.callPath.count ? first.key.callPath.count < second.key.callPath.count : first.sortKey < second.sortKey
+		}.map(\.key)
 		var namesByCallPath = [[Property]: Set<String>]()
 		var nameByKey = [InnerScopeKey: String]()
 		for key in orderedKeys {
 			guard let callProperty = key.callPath.last else { continue }
-			var taken = reservedNames
-			for length in 1...key.callPath.count {
-				taken.formUnion(namesByCallPath[Array(key.callPath.prefix(length)), default: []])
-			}
-			var name = ScopeGenerator.functionName(toBuildPropertyNamed: "\(callProperty.label.spelledWithoutBackticks)_\(builderLabelByKey[key, default: ""])".spelledAsIdentifier)
-			while taken.contains(name) {
-				name = "\(name)_".spelledAsJoinedIdentifier
-			}
+			// The names are released before this key's is inserted, which would copy the set they share otherwise.
+			let name: String = {
+				// Each name is asked of each set in turn, never of their union: a union made for every key holds every
+				// payload's name, so naming the inner scopes grew with the square of the seam's places.
+				let taken = GenerationWork.taking(
+					NamesConsultedInTurn([reservedNames] + (1...key.callPath.count).compactMap { namesByCallPath[Array(key.callPath.prefix($0))] }),
+					by: .namingInnerScopes,
+				)
+				var name = ScopeGenerator.functionName(toBuildPropertyNamed: "\(callProperty.label.spelledWithoutBackticks)_\(builderLabelByKey[key, default: ""])".spelledAsIdentifier)
+				while taken.contains(name) {
+					name = "\(name)_".spelledAsJoinedIdentifier
+				}
+				return name
+			}()
 			nameByKey[key] = name
 			namesByCallPath[key.callPath, default: []].insert(name)
 		}
@@ -618,6 +640,7 @@ extension DependencyTreeGenerator {
 			let renamed = ScopeGenerator.identifierSafeNames(
 				for: colliding.map { (label: stems[$0], suffixTypes: [holeTypes[$0].instantiatedType, holeTypes[$0].builtType]) },
 				reservedNames: Set(holeTypes.indices.filter { !colliding.contains($0) }.map { stems[$0] }),
+				countingWorkAs: .namingEntriesApart,
 			)
 			for (index, name) in zip(colliding, renamed) {
 				stems[index] = name.spelledWithoutBackticks

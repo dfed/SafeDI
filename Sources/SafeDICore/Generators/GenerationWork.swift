@@ -1,0 +1,136 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+/// The work a step of generation did: how many elements it read, wrote or compared. Each step counted here once did work
+/// that grew with the square of a seam's places – it copied or scanned every place's names, or every fill of a call, once
+/// for each place, fill or scope – and is counted so that a test can check that its work grows no faster than the paths
+/// to the places. Handed to `observer`, which the tests set, never the tool.
+///
+/// Work is counted where each scope, fill, builder or name takes the collection it consults (`taking(_:by:)`), not where
+/// the collection is built: a collection taken as a plain value counts every element, as if built or scanned for the taker,
+/// so a step that builds or scans its collection again for each taker counts that work whatever its own code reports. A
+/// collection built once is taken as `Shared`, which counts its building where it is built; names kept in several sets
+/// are taken as `NamesConsultedInTurn`, which counts each membership test.
+///
+/// `observer` is task-local. It sees every step `generate` runs: building each tree and computing each seam's signature in
+/// `generate`'s own task and its children, and emitting each scope's code on the detached task that starts it
+/// (`Scope.startCodeGeneration(of:)`), which is handed the observer of the task that starts it. A step passes no `Step`
+/// (`taking(_:by:)` with `nil`) where its work is not counted: `identifierSafeNames` counts only for a seam's signature.
+public struct GenerationWork: Sendable {
+	/// A step of generation whose work is counted.
+	public enum Step: String, Sendable, Hashable, CaseIterable {
+		/// Naming entries that share a label apart by their suffix types
+		/// (`ScopeGenerator.identifierSafeNames(for:besideEntriesKeepingTheirNames:reservedNames:countingWorkAs:)`), for a
+		/// seam's signature: each entry, at each suffix position it tries, takes what it must differ from there, the entries
+		/// sharing its label and suffix.
+		case namingEntriesApart
+		/// Naming each of a seam's builders apart from the names bound in its initializer: each builder of a place takes the
+		/// names it must avoid (`DependencyTreeGenerator.holes`), and the builders of each hole type the names the initializer
+		/// declares before them (`DependencyTreeGenerator.shapedBuilders`).
+		case namingSeamBuilders
+		/// Gathering the fills and dispatchers of a seam call, which every fill inside the call takes, as does the call.
+		case gatheringFillsOfACall
+		/// Joining the names a seam's tree binds for its builders and its deferred parameters, which every scope of the tree
+		/// takes.
+		case joiningNamesBoundBySeam
+		/// Naming the scope value each call of an inner seam hands a fill (`DependencyTreeGenerator.innerScopeNames`): each
+		/// call and builder takes the names it must avoid.
+		case namingInnerScopes
+		/// Naming the payload of each case on the routes to a seam's places (`DependencyTreeGenerator.valuesBindingNames`):
+		/// each payload takes the names it must avoid.
+		case namingValuesBindings
+		/// Reserving the names a seam call's fills and dispatchers avoid: the enclosing calls' fills and the names the seam
+		/// whose tree holds the call binds, which each call takes.
+		case reservingNamesOfACall
+	}
+
+	/// The step that did the work.
+	public let step: Step
+	/// The elements it read, wrote or compared.
+	public let elementCount: Int
+
+	/// Called with the work of a counted step each time the step runs, when set: by the tests, never by the tool.
+	@TaskLocal public static var observer: (@Sendable (GenerationWork) -> Void)?
+
+	/// Hands `observer`, when set, the work `step` did, when `step` is not `nil`.
+	static func record(_ elementCount: Int, by step: Step?) {
+		if let observer, let step {
+			observer(GenerationWork(step: step, elementCount: elementCount))
+		}
+	}
+
+	/// `collection`, which a scope, fill, builder or name of `step` takes: as a plain value, it was built or is scanned for
+	/// the taker, so each of its elements counts.
+	static func taking<Taken: Collection>(_ collection: Taken, by step: Step?) -> Taken {
+		record(collection.count, by: step)
+		return collection
+	}
+
+	/// The value of `shared`, built once for every taker and counted where it was built, so taking it counts nothing.
+	static func taking<Value>(_ shared: Shared<Value>, by _: Step?) -> Value {
+		shared.value
+	}
+
+	/// `names`, which a builder, name or call of `step` takes: taking it copies none of their names, and each membership test
+	/// it is asked then counts as one.
+	static func taking(_ names: NamesConsultedInTurn, by step: Step?) -> NamesConsultedInTurn {
+		var names = names
+		names.step = step
+		return names
+	}
+
+	/// A collection built once and handed to each scope, fill or builder that takes it, which costs the taker nothing:
+	/// its building is counted where it is built.
+	struct Shared<Value: Sendable>: Sendable {
+		init(_ value: Value) {
+			self.value = value
+		}
+
+		fileprivate let value: Value
+	}
+}
+
+/// Names a builder, a name or a call must avoid, held as the sets they are in and asked of each in turn: joining the sets
+/// would copy every name of each for every builder, name or call that asks, where the sets grow with a seam's places.
+/// Each test asks as many sets as there are calls or paths enclosing the asker, which the code generated there spells too.
+///
+/// A set handed here shares its storage with the collection it came from, so the holder releases this value before it
+/// inserts into that collection: inserting while both hold the storage copies it.
+struct NamesConsultedInTurn {
+	/// Names in `sets`, each asked in turn, apart from `exception`, which the last set does not hold for this asker.
+	init(_ sets: [Set<String>], exceptFromTheLast exception: String? = nil) {
+		self.sets = sets
+		self.exception = exception
+	}
+
+	/// Whether any set holds `name`: one membership test of the step that took these names (`GenerationWork.taking(_:by:)`).
+	func contains(_ name: String) -> Bool {
+		GenerationWork.record(1, by: step)
+		return sets.indices.contains { index in
+			sets[index].contains(name) && (index != sets.count - 1 || name != exception)
+		}
+	}
+
+	/// The step whose membership tests these are, once taken.
+	fileprivate(set) var step: GenerationWork.Step?
+
+	private let sets: [Set<String>]
+	private let exception: String?
+}

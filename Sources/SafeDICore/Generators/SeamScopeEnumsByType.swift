@@ -908,9 +908,11 @@ extension DependencyTreeGenerator {
 		func sortKey(of binding: Binding) -> String {
 			binding.key.path.map(\.asSource).joined(separator: " ") + " " + binding.key.caseName + " " + binding.stem
 		}
-		let orderedBindings = bindings.sorted { first, second in
-			first.key.path.count != second.key.path.count ? first.key.path.count < second.key.path.count : sortKey(of: first) < sortKey(of: second)
-		}
+		// Each binding's key is spelled once, not once for every pair compared.
+		let keyedBindings = bindings.map { (binding: $0, sortKey: sortKey(of: $0)) }
+		let orderedBindings = keyedBindings.sorted { first, second in
+			first.binding.key.path.count != second.binding.key.path.count ? first.binding.key.path.count < second.binding.key.path.count : first.sortKey < second.sortKey
+		}.map(\.binding)
 		var namesByPath = [[Property]: Set<String>]()
 		var nameByBinding = [Binding: String]()
 		var namesByScope = [[Property]: Set<String>]()
@@ -918,14 +920,20 @@ extension DependencyTreeGenerator {
 			let path = binding.key.path
 			guard !path.isEmpty else { continue }
 			let scope = Array(path.dropLast())
-			var taken = reservedNames.union(namesByScope[scope, default: []])
-			for length in 1..<path.count {
-				taken.formUnion(namesByPath[Array(path.prefix(length)), default: []])
-			}
-			var name = ScopeGenerator.functionName(toBuildPropertyNamed: "\(binding.stem)\(nameInfix)\(binding.key.caseName)")
-			while taken.contains(name) {
-				name = "\(name)_".spelledAsJoinedIdentifier
-			}
+			// The names are released before this binding's is inserted, which would copy the sets they share otherwise.
+			let name: String = {
+				// Each name is asked of each set in turn, never of their union: a union made for every binding holds every
+				// payload's name, so naming the payloads grew with the square of the seam's places.
+				let taken = GenerationWork.taking(
+					NamesConsultedInTurn([reservedNames, namesByScope[scope, default: []]] + (1..<path.count).compactMap { namesByPath[Array(path.prefix($0))] }),
+					by: .namingValuesBindings,
+				)
+				var name = ScopeGenerator.functionName(toBuildPropertyNamed: "\(binding.stem)\(nameInfix)\(binding.key.caseName)")
+				while taken.contains(name) {
+					name = "\(name)_".spelledAsJoinedIdentifier
+				}
+				return name
+			}()
 			nameByBinding[binding] = name
 			namesByPath[path, default: []].insert(name)
 			namesByScope[scope, default: []].insert(name)
