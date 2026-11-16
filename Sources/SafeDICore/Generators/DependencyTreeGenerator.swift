@@ -5433,12 +5433,9 @@ public actor DependencyTreeGenerator {
 				))
 				continue
 			}
-			// A form the seam's own property of the label does not provide is a second parameter under the label.
-			guard !ownLabels.contains(label) else {
-				errors.append(labelCollision(label, among: receivers(ofLabel: label)))
-				continue
-			}
-			guard let providingForm = Self.providingForm(among: forms) else {
+			// A form the seam's own property of the label does not provide is a second parameter under the label, as is a form
+			// beside which no one parameter takes the others.
+			guard !ownLabels.contains(label), let providingForm = Self.providingForm(among: forms) else {
 				errors.append(labelCollision(label, among: receivers(ofLabel: label)))
 				continue
 			}
