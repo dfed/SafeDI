@@ -1,0 +1,3 @@
+Harness plain
+Feature generate Harness
+App generate Feature Harness

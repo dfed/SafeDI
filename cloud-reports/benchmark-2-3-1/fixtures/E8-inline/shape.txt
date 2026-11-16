@@ -1,0 +1,1 @@
+description=spike 2 shape E8 built inline in one module; runtime: Root() and every path, per value

@@ -1,0 +1,1 @@
+description=spike 2 shape E24 with its seam in module Feature (no 2.2.0 counterpart); runtime: Root() and every path, per value

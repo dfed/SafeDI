@@ -1,0 +1,1 @@
+description=spike 2 shape E16 built inline in one module; runtime: Root() and every path, per value
