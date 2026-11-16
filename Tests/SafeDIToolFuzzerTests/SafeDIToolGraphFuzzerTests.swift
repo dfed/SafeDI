@@ -7388,12 +7388,16 @@ struct SafeDIToolGraphFuzzerTests {
 		.forwardedProvider: 3,
 		// pins: derive on CI
 		.generatedOnlyMockFunction: 0,
+		// pins: derive on CI
+		.generatedOnlyMockFunctionBesideConstructionFunction: 0,
 		.holeBuilder: 39,
 		// pins: derive on CI
 		.holeLoopBuilder: 0,
 		// pins: derive on CI
 		.holeLoopBuilderOfBuilderStruct: 0,
 		.isolatedConstruction: 3,
+		// pins: derive on CI
+		.isolatedGeneratedOnlyMockFunction: 0,
 		.moduleConfiguration: 84,
 		.publicTier: 100,
 		.secondTier: 60,

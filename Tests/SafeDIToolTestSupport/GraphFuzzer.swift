@@ -66,10 +66,6 @@ struct GraphFuzzerFixture: Equatable {
 	/// The contents of each file, in declaration order. Every type name begins with `typeNamePrefix`, so the
 	/// fixtures of several seeds compile together as one module.
 	let swiftFileContent: [String]
-	/// Whether the graph is a public mock corpus graph with a builder surface edit applied after the draw
-	/// (`GraphFuzzerGenerator.fixture(forSeed:features:builderSurfaceEdit:)`), which can give `T6` builders the hand-written
-	/// call its draw wrote does not pass: the same-supply judgment, not that call, judges the calls of the edited graph.
-	var isBuilderSurfaceEdit = false
 
 	/// A seam corpus graph, every module of which that declares a seam sets `generatePlainDependencyTreeInitializers: true`,
 	/// so the oracles read and call the readable initializer a person calls, beside the one only generated code calls. The
@@ -2116,7 +2112,7 @@ enum GraphFuzzerGenerator {
 	static func fixture(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>, builderSurfaceEdit edit: GraphFuzzerBuilderSurfaceEdit) -> GraphFuzzerFixture? {
 		guard !features.contains(.generateMockPublic) else {
 			let draw = GraphFuzzerPublicMockDraw(seed: seed, builderSurfaceEdit: edit)
-			return draw.appliesBuilderSurfaceEdit ? GraphFuzzerFixture(seed: seed, swiftFileContent: draw.swiftFileContent(storingEveryParameter: false, isKnownRight: false), isBuilderSurfaceEdit: true) : nil
+			return draw.appliesBuilderSurfaceEdit ? GraphFuzzerFixture(seed: seed, swiftFileContent: draw.swiftFileContent(storingEveryParameter: false, isKnownRight: false)) : nil
 		}
 		guard features.contains(.generateDependencyTree) else { return nil }
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: false)
@@ -13394,25 +13390,33 @@ enum GraphFuzzerOracle {
 				guard let colon = moduleAndCall.firstIndex(of: ":"), let callee = moduleAndCall[moduleAndCall.index(after: colon)...].trimmingCharacters(in: .whitespaces).components(separatedBy: ".mock(").first else { continue }
 				let moduleName = String(moduleAndCall[..<colon])
 				var call = moduleAndCall[moduleAndCall.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-				// The call passes one builder, of `T6`'s one hole type, labeled from type names the renamed graph renames, so it
-				// is found by its form, not its label. A draw whose call or mock has another number of builders breaks that
-				// reading, which fails the run rather than leave a builder unconverted; a builder surface edit can give the mock
-				// more after the call was written (`GraphFuzzerFixture.isBuilderSurfaceEdit`).
-				if !GraphFuzzerPublicMockBuilders.labelsTakingNothing(of: callee, in: generatedFiles).isEmpty {
-					let builderPattern = #"(\w+Builder\w*): \{ _ in "#
-					let builderCount = (try? NSRegularExpression(pattern: builderPattern)).map { $0.numberOfMatches(in: call, range: NSRange(call.startIndex..., in: call)) } ?? 0
-					let mostBuildersOfOneMock = GraphFuzzerPublicMockBuilders.publicTierBuilderCounts(of: callee, in: generatedFiles).max() ?? 0
-					if builderCount != 1 || (mostBuildersOfOneMock != 1 && !fixture.isBuilderSurfaceEdit) {
-						Issue.record("The hand-written call of `\(callee)`’s public mock passes \(builderCount) builders, and its `public` `mock()` takes \(mostBuildersOfOneMock), where the conversion reads one: \(call)")
-					}
-					call = call.replacingOccurrences(of: builderPattern, with: "$1: { ", options: .regularExpression)
+				// The draw writes each builder as a closure that ignores the scope it is handed, `<label>: { _ in `. Where the
+				// generated `mock()` takes a closure that takes nothing under that label, the call passes one: each builder by its
+				// label, however many the mock takes. A builder the mock takes that the call does not pass is left as it is: a
+				// builder surface edit gives the mock builders after the draw wrote the call, which the same-supply judgment
+				// judges. One the call passes under such a label in another form is a draw this reading does not know. A graph
+				// renamed to change an order renames the type names the mock's labels are spelled from but not the call the
+				// draw wrote, so where the call passes none of the mock's labels, each builder is converted by its form.
+				let labelsTakingNothing = GraphFuzzerPublicMockBuilders.labelsTakingNothing(of: callee, in: generatedFiles)
+				let passedLabels = labelsTakingNothing.filter { call.range(of: #"\b\#($0): "#, options: .regularExpression) != nil }
+				if passedLabels.isEmpty, !labelsTakingNothing.isEmpty {
+					call = call.replacingOccurrences(of: #"(\w+Builder\w*): \{ _ in "#, with: "$1: { ", options: .regularExpression)
 				}
+				for label in passedLabels {
+					if call.range(of: #"\b\#(label): \{ _ in "#, options: .regularExpression) != nil {
+						call = call.replacingOccurrences(of: #"\b\#(label): \{ _ in "#, with: "\(label): { ", options: .regularExpression)
+					} else {
+						Issue.record("The hand-written call of `\(callee)`’s public mock passes `\(label)`, which its `mock()` takes as a closure that takes nothing, in a form the conversion does not read: \(call)")
+					}
+				}
+				// A mock isolated to the main actor through `mockAttributes` is called from a function isolated to it.
+				let isolation = declaresMainActorMock(typeNamed: callee, in: content) ? "@MainActor " : ""
 				generatedFiles["\(moduleName)/\(callee)\(publicMockCallerFileSuffix)"] = """
 				import \(GraphFuzzerModule.seamModule.name)
 
 				#if DEBUG
 				public enum \(callee)PublicMockCaller {
-				\tpublic static func call() -> \(callee) {
+				\t\(isolation)public static func call() -> \(callee) {
 				\t\t\(call)
 				\t}
 				}
@@ -13422,6 +13426,15 @@ enum GraphFuzzerOracle {
 			}
 		}
 		return generatedFiles
+	}
+
+	/// Whether the `@Instantiable` attribute on the line before `typeName`'s class declaration in `content`, a fixture
+	/// file, spells `mockAttributes: "@MainActor"`.
+	static func declaresMainActorMock(typeNamed typeName: String, in content: String) -> Bool {
+		let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
+		guard let classIndex = lines.firstIndex(where: { $0.contains("final class \(typeName): ") }), classIndex > 0 else { return false }
+		let attribute = lines[classIndex - 1]
+		return attribute.hasPrefix("@Instantiable(") && attribute.contains("mockAttributes: \"@MainActor\"")
 	}
 
 	/// The generated initializers in `contents` – one seam's generated file, or a module's combined output – of each
