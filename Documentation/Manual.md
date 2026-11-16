@@ -296,6 +296,8 @@ public final class Root: Instantiable {
 }
 ```
 
+Likewise, if code that is not on the main actor creates a `@MainActor` type with `generateDependencyTree: true`, and nothing its tree builds needs the main actor, give it `generatedInitializerAttributes: "nonisolated"`.
+
 SafeDI writes the text before the generated declaration’s modifiers, on the same line:
 
 ```swift
@@ -832,7 +834,7 @@ Here is what happens when the tree gains a narrower parameter. Suppose `Badge` a
 
 A new parameter at least as visible as the seam is on every tier, so hand-written calls stop compiling until they pass it.
 
-A hole is a type the seam’s tree instantiates that no `@Instantiable` declaration visible to the seam’s module fulfills, such as a protocol that only the app implements. The seam’s initializer takes one builder per hole type, named for that type: `userServiceBuilder` for `UserService`, `urlLoaderBuilder` for `URLLoader`. Where no place of the type is held in an `Instantiator`, or in an erased one that forwards a value, and none is reached through a seam’s call, the seam’s own included, the builder takes nothing and returns the value the property holds: `userServiceBuilder: @escaping () -> any UserService`. A hand-written call passes `{ DefaultUserService() }`, `DefaultUserService.init`, or any other function that takes nothing, and the seam calls it at each place. The initializer only generated code calls takes such a builder as a struct, `SafeDIScope_UserService.__safeDI_Builder<any UserService>`, with one function for each case of the scope enum below, which the seam calls where it binds that level, so the code that fills the builder keeps only the values it reads.
+A hole is a type the seam’s tree instantiates that no `@Instantiable` declaration visible to the seam’s module fulfills, such as a protocol that only the app implements. The seam’s initializer takes one builder per hole type, named for that type: `userServiceBuilder` for `UserService`, `urlLoaderBuilder` for `URLLoader`. Where no place of the type is held in an `Instantiator` or a `SendableInstantiator`, or in an `ErasedInstantiator` or a `SendableErasedInstantiator` that forwards a value, and none is reached through a seam’s call, the seam’s own included, the builder takes nothing and returns the value the property holds: `userServiceBuilder: @escaping () -> any UserService`. A hand-written call passes `{ DefaultUserService() }`, `DefaultUserService.init`, or any other function that takes nothing, and the seam calls it at each place. The initializer only generated code calls takes such a builder as a struct, `SafeDIScope_UserService.__safeDI_Builder<any UserService>`, with one function for each case of the scope enum below, which the seam calls where it binds that level, so the code that fills the builder keeps only the values it reads.
 
 Any other builder is a closure that is handed a scope saying which place in the tree wants a value, and returns the value the property holds. The scope is an enum, such as `SafeDIScope_UserService`, with a case for each of the seam’s properties that leads to a place of the type. Each case’s first value, except an inner seam’s case, holds what that type has bound before the property, and the seam’s own cases also hold its parameters:
 
