@@ -132,6 +132,29 @@ def run_generate(command):
 	return wall, usage.ru_maxrss * 1024, None, process.returncode, output.decode(errors="replace")[-3000:]
 
 
+COMPILE_TIMEOUT = 1800
+# The largest generated modules (hundreds of thousands of lines) can take more memory than a small machine has; a cap
+# on address space turns that into a reported failure rather than an out-of-memory kill. Linux only (macOS ignores it).
+COMPILE_ADDRESS_SPACE = int(os.environ.get("BENCHMARK_COMPILE_MEMORY_LIMIT_GB", "11")) << 30
+
+
+def limit_memory():
+	try:
+		import resource
+		resource.setrlimit(resource.RLIMIT_AS, (COMPILE_ADDRESS_SPACE, COMPILE_ADDRESS_SPACE))
+	except (ValueError, OSError):
+		pass
+
+
+def run_compile(command, text=True):
+	"""Runs a compile with the memory cap and a timeout; returns (returncode or "timeout", output)."""
+	try:
+		process = subprocess.run(command, capture_output=True, text=text, timeout=COMPILE_TIMEOUT, preexec_fn=None if IS_DARWIN else limit_memory)
+	except subprocess.TimeoutExpired:
+		return "timeout", f"exceeded {COMPILE_TIMEOUT} s"
+	return process.returncode, process.stdout + process.stderr if text else ""
+
+
 class Shape:
 	def __init__(self, directory):
 		self.directory = directory
@@ -149,6 +172,8 @@ class Shape:
 				self.modules.append((words[0], words[1] == "generate", words[2:]))
 		self.dependencies = {name: dependencies for name, _, dependencies in self.modules}
 		self.package = self.options.get("package", "Benchmark")
+		# `measures=generate` limits a shape whose generated module is too large to compile on a small machine.
+		self.measures = self.options.get("measures", "generate,compile,runtime").split(",")
 		self.bench_module = self.options.get("bench_module", self.modules[-1][0])
 		self.bench_files = sorted(os.path.join(dp, f) for dp, _, fs in os.walk(f"{directory}/bench") for f in fs if f.endswith(".swift")) if os.path.isdir(f"{directory}/bench") else []
 
@@ -243,9 +268,9 @@ class Run:
 		for module, generates, _ in self.shape.modules:
 			directory, command = self.compile_command(module, optimization, with_bench)
 			os.makedirs(directory, exist_ok=True)
-			process = subprocess.run(command, capture_output=True, text=True)
-			if process.returncode != 0:
-				self.failure = f"{module} did not compile at -{optimization}: {(process.stdout + process.stderr).strip()[-1500:]}"
+			status, output = run_compile(command)
+			if status != 0:
+				self.failure = f"{module} did not compile at -{optimization}: {output.strip()[-1500:]}"
 				return None
 			if generates and not with_bench:
 				jobs = subprocess.run(command + ["-###"], capture_output=True, text=True, check=True).stdout.strip().splitlines()
@@ -276,6 +301,7 @@ def summary(values):
 
 def measure_shape(shape, tools, work, runs, measures):
 	result = {"description": shape.options.get("description", ""), "tools": {}}
+	measures = [m for m in measures if m in shape.measures]
 	live = {}
 	for tool in tools:
 		run = Run(shape, tool, work)
@@ -321,9 +347,9 @@ def measure_shape(shape, tools, work, runs, measures):
 					total = 0.0
 					for module, job in jobs.items():
 						start = time.perf_counter()
-						process = subprocess.run(job, capture_output=True)
+						status, _ = run_compile(job, text=False)
 						total += time.perf_counter() - start
-						if process.returncode != 0:
+						if status != 0:
 							total = None
 							break
 					if index > 0:  # run 0 is the warm-up

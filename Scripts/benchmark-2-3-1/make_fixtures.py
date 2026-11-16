@@ -76,7 +76,9 @@ def issue646(output, name, screens, seed, mock):
 	write(f"{shape}/bench/Walk.swift", "\n".join(lines) + "\n")
 	write(f"{shape}/modules.txt", "App generate\n")
 	description = f"#646's generator, {screens} screens, seed {seed}{', mock' if mock else ''}; runtime: {root} and a walk 4 screens deep, per screen"
-	write(f"{shape}/shape.txt", f"description={description}\n")
+	# The mock variant generates about 340,000 lines, which a 16 GB machine cannot compile; #646 measures its generate only.
+	measures = "measures=generate\n" if mock else ""
+	write(f"{shape}/shape.txt", f"description={description}\n{measures}")
 
 
 # MARK: Spike 2 (E and L)
