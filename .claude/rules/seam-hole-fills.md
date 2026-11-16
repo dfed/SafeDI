@@ -1,0 +1,17 @@
+---
+paths:
+  - "Sources/SafeDICore/Generators/**/*"
+  - "Sources/SafeDICore/Models/{Scope,AccessDeclaration,AccessLevel,InstantiableStruct,SeamAccess,SeamSignature,TypeAccessProof,GuardedPlainTypeNames,PlainTypeDeclaration}.swift"
+  - "Sources/SafeDIToolLibrary/GenerateCommand.swift"
+  - "Tests/**/*Seam*.swift"
+  - "Tests/**/*Hole*.swift"
+  - "Tests/**/*UnreadType*.swift"
+---
+
+<!-- Moved from seam-holes.md, which it continues. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
+
+# Seams: fills that receive a building instantiator
+
+Continues `seam-holes.md`.
+
+- **A fill's receive of an instantiator the seam's tree is building is an error, never `nil`.** Inline, a type in a fill's tree that receives the hole's own property, or the property of a scope on the site's path or a member of its loop of builders, where that property is an instantiator, closes a loop of instantiators (`ReceivedBuilderLoops` in `cycle-generation.md`) and gets a wrapper made again of a builder function the seam's initializer declares; the seam's module does not see the receive, so it can rebind nothing for it. `fields(of:)` marks such a declaration `UncarriedDeclaration.Reason.instantiatorBuildingSite`, and `findingsOfFill` reports a receive of it, required or only if available, as `FillFinding.Kind.receivesInstantiatorBuildingSite`, whose remedy is to instantiate it above the seam and receive it in the seam's tree, so the caller holds it. The finding stands in the rare shape where inline passes `nil`, a loop whose component holds a value after the second pass (`aBuilder`'s tree requires a value `V`, which requires `cBuilder`, whose `C` receives `aBuilder` only if available); the message says such a fill "can get" an instantiator of its own, not "would". An instantiator the seam builds after the site, such as a second hole whose implementation receives the first back, stays `declarationBoundAfterSite`, whose message offers the same remedy for an instantiator. A fill's own generator finds no loops (`ScopeGenerator.init`, `fill != nil`): its one child is the filled property, and a receive of it is this finding.
