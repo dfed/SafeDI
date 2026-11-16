@@ -251,6 +251,11 @@ class Structure:
                     continue
                 actual, expected = elements[0], elements[1]
             match = re.fullmatch(r'(?:try #require\()?(\w+)(?:\.modules\[\s*"([^"\\]+)"\s*\]\)?\??)?\.generatedFiles', self.source(*actual))
+            if match is None and actual[0] == actual[1] and self.tokens[actual[0]].kind == "identifier":
+                # A constant the test unwrapped the files into.
+                body = self.file.source[function[2]:token.start]
+                declared = re.findall(r'let ' + re.escape(self.text(actual[0])) + r' = try #require\((\w+)\.modules\[\s*"([^"\\]+)"\s*\](?:\?\.generatedFiles\)|\)\.generatedFiles)', body)
+                match = re.fullmatch(r'(\w+)\.modules\["([^"]+)"\]\.generatedFiles', f'{declared[-1][0]}.modules["{declared[-1][1]}"].generatedFiles') if declared else None
             if match is None:
                 continue
             calls_helper = any(
@@ -532,6 +537,8 @@ def migrate(arguments):
             scopes.append((test_path, files[test_path].test_function_declared_at(record["testLine"])))
         if scopes[-1][1] is not None:
             records_of_function.setdefault(scopes[-1], []).append(record)
+        if arguments.helpers_only:
+            continue
         path_of_literal = {}
         for relative_path, function in scopes:
             for literal in literals_in(relative_path, function) + (literals_in(relative_path, None) if function is not None else []):
@@ -799,6 +806,7 @@ def main(argv):
     parser.add_argument("--tabs", type=int, default=2)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--only")
+    parser.add_argument("--helpers-only", action="store_true", help="only rewrite comparisons whose expected side calls a helper, whole, from the records")
     arguments = parser.parse_args(argv)
     try:
         if arguments.emit:

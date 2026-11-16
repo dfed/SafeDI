@@ -17,3 +17,16 @@ Records: one run of the suite on 8f057441 with `SAFEDI_TEST_RECORD_DIRECTORY` se
 
 `left-as-they-are.txt` is the tool's report of step 1 (what its first pass could not tile; the second pass and the hand
 steps then covered what the helper-built search finds in seam tests).
+
+## Follow-up commit: the fifteen comparisons in the tool's and the mocks' tests
+
+Recorded only the three suites on the migrated head (`swift test --filter '…'` with the record variable, then
+`--write-manifest`), and ran `write-out-expectations.py … --helpers-only`, which skips the fragment pass and rewrites
+each comparison whose expected side calls a helper whole, from the records: 13 written. `tail_hand.py` holds the five
+whose text an argument decides.
+
+## Redoing this after a rebase
+
+Where a rebase brings new or changed tests: record the changed suites on the rebased head (filter run, a few seconds
+each with a built tree), write the manifest, run the tool without `--helpers-only` and with `--only <file name>` per
+changed file, lint, delete helpers nothing reads (`delete_dead.py <base>`), and run the changed suites.

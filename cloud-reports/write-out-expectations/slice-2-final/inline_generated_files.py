@@ -78,7 +78,7 @@ def process(path, line_numbers):
         elif len(names)==1:
             replacement=f'[{integration} == .moduleInfo ? "{module}.swift" : "{names[0]}+SafeDI.swift": '+value(*entries[names[0]])+']'
         else:
-            replacement=f'{integration} == .moduleInfo ? [{combined()}] : [{per_type()}]'
+            replacement=f'({integration} == .moduleInfo ? [{combined()}] : [{per_type()}])'
         if toks[call].text=='expectGeneratedCode':
             replacement=f'expectGeneratedFiles({st.source(*labels["of"])}.modules["{module}"]?.generatedFiles, {replacement})'
         source=source[:toks[first].start]+replacement+source[toks[closing].end:]
