@@ -66,6 +66,10 @@ struct GraphFuzzerFixture: Equatable {
 	/// The contents of each file, in declaration order. Every type name begins with `typeNamePrefix`, so the
 	/// fixtures of several seeds compile together as one module.
 	let swiftFileContent: [String]
+	/// Whether the graph is a public mock corpus graph with a builder surface edit applied after the draw
+	/// (`GraphFuzzerGenerator.fixture(forSeed:features:builderSurfaceEdit:)`), which can give `T6` builders the hand-written
+	/// call its draw wrote does not pass: the same-supply judgment, not that call, judges the calls of the edited graph.
+	var isBuilderSurfaceEdit = false
 
 	/// A seam corpus graph, every module of which that declares a seam sets `generatePlainDependencyTreeInitializers: true`,
 	/// so the oracles read and call the readable initializer a person calls, beside the one only generated code calls. The
@@ -990,6 +994,9 @@ enum GraphFuzzerSeamOutputFeature: String, CaseIterable, Comparable {
 	/// The comment of a run without a target graph naming a type the file's `public` declarations name that SafeDI reads
 	/// no declaration of, which it counts as `public` (`addingUnreadParameterTypes`).
 	case unreadTypeComment
+	/// A seam's own internal mock taking a builder as a closure that takes nothing, `<label>: @escaping () -> T`, in place of
+	/// a value for each place of its hole type.
+	case seamOwnMockBuilder
 
 	static func < (lhs: GraphFuzzerSeamOutputFeature, rhs: GraphFuzzerSeamOutputFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -2319,7 +2326,7 @@ enum GraphFuzzerGenerator {
 	static func fixture(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>, builderSurfaceEdit edit: GraphFuzzerBuilderSurfaceEdit) -> GraphFuzzerFixture? {
 		guard !features.contains(.generateMockPublic) else {
 			let draw = GraphFuzzerPublicMockDraw(seed: seed, builderSurfaceEdit: edit)
-			return draw.appliesBuilderSurfaceEdit ? GraphFuzzerFixture(seed: seed, swiftFileContent: draw.swiftFileContent(storingEveryParameter: false, isKnownRight: false)) : nil
+			return draw.appliesBuilderSurfaceEdit ? GraphFuzzerFixture(seed: seed, swiftFileContent: draw.swiftFileContent(storingEveryParameter: false, isKnownRight: false), isBuilderSurfaceEdit: true) : nil
 		}
 		guard features.contains(.generateDependencyTree) else { return nil }
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: false)
@@ -10849,7 +10856,32 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		if generatedFiles.values.contains(where: { $0.contains("// SafeDI counts `") }) {
 			features.insert(.unreadTypeComment)
 		}
+		let seamTypeNames = Set(widestTiers.map(\.seamTypeName))
+		if generatedFiles.values.contains(where: { seamOwnMockTakesBuilder(in: $0, seamTypeNames: seamTypeNames) }) {
+			features.insert(.seamOwnMockBuilder)
+		}
 		return features
+	}
+
+	/// Whether `contents`, a generated file, holds the `mock()` of one of `seamTypeNames` taking a builder as a closure that
+	/// takes nothing (`GraphFuzzerSeamOutputFeature.seamOwnMockBuilder`).
+	static func seamOwnMockTakesBuilder(in contents: String, seamTypeNames: Set<String>) -> Bool {
+		var extendedType: String?
+		var isInSeamMockParameters = false
+		for line in contents.split(separator: "\n") {
+			let trimmed = line.trimmingCharacters(in: .whitespaces)
+			if trimmed.hasPrefix("extension "), trimmed.hasSuffix(" {") {
+				extendedType = String(trimmed.dropFirst("extension ".count).dropLast(2))
+			}
+			if trimmed.hasSuffix("static func mock(") {
+				isInSeamMockParameters = extendedType.map(seamTypeNames.contains) ?? false
+			} else if trimmed.hasPrefix(")") {
+				isInSeamMockParameters = false
+			} else if isInSeamMockParameters, trimmed.range(of: #"^\w*Builder\w*: @escaping \(\) -> "#, options: .regularExpression) != nil {
+				return true
+			}
+		}
+		return false
 	}
 
 	/// What the code generated for a graph with a hole shows (`GraphFuzzerHoleOutputFeature`), read from
@@ -14700,7 +14732,9 @@ enum GraphFuzzerOracle {
 	/// in that module holding a function that makes the call, `<Type>+SafeDIPublicMockCaller.swift`. The oracle compiles
 	/// it with the rest, so a public mock a caller outside SafeDI's generation cannot call, with the builders the draw
 	/// expects, fails there. The known-right path declares no `.public` mock, so it gets none. Read from the fixture's
-	/// text, so a renamed graph's caller is renamed with it and restored with its files.
+	/// text, so a renamed graph's caller is renamed with it and restored with its files. The draw writes each builder as a
+	/// closure over the enum, `{ _ in value }`; where the generated `mock()` takes its builder as a closure that takes
+	/// nothing, the call passes `{ value }` instead (`GraphFuzzerPublicMockBuilders.labelsTakingNothing(of:in:)`), as a person writes it.
 	static func addingPublicMockCallers(to generatedFiles: [String: String], of fixture: GraphFuzzerFixture) -> [String: String] {
 		var generatedFiles = generatedFiles
 		for content in fixture.swiftFileContent where content.contains("generateMock: .public") {
@@ -14708,7 +14742,20 @@ enum GraphFuzzerOracle {
 				let moduleAndCall = line.dropFirst(GraphFuzzerPublicMockDraw.publicMockCallerMarker.count)
 				guard let colon = moduleAndCall.firstIndex(of: ":"), let callee = moduleAndCall[moduleAndCall.index(after: colon)...].trimmingCharacters(in: .whitespaces).components(separatedBy: ".mock(").first else { continue }
 				let moduleName = String(moduleAndCall[..<colon])
-				let call = moduleAndCall[moduleAndCall.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+				var call = moduleAndCall[moduleAndCall.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+				// The call passes one builder, of `T6`'s one hole type, labeled from type names the renamed graph renames, so it
+				// is found by its form, not its label. A draw whose call or mock has another number of builders breaks that
+				// reading, which fails the run rather than leave a builder unconverted; a builder surface edit can give the mock
+				// more after the call was written (`GraphFuzzerFixture.isBuilderSurfaceEdit`).
+				if !GraphFuzzerPublicMockBuilders.labelsTakingNothing(of: callee, in: generatedFiles).isEmpty {
+					let builderPattern = #"(\w+Builder\w*): \{ _ in "#
+					let builderCount = (try? NSRegularExpression(pattern: builderPattern)).map { $0.numberOfMatches(in: call, range: NSRange(call.startIndex..., in: call)) } ?? 0
+					let mostBuildersOfOneMock = GraphFuzzerPublicMockBuilders.publicTierBuilderCounts(of: callee, in: generatedFiles).max() ?? 0
+					if builderCount != 1 || (mostBuildersOfOneMock != 1 && !fixture.isBuilderSurfaceEdit) {
+						Issue.record("The hand-written call of `\(callee)`’s public mock passes \(builderCount) builders, and its `public` `mock()` takes \(mostBuildersOfOneMock), where the conversion reads one: \(call)")
+					}
+					call = call.replacingOccurrences(of: builderPattern, with: "$1: { ", options: .regularExpression)
+				}
 				generatedFiles["\(moduleName)/\(callee)\(publicMockCallerFileSuffix)"] = """
 				import \(GraphFuzzerModule.seamModule.name)
 
