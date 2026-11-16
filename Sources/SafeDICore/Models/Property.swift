@@ -364,6 +364,16 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 			}
 		}
 
+		/// Whether the wrapper is one of the four instantiators, erased or not, which build a value each time they are asked.
+		var isAnyInstantiator: Bool {
+			switch self {
+			case .instantiator, .erasedInstantiator, .sendableInstantiator, .sendableErasedInstantiator:
+				true
+			case .constant, .lazilyInstantiated, .sendableLazilyInstantiated:
+				false
+			}
+		}
+
 		public var isSendable: Bool {
 			switch self {
 			case .instantiator, .erasedInstantiator, .constant, .lazilyInstantiated:

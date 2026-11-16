@@ -643,6 +643,19 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// This instantiator's `Sendable` twin with the same generic arguments: `SendableInstantiator<T>` for `Instantiator<T>`
+	/// and `SendableErasedInstantiator<F, T>` for `ErasedInstantiator<F, T>`, whose `Builder` is the same function type,
+	/// `@Sendable`. Any other type is its own twin.
+	var sendableTwinOfWrapper: TypeDescription {
+		if case let .simple(name, generics) = self, name == Dependency.instantiatorType {
+			.simple(name: Dependency.sendableInstantiatorType, generics: generics)
+		} else if case let .simple(name, generics) = self, name == Dependency.erasedInstantiatorType {
+			.simple(name: Dependency.sendableErasedInstantiatorType, generics: generics)
+		} else {
+			self
+		}
+	}
+
 	/// This function type, `@Sendable`.
 	var asSendableFunction: TypeDescription {
 		.attributed(self, specifiers: [], attributes: ["Sendable"])
