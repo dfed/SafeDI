@@ -1938,41 +1938,6 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 		"""
 	}
 
-	/// The public mock of `root(instantiating:)`, which builds `label`, configured by `configurationTypeName`, with
-	/// `construction`.
-	private static func rootMock(building label: String, ofType type: String, configuredBy configurationTypeName: String, construction: String) -> String {
-		generatedFileHeader + """
-		#if DEBUG
-		extension Root {
-		    /// Overrides for the mock dependency tree.
-		    nonisolated public struct SafeDIOverrides {
-		        public init(
-		            \(label): \(configurationTypeName) = .init()
-		        ) {
-		            self.\(label) = \(label)
-		        }
-
-		        public let \(label): \(configurationTypeName)
-		    }
-
-		    public static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Root {
-		        func __safeDI_\(label)() -> \(type) {
-		            return \(construction)
-		        }
-		        let \(label): \(type) = __safeDI_\(label)()
-		        return Root(\(label): \(label))
-		    }
-		}
-
-		extension Root {
-		    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
-		}
-		#endif
-		"""
-	}
-
 	/// A `Child` whose initializer's default-valued parameter is of a `Theme` nested in it.
 	private static let childWithNestedTheme = """
 	@Instantiable

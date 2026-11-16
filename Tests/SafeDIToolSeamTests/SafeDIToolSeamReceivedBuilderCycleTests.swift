@@ -2242,10 +2242,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		SafeDIToolSeamBuilderParameterTests.fulfillingType(named: name, fulfilling: fulfilledType, declarations: declarations)
 	}
 
-	private static func generatedFiles(module: String, imports: [String], rootFiles: [String: String]) -> [String: String] {
-		SafeDIToolSeamBuilderParameterTests.generatedFiles(module: module, integration: .moduleInfo, imports: imports, rootFiles: rootFiles)
-	}
-
 	/// Expects the values `output`, the run of `modules`, builds for each probe to equal those the run of `visibleModules`
 	/// builds, the same graph built inline, with every fulfilling declaration in the seam's module.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)

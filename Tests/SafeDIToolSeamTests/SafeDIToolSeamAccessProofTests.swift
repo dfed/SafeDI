@@ -2101,19 +2101,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	/// SafeDI supports, so only fixtures whose run is an error use it.
 	private static let unreadableThemeType = "[3 of Int]"
 
-	/// The generated files of `module` under `integration`: its one combined file, or, under the SwiftPM plugin, the file
-	/// generated beside `sourceFile`, the file that declares the root, whose calls of `Feature`'s seam carry the comment
-	/// `integration` adds.
-	private static func generatedFiles(of module: String, sourceFile: String, _ code: String, under integration: MultiModuleIntegration) -> [String: String] {
-		let code = code.replacingOccurrences(of: #"(_ = Service\.__safeDI_Service_[0-9A-F]+\.self)"#, with: "$1" + integration.seamCallComment(type: "Service", declaringModule: "Feature"), options: .regularExpression)
-		return switch integration {
-		case .moduleInfo:
-			["\(module).swift": generatedFileHeader + code]
-		case .swiftPackagePlugin:
-			["\(sourceFile)+SafeDI.swift": generatedFileHeader + code]
-		}
-	}
-
 	@Test(arguments: MultiModuleIntegration.allCases, [OwnReceiveProvider.forwardedByCaller, .instantiatedBeforeSeam, .instantiatedAfterSeam])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorAtProvider_whenCallerInAnotherPackageHoldsValueForSeamsOwnReceive(integration: MultiModuleIntegration, provider: OwnReceiveProvider) async {

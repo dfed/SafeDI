@@ -2738,13 +2738,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 	/// root's own scope.
 	private static let rootInstantiatingAnalytics = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let host: Host"])
 
-	/// An `@Instantiable` type that fulfills `fulfilledType` and is `@unchecked Sendable`, so that a `@Sendable` function can
-	/// hold what it instantiates.
-	private static func sendableFulfillingType(named name: String, fulfilling fulfilledType: String, declarations: [String]) -> String {
-		SafeDIToolSeamBuilderParameterTests.fulfillingType(named: name, fulfilling: fulfilledType, declarations: declarations)
-			.replacingOccurrences(of: ", \(fulfilledType) {", with: ", \(fulfilledType), @unchecked Sendable {")
-	}
-
 	private static let labelDeclaration = "public struct Label: Sendable {}"
 
 	/// `feature`, which holds a hole for `NamedGadget` and declares `Label`, beneath `middle`, whose seam `Host` builds it,

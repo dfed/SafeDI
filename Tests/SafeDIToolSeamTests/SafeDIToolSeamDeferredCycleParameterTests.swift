@@ -139,44 +139,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 	/// The comment on the line of `App`'s guard of the call of `Hub`.
 	private static let callComment = MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature")
 
-	/// `App`'s generated file, whose `Root` binds `tag` with `rootTagCode` and calls `Hub`'s initializer under the guard
-	/// `guardName`, passing `tagArgument` and the root dispatcher, whose one case, `rootCaseName`, hands `A`'s enum to its
-	/// dispatcher, whose one case, `api`, `fillCode` fills.
-	private static func appFile(
-		guardName: String,
-		rootTagCode: String = "let tag = Tag()",
-		tagArgument: String = "tag",
-		rootCaseName: String = "aBuilder",
-		fillCode: String = "let api: any Api = LiveApi()",
-	) -> [String: String] {
-		["App.swift": generatedFileHeader + """
-		#if canImport(Feature)
-		import Feature
-		#endif
-
-		extension Root {
-		    public convenience init() {
-		        \(rootTagCode)
-		        func __safeDI_hub() -> Hub {
-		            _ = Hub.\(guardName).self\(callComment)
-		            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIScope_Api.__safeDI_Builder<any Api> {
-		                .init(\(rootCaseName): { _ in __safeDI_apiBuilder_Hub_A_Scope() })
-		            }
-		            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
-		                .init(api: { \(fillCode.contains("scope.") ? "scope" : "_") in
-		                    \(fillCode)
-		                    return api
-		                })
-		            }
-		            return Hub(__safeDI_tag: \(tagArgument), __safeDI_apiBuilder: __safeDI_apiBuilder_Hub())
-		        }
-		        let hub: Hub = __safeDI_hub()
-		        self.init(tag: tag, hub: hub)
-		    }
-		}
-		"""]
-	}
-
 	/// `Feature`'s generated file for `Hub`'s tree built behind `aBuilder: SendableInstantiator<A>`.
 	private static let sendableCycleFeatureFile = ["Feature.swift": generatedFileHeader + """
 	extension Hub {
