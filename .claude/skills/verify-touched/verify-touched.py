@@ -21,7 +21,8 @@ Every changed path matches one rule, in this order, or runs the whole suite; no 
 - a path on `REACHES_NO_TEST`: nothing, and the script prints it.
 
 `--list` prints the `swift test` filters and runs nothing. `--skip-compile-checks` sets `SAFEDI_SKIP_COMPILE_CHECK`,
-for a first pass; without it each test's generated code is compiled. `--also` adds a filter. `--runner` (or
+for a first pass; without it each test's generated code is compiled, in a debug build, and an inherited
+`SAFEDI_SKIP_COMPILE_CHECK` is dropped. `--also` adds a filter. `--runner` (or
 `SAFEDI_VERIFY_RUNNER`) is a command the `swift test` command is appended to, for a machine that queues heavy work.
 
 The build is a debug build, not CI's release build, so it finds what tests assert and not what only the release
@@ -46,6 +47,9 @@ import subprocess
 import sys
 import tempfile
 import time
+
+# Another script may import this one; neither leaves a `__pycache__` in the checkout.
+sys.dont_write_bytecode = True
 
 TEST_TARGETS_DIRECTORY = "Tests"
 HELPER_TARGET = "SafeDIToolTestSupport"
@@ -297,22 +301,27 @@ def run(arguments):
     environment = dict(os.environ, TMPDIR=str(temporary_directory))
     if arguments.skip_compile_checks:
         environment["SAFEDI_SKIP_COMPILE_CHECK"] = "1"
+    elif environment.pop("SAFEDI_SKIP_COMPILE_CHECK", None) is not None:
+        print("Dropped the inherited SAFEDI_SKIP_COMPILE_CHECK: generated code is compiled unless --skip-compile-checks.")
     print(f"Running; the whole output goes to {log}", flush=True)
-    with log.open("w", encoding="utf-8") as output:
-        # A session of its own, so that ending this script ends `swift test` and everything it started.
-        process = subprocess.Popen(command, env=environment, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
+    started = []
 
-        def end(signal_number, _frame):
+    def end(signal_number, _frame):
+        for process in started:
             try:
                 os.killpg(process.pid, signal.SIGTERM)
             except ProcessLookupError:
                 pass
-            shutil.rmtree(temporary_directory, ignore_errors=True)
-            sys.exit(128 + signal_number)
+        shutil.rmtree(temporary_directory, ignore_errors=True)
+        sys.exit(128 + signal_number)
 
-        for signal_number in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
-            signal.signal(signal_number, end)
-        status = process.wait()
+    # Before the run starts, so that no signal finds `swift test` running and this script without a handler.
+    for signal_number in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(signal_number, end)
+    with log.open("w", encoding="utf-8") as output:
+        # A session of its own, so that ending this script ends `swift test` and everything it started.
+        started.append(subprocess.Popen(command, env=environment, stdout=output, stderr=subprocess.STDOUT, start_new_session=True))
+        status = started[0].wait()
     shutil.rmtree(temporary_directory, ignore_errors=True)
     with log.open(encoding="utf-8", errors="replace") as output:
         lines = output.readlines()
@@ -332,21 +341,20 @@ def check_against_checkout(expect):
     test_targets = {path.name for path in pathlib.Path(TEST_TARGETS_DIRECTORY).iterdir() if path.is_dir()}
     mapped = {target for targets in list(TARGETS_OF_SOURCES.values()) + list(TARGETS_OF_READ_PATHS.values()) for target in targets}
     expect(sorted(mapped - test_targets), [], "every mapped test target is a directory under Tests/")
+    expect(sorted(test_targets - mapped - {HELPER_TARGET}), [], "every test target but the helpers is mapped from what it tests")
     source_directories = {f"Sources/{path.name}" for path in pathlib.Path("Sources").iterdir() if path.is_dir()} | {"Plugins"}
     expect(sorted(TARGETS_OF_SOURCES), sorted(source_directories), "TARGETS_OF_SOURCES lists exactly the source directories")
     tracked = [path for path in git("ls-files").split("\n") if path]
-    unruled = []
+    unselected = []
     for path in tracked:
-        unselected = []
         try:
-            filters = filters_of_changes({path}, read_text_in_checkout, unselected)
+            filters = filters_of_changes({path}, read_text_in_checkout)
         except WholeSuite:
-            if path not in WHOLE_SUITE_FILES and not path.startswith(f"{TEST_TARGETS_DIRECTORY}/{HELPER_TARGET}/"):
-                unruled.append(path)
-        else:
-            if path.startswith(f"{TEST_TARGETS_DIRECTORY}/") and path.count("/") >= 2 and not filters:
-                unruled.append(path)
-    expect(unruled, [], "every tracked file matches a rule, and every test target's file selects a filter")
+            # Ruled: a path no rule names runs the whole suite, which is safe, so a new top-level path fails nothing.
+            continue
+        if path.startswith(f"{TEST_TARGETS_DIRECTORY}/") and path.count("/") >= 2 and not filters:
+            unselected.append(path)
+    expect(unselected, [], "every file of a test target selects a filter")
 
 
 def self_test():
