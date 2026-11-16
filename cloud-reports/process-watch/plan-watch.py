@@ -89,20 +89,19 @@ def main():
             has_lane = True
             if not detail:
                 questions.append(f"{item}: no lane is named. Who is working on it?")
-            if not branch or branch == "-":
-                questions.append(f"{item}: a lane is named but no branch. Where is the work?")
-                continue
+            # Work not committed yet has no branch ("-"); then only the row's own time speaks for it.
+            has_branch = bool(branch) and branch != "-"
             confirmed = None
             try:
                 confirmed = datetime.strptime(since, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
             except ValueError:
                 questions.append(f"{item}: 'since' is not a time like 2026-11-16 22:25. When was this row last true?")
             # A lane on the lead's machine pushes nothing, so the row's own time counts as a sign of life.
-            times = [time for time in (last_push(repository, branch), newest_run.get(branch), confirmed) if time]
+            times = [time for time in (last_push(repository, branch) if has_branch else None, newest_run.get(branch), confirmed) if time]
             if times:
                 quiet = (now - max(times)).total_seconds() / 60
                 if quiet > quiet_minutes:
-                    questions.append(f"{item} ({detail}): no push, no run and no word on {branch} for {quiet:.0f} minutes. Is the lane still on it?")
+                    questions.append(f"{item} ({detail}): no push, no run and no word{' on ' + branch if has_branch else ''} for {quiet:.0f} minutes. Is the lane still on it?")
         elif state == "waiting":
             if not detail:
                 questions.append(f"{item}: it waits, but on what? Give the reason or a lane.")
