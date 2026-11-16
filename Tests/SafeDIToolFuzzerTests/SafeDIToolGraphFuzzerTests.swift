@@ -255,7 +255,8 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func seamSmokeSeeds_produceNoUnknownFailures_whenRunThroughToolAndCompiler() async throws {
-		// The smoke batch's graphs pass, but those the in-seam leak fails until its fix, which must fail exactly as listed
+		// The smoke batch's graphs pass, but those the in-seam leak fails until its fix, and those with a hole, which
+		// fail the builder surface until the planned builder structs, which must fail exactly as listed
 		// (`seamSmokeKnownIssuesBySeed`).
 		for result in try await seamSmokeResults.value {
 			for finding in GraphFuzzerFinding.findings(failure: result.failure, laterFailures: result.laterFailures, knownIssue: Self.seamSmokeKnownIssuesBySeed[result.fixture.seed], retentionIsJudged: result.isJudgedForRetention) {
@@ -266,6 +267,10 @@ struct SafeDIToolGraphFuzzerTests {
 					Issue.record("Seed \(result.fixture.seed) no longer fails: \(knownIssue.reason)")
 				case let .staleRenamedGraphDifference(knownIssue, aspect):
 					Issue.record("Seed \(result.fixture.seed) sits on \"\(knownIssue.reason)\", which lists \(aspect.rawValue), but its renamed graphs do not show it.")
+				case let .staleBuilderSurfaceSignature(knownIssue, kind):
+					Issue.record("Seed \(result.fixture.seed) sits on \"\(knownIssue.reason)\", which lists \(kind.rawValue), but the graph does not show it.")
+				case let .staleLeakEntry(knownIssue):
+					Issue.record("Seed \(result.fixture.seed) sits on \"\(knownIssue.reason)\", which lists a leak the graph no longer shows.")
 				case let .failure(failure):
 					Issue.record(failure.issueComment(fixture: result.fixture))
 				}
@@ -287,7 +292,8 @@ struct SafeDIToolGraphFuzzerTests {
 		// tool accepts whose generated code, read from what the oracle compiled, between them shows every
 		// `GraphFuzzerSeamOutputFeature`, and one graph it rejects.
 		let results = try await seamSmokeResults.value
-		// A graph the retention oracle alone fails, as a known issue lists, passed every other oracle, which judge it first.
+		// A graph that fails only the builder surface, or the retention oracle as a known issue lists, passed every other
+		// oracle.
 		let acceptedResults = results.filter { $0.isAccepted && $0.passes(butForRetentionDocumentedBy: Self.seamSmokeKnownIssuesBySeed[$0.fixture.seed]) }
 
 		#expect(acceptedResults.allSatisfy { GraphFuzzerFeature.features(of: $0.fixture).contains(.generateDependencyTree) })
@@ -348,6 +354,7 @@ struct SafeDIToolGraphFuzzerTests {
 			.holeLoopPlaceThroughSharedLeaf,
 			.holeLoopBeneathSeam,
 			.holeLoopMemberLevelReadByFill,
+			.holeForwardingPlace,
 			.holeLoopMemberAlsoBuiltByValue,
 		]).subtracting(drawFeatures).sorted() == [])
 		// `addingCycleParameterShapes`' cycle, in accepted graphs: its hole between the cycle's ends at or beneath the type that
@@ -4734,7 +4741,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Long run
 
-	@Test(.enabled(if: GraphFuzzerLongRunConfiguration.current != nil, "Set SAFEDI_GRAPH_FUZZER_ITERATIONS to run"))
+	@Test(.enabled(if: GraphFuzzerLongRunConfiguration.current != nil, "Set SAFEDI_GRAPH_FUZZER_ITERATIONS or SAFEDI_GRAPH_FUZZER_SEEDS to run"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func longRun_findsNoUnknownFailures_whenEnabledByEnvironment() async throws {
 		let configuration = try #require(GraphFuzzerLongRunConfiguration.current)
@@ -4752,7 +4759,7 @@ struct SafeDIToolGraphFuzzerTests {
 			return
 		}
 		guard configuration.iterations > 0 else {
-			reportProblem("SAFEDI_GRAPH_FUZZER_ITERATIONS must be a positive integer or `corpus`, and SAFEDI_GRAPH_FUZZER_SHARD, when set, `<index>/<count>` naming a shard with at least one seed.")
+			reportProblem(configuration.noSeedsProblem)
 			return
 		}
 		let corpus = Self.corpus(for: features)
@@ -4815,6 +4822,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs of each gating draw that the oracles after acceptance judged, by the draw's name.
 		var gatingDrawJudgedCounts = [String: Int]()
 		var readTwinGraphCount = 0
+		var builderSurfaceCounts = [String: Int]()
 		var acceptedSpellingDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
 		var omittedValueGraphCount = 0
 		var publicMockOutputFeatureCounts = [GraphFuzzerPublicMockOutputFeature: Int]()
@@ -4828,7 +4836,7 @@ struct SafeDIToolGraphFuzzerTests {
 		var unremediedSiteCount = 0
 		var knownIssueCount = 0
 		var failureCount = 0
-		// Batches run concurrently, one per core, but their findings are recorded in seed order, so the report and
+		// Batches run concurrently, one per core, but their findings are recorded in the run's seed order, so the report and
 		// the issues are the same on every run. A batch's seeds are all finished when its results arrive.
 		let batchStarts = Array(stride(from: 0, to: configuration.iterations, by: Self.longRunBatchSize))
 		let concurrentBatchCount = max(1, ProcessInfo.processInfo.activeProcessorCount)
@@ -4847,13 +4855,13 @@ struct SafeDIToolGraphFuzzerTests {
 					let batchIndex = nextBatchIndex
 					let batchStart = batchStarts[batchIndex]
 					let seeds = (batchStart..<min(batchStart + Self.longRunBatchSize, configuration.iterations))
-						.map { configuration.startingSeed &+ UInt64($0) }
+						.map(configuration.seed(at:))
 					nextBatchIndex += 1
 					group.addTask { try await GraphFuzzerPhaseAccount.$current.withValue(phaseContext) {
 						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueGraphsOf: corpus.isolatedValueGraphSeeds) { seed in
 							report.append("seed \(seed)")
 						}
-						for index in results.indices where results[index].failure == nil
+						for index in results.indices where results[index].passesBesidesBuilderSurface
 							&& results[index].fixture.seed % Self.crossProcessSampleInterval == 0
 						{
 							let fixture = results[index].fixture
@@ -4863,8 +4871,8 @@ struct SafeDIToolGraphFuzzerTests {
 							results[index] = GraphFuzzerResult(
 								fixture: results[index].fixture,
 								outcome: results[index].outcome,
-								failure: crossProcessFailure,
-								laterFailures: results[index].laterFailures,
+								failure: crossProcessFailure ?? results[index].failure,
+								laterFailures: crossProcessFailure == nil ? results[index].laterFailures : [results[index].failure].compactMap(\.self) + results[index].laterFailures,
 								renamedGraphFailures: results[index].renamedGraphFailures,
 								multiModuleRuns: results[index].multiModuleRuns,
 								isInspectedByValueOracle: results[index].isInspectedByValueOracle,
@@ -4874,6 +4882,7 @@ struct SafeDIToolGraphFuzzerTests {
 								retentionCounts: results[index].retentionCounts,
 								valueOracle: results[index].valueOracle,
 								remedyRuns: results[index].remedyRuns,
+								builderSurfaceFloorKinds: results[index].builderSurfaceFloorKinds,
 							)
 						}
 						for result in results {
@@ -4942,6 +4951,9 @@ struct SafeDIToolGraphFuzzerTests {
 							for draw in corpus.gatingDrawsJudged(by: result, knownIssue: knownIssuesBySeed[seed]) {
 								gatingDrawJudgedCounts[draw, default: 0] += 1
 							}
+							for kind in result.builderSurfaceFloorKinds {
+								builderSurfaceCounts[kind, default: 0] += 1
+							}
 							if result.isComparedWithReadTwin {
 								readTwinGraphCount += 1
 							}
@@ -4978,7 +4990,7 @@ struct SafeDIToolGraphFuzzerTests {
 									knownIssueCount += 1
 								case .failure:
 									failureCount += 1
-								case .passed, .staleKnownIssue, .staleRenamedGraphDifference:
+								case .passed, .staleKnownIssue, .staleRenamedGraphDifference, .staleBuilderSurfaceSignature, .staleLeakEntry:
 									break
 								}
 								Self.record(finding, fixture: result.fixture)
@@ -4994,8 +5006,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 		// The oracle accepts any error the tool reports, so pin which graphs the tool accepts: a change that makes
 		// it reject valid graphs changes this. A shard of the corpus reports its part, which ci.yml's combine job
-		// adds up, and a run of the whole corpus checks the pins itself.
-		report.append("shard \(configuration.startingSeed) \(configuration.iterations) \(acceptedCount) \(Self.hexadecimal(acceptedSeedsSum.value)) \(corpus.name)")
+		// adds up, and a run of the whole corpus checks the pins itself; a run of listed seeds reports a `seeds` line.
+		report.append("\(configuration.seedsReportFields) \(acceptedCount) \(Self.hexadecimal(acceptedSeedsSum.value)) \(corpus.name)")
 		report.append("corpus \(corpus.seedCount) \(corpus.acceptedSeedCount) \(Self.hexadecimal(corpus.acceptedSeedsSum)) \(corpus.name)")
 		// The accepted graphs that show each feature, with the pinned counts, which ci.yml's combine job adds up and
 		// checks for a corpus that pins them.
@@ -5021,6 +5033,11 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs the oracle compared with their read twin, with the pin, which ci.yml's combine job adds up: an oracle
 		// that stops running the twins fails it.
 		report.append("read-twins \(readTwinGraphCount) \(corpus.readTwinGraphCount) \(corpus.name)")
+		// The graphs the builder surface judges, by kind, with the kinds whose floor the corpus must reach, which ci.yml's
+		// combine job adds up and checks: a draw or an edit that stops landing in accepted graphs fails it.
+		// Every corpus writes it, the base corpus, which has no holes, with no floored kind.
+		let builderSurfaceCountsField = GraphFuzzerBuilderSurface.floorKinds.map { "\($0)=\(builderSurfaceCounts[$0, default: 0])" }.joined(separator: ",")
+		report.append("builder-surface \(corpus.name) \(builderSurfaceCountsField) \(corpus.builderSurfaceFlooredKinds.joined(separator: ","))")
 		// The graphs the tool rejects because a caller holds a value its tier omits, which ci.yml's combine job adds up.
 		report.append("omitted-values \(omittedValueGraphCount) \(corpus.omittedValueGraphCount) \(corpus.name)")
 		report.append("spellings \(corpus.name) \(corpus.spellingDrawFeatures.map(\.rawValue).sorted().joined(separator: ",")) \(acceptedSpellingDrawFeatures.map(\.rawValue).sorted().joined(separator: ","))")
@@ -5060,12 +5077,12 @@ struct SafeDIToolGraphFuzzerTests {
 		await report.append("cpu \(corpus.name) \(GraphFuzzerPhaseAccount.formatted(wallSeconds)) \(GraphFuzzerPhaseAccount.formatted(processCPUSeconds)) \(GraphFuzzerPhaseAccount.formatted(childProcessCPUSeconds)) \(phaseAccount.reportField)")
 		// Every corpus that exists, so the combine job can tell a corpus whose shards left no report from none.
 		report.append("corpora \(([Self.baseCorpus] + GraphFuzzerGeneratorFeature.allCases.map { Self.corpus(for: [$0]) }).map(\.name).joined(separator: " "))")
-		if configuration.startingSeed == 0, configuration.iterations == corpus.seedCount,
+		if configuration.coversCorpus(ofSeedCount: corpus.seedCount),
 		   acceptedCount != corpus.acceptedSeedCount || acceptedSeedsSum.value != corpus.acceptedSeedsSum
 		{
 			reportProblem("The tool accepted \(acceptedCount) of seeds 0..<\(corpus.seedCount) of the \(corpus.name) corpus (sum \(Self.hexadecimal(acceptedSeedsSum.value))), but \(corpus.acceptedSeedCount) are pinned (sum \(Self.hexadecimal(corpus.acceptedSeedsSum))). A tool change that rejects or accepts different graphs must update the pinned values deliberately.")
 		}
-		if configuration.startingSeed == 0, configuration.iterations == corpus.seedCount {
+		if configuration.coversCorpus(ofSeedCount: corpus.seedCount) {
 			if !corpus.acceptedFeatureCounts.isEmpty {
 				let mismatches = GraphFuzzerFeature.allCases.compactMap { feature -> String? in
 					let count = acceptedFeatureCounts[feature, default: 0]
@@ -5093,6 +5110,9 @@ struct SafeDIToolGraphFuzzerTests {
 			let thinGatingDraws = corpus.flooredGatingDrawNames.filter { gatingDrawJudgedCounts[$0, default: 0] < Self.gatingDrawJudgedGraphFloor }
 			if !thinGatingDraws.isEmpty {
 				reportProblem("The oracles judged fewer than \(Self.gatingDrawJudgedGraphFloor) graphs of the \(corpus.name) corpus that draw \(thinGatingDraws.map { "\($0) (\(gatingDrawJudgedCounts[$0, default: 0]))" }.joined(separator: ", ")): such a draw gates nothing.")
+			}
+			for kind in corpus.builderSurfaceFlooredKinds where builderSurfaceCounts[kind, default: 0] < Self.builderSurfaceFloor {
+				reportProblem("The builder surface judged \(builderSurfaceCounts[kind, default: 0]) graphs of the \(corpus.name) corpus as \(kind), below its floor of \(Self.builderSurfaceFloor).")
 			}
 			if omittedValueGraphCount != corpus.omittedValueGraphCount {
 				reportProblem("The tool rejected \(omittedValueGraphCount) graphs of the \(corpus.name) corpus because a caller holds a value its tier omits, but \(corpus.omittedValueGraphCount) are pinned.")
@@ -5351,6 +5371,12 @@ struct SafeDIToolGraphFuzzerTests {
 			return seamDraws.map(\.rawValue) + publicMockDraws.map(\.rawValue)
 		}
 
+		/// The builder surface's kinds (`GraphFuzzerBuilderSurface.floorKinds`) whose judged graphs must reach
+		/// `builderSurfaceFloor` over the corpus, which ci.yml's combine job adds up and checks: every kind the corpus draws,
+		/// none for a corpus without holes. A kind the corpus never draws is left out: the seam corpus draws no edit of a
+		/// place's wrapper, no second call of a public mock and no new builder of an existing filling type but its second
+		/// erasure, and the public mock corpus no inner seam and no second erasure.
+		var builderSurfaceFlooredKinds = [String]()
 		/// The seeds whose value graphs' probes traverse more wrappers than `DifferentialValueLimits()` allows, each listed
 		/// by name so that only its graphs get `DifferentialValueLimits.isolatedFuzzerGraph`'s budget.
 		var seedsTraversingPastTheBatchBudget = Set<UInt64>()
@@ -5463,6 +5489,24 @@ struct SafeDIToolGraphFuzzerTests {
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
 		gatingSeamDrawFeatures: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape }),
+		builderSurfaceFlooredKinds: [
+			"base-plain",
+			"base-lazy",
+			"base-forwarding",
+			"base-sendable",
+			"secondPlaceInAnotherType",
+			"secondPlaceInInnerSeamOfAnotherModule",
+			"holderMovedToInnerSeamOfAnotherModule",
+			"placeBehindLazilyInstantiated",
+			"placeOfNewBuilderInInnerSeamOfAnotherModule",
+			"placeForwardingOtherValues",
+			"placeForwardingOtherValuesRemedied",
+			"placeForwardingOtherValuesInInnerSeamOfAnotherModule",
+			"placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied",
+			"lazilyInstantiatedPlaceMovedBack",
+			"secondErasureOfFillingType",
+			"remedyKeepsDrawnBuilders",
+		],
 		seedsTraversingPastTheBatchBudget: seamCorpusSeedsTraversingPastTheBatchBudget,
 	)
 
@@ -5479,7 +5523,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 553, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x31685803AD66A896
+	static let seamCorpusFixtureHash: UInt64 = 0xE6D1AA09250B1278
 	static let seamCorpusAcceptedSeedCount = 289
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -5607,11 +5651,11 @@ struct SafeDIToolGraphFuzzerTests {
 	/// and opened by value inside `Sendable` wrappers (seed 277). The union of the batches the hole rolls and the seam tests'
 	/// draws were each pinned with, less the seeds whose renamed graph shows a known issue's shape: a tangle of cycles, which
 	/// the tool now accepts, giving the seam a second hole type whose builders the move across wrapper names reorders
-	/// (`seamBuilderOrderReason`), or a lazy cycle's configuration field (`lazyCycleConfigurationFieldReason`). Pinned by
-	/// `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 1_010, 1_020, 1_450, 1_814, 1_890]
+	/// (`seamBuilderOrderReason`), or a lazy cycle's configuration field (`lazyCycleConfigurationFieldReason`); seed 850 stands in for seed 93, whose forwarding place became a second
+	/// hole type, for a hole read only if available. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xB5E719C74E5AD4EE
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xEFDC8A8D6836981B
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -5738,8 +5782,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeSecondHoleBeneathRedeclaredLabel: 2,
 		.holeSendableDiamond: 22,
 		.holeNestedSameLabelFill: 18,
-		.holeSecondHoleType: 49,
-		.holeSecondHoleTypeCollidingStem: 32,
+		.holeSecondHoleType: 33,
+		.holeSecondHoleTypeCollidingStem: 48,
+		.holeForwardingPlace: 126,
 		.holeInnerSeamPlainAndSendableRoutes: 36,
 		.holeInnerSeamWithBothEnums: 17,
 		.holeTwoSeamCycleWithSendableEdge: 26,
@@ -5880,7 +5925,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`seamCorpusSeedsAddedToInheritedShapes`): the inherited shapes are listed from `knownIssues` with those
 	/// adjustments, a shape left with no seed dropped, so that a fix there is a fix here, and the long run reports a
 	/// seed that diverges as stale or new. The seam's own shape follows them. Each seed is listed once.
-	static let seamKnownIssues: [GraphFuzzerKnownIssue] = knownIssues.compactMap { knownIssue in
+	static let seamKnownIssuesBesideBuilderSurface: [GraphFuzzerKnownIssue] = knownIssues.compactMap { knownIssue in
 		// The base corpus's value oracle runs in no other corpus.
 		guard !knownIssue.isBaseCorpusValueOracleShape else { return nil }
 		let seeds = (knownIssue.seeds.filter { $0 < UInt64(seamCorpusSeedCount) && !seamCorpusSeedsOfOtherShapes.contains($0) }
@@ -5902,7 +5947,23 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode)],
-			seeds: [298, 308, 326, 391, 407, 701],
+			seeds: [93, 298, 308, 326, 391, 670, 750],
+		),
+		// The forwarding place's hole type is a second hole type beside `HoleService`, so its builders reorder too.
+		GraphFuzzerKnownIssue(
+			reason: "\(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
+			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
+			seeds: [567],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason); and \(inSeamLeakReason)",
+			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)] + inSeamLeakSignatures,
+			seeds: [163],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(seamBuilderOrderReason); and \(mockParameterAndFieldOrderReason)",
+			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
+			seeds: [281],
 		),
 		// A fill that re-enters its own seam: the place the re-entered seam builds is handed the root dispatcher, not the
 		// fill's values, so `HoleImpl`'s only-if-available `holeNestId` is `nil` where the visible build and the inline
@@ -5928,7 +5989,24 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(collidingHoleTypesReason); and \(seamBuilderOrderReason)",
 			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`"), .renamedGraphDiffers(.dependencyTreeCode)],
-			seeds: [98, 481, 929, 931],
+			seeds: [407, 481, 701, 929, 931],
+		),
+		GraphFuzzerKnownIssue(
+			reason: collidingHoleTypesReason,
+			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`")],
+			seeds: [832],
+		),
+		// The in-seam leak through the forwarding place's builder (owner: the leak fix's forwarding-place slice) in graphs
+		// with the colliding hole types.
+		GraphFuzzerKnownIssue(
+			reason: "\(collidingHoleTypesReason); and \(seamBuilderOrderReason); and \(inSeamLeakReason)",
+			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`"), .renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures,
+			seeds: [98],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(collidingHoleTypesReason); and \(seamBuilderOrderReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
+			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`"), .renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
+			seeds: [787],
 		),
 		// The colliding hole types in a graph whose mock shows the inherited shape of a mock's API, which the base corpus
 		// lists 338, 595 and 948 under.
@@ -5951,17 +6029,17 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: inSeamLeakReason,
 			signatures: inSeamLeakSignatures,
-			seeds: [68, 151, 309, 418, 430, 699, 892, 990],
+			seeds: [68, 151, 309, 418, 430, 699, 883, 990],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures,
-			seeds: [556],
+			seeds: [556, 892],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
 			signatures: inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
-			seeds: [15, 94, 227, 283, 321, 403, 454, 663, 787, 867, 924],
+			seeds: [15, 94, 227, 283, 321, 403, 454, 663, 867, 924],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
@@ -5997,8 +6075,110 @@ struct SafeDIToolGraphFuzzerTests {
 		),
 	]
 
-	/// The seam corpus's known issues and `seamSmokeKnownIssuesBeyondTheCorpus`, by seed, which the smoke batch consults.
-	static let seamSmokeKnownIssuesBySeed = Dictionary(uniqueKeysWithValues: (seamKnownIssues + seamSmokeKnownIssuesBeyondTheCorpus).flatMap { knownIssue in knownIssue.seeds.map { ($0, knownIssue) } })
+	/// `seamKnownIssuesBesideBuilderSurface` with each part of the builder surface added for its seeds.
+	static let seamKnownIssues = addingBuilderSurfaceShapes(seeds: seamBuilderSurfaceSeeds, to: seamKnownIssuesBesideBuilderSurface)
+
+	/// `seamKnownIssues` and `seamSmokeKnownIssuesBeyondTheCorpus`, with the smoke seeds beyond the seam corpus that fail
+	/// the builder surface, which the corpus's list, bounded by its size, cannot hold.
+	static let seamSmokeKnownIssues = addingBuilderSurfaceShapes(
+		seeds: BuilderSurfaceSeeds(
+			base: [1_010, 1_020, 1_450, 1_814, 1_890],
+			labels: [1_020, 1_890],
+			sameSupply: [1_020],
+			sameSupplyReason: seamMockTakesHoleValueReason,
+			addedSupply: [1_890],
+			forwardingOtherValues: [1_010, 1_020, 1_450, 1_890],
+			callingMocks: [],
+		),
+		to: seamKnownIssues + seamSmokeKnownIssuesBeyondTheCorpus,
+	)
+
+	/// The fewest graphs of a corpus the builder surface must judge for each kind it floors (`Corpus.builderSurfaceFlooredKinds`):
+	/// below ten, a draw no longer stands in for unit tests of its shape.
+	static let builderSurfaceFloor = 10
+
+	/// The seeds of a corpus that fail each part of the builder surface, each part's list apart: the base check, the label
+	/// check, same supply (i), added supply (ii), places forwarding other values (iii) and calling mocks (iv).
+	struct BuilderSurfaceSeeds {
+		let base: [UInt64]
+		let labels: [UInt64]
+		let sameSupply: [UInt64]
+		/// Why `sameSupply`'s graphs fail, which differs by corpus: the defect each corpus's same-supply edits show.
+		let sameSupplyReason: String
+		let addedSupply: [UInt64]
+		let forwardingOtherValues: [UInt64]
+		let callingMocks: [UInt64]
+	}
+
+	/// `issues` with each part of the builder surface's shape added for its seeds (`GraphFuzzerKnownIssue.adding`).
+	private static func addingBuilderSurfaceShapes(seeds: BuilderSurfaceSeeds, to issues: [GraphFuzzerKnownIssue]) -> [GraphFuzzerKnownIssue] {
+		var issues = GraphFuzzerKnownIssue.adding(.builderSurface(.builderSurfaceNamesGeneratedType), reason: builderSurfaceReason, seeds: seeds.base, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.builderLabelBreaksContract), reason: labelReason, seeds: seeds.labels, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.sameSupplyCallStopsCompiling), reason: seeds.sameSupplyReason, seeds: seeds.sameSupply, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.addedBuilderChangesExistingBuilder), reason: addedSupplyReason, seeds: seeds.addedSupply, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.placesForwardingOtherValuesAccepted), reason: forwardingOtherValuesReason, seeds: seeds.forwardingOtherValues, to: issues)
+		return GraphFuzzerKnownIssue.adding(.builderSurface(.callingMockChangesBuilder), reason: callingMocksReason, seeds: seeds.callingMocks, to: issues)
+	}
+
+	/// Why a graph with a hole fails the builder surface on main (`GraphFuzzerToolRuns.builderSurfaceFailure`).
+	static let builderSurfaceReason = "A seam's readable initializer and a mock hand each hole's builder a generated scope enum, so a builder a person writes names generated code; the planned builder structs replace it with builders that take only what their place forwards"
+
+	private static let labelReason = "A builder of a hole is labeled `<fillingType>Builder` until a second returned type of its filling type appears, and a calling mock names builders apart after each called type, where contract rule 8 labels each builder by its filling type, returned type and family alone"
+
+	/// The seam corpus's same-supply defect, which no slice of the planned builder structs names yet: the seam's own
+	/// internal `mock()` takes `holeService: S83_HoleService` (seed 83) where the seam takes a builder.
+	private static let seamMockTakesHoleValueReason = "A seam's own internal mock, which cannot build a hole whose fill is in another module, takes the hole's value, or the wrapper its place spells, as a parameter where the seam takes one builder per filling type, returned type and family, as contract rules 7 and 8 ask of the mock too, so moving the place behind `LazilyInstantiated` or into an inner seam, or giving a second place the same label, changes the parameter's type, its label or its order"
+
+	/// The public mock corpus's same-supply defect: an internal calling mock takes `hole: S128_Hole` (seed 128), which the
+	/// calling-mock clause of contract rule 7, in the planned builder structs' last mock slice, removes.
+	private static let callingMockTakesHoleValueReason = "An internal calling mock passes the called public mock's hole up as the hole's value, or the wrapper its place spells, rather than filling it where the app fills or taking one builder per filling type, returned type and family (contract rules 7 and 8), so changing the place's wrapper changes the parameter's type or its label"
+
+	private static let addedSupplyReason = "A builder takes `<fillingType>_<ReturnedType>Builder` only once a second returned type of its filling type appears, so adding a place of a new builder of an existing filling type renames the existing builder"
+
+	private static let forwardingOtherValuesReason = "Places of one builder that forward other values are merged into one builder rather than rejected, so the builder cannot take only what each place forwards"
+
+	private static let callingMocksReason = "An internal mock that passes up the places of two calls of public mocks of one hole type names their builders apart after each called type, so adding the second call adds a builder and renames the first's, where the second call's places are places of the first's builder"
+
+	/// The seam corpus's graphs that fail each part of the builder surface today, observed from a run of the tool over
+	/// the corpus (`GraphFuzzerBuilderSurface`), each part's seeds apart: the base check (every graph with a hole the tool
+	/// accepts), the label check, same supply (i), added supply (ii), places forwarding other values (iii) and calling
+	/// mocks (iv). The planned builder structs empty them, each slice the seeds it fixes, but for same supply's, whose
+	/// defect no slice names yet (`seamMockTakesHoleValueReason`).
+	static let seamBuilderSurfaceSeeds = BuilderSurfaceSeeds(
+		base: [
+			15, 18, 19, 24, 25, 30, 56, 59, 68, 69, 78, 80, 83, 84, 88, 93, 94, 98, 108, 116,
+			121, 135, 144, 151, 153, 162, 163, 164, 187, 209, 215, 227, 240, 241, 247, 252, 273, 277, 279, 281,
+			283, 298, 300, 304, 306, 308, 309, 311, 321, 326, 330, 334, 338, 347, 348, 362, 365, 370, 383, 384,
+			390, 391, 403, 407, 418, 430, 448, 454, 468, 471, 478, 481, 494, 500, 517, 527, 532, 548, 550, 556,
+			567, 568, 593, 594, 595, 600, 605, 609, 617, 618, 623, 627, 663, 669, 670, 699, 701, 705, 709, 718,
+			732, 743, 750, 751, 760, 769, 787, 788, 791, 794, 797, 809, 819, 832, 834, 835, 836, 850, 851, 854,
+			858, 866, 867, 876, 883, 886, 892, 905, 912, 920, 923, 924, 929, 930, 931, 934, 940, 942, 945, 947,
+			948, 950, 969, 990,
+		],
+		labels: [
+			19, 59, 68, 93, 98, 121, 163, 281, 283, 348, 383, 391, 468, 481, 548, 567, 568, 605, 670, 750,
+			794, 797, 867, 883, 892, 923, 929, 930, 948, 950, 990,
+		],
+		sameSupply: [
+			19, 83, 98, 108, 135, 151, 273, 300, 326, 797, 854, 858, 929, 942, 990,
+		],
+		sameSupplyReason: seamMockTakesHoleValueReason,
+		addedSupply: [
+			15, 69, 78, 98, 135, 273, 277, 311, 338, 383, 391, 403, 407, 418, 478, 481, 527, 595, 701, 787,
+			797, 809, 832, 836, 929, 930, 931, 940, 948, 950,
+		],
+		forwardingOtherValues: [
+			15, 19, 59, 68, 69, 78, 83, 93, 94, 98, 108, 116, 121, 135, 151, 153, 163, 164, 215, 227, 252, 273,
+			277, 281, 283, 298, 300, 304, 308, 309, 311, 326, 330, 338, 347, 348, 362, 365, 383, 391, 403, 407,
+			418, 454, 468, 478, 481, 494, 527, 548, 556, 567, 568, 594, 595, 600, 605, 618, 623, 663, 670, 699,
+			701, 743, 750, 751, 760, 787, 794, 797, 809, 832, 836, 850, 854, 858, 866, 867, 876, 883, 886, 892,
+			923, 929, 930, 931, 940, 942, 945, 947, 948, 950, 969, 990,
+		],
+		callingMocks: [],
+	)
+
+	/// `seamSmokeKnownIssues` by seed, which the smoke batch consults.
+	static let seamSmokeKnownIssuesBySeed = Dictionary(uniqueKeysWithValues: seamSmokeKnownIssues.flatMap { knownIssue in knownIssue.seeds.map { ($0, knownIssue) } })
 
 	/// The known issues of the smoke batch's seeds beyond the seam corpus, which no corpus run reaches: the in-seam leak,
 	/// until its fix.
@@ -6018,20 +6198,25 @@ struct SafeDIToolGraphFuzzerTests {
 	private static let inSeamLeakSignatures: [GraphFuzzerKnownIssue.Signature] = [
 		"_ChainBase alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainBase alive holding holeSeam.holeOwnerBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainBase alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainBase alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLeaf alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLeaf alive holding holeSeam.holeOwnerBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainLeaf alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLeaf alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLink alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLink alive holding holeSeam.holeOwnerBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainLink alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLink alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_Cycle4Reader alive holding cycleSeam.cycle1A.cycle2BBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_CycleTag alive holding cycleSeam.cycle1A.cycle2BBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_CycleTag> alive holding cycleSeam.cycle1A once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ForwardedUser alive holding forwardedHome.forwardedOuter.forwardedInnerBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleAnalytics alive holding holeBothTop.holeBoth.holeSeamPlain.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleAnalytics alive holding holeOuter.holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleAnalytics alive holding holeOuter.holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleAnalytics alive holding holeOuter.holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleAnalytics alive holding holeOuter.holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleAnalytics alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleAnalytics alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleAnalytics alive holding holeSeam.holeRingABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6041,14 +6226,18 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleAnalytics alive holding holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleAnalytics alive holding holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleAnalytics alive holding holeSeam.holeTangleTValue.holeTangleService.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleAnalytics alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleAnalytics alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleDeep> alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleGadgetImpl alive holding holeSeam.holeRingABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleGadgetImpl alive holding holeSeam.holeRingAValue.holeRingBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleGadgetImpl alive holding holeSeam.holeRingBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleGadgetImpl alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleGadgetImpl alive holding holeSeam.holeTicketBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleGadgetOwner alive holding holeSeam.holeRingABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleGadgetOwner alive holding holeSeam.holeRingAValue.holeRingBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleGadgetOwner alive holding holeSeam.holeRingBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleGadgetOwner alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleImpl alive holding holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleImpl alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleImpl alive holding holeSeam.holeNestBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
@@ -6066,9 +6255,12 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleImpl alive holding holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleImpl alive holding holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleImpl alive holding holeSeam.holeTangleTValue.holeTangleService.holeTangleC once the probe's value is released: 2 on the feature path, 0 on the known-right path",
+		"_HoleImpl alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleLogger alive holding holeBothTop.holeBoth.holeSeamPlain.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleLogger alive holding holeOuter.holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleLogger alive holding holeOuter.holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleLogger alive holding holeOuter.holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleLogger alive holding holeOuter.holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleLogger alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleLogger alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleLogger alive holding holeSeam.holeRingFlow.holeRingABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6077,6 +6269,7 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleLogger alive holding holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleLogger alive holding holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleLogger alive holding holeSeam.holeTangleTValue.holeTangleService.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleLogger alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleModel alive holding holeSeam.holeRingABuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleModel alive holding holeSeam.holeRingBBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleNamespace.S556_HoleImpl alive holding holeOuter.holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6099,10 +6292,13 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleOwner alive holding holeSeam.holeTangleT once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleOwner alive holding holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleOwner alive holding holeSeam.holeTangleTValue.holeTangleService.holeTangleC once the probe's value is released: 2 on the feature path, 0 on the known-right path",
+		"_HoleOwner alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleOwner> alive holding holeBothTop.holeBoth.holeSeamPlain.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner> alive holding holeOuter.holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner> alive holding holeOuter.holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner> alive holding holeOuter.holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner> alive holding holeOuter.holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleOwner> alive holding holeOuter.holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner> alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner> alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner> alive holding holeSeam.holeRingABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6113,10 +6309,13 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleOwner> alive holding holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner> alive holding holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner> alive holding holeSeam.holeTangleTValue.holeTangleService.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleOwner> alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner> alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HolePing> alive holding holeBothTop.holeBoth.holeSeamPlain.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HolePing> alive holding holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HolePing> alive holding holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HolePing> alive holding holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HolePing> alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleScreenA alive holding holeSeam.holeRingABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleScreenA alive holding holeSeam.holeRingBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleScreenB alive holding holeSeam.holeRingABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6128,6 +6327,7 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleService> alive holding holeSeam.holeRingFlow.holeRingBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleService> alive holding holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleService> alive holding holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleService> alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleSettings alive holding holeOuter.holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleSettings alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleSettings alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6137,6 +6337,7 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleSettings alive holding holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleSettings alive holding holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleSettings alive holding holeSeam.holeTangleTValue.holeTangleService.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleSettings alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleSettings alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleShared alive holding holeSeam.holeRingABuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleShared alive holding holeSeam.holeRingBBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
@@ -6154,6 +6355,17 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleTangleT> alive holding holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTangleT> alive holding holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTangleT> alive holding holeSeam.holeTangleTValue.holeTangleService.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeOuter.holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeOuter.holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeOuter.holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeSeam.holeRingABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeSeam.holeRingBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeSeam.holeRingFlow.holeRingABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeSeam.holeRingFlow.holeRingBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTrackerImpl alive holding holeOuter.holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTrackerImpl alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTrackerImpl alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6163,6 +6375,7 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleTrackerImpl alive holding holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTrackerImpl alive holding holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTrackerImpl alive holding holeSeam.holeTangleTValue.holeTangleService.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTrackerImpl alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTrackerImpl alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_RetainNavigator alive holding retainHome.retainDetailBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 	].map { .seamRetainsWhatInlineFrees(containing: $0) }
@@ -6190,12 +6403,12 @@ struct SafeDIToolGraphFuzzerTests {
 	/// corpus does not draw, changed them there (154, 527, 657); the inherited lists leave them out. Observed, not
 	/// derived: a seed here that a run finds failing its inherited shape again is a new failure, and goes back. Seeds
 	/// 300 and 886 fail their inherited shape beside the in-seam leak, which an entry of their own lists.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 154, 157, 300, 309, 311, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 595, 632, 657, 714, 728, 735, 768, 774, 786, 808, 836, 840, 847, 886, 903, 948]
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 154, 157, 281, 300, 309, 311, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 567, 595, 632, 657, 714, 728, 735, 768, 774, 786, 808, 836, 840, 847, 886, 903, 948]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
 	private static let seamCorpusSeedsAddedToInheritedShapes: [String: [UInt64]] = [
-		lazyCycleConfigurationFieldReason: [19, 135, 163],
+		lazyCycleConfigurationFieldReason: [19, 135],
 	]
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
@@ -6242,6 +6455,27 @@ struct SafeDIToolGraphFuzzerTests {
 		readTwinGraphCount: publicMockCorpusReadTwinGraphCount,
 		retentionCounts: publicMockCorpusRetentionCounts,
 		gatingPublicMockDrawFeatures: Set(GraphFuzzerPublicMockDrawFeature.allCases.filter(\.isCountedWhenAccepted)),
+		builderSurfaceFlooredKinds: [
+			"base-plain",
+			"base-lazy",
+			"base-forwarding",
+			"base-sendable",
+			"placeBehindLazilyInstantiated",
+			"instantiatorPlaceMovedToPlainPlace",
+			"plainPlaceMovedToInstantiator",
+			"instantiatorChangedToErasedInstantiator",
+			"erasedInstantiatorChangedToInstantiator",
+			"sendableInstantiatorPlaceMovedToPlainPlace",
+			"plainPlaceMovedToSendableInstantiator",
+			"sendableInstantiatorChangedToSendableErasedInstantiator",
+			"sendableErasedInstantiatorChangedToSendableInstantiator",
+			"placeOfNewBuilderOfExistingFillingType",
+			"placeForwardingOtherValues",
+			"placeForwardingOtherValuesRemedied",
+			"lazilyInstantiatedPlaceMovedBack",
+			"secondCallOfPublicMock",
+			"remedyKeepsDrawnBuilders",
+		],
 	)
 
 	/// How many of the public mock corpus's accepted graphs show each gating draw (`isCountedWhenAccepted`), counted
@@ -6296,7 +6530,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x4EBCF943FB5E6F96
+	static let publicMockCorpusFixtureHash: UInt64 = 0x7A3E59F695DB4AE1
 	static let publicMockCorpusAcceptedSeedCount = 856
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x00FC421C8B43BC22
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -6339,11 +6573,11 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x695C10371F6EC9D9
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x4B54A60A1897C0EB
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
-	static let publicMockKnownIssues: [GraphFuzzerKnownIssue] = [
+	static let publicMockKnownIssuesBesideBuilderSurface: [GraphFuzzerKnownIssue] = [
 		GraphFuzzerKnownIssue(
 			reason: publicMockParametersSortedByLabelReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
@@ -6512,6 +6746,86 @@ struct SafeDIToolGraphFuzzerTests {
 		),
 	]
 
+	/// `publicMockKnownIssuesBesideBuilderSurface` with each part of the builder surface added for its seeds.
+	static let publicMockKnownIssues = addingBuilderSurfaceShapes(seeds: publicMockBuilderSurfaceSeeds, to: publicMockKnownIssuesBesideBuilderSurface)
+
+	/// The public mock corpus's graphs that fail each part of the builder surface today, observed from a run of the tool over
+	/// the corpus (`GraphFuzzerBuilderSurface`), each part's seeds apart: the base check (every graph with a hole the tool
+	/// accepts), the label check, same supply (i), added supply (ii), places forwarding other values (iii) and calling
+	/// mocks (iv). The planned builder structs empty them, each slice the seeds it fixes.
+	static let publicMockBuilderSurfaceSeeds = BuilderSurfaceSeeds(
+		base: [
+			2, 3, 4, 8, 9, 10, 11, 12, 15, 17, 18, 19, 20, 21, 22, 24, 25, 26, 28, 31,
+			33, 34, 37, 42, 43, 44, 45, 47, 48, 49, 54, 55, 56, 57, 58, 59, 60, 62, 63, 64,
+			65, 66, 67, 69, 70, 73, 77, 79, 82, 84, 87, 88, 89, 90, 92, 93, 95, 96, 97, 98,
+			99, 101, 103, 106, 107, 108, 109, 110, 111, 115, 117, 119, 122, 123, 124, 125, 128, 129, 130, 131,
+			133, 136, 137, 138, 143, 145, 146, 147, 148, 149, 150, 151, 152, 153, 155, 156, 157, 158, 159, 160,
+			161, 162, 165, 166, 167, 168, 171, 172, 176, 177, 178, 180, 181, 182, 183, 185, 186, 189, 190, 192,
+			195, 196, 197, 198, 199, 200, 201, 202, 204, 205, 206, 207, 210, 211, 212, 213, 216, 218, 219, 221,
+			222, 223, 225, 226, 227, 228, 229, 230, 231, 233, 238, 239, 242, 243, 244, 245, 246, 247, 248, 250,
+			251, 252, 256, 257, 259, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 276,
+			278, 280, 281, 282, 283, 284, 285, 287, 289, 290, 293, 295, 296, 297, 299, 300, 301, 302, 304, 306,
+			307, 308, 309, 310, 311, 312, 313, 314, 316, 317, 318, 319, 321, 322, 324, 326, 327, 328, 329, 330,
+			331, 332, 333, 335, 336, 337, 338, 339, 340, 341, 342, 344, 346, 347, 348, 349, 350, 351, 352, 353,
+			354, 356, 359, 360, 361, 362, 366, 368, 369, 370, 371, 372, 374, 376, 379, 380, 381, 383, 386, 387,
+			388, 389, 392, 393, 394, 395, 397, 398, 401, 402, 404, 406, 407, 409, 411, 412, 413, 415, 416, 417,
+			419, 421, 423, 424, 425, 427, 428, 429, 431, 432, 433, 434, 435, 436, 437, 438, 440, 441, 442, 443,
+			445, 448, 449, 453, 455, 456, 459, 463, 465, 467, 468, 469, 472, 474, 477, 478, 479, 481, 482, 484,
+			486, 488, 489, 490, 492, 494, 495, 497, 498, 499, 500, 503, 505, 507, 508, 510, 511, 515, 516, 519,
+			520, 521, 522, 525, 526, 527, 528, 532, 537, 538, 539, 540, 541, 542, 543, 545, 546, 549, 550, 551,
+			552, 554, 556, 558, 559, 560, 561, 562, 563, 564, 565, 567, 568, 571, 572, 575, 576, 577, 580, 581,
+			582, 584, 587, 589, 591, 592, 594, 595, 597, 598, 601, 602, 603, 605, 606, 607, 608, 610, 611, 612,
+			613, 614, 615, 616, 618, 619, 621, 622, 623, 624, 626, 627, 629, 630, 631, 632, 633, 635, 636, 637,
+			638, 639, 642, 643, 644, 645, 646, 647, 648, 649, 651, 652, 653, 654, 655, 657, 658, 659, 660, 663,
+			664, 666, 668, 669, 670, 671, 673, 675, 677, 678, 679, 680, 681, 682, 684, 685, 691, 692, 693, 695,
+			697, 698, 699, 700, 701, 703, 706, 707, 708, 711, 713, 714, 715, 716, 717, 718, 720, 721, 722, 723,
+			724, 725, 726, 727, 728, 730, 732, 733, 734, 735, 736, 737, 738, 739, 740, 741, 743, 744, 746, 747,
+			748, 750, 751, 753, 757, 758, 765, 766, 768, 770, 772, 773, 774, 775, 776, 777, 778, 779, 781, 782,
+			783, 784, 786, 787, 788, 789, 790, 792, 793, 795, 797, 798, 799, 801, 802, 803, 804, 805, 807, 808,
+			811, 812, 814, 817, 818, 819, 820, 821, 822, 823, 824, 825, 827, 828, 830, 832, 833, 834, 835, 836,
+			838, 839, 840, 843, 844, 845, 846, 847, 848, 849, 850, 851, 852, 853, 854, 858, 859, 860, 861, 862,
+			863, 864, 865, 866, 870, 872, 873, 875, 876, 877, 879, 880, 881, 883, 884, 885, 886, 887, 888, 889,
+			890, 891, 892, 895, 896, 897, 898, 899, 901, 902, 903, 904, 905, 906, 907, 909, 910, 911, 912, 913,
+			915, 917, 918, 919, 923, 926, 927, 930, 931, 933, 934, 935, 936, 937, 940, 941, 942, 943, 944, 945,
+			946, 947, 949, 950, 951, 953, 956, 957, 958, 959, 960, 961, 962, 963, 965, 966, 968, 970, 971, 973,
+			974, 975, 977, 978, 979, 981, 983, 984, 985, 987, 988, 989, 990, 991, 992, 993, 994, 995, 996, 998,
+		],
+		labels: [
+			2, 19, 20, 21, 33, 34, 37, 43, 47, 55, 56, 64, 84, 89, 90, 93, 96, 103, 108, 119,
+			151, 162, 166, 167, 168, 176, 180, 181, 186, 197, 207, 210, 211, 213, 229, 230, 243, 247, 248, 283,
+			295, 299, 301, 302, 307, 311, 319, 330, 333, 339, 341, 348, 356, 372, 380, 381, 389, 406, 407, 415,
+			429, 433, 434, 436, 456, 465, 468, 469, 486, 490, 499, 500, 508, 510, 554, 558, 561, 581, 584, 592,
+			597, 601, 611, 614, 615, 621, 623, 627, 631, 636, 653, 658, 673, 685, 692, 695, 697, 707, 715, 718,
+			720, 728, 730, 737, 743, 748, 751, 766, 781, 782, 795, 798, 799, 804, 824, 830, 832, 844, 845, 846,
+			847, 848, 850, 851, 866, 875, 886, 895, 897, 902, 910, 923, 931, 942, 943, 946, 960, 962, 978, 979,
+			991, 996, 998,
+		],
+		sameSupply: [
+			122, 128, 136, 145, 266, 332, 352, 411, 427, 580, 681, 740, 786, 814, 823, 827, 853, 977,
+		],
+		sameSupplyReason: callingMockTakesHoleValueReason,
+		addedSupply: [
+			2, 19, 20, 21, 33, 34, 37, 43, 47, 55, 56, 84, 89, 90, 93, 96, 103, 108, 151, 162,
+			167, 168, 176, 180, 181, 186, 197, 207, 210, 213, 229, 243, 247, 248, 283, 295, 301, 302, 311, 319,
+			330, 339, 341, 348, 356, 372, 380, 381, 389, 407, 415, 429, 433, 434, 436, 465, 468, 469, 486, 490,
+			499, 500, 508, 554, 558, 561, 581, 584, 592, 597, 601, 611, 614, 615, 621, 623, 627, 631, 636, 653,
+			673, 685, 695, 697, 707, 715, 718, 720, 728, 730, 737, 751, 766, 781, 782, 795, 798, 799, 804, 824,
+			830, 832, 844, 845, 846, 847, 848, 850, 851, 866, 875, 886, 895, 897, 902, 910, 923, 931, 942, 943,
+			946, 960, 962, 978, 979, 991, 996, 998,
+		],
+		forwardingOtherValues: [
+			3, 12, 22, 28, 59, 60, 64, 65, 79, 87, 88, 97, 106, 107, 117, 119, 128, 130, 136, 156,
+			166, 199, 221, 230, 238, 242, 251, 259, 262, 264, 269, 273, 284, 296, 314, 327, 328, 332, 344, 351,
+			370, 386, 397, 402, 406, 423, 425, 435, 449, 455, 456, 459, 463, 474, 477, 489, 497, 510, 537, 539,
+			543, 549, 551, 559, 562, 587, 606, 629, 635, 647, 648, 658, 668, 679, 692, 699, 716, 723, 724, 725,
+			743, 779, 786, 790, 797, 821, 833, 834, 836, 876, 892, 904, 906, 909, 911, 912, 919, 936, 947, 958,
+			959, 977, 983, 995,
+		],
+		callingMocks: [
+			19, 211, 230, 299, 307, 333, 406, 456, 486, 510, 597, 658, 692, 743, 748, 845, 960,
+		],
+	)
+
 	/// What a public mock's leak keeps alive in the public mock corpus's graphs, each type after its graph's prefix with what
 	/// is held and both counts, as the corpus run observed.
 	private static let publicMockLeakSignatures: [GraphFuzzerKnownIssue.Signature] = [
@@ -6594,6 +6908,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeFillReceivesFormBoundAgain: 28,
 		.holeFillReceivesRootLevelValue: 38,
 		.holeFillReceivesRootLevelWrapper: 15,
+		.holeForwardsValue: 43,
 		.holeInsideLoop: 131,
 		.holeLoopDeclaresContextAgain: 74,
 		.holeOnPublicMockType: 228,
@@ -6982,6 +7297,10 @@ struct SafeDIToolGraphFuzzerTests {
 			withKnownIssue("Seed \(fixture.seed) no longer fails, so \(Self.corpus(for: GraphFuzzerGeneratorFeature.features(drawnIn: fixture)).staleSeedRemedy(knownIssue, fixture.seed)): \(knownIssue.reason)") {}
 		case let .staleRenamedGraphDifference(knownIssue, aspect):
 			Issue.record("Seed \(fixture.seed) sits on \"\(knownIssue.reason)\", which lists \(aspect.rawValue), but its renamed graphs do not show it: list the seed under the entry that names exactly what it shows.")
+		case let .staleBuilderSurfaceSignature(knownIssue, kind):
+			Issue.record("Seed \(fixture.seed) sits on \"\(knownIssue.reason)\", which lists \(kind.rawValue), but the graph does not show it: list the seed under the entry that names exactly what it shows.")
+		case let .staleLeakEntry(knownIssue):
+			Issue.record("Seed \(fixture.seed) sits on \"\(knownIssue.reason)\", which lists a leak the graph no longer shows: remove the seed from the leak's entry.")
 		case let .failure(failure):
 			Issue.record(failure.issueComment(fixture: fixture))
 		}
@@ -7017,6 +7336,11 @@ extension GraphFuzzerToolRuns {
 struct GraphFuzzerLongRunConfiguration {
 	let iterations: Int
 	let startingSeed: UInt64
+	/// The seeds `SAFEDI_GRAPH_FUZZER_SEEDS` lists, in the order it lists them, which the run then covers in place of
+	/// the `iterations` consecutive seeds from `startingSeed`; `iterations` is their count and `startingSeed` the first.
+	let listedSeeds: [UInt64]?
+	/// Whether `SAFEDI_GRAPH_FUZZER_SEEDS` is set, whatever it holds.
+	let namesSeedList: Bool
 	/// The generator features the run's graphs are drawn with, which select the corpus and its pins, or `nil` when
 	/// `SAFEDI_GRAPH_FUZZER_FEATURES` names a feature that does not exist, which the run reports.
 	let features: Set<GraphFuzzerGeneratorFeature>?
@@ -7029,21 +7353,44 @@ struct GraphFuzzerLongRunConfiguration {
 	/// `cpu …` with what each `GraphFuzzerPhase` cost (`GraphFuzzerPhaseAccount`); and `completed …` at the end.
 	let reportPath: String?
 
-	/// `nil` unless `SAFEDI_GRAPH_FUZZER_ITERATIONS` is set: to a count of seeds, or to `corpus` for the seed count
+	/// The process's settings: `configuration(inEnvironment:)` of its environment.
+	static var current: GraphFuzzerLongRunConfiguration? {
+		configuration(inEnvironment: ProcessInfo.processInfo.environment)
+	}
+
+	/// `nil` unless `SAFEDI_GRAPH_FUZZER_ITERATIONS` or `SAFEDI_GRAPH_FUZZER_SEEDS` is set. `SAFEDI_GRAPH_FUZZER_ITERATIONS`
+	/// is a count of seeds, or `corpus` for the seed count
 	/// of the corpus `SAFEDI_GRAPH_FUZZER_FEATURES` selects – a comma-separated list of `GraphFuzzerGeneratorFeature`
 	/// names, or unset for the corpus drawn without features. Anything else becomes zero, which the run reports.
 	/// `SAFEDI_GRAPH_FUZZER_SHARD`, when set to `<index>/<count>`, runs only that shard of those seeds
 	/// (`shard(_:of:startingSeed:iterations:)`), as `graph-fuzzer.yml`'s jobs do; any other value also becomes zero.
-	static var current: GraphFuzzerLongRunConfiguration? {
-		let environment = ProcessInfo.processInfo.environment
-		guard let iterations = environment["SAFEDI_GRAPH_FUZZER_ITERATIONS"] else { return nil }
+	/// `SAFEDI_GRAPH_FUZZER_SEEDS` is a comma-separated list of distinct seeds, such as `98,311,383`, which one process
+	/// then runs in place of a process per seed. It replaces the count, the starting seed and the shard, so a list
+	/// set beside any of them, an empty list, and a list that repeats a seed or holds anything but seeds also become
+	/// zero. A listed run checks no corpus pin, whatever it lists (`coversCorpus(ofSeedCount:)`), and writes a `seeds`
+	/// line where a range writes its `shard` line.
+	static func configuration(inEnvironment environment: [String: String]) -> GraphFuzzerLongRunConfiguration? {
+		let seedList = environment["SAFEDI_GRAPH_FUZZER_SEEDS"]
+		guard environment["SAFEDI_GRAPH_FUZZER_ITERATIONS"] != nil || seedList != nil else { return nil }
+		let iterations = environment["SAFEDI_GRAPH_FUZZER_ITERATIONS"] ?? ""
 		let featureNames = (environment["SAFEDI_GRAPH_FUZZER_FEATURES"] ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
 		let features = featureNames.compactMap(GraphFuzzerGeneratorFeature.init(rawValue:))
 		let validFeatures: Set<GraphFuzzerGeneratorFeature>? = features.count == featureNames.count ? Set(features) : nil
 		let requestedIterations = iterations == "corpus" ? validFeatures.map { SafeDIToolGraphFuzzerTests.corpus(for: $0).seedCount } ?? 0 : Int(iterations) ?? 0
 		let requestedStartingSeed = environment["SAFEDI_GRAPH_FUZZER_STARTING_SEED"].flatMap { UInt64($0) } ?? 0
 		let seeds: (startingSeed: UInt64, iterations: Int)
-		if let shardDescription = environment["SAFEDI_GRAPH_FUZZER_SHARD"] {
+		var listedSeeds: [UInt64]?
+		if let seedList {
+			let listed = seedList.split(separator: ",", omittingEmptySubsequences: false).map { UInt64($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+			let namesNoOtherSeeds = ["SAFEDI_GRAPH_FUZZER_ITERATIONS", "SAFEDI_GRAPH_FUZZER_STARTING_SEED", "SAFEDI_GRAPH_FUZZER_SHARD"].allSatisfy { environment[$0] == nil }
+			let valid = listed.compactMap(\.self)
+			if namesNoOtherSeeds, valid.count == listed.count, Set(valid).count == valid.count, let first = valid.first {
+				seeds = (first, valid.count)
+				listedSeeds = valid
+			} else {
+				seeds = (requestedStartingSeed, 0)
+			}
+		} else if let shardDescription = environment["SAFEDI_GRAPH_FUZZER_SHARD"] {
 			let parts = shardDescription.split(separator: "/", omittingEmptySubsequences: false).map { Int($0) }
 			if parts.count == 2, let index = parts[0], let count = parts[1], let shard = shard(index, of: count, startingSeed: requestedStartingSeed, iterations: requestedIterations) {
 				seeds = shard
@@ -7056,9 +7403,45 @@ struct GraphFuzzerLongRunConfiguration {
 		return GraphFuzzerLongRunConfiguration(
 			iterations: seeds.iterations,
 			startingSeed: seeds.startingSeed,
+			listedSeeds: listedSeeds,
+			namesSeedList: seedList != nil,
 			features: validFeatures,
 			reportPath: environment["SAFEDI_GRAPH_FUZZER_REPORT"],
 		)
+	}
+
+	/// The run's seed at `offset`, which is in `0..<iterations`.
+	func seed(at offset: Int) -> UInt64 {
+		if let listedSeeds {
+			listedSeeds[offset]
+		} else {
+			startingSeed &+ UInt64(offset)
+		}
+	}
+
+	/// Whether the run is of the whole corpus of `seedCount` seeds, whose pins it then checks: consecutive seeds from
+	/// zero. Listed seeds never are, in whatever order and number, so that a list's order does not decide it.
+	func coversCorpus(ofSeedCount seedCount: Int) -> Bool {
+		listedSeeds == nil && startingSeed == 0 && iterations == seedCount
+	}
+
+	/// What the run reports when its settings name no seed.
+	var noSeedsProblem: String {
+		if namesSeedList {
+			"SAFEDI_GRAPH_FUZZER_SEEDS must be a comma-separated list of distinct seeds, set without SAFEDI_GRAPH_FUZZER_ITERATIONS, SAFEDI_GRAPH_FUZZER_STARTING_SEED or SAFEDI_GRAPH_FUZZER_SHARD."
+		} else {
+			"SAFEDI_GRAPH_FUZZER_ITERATIONS must be a positive integer or `corpus`, and SAFEDI_GRAPH_FUZZER_SHARD, when set, `<index>/<count>` naming a shard with at least one seed."
+		}
+	}
+
+	/// What the report's line of accepted graphs begins with: `shard <starting seed> <count>` for consecutive seeds,
+	/// which `ci.yml`'s combine job adds up, or `seeds <seed>,<seed>…` for listed ones, which belong to no shard.
+	var seedsReportFields: String {
+		if let listedSeeds {
+			"seeds \(listedSeeds.map(String.init).joined(separator: ","))"
+		} else {
+			"shard \(startingSeed) \(iterations)"
+		}
 	}
 
 	/// The seeds of shard `index` of `count` consecutive shards of the `iterations` seeds from `startingSeed`, the earlier

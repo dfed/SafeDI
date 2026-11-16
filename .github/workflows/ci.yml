@@ -824,6 +824,15 @@ jobs:
           key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-
+      # And the checks that passed in any other run of this repository, on
+      # whatever branch, which this run's own cache cannot hold. Sharing only
+      # saves compiles, so neither this step nor the upload after the tests
+      # can fail the job.
+      - name: Restore Shared Passed Compile Checks
+        continue-on-error: true
+        uses: ./.github/actions/restore-shared-compile-checks
+        with:
+          identity: ${{ steps.compile-check-identity.outputs.identity }}
       # One pass, with compile verification. The passes that catch output
       # differing between processes (per-process hash seeds) run on Linux,
       # in "Repeat Tests on Linux", where runners are plentiful: on this
@@ -843,15 +852,16 @@ jobs:
       # flag through; the swiftbuild build system drops it.
       #
       # The time limit stops a test that hangs rather than letting it hold
-      # the runner for GitHub's six-hour default. Over the 177 completed CI
-      # runs from 2026-11-02 to 2026-11-05, 63 runs of this step, which then
-      # also ran four passes without compile verification, took 9.9 to 37.2
-      # minutes (median 24.1, 95th percentile 32.3). Without those passes
-      # (9.0 minutes in run 43207169056) the longest would have been about
-      # 28 minutes; twice that is the limit until runs of the single pass
-      # have been measured.
+      # the runner for GitHub's six-hour default. It is about twice the
+      # longest duration measured, rounded up to 5 minutes. On 2026-11-15,
+      # eight successful runs of this step took 17.1 to 55.1 minutes
+      # (median 32.2): 26.4 (run 43712596551), 45.2 (43692820935), 55.1
+      # (43687996075), 17.1 (43685323713), 23.9 (43682711345), 21.9
+      # (43676467330), 38.0 (43671437925) and 54.9 (main's run
+      # 43721724778). The longest took 92% of the 60-minute limit this
+      # step had.
       - name: Build and Test Framework
-        timeout-minutes: 60
+        timeout-minutes: 115
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
         run: |
@@ -863,6 +873,12 @@ jobs:
         with:
           path: .compile-check-cache
           key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Upload Passed Compile Checks to Share
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: ./.github/actions/upload-passed-compile-checks
+        with:
+          identity: ${{ steps.compile-check-identity.outputs.identity }}
       - name: Prepare Coverage Reports
         run: ./Scripts/prepare-coverage-reports.sh
       # "Check Line Coverage on Linux" unions this report with the Linux
@@ -898,20 +914,25 @@ jobs:
           os: macos
           flags: macos
 
-  linux:
-    name: Build and Test on Linux
+  # Builds the test bundle that "Build and Test on Linux", the graph fuzzer's
+  # shards and "Repeat Tests on Linux" all run, in a job of its own so that
+  # the three start together when the build ends. While the build and the
+  # tests were one job, the shards and the repeated passes started only after
+  # the tests, 28.7 to 38.4 minutes into a run of which the tests were 13.5
+  # to 17.8 (runs 43760851366, 43721724778, 43755152593, 43671437925).
+  linux-build:
+    name: Build Tests on Linux
     needs: changes
-    # Also runs on every push to main, Markdown-only or not, so the
-    # Codecov report behind the README badge always comes from a real
-    # test run.
+    # Also runs on every push to main, Markdown-only or not, for the reason
+    # "Build and Test on Linux" gives.
     if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
       contents: read
-    env:
-      # What the test step passes `swift test`, which the compile check
-      # identity below hashes too.
+    env: &linux-test-environment
+      # What the build passes `swift build --build-tests`, which the compile
+      # check identity of "Build and Test on Linux" hashes too.
       SWIFT_TEST_ARGUMENTS: -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
     steps:
       - name: Checkout Repo
@@ -930,6 +951,69 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: swift package resolve
+      # Atomic coverage counter updates, for the reason the macOS job gives.
+      # The limit is twice the slowest build: the build took 10.0 to 15.2
+      # minutes of the step that built and tested, going by the time of the
+      # test run each log reports (the runs the job's comment names), and
+      # Verify's release build from nothing 10 to 17.
+      - name: Build Tests
+        timeout-minutes: 35
+        run: |
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          swift build --build-tests $SWIFT_TEST_ARGUMENTS
+      # What a job that runs the tests needs of the build: the bundle,
+      # SafeDITool and the macro plugin (which compile checks and the
+      # fuzzer's compiler runs use), and SafeDI's module.
+      - name: Package Test Bundle
+        run: |
+          products=.build/x86_64-unknown-linux-gnu/release
+          tar -czf graph-fuzzer-test-bundle.tar.gz \
+            "$products/SafeDIPackageTests.xctest" \
+            "$products/SafeDITool" \
+            "$products/SafeDIMacros-tool" \
+            "$products/Modules/SafeDI.swiftmodule"
+      # Kept three days, since two required checks now run it: a job re-run
+      # after the bundle expired needs "Re-run all jobs".
+      - name: Upload Test Bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: graph-fuzzer-test-bundle
+          path: graph-fuzzer-test-bundle.tar.gz
+          retention-days: 3
+
+  # Runs the suite once, with compile checks and coverage, from the bundle
+  # "Build Tests on Linux" built. It keeps the name it had when it also
+  # built, which is the name of a required check.
+  linux:
+    name: Build and Test on Linux
+    needs: [changes, linux-build]
+    # Also runs on every push to main, Markdown-only or not, so the
+    # Codecov report behind the README badge always comes from a real
+    # test run. It runs when the build failed too, and fails in its first
+    # step: a skipped job would satisfy the required check.
+    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    permissions:
+      contents: read
+    env: *linux-test-environment
+    steps:
+      - name: Require the Build
+        env:
+          BUILD_RESULT: ${{ needs.linux-build.result }}
+        run: |
+          echo "Build Tests on Linux: $BUILD_RESULT"
+          test "$BUILD_RESULT" = success
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Download Test Bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: graph-fuzzer-test-bundle
+      - name: Unpack Test Bundle
+        run: |
+          tar -xzf graph-fuzzer-test-bundle.tar.gz
+          mkdir -p "$RUNNER_TEMP/unit-suite-profiles"
       # Passed compile checks are cached as in the macOS job, under a key of
       # this runner's operating system.
       - name: Compute Compile Check Identity
@@ -949,41 +1033,57 @@ jobs:
           key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-
-      # Atomic coverage counter updates, for the reason the macOS job gives.
-      # A time limit for the macOS job's reason: twice the longest
-      # successful run of this step over the same 177 CI runs, in which 84
-      # runs took 5.8 to 26.4 minutes (median 14.8, 95th percentile 24.1).
-      - name: Build and Test Framework
-        timeout-minutes: 55
+      # And the checks that passed in any other run of this repository, on
+      # whatever branch, which this run's own cache cannot hold. Sharing only
+      # saves compiles, so neither this step nor the upload after the tests
+      # can fail the job.
+      - name: Restore Shared Passed Compile Checks
+        continue-on-error: true
+        uses: ./.github/actions/restore-shared-compile-checks
+        with:
+          identity: ${{ steps.compile-check-identity.outputs.identity }}
+      # Runs the bundle as `swift test` would, in one process. Only that
+      # process writes to the profile folder: every process a test starts gets
+      # an LLVM_PROFILE_FILE of its own in the test's temporary directory.
+      # A time limit for the macOS job's reason: twice the slowest suite,
+      # which took 13.5 to 17.8 minutes with every compile check compiling
+      # (the runs "Build Tests on Linux" names; 15 to 20 in Verify's runs of
+      # the suite in one process, as verify.yml says) and 7.5 with the checks
+      # skipped (run 43765011597).
+      - name: Test
+        timeout-minutes: 40
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
-        run: |
-          # shellcheck disable=SC2086 # The arguments are words to split.
-          swift test $SWIFT_TEST_ARGUMENTS
+          LLVM_PROFILE_FILE: ${{ runner.temp }}/unit-suite-profiles/unit-suite-%p.profraw
+        run: .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing
       - name: Save Passed Compile Checks
         if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
         uses: actions/cache/save@v6
         with:
           path: .compile-check-cache
           key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
-      # The graph fuzzer's shards and "Repeat Tests on Linux" run this job's
-      # test bundle rather than building their own: the bundle, SafeDITool and
-      # the macro plugin (which the fuzzer's compiler runs use), and SafeDI's
-      # module.
-      - name: Package Test Bundle for the Graph Fuzzer
-        run: |
-          products=.build/x86_64-unknown-linux-gnu/release
-          tar -czf graph-fuzzer-test-bundle.tar.gz \
-            "$products/SafeDIPackageTests.xctest" \
-            "$products/SafeDITool" \
-            "$products/SafeDIMacros-tool" \
-            "$products/Modules/SafeDI.swiftmodule"
-      - name: Upload Test Bundle for the Graph Fuzzer
-        uses: actions/upload-artifact@v7
+      # Not when the job stopped before the identity was computed, as it does
+      # when the build failed: there is then no checkout to take the action
+      # from.
+      - name: Upload Passed Compile Checks to Share
+        if: ${{ always() && steps.compile-check-identity.outcome == 'success' }}
+        continue-on-error: true
+        uses: ./.github/actions/upload-passed-compile-checks
         with:
-          name: graph-fuzzer-test-bundle
-          path: graph-fuzzer-test-bundle.tar.gz
-          retention-days: 1
+          identity: ${{ steps.compile-check-identity.outputs.identity }}
+      # The profile `swift test` would have left where the steps below read
+      # it.
+      - name: Merge Coverage Profile
+        shell: bash
+        run: |
+          shopt -s nullglob
+          profiles=("$RUNNER_TEMP"/unit-suite-profiles/*.profraw)
+          if [ ${#profiles[@]} -eq 0 ]; then
+            echo "::error::The suite wrote no coverage profile."
+            exit 1
+          fi
+          mkdir -p .build/x86_64-unknown-linux-gnu/release/codecov
+          llvm-profdata merge -sparse "${profiles[@]}" -o .build/x86_64-unknown-linux-gnu/release/codecov/default.profdata
       - name: Prepare Coverage Reports
         run: |
           llvm-cov export -format="lcov" .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest -instr-profile .build/x86_64-unknown-linux-gnu/release/codecov/default.profdata > coverage.lcov
@@ -1016,8 +1116,7 @@ jobs:
           retention-days: 1
       # Retried because the runner sometimes cannot resolve Ubuntu's package
       # servers. `apt-get update` exits 0 when it cannot fetch an index, so the
-      # retry covers the install, which is what fails. A failure here skips the
-      # fuzzer shards, which need this job to succeed.
+      # retry covers the install, which is what fails.
       - name: Install curl for Codecov
         uses: ./.github/actions/retry
         with:
@@ -1036,20 +1135,25 @@ jobs:
   # Swift seeds hashing per process, so an order that leaks from a `Set` or
   # `Dictionary` changes from one pass to the next, and every pass compares
   # generated output against the expected strings. Compile verification is
-  # off: it compiles strings these passes have already proven identical to
-  # the ones "Build and Test on Linux" compiled. The passes run the test
-  # bundle that job built, as the graph fuzzer's shards do, and run beside
-  # the shards, so they add no time to the run. Coverage is not collected:
-  # the bundle is built for coverage, so its profiles go to the runner's
-  # temporary directory.
-  linux-repeat:
-    name: Repeat Tests on Linux
-    needs: [changes, linux]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux.result == 'success' }}
+  # off: it compiles strings "Build and Test on Linux" compiles from the
+  # same bundle, and a pass whose strings differ fails its comparison. The
+  # passes run the bundle "Build Tests on Linux" built, as the graph fuzzer's
+  # shards do, each in a job of its own beside that job and the shards: one
+  # after another in one job they took 9.7 to 25.3 minutes and ended run
+  # 43755152593. Coverage is not collected: the bundle is built for
+  # coverage, so its profiles go to the runner's temporary directory.
+  linux-repeat-pass:
+    name: Repeat Tests on Linux (pass ${{ matrix.pass }})
+    needs: [changes, linux-build]
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        pass: [1, 2, 3, 4]
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -1059,19 +1163,33 @@ jobs:
           name: graph-fuzzer-test-bundle
       - name: Unpack Test Bundle
         run: tar -xzf graph-fuzzer-test-bundle.tar.gz
-      # No pass of the suite without compile verification has been timed on
-      # Linux; on the 3-core macOS runner one took 2.2 minutes. The limit is
-      # provisional until this step's runs have been measured.
-      - name: Run Tests Four Times
-        timeout-minutes: 30
+      # A pass took about 6.3 minutes when four took 25.3 (run 43755152593)
+      # and about 5.1 in run 43760851366; the limit is about twice the
+      # slower.
+      - name: Run Tests
+        timeout-minutes: 14
         env:
           SAFEDI_SKIP_COMPILE_CHECK: 1
           LLVM_PROFILE_FILE: ${{ runner.temp }}/repeat-tests-%p.profraw
+        run: .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing
+
+  # Reports the four passes under the name the one job that ran them had. It
+  # only reads their result, so it needs no container. It fails when a pass
+  # failed or did not run although the change has source: skipped, it would
+  # satisfy a required check.
+  linux-repeat:
+    name: Repeat Tests on Linux
+    needs: [changes, linux-repeat-pass]
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require the Four Passes
+        env:
+          PASSES_RESULT: ${{ needs.linux-repeat-pass.result }}
         run: |
-          for pass in 1 2 3 4; do
-            echo "Pass $pass of 4"
-            .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing
-          done
+          echo "Repeat Tests on Linux (pass 1 to 4): $PASSES_RESULT"
+          test "$PASSES_RESULT" = success
 
   # Builds SafeDITool exactly as publish.yml's Linux jobs build the release
   # binary, so a compiler crash that only that build meets fails a pull
@@ -1132,15 +1250,15 @@ jobs:
   # drawn with the generateDependencyTree feature, and the public mock corpus,
   # seeds 0..<publicMockCorpusSeedCount drawn with the generateMockPublic
   # feature (see SafeDIToolGraphFuzzerTests.swift) – split across shards that run the test
-  # bundle "Build and Test on Linux" built. A shard fails when a graph fails,
+  # bundle "Build Tests on Linux" built. A shard fails when a graph fails,
   # a known issue goes stale, the run reports a problem with itself, the
   # process crashes, or no graph runs, and names the seeds in its summary.
   # The fixed seeds make a failure deterministic, so it belongs to the change
   # that caused it.
   graph-fuzzer:
     name: Fuzz Dependency Graphs on Linux (${{ matrix.corpus }} seeds ${{ matrix.starting-seed }}+${{ matrix.iterations }})
-    needs: [changes, linux]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux.result == 'success' }}
+    needs: [changes, linux-build]
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 30
@@ -1155,9 +1273,11 @@ jobs:
       # shards cover it exactly once, and that every corpus the long run names has a report.
       # The base corpus runs in four shards: its value oracle compiles every accepted graph's root mocks and mirrors
       # again, which the smoke batch suggests about doubles a base shard's time (not yet measured on CI). The seam
-      # corpus runs in two: its graphs cost about four times as much each as the others', and as one shard of 1000
-      # seeds (14.5 to 15 minutes) it finished about five minutes after every other shard. Each report's `cpu` line
-      # says what each phase of a shard cost, which the combine job adds up per corpus.
+      # corpus runs in four and the public mock corpus in two, because their graphs cost the most and a shard's
+      # time is what a run waits for after its build: in run 43751741235 the base shards fuzzed for 5.3 to 7.7
+      # minutes, the seam corpus's two shards of 500 seeds for 14.0 and 9.9, and the public mock corpus's one of
+      # 1000 for 16.5; split as below, the ten shards fuzzed for 4.4 to 7.7 minutes (run 43762600658). Each
+      # report's `cpu` line says what each phase of a shard cost, which the combine job adds up per corpus.
       # No required check is a shard's: "Check Graph Fuzzer Corpus on Linux" is, so a change to this matrix needs no
       # stand-in for a Markdown-only change. A change to it changes graph-fuzzer-coverage's EXPECTED_SHARDS too.
       matrix:
@@ -1181,15 +1301,27 @@ jobs:
           - corpus: generateDependencyTree
             features: generateDependencyTree
             starting-seed: 0
-            iterations: 500
+            iterations: 250
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 250
+            iterations: 250
           - corpus: generateDependencyTree
             features: generateDependencyTree
             starting-seed: 500
-            iterations: 500
+            iterations: 250
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 750
+            iterations: 250
           - corpus: generateMockPublic
             features: generateMockPublic
             starting-seed: 0
-            iterations: 1000
+            iterations: 500
+          - corpus: generateMockPublic
+            features: generateMockPublic
+            starting-seed: 500
+            iterations: 500
     defaults:
       run:
         shell: bash
@@ -1214,9 +1346,9 @@ jobs:
       # (TestTemporaryDirectory.environment). The step's limit is under the
       # job's, so a shard that runs out of time still summarizes and uploads
       # its report; the job's limit would cancel those steps too. A shard's
-      # fuzzer has taken 7 to 12 minutes.
+      # fuzzer has taken 4.4 to 7.7 minutes (run 43762600658).
       - name: Run Graph Fuzzer
-        timeout-minutes: 25
+        timeout-minutes: 16
         env:
           SAFEDI_GRAPH_FUZZER_ITERATIONS: ${{ matrix.iterations }}
           SAFEDI_GRAPH_FUZZER_STARTING_SEED: ${{ matrix.starting-seed }}
@@ -1369,7 +1501,7 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
           # graph-fuzzer's matrix, `<corpus>-<starting-seed>` per shard.
-          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-500 generateMockPublic-0
+          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-250 generateDependencyTree-500 generateDependencyTree-750 generateMockPublic-0 generateMockPublic-500
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           tar -xzf graph-fuzzer-test-bundle.tar.gz
@@ -1443,16 +1575,21 @@ jobs:
         # first runs on the 4-core Linux runner, which has no measurement yet.
         timeout-minutes: 15
         run: swift build --build-system swiftbuild --traits sourceBuild --target SafeDIToolTestSupport --scratch-path "$RUNNER_TEMP/swiftbuild-test-support"
-      # A time limit for the macOS job's reason: twice the longest
-      # successful run of this step over the same 177 CI runs, in which 88
-      # runs took 2.8 to 15.9 minutes (median 8.2, 95th percentile 13.0).
+      # A time limit for the macOS job's reason: about twice the longest
+      # duration measured. On 2026-11-15, eight successful runs of this
+      # step took 18.5 to 32.6 minutes (median 19.3; the longest was main's
+      # run 43721724778), and the step of a pull request's run 43726656460
+      # reached the 35-minute limit after its tests had passed. The tests
+      # alone take about 5.5 minutes; the rest is the build, and the compile
+      # of the code each test generates, which the builder-surface check
+      # added tool runs to. Twice 35 minutes is 70.
       #
       # No cache of passed compile checks here, deliberately: this job
       # compiles every test's generated code on every run, so a check the
       # pinned jobs skip because it passed in an earlier run is still
       # compiled once per run, by a third compiler.
       - name: Build and Test Framework
-        timeout-minutes: 35
+        timeout-minutes: 70
         run: swift test --traits sourceBuild
 
   bazel:

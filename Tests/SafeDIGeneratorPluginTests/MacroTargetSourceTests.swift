@@ -28,7 +28,9 @@ import Testing
 /// lists what the target leaves out in its `exclude` argument, and Sources/SafeDICore/BUILD.bazel in the `exclude` of the
 /// `SafeDICoreSources` filegroup. A file the macros need but the lists leave out fails the build; these tests catch the
 /// rest: two lists that disagree, a new SafeDICore file that the macros would compile without anyone deciding they
-/// should, and an exclusion that no longer names a file.
+/// should, and an exclusion that no longer names a file. `.github/scripts/compile-check-identity.sh` reads the
+/// manifest's list too, to hash the sources the macro plugin compiles, and the last test checks that it reads the same
+/// files.
 struct MacroTargetSourceTests {
 	@Test
 	func macroTarget_leavesOutTheSameSafeDICoreSources_inPackageManifestAndBazel() throws {
@@ -63,7 +65,41 @@ struct MacroTargetSourceTests {
 		#expect(exclusionsLeavingOutNothing == [])
 	}
 
+	@Test
+	func compileCheckIdentity_hashesTheSafeDICoreSourcesTheMacrosUse_whenItListsItsSources() throws {
+		// CI keeps the compile checks that passed while the identity is unchanged. The identity must cover every
+		// SafeDICore file the macro plugin compiles, since the plugin expands the macros of every check, and no file
+		// the plugin leaves out, since a change to a generator would then compile every check again.
+		let runtimeAndMacroSources = try RepositorySwiftFile.files(under: ["Sources/SafeDI", "Sources/SafeDIMacros"]).map(\.path)
+		let safeDICoreSources = Self.safeDICoreSourcesTheMacrosUse.map { "\(Self.safeDICoreDirectory)/\($0)" }
+		#expect(try Self.sourcesTheCompileCheckIdentityHashes() == (runtimeAndMacroSources + safeDICoreSources).sorted())
+	}
+
 	// MARK: Private
+
+	/// The paths `.github/scripts/compile-check-identity.sh --list-sources` prints, relative to the repository root.
+	private static func sourcesTheCompileCheckIdentityHashes() throws -> [String] {
+		let process = Process()
+		process.executableURL = URL(fileURLWithPath: "/bin/bash")
+		process.arguments = [
+			RepositorySwiftFile.repositoryRoot.appendingPathComponent(".github/scripts/compile-check-identity.sh").path,
+			"--list-sources",
+		]
+		let output = Pipe()
+		process.standardOutput = output
+		try process.run()
+		// The list is a few kilobytes, less than a pipe holds, so reading after the process exits cannot block it.
+		process.waitUntilExit()
+		guard process.terminationStatus == 0 else {
+			throw CompileCheckIdentityFailedError(terminationStatus: process.terminationStatus)
+		}
+		let text = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+		return text.split(separator: "\n").map(String.init)
+	}
+
+	private struct CompileCheckIdentityFailedError: Error {
+		let terminationStatus: Int32
+	}
 
 	/// The Swift files under Sources/SafeDICore that the macros use, relative to that directory, in path order.
 	private static let safeDICoreSourcesTheMacrosUse = [

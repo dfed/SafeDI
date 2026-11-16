@@ -42,6 +42,10 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 					Issue.record("Seed \(result.fixture.seed) no longer fails: \(knownIssue.reason)")
 				case let .staleRenamedGraphDifference(knownIssue, aspect):
 					Issue.record("Seed \(result.fixture.seed) sits on \"\(knownIssue.reason)\", which lists \(aspect.rawValue), but its renamed graphs do not show it.")
+				case let .staleBuilderSurfaceSignature(knownIssue, kind):
+					Issue.record("Seed \(result.fixture.seed) sits on \"\(knownIssue.reason)\", which lists \(kind.rawValue), but the graph does not show it.")
+				case let .staleLeakEntry(knownIssue):
+					Issue.record("Seed \(result.fixture.seed) sits on \"\(knownIssue.reason)\", which lists a leak the graph no longer shows.")
 				case let .failure(failure):
 					Issue.record(failure.issueComment(fixture: result.fixture))
 				}
@@ -56,7 +60,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		// code the oracle compiled and compared by value, with both consumer modules between them; and it holds a graph
 		// the tool rejects today.
 		let results = try await publicMockSmokeResults.value
-		let passingResults = results.filter { $0.isAccepted && $0.failure == nil }
+		let passingResults = results.filter { $0.isAccepted && $0.passesBesidesBuilderSurface }
 		#expect(passingResults.allSatisfy(\.isComparedByValueOracle) || !compileVerificationIsEnabled)
 		// A graph with a hole whose retention the retention oracle judged.
 		#expect(results.contains(where: \.isJudgedForRetention) || !compileVerificationIsEnabled)

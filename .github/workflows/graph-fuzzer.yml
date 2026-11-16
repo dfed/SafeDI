@@ -18,7 +18,7 @@ name: Graph Fuzzer
 # With `coverage`, the run instead lists the generator lines a change adds or
 # modifies that no corpus graph executed, the report ci.yml makes for a pull
 # request, for any commit before it is pushed for review. It builds the
-# commit the run is dispatched on for coverage as "Build and Test on Linux"
+# commit the run is dispatched on for coverage as "Build Tests on Linux"
 # does, runs the unit suite once for its coverage, fuzzes every corpus in the
 # shards of ci.yml's graph-fuzzer job with each shard's profile kept, and
 # reports the lines changed since `base`
@@ -123,8 +123,14 @@ jobs:
           if-no-files-found: ignore
 
   # The jobs below run only with `coverage`. This one builds the test bundle
-  # with "Build and Test on Linux"'s arguments, from the build cache of the
-  # branch the run is dispatched on or main's, which it reads and never saves.
+  # with "Build Tests on Linux"'s arguments, which are also the arguments
+  # of verify.yml's release build, so it starts from the build "Warm the
+  # Release Verify Build Cache" there saved for the branch the run is
+  # dispatched on, or else for main's newest commit: with the sources' times
+  # stamped as that job stamps them, it compiles again only the targets whose
+  # files differ and the targets that depend on them, which for a change to
+  # the corpora's pins is the fuzzer's test target. It reads the cache and
+  # never saves it. Keep the key and the arguments in step with verify.yml.
   coverage-build:
     name: Build for Coverage on Linux
     if: ${{ inputs.coverage }}
@@ -144,22 +150,34 @@ jobs:
       # nothing.
       - name: Checkout Repo
         uses: actions/checkout@v7
+      - name: Stamp Source Times
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          .github/scripts/stamp-source-times.sh
+      # No cache has the key, which names a run: the newest build of this
+      # commit, then of this branch or main.
       - name: Restore Build Directory
         uses: actions/cache/restore@v6
         with:
           path: .build
-          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/ci.yml') }}
+          key: verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            spm-release-${{ runner.os }}-swift-6.2-
+            verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}-
+            verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
           command: swift package resolve
+      # From nothing the build has taken 10 to 17 minutes, which is also what
+      # a change to SafeDICore costs; from a saved build of the same commit it
+      # took 15 seconds (run 43762600658, 13.2 minutes in all). The limit is
+      # twice the slowest.
       - name: Build
+        timeout-minutes: 35
         run: |
           # shellcheck disable=SC2086 # The arguments are words to split.
           swift build $SWIFT_BUILD_ARGUMENTS --build-tests
-      # What ci.yml's Linux test job packages for the graph fuzzer's shards.
+      # What ci.yml's "Build Tests on Linux" packages for the jobs that run it.
       - name: Package Test Bundle
         run: |
           products=.build/x86_64-unknown-linux-gnu/release
@@ -245,7 +263,7 @@ jobs:
     if: ${{ !cancelled() && needs.coverage-build.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    timeout-minutes: 40
+    timeout-minutes: 25
     permissions:
       contents: read
     strategy:
@@ -256,9 +274,12 @@ jobs:
           - {corpus: base, features: '', starting-seed: 1250, iterations: 1250}
           - {corpus: base, features: '', starting-seed: 2500, iterations: 1250}
           - {corpus: base, features: '', starting-seed: 3750, iterations: 1250}
-          - {corpus: generateDependencyTree, features: generateDependencyTree, starting-seed: 0, iterations: 500}
-          - {corpus: generateDependencyTree, features: generateDependencyTree, starting-seed: 500, iterations: 500}
-          - {corpus: generateMockPublic, features: generateMockPublic, starting-seed: 0, iterations: 1000}
+          - {corpus: generateDependencyTree, features: generateDependencyTree, starting-seed: 0, iterations: 250}
+          - {corpus: generateDependencyTree, features: generateDependencyTree, starting-seed: 250, iterations: 250}
+          - {corpus: generateDependencyTree, features: generateDependencyTree, starting-seed: 500, iterations: 250}
+          - {corpus: generateDependencyTree, features: generateDependencyTree, starting-seed: 750, iterations: 250}
+          - {corpus: generateMockPublic, features: generateMockPublic, starting-seed: 0, iterations: 500}
+          - {corpus: generateMockPublic, features: generateMockPublic, starting-seed: 500, iterations: 500}
     defaults:
       run:
         shell: bash
@@ -280,10 +301,11 @@ jobs:
           mkdir -p graph-fuzzer "$RUNNER_TEMP/graph-fuzzer-profiles"
       # Only the fuzzer's own process writes to the profile folder: every
       # process it starts gets an LLVM_PROFILE_FILE of its own in the test's
-      # temporary directory. The step's limit is under the job's, so a shard
-      # that runs out of time still uploads what it has.
+      # temporary directory. A shard's fuzzer has taken 4.4 to 7.7 minutes
+      # (run 43762600658); the step's limit is twice that and under the
+      # job's, so a shard that runs out of time still uploads what it has.
       - name: Run Graph Fuzzer
-        timeout-minutes: 35
+        timeout-minutes: 16
         env:
           SAFEDI_GRAPH_FUZZER_ITERATIONS: ${{ matrix.iterations }}
           SAFEDI_GRAPH_FUZZER_STARTING_SEED: ${{ matrix.starting-seed }}
@@ -356,7 +378,7 @@ jobs:
         env:
           BASE: ${{ inputs.base }}
           # coverage-fuzz's matrix, `<corpus>-<starting-seed>` per shard.
-          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-500 generateMockPublic-0
+          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-250 generateDependencyTree-500 generateDependencyTree-750 generateMockPublic-0 generateMockPublic-500
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           tar -xzf graph-fuzzer-test-bundle.tar.gz
