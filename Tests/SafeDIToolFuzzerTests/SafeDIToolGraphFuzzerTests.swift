@@ -3967,6 +3967,44 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func findings_reportLaterValueDifference_whenFirstFailureIsRenamedDifferenceItsEntryLists() {
+		// A renamed graph's difference that the entry lists masks no later failure the entry does not list.
+		let knownIssue = GraphFuzzerKnownIssue(reason: "Builder order", signatures: [.renamedGraphDiffers(.dependencyTreeCode)], seeds: [12])
+		let renamed = GraphFuzzerFailure(seed: 12, kind: .renamedGraphDiffers, details: "A", renamedGraphDifference: .dependencyTreeCode)
+		let values = GraphFuzzerFailure(seed: 12, kind: .holeBuildsOtherValuesThanVisibleBuild, details: "B")
+
+		#expect(GraphFuzzerFinding.findings(failure: renamed, laterFailures: [values], knownIssue: knownIssue) == [.failure(values)])
+	}
+
+	@Test
+	func masksNoLaterFailure_isTrue_whenEntryListsRenamedDifferences() {
+		let order = GraphFuzzerKnownIssue(reason: "Order", signatures: [.renamedGraphDiffers(.dependencyTreeCode)], seeds: [12])
+
+		#expect(order.masksNoLaterFailure)
+	}
+
+	@Test
+	func masksNoLaterFailure_isTrue_whenEntryListsRenamedDifferenceBesideRetention() {
+		let orderAndLeak = GraphFuzzerKnownIssue(reason: "Order and leak", signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), .seamRetainsWhatInlineFrees(containing: "_Leak alive")], seeds: [12])
+
+		#expect(orderAndLeak.masksNoLaterFailure)
+	}
+
+	@Test
+	func masksNoLaterFailure_isFalse_whenEntryListsCompilerErrorBesideRenamedDifference() {
+		let compiler = GraphFuzzerKnownIssue(reason: "Compiler", signatures: [.renamedGraphDiffers(.dependencyTreeCode), .compilerError(containing: "redeclaration")], seeds: [12])
+
+		#expect(!compiler.masksNoLaterFailure)
+	}
+
+	@Test
+	func masksNoLaterFailure_isFalse_whenEntryListsHoleNamesChangingWithSecondPlace() {
+		let names = GraphFuzzerKnownIssue(reason: "Names", signatures: [.holeNamesChangeWithSecondPlace(containing: "label")], seeds: [12])
+
+		#expect(!names.masksNoLaterFailure)
+	}
+
+	@Test
 	func findings_reportNoStaleDifference_whenTheGraphShowsEveryDifferenceItsEntryLists() {
 		let knownIssue = GraphFuzzerKnownIssue(reason: "Both reasons", signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)], seeds: [12])
 		let order = GraphFuzzerFailure(seed: 12, kind: .renamedGraphDiffers, details: "A", renamedGraphDifference: .mockParameterAndFieldOrder)
