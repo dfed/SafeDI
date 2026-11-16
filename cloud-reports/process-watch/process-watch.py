@@ -7,7 +7,7 @@ RUNS.json is the saved result of listing the repository's workflow runs (the Git
 or `gh api repos/OWNER/REPO/actions/runs`). Prints, for the heavy workflows (CI, Verify, Graph Fuzzer):
 
 - each run since `--since` with its branch, how it ended and how long it took;
-- rule 1, no overlap: the pairs of pins runs that overlapped, and landings (CI on a push to main) that overlapped a
+- rule 1, no overlap: the pairs of pins runs on one line of work (one commit an ancestor of the other) that overlapped, and landings (CI on a push to main) that overlapped a
   pull request's CI or a pins run;
 - rule 2, one dispatch: Graph Fuzzer runs dispatched by hand, which `verify -f pins=true` replaces;
 - rule 3, a local run first: branches with two or more failed Verify runs.
@@ -17,6 +17,20 @@ A run still going counts as running until now.
 import datetime, json, sys
 
 HEAVY = {"CI", "Verify", "Graph Fuzzer"}
+
+
+def same_lineage(first, second):
+    """Whether one commit is the other or its ancestor, by the checkout this script is in; None when git cannot say."""
+    import pathlib, subprocess
+    checkout = pathlib.Path(__file__).resolve().parent
+    def git(*arguments):
+        return subprocess.run(["git", "-C", str(checkout), *arguments], capture_output=True, text=True).returncode
+    if first == second:
+        return True
+    for commit in (first, second):
+        if git("cat-file", "-e", f"{commit}^{{commit}}") != 0 and git("fetch", "-q", "origin", commit) != 0:
+            return None
+    return git("merge-base", "--is-ancestor", first, second) == 0 or git("merge-base", "--is-ancestor", second, first) == 0
 
 
 def parse(text):
@@ -38,7 +52,7 @@ def main():
         if start < since: continue
         done = run["status"] == "completed"
         end = parse(run["updated_at"]) if done else now
-        rows.append(dict(id=run["id"], name=run["name"], event=run["event"], branch=run["head_branch"], sha=run["head_sha"][:9], start=start, end=end, result=run.get("conclusion") if done else run["status"], attempt=run.get("run_attempt", 1)))
+        rows.append(dict(id=run["id"], name=run["name"], event=run["event"], branch=run["head_branch"], sha=run["head_sha"][:9], full_sha=run["head_sha"], start=start, end=end, result=run.get("conclusion") if done else run["status"], attempt=run.get("run_attempt", 1)))
     rows.sort(key=lambda row: row["start"])
     for row in rows:
         minutes = (row["end"] - row["start"]).total_seconds() / 60
@@ -55,7 +69,12 @@ def main():
     for i, a in enumerate(fuzz):
         for b in fuzz[i + 1:]:
             if overlap(a, b) > 2:
-                found = True; print(f'  two pins runs overlapped {overlap(a, b):.0f} min: {a["id"]} ({a["branch"]}) and {b["id"]} ({b["branch"]})')
+                # The lead's ruling of 2026-11-16 11:06Z: one pins run per line of work; two lines may overlap.
+                line = same_lineage(a["full_sha"], b["full_sha"])
+                if line is None:
+                    print(f'  note: pins runs {a["id"]} ({a["branch"]}) and {b["id"]} ({b["branch"]}) overlapped {overlap(a, b):.0f} min; their commits could not be fetched to tell whether they are one line of work')
+                elif line:
+                    found = True; print(f'  two pins runs on one line of work overlapped {overlap(a, b):.0f} min: {a["id"]} ({a["branch"]}) and {b["id"]} ({b["branch"]})')
     for a in landings:
         for b in pull + fuzz:
             if overlap(a, b) > 5:
