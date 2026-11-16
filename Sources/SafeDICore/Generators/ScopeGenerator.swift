@@ -5931,15 +5931,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		erasedToConcreteExistential: Bool,
 		fulfillingValueMayBeOptional: Bool,
 	) -> String {
-		let existentialTypeSource = property.typeDescription.unwrapped.asSource
+		let existentialType = property.typeDescription.unwrapped
 		return if !erasedToConcreteExistential {
 			fulfillingExpression
 		} else if fulfillingValueMayBeOptional || fulfillingTypeDescription.isOptional {
 			// The fulfilling type's optional form, spelled once: an alias of a property declared optional (`ofType:
 			// Secret?.self`) maps over `Secret?`, never `Secret??`.
-			"(\(fulfillingExpression) as \(fulfillingTypeDescription.isOptional ? fulfillingTypeDescription.asSource : TypeDescription.optional(fulfillingTypeDescription).asSource)).map { \(existentialTypeSource)($0) }"
+			"(\(fulfillingExpression) as \(fulfillingTypeDescription.isOptional ? fulfillingTypeDescription.asSource : TypeDescription.optional(fulfillingTypeDescription).asSource)).map { \(existentialType.erasing("$0")) }"
 		} else {
-			"\(existentialTypeSource)(\(fulfillingExpression))"
+			existentialType.erasing(fulfillingExpression)
 		}
 	}
 
@@ -5987,7 +5987,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		/// The call of the hand-written mock that takes no argument.
 		var expression: String {
-			"\(concreteType.asSource).\(methodName)()"
+			ConstructionTarget.mock(methodName: methodName).call(constructing: concreteType, arguments: "")
 		}
 	}
 

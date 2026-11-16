@@ -27,8 +27,10 @@ import Testing
 /// Which bindings a production tree annotates with their type. Three rules decide it today, one per form: a constant is
 /// annotated unless it is erased, or is built in place (no builder function) with no type spelling between its property
 /// and its construction and is no extension-based type; an instantiator is annotated when its type is extension-based
-/// or is constructed by annotation; a lazily instantiated wrapper never is. The fixtures here separate the three, so a
-/// change that merges their spelling cannot move one form's rule onto another's.
+/// or is constructed by annotation; a lazily instantiated wrapper never is. The fixture builds an extension-based type
+/// and a plain type in each form, a plain type with children in each form, and an erased constant with children, so a
+/// change that merges the three spellings cannot move one form's rule onto another's. An instantiator constructed by
+/// annotation (a `nonisolated(nonsending)` generic argument) is pinned by `SafeDIToolForwardedTupleElementTests`.
 struct SafeDIToolBindingAnnotationTests: ~Copyable {
 	// MARK: Initialization
 
@@ -46,7 +48,7 @@ struct SafeDIToolBindingAnnotationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_annotatesEachFormByItsOwnRule_whenExtensionBasedTypeIsBuiltAsConstantInstantiatorAndLazilyInstantiated() async throws {
+	mutating func run_annotatesEachFormByItsOwnRule_whenPlainExtensionBasedAndErasedTypesAreBuiltInEachForm() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -66,8 +68,15 @@ struct SafeDIToolBindingAnnotationTests: ~Copyable {
 				}
 				""",
 				"""
+				public protocol Vehicle {}
+
+				public struct AnyVehicle: Vehicle {
+				    public init(_ vehicle: some Vehicle) {}
+				}
+				""",
+				"""
 				@Instantiable
-				public final class Car: Instantiable {
+				public final class Car: Vehicle, Instantiable {
 				    public init(wheel: Wheel) {
 				        self.wheel = wheel
 				    }
@@ -78,13 +87,16 @@ struct SafeDIToolBindingAnnotationTests: ~Copyable {
 				"""
 				@Instantiable(isRoot: true)
 				public final class Garage: Instantiable {
-				    public init(engine: Engine, engineBuilder: Instantiator<Engine>, lazyEngine: LazilyInstantiated<Engine>, wheel: Wheel, wheelBuilder: Instantiator<Wheel>, car: Car) {
+				    public init(engine: Engine, engineBuilder: Instantiator<Engine>, lazyEngine: LazilyInstantiated<Engine>, wheel: Wheel, wheelBuilder: Instantiator<Wheel>, car: Car, carBuilder: Instantiator<Car>, lazyWheel: LazilyInstantiated<Wheel>, anyVehicle: AnyVehicle) {
 				        self.engine = engine
 				        self.engineBuilder = engineBuilder
 				        self.lazyEngine = lazyEngine
 				        self.wheel = wheel
 				        self.wheelBuilder = wheelBuilder
 				        self.car = car
+				        self.carBuilder = carBuilder
+				        self.lazyWheel = lazyWheel
+				        self.anyVehicle = anyVehicle
 				    }
 
 				    @Instantiated let engine: Engine
@@ -93,6 +105,9 @@ struct SafeDIToolBindingAnnotationTests: ~Copyable {
 				    @Instantiated let wheel: Wheel
 				    @Instantiated let wheelBuilder: Instantiator<Wheel>
 				    @Instantiated let car: Car
+				    @Instantiated let carBuilder: Instantiator<Car>
+				    @Instantiated let lazyWheel: LazilyInstantiated<Wheel>
+				    @Instantiated(fulfilledByType: "Car", erasedToConcreteExistential: true) let anyVehicle: AnyVehicle
 				}
 				""",
 			],
@@ -126,7 +141,21 @@ struct SafeDIToolBindingAnnotationTests: ~Copyable {
 		            return Car(wheel: wheel)
 		        }
 		        let car: Car = __safeDI_car()
-		        self.init(engine: engine, engineBuilder: engineBuilder, lazyEngine: lazyEngine, wheel: wheel, wheelBuilder: wheelBuilder, car: car)
+		        func __safeDI_carBuilder() -> Car {
+		            let wheel = Wheel()
+		            return Car(wheel: wheel)
+		        }
+		        let carBuilder = Instantiator<Car>(__safeDI_carBuilder)
+		        func __safeDI_lazyWheel() -> Wheel {
+		            Wheel()
+		        }
+		        let lazyWheel = LazilyInstantiated<Wheel>(__safeDI_lazyWheel)
+		        func __safeDI_anyVehicle() -> Car {
+		            let wheel = Wheel()
+		            return Car(wheel: wheel)
+		        }
+		        let anyVehicle = AnyVehicle(__safeDI_anyVehicle())
+		        self.init(engine: engine, engineBuilder: engineBuilder, lazyEngine: lazyEngine, wheel: wheel, wheelBuilder: wheelBuilder, car: car, carBuilder: carBuilder, lazyWheel: lazyWheel, anyVehicle: anyVehicle)
 		    }
 		}
 		""")
