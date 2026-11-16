@@ -58,3 +58,33 @@ Files: interim-report.md, release-acceptance-5000-9999.txt, release-acceptance-5
 - **F4**: documented behavior, not a bug. Repro f4, commit 287fd40d. The fix is fuzzer-only: give the integrations oracle an exemption, or have the module-info flow list the modules a mock reaches.
 - **3855, label oracle false positive.** `GraphFuzzerBuilderSurface.isBuilder` counts any parameter whose label ends in `Builder` and whose type is a function type. `holeTicketBuilder: @autoclosure @escaping @Sendable () -> ErasedInstantiator<…>` is a received instantiator promoted to a `mock()` parameter as a deferred pass-through, not a hole builder. Fix: skip `@autoclosure` parameters in `isBuilder`. The generator is fine.
 - **2628/2862, remedy oracle false positive.** The failing pair is `.placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied`. In a graph whose types are `Sendable` (`context.isSendableGraph`), the edit declares the inner seam's place as `SendableErasedInstantiator<(), any HoleService>`. A `SendableErasedInstantiator` place belongs to the `@Sendable` family, so the remedied graph adds `holeServiceSendableBuilder` beside the drawn plain `holeServiceBuilder`, and `remedyBuildersJudgment` reports a builder the drawn graph lacks. The generator is right: another family gets another builder, as rule 8 says. Fix: in a Sendable graph, judge the remedy against the drawn builder's `@Sendable` twin, or skip the pair when the drawn place's family differs. Confirmed by generating both seeds with the edit (ExplorationBuilderSurfaceEditTests on my branch).
+
+## Public mock corpus 1000–2999 on main 58cbc93 (~08:40Z)
+- **F5, seeds 1339 1649 2687 2840.** The generated code does not compile. Repro f5 (commit 631ccf97). The trigger is `customMockName` on a `.public` type that another module instantiates through `erasedToConcreteExistential`; `f5b`, the same graph without it, compiles. The calling module's `__safeDI_mock` helper returns the erasure but builds the bare type. The lead ruled it a 2.3.0 blocker, fixed in its own PR.
+- **Fuzzer-only.**
+  - 1999 and 2827 are stated public-mock divergences the exemptions miss: a dependency the caller can't name is built once per call, and M8.32's re-wrapped `LazilyInstantiated`.
+  - 17 leaks: 14 are the documented public-mock fill exception, with held strings the list lacks. 1591, 2048 and 2344 come from M8.32's early `.instance` read, which the retention oracle doesn't exempt.
+  - 1326 1543 1793 2291 2877: the extension-order normalizer won't move a bare configuration struct followed by its `@usableFromInline` mockDefault forwarder.
+
+## Base corpus 5000–9999 on main 58cbc93 (~09:10Z)
+5000 graphs, 2343 accepted, 10 seeds outside the known issues. Repros are in commit 8d2ef80c.
+- **F6, seeds 5889 and 6388.** Swift 6.2 crashes (SendNonSendable) on `Root.init()`. A type receives an alias of its own `Instantiator`, and an only-if-available sibling stops the builder function from rebinding the builder inside itself, so it reads the `let` declared after it. 2.2.0 rejected the graph as a cycle. Repro f6 (4 types). The lead ruled it a 2.3.0 blocker.
+- **F7, seed 9457.** A mock takes `LazilyInstantiated<U>` (U unbuildable) and reads `.instance` inside a `@Sendable` builder, so the code doesn't compile. Production rejects the same tree. 2.2.0 behaves the same. Repro f7. Ruled 2.3.1.
+- **F8, seeds 5160 and 6381.** `generateMock: true` on a root rejects an unprovided only-if-available non-Sendable receive inside a `@Sendable` builder, which production accepts as `nil`. The diagnostic's fix names a declaration that doesn't exist. 2.2.0 behaves the same. Repro f8. Ruled a 2.3.1 leftover.
+- **Fuzzer-only (daytime queue).**
+  - 9105: the mirror passes `nil` to an only-if-available alias of a forwarded property, while the mock matches production.
+  - 5776 and 6308: disambiguated override bindings move with type order in the mock body, which the aspect classifier calls `.mockCode`.
+  - 5482 and 7143: remedy-advice shapes (diagnostic wording).
+  - 5776's and 6308's value-oracle rejections are the documented intended hidden-receive shape.
+
+## Combination draws beyond their range (~10:00Z)
+Branch claude/project-thread-q55hef (5e6b082), merged locally onto main 58cbc93. Public mock combination 330–989 and seam combination 1320–2639.
+- **Nothing new.** Every seed shows the known builder-surface finding.
+- 13 seam seeds don't compile: cells 9 (fulfiller seam with a place) and 47 and 70 (`@MainActor` seam with a `nonisolated` initializer). Both are already-listed shapes.
+- The leaks are all in the documented leak cells: seam cells 0, 3 and 38 (in-seam leak), and public mock cell 0.
+  - Seam: 1408 1496 1499 1534 1584 1587 1622 1672 1675 1710 1848 1851 1886 1936 1939 1974 2024 2027 2062 2112 2115 2150 2376 2379 2414 2464 2467 2502 2552 2555 2590.
+  - Public mock: 374 396 418 462 484 506 528 594 616 638 682 704 726 748 814 836 858 924 946 968.
+- Local merge note: the branch conflicts with main in `GraphFuzzer.swift`'s `documentsLeak` switch. It also needs `try` in `GraphFuzzerReleaseAcceptance.swift`, because `fixture.fileNames` and `swiftFileContent` now throw.
+
+## Status
+Every planned range has been run. 2.3.0 blockers found here: F3, F5, F6 (F1 and F2 belong to slice 4). 2.3.1: F7, F8. Everything else is fuzzer-only or documented.
