@@ -1,0 +1,18 @@
+---
+name: apply-fuzzer-pins
+description: Write the graph fuzzer's moved pins (fixture hashes, accepted-seed counts and sums, feature, draw, error, retention and value-oracle counts) into the test sources from the pins.json of a corpus run's analysis. Use after a generator or draw change moves pins, instead of copying values from a report by hand.
+---
+
+# Apply the graph fuzzer's pins
+
+`apply-fuzzer-pins.py`, beside this file, replaces each pinned literal a corpus run moved with the value the run derived. Run it from the repository root; `S` below is `.claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py`. Its `--help` is the full contract.
+
+1. Push the commit and run its corpora: `gh workflow run verify.yml --ref <branch> -f pins=true` runs the suite and every corpus from one build ("Coverage of a change" in `.claude/rules/fuzzer-corpora.md`).
+2. Analyze the run with `linux-pins --from-run <run id>`, which downloads its reports and writes `report.md` and `pins.json` (schema 1): the commit, where the reports came from, and each moved pin with its constant, key, pinned value and derived value.
+3. With the checkout at that commit and no uncommitted change: `python3 -I S PINS.json --dry-run`, read what it would write, then run it without `--dry-run`.
+4. Read every `left:` line and every "not a pin" line and do those by hand: a key no literal lists yet, a dictionary built by `reduce`, a constant another constant names that the run did not move with it, unknown failures, stale or misfiled known-issue seeds, a count below its floor. The analysis never derives the pins its `notDerived` names (the smoke and known-issue hashes, the smoke batches' draw-feature counts, the smoke seeds): read those from the unit suite's failures in the same run. A moved fixture or partition hash means the corpus's graphs changed, so derive its known issues and smoke seeds again. The script exits 1 whenever the run moved a pin, because this step is then never empty.
+5. Commit the pins alone, on top of the commit the run built, and say in the pull request which run they are from.
+
+The script refuses the whole file, writing nothing (status 2), unless `provenance.validForHead` is exactly `true`, the file's commit is the checkout's `HEAD`, the checkout is clean, the analysis is whole (`complete` is `true` and its integrity lists are empty; a crashed shard makes it incomplete), and every literal it would replace holds the value the report says is pinned. A pull request's run builds the merge with its base, so its values hold for the branch only when that base was an ancestor of it; a rebase or any new commit invalidates every value. Never edit a `pins.json` to get past a refusal: run the corpora on the commit instead.
+
+After changing the script, run `python3 -I S --self-test DIR` with a directory that does not exist, outside the checkout and the system temporary directory (for example under `~/Library/Caches/SafeDITests/`); it removes the directory when every case passes. "Check Line Coverage on Linux" runs the same.
