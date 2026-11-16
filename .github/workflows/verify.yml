@@ -22,11 +22,15 @@ name: Verify
 # without coverage, as "Build and Test on Latest Swift" does, from a build
 # cache of its own that "Warm the Fast Verify Build Cache" below keeps on
 # main. Its build takes half as long or less, but its tests run slower,
-# because the parser and macros come from a debug build of swift-syntax. So it
-# pays off for a narrow filter; for the whole suite, or a whole test target
-# that compiles generated code, the two modes take about as long, and
-# `release` builds as CI does. Each mode keeps its passed compile checks under
-# its own identity, since the identity hashes the test arguments.
+# because the parser and macros come from a debug build of swift-syntax, and
+# they run in the job that builds, as one process. So it pays off for a narrow
+# filter, and a `fast` run needs one: the whole suite took 37 minutes in
+# `fast` (run 43793266801, all of them the tests) against 20 in `release`,
+# which splits it, so a `fast` run with an empty filter fails at once and says
+# so. For a whole test target that compiles generated code the two modes take
+# about as long, and `release` builds as CI does. Each mode keeps its passed
+# compile checks under its own identity, since the identity hashes the test
+# arguments.
 #
 # A `release` run of the whole suite (an empty filter) builds once and then
 # runs the tests in seven jobs at the same time, four for the largest test
@@ -38,7 +42,7 @@ name: Verify
 # minutes from start to end with every compile check compiling (run
 # 43766692766). With `pins`, graph-fuzzer.yml's `coverage` jobs fuzz every
 # corpus from the same bundle and check the pins (job "Fuzz", below), and the
-# test jobs can start later than a plain run's. A run with a filter, and every `fast` run, tests in the job
+# test jobs can start later than a plain run's. A run with a filter tests in the job
 # that builds, since handing the bundle to another job costs about two
 # minutes.
 #
@@ -112,7 +116,7 @@ jobs:
         uses: actions/checkout@v7
       # The whole suite in release mode runs in "Verify Tests on Linux"
       # below, one job per group of test targets, from the bundle this job
-      # builds. A filter, or fast mode, runs here as one process.
+      # builds. A filter runs here as one process, and fast mode needs one.
       - name: Decide Whether to Split the Tests
         id: split
         env:
@@ -122,6 +126,11 @@ jobs:
         run: |
           if [ "$MODE" = release ] && [ -z "$FILTER" ]; then
             echo "split=true" >> "$GITHUB_OUTPUT"
+          elif [ "$MODE" = fast ] && [ -z "$FILTER" ]; then
+            # The whole suite in one debug process took 37 minutes (run
+            # 43793266801); release mode's seven jobs take about 20.
+            echo "::error::mode=fast needs a filter. For the whole suite dispatch mode=release, which runs the tests in seven jobs and ends sooner."
+            exit 1
           else
             # The fuzzer's jobs read the bundle only a split run uploads, so
             # a run that cannot fuzz fails rather than pass without pins.
