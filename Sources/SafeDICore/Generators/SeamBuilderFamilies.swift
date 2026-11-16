@@ -271,9 +271,17 @@ extension DependencyTreeGenerator {
 					instantiables: instantiables,
 					reachedEnum: reachedEnum,
 				)
-				// A public mock (`areQualified`) keeps the closure over its enum for now, a deliberate gap: its builder is handed the
-				// scope where the seam's takes nothing.
-				if !scopeTypeNames.areQualified, Self.declaresBuilderStructs(of: byType.enums) {
+				// A public mock's hole type takes a builder struct by a rule of its own (`publicMockTakesBuilderStructs`), which reads
+				// what the mock's caller and its own tree can hand on through the struct. So a type that is a seam and a public mock
+				// keeps the closure over its mock's enum where a place is built in a `@Sendable` function or beside a
+				// `LazilyInstantiated`, though its seam takes the struct: a deliberate difference until the mock's rule takes those
+				// too (`public-mocks.md`). A seam's own internal mock takes a closure that takes nothing whatever this gives the
+				// seam's builder (`ScopeGenerator.seamMockBuilders`), where the seam keeps the closure over its enum for a place that
+				// holds another seam's scope: deliberate too (`mock-generation.md`).
+				let takesBuilderStructs = scopeTypeNames.areQualified
+					? Self.publicMockTakesBuilderStructs(of: byType.enums, holesBySite: holesBySite)
+					: Self.declaresBuilderStructs(of: byType.enums)
+				if takesBuilderStructs {
 					// The seam's tree calls a member per level, bound under names of their own, and binds no payload.
 					holeTypesDeclaringBuilderStructs.insert(holeType)
 					for isSendable in [false, true] {
@@ -604,6 +612,36 @@ extension DependencyTreeGenerator {
 		}
 	}
 
+	/// Whether a public mock's builders of a hole type, its enums being `enums`, take builder structs: when no place they reach
+	/// is built inside a `@Sendable` function (the hole type has a `@Sendable` enum), forwards a value (as a seam's place does,
+	/// `declaresBuilderStructs(of:)`), or is held in, built beneath, or handed a `LazilyInstantiated`; and no
+	/// case holds another scope: a call's case, which holds another module's public mock's enum, a case for a builder a call
+	/// fills, or a case that holds the mocked type's own root enum, where its tree builds it again. Every other hole type
+	/// keeps the closure over its enum, in the mock's module and at every call, which computes the mock's signature with
+	/// this rule too. A seam's rule (`declaresBuilderStructs(of:)`) switches the `@Sendable` family and a lazy
+	/// value on a route besides, so one type's seam and public mock can differ there: a deliberate difference
+	/// (`public-mocks.md`).
+	static func publicMockTakesBuilderStructs(of enums: [SeamSignature.ScopeEnum], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) -> Bool {
+		enums.allSatisfy { scopeEnum in
+			!scopeEnum.key.isSendable && scopeEnum.cases.allSatisfy { enumCase in
+				let handsOnNoLazilyInstantiatedValue = enumCase.values?.fields.allSatisfy { !$0.property.propertyType.isLazilyInstantiated } ?? true
+				switch enumCase.kind {
+				case let .place(sites):
+					return handsOnNoLazilyInstantiatedValue && sites.allSatisfy { site in
+						guard let hole = holesBySite[site] else { return true }
+						return hole.forwardedType == nil
+							&& !hole.property.propertyType.isLazilyInstantiated
+							&& hole.sitePath.allSatisfy { !$0.propertyType.isLazilyInstantiated }
+					}
+				case let .nested(enumKey, _, _):
+					return handsOnNoLazilyInstantiatedValue && enumKey.describedType != nil
+				case .inner, .fill:
+					return false
+				}
+			}
+		}
+	}
+
 	/// The type of a builder over an enum.
 	private static func builderParameterType(takingEnum enumType: TypeDescription, returning builtType: TypeDescription, isSendable: Bool) -> TypeDescription {
 		let functionType = TypeDescription.closure(arguments: [enumType], isAsync: false, doesThrow: false, returnType: builtType)
@@ -788,7 +826,7 @@ extension DependencyTreeGenerator {
 	/// that equals another's, or gives a label another gives, is named apart, by its types; no rung names an owner, a
 	/// path or a parameter, so adding a place of a hole type already built never renames one, and adding a hole type renames
 	/// another only when their stems or labels coincide.
-	private static func stems(of holeTypes: [SeamSignature.HoleType]) -> [SeamSignature.HoleType: String] {
+	static func stems(of holeTypes: [SeamSignature.HoleType]) -> [SeamSignature.HoleType: String] {
 		func stem(of type: TypeDescription) -> String {
 			type.simplified.asIdentifier.spelledWithoutBackticks
 		}
