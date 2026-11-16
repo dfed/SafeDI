@@ -1280,19 +1280,21 @@ private struct ScopeGeneratorUnderConstruction {
 			let dispatcherKey = ScopeGenerator.FillDispatcher.key(of: enumKey, returnsBuilderStruct: returnsBuilderStruct)
 			let dispatcher = fillNames[dispatcherKey] ?? ""
 			let enclosingFillKey = enclosingFills[dispatcherKey] == nil ? nil : dispatcherKey
+			// What the call refers to by name: the enclosing dispatcher, whatever expression passes it.
+			let referencedName = enclosingFillKey == nil ? nil : dispatcher
 			guard reachedSites.isSubset(of: sitesFilledOnEveryRoute) else {
 				// The whole scope the call was given goes up, under the route's case.
 				let passUp = route.map { route in route.call(handing: "scope") } ?? "\(builder.label)(scope)"
-				return .init(label: label, value: "{ scope in \(dispatcher)(scope, \(ScopeGenerator.FillDispatcher.passUpParameterName): { \(passUp) }) }", enclosingFillKey: enclosingFillKey, isSendable: enumKey.isSendable)
+				return .init(label: label, value: "{ scope in \(dispatcher)(scope, \(ScopeGenerator.FillDispatcher.passUpParameterName): { \(passUp) }) }", enclosingFillKey: enclosingFillKey, referencedName: referencedName, isSendable: enumKey.isSendable)
 			}
 			guard builder.takesBuilderStruct else {
-				return .init(label: label, value: dispatcher, enclosingFillKey: enclosingFillKey, isSendable: enumKey.isSendable)
+				return .init(label: label, value: dispatcher, enclosingFillKey: enclosingFillKey, referencedName: referencedName, isSendable: enumKey.isSendable)
 			}
 			guard !returnsBuilderStruct else {
-				return .init(label: label, value: "\(dispatcher)()", enclosingFillKey: enclosingFillKey, isSendable: enumKey.isSendable)
+				return .init(label: label, value: "\(dispatcher)()", enclosingFillKey: enclosingFillKey, referencedName: referencedName, isSendable: enumKey.isSendable)
 			}
 			let conversion = ScopeGenerator.builderStructConversion(ofEnumOf: enumKey, enumsByKey: enumsByKey, builtType: builtType, reservedNames: seamHoles.namesBoundForBuilders.union([dispatcher]), names: &names) { "\(dispatcher)(\($0))" }
-			return .init(label: label, value: conversion.value, declarations: conversion.declarations, enclosingFillKey: enclosingFillKey, isSendable: enumKey.isSendable)
+			return .init(label: label, value: conversion.value, declarations: conversion.declarations, enclosingFillKey: enclosingFillKey, referencedName: referencedName, isSendable: enumKey.isSendable)
 		}
 	}
 
