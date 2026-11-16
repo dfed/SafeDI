@@ -7782,8 +7782,6 @@ struct SafeDIToolGraphFuzzerTests {
 		.consumerCall: 82,
 		// pins: derive on CI
 		.consumerConvertsClosureOverEnum: 0,
-		// pins: derive on CI
-		.consumerConvertsOverReopenedLevel: 0,
 		.consumerErasedCall: 19,
 		.consumerErasedInline: 3,
 		.consumerFillReentersPublicMock: 2,
