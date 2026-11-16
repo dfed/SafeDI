@@ -55,13 +55,8 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 				import Feature
 				import SafeDI
 
-				func handWrittenToolbar() -> Toolbar {
-				    Toolbar(livePanel_PanelBuilder: { scope in
-				        switch scope {
-				        case let .panelBuilder(values, title):
-				            LivePanel(title: title, theme: values.theme)
-				        }
-				    })
+				func handWrittenToolbar(theme: Theme) -> Toolbar {
+				    Toolbar(livePanel_PanelBuilder: { title in LivePanel(title: title, theme: theme) })
 				}
 				""",
 			], dependencies: ["Feature"]),
@@ -137,12 +132,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 				import SafeDI
 
 				func handWrittenToolbar() -> Toolbar {
-				    Toolbar(livePanel_PanelSendableBuilder: { scope in
-				        switch scope {
-				        case let .panelBuilder(title):
-				            LivePanel(title: title)
-				        }
-				    })
+				    Toolbar(livePanel_PanelSendableBuilder: { title in LivePanel(title: title) })
 				}
 				""",
 			], dependencies: ["Feature"]),

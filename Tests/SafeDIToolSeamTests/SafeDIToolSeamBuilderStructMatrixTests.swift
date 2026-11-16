@@ -2052,7 +2052,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsBothFamiliesClosuresOverEnums_whenSendablePlaceForwardsBesidePlainPlaceThatDoesNot() async throws {
+	mutating func generate_takesBuilderStructInBothFamilies_whenSendablePlaceForwardsBesidePlainPlaceThatDoesNot() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["plainPlaceBesideSendableForwardingPlace"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
@@ -2128,7 +2128,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsBothFamiliesClosuresOverEnums_whenPlainPlaceForwardsBesideSendablePlaceThatDoesNot() async throws {
+	mutating func generate_takesBuilderStructInBothFamilies_whenPlainPlaceForwardsBesideSendablePlaceThatDoesNot() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["forwardingPlaceBesideSendablePlainPlace"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
@@ -2219,7 +2219,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsClosureOverEnum_whenOneBuilderReachesPlaceThatForwardsBesidePlaceThatDoesNot() async throws {
+	mutating func generate_takesBuilderTakingNothing_whenOneBuilderReachesInstantiatorBesidePlainPlace() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["plainPlaceBesideForwardingPlace"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {

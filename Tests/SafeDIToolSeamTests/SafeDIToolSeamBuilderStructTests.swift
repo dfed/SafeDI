@@ -1233,7 +1233,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsClosureOverEnumForForwardingBuilderOnly_whenSeamTakesPlainAndForwardingHoleTypes() async throws {
+	mutating func generate_takesBuilderStructForEachHoleType_whenOneHoleTypesPlaceForwardsValue() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["twoHoleTypes"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Home {
