@@ -9886,23 +9886,38 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// parameter's access – "(`Host.init(key:seam:)`, `Vault.init(key:)`)", which SafeDI lists in source order, so a
 	/// file-name reversal reorders them – and of the two lists of the forms of a label one cycle parameter cannot carry
 	/// ("receive `x` as `x: X?` and `x: LazilyInstantiated<X>?`, which one value cannot carry together. Receive `x: X?`
-	/// and `x: LazilyInstantiated<X>?` under different labels to fix.", `unpassableCycleLabel`), which SafeDI lists in the
-	/// order of their types' names – sorted as text, each item in its place among the list's separators, so two diagnostics
-	/// that list the same items in another order compare equal, and any other difference, including an item added, removed
-	/// or changed, still tells them apart.
+	/// and `x: LazilyInstantiated<X>?` under different labels to fix.", `unpassableCycleLabel`), and of each list of the
+	/// places one fill finding holds for ("the builders for `A`’s `x: X` (case `A_Scope.x` of `xBuilder`) and `B`’s `y: Y`",
+	/// "the builder `Seam` takes for `A`’s `x: X`, `B`’s `y: Y`, and `B`’s `z: Z` on unchanged", `FillFinding`), each of
+	/// which SafeDI lists in the order of their types' names – sorted as text, each item in its place among the list's
+	/// separators, so two diagnostics that list the same items in another order compare equal, and any other difference,
+	/// including an item added, removed or changed, still tells them apart.
 	private static func sortingSuggestions(in diagnostic: String) -> String {
 		// Each item is a property's or a declaration's source between backticks, and no fuzzer label or type contains one.
-		let expression = try! NSRegularExpression(pattern: [
-			"(?<=Did you mean one of )`[^`]*`(?:, `[^`]*`)+(?=\\?)",
-			"(?<=\\()`[^`]*`(?:, `[^`]*`)+(?=\\))",
-			"(?<= as )`[^`]*`(?:(?:, and |, | and )`[^`]*`)+(?=, which one value cannot carry together\\.)",
-			"(?<=which one value cannot carry together\\. Receive )`[^`]*`(?:(?:, and |, | and )`[^`]*`)+(?= under different labels to fix\\.)",
-		].joined(separator: "|"))
-		let item = try! NSRegularExpression(pattern: "`[^`]*`")
+		let backtickedItem = "`[^`]*`"
+		// A place is the type that declares it and its property, then the case of the builder's scope enum that holds it
+		// and the seam whose tree holds it, where the message names them.
+		let place = "`[^`]*`’s `[^`]*`(?: \\(case `[^`]*` of `[^`]*`\\))?(?: in `[^`]*`’s tree)?"
+		var diagnostic = diagnostic
+		for (list, item) in [
+			("(?<=Did you mean one of )`[^`]*`(?:, `[^`]*`)+(?=\\?)", backtickedItem),
+			("(?<=\\()`[^`]*`(?:, `[^`]*`)+(?=\\))", backtickedItem),
+			("(?<= as )`[^`]*`(?:(?:, and |, | and )`[^`]*`)+(?=, which one value cannot carry together\\.)", backtickedItem),
+			("(?<=which one value cannot carry together\\. Receive )`[^`]*`(?:(?:, and |, | and )`[^`]*`)+(?= under different labels to fix\\.)", backtickedItem),
+			("(?<=builder for |builders for |takes for )\(place)(?:(?:, and |, | and )\(place))+", place),
+		] {
+			diagnostic = sortingItems(ofListsMatching: try! NSRegularExpression(pattern: list), item: try! NSRegularExpression(pattern: item), in: diagnostic)
+		}
+		return diagnostic
+	}
+
+	/// `diagnostic` with the items `item` matches in each list `list` matches sorted as text, each in its place among the
+	/// list's separators.
+	private static func sortingItems(ofListsMatching list: NSRegularExpression, item: NSRegularExpression, in diagnostic: String) -> String {
 		let source = diagnostic as NSString
 		var result = ""
 		var location = 0
-		for match in expression.matches(in: diagnostic, range: NSRange(location: 0, length: source.length)) {
+		for match in list.matches(in: diagnostic, range: NSRange(location: 0, length: source.length)) {
 			let list = source.substring(with: match.range) as NSString
 			let itemRanges = item.matches(in: list as String, range: NSRange(location: 0, length: list.length)).map(\.range)
 			let sortedItems = itemRanges.map { list.substring(with: $0) }.sorted()
