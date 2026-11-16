@@ -221,7 +221,9 @@ jobs:
           echo "The bundle lists $tests tests."
       # What a test job needs of the build, as "Build Tests on Linux"
       # packages it for the graph fuzzer's shards: the bundle, SafeDITool and
-      # the macro plugin (which compile checks run), and SafeDI's module.
+      # the macro plugin (which compile checks run), SafeDI's module, and the
+      # build's record of the dependency versions it resolved, which the key
+      # of each compile check names (CompileCheckBuild).
       - name: Package Test Bundle
         if: ${{ steps.split.outputs.split == 'true' }}
         run: |
@@ -230,7 +232,8 @@ jobs:
             "$products/SafeDIPackageTests.xctest" \
             "$products/SafeDITool" \
             "$products/SafeDIMacros-tool" \
-            "$products/Modules/SafeDI.swiftmodule"
+            "$products/Modules/SafeDI.swiftmodule" \
+            .build/workspace-state.json
       - name: Upload Test Bundle
         if: ${{ steps.split.outputs.split == 'true' }}
         uses: actions/upload-artifact@v7
@@ -386,7 +389,11 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: verify-passed-compile-checks-${{ matrix.group }}
-          path: .compile-check-cache/passed.txt
+          # Every check the group's cache holds, for this branch's cache, and
+          # the ones the group itself passed, for the list all branches share.
+          path: |
+            .compile-check-cache/passed.txt
+            .compile-check-cache/passed-in-run-${{ github.run_id }}.txt
           retention-days: 1
           include-hidden-files: true
           # A re-run of the job replaces what an earlier attempt uploaded.
@@ -480,7 +487,10 @@ jobs:
           groups=$(find group-compile-checks -name passed.txt 2>/dev/null | wc -l)
           if [ "$groups" -gt 0 ]; then
             find group-compile-checks -name passed.txt -exec cat {} + | LC_ALL=C sort -u > .compile-check-cache/passed.txt
-            echo "Passed compile checks of $groups groups: $(wc -l < .compile-check-cache/passed.txt) together."
+            # The checks the groups themselves passed, which is all that
+            # "Upload Passed Compile Checks to Share" uploads.
+            find group-compile-checks -name "passed-in-run-$GITHUB_RUN_ID.txt" -exec cat {} + | LC_ALL=C sort -u > ".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt"
+            echo "Passed compile checks of $groups groups: $(wc -l < .compile-check-cache/passed.txt) together, $(wc -l < ".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt") of them passed in this run."
           else
             echo "No group uploaded passed compile checks."
           fi

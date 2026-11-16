@@ -963,7 +963,9 @@ jobs:
           swift build --build-tests $SWIFT_TEST_ARGUMENTS
       # What a job that runs the tests needs of the build: the bundle,
       # SafeDITool and the macro plugin (which compile checks and the
-      # fuzzer's compiler runs use), and SafeDI's module.
+      # fuzzer's compiler runs use), SafeDI's module, and the build's record
+      # of the dependency versions it resolved, which the key of each compile
+      # check names (CompileCheckBuild).
       - name: Package Test Bundle
         run: |
           products=.build/x86_64-unknown-linux-gnu/release
@@ -971,7 +973,8 @@ jobs:
             "$products/SafeDIPackageTests.xctest" \
             "$products/SafeDITool" \
             "$products/SafeDIMacros-tool" \
-            "$products/Modules/SafeDI.swiftmodule"
+            "$products/Modules/SafeDI.swiftmodule" \
+            .build/workspace-state.json
       # Kept three days, since two required checks now run it: a job re-run
       # after the bundle expired needs "Re-run all jobs".
       - name: Upload Test Bundle

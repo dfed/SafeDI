@@ -2,20 +2,30 @@
 # usage: compile-check-identity.sh TEST_ARGUMENT…
 #        compile-check-identity.sh --list-sources
 #
-# Prints the SHA-256 of everything a compile check's result depends on that the
-# check's own key leaves out (PassedCompileCheckCache.swift): the sources of
-# SafeDI's runtime library and macro plugin, the package manifest and its
-# resolved dependencies, the sources of the compile verifier and its cache, the
-# arguments the test step builds with (TEST_ARGUMENT…), the compiler's version
-# and default target, and on macOS the SDK. A job keys its cache of passed
-# compile checks on this hash, so a change to any of these starts from an empty
-# cache and compiles every check.
+# Prints the SHA-256 that names one list of passed compile checks
+# (PassedCompileCheckCache.swift). A job keys its cache of passed checks on it,
+# so a change to anything it covers starts from an empty list.
 #
-# It also covers what decides which passed checks a run writes and shares: the
-# workflows whose test jobs record them (ci.yml, verify.yml), the actions those
-# jobs restore and upload them with, and this script. Runs on every branch add
-# to one list per identity (share-compile-checks.yml), so a branch that changes
-# how passes are written must write to a list of its own.
+# A check's own key already covers what its result depends on: everything the
+# check compiles, the compiler and SDK the test process finds, the bytes of
+# the SafeDI module it loads, and the dependency versions the macro plugin it
+# loads was built from (CompileCheckBuild). So no workflow file is hashed
+# here, and a workflow edit keeps every passed check unless it changes one of
+# those.
+#
+# What this hash adds is what decides which keys a run writes and shares: the
+# sources of the compile verifier and its cache, the actions the test jobs
+# restore and upload passed checks with, and this script. Runs on every branch
+# add to one list per identity (share-compile-checks.yml), so a branch that
+# changes how passes are written writes to a list of its own.
+#
+# It also covers the sources of SafeDI's runtime library and macro plugin, the
+# package manifest and its resolved dependencies, the arguments the test step
+# builds with (TEST_ARGUMENT…), the compiler's version and default target, and
+# on macOS the SDK. The macro plugin's own sources are covered only here: a
+# key cannot hash the built plugin, whose bytes differ between two builds of
+# the same sources. For the rest, each key covers them too, and hashing them
+# here only keeps one build's list from growing with the keys of every other.
 #
 # The macro plugin compiles SafeDICore through a symbolic link, leaving out the
 # files and directories its target's `exclude` in Package.swift lists: the
@@ -120,8 +130,6 @@ fi
 		Tests/SafeDIToolTestSupport/SafeDICompileVerifier.swift \
 		Tests/SafeDIToolTestSupport/PassedCompileCheckCache.swift \
 		Tests/SafeDIToolTestSupport/TestTemporaryDirectory.swift \
-		.github/workflows/ci.yml \
-		.github/workflows/verify.yml \
 		.github/actions/restore-shared-compile-checks/action.yml \
 		.github/actions/upload-passed-compile-checks/action.yml \
 		.github/scripts/compile-check-identity.sh \
