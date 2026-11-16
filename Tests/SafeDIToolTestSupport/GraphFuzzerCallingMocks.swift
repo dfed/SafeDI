@@ -166,14 +166,18 @@ struct GraphFuzzerCallingMockDraw {
 		cell.shape != .noVisibleImplementation
 	}
 
-	/// The builder of the hole's place, as the twin's seam initializer and the calling mock's `mock()` name it.
+	/// The builder of the hole's place, as contract rule 8 labels it in the twin's seam initializer and the calling mock's
+	/// `mock()`: `<filling type>Builder` when the filling type is the returned type, the hole, else
+	/// `<filling type>_<returned type>Builder`, the filling type's leading capitals lowered.
 	var holeBuilderLabel: String {
-		switch cell.place {
+		let fillingType = switch cell.place {
 		case .plain:
-			"\(names.hole.lowercasedFirst)Builder"
+			names.hole
 		case .deferred:
-			"\(names.fill.lowercasedFirst)Builder"
+			names.fill
 		}
+		let stem = String(GraphFuzzerPublicMockDraw.builderLabel(ofTypeNamed: fillingType).dropLast("Builder".count))
+		return stem + (fillingType == names.hole ? "" : "_\(names.hole)") + "Builder"
 	}
 
 	/// What the twin's seam initializer takes where production accepts the graph: nothing where its tree fills the place,

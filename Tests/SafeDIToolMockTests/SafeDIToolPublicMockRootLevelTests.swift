@@ -1478,9 +1478,9 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesHoleBuilderApart_whenDefaultValuedParameterOfMockOutsideRootLevelTakesItsLabel() async throws {
+	mutating func generate_appendsUnderscoreToHoleBuildersLabel_whenDefaultValuedParameterOfMockOutsideRootLevelTakesIt() async throws {
 		// `Detail`'s initializer takes `apiBuilder: Int = 0`, which is not a dependency: `mock()` takes it as a flat parameter
-		// that the root level does not hold, so the builder of `api`'s place takes another name.
+		// that the root level does not hold, so the label of the builder of `api`'s place takes `_` and its enum keeps its name.
 		try await expectPublicMock(
 			feature: [
 				"public protocol Api {}",
@@ -1505,7 +1505,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			expectedFeature: """
 			#if DEBUG
 			extension Detail {
-			    @frozen public enum SafeDIMockScope_Api_Api {
+			    @frozen public enum SafeDIMockScope_Api {
 			        case api(api_Values)
 
 			        public struct api_Values {}
@@ -1513,17 +1513,17 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 
 			    public static func mock(
 			        apiBuilder: Int? = nil,
-			        api_ApiBuilder: @escaping (Detail.SafeDIMockScope_Api_Api) -> any Api
+			        apiBuilder_: @escaping (Detail.SafeDIMockScope_Api) -> any Api
 			    ) -> Detail {
-			        let __safeDI_api_ApiBuilder = api_ApiBuilder
+			        let __safeDI_apiBuilder_ = apiBuilder_
 			        let apiBuilder = apiBuilder ?? (0)
-			        let api: any Api = __safeDI_api_ApiBuilder(.api(SafeDIMockScope_Api_Api.api_Values()))
+			        let api: any Api = __safeDI_apiBuilder_(.api(SafeDIMockScope_Api.api_Values()))
 			        return Detail(api: api, apiBuilder: apiBuilder)
 			    }
 			}
 
 			extension Detail {
-			    public enum __safeDI_Detail_mock_4E793A2E460FF12F {}
+			    public enum __safeDI_Detail_mock_8913461BF3169573 {}
 			}
 			#endif
 			""",
@@ -1537,27 +1537,27 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			    /// Overrides for the mock dependency tree.
 			    struct SafeDIOverrides {
 			        init(
-			            detail: ((@escaping (Detail.SafeDIMockScope_Api_Api) -> any Api) -> Detail)? = nil
+			            detail: ((@escaping (Detail.SafeDIMockScope_Api) -> any Api) -> Detail)? = nil
 			        ) {
 			            self.detail = detail
 			        }
 
-			        let detail: ((@escaping (Detail.SafeDIMockScope_Api_Api) -> any Api) -> Detail)?
+			        let detail: ((@escaping (Detail.SafeDIMockScope_Api) -> any Api) -> Detail)?
 			    }
 
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        func __safeDI_detail() -> Detail {
-			            func __safeDI_api_ApiBuilder_Detail(_ scope: Detail.SafeDIMockScope_Api_Api) -> any Api {
+			            func __safeDI_apiBuilder__Detail(_ scope: Detail.SafeDIMockScope_Api) -> any Api {
 			                switch scope {
 			                case .api:
 			                    let api: any Api = Live()
 			                    return api
 			                }
 			            }
-			            _ = Detail.__safeDI_Detail_mock_4E793A2E460FF12F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return if let safeDIBuilder = safeDIOverrides.detail { safeDIBuilder(__safeDI_api_ApiBuilder_Detail) } else { Detail.mock(api_ApiBuilder: __safeDI_api_ApiBuilder_Detail) }
+			            _ = Detail.__safeDI_Detail_mock_8913461BF3169573.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return if let safeDIBuilder = safeDIOverrides.detail { safeDIBuilder(__safeDI_apiBuilder__Detail) } else { Detail.mock(apiBuilder_: __safeDI_apiBuilder__Detail) }
 			        }
 			        let detail: Detail = __safeDI_detail()
 			        return Root(detail: detail)

@@ -1080,7 +1080,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	func holeNameStabilityFailure_reportsRenamedBuilder_whenAddingSecondPlaceRenamesABuilderOfTheGraphWithoutIt() {
-		// A second hole type whose stem collides renames the builders of both, which a hand-written caller passes by label.
+		// A builder that adding a second place relabels, which a hand-written caller passes by label.
 		let fixture = GraphFuzzerFixture(seed: 8, swiftFileContent: ["// module: FuzzFeature\n"])
 		let withoutPlace = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S8_Feature+SafeDI.swift": Self.holeSeamFile(builderLabel: "s8_ServiceBuilder", cases: ["service"])], warnings: [])
 		let withPlaceRenamingBuilder = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S8_Feature+SafeDI.swift": Self.holeSeamFile(builderLabel: "s8_Service_S8_AnyServiceBuilder", cases: ["service"])], warnings: [])
@@ -5655,7 +5655,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// hole type, for a hole read only if available. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xEFDC8A8D6836981B
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x40EA4DDB11F23B31
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -5943,17 +5943,20 @@ struct SafeDIToolGraphFuzzerTests {
 			seeds: labelSortedPassThroughSeedsWhoseMockParametersAlsoChange,
 		),
 		// The nested builders' design orders a seam's builders by label, so by their hole types' names, which the move
-		// across wrapper names reorders where two hole types take other letters.
+		// across wrapper names reorders where two hole types take other letters, such as the two erasures of
+		// `HoleGadgetImpl`, labeled by the types they return.
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode)],
-			seeds: [93, 298, 308, 326, 391, 670, 750],
+			seeds: [93, 298, 308, 326, 391, 407, 481, 670, 701, 750, 929, 931],
 		),
-		// The forwarding place's hole type is a second hole type beside `HoleService`, so its builders reorder too.
+		// The forwarding place's hole type is a second hole type beside `HoleService`, so its builders reorder too; and the
+		// erasures of `HoleGadgetImpl` in graphs whose mock shows the inherited shape of a mock's API, which the base corpus
+		// lists 311, 338, 595, 836 and 948 under.
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [567],
+			seeds: [311, 338, 567, 595, 836, 948],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason); and \(inSeamLeakReason)",
@@ -5983,43 +5986,6 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(.diagnostics)],
 			seeds: [590],
 		),
-		// The design's output stability, section 8: a second hole type whose stem collides with another's renames both;
-		// and the two colliding hole types' builders, enums and payload bindings are ordered by their names, which the move
-		// across wrapper names reorders.
-		GraphFuzzerKnownIssue(
-			reason: "\(collidingHoleTypesReason); and \(seamBuilderOrderReason)",
-			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`"), .renamedGraphDiffers(.dependencyTreeCode)],
-			seeds: [407, 481, 701, 929, 931],
-		),
-		GraphFuzzerKnownIssue(
-			reason: collidingHoleTypesReason,
-			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`")],
-			seeds: [832],
-		),
-		// The in-seam leak through the forwarding place's builder (owner: the leak fix's forwarding-place slice) in graphs
-		// with the colliding hole types.
-		GraphFuzzerKnownIssue(
-			reason: "\(collidingHoleTypesReason); and \(seamBuilderOrderReason); and \(inSeamLeakReason)",
-			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`"), .renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures,
-			seeds: [98],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "\(collidingHoleTypesReason); and \(seamBuilderOrderReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
-			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`"), .renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
-			seeds: [787],
-		),
-		// The colliding hole types in a graph whose mock shows the inherited shape of a mock's API, which the base corpus
-		// lists 338, 595 and 948 under.
-		GraphFuzzerKnownIssue(
-			reason: "\(collidingHoleTypesReason); and \(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
-			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`"), .renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [311, 338, 595, 836, 948],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "\(collidingHoleTypesReason); and \(lazyCycleConfigurationFieldReason)",
-			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`"), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [383],
-		),
 		// The in-seam leak (rule 3 of the seam contract), which the retention check must fail on until its fix: a seam's
 		// builder functions capture the values of each level on the way to a place, so holding a builder keeps them alive
 		// where the inline build frees them. Listed so that main stays green while the check gates: the fix makes each entry
@@ -6034,7 +6000,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures,
-			seeds: [556, 892],
+			seeds: [98, 556, 892],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
@@ -6044,7 +6010,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
-			seeds: [83, 108, 930],
+			seeds: [83, 108, 787, 930],
 		),
 		// The in-seam leak in graphs that also show a shape the seam corpus inherits from the base corpus's list, or the
 		// order of a seam's pass-throughs.
@@ -6083,10 +6049,10 @@ struct SafeDIToolGraphFuzzerTests {
 	static let seamSmokeKnownIssues = addingBuilderSurfaceShapes(
 		seeds: BuilderSurfaceSeeds(
 			base: [1_010, 1_020, 1_450, 1_814, 1_890],
-			labels: [1_020, 1_890],
+			labels: [],
 			sameSupply: [1_020],
 			sameSupplyReason: seamMockTakesHoleValueReason,
-			addedSupply: [1_890],
+			addedSupply: [],
 			forwardingOtherValues: [1_010, 1_020, 1_450, 1_890],
 			callingMocks: [],
 		),
@@ -6155,18 +6121,12 @@ struct SafeDIToolGraphFuzzerTests {
 			858, 866, 867, 876, 883, 886, 892, 905, 912, 920, 923, 924, 929, 930, 931, 934, 940, 942, 945, 947,
 			948, 950, 969, 990,
 		],
-		labels: [
-			19, 59, 68, 93, 98, 121, 163, 281, 283, 348, 383, 391, 468, 481, 548, 567, 568, 605, 670, 750,
-			794, 797, 867, 883, 892, 923, 929, 930, 948, 950, 990,
-		],
+		labels: [],
 		sameSupply: [
 			19, 83, 98, 108, 135, 151, 273, 300, 326, 797, 854, 858, 929, 942, 990,
 		],
 		sameSupplyReason: seamMockTakesHoleValueReason,
-		addedSupply: [
-			15, 69, 78, 98, 135, 273, 277, 311, 338, 383, 391, 403, 407, 418, 478, 481, 527, 595, 701, 787,
-			797, 809, 832, 836, 929, 930, 931, 940, 948, 950,
-		],
+		addedSupply: [],
 		forwardingOtherValues: [
 			15, 19, 59, 68, 69, 78, 83, 93, 94, 98, 108, 116, 121, 135, 151, 153, 163, 164, 215, 227, 252, 273,
 			277, 281, 283, 298, 300, 304, 308, 309, 311, 326, 330, 338, 347, 348, 362, 365, 383, 391, 403, 407,
@@ -6390,9 +6350,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	private static let handWrittenBuilderRetentionReason = "A builder written by hand, handed to a seam as its readable initializer hands it on, keeps alive every value of each level on the way to its places, even when it reads none, where the inline build frees them, until the in-seam leak fix gives the readable initializer a builder that reads nothing"
 
-	private static let seamBuilderOrderReason = "A seam's builders are ordered by label, which its hole type's name begins, so moving type names across wrapper names reorders the builders of a seam with two hole types, its generated initializers and the calls of them"
-
-	private static let collidingHoleTypesReason = "Two hole types of one instantiated type take builders named apart by the type each returns, so adding the second renames the first's builder, enum and cases"
+	private static let seamBuilderOrderReason = "A seam's builders are ordered by label, which its hole type's names spell, so moving type names across wrapper names reorders the builders of a seam with two hole types, its generated initializers and the calls of them"
 
 	private static let labelSortedPassThroughReason = "A seam's pass-through parameters are sorted by label, so reversing the labels reorders its generated initializer and the calls of it"
 
@@ -6403,7 +6361,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// corpus does not draw, changed them there (154, 527, 657); the inherited lists leave them out. Observed, not
 	/// derived: a seed here that a run finds failing its inherited shape again is a new failure, and goes back. Seeds
 	/// 300 and 886 fail their inherited shape beside the in-seam leak, which an entry of their own lists.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 154, 157, 281, 300, 309, 311, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 567, 595, 632, 657, 714, 728, 735, 768, 774, 786, 808, 836, 840, 847, 886, 903, 948]
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 154, 157, 281, 300, 309, 311, 338, 364, 371, 381, 431, 434, 476, 525, 527, 545, 567, 595, 632, 657, 714, 728, 735, 768, 774, 786, 808, 836, 840, 847, 886, 903, 948]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
@@ -6530,7 +6488,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x7A3E59F695DB4AE1
+	static let publicMockCorpusFixtureHash: UInt64 = 0x9731E1275C7C8651
 	static let publicMockCorpusAcceptedSeedCount = 856
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x00FC421C8B43BC22
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -6573,7 +6531,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x4B54A60A1897C0EB
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x5CB794B9CA7167C0
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -6791,28 +6749,14 @@ struct SafeDIToolGraphFuzzerTests {
 			974, 975, 977, 978, 979, 981, 983, 984, 985, 987, 988, 989, 990, 991, 992, 993, 994, 995, 996, 998,
 		],
 		labels: [
-			2, 19, 20, 21, 33, 34, 37, 43, 47, 55, 56, 64, 84, 89, 90, 93, 96, 103, 108, 119,
-			151, 162, 166, 167, 168, 176, 180, 181, 186, 197, 207, 210, 211, 213, 229, 230, 243, 247, 248, 283,
-			295, 299, 301, 302, 307, 311, 319, 330, 333, 339, 341, 348, 356, 372, 380, 381, 389, 406, 407, 415,
-			429, 433, 434, 436, 456, 465, 468, 469, 486, 490, 499, 500, 508, 510, 554, 558, 561, 581, 584, 592,
-			597, 601, 611, 614, 615, 621, 623, 627, 631, 636, 653, 658, 673, 685, 692, 695, 697, 707, 715, 718,
-			720, 728, 730, 737, 743, 748, 751, 766, 781, 782, 795, 798, 799, 804, 824, 830, 832, 844, 845, 846,
-			847, 848, 850, 851, 866, 875, 886, 895, 897, 902, 910, 923, 931, 942, 943, 946, 960, 962, 978, 979,
-			991, 996, 998,
+			19, 64, 119, 166, 211, 230, 299, 307, 333, 406, 415, 456, 486, 510, 597, 631, 658, 692, 743, 748,
+			845, 960,
 		],
 		sameSupply: [
 			122, 128, 136, 145, 266, 332, 352, 411, 427, 580, 681, 740, 786, 814, 823, 827, 853, 977,
 		],
 		sameSupplyReason: callingMockTakesHoleValueReason,
-		addedSupply: [
-			2, 19, 20, 21, 33, 34, 37, 43, 47, 55, 56, 84, 89, 90, 93, 96, 103, 108, 151, 162,
-			167, 168, 176, 180, 181, 186, 197, 207, 210, 213, 229, 243, 247, 248, 283, 295, 301, 302, 311, 319,
-			330, 339, 341, 348, 356, 372, 380, 381, 389, 407, 415, 429, 433, 434, 436, 465, 468, 469, 486, 490,
-			499, 500, 508, 554, 558, 561, 581, 584, 592, 597, 601, 611, 614, 615, 621, 623, 627, 631, 636, 653,
-			673, 685, 695, 697, 707, 715, 718, 720, 728, 730, 737, 751, 766, 781, 782, 795, 798, 799, 804, 824,
-			830, 832, 844, 845, 846, 847, 848, 850, 851, 866, 875, 886, 895, 897, 902, 910, 923, 931, 942, 943,
-			946, 960, 962, 978, 979, 991, 996, 998,
-		],
+		addedSupply: [],
 		forwardingOtherValues: [
 			3, 12, 22, 28, 59, 60, 64, 65, 79, 87, 88, 97, 106, 107, 117, 119, 128, 130, 136, 156,
 			166, 199, 221, 230, 238, 242, 251, 259, 262, 264, 269, 273, 284, 296, 314, 327, 328, 332, 344, 351,
