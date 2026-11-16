@@ -4784,13 +4784,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.typeDescription
 			.unwrapped
 			.asInstantiatedType
-			.asSource
 		return if forwardedArguments.isEmpty, !erasedToConcreteExistential {
 			"\(unwrappedTypeDescription)(\(functionName))"
 		} else if erasedToConcreteExistential {
 			"""
 			\(unwrappedTypeDescription) {
-			\(Self.standardIndent)\(instantiatedTypeDescription)(\(functionName)(\(forwardedArguments)))
+			\(Self.standardIndent)\(instantiatedTypeDescription.erasing("\(functionName)(\(forwardedArguments))"))
 			}
 			"""
 		} else {
@@ -5121,15 +5120,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 			}
 			let concreteTypeName = instantiable.concreteInstantiable.asSource
-			let instantiationDeclaration = if publicMockCall != nil {
-				"\(concreteTypeName).\(InstantiableVisitor.mockMethodName)"
+			// A call of another module's public mock calls its generated `mock()`; a type built with its hand-written mock
+			// calls that mock.
+			let mockMethodName: String? = if publicMockCall != nil {
+				InstantiableVisitor.mockMethodName
 			} else if constructsWithHandWrittenMock {
-				"\(concreteTypeName).\(instantiable.customMockName ?? InstantiableVisitor.mockMethodName)"
-			} else if instantiable.declarationType.isExtension {
-				"\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
+				instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 			} else {
-				concreteTypeName
+				nil
 			}
+			let constructionTarget = ConstructionTarget(
+				mockMethodName: mockMethodName,
+				isExtensionBased: instantiable.declarationType.isExtension,
+			)
+			let instantiationDeclaration = constructionTarget.callee(constructing: instantiable.concreteInstantiable)
 			// A seam call passes a builder for each of the seam's holes after the tier's parameters; a call of a public
 			// mock passes them among its arguments.
 			let holeArgumentList = publicMockCall == nil
@@ -5221,7 +5225,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 				guard !isBuiltByFill else {
 					let builderCall = "\(functionName)(\(forwardedArguments))"
-					return "\(valuesBindingLines)\(functionDeclaration)return \(erasedToConcreteExistential ? "\(property.typeDescription.unwrapped.asInstantiatedType.asSource)(\(builderCall))" : builderCall)"
+					return "\(valuesBindingLines)\(functionDeclaration)return \(erasedToConcreteExistential ? property.typeDescription.unwrapped.asInstantiatedType.erasing(builderCall) : builderCall)"
 				}
 
 				if let receivedFunctionName = builderFunctionNames.receivedFunctionName {
@@ -5284,7 +5288,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let lazilyInstantiatedInstantiation = if erasedToConcreteExistential {
 					"""
 					\(unwrappedTypeDescription) {
-					\(Self.standardIndent)\(property.typeDescription.asInstantiatedType.asSource)(\(functionName)(\(cycleArguments)))
+					\(Self.standardIndent)\(property.typeDescription.asInstantiatedType.erasing("\(functionName)(\(cycleArguments))"))
 					}
 					"""
 				} else if cycleArguments.isEmpty {
@@ -5315,7 +5319,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
 				let builderCall = "\(functionName)(\(cycleArguments))"
 				let lastLine = if isBuiltByFill {
-					"return \(erasedToConcreteExistential ? "\(property.typeDescription.asInstantiatedType.asSource)(\(builderCall))" : builderCall)"
+					"return \(erasedToConcreteExistential ? property.typeDescription.asInstantiatedType.erasing(builderCall) : builderCall)"
 				} else {
 					"let \(property.label) = \(lazilyInstantiatedInstantiation)"
 				}
@@ -5335,7 +5339,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// it holds no seam's site and `valuesBindingLines` is empty, as it is for every closer.
 					let call = "\(closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames))(\(callArguments))"
 					return if erasedToConcreteExistential {
-						"\(valuesBindingLines)let \(property.label) = \(property.typeDescription.asSource)(\(call))\n"
+						"\(valuesBindingLines)let \(property.label) = \(property.typeDescription.erasing(call))\n"
 					} else {
 						"\(valuesBindingLines)let \(property.asSource) = \(call)\n"
 					}
@@ -5382,14 +5386,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					"""
 				}
 				let existentialWrappedReturn = if erasedToConcreteExistential {
-					"\(property.typeDescription.asSource)(\(returnLineSansReturn))"
+					property.typeDescription.erasing(returnLineSansReturn)
 				} else {
 					returnLineSansReturn
 				}
 				let initializer = if !hasGeneratedContent {
 					existentialWrappedReturn + constructionLineEnd
 				} else if erasedToConcreteExistential {
-					"\(property.typeDescription.asSource)(\(functionName)(\(callArguments)))"
+					property.typeDescription.erasing("\(functionName)(\(callArguments))")
 				} else {
 					"\(functionName)(\(callArguments))"
 				}
@@ -6678,14 +6682,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableOptionalProperties,
 				forMockGeneration: true,
 			)
-			let mockMethodName = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
-			let construction = if instantiable.mockInitializer != nil {
-				"\(typeName).\(mockMethodName)(\(argumentList))"
-			} else if instantiable.declarationType.isExtension {
-				"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
-			} else {
-				"\(typeName)(\(argumentList))"
-			}
+			let construction = ConstructionTarget(
+				mockMethodName: instantiable.mockInitializer == nil ? nil : instantiable.customMockName ?? InstantiableVisitor.mockMethodName,
+				isExtensionBased: instantiable.declarationType.isExtension,
+			).call(constructing: instantiable.concreteInstantiable, arguments: argumentList)
 			let code = if let publicMockPlan {
 				"""
 				extension \(typeName) {
@@ -6992,14 +6992,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			disambiguationMap: returnDisambiguationMap,
 			defaultValues: publicMockPlan?.constructionDefaultValues ?? [:],
 		)
-		let mockMethodName = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
-		let returnConstruction = if instantiable.mockInitializer != nil {
-			"\(typeName).\(mockMethodName)(\(returnArgumentList))"
-		} else if instantiable.declarationType.isExtension {
-			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(returnArgumentList))"
-		} else {
-			"\(typeName)(\(returnArgumentList))"
-		}
+		let returnConstruction = ConstructionTarget(
+			mockMethodName: instantiable.mockInitializer == nil ? nil : instantiable.customMockName ?? InstantiableVisitor.mockMethodName,
+			isExtensionBased: instantiable.declarationType.isExtension,
+		).call(constructing: instantiable.concreteInstantiable, arguments: returnArgumentList)
 		lines.append("\(bodyIndent)return \(returnConstruction)")
 		if let publicMockPlan {
 			let body = Array(lines[bodyStartIndex...])
@@ -7590,8 +7586,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let overrides = overridesIsSendableClosure ? "\(overridesExpression)?() ?? .init()" : overridesExpression
 				labeledArguments.append("\(ReservedName.mockOverridesParameterName): \(overrides)")
 			}
-			let call = "\(concreteType.asSource).\(InstantiableVisitor.mockMethodName)(\(labeledArguments.joined(separator: ", ")))"
-			return erasedToConcreteExistential ? "\(concreteExistentialType.asSource)(\(call))" : call
+			let call = ConstructionTarget.mock(methodName: InstantiableVisitor.mockMethodName)
+				.call(constructing: concreteType, arguments: labeledArguments.joined(separator: ", "))
+			return erasedToConcreteExistential ? concreteExistentialType.erasing(call) : call
 		}
 
 		/// Whether this argument is a non-dependency `_`-labeled defaulted
@@ -7800,7 +7797,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 			)
 			let defaultConstruction = if erasedToConcreteExistential {
-				"\(concreteExistentialType.asSource)(\(defaultCall))"
+				concreteExistentialType.erasing(defaultCall)
 			} else {
 				defaultCall
 			}
@@ -7810,7 +7807,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let overrideName = ReservedName.configurationBuilderPropertyName
 			let overrideCall = "\(overrideName)(\(arguments.joined(separator: ", ")))"
 			let overrideConstruction = if erasedToConcreteExistential, needsConfigurationStruct {
-				"\(concreteExistentialType.asSource)(\(overrideCall))"
+				concreteExistentialType.erasing(overrideCall)
 			} else {
 				overrideCall
 			}
@@ -7835,13 +7832,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			overrideReachable: Bool,
 			handWrittenMockDefaultParameters: [DefaultParameter],
 		) -> String {
-			let methodName: String = if useMockInitializer {
-				customMockName ?? InstantiableVisitor.mockMethodName
-			} else if isExtensionBased {
-				InstantiableVisitor.instantiateMethodName
-			} else {
-				"init"
-			}
+			let constructionTarget = ConstructionTarget(
+				mockMethodName: useMockInitializer ? customMockName ?? InstantiableVisitor.mockMethodName : nil,
+				isExtensionBased: isExtensionBased,
+			)
 			let surfacedArguments = surfacedCallSiteArguments(
 				overrideReachable: overrideReachable,
 				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
@@ -7849,11 +7843,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let labeledArguments = zip(surfacedArguments, arguments)
 				.map { $0.0.label == "_" ? $0.1 : "\($0.0.label.spelledAsArgumentLabel): \($0.1)" }
 				.joined(separator: ", ")
-			if methodName == "init" {
-				return "\(concreteType.asSource)(\(labeledArguments))"
-			} else {
-				return "\(concreteType.asSource).\(methodName)(\(labeledArguments))"
-			}
+			return constructionTarget.call(constructing: concreteType, arguments: labeledArguments)
 		}
 
 		/// A payload bound before a node's builder function, inside the builder function of the node above

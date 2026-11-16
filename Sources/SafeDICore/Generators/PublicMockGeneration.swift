@@ -411,13 +411,10 @@ extension ScopeGenerator {
 			constructionArguments.append(argument.label == "_" ? value : "\(argument.label.spelledAsArgumentLabel): \(value)")
 		}
 		parameters.append("\(ReservedName.configurationBuilderPropertyName): \(builderType)")
-		let construction = if node.useMockInitializer {
-			"\(concreteType.asSource).\(node.customMockName ?? InstantiableVisitor.mockMethodName)(\(constructionArguments.joined(separator: ", ")))"
-		} else if node.isExtensionBased {
-			"\(concreteType.asSource).\(InstantiableVisitor.instantiateMethodName)(\(constructionArguments.joined(separator: ", ")))"
-		} else {
-			"\(concreteType.asSource)(\(constructionArguments.joined(separator: ", ")))"
-		}
+		let construction = ConstructionTarget(
+			mockMethodName: node.useMockInitializer ? node.customMockName ?? InstantiableVisitor.mockMethodName : nil,
+			isExtensionBased: node.isExtensionBased,
+		).call(constructing: concreteType, arguments: constructionArguments.joined(separator: ", "))
 		let returnType = node.useMockInitializer ? node.instantiatedTypeDescription.asSource : concreteType.asSource
 		let builderName = ReservedName.configurationBuilderPropertyName
 		let optionalDefaultParameters = defaultParameters.filter { $0.valueTypeDescription.isOptional && $0.defaultExpression != "nil" }
@@ -557,7 +554,7 @@ extension ScopeGenerator {
 			"\(argument.innerLabel.spelledAsArgumentLabel): \(value)"
 		} + ["\(ReservedName.configurationBuilderPropertyName): \(overrideExpression ?? "nil")"]
 		let call = "\(node.concreteType.asSource).\(publicConstructionFunctionName(of: node))(\(labeledArguments.joined(separator: ", ")))"
-		return node.erasedToConcreteExistential ? "\(node.concreteExistentialType.asSource)(\(call))" : call
+		return node.erasedToConcreteExistential ? node.concreteExistentialType.erasing(call) : call
 	}
 
 	/// An expression that evaluates to the value the caller passed as `parameterName`, when it passed one, and
