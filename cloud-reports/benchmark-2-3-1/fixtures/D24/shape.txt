@@ -1,0 +1,1 @@
+description=mock-overrides spike shape D, 24 screens, each a public seam in its own module (no 2.2.0 counterpart); runtime: Root.mock() building every screen, per value

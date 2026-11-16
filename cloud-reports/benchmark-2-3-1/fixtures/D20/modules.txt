@@ -1,0 +1,22 @@
+Core generate 
+M19 generate Core
+M18 generate Core
+M17 generate Core
+M16 generate Core
+M15 generate Core M16 M17 M19
+M14 generate Core M17 M18 M19
+M13 generate Core M16 M17 M19
+M12 generate Core M17 M18 M19
+M11 generate Core M13 M14 M15
+M10 generate Core M13 M14 M15
+M9 generate Core M13 M14 M15
+M8 generate Core M12 M13 M15
+M7 generate Core M8 M9 M10
+M6 generate Core M8 M9 M10
+M5 generate Core M8 M9 M11
+M4 generate Core M8 M9 M10
+M3 generate Core M5 M6 M7
+M2 generate Core M5 M6 M7
+M1 generate Core M5 M6 M7
+M0 generate Core M4 M5 M7
+App generate Core M19 M18 M17 M16 M15 M14 M13 M12 M11 M10 M9 M8 M7 M6 M5 M4 M3 M2 M1 M0

@@ -1,0 +1,21 @@
+import SafeDI
+import Core
+import M10
+import M11
+import M4
+import M5
+import M6
+import M8
+import M9
+@Instantiable(generateDependencyTree: true) public final class Screen0: Screen, Instantiable { public init(id: Int, service: Service, model0: Model0, screen4Builder: Instantiator<Screen4>, screen5Builder: Instantiator<Screen5>, screen6Builder: Instantiator<Screen6>) { self.id = id; self.service = service; self.model0 = model0; self.screen4Builder = screen4Builder; self.screen5Builder = screen5Builder; self.screen6Builder = screen6Builder; _ = screen4Builder.instantiate(id * 4 + 1); _ = screen5Builder.instantiate(id * 4 + 2); _ = screen6Builder.instantiate(id * 4 + 3); super.init() }
+    @Forwarded let id: Int
+    @Received let service: Service
+    @Instantiated let model0: Model0
+    @Instantiated let screen4Builder: Instantiator<Screen4>
+    @Instantiated let screen5Builder: Instantiator<Screen5>
+    @Instantiated let screen6Builder: Instantiator<Screen6>
+}
+@Instantiable public final class Model0: Instantiable { public init(id: Int, service: Service) { self.id = id; self.service = service }
+    @Received let id: Int
+    @Received let service: Service
+}

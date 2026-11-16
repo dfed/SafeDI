@@ -1,0 +1,10 @@
+Core generate 
+M7 generate Core
+M6 generate Core
+M5 generate Core
+M4 generate Core
+M3 generate Core M4 M5 M6
+M2 generate Core M4 M5 M7
+M1 generate Core M4 M5 M6
+M0 generate Core M5 M6 M7
+App generate Core M7 M6 M5 M4 M3 M2 M1 M0
