@@ -1047,19 +1047,13 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		]
 		let builds = [
 			"nested": """
-			        let nested = SendableInstantiator<Outer.Thing> {
-			            __safeDI_outer_Thing_Outer_ThingSendableBuilder(.nested($0))
-			        }
+			        let nested = SendableInstantiator<Outer.Thing>(__safeDI_outer_Thing_Outer_ThingSendableBuilder.nested(SafeDISendableScope_Outer_Thing_Outer_Thing.nested_Values()))
 			""",
 			"joined": """
-			        let joined = SendableInstantiator<Outer_Thing> {
-			            __safeDI_outer_Thing_Outer_Thing_SendableBuilder(.joined($0))
-			        }
+			        let joined = SendableInstantiator<Outer_Thing>(__safeDI_outer_Thing_Outer_Thing_SendableBuilder.joined(SafeDISendableScope_Outer_Thing_Outer_Thing_.joined_Values()))
 			""",
 			"sendable": """
-			        let sendable = SendableInstantiator<Outer_ThingSendable> {
-			            __safeDI_outer_ThingSendable_Outer_ThingSendableSendableBuilder(.sendable($0))
-			        }
+			        let sendable = SendableInstantiator<Outer_ThingSendable>(__safeDI_outer_ThingSendable_Outer_ThingSendableSendableBuilder.sendable(SafeDISendableScope_Outer_ThingSendable_Outer_ThingSendable.sendable_Values()))
 			""",
 		]
 		let output = try await compiledOutput(of: [
@@ -1085,28 +1079,73 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		let body = order.compactMap { builds[$0] }.joined(separator: "\n")
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDISendableScope_Outer_ThingSendable_Outer_ThingSendable {
+		    @frozen nonisolated public enum SafeDISendableScope_Outer_ThingSendable_Outer_ThingSendable {
 		        case sendable(Outer_ThingSendable.ForwardedProperties)
+
+		        nonisolated public struct sendable_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let sendable: @Sendable (sendable_Values) -> SendableErasedInstantiator<Outer_ThingSendable.ForwardedProperties, __safeDI_Built>.Builder
+
+		            public init(sendable: @escaping @Sendable (sendable_Values) -> SendableErasedInstantiator<Outer_ThingSendable.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.sendable = sendable
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Outer_ThingSendable.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.sendable = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
-		    @frozen public enum SafeDISendableScope_Outer_Thing_Outer_Thing {
+		    @frozen nonisolated public enum SafeDISendableScope_Outer_Thing_Outer_Thing {
 		        case nested(Outer.Thing.ForwardedProperties)
+
+		        nonisolated public struct nested_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let nested: @Sendable (nested_Values) -> SendableErasedInstantiator<Outer.Thing.ForwardedProperties, __safeDI_Built>.Builder
+
+		            public init(nested: @escaping @Sendable (nested_Values) -> SendableErasedInstantiator<Outer.Thing.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.nested = nested
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Outer.Thing.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.nested = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
-		    @frozen public enum SafeDISendableScope_Outer_Thing_Outer_Thing_ {
+		    @frozen nonisolated public enum SafeDISendableScope_Outer_Thing_Outer_Thing_ {
 		        case joined(Outer_Thing.ForwardedProperties)
+
+		        nonisolated public struct joined_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let joined: @Sendable (joined_Values) -> SendableErasedInstantiator<Outer_Thing.ForwardedProperties, __safeDI_Built>.Builder
+
+		            public init(joined: @escaping @Sendable (joined_Values) -> SendableErasedInstantiator<Outer_Thing.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.joined = joined
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Outer_Thing.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.joined = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_outer_ThingSendable_Outer_ThingSendableSendableBuilder: @escaping @Sendable (SafeDISendableScope_Outer_ThingSendable_Outer_ThingSendable) -> Outer_ThingSendable, __safeDI_outer_Thing_Outer_ThingSendableBuilder: @escaping @Sendable (SafeDISendableScope_Outer_Thing_Outer_Thing) -> Outer.Thing, __safeDI_outer_Thing_Outer_Thing_SendableBuilder: @escaping @Sendable (SafeDISendableScope_Outer_Thing_Outer_Thing_) -> Outer_Thing) {
+		    public init(__safeDI_outer_ThingSendable_Outer_ThingSendableSendableBuilder: SafeDISendableScope_Outer_ThingSendable_Outer_ThingSendable.__safeDI_Builder<Outer_ThingSendable>, __safeDI_outer_Thing_Outer_ThingSendableBuilder: SafeDISendableScope_Outer_Thing_Outer_Thing.__safeDI_Builder<Outer.Thing>, __safeDI_outer_Thing_Outer_Thing_SendableBuilder: SafeDISendableScope_Outer_Thing_Outer_Thing_.__safeDI_Builder<Outer_Thing>) {
 		\(body)
 		        self.init(\(order.map { "\($0): \($0)" }.joined(separator: ", ")))
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_D0F3DAA93AC73981 {}
+		    public enum __safeDI_Host_2BACC0F4A53050EF {}
 		}
 		"""])
 	}
@@ -1127,19 +1166,13 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		]
 		let builds = [
 			"api": """
-			        let api = SendableErasedInstantiator<String, any Api> {
-			            __safeDI_impl_Api_ImplSendableBuilder(.api($0))
-			        }
+			        let api = SendableErasedInstantiator<String, any Api>(__safeDI_impl_Api_ImplSendableBuilder.api(SafeDISendableScope_Impl_Api_Impl.api_Values()))
 			""",
 			"implApi": """
-			        let implApi = SendableInstantiator<Impl_Api> {
-			            __safeDI_impl_Api_Impl_ApiSendableBuilder(.implApi($0))
-			        }
+			        let implApi = SendableInstantiator<Impl_Api>(__safeDI_impl_Api_Impl_ApiSendableBuilder.implApi(SafeDISendableScope_Impl_Api_Impl_Api.implApi_Values()))
 			""",
 			"implApiSendable": """
-			        let implApiSendable = SendableInstantiator<Impl_ApiSendable> {
-			            __safeDI_impl_ApiSendable_Impl_ApiSendableSendableBuilder(.implApiSendable($0))
-			        }
+			        let implApiSendable = SendableInstantiator<Impl_ApiSendable>(__safeDI_impl_ApiSendable_Impl_ApiSendableSendableBuilder.implApiSendable(SafeDISendableScope_Impl_ApiSendable_Impl_ApiSendable.implApiSendable_Values()))
 			""",
 		]
 		let output = try await compiledOutput(of: [
@@ -1161,28 +1194,73 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		let body = order.compactMap { builds[$0] }.joined(separator: "\n")
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDISendableScope_Impl_ApiSendable_Impl_ApiSendable {
+		    @frozen nonisolated public enum SafeDISendableScope_Impl_ApiSendable_Impl_ApiSendable {
 		        case implApiSendable(Impl_ApiSendable.ForwardedProperties)
+
+		        nonisolated public struct implApiSendable_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let implApiSendable: @Sendable (implApiSendable_Values) -> SendableErasedInstantiator<Impl_ApiSendable.ForwardedProperties, __safeDI_Built>.Builder
+
+		            public init(implApiSendable: @escaping @Sendable (implApiSendable_Values) -> SendableErasedInstantiator<Impl_ApiSendable.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.implApiSendable = implApiSendable
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Impl_ApiSendable.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.implApiSendable = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
-		    @frozen public enum SafeDISendableScope_Impl_Api_Impl {
+		    @frozen nonisolated public enum SafeDISendableScope_Impl_Api_Impl {
 		        case api(String)
+
+		        nonisolated public struct api_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let api: @Sendable (api_Values) -> SendableErasedInstantiator<String, __safeDI_Built>.Builder
+
+		            public init(api: @escaping @Sendable (api_Values) -> SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                self.api = api
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                self.api = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
-		    @frozen public enum SafeDISendableScope_Impl_Api_Impl_Api {
+		    @frozen nonisolated public enum SafeDISendableScope_Impl_Api_Impl_Api {
 		        case implApi(Impl_Api.ForwardedProperties)
+
+		        nonisolated public struct implApi_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let implApi: @Sendable (implApi_Values) -> SendableErasedInstantiator<Impl_Api.ForwardedProperties, __safeDI_Built>.Builder
+
+		            public init(implApi: @escaping @Sendable (implApi_Values) -> SendableErasedInstantiator<Impl_Api.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.implApi = implApi
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Impl_Api.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.implApi = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_impl_ApiSendable_Impl_ApiSendableSendableBuilder: @escaping @Sendable (SafeDISendableScope_Impl_ApiSendable_Impl_ApiSendable) -> Impl_ApiSendable, __safeDI_impl_Api_ImplSendableBuilder: @escaping @Sendable (SafeDISendableScope_Impl_Api_Impl) -> any Api, __safeDI_impl_Api_Impl_ApiSendableBuilder: @escaping @Sendable (SafeDISendableScope_Impl_Api_Impl_Api) -> Impl_Api) {
+		    public init(__safeDI_impl_ApiSendable_Impl_ApiSendableSendableBuilder: SafeDISendableScope_Impl_ApiSendable_Impl_ApiSendable.__safeDI_Builder<Impl_ApiSendable>, __safeDI_impl_Api_ImplSendableBuilder: SafeDISendableScope_Impl_Api_Impl.__safeDI_Builder<any Api>, __safeDI_impl_Api_Impl_ApiSendableBuilder: SafeDISendableScope_Impl_Api_Impl_Api.__safeDI_Builder<Impl_Api>) {
 		\(body)
 		        self.init(\(order.map { "\($0): \($0)" }.joined(separator: ", ")))
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_621FEB413D6DCE95 {}
+		    public enum __safeDI_Host_71AC932175BE645B {}
 		}
 		"""])
 	}
