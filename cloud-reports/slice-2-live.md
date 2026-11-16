@@ -8,3 +8,4 @@
 - 2026-11-16T06:05Z nit commit 1be7d779b done (Manual isolation wording, 2.9 cell distinguishes rulings, rules split); waiting on pins
 - 2026-11-16T06:20Z pins run on 7e94f056b done (43812452993): hash moved + 69 rename-order findings to classify; pins-and-lists + migration + final Verify agent started
 - 2026-11-16T07:01Z pins-and-lists: 69 problems classified (all order-only or leaks; 566 waits on #735); smoke-coverage ruling B; next: migration on top, then rebase on main after #735, one full Verify
+- 2026-11-16T07:20Z pins-and-lists + migration assembled: 592021a1b (fuzzer + seam targets green locally); waits for #735 to land, then rebase onto main, full Verify + pins, PR
