@@ -2053,11 +2053,354 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsFulfillingSeamItsSendableStruct_whenFulfillingSeamsHoleIsHeldInSendableWrapper() async throws {
+		try await expectOutput(
+			of: Self.fulfillingSeamModules(gadgetPlace: "sendableWrapper"),
+			[
+				"App": ["App.swift": """
+				#if canImport(Mid)
+				import Mid
+				#endif
+				#if canImport(Up)
+				import Up
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_feature() -> Feature {
+				            _ = Feature.__safeDI_Feature_755DFDF5DD92EA7B.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            @Sendable func __safeDI_gadgetSendableBuilder_GadgetSeam_gadget() -> any Gadget {
+				                @Sendable func __safeDI_gadget() -> LiveGadget {
+				                    LiveGadget()
+				                }
+				                return __safeDI_gadget()
+				            }
+				            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Feature() -> Feature.SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget> {
+				                .init(inner_serviceBuilder_Sendable: { _ in __safeDI_gadgetSendableBuilder_GadgetSeam() })
+				            }
+				            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_GadgetSeam() -> GadgetSeam.SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget> {
+				                .init(gadget: { _ in __safeDI_gadgetSendableBuilder_GadgetSeam_gadget() })
+				            }
+				            return Feature(__safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_Feature())
+				        }
+				        let feature: Feature = __safeDI_feature()
+				        self.init(feature: feature)
+				    }
+				}
+				"""],
+				"Mid": ["Mid.swift": """
+				#if canImport(Up)
+				import Up
+				#endif
+
+				extension Feature {
+				    nonisolated public enum SafeDISendableScope_Gadget {
+				        nonisolated public struct inner_serviceBuilder_Sendable_Values: Sendable {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+				            public let inner_serviceBuilder_Sendable: @Sendable (inner_serviceBuilder_Sendable_Values) -> GadgetSeam.SafeDISendableScope_Gadget.__safeDI_Builder<__safeDI_Built>
+
+				            public init(inner_serviceBuilder_Sendable: @escaping @Sendable (inner_serviceBuilder_Sendable_Values) -> GadgetSeam.SafeDISendableScope_Gadget.__safeDI_Builder<__safeDI_Built>) {
+				                self.inner_serviceBuilder_Sendable = inner_serviceBuilder_Sendable
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+				                self.inner_serviceBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				            }
+				        }
+				    }
+
+				    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
+				        let __safeDI_gadgetSendableBuilder_inner_serviceBuilder_Sendable = __safeDI_gadgetSendableBuilder.inner_serviceBuilder_Sendable(SafeDISendableScope_Gadget.inner_serviceBuilder_Sendable_Values())
+				        func __safeDI_inner() -> Inner {
+				            _ = Inner.__safeDI_Inner_8DBB5EEFBE99D753.self // If this line does not compile, compile the code SafeDI generates for module Up into Up: under Bazel, add Up’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            func __safeDI_serviceBuilder_Inner_service(_ scope: Inner.SafeDIScope_Service.service_Values) -> any Service {
+				                func __safeDI_service() -> GadgetSeam {
+				                    _ = GadgetSeam.__safeDI_GadgetSeam_AAFBC43C9659A8A0.self
+				                    return GadgetSeam(__safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_inner_serviceBuilder_Sendable)
+				                }
+				                let service: any Service = __safeDI_service()
+				                return service
+				            }
+				            func __safeDI_serviceBuilder_Inner() -> Inner.SafeDIScope_Service.__safeDI_Builder<any Service> {
+				                .init(service: { scope in __safeDI_serviceBuilder_Inner_service(scope) })
+				            }
+				            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Inner())
+				        }
+				        let inner: Inner = __safeDI_inner()
+				        self.init(inner: inner)
+				    }
+				}
+
+				extension Feature {
+				    public enum __safeDI_Feature_755DFDF5DD92EA7B {}
+				}
+
+				extension GadgetSeam {
+				    nonisolated public enum SafeDISendableScope_Gadget {
+				        nonisolated public struct gadget_Values: Sendable {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+				            public let gadget: @Sendable (gadget_Values) -> __safeDI_Built
+
+				            public init(gadget: @escaping @Sendable (gadget_Values) -> __safeDI_Built) {
+				                self.gadget = gadget
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+				                self.gadget = { _ in __safeDI_builder() }
+				            }
+				        }
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
+				        @Sendable nonisolated func __safeDI_gadget() -> any Gadget {
+				            __safeDI_gadgetSendableBuilder.gadget(SafeDISendableScope_Gadget.gadget_Values())
+				        }
+				        let gadget = SendableLazilyInstantiated<any Gadget>(__safeDI_gadget)
+				        self.init(gadget: gadget)
+				    }
+				}
+
+				extension GadgetSeam {
+				    public enum __safeDI_GadgetSeam_AAFBC43C9659A8A0 {}
+				}
+				"""],
+				"Up": ["Up.swift": """
+				extension Inner {
+				    nonisolated public enum SafeDIScope_Service {
+				        nonisolated public struct service_Values {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let service: (service_Values) -> __safeDI_Built
+
+				            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+				                self.service = service
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.service = { _ in __safeDI_builder() }
+				            }
+				        }
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+				        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values())
+				        self.init(service: service)
+				    }
+				}
+
+				extension Inner {
+				    public enum __safeDI_Inner_8DBB5EEFBE99D753 {}
+				}
+				"""],
+			],
+			inline: Self.fulfillingSeamModules(liveGadgetInMid: true, gadgetPlace: "sendableWrapper"),
+			probes: [DifferentialValueProbe("Root()")],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsFulfillingSeamItsSendableStruct_whenFulfillingSeamsHoleIsBeneathSendableBuilder() async throws {
+		try await expectOutput(
+			of: Self.fulfillingSeamModules(gadgetPlace: "sendableBuilder"),
+			[
+				"App": ["App.swift": """
+				#if canImport(Mid)
+				import Mid
+				#endif
+				#if canImport(Up)
+				import Up
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_feature() -> Feature {
+				            _ = Feature.__safeDI_Feature_A9A9791097752958.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Feature() -> Feature.SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget> {
+				                .init(inner_serviceBuilder_Sendable: { _ in __safeDI_gadgetSendableBuilder_GadgetSeam() })
+				            }
+				            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_GadgetSeam() -> GadgetSeam.SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget> {
+				                .init(holderBuilder: { _ in __safeDI_gadgetBuilder_GadgetSeam_GadgetHolder_Scope() })
+				            }
+				            @Sendable nonisolated func __safeDI_gadgetBuilder_GadgetSeam_GadgetHolder_Scope() -> GadgetSeam.SafeDIScope_Gadget.GadgetHolder_Scope.__safeDI_Builder<any Gadget> {
+				                .init(gadget: { _ in
+				                    let gadget: any Gadget = LiveGadget()
+				                    return gadget
+				                })
+				            }
+				            return Feature(__safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_Feature())
+				        }
+				        let feature: Feature = __safeDI_feature()
+				        self.init(feature: feature)
+				    }
+				}
+				"""],
+				"Mid": ["Mid.swift": """
+				#if canImport(Up)
+				import Up
+				#endif
+
+				extension Feature {
+				    nonisolated public enum SafeDISendableScope_Gadget {
+				        nonisolated public struct inner_serviceBuilder_Sendable_Values: Sendable {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+				            public let inner_serviceBuilder_Sendable: @Sendable (inner_serviceBuilder_Sendable_Values) -> GadgetSeam.SafeDISendableScope_Gadget.__safeDI_Builder<__safeDI_Built>
+
+				            public init(inner_serviceBuilder_Sendable: @escaping @Sendable (inner_serviceBuilder_Sendable_Values) -> GadgetSeam.SafeDISendableScope_Gadget.__safeDI_Builder<__safeDI_Built>) {
+				                self.inner_serviceBuilder_Sendable = inner_serviceBuilder_Sendable
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+				                self.inner_serviceBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				            }
+				        }
+				    }
+
+				    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
+				        let __safeDI_gadgetSendableBuilder_inner_serviceBuilder_Sendable = __safeDI_gadgetSendableBuilder.inner_serviceBuilder_Sendable(SafeDISendableScope_Gadget.inner_serviceBuilder_Sendable_Values())
+				        func __safeDI_inner() -> Inner {
+				            _ = Inner.__safeDI_Inner_8DBB5EEFBE99D753.self // If this line does not compile, compile the code SafeDI generates for module Up into Up: under Bazel, add Up’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            func __safeDI_serviceBuilder_Inner_service(_ scope: Inner.SafeDIScope_Service.service_Values) -> any Service {
+				                func __safeDI_service() -> GadgetSeam {
+				                    _ = GadgetSeam.__safeDI_GadgetSeam_92BBC4E284F894D6.self
+				                    return GadgetSeam(__safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_inner_serviceBuilder_Sendable)
+				                }
+				                let service: any Service = __safeDI_service()
+				                return service
+				            }
+				            func __safeDI_serviceBuilder_Inner() -> Inner.SafeDIScope_Service.__safeDI_Builder<any Service> {
+				                .init(service: { scope in __safeDI_serviceBuilder_Inner_service(scope) })
+				            }
+				            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Inner())
+				        }
+				        let inner: Inner = __safeDI_inner()
+				        self.init(inner: inner)
+				    }
+				}
+
+				extension Feature {
+				    public enum __safeDI_Feature_A9A9791097752958 {}
+				}
+
+				extension GadgetSeam {
+				    nonisolated public enum SafeDIScope_Gadget {
+				        nonisolated public enum GadgetHolder_Scope {
+				            nonisolated public struct gadget_Values {}
+
+				            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				                public let gadget: (gadget_Values) -> __safeDI_Built
+
+				                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
+				                    self.gadget = gadget
+				                }
+
+				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                    self.gadget = { _ in __safeDI_builder() }
+				                }
+				            }
+				        }
+				    }
+
+				    nonisolated public enum SafeDISendableScope_Gadget {
+				        nonisolated public struct holderBuilder_Values: Sendable {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+				            public let holderBuilder: @Sendable (holderBuilder_Values) -> SafeDIScope_Gadget.GadgetHolder_Scope.__safeDI_Builder<__safeDI_Built>
+
+				            public init(holderBuilder: @escaping @Sendable (holderBuilder_Values) -> SafeDIScope_Gadget.GadgetHolder_Scope.__safeDI_Builder<__safeDI_Built>) {
+				                self.holderBuilder = holderBuilder
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+				                self.holderBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				            }
+				        }
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
+				        @Sendable nonisolated func __safeDI_holderBuilder() -> GadgetHolder {
+				            let __safeDI_gadgetSendableBuilder_holderBuilder = __safeDI_gadgetSendableBuilder.holderBuilder(SafeDISendableScope_Gadget.holderBuilder_Values())
+				            let gadget: any Gadget = __safeDI_gadgetSendableBuilder_holderBuilder.gadget(SafeDIScope_Gadget.GadgetHolder_Scope.gadget_Values())
+				            return GadgetHolder(gadget: gadget)
+				        }
+				        let holderBuilder = SendableInstantiator<GadgetHolder>(__safeDI_holderBuilder)
+				        self.init(holderBuilder: holderBuilder)
+				    }
+				}
+
+				extension GadgetSeam {
+				    public enum __safeDI_GadgetSeam_92BBC4E284F894D6 {}
+				}
+				"""],
+				"Up": ["Up.swift": """
+				extension Inner {
+				    nonisolated public enum SafeDIScope_Service {
+				        nonisolated public struct service_Values {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let service: (service_Values) -> __safeDI_Built
+
+				            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+				                self.service = service
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.service = { _ in __safeDI_builder() }
+				            }
+				        }
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+				        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values())
+				        self.init(service: service)
+				    }
+				}
+
+				extension Inner {
+				    public enum __safeDI_Inner_8DBB5EEFBE99D753 {}
+				}
+				"""],
+			],
+			inline: Self.fulfillingSeamModules(liveGadgetInMid: true, gadgetPlace: "sendableBuilder"),
+			probes: [DifferentialValueProbe("Root()")],
+		)
+	}
+
 	// MARK: Fixtures
 
 	/// `Inner { service: any Service }` in `Up`; in `Mid`, `Feature { inner: Inner }` and `GadgetSeam: Service { gadget: any Gadget }`,
 	/// both seams; only `App` fills `Gadget`.
-	private static func fulfillingSeamModules(liveGadgetInMid: Bool = false) -> [ModuleFixture] {
+	/// `gadgetPlace` is `nil` for `GadgetSeam`'s plain place `gadget`, `"sendableWrapper"` for `gadget` held in a
+	/// `SendableLazilyInstantiated`, and `"sendableBuilder"` for `gadget` on `GadgetHolder`, which `GadgetSeam` builds through
+	/// a `SendableInstantiator`.
+	private static func fulfillingSeamModules(liveGadgetInMid: Bool = false, gadgetPlace: String? = nil) -> [ModuleFixture] {
+		let sendable = gadgetPlace == nil ? "" : ", Sendable"
 		let liveGadget = """
 		@Instantiable(fulfillingAdditionalTypes: [Gadget.self])
 		public final class LiveGadget: Instantiable, Gadget {
@@ -2065,19 +2408,45 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 		}
 		"""
 		let up = [
-			"public protocol Service: AnyObject {}",
-			"public protocol Gadget: AnyObject {}",
+			"public protocol Service: AnyObject\(sendable) {}",
+			"public protocol Gadget: AnyObject\(sendable) {}",
 			seamFixtureType(named: "Inner", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let service: any Service"]),
 		]
-		var mid = [
-			seamFixtureType(named: "Feature", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let inner: Inner"]),
+		let gadgetSeam = switch gadgetPlace {
+		case "sendableWrapper":
+			"""
+			@Instantiable(generateDependencyTree: true, fulfillingAdditionalTypes: [Service.self])
+			public final class GadgetSeam: Instantiable, Service {
+			    public init(gadget: SendableLazilyInstantiated<any Gadget>) { self.gadget = gadget }
+			    @Instantiated public let gadget: SendableLazilyInstantiated<any Gadget>
+			}
+			"""
+		case "sendableBuilder":
+			"""
+			@Instantiable
+			public final class GadgetHolder: Instantiable, Sendable {
+			    public init(gadget: any Gadget) { self.gadget = gadget }
+			    @Instantiated public let gadget: any Gadget
+			}
+
+			@Instantiable(generateDependencyTree: true, fulfillingAdditionalTypes: [Service.self])
+			public final class GadgetSeam: Instantiable, Service {
+			    public init(holderBuilder: SendableInstantiator<GadgetHolder>) { self.holderBuilder = holderBuilder }
+			    @Instantiated public let holderBuilder: SendableInstantiator<GadgetHolder>
+			}
+			"""
+		default:
 			"""
 			@Instantiable(generateDependencyTree: true, fulfillingAdditionalTypes: [Service.self])
 			public final class GadgetSeam: Instantiable, Service {
 			    public init(gadget: any Gadget) { self.gadget = gadget }
 			    @Instantiated public let gadget: any Gadget
 			}
-			""",
+			"""
+		}
+		var mid = [
+			seamFixtureType(named: "Feature", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let inner: Inner"]),
+			gadgetSeam,
 		]
 		var app = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let feature: Feature"])]
 		if liveGadgetInMid {
