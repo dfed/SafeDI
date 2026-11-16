@@ -321,6 +321,156 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(overriding.publicMockRootLevelFailure == nil)
 	}
 
+	// MARK: Builder structs
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingPublicMockCallers_passesClosureThatTakesNothing_whenGeneratedMockTakesBuilderAsClosureThatTakesNothing() {
+		// The draw writes `{ _ in … }`; `mock()` takes `S1_HoleBuilder` as `() -> S1_Hole`, so the caller passes `{ … }`.
+		let call = "S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })"
+		let drawn = GraphFuzzerFixture(seed: 1, swiftFileContent: ["// module: FuzzFeature\n\n@Instantiable(generateMock: .public)\npublic final class S1_T6: Instantiable {}\n\n\(GraphFuzzerPublicMockDraw.publicMockCallerMarker)FuzzOther: \(call)\n"])
+		let switched = ["FuzzFeature/S1_T6+SafeDIMock.swift": "extension S1_T6 {\n    public static func mock(\n        s1_HoleBuilder: @escaping () -> S1_Hole\n    ) -> S1_T6 {\n    }\n}\n"]
+		#expect(GraphFuzzerOracle.addingPublicMockCallers(to: switched, of: drawn)["FuzzOther/S1_T6+SafeDIPublicMockCaller.swift"]?.contains("\t\tS1_T6.mock(s1_HoleBuilder: { S1_Hole() })\n") == true)
+		let kept = ["FuzzFeature/S1_T6+SafeDIMock.swift": "extension S1_T6 {\n    public static func mock(\n        s1_HoleBuilder: @escaping (S1_T6.SafeDIMockScope_S1_Hole) -> S1_Hole\n    ) -> S1_T6 {\n    }\n}\n"]
+		#expect(GraphFuzzerOracle.addingPublicMockCallers(to: kept, of: drawn)["FuzzOther/S1_T6+SafeDIPublicMockCaller.swift"]?.contains("\t\t\(call)\n") == true)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingPublicMockCallers_recordsIssue_whenCallPassesTwoBuildersToMockThatTakesClosuresThatTakeNothing() {
+		let call = "S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() }, s1_OtherBuilder: { _ in S1_Other() })"
+		let drawn = GraphFuzzerFixture(seed: 1, swiftFileContent: ["// module: FuzzFeature\n\n@Instantiable(generateMock: .public)\npublic final class S1_T6: Instantiable {}\n\n\(GraphFuzzerPublicMockDraw.publicMockCallerMarker)FuzzOther: \(call)\n"])
+		let switched = ["FuzzFeature/S1_T6+SafeDIMock.swift": "extension S1_T6 {\n    public static func mock(\n        s1_HoleBuilder: @escaping () -> S1_Hole,\n        s1_OtherBuilder: @escaping () -> S1_Other\n    ) -> S1_T6 {\n    }\n}\n"]
+		withKnownIssue {
+			_ = GraphFuzzerOracle.addingPublicMockCallers(to: switched, of: drawn)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingPublicMockCallers_recordsIssue_whenPublicMockTakesBuilderTheDrawnCallDoesNotPass() {
+		let call = "S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })"
+		let drawn = GraphFuzzerFixture(seed: 1, swiftFileContent: ["// module: FuzzFeature\n\n@Instantiable(generateMock: .public)\npublic final class S1_T6: Instantiable {}\n\n\(GraphFuzzerPublicMockDraw.publicMockCallerMarker)FuzzOther: \(call)\n"])
+		withKnownIssue {
+			_ = GraphFuzzerOracle.addingPublicMockCallers(to: Self.mockTakingTwoBuilders, of: drawn)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingPublicMockCallers_convertsTheCallsBuilder_whenBuilderSurfaceEditGivesPublicMockAnotherBuilder() {
+		// The edit adds a builder after the draw wrote the call, which the same-supply judgment judges instead.
+		let call = "S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })"
+		let edited = GraphFuzzerFixture(seed: 1, swiftFileContent: ["// module: FuzzFeature\n\n@Instantiable(generateMock: .public)\npublic final class S1_T6: Instantiable {}\n\n\(GraphFuzzerPublicMockDraw.publicMockCallerMarker)FuzzOther: \(call)\n"], isBuilderSurfaceEdit: true)
+		#expect(GraphFuzzerOracle.addingPublicMockCallers(to: Self.mockTakingTwoBuilders, of: edited)["FuzzOther/S1_T6+SafeDIPublicMockCaller.swift"]?.contains("\t\tS1_T6.mock(s1_HoleBuilder: { S1_Hole() })\n") == true)
+	}
+
+	/// `S1_T6`'s generated file, whose `public` `mock()` takes two closures that take nothing.
+	private static let mockTakingTwoBuilders = ["FuzzFeature/S1_T6+SafeDIMock.swift": "extension S1_T6 {\n    public static func mock(\n        s1_HoleBuilder: @escaping () -> S1_Hole,\n        s1_OtherBuilder: @escaping () -> S1_Other\n    ) -> S1_T6 {\n    }\n}\n"]
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingPublicMockCallers_recordsIssue_whenCallPassesNoBuilderInTheFormItConverts() {
+		let call = "S1_T6.mock(s1_HoleBuilder: { scope in S1_Hole() })"
+		let drawn = GraphFuzzerFixture(seed: 1, swiftFileContent: ["// module: FuzzFeature\n\n@Instantiable(generateMock: .public)\npublic final class S1_T6: Instantiable {}\n\n\(GraphFuzzerPublicMockDraw.publicMockCallerMarker)FuzzOther: \(call)\n"])
+		let switched = ["FuzzFeature/S1_T6+SafeDIMock.swift": "extension S1_T6 {\n    public static func mock(\n        s1_HoleBuilder: @escaping () -> S1_Hole\n    ) -> S1_T6 {\n    }\n}\n"]
+		withKnownIssue {
+			_ = GraphFuzzerOracle.addingPublicMockCallers(to: switched, of: drawn)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func handWrittenBuilderFindings_reportsOnlyCallsPassingClosureOverEnum_whenCallerFilesHoldHandWrittenCalls() {
+		let switched = ["FuzzOther/S1_T6+SafeDIPublicMockCaller.swift": "public enum S1_T6PublicMockCaller {\n\tpublic static func call() -> S1_T6 {\n\t\tS1_T6.mock(s1_HoleBuilder: { S1_Hole() })\n\t}\n}\n"]
+		#expect(GraphFuzzerBuilderSurface.handWrittenBuilderFindings(in: switched).isEmpty)
+		let kept = ["FuzzOther/S1_T6+SafeDIPublicMockCaller.swift": "public enum S1_T6PublicMockCaller {\n\tpublic static func call() -> S1_T6 {\n\t\tS1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })\n\t}\n}\n"]
+		#expect(GraphFuzzerBuilderSurface.handWrittenBuilderFindings(in: kept) == [
+			GraphFuzzerBuilderSurface.Finding(declaration: "the hand-written call `S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })`", parameter: "s1_HoleBuilder: { _ in", reason: "takes a scope its place does not forward"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func outputFeatures_readBuilderStructsAndTheCallsThatPassThem_whenPublicMockTakesBuilderStruct() {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [])
+		let generatedFiles = [
+			"FuzzFeature/S1_T6+SafeDIMock.swift": """
+			extension S1_T6 {
+			    public static func mock(
+			        s1_HoleBuilder: @escaping () -> S1_Hole
+			    ) -> S1_T6 {
+			        S1_T6.__safeDI_mock(s1_HoleBuilder: .init(__safeDI_noScope: s1_HoleBuilder))
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        s1_HoleBuilder __safeDI_s1_HoleBuilder: S1_T6.SafeDIMockScope_S1_Hole.__safeDI_Builder<S1_Hole>
+			    ) -> S1_T6 {
+			        let holeLoopBuilder = Instantiator<S1_HoleLoop>(__safeDI_holeLoopBuilder)
+			    }
+			}
+			""",
+			"FuzzApp/S1_T7+SafeDIMock.swift": """
+			extension S1_T7 {
+			    static func mock() -> S1_T7 {
+			        func __safeDI_s1_HoleBuilder_S1_T6() -> S1_T6.SafeDIMockScope_S1_Hole.__safeDI_Builder<S1_Hole> {
+			        }
+			        func __safeDI_s1_HoleBuilder_S1_T6_S1_HoleHost_Scope(_ __safeDI_s1_HoleBuilder_S1_T6_wrap: @escaping (S1_T6.SafeDIMockScope_S1_Hole.S1_HoleHost_Scope) -> S1_T6.SafeDIMockScope_S1_Hole) -> S1_T6.SafeDIMockScope_S1_Hole.S1_HoleHost_Scope.__safeDI_Builder<S1_Hole> {
+			        }
+			        let t6 = S1_T6.__safeDI_mock(s1_HoleBuilder: __safeDI_s1_HoleBuilder_S1_T6())
+			        let t6Second = S1_T6.__safeDI_mock(s1_HoleBuilder: .init(s1_Hole: { __safeDI_s1_HoleValues in s1_HoleBuilder(.s1_Hole(__safeDI_s1_HoleValues)) }))
+			    }
+			}
+			""",
+		]
+		let features = GraphFuzzerPublicMockDraw.outputFeatures(of: fixture, generatedFiles: generatedFiles)
+		#expect(features.isSuperset(of: [.holeBuilder, .generatedOnlyMockFunction, .holeLoopBuilder, .holeLoopBuilderOfBuilderStruct, .consumerCall, .consumerFillsHole, .consumerPassesLevelFunctionsStruct, .consumerConvertsClosureOverEnum, .consumerConvertsOverReopenedLevel]))
+		#expect(!features.contains(.constructionFunction))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func outputFeatures_readNoBuilderStruct_whenPublicMockKeepsClosureOverEnum() {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [])
+		let generatedFiles = [
+			"FuzzFeature/S1_T6+SafeDIMock.swift": """
+			extension S1_T6 {
+			    public static func mock(
+			        s1_HoleBuilder: @escaping (S1_T6.SafeDIMockScope_S1_Hole) -> S1_Hole
+			    ) -> S1_T6 {
+			        let holeLoopBuilder = Instantiator<S1_HoleLoop>(__safeDI_holeLoopBuilder)
+			    }
+			}
+
+			extension S1_Card {
+			    static func __safeDI_mock(api: any Api, safeDIBuilder: ((any Api) -> S1_Card)?) -> S1_Card {
+			    }
+			}
+			""",
+			"FuzzApp/S1_T7+SafeDIMock.swift": """
+			extension S1_T7 {
+			    static func mock() -> S1_T7 {
+			        let t6 = S1_T6.mock(s1_HoleBuilder: __safeDI_s1_HoleBuilder_S1_T6)
+			    }
+			}
+			""",
+		]
+		let features = GraphFuzzerPublicMockDraw.outputFeatures(of: fixture, generatedFiles: generatedFiles)
+		#expect(features.isSuperset(of: [.holeBuilder, .holeLoopBuilder, .consumerCall, .constructionFunction]))
+		#expect(features.isDisjoint(with: [.generatedOnlyMockFunction, .holeLoopBuilderOfBuilderStruct, .consumerPassesLevelFunctionsStruct, .consumerConvertsClosureOverEnum, .consumerConvertsOverReopenedLevel]))
+	}
+
+	@Test
+	func seamOwnMockTakesBuilder_readsSeamsMockOnly_whenMockTakesClosureThatTakesNothing() {
+		let seamMock = "extension S1_Home {\n    static func mock(\n        s1_ApiBuilder: @escaping () -> any S1_Api,\n        safeDIOverrides: SafeDIOverrides = .init()\n    ) -> S1_Home {\n    }\n}\n"
+		#expect(GraphFuzzerFeature.seamOwnMockTakesBuilder(in: seamMock, seamTypeNames: ["S1_Home"]))
+		// Another type's mock, and a seam's mock that takes a value for its place, take no such builder.
+		#expect(!GraphFuzzerFeature.seamOwnMockTakesBuilder(in: seamMock, seamTypeNames: ["S1_Other"]))
+		let valueMock = "extension S1_Home {\n    static func mock(\n        s1_Api: S1_Api,\n        safeDIOverrides: SafeDIOverrides = .init()\n    ) -> S1_Home {\n    }\n}\n"
+		#expect(!GraphFuzzerFeature.seamOwnMockTakesBuilder(in: valueMock, seamTypeNames: ["S1_Home"]))
+	}
+
 	// MARK: Hand-written caller
 
 	@Test
