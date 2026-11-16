@@ -532,6 +532,10 @@ extension DependencyTreeGenerator {
 			let leadsIntoFill = caseOfProperty.filledBuilder != nil
 			let enumType = enumTypeByDescribed[caseOfProperty.described]
 			var member: SeamSignature.Hole.RouteStep.Member?
+			// Deliberate gap: a loop's level re-entered through a cycle-closing scope calls no member of its own, and re-enters
+			// the function built at its first opening with the struct bound there, which carries nothing bound above the
+			// reopened level. A read of such a value stays rejected (`declarationBoundOnCycleReentry`); do not lift that
+			// rejection before the member exists.
 			if let bindingPrefix, let enumType, let memberValuesTypeName = enumCase.memberValuesTypeName {
 				result.memberBindingKeysByFamily[isSendableRoute, default: []].insert(ValuesBindingKey(path: bindingPrefix, caseName: enumCase.name))
 				member = .init(

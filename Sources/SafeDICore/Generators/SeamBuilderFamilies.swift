@@ -240,6 +240,8 @@ extension DependencyTreeGenerator {
 					instantiables: instantiables,
 					reachedEnum: reachedEnum,
 				)
+				// A public mock (`areQualified`) keeps the closure over its enum for now, a deliberate gap: its builder is handed the
+				// scope where the seam's takes nothing.
 				if !scopeTypeNames.areQualified, Self.declaresBuilderStructs(of: byType.enums, holesBySite: holesBySite) {
 					// The seam's tree calls a member per level, bound under names of their own, and binds no payload.
 					holeTypesDeclaringBuilderStructs.insert(holeType)
@@ -514,9 +516,10 @@ extension DependencyTreeGenerator {
 	}
 
 	/// Whether a seam's builders of a hole type, both families together, take builder structs, its enums being `enums`: when
-	/// no place they reach forwards a value – a place whose own property is an instantiator, whose case carries the forwarded
-	/// value – and none holds a seam's scope – a call's case, which holds an inner seam's root enum (the seam's own, where its
-	/// tree builds it again), or a case for a builder a call fills. Every other hole type keeps the closure over its enum.
+	/// no place they reach forwards a value – a place whose case carries a forwarded value: every `Instantiator<T>` place,
+	/// whatever `T` forwards, and an erased instantiator whose forwarded type is not spelled `()` or `Void` – and none holds a
+	/// seam's scope – a call's case, which holds an inner seam's root enum (the seam's own, where its tree builds it again),
+	/// or a case for a builder a call fills. Every other hole type keeps the closure over its enum.
 	static func declaresBuilderStructs(of enums: [SeamSignature.ScopeEnum], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) -> Bool {
 		enums.allSatisfy { scopeEnum in
 			scopeEnum.cases.allSatisfy { enumCase in

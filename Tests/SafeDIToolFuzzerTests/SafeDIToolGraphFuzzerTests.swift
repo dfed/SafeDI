@@ -6371,8 +6371,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
 	/// that follows label order is how mocks and initializers already work – so the oracle's label reversal
-	/// reorders them, which is expected, not a defect, as the mock's label-sorted parameters are in `knownIssues`. Seeds
-	/// 330 and 809 of this shape also leak, and are listed apart.
+	/// reorders them, which is expected, not a defect, as the mock's label-sorted parameters are in `knownIssues`. Seed 330
+	/// of this shape also leaks, and is listed apart.
 	private static let labelSortedPassThroughSeeds: [UInt64] = [604, 788, 809, 816, 834, 928, 950]
 
 	/// Seeds of the same shape whose generated mock also lists label-sorted parameters, so that it changes too.
