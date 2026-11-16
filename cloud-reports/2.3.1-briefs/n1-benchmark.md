@@ -18,3 +18,10 @@ Follow `.claude/rules/generator-design.md`, "Benchmarks are lifelike": a synthet
 **Done when.** A script (proposed home `Scripts/benchmark-2-3-1.sh`, not merged) that takes two `SafeDITool` paths and prints one table; the baseline table for 2.2.0 and main; two full runs agreeing within 3% on wall-time medians (report any shape that does not); every shape where main is slower than 2.2.0, ranked by ratio; machine, compiler and load recorded. Keep machine load under 1 during timing; run nothing else.
 
 **Hand-back** as in the common brief, plus the Mac command list. Copy the report to `/mnt/project-files/benchmark-2-3-1/report.md` if you can write there.
+
+## Addendum (2026-11-16, from the lead's review of the emitter design)
+
+Add these to the hand-back:
+1. **Profile main** on #646's graphs at 12 and 16 screens and on the mock variant, with instructions retired per phase: the `Scope.createScopeGenerator` passes, `ScopeGenerator.init`'s facts, the validation walks, and emission. (Instructions per phase need the Mac or a Linux profiler you can run without root, such as `valgrind --tool=callgrind`; say which.)
+2. **Speculative generation:** report instructions and wall time with and without the detached per-generator `generateCode()` starts (`Models/Scope.swift:1304–1322`), on the same graphs. A local, uncommitted patch on your branch is fine for this measurement.
+3. **Lifelike production compile** at `-Onone` and `-O`, the 2.3.0 stack head against 2.2.0, and the count of types built in both families (inside and outside a `@Sendable` builder function) on the lifelike benchmark.
