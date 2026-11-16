@@ -569,9 +569,7 @@ extension ScopeGenerator {
 		// Each label names one dependency: `validateDependencyLabelsAreDistinct` rejects a declaration in a generated tree that repeats one.
 		let dependenciesByLabel = Dictionary(grouping: node.dependencies, by: \.property.label).compactMapValues(\.first)
 		let defaultParametersByLabel = Dictionary(grouping: node.defaultParameters, by: \.label).compactMapValues(\.first)
-		let relativePath = nodePath
-			.replacingOccurrences(of: "\(ReservedName.mockOverridesParameterName).", with: "")
-			.replacingOccurrences(of: ".", with: "_")
+		let relativePath = GeneratedCodeText.overrideRelativePath(of: nodePath)
 		let storesDefaultsAsClosures = emission.sendableConfigurationTypeNames.contains(node.concreteType.asSource)
 		return node.callSiteArguments.map { argument in
 			if let dependency = dependenciesByLabel[argument.innerLabel] {

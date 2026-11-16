@@ -2269,10 +2269,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if leadingWhitespace.isEmpty {
 			return generatedCode
 		} else {
-			return generatedCode
-				.split(separator: "\n")
-				.map { leadingWhitespace + $0 }
-				.joined(separator: "\n")
+			// Every level of the tree indents its whole subtree again, so this runs over each line once per level above it.
+			return GeneratedCodeText.indentingNonEmptyLines(of: generatedCode, by: leadingWhitespace)
 		}
 	}
 
@@ -9839,9 +9837,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// A cycle-closing node declares no function: it refers to the enclosing one of the declaration it repeats.
 				let functionName = functionName(ofNodeAt: propertyNodeIndex - 1, node, bindingName: disambiguated)
 
-				let relativePath = nodePath
-					.replacingOccurrences(of: "\(ReservedName.mockOverridesParameterName).", with: "")
-					.replacingOccurrences(of: ".", with: "_")
+				let relativePath = GeneratedCodeText.overrideRelativePath(of: nodePath)
 
 				// The optional override closure to consult, or `nil` when there is
 				// none to consult: a cycle node constructs itself directly, and a
@@ -10120,15 +10116,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 	) -> String {
 		if let holeSite = alias.holeSite {
-			return buildSiteCode(of: alias.property, at: holeSite, functionName: holeFunctionName, readingInstancesOf: alias.holeSiteLazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames).split(separator: "\n").map(String.init)
-				.map { "\(indent)\($0)" }
-				.joined(separator: "\n")
+			return GeneratedCodeText.indentingNonEmptyLines(
+				of: buildSiteCode(of: alias.property, at: holeSite, functionName: holeFunctionName, readingInstancesOf: alias.holeSiteLazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames),
+				by: indent,
+			)
 		}
 		guard !alias.isBoundToNil else {
-			return referencingDeclaration(of: "let \(alias.property.asSource) = nil", by: alias.declarationReference)
-				.split(separator: "\n")
-				.map { "\(indent)\($0)" }
-				.joined(separator: "\n")
+			return GeneratedCodeText.indentingNonEmptyLines(of: referencingDeclaration(of: "let \(alias.property.asSource) = nil", by: alias.declarationReference), by: indent)
 		}
 		let fulfillingLabel = alias.fulfillingLabel
 		let fulfillingValue = if alias.fulfillingPropertyIsLazilyInstantiatedInstance {
@@ -10139,19 +10133,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				?? lazilyInstantiatedBindingNames[fulfillingLabel]?[alias.fulfillingTypeDescription]
 				?? fulfillingLabel
 		}
-		return referencingDeclaration(
-			of: aliasDeclaration(
-				of: alias.property,
-				fulfilledBy: fulfillingValue,
-				ofType: alias.fulfillingTypeDescription,
-				erasedToConcreteExistential: alias.erasedToConcreteExistential,
-				fulfillingValueMayBeOptional: alias.onlyIfAvailable,
+		return GeneratedCodeText.indentingNonEmptyLines(
+			of: referencingDeclaration(
+				of: aliasDeclaration(
+					of: alias.property,
+					fulfilledBy: fulfillingValue,
+					ofType: alias.fulfillingTypeDescription,
+					erasedToConcreteExistential: alias.erasedToConcreteExistential,
+					fulfillingValueMayBeOptional: alias.onlyIfAvailable,
+				),
+				by: alias.declarationReference,
 			),
-			by: alias.declarationReference,
+			by: indent,
 		)
-		.split(separator: "\n")
-		.map { "\(indent)\($0)" }
-		.joined(separator: "\n")
 	}
 
 	/// Renames the aliases among `items` whose label is in `redeclaredNames`, so that their
@@ -10261,9 +10255,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) -> [String] {
 		// Each label names one dependency: `validateDependencyLabelsAreDistinct` rejects a declaration in a generated tree that repeats one.
 		let dependenciesByLabel = Dictionary(grouping: node.dependencies, by: \.property.label).compactMapValues(\.first)
-		let relativePath = nodePath
-			.replacingOccurrences(of: "\(ReservedName.mockOverridesParameterName).", with: "")
-			.replacingOccurrences(of: ".", with: "_")
+		let relativePath = GeneratedCodeText.overrideRelativePath(of: nodePath)
 		let argumentsToSurface = node.surfacedCallSiteArguments(
 			overrideReachable: overrideReachable,
 			handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
