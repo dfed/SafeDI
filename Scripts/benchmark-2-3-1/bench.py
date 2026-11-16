@@ -381,7 +381,8 @@ def measure_shape(shape, tools, work, runs, measures):
 			result["tools"][label]["runtime_ns"] = summary(values)
 			result["tools"][label]["values_per_iteration"] = values_per_iteration.get(label)
 	for label, entry in result["tools"].items():
-		failures = [value["failure"] for value in entry.values() if isinstance(value, dict) and "failure" in value]
+		# Only a shape that does not compile loses its figures; a failed runtime build keeps the rest.
+		failures = [value["failure"] for key, value in entry.items() if key.startswith("compile") and isinstance(value, dict) and "failure" in value]
 		if failures and "failure" not in entry:
 			# A shape this tool cannot build has no figures: its generate time would compare unlike work.
 			entry.clear()

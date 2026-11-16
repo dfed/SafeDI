@@ -144,7 +144,7 @@ def write_shape(root, seams, seed=7):
 		handle.write("".join(f"import {m}\n" for m in top) + "\n// The roots, built in bench/.\n")
 	os.makedirs(os.path.join(root, "bench"))
 	with open(os.path.join(root, "bench", "Roots.swift"), "w") as handle:
-		handle.write("func benchmarkIteration() -> Int {\n" + "".join(f"\twithExtendedLifetime({name}()) {{}}\n" for name in roots) + f"\treturn {values}\n}}\n")
+		handle.write("".join(f"import {m}\n" for m in top) + "\nfunc benchmarkIteration() -> Int {\n" + "".join(f"\twithExtendedLifetime({name}()) {{}}\n" for name in roots) + f"\treturn {values}\n}}\n")
 	with open(os.path.join(root, "modules.txt"), "w") as handle:
 		handle.write("".join(f"{name} generate {' '.join(dependencies[name])}\n" for name, _ in modules))
 		handle.write(f"Bench plain {' '.join(top)}\n")
