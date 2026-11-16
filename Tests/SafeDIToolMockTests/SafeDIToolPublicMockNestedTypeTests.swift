@@ -63,8 +63,63 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.generatedFiles == [
-			"Root+SafeDIMock.swift": Self.rootMock(building: "child", ofType: "Child", configuredBy: "__safeDI_Child_MockConfiguration", construction: "Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)"),
-			"SafeDIMockConfiguration.swift": generatedFileHeader + Self.childThemeConfiguration + "\n",
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            child: __safeDI_Child_MockConfiguration = .init()
+			        ) {
+			            self.child = child
+			        }
+
+			        public let child: __safeDI_Child_MockConfiguration
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_child() -> Child {
+			            return Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+			        }
+			        let child: Child = __safeDI_child()
+			        return Root(child: child)
+			    }
+			}
+
+			extension Root {
+			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			/// Configuration for how `Child` is constructed within the public mock trees of this module.
+			nonisolated public struct __safeDI_Child_MockConfiguration {
+			    public init(
+			        theme: Child.Theme? = nil,
+			        _ safeDIBuilder: ((Child.Theme) -> Child)? = nil
+			    ) {
+			        self.theme = theme
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    /// `nil` keeps the default of `Child`’s `theme`.
+			    public let theme: Child.Theme?
+			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Child.Theme) -> Child)?
+			}
+
+			extension Child {
+			    static func __safeDI_init(theme: Child.Theme?, safeDIBuilder: ((Child.Theme) -> Child)?) -> Child {
+			        let theme = theme ?? (.light)
+			        return if let safeDIBuilder { safeDIBuilder(theme) } else { Child(theme: theme) }
+			    }
+			}
+			#endif
+
+			""",
 		])
 	}
 
@@ -108,8 +163,63 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.generatedFiles == [
-			"Root+SafeDIMock.swift": Self.rootMock(building: "child", ofType: "Child", configuredBy: "__safeDI_Child_MockConfiguration", construction: "Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)"),
-			"SafeDIMockConfiguration.swift": generatedFileHeader + Self.childThemeConfiguration + "\n",
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            child: __safeDI_Child_MockConfiguration = .init()
+			        ) {
+			            self.child = child
+			        }
+
+			        public let child: __safeDI_Child_MockConfiguration
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_child() -> Child {
+			            return Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+			        }
+			        let child: Child = __safeDI_child()
+			        return Root(child: child)
+			    }
+			}
+
+			extension Root {
+			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			/// Configuration for how `Child` is constructed within the public mock trees of this module.
+			nonisolated public struct __safeDI_Child_MockConfiguration {
+			    public init(
+			        theme: Child.Theme? = nil,
+			        _ safeDIBuilder: ((Child.Theme) -> Child)? = nil
+			    ) {
+			        self.theme = theme
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    /// `nil` keeps the default of `Child`’s `theme`.
+			    public let theme: Child.Theme?
+			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Child.Theme) -> Child)?
+			}
+
+			extension Child {
+			    static func __safeDI_init(theme: Child.Theme?, safeDIBuilder: ((Child.Theme) -> Child)?) -> Child {
+			        let theme = theme ?? (.light)
+			        return if let safeDIBuilder { safeDIBuilder(theme) } else { Child(theme: theme) }
+			    }
+			}
+			#endif
+
+			""",
 		])
 	}
 
@@ -142,8 +252,63 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.generatedFiles == [
-			"Root+SafeDIMock.swift": Self.rootMock(building: "child", ofType: "Child", configuredBy: "__safeDI_Child_MockConfiguration", construction: "Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)"),
-			"SafeDIMockConfiguration.swift": generatedFileHeader + Self.childThemeConfiguration + "\n",
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            child: __safeDI_Child_MockConfiguration = .init()
+			        ) {
+			            self.child = child
+			        }
+
+			        public let child: __safeDI_Child_MockConfiguration
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_child() -> Child {
+			            return Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+			        }
+			        let child: Child = __safeDI_child()
+			        return Root(child: child)
+			    }
+			}
+
+			extension Root {
+			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			/// Configuration for how `Child` is constructed within the public mock trees of this module.
+			nonisolated public struct __safeDI_Child_MockConfiguration {
+			    public init(
+			        theme: Child.Theme? = nil,
+			        _ safeDIBuilder: ((Child.Theme) -> Child)? = nil
+			    ) {
+			        self.theme = theme
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    /// `nil` keeps the default of `Child`’s `theme`.
+			    public let theme: Child.Theme?
+			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Child.Theme) -> Child)?
+			}
+
+			extension Child {
+			    static func __safeDI_init(theme: Child.Theme?, safeDIBuilder: ((Child.Theme) -> Child)?) -> Child {
+			        let theme = theme ?? (.light)
+			        return if let safeDIBuilder { safeDIBuilder(theme) } else { Child(theme: theme) }
+			    }
+			}
+			#endif
+
+			""",
 		])
 
 		// The public mock builds the `Child.Theme` default that a hand-written mock building `Child()` builds.
@@ -201,8 +366,63 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.generatedFiles == [
-			"Root+SafeDIMock.swift": Self.rootMock(building: "child", ofType: "AnyChild", configuredBy: "__safeDI_Child_MockConfiguration", construction: "AnyChild(Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder))"),
-			"SafeDIMockConfiguration.swift": generatedFileHeader + Self.childThemeConfiguration + "\n",
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            child: __safeDI_Child_MockConfiguration = .init()
+			        ) {
+			            self.child = child
+			        }
+
+			        public let child: __safeDI_Child_MockConfiguration
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_child() -> AnyChild {
+			            return AnyChild(Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder))
+			        }
+			        let child: AnyChild = __safeDI_child()
+			        return Root(child: child)
+			    }
+			}
+
+			extension Root {
+			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			/// Configuration for how `Child` is constructed within the public mock trees of this module.
+			nonisolated public struct __safeDI_Child_MockConfiguration {
+			    public init(
+			        theme: Child.Theme? = nil,
+			        _ safeDIBuilder: ((Child.Theme) -> Child)? = nil
+			    ) {
+			        self.theme = theme
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    /// `nil` keeps the default of `Child`’s `theme`.
+			    public let theme: Child.Theme?
+			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Child.Theme) -> Child)?
+			}
+
+			extension Child {
+			    static func __safeDI_init(theme: Child.Theme?, safeDIBuilder: ((Child.Theme) -> Child)?) -> Child {
+			        let theme = theme ?? (.light)
+			        return if let safeDIBuilder { safeDIBuilder(theme) } else { Child(theme: theme) }
+			    }
+			}
+			#endif
+
+			""",
 		])
 	}
 
@@ -244,7 +464,36 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.generatedFiles == [
-			"Root+SafeDIMock.swift": Self.rootMock(building: "child", ofType: "Child", configuredBy: "__safeDI_Child_MockConfiguration", construction: "Child.__safeDI_init(style: safeDIOverrides.child.style, accent: safeDIOverrides.child.accent, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)"),
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            child: __safeDI_Child_MockConfiguration = .init()
+			        ) {
+			            self.child = child
+			        }
+
+			        public let child: __safeDI_Child_MockConfiguration
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_child() -> Child {
+			            return Child.__safeDI_init(style: safeDIOverrides.child.style, accent: safeDIOverrides.child.accent, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+			        }
+			        let child: Child = __safeDI_child()
+			        return Root(child: child)
+			    }
+			}
+
+			extension Root {
+			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
@@ -319,7 +568,36 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.generatedFiles == [
-			"Root+SafeDIMock.swift": Self.rootMock(building: "gadget", ofType: "Gadget", configuredBy: "__safeDI_Gadget_MockConfiguration", construction: "Gadget.__safeDI_init(mode: safeDIOverrides.gadget.mode, safeDIBuilder: safeDIOverrides.gadget.safeDIBuilder)"),
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            gadget: __safeDI_Gadget_MockConfiguration = .init()
+			        ) {
+			            self.gadget = gadget
+			        }
+
+			        public let gadget: __safeDI_Gadget_MockConfiguration
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_gadget() -> Gadget {
+			            return Gadget.__safeDI_init(mode: safeDIOverrides.gadget.mode, safeDIBuilder: safeDIOverrides.gadget.safeDIBuilder)
+			        }
+			        let gadget: Gadget = __safeDI_gadget()
+			        return Root(gadget: gadget)
+			    }
+			}
+
+			extension Root {
+			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Gadget` is constructed within the public mock trees of this module.
@@ -385,7 +663,36 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.generatedFiles == [
-			"Root+SafeDIMock.swift": Self.rootMock(building: "child", ofType: "Child", configuredBy: "__safeDI_Child_MockConfiguration", construction: "Child.__safeDI_init(onTap: safeDIOverrides.child.onTap, onFinish: safeDIOverrides.child.onFinish, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)"),
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            child: __safeDI_Child_MockConfiguration = .init()
+			        ) {
+			            self.child = child
+			        }
+
+			        public let child: __safeDI_Child_MockConfiguration
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_child() -> Child {
+			            return Child.__safeDI_init(onTap: safeDIOverrides.child.onTap, onFinish: safeDIOverrides.child.onFinish, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+			        }
+			        let child: Child = __safeDI_child()
+			        return Root(child: child)
+			    }
+			}
+
+			extension Root {
+			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
@@ -476,7 +783,36 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.generatedFiles == [
-			"Root+SafeDIMock.swift": Self.rootMock(building: "child", ofType: "Outer.Child", configuredBy: "__safeDI_Outer_Child_MockConfiguration", construction: "Outer.Child.__safeDI_init(theme: safeDIOverrides.child.theme, mode: safeDIOverrides.child.mode, palette: safeDIOverrides.child.palette, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)"),
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            child: __safeDI_Outer_Child_MockConfiguration = .init()
+			        ) {
+			            self.child = child
+			        }
+
+			        public let child: __safeDI_Outer_Child_MockConfiguration
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_child() -> Outer.Child {
+			            return Outer.Child.__safeDI_init(theme: safeDIOverrides.child.theme, mode: safeDIOverrides.child.mode, palette: safeDIOverrides.child.palette, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+			        }
+			        let child: Outer.Child = __safeDI_child()
+			        return Root(child: child)
+			    }
+			}
+
+			extension Root {
+			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Outer.Child` is constructed within the public mock trees of this module.
@@ -1018,7 +1354,36 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.generatedFiles == [
-			"Root+SafeDIMock.swift": Self.rootMock(building: "child", ofType: "Child", configuredBy: "__safeDI_Child_MockConfiguration", construction: "Child.__safeDI_init(box: safeDIOverrides.child.box, themes: safeDIOverrides.child.themes, themesByName: safeDIOverrides.child.themesByName, kind: safeDIOverrides.child.kind, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)"),
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            child: __safeDI_Child_MockConfiguration = .init()
+			        ) {
+			            self.child = child
+			        }
+
+			        public let child: __safeDI_Child_MockConfiguration
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_child() -> Child {
+			            return Child.__safeDI_init(box: safeDIOverrides.child.box, themes: safeDIOverrides.child.themes, themesByName: safeDIOverrides.child.themesByName, kind: safeDIOverrides.child.kind, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+			        }
+			        let child: Child = __safeDI_child()
+			        return Root(child: child)
+			    }
+			}
+
+			extension Root {
+			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
@@ -1207,7 +1572,36 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.generatedFiles == [
-			"Root+SafeDIMock.swift": Self.rootMock(building: "child", ofType: "Child", configuredBy: "__safeDI_Child_MockConfiguration", construction: "Child.__safeDI_init(theme: safeDIOverrides.child.theme, mode: safeDIOverrides.child.mode, count: safeDIOverrides.child.count, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)"),
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            child: __safeDI_Child_MockConfiguration = .init()
+			        ) {
+			            self.child = child
+			        }
+
+			        public let child: __safeDI_Child_MockConfiguration
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_child() -> Child {
+			            return Child.__safeDI_init(theme: safeDIOverrides.child.theme, mode: safeDIOverrides.child.mode, count: safeDIOverrides.child.count, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+			        }
+			        let child: Child = __safeDI_child()
+			        return Root(child: child)
+			    }
+			}
+
+			extension Root {
+			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
@@ -1311,7 +1705,36 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			}
 			#endif
 			""",
-			"Root+SafeDIMock.swift": Self.rootMock(building: "child", ofType: "Child", configuredBy: "__safeDI_Child_MockConfiguration", construction: "Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)"),
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            child: __safeDI_Child_MockConfiguration = .init()
+			        ) {
+			            self.child = child
+			        }
+
+			        public let child: __safeDI_Child_MockConfiguration
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_child() -> Child {
+			            return Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+			        }
+			        let child: Child = __safeDI_child()
+			        return Root(child: child)
+			    }
+			}
+
+			extension Root {
+			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Child {
@@ -1331,8 +1754,31 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 			}
 
+			/// Configuration for how `Child` is constructed within the public mock trees of this module.
+			nonisolated public struct __safeDI_Child_MockConfiguration {
+			    public init(
+			        theme: Child.Theme? = nil,
+			        _ safeDIBuilder: ((Child.Theme) -> Child)? = nil
+			    ) {
+			        self.theme = theme
+			        self.safeDIBuilder = safeDIBuilder
+			    }
 
-			""" + Self.childThemePublicConfiguration + "\n#endif\n",
+			    /// `nil` keeps the default of `Child`’s `theme`.
+			    public let theme: Child.Theme?
+			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Child.Theme) -> Child)?
+			}
+
+			extension Child {
+			    static func __safeDI_init(theme: Child.Theme?, safeDIBuilder: ((Child.Theme) -> Child)?) -> Child {
+			        let theme = theme ?? (.light)
+			        return if let safeDIBuilder { safeDIBuilder(theme) } else { Child(theme: theme) }
+			    }
+			}
+			#endif
+
+			""",
 		])
 	}
 
@@ -1437,7 +1883,40 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + imports + rootMock + "\n\n" + configuration + "\n"])
 		case .swiftPackagePlugin:
 			#expect(output.modules["App"]?.generatedFiles["Root+SafeDIMock.swift"] == generatedFileHeader + imports + rootMock)
-			#expect(output.modules["App"]?.generatedFiles["SafeDIMockConfiguration.swift"] == generatedFileHeader + imports + configuration + "\n")
+			#expect(output.modules["App"]?.generatedFiles["SafeDIMockConfiguration.swift"] == generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			/// Configuration for how `Child` is constructed within the public mock trees of module `App`.
+			nonisolated public struct __safeDI_App_Child_MockConfiguration {
+			    public init(
+			        theme: Child.Theme? = nil,
+			        _ safeDIBuilder: ((Child.Theme) -> Child)? = nil
+			    ) {
+			        self.theme = theme
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    /// `nil` keeps the default of `Child`’s `theme`.
+			    public let theme: Child.Theme?
+			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Child.Theme) -> Child)?
+			}
+
+			extension Child {
+			    static func __safeDI_init(theme: Child.Theme?, safeDIBuilder: ((Child.Theme) -> Child)?) -> Child {
+			        let theme = theme ?? (.light)
+			        return if let safeDIBuilder { safeDIBuilder(theme) } else { Child(theme: theme) }
+			    }
+			}
+			#endif
+
+			""")
 		}
 	}
 
@@ -1508,36 +1987,6 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 	    }
 
 	    public let theme: Theme
-	}
-	"""
-
-	/// The module-level configuration of `childWithNestedTheme` that a public mock of this module generates, in the block
-	/// that compiles it only where mocks compile.
-	private static let childThemeConfiguration = "#if DEBUG\n" + childThemePublicConfiguration + "\n#endif"
-
-	/// The module-level configuration of `childWithNestedTheme` that a public mock of this module generates.
-	private static let childThemePublicConfiguration = """
-	/// Configuration for how `Child` is constructed within the public mock trees of this module.
-	nonisolated public struct __safeDI_Child_MockConfiguration {
-	    public init(
-	        theme: Child.Theme? = nil,
-	        _ safeDIBuilder: ((Child.Theme) -> Child)? = nil
-	    ) {
-	        self.theme = theme
-	        self.safeDIBuilder = safeDIBuilder
-	    }
-
-	    /// `nil` keeps the default of `Child`’s `theme`.
-	    public let theme: Child.Theme?
-	    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-	    public let safeDIBuilder: ((Child.Theme) -> Child)?
-	}
-
-	extension Child {
-	    static func __safeDI_init(theme: Child.Theme?, safeDIBuilder: ((Child.Theme) -> Child)?) -> Child {
-	        let theme = theme ?? (.light)
-	        return if let safeDIBuilder { safeDIBuilder(theme) } else { Child(theme: theme) }
-	    }
 	}
 	"""
 }

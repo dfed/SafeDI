@@ -53,7 +53,30 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.appCallingFeedScreen()])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(Feed)
+			import Feed
+			#endif
+			#if canImport(Session)
+			import Session
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_feedScreen() -> FeedScreen {
+			            _ = FeedScreen.__safeDI_FeedScreen_F046DCFB1718557F.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return FeedScreen(__safeDI_token: nil)
+			        }
+			        let feedScreen: FeedScreen = __safeDI_feedScreen()
+			        self.init(feedScreen: feedScreen)
+			    }
+			}
+			""",
+		])
 		let feedView = try #require(output.modules["Feed"]?.moduleInfoFile?.view)
 		#expect(feedView.moduleGraph.map(\.moduleName) == ["Core", "Session"])
 		#expect(feedView.declarations.map(\.moduleName) == ["Core", "Session"])
@@ -94,7 +117,30 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feed"]?.moduleInfoFile?.dependencyModuleNames == ["Core"])
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.appCallingFeedScreen(guardHash: "029593DA1BB2FBD5")])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(Feed)
+			import Feed
+			#endif
+			#if canImport(Session)
+			import Session
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_feedScreen() -> FeedScreen {
+			            _ = FeedScreen.__safeDI_FeedScreen_029593DA1BB2FBD5.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return FeedScreen(__safeDI_token: nil)
+			        }
+			        let feedScreen: FeedScreen = __safeDI_feedScreen()
+			        self.init(feedScreen: feedScreen)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test(arguments: [false, true])
@@ -258,9 +304,105 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == (integration == .moduleInfo
-				? ["App.swift": Self.appCallingFeedServiceMock(carriesPluginComment: false)]
-				: ["AppFeature+SafeDIMock.swift": Self.appCallingFeedServiceMock(carriesPluginComment: true), "SafeDIMockConfiguration.swift": Self.publicMockChainImports + "\n\n"]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Base)
+				import Base
+				#endif
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(Feed)
+				import Feed
+				#endif
+				#if canImport(Session)
+				import Session
+				#endif
+
+				#if DEBUG
+				extension AppFeature {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            feedService: FeedService.SafeDIOverrides = .init()
+				        ) {
+				            self.feedService = feedService
+				        }
+
+				        let feedService: FeedService.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> AppFeature {
+				        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				        let feedService = FeedService.mock(safeDIOverrides: safeDIOverrides.feedService)
+				        return AppFeature(feedService: feedService)
+				    }
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"AppFeature+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Base)
+				import Base
+				#endif
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(Feed)
+				import Feed
+				#endif
+				#if canImport(Session)
+				import Session
+				#endif
+
+				#if DEBUG
+				extension AppFeature {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            feedService: FeedService.SafeDIOverrides = .init()
+				        ) {
+				            self.feedService = feedService
+				        }
+
+				        let feedService: FeedService.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> AppFeature {
+				        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self // If this line does not compile, add the SafeDI plugin to the target that declares FeedService.
+				        let feedService = FeedService.mock(safeDIOverrides: safeDIOverrides.feedService)
+				        return AppFeature(feedService: feedService)
+				    }
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Base)
+				import Base
+				#endif
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(Feed)
+				import Feed
+				#endif
+				#if canImport(Session)
+				import Session
+				#endif
+
+
+				""",
+			]
+		}
+		#expect(output.modules["App"]?.generatedFiles == expectedFiles)
 	}
 
 	@Test(arguments: ["internal ", "", "private "])
@@ -333,23 +475,35 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n" + Self.importBlock("Session") + "\n\n" + """
-		extension Root {
-		    public init() {
-		        func __safeDI_feedScreen() -> FeedScreen {
-		            _ = FeedScreen.__safeDI_FeedScreen_F046DCFB1718557F.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "FeedScreen", declaringModule: "Feed"))
-		            return FeedScreen(__safeDI_token: nil)
-		        }
-		        let feedScreen: FeedScreen = __safeDI_feedScreen()
-		        func __safeDI_session() -> Session {
-		            _ = Session.__safeDI_Session_029593DA1BB2FBD5.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Session", declaringModule: "Session"))
-		            return Session(__safeDI_token: nil)
-		        }
-		        let session: Session = __safeDI_session()
-		        self.init(feedScreen: feedScreen, session: session)
-		    }
-		}
-		"""])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(Feed)
+			import Feed
+			#endif
+			#if canImport(Session)
+			import Session
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_feedScreen() -> FeedScreen {
+			            _ = FeedScreen.__safeDI_FeedScreen_F046DCFB1718557F.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return FeedScreen(__safeDI_token: nil)
+			        }
+			        let feedScreen: FeedScreen = __safeDI_feedScreen()
+			        func __safeDI_session() -> Session {
+			            _ = Session.__safeDI_Session_029593DA1BB2FBD5.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Session(__safeDI_token: nil)
+			        }
+			        let session: Session = __safeDI_session()
+			        self.init(feedScreen: feedScreen, session: session)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -396,7 +550,14 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		)
 		let fileName = integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"
 		let pluginComment = integration.seamCallComment(type: "FeedScreen", declaringModule: "Feed")
-		#expect(output.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n\n" + """
+		#expect(output.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feed)
+		import Feed
+		#endif
+
 		extension Root {
 		    public init() {
 		        func __safeDI_feedScreen() -> FeedScreen {
@@ -451,7 +612,17 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		#expect(output.modules["App"]?.generatedFiles == directOutput.modules["App"]?.generatedFiles)
 		let fileName = integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"
 		let pluginComment = integration.seamCallComment(type: "Service", declaringModule: "Feed")
-		#expect(output.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n" + Self.importBlock("SafeDI") + "\n\n" + """
+		#expect(output.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feed)
+		import Feed
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
 		extension Root {
 		    public init() {
 		        func __safeDI_screenBuilder(theme: [3 of Int]) -> Screen {
@@ -731,7 +902,14 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		switch integration {
 		case .moduleInfo:
 			let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)
-			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Feed") + "\n" + Self.importBlock("Session") + "\n\n" + """
+			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+			#if canImport(Feed)
+			import Feed
+			#endif
+			#if canImport(Session)
+			import Session
+			#endif
+
 			extension Root {
 			    public init() {
 			        func __safeDI_feedScreen() -> FeedScreen {
@@ -889,37 +1067,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			}
 			"""], dependencies: appDependencies),
 		]
-	}
-
-	/// The header and imports of `App`'s generated files: what the files of `Feed`, `Session`, `Core` and `Base` import.
-	private static let publicMockChainImports = generatedFileHeader + importBlock("Base") + "\n" + importBlock("Core") + "\n" + importBlock("Feed") + "\n" + importBlock("Session")
-
-	/// `App`'s mock of `AppFeature`, which calls `FeedService`'s public mock under the enum `Feed` generated.
-	private static func appCallingFeedServiceMock(carriesPluginComment: Bool) -> String {
-		publicMockChainImports + "\n\n" + """
-		#if DEBUG
-		extension AppFeature {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            feedService: FeedService.SafeDIOverrides = .init()
-		        ) {
-		            self.feedService = feedService
-		        }
-
-		        let feedService: FeedService.SafeDIOverrides
-		    }
-
-		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> AppFeature {
-		        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self\((carriesPluginComment ? MultiModuleIntegration.swiftPackagePlugin : .moduleInfo).seamCallComment(type: "FeedService", declaringModule: "Feed"))
-		        let feedService = FeedService.mock(safeDIOverrides: safeDIOverrides.feedService)
-		        return AppFeature(feedService: feedService)
-		    }
-		}
-		#endif
-		"""
 	}
 
 	/// `Feed` and `Bar` each declare a seam that builds `Core`'s type named `coreTypeName`; `App` lists both.

@@ -259,7 +259,11 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		)
 
 		let file = try generatedFile(ofModuleNamed: "App", typeName: "Root", in: output, under: integration)
-		#expect(file == Self.expectedFile(imports: ["Feature"], code: """
+		#expect(file == generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_hostBuilder(onTap: @escaping OnTap) -> Host {
@@ -278,7 +282,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		        self.init(hostBuilder: hostBuilder)
 		    }
 		}
-		"""), "Unexpected output \(file)")
+		""", "Unexpected output \(file)")
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -326,7 +330,14 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		)
 
 		let file = try generatedFile(ofModuleNamed: "App", typeName: "Outer", in: output, under: integration)
-		#expect(file == Self.expectedFile(imports: ["Feature", "Middle"], code: """
+		#expect(file == generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
 		extension Outer {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
@@ -344,7 +355,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		extension Outer {
 		    public enum __safeDI_Outer_620B4A759064B3AE {}
 		}
-		"""), "Unexpected output \(file)")
+		""", "Unexpected output \(file)")
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)

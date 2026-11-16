@@ -521,7 +521,40 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			moduleMembershipArguments: ["--module-name", standaloneVerificationModuleName],
 		)
 
-		#expect(output.generatedFiles == Self.generatedFiles(importing: ["SafeDI"]))
+		#expect(output.generatedFiles == [
+			"Logger+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Logger {
+			    static func mock() -> Logger {
+			        Logger()
+			    }
+			}
+			#endif
+			""",
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger = Logger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+
+			""",
+		])
 	}
 
 	@Test
@@ -534,7 +567,49 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 		// fails a test on any warning in generated code, is therefore skipped.
 		let output = try await generateReadingFileThatImportsVerifiedModule(skipCompileVerification: true)
 
-		#expect(output.generatedFiles == Self.generatedFiles(importing: ["SafeDI", standaloneVerificationModuleName]))
+		#expect(output.generatedFiles == [
+			"Logger+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+			#if canImport(SafeDICodegenVerification)
+			import SafeDICodegenVerification
+			#endif
+
+			#if DEBUG
+			extension Logger {
+			    static func mock() -> Logger {
+			        Logger()
+			    }
+			}
+			#endif
+			""",
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+			#if canImport(SafeDICodegenVerification)
+			import SafeDICodegenVerification
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger = Logger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+			#if canImport(SafeDICodegenVerification)
+			import SafeDICodegenVerification
+			#endif
+
+
+			""",
+		])
 	}
 
 	@Test
