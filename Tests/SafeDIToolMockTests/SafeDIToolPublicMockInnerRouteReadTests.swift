@@ -162,8 +162,19 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		                        return service
 		                    }
 		                }
-		                _ = Inner.__safeDI_Inner_mock_9A3489C424741DFE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                return Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner, safeDIOverrides: safeDIOverrides.wrapper.inner)
+		                _ = Inner.__safeDI_Inner_mock_C638028EA3E6E9BE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                return Inner.__safeDI_mock(serviceBuilder: .init(
+		                    page: { __safeDI_pageValues in
+		                        .init(
+		                            model: { __safeDI_modelValues in
+		                                .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.page(__safeDI_pageValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
+		                            }
+		                        )
+		                    },
+		                    model: { __safeDI_modelValues in
+		                        .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.model(__safeDI_modelValues, .service(__safeDI_serviceValues))) })
+		                    }
+		                ), safeDIOverrides: safeDIOverrides.wrapper.inner)
 		            }
 		            let inner: Inner = __safeDI_inner()
 		            return Wrapper.__safeDI_init(inner: inner, safeDIBuilder: safeDIOverrides.wrapper.safeDIBuilder)
@@ -401,8 +412,12 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		                    return widget
 		                }
 		            }
-		            _ = Deeper.__safeDI_Deeper_mock_B307990F5E8CC787.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Deeper.mock(widgetBuilder: __safeDI_widgetBuilder_Deeper, safeDIOverrides: safeDIOverrides.deeper)
+		            _ = Deeper.__safeDI_Deeper_mock_B7E2C56CDBAB0D93.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Deeper.__safeDI_mock(widgetBuilder: .init(
+		                screenBuilder: { __safeDI_screenBuilderValues in
+		                    .init(widget: { __safeDI_widgetValues in __safeDI_widgetBuilder_Deeper(.screenBuilder(__safeDI_screenBuilderValues, .widget(__safeDI_widgetValues))) })
+		                }
+		            ), safeDIOverrides: safeDIOverrides.deeper)
 		        }
 		        let deeper: Deeper = __safeDI_deeper()
 		        return Inner(deeper: deeper)

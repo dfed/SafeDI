@@ -3258,8 +3258,9 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesClosureThatTakesNothing_whenEveryPlaceOfHoleTypeIsErasedInstantiatorThatForwardsNothing() async throws {
-		// An erased instantiator of `()` forwards nothing, so its places switch with the plain place beside them.
+	mutating func generate_takesErasedInstantiatorsBuilder_whenEveryPlaceOfHoleTypeIsErasedInstantiatorThatForwardsNothing() async throws {
+		// An erased instantiator of `()` forwards nothing, so its places take the builder struct; every place is one, so
+		// `mock()` takes the builder a seam's readable initializer takes for them, the erased instantiator's `Builder`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"public protocol Gadget {}\npublic struct AnyGadget: Gadget {\n    public init(_ gadget: any Gadget) {}\n}",
@@ -3310,30 +3311,30 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let gadgetBuilder: (gadgetBuilder_Values) -> __safeDI_Built
+			                public let gadgetBuilder: (gadgetBuilder_Values) -> ErasedInstantiator<(), __safeDI_Built>.Builder
 
-			                public init(gadgetBuilder: @escaping (gadgetBuilder_Values) -> __safeDI_Built) {
+			                public init(gadgetBuilder: @escaping (gadgetBuilder_Values) -> ErasedInstantiator<(), __safeDI_Built>.Builder) {
 			                    self.gadgetBuilder = gadgetBuilder
 			                }
 
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadgetBuilder = { _ in __safeDI_builder() }
+			                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
+			                    self.gadgetBuilder = { _ in __safeDI_builder }
 			                }
 			            }
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let gadgetBuilder: (gadgetBuilder_Values) -> __safeDI_Built
+			            public let gadgetBuilder: (gadgetBuilder_Values) -> ErasedInstantiator<(), __safeDI_Built>.Builder
 			            public let row: (row_Values) -> SafeDIMockScope_LiveGadget_AnyGadget.Row_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(gadgetBuilder: @escaping (gadgetBuilder_Values) -> __safeDI_Built, row: @escaping (row_Values) -> SafeDIMockScope_LiveGadget_AnyGadget.Row_Scope.__safeDI_Builder<__safeDI_Built>) {
+			            public init(gadgetBuilder: @escaping (gadgetBuilder_Values) -> ErasedInstantiator<(), __safeDI_Built>.Builder, row: @escaping (row_Values) -> SafeDIMockScope_LiveGadget_AnyGadget.Row_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.gadgetBuilder = gadgetBuilder
 			                self.row = row
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.gadgetBuilder = { _ in __safeDI_builder() }
+			            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
+			                self.gadgetBuilder = { _ in __safeDI_builder }
 			                self.row = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 			            }
 			        }
@@ -3351,7 +3352,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 			    }
 
 			    public static func mock(
-			        liveGadget_AnyGadgetBuilder: @escaping () -> AnyGadget,
+			        liveGadget_AnyGadgetBuilder: @escaping ErasedInstantiator<(), AnyGadget>.Builder,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Panel {
 			        Panel.__safeDI_mock(liveGadget_AnyGadgetBuilder: .init(__safeDI_noScope: liveGadget_AnyGadgetBuilder), safeDIOverrides: safeDIOverrides)
@@ -3362,16 +3363,10 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 			        liveGadget_AnyGadgetBuilder __safeDI_liveGadget_AnyGadgetBuilder: Panel.SafeDIMockScope_LiveGadget_AnyGadget.__safeDI_Builder<AnyGadget>,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Panel {
-			        func __safeDI_gadgetBuilder() -> AnyGadget {
-			            __safeDI_liveGadget_AnyGadgetBuilder.gadgetBuilder(SafeDIMockScope_LiveGadget_AnyGadget.gadgetBuilder_Values())
-			        }
-			        let gadgetBuilder = ErasedInstantiator<(), AnyGadget>(__safeDI_gadgetBuilder)
+			        let gadgetBuilder = ErasedInstantiator<(), AnyGadget>(__safeDI_liveGadget_AnyGadgetBuilder.gadgetBuilder(SafeDIMockScope_LiveGadget_AnyGadget.gadgetBuilder_Values()))
 			        let __safeDI_liveGadget_AnyGadgetBuilder_row = __safeDI_liveGadget_AnyGadgetBuilder.row(SafeDIMockScope_LiveGadget_AnyGadget.row_Values(gadgetBuilder: gadgetBuilder))
 			        func __safeDI_row() -> Row {
-			            func __safeDI_gadgetBuilder() -> AnyGadget {
-			                __safeDI_liveGadget_AnyGadgetBuilder_row.gadgetBuilder(SafeDIMockScope_LiveGadget_AnyGadget.Row_Scope.gadgetBuilder_Values())
-			            }
-			            let gadgetBuilder = ErasedInstantiator<(), AnyGadget>(__safeDI_gadgetBuilder)
+			            let gadgetBuilder = ErasedInstantiator<(), AnyGadget>(__safeDI_liveGadget_AnyGadgetBuilder_row.gadgetBuilder(SafeDIMockScope_LiveGadget_AnyGadget.Row_Scope.gadgetBuilder_Values()))
 			            return if let safeDIBuilder = safeDIOverrides.row { safeDIBuilder(gadgetBuilder) } else { Row(gadgetBuilder: gadgetBuilder) }
 			        }
 			        let row: Row = __safeDI_row()
