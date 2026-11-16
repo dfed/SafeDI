@@ -869,6 +869,66 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenHandWrittenMockTakesSameTypedDependenciesInOtherOrderThanInstantiateMethod() async {
+		// The two constructions take parameters of the same types in the same order, but `primary` and `backup` trade
+		// places, so the one builder of `SystemClock.SafeDIMockConfiguration` would be handed each in the other's place.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Clock.swift"]):13:5: error: Generated mocks build `SystemClock` with its hand-written `customMock` method for `clock: Clock` on `Parent` in `Parent.mock()`, and with its `instantiate(…)` method for `systemClock: SystemClock` on `Parent` in `Parent.mock()`. The two take different parameters, but both properties are configured with one `SystemClock.SafeDIMockConfiguration`. Make `customMock` return `SystemClock`, so that it builds both properties, or give `customMock` exactly the parameters of `SystemClock`’s `instantiate(…)` method, in the same order.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Parent: Instantiable {
+					    public init(primary: Source, backup: Source, clock: Clock, systemClock: SystemClock) {
+					        self.primary = primary
+					        self.backup = backup
+					        self.clock = clock
+					        self.systemClock = systemClock
+					    }
+					    @Instantiated let primary: Source
+					    @Instantiated let backup: Source
+					    @Instantiated let clock: Clock
+					    @Instantiated let systemClock: SystemClock
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Source: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					public protocol Clock {}
+
+					public final class SystemClock: Clock {
+					    public init() {}
+					}
+
+					@Instantiable(fulfillingAdditionalTypes: [Clock.self], generateMock: true, customMockName: "customMock")
+					extension SystemClock: Instantiable {
+					    public static func instantiate(primary: Source, backup: Source, zone: String = "UTC") -> SystemClock {
+					        SystemClock()
+					    }
+
+					    public static func customMock(backup: Source, primary: Source, zone: String = "UTC") -> Clock {
+					        SystemClock()
+					    }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTypeIsBuiltByHandWrittenMockWithDefaultParameterAndByInitializer() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in

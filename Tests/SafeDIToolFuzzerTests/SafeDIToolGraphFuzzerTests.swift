@@ -5621,7 +5621,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 62, judgedDrawingRetentionShape: 45, judgedThroughHandWrittenBuilder: 40, unpairedExperiments: 0)
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
-	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 553, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
+	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 561, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 1_000
 	static let seamCorpusFixtureHash: UInt64 = 0x492C07E7CB265EE7
@@ -6628,6 +6628,14 @@ struct SafeDIToolGraphFuzzerTests {
 		.selfBuildingPublicMockPlaceBeneath: 116,
 		.selfBuildingPublicMockThroughSendableInstantiator: 33,
 		.selfBuildingPublicMockThroughStep: 91,
+		.sharedConstructionPublicMock: 247,
+		.sharedConstructionPublicMockBeneathCycleEdge: 53,
+		.sharedConstructionPublicMockBesideDeclaringModulesOwn: 55,
+		.sharedConstructionPublicMockErased: 106,
+		.sharedConstructionPublicMockExtensionBased: 103,
+		.sharedConstructionPublicMockInDeclaringModule: 69,
+		.sharedConstructionPublicMockOneHolder: 46,
+		.sharedConstructionPublicMockWithoutMockFirst: 101,
 	]
 
 	/// The least share of the public mock corpus's accepted graphs, whether or not they fail, whose generated code shows
@@ -6661,7 +6669,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x9731E1275C7C8651
+	static let publicMockCorpusFixtureHash: UInt64 = 0xAA68F0D018013D8E
 	static let publicMockCorpusAcceptedSeedCount = 856
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x00FC421C8B43BC22
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -6704,10 +6712,14 @@ struct SafeDIToolGraphFuzzerTests {
 	/// 1339, 1649, 2687 and 2840 build a type whose public mock names `customMockName` erased to a concrete existential in
 	/// another module's public mock, whose shared construction function returned the eraser and did not compile
 	/// (`SafeDIToolPublicMockCustomMockConstructionTests`); no corpus graph showed it, and they fail the builder surface as
-	/// `publicMockSmokeKnownIssues` lists. Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
+	/// `publicMockSmokeKnownIssues` lists. Seeds 10, 551 and 836 also draw a type the public mocks of one module build two
+	/// ways (`drawSharedConstructionPublicMock`), 836 with the hand-written mock only beneath a cycle edge, whose generated
+	/// code did not compile before each construction had a function of its own
+	/// (`SafeDIToolPublicMockSharedConstructionTests`); seed 555 draws it in the graph the tool rejects.
+	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x3B5C0B05DB7F36A4
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x6BC3F16EC34E7536
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -6720,11 +6732,12 @@ struct SafeDIToolGraphFuzzerTests {
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
 		// cycle through it, in the gating draw of the shape #702 fixed, a `.public` type that builds itself again through
 		// `SelfStep`, whose two names the move across wrapper names now and then puts on either side of `Instantiator`, and in
-		// the stale-value draw's loop around `T6`'s hole (`HoleHost` and `HoleLoop`).
+		// the stale-value draw's loop around `T6`'s hole (`HoleHost` and `HoleLoop`), and in the shared-construction draw's
+		// cycle through `ShareService` and `ShareTicker`.
 		GraphFuzzerKnownIssue(
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [3, 99, 186, 213, 289, 301, 387, 468, 542, 549, 561, 598, 618, 649, 653, 677, 697, 701, 717, 832, 833, 840, 884],
+			seeds: [3, 99, 186, 213, 289, 301, 387, 468, 542, 549, 561, 566, 583, 598, 616, 618, 649, 653, 677, 697, 701, 717, 832, 833, 840, 884, 907],
 		),
 		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
 		// before, a consumer held a holder the public tier omitted, which the tool rejected; now `Dock`'s own declaration
@@ -6786,7 +6799,7 @@ struct SafeDIToolGraphFuzzerTests {
 			        152, 159, 165, 172, 177, 178, 185, 196, 199, 205, 206, 207, 212, 225, 233, 243, 244, 266, 269, 271, 273, 278,
 			        282, 285, 297, 304, 314, 319, 322, 331, 335, 338, 339, 340, 342, 353, 356, 362, 369, 379, 386, 389, 393, 401,
 			        412, 415, 419, 421, 423, 428, 429, 431, 434, 436, 437, 438, 442, 443, 445, 465, 467, 477, 478, 482, 519, 520,
-			        522, 525, 532, 538, 540, 541, 543, 550, 552, 558, 560, 563, 571, 575, 582, 595, 601, 608, 612, 619, 631, 633,
+			        522, 525, 532, 538, 540, 541, 543, 550, 552, 558, 560, 563, 571, 575, 582, 595, 601, 608, 619, 631, 633,
 			        651, 654, 657, 660, 664, 678, 679, 682, 684, 693, 699, 713, 732, 738, 747, 753, 768, 770, 775, 777, 782, 787,
 			        788, 797, 798, 802, 805, 807, 811, 827, 834, 835, 838, 843, 844, 846, 847, 849, 851, 852, 858, 872, 877, 879,
 			        883, 888, 890, 891, 902, 903, 905, 926, 927, 933, 934, 940, 943, 945, 949, 957, 958, 968, 971, 975, 978, 979,
@@ -6805,11 +6818,11 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(.mockCode)] + publicMockLeakSignatures,
 			seeds: [327, 474, 970, 983],
 		),
-		// A graph of a gating draw that shows a public mock's leak, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy cycle through it, or whose `SelfStep` the move across wrapper names puts on either side of `Instantiator`.
+		// A graph of a gating draw that shows a public mock's leak, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy cycle through it, or whose `SelfStep` the move across wrapper names puts on either side of `Instantiator`, or the shared-construction draw's `ShareService` and `ShareTicker`.
 		GraphFuzzerKnownIssue(
 			reason: "\(lazyCycleConfigurationFieldReason); and \(publicMockLeakReason)",
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)] + publicMockLeakSignatures,
-			seeds: [33, 171, 265, 302, 539, 572, 659, 669, 703, 730, 825, 897, 909, 944, 946],
+			seeds: [33, 171, 265, 302, 539, 572, 612, 659, 669, 703, 730, 825, 897, 909, 944, 946],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(publicMockParametersSortedByLabelReason); and \(publicMockLeakReason)",
@@ -7071,6 +7084,14 @@ struct SafeDIToolGraphFuzzerTests {
 		.retentionPublicMockValueBeforeBuilder: 144,
 		.retentionPublicMockValueBeforeBuilderFillReadsValue: 41,
 		.retentionPublicMockValueBeforeBuilderLeafThroughInstantiator: 70,
+		.sharedConstructionPublicMock: 270,
+		.sharedConstructionPublicMockBeneathCycleEdge: 60,
+		.sharedConstructionPublicMockBesideDeclaringModulesOwn: 61,
+		.sharedConstructionPublicMockErased: 113,
+		.sharedConstructionPublicMockExtensionBased: 112,
+		.sharedConstructionPublicMockInDeclaringModule: 73,
+		.sharedConstructionPublicMockOneHolder: 49,
+		.sharedConstructionPublicMockWithoutMockFirst: 108,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,

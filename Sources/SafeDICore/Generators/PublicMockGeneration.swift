@@ -158,12 +158,15 @@ extension ScopeGenerator {
 	}
 
 	/// The module-level configuration struct that every public mock of the module shares for `node`'s type, and the
-	/// construction function in the type's extension that resolves the type's defaults where its declaration does.
+	/// construction functions in the type's extension that resolve the type's defaults where its declaration does.
 	/// - Parameters:
+	///   - constructionNodes: A node of each construction the module's public mocks build the type with, `node`'s among
+	///     them, each of which gets a function of its own (`publicConstructionFunctions`).
 	///   - handWrittenMockDefaultParameters: The defaults of the type's hand-written mock, whose expressions the
-	///     construction function resolves the fields of the same label and type with, whichever way it constructs.
+	///     construction functions resolve the fields of the same label and type with, whichever way they construct.
 	static func publicConfigurationDeclarations(
 		for node: MockParameterNode,
+		constructionNodes: [MockParameterNode],
 		configurationTypeName: String,
 		context: PublicMockContext,
 		cycleEdges: Set<CycleEdge>,
@@ -172,7 +175,6 @@ extension ScopeGenerator {
 	) -> String {
 		let concreteType = node.concreteType
 		let admittedModules: Set<String?> = [context.moduleName, context.moduleNameByType[concreteType]]
-		let sendableAnnotation = requiresSendable ? "@Sendable " : ""
 		var members = [PublicStructMember]()
 
 		// Each child the type builds itself, as an internal configuration struct holds it, except a child beneath a
@@ -227,7 +229,7 @@ extension ScopeGenerator {
 		// argument as the type's member declares it, named as the members above name their types.
 		let builderParameterTypes = node.builderParameterTypes
 		let builderAccess = context.access(ofTypes: builderParameterTypes + [concreteType], admittedModules: admittedModules).level
-		let builderType = "(\(sendableAnnotation)(\(builderParameterTypes.map(\.asSource).joined(separator: ", "))) -> \(concreteType.asSource))?"
+		let builderType = publicBuilderType(of: node, requiresSendable: requiresSendable)
 		members.append(PublicStructMember(
 			name: ReservedName.configurationBuilderPropertyName,
 			typeSource: builderType,
@@ -251,11 +253,19 @@ extension ScopeGenerator {
 		lines.append("")
 		lines.append(contentsOf: publicConstructionFunctions(
 			for: node,
-			builderType: builderType,
+			constructionNodes: constructionNodes,
+			requiresSendable: requiresSendable,
 			context: context,
 			handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 		))
 		return lines.joined(separator: "\n")
+	}
+
+	/// The type of the builder that overrides how `node` is constructed: optional, taking each of `node`'s call-site
+	/// arguments as `MockParameterNode.builderParameterTypes` spells it and returning the concrete type, `@Sendable` where
+	/// a `@Sendable` builder function reads the type's configuration.
+	static func publicBuilderType(of node: MockParameterNode, requiresSendable: Bool) -> String {
+		"(\(requiresSendable ? "@Sendable " : "")(\(node.builderParameterTypes.map(\.asSource).joined(separator: ", "))) -> \(node.concreteType.asSource))?"
 	}
 
 	/// The default-valued parameters of `node`, each with the expression a public mock resolves it with: its type's
@@ -369,18 +379,76 @@ extension ScopeGenerator {
 		"\(ReservedName.builderFunctionNamePrefix)\(node.useMockInitializer ? "mock" : "init")"
 	}
 
-	/// The extension of `node`'s type that holds the function a public mock builds it with and the providers of its
-	/// optional defaults, followed by the module-level forwarders of the public ones. Each type their signatures spell is
-	/// qualified as the module-level configuration qualifies it: an extension of a nested type sees the type's own members,
-	/// but not those of the types enclosing it, which its declaration's members see.
+	/// The extension of `node`'s type that holds the providers of its optional defaults and a function for each of
+	/// `constructionNodes`, which public mocks build it with, followed by the module-level forwarders of the public
+	/// providers `node`'s configuration names. The constructions of nodes that read the configuration take equal parameters
+	/// (`validateConfigurationsAreBuiltOneWay`), whose defaults resolve to the hand-written mock's. A node beneath an edge
+	/// in `cycleEdges` reads no overrides and is not compared, so its construction can take other parameters: its function
+	/// takes a builder of its own parameters, which that node passes `nil`, and the providers of its optional defaults are
+	/// declared too, once per label, type and default. Each type their signatures spell is qualified as the module-level
+	/// configuration qualifies it: an extension of a nested type sees the type's own members, but not those of the types
+	/// enclosing it, which its declaration's members see.
 	static func publicConstructionFunctions(
 		for node: MockParameterNode,
-		builderType: String,
+		constructionNodes: [MockParameterNode],
+		requiresSendable: Bool,
 		context: PublicMockContext,
 		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
 	) -> [String] {
 		let concreteType = node.concreteType
 		let admittedModules: Set<String?> = [context.moduleName, context.moduleNameByType[concreteType]]
+		/// The defaults of `constructionNode` whose providers its construction function's callers can call.
+		func providedDefaultParameters(of constructionNode: MockParameterNode) -> [MockParameterNode.DefaultParameter] {
+			publicDefaultParameters(of: constructionNode, handWrittenMockDefaultParameters: handWrittenMockDefaultParameters)
+				.filter { $0.valueTypeDescription.isOptional && $0.defaultExpression != "nil" }
+		}
+		let optionalDefaultParameters = providedDefaultParameters(of: node)
+		// One provider per label, value type and default. Two constructions' defaults of one label and one declared type
+		// both resolve to the hand-written mock's (`publicDefaultParameters`), and an optional value type is the declared
+		// one, so two providers of one label differ in the type they return, and each call resolves to the provider its
+		// argument's type selects (`SafeDIToolPublicMockSharedConstructionTests`).
+		var providers = [MockParameterNode.DefaultParameter]()
+		for defaultParameter in ([node] + constructionNodes).flatMap(providedDefaultParameters(of:))
+			where !providers.contains(where: {
+				$0.label == defaultParameter.label
+					&& $0.valueTypeDescription == defaultParameter.valueTypeDescription
+					&& $0.defaultExpression == defaultParameter.defaultExpression
+			})
+		{
+			providers.append(defaultParameter)
+		}
+		var lines = [String]()
+		lines.append("extension \(concreteType.asSource) {")
+		for defaultParameter in providers {
+			lines.append("\(standardIndent)nonisolated static func \(PublicMockContext.providerName(label: defaultParameter.label))() -> \(defaultParameter.valueTypeDescription.asSource) { \(defaultParameter.defaultExpression) }")
+		}
+		for constructionNode in constructionNodes {
+			lines.append(contentsOf: publicConstructionFunction(
+				for: constructionNode,
+				builderType: publicBuilderType(of: constructionNode, requiresSendable: requiresSendable),
+				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+			))
+		}
+		lines.append("}")
+		// A public member's default names the provider through a module-level function, which a public declaration's
+		// default argument can name without naming the type, which may be narrower than `public`.
+		let optionalDefaultValueTypes = optionalDefaultParameters.map { defaultParameter in
+			(label: defaultParameter.label, valueType: defaultParameter.valueTypeDescription)
+		}
+		for (label, valueType) in optionalDefaultValueTypes where context.access(ofTypes: [valueType], admittedModules: admittedModules).level == .public {
+			lines.append("@usableFromInline nonisolated func \(context.forwarderName(of: concreteType, label: label))() -> \(valueType.asSource) { \(concreteType.asSource).\(PublicMockContext.providerName(label: label))() }")
+		}
+		return lines
+	}
+
+	/// The function in its type's extension that public mocks build `node`'s type with by `node`'s construction
+	/// (`publicConstructionFunctionName(of:)`), indented as a member of the extension.
+	private static func publicConstructionFunction(
+		for node: MockParameterNode,
+		builderType: String,
+		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
+	) -> [String] {
+		let concreteType = node.concreteType
 		let dependencyLabels = Set(node.dependencies.map(\.property.label))
 		let defaultParameters = publicDefaultParameters(of: node, handWrittenMockDefaultParameters: handWrittenMockDefaultParameters)
 		// safedi-source-rule: allow uniqueKeysWithValues — the labels of one function's parameters are distinct.
@@ -418,32 +486,18 @@ extension ScopeGenerator {
 		} else {
 			"\(concreteType.asSource)(\(constructionArguments.joined(separator: ", ")))"
 		}
-		// What the construction returns, whatever property the node builds: every node of the type shares this function, and
-		// each converts its result to its own property's type, an erased one by wrapping it in its eraser
+		// What the construction returns, whatever property the node builds: every node of the type built this way shares
+		// this function, and each converts its result to its own property's type, an erased one by wrapping it in its eraser
 		// (`publicConstructionExpression`).
 		let returnType = node.constructionReturnType.asSource
 		let builderName = ReservedName.configurationBuilderPropertyName
-		let optionalDefaultParameters = defaultParameters.filter { $0.valueTypeDescription.isOptional && $0.defaultExpression != "nil" }
 		var lines = [String]()
-		lines.append("extension \(concreteType.asSource) {")
-		for defaultParameter in optionalDefaultParameters {
-			lines.append("\(standardIndent)nonisolated static func \(PublicMockContext.providerName(label: defaultParameter.label))() -> \(defaultParameter.valueTypeDescription.asSource) { \(defaultParameter.defaultExpression) }")
-		}
 		// The function mirrors the isolation the member it calls spells, so a caller that can call the member can call it.
 		let isolationPrefix = node.constructionIsolation.map { "\($0) " } ?? ""
 		lines.append("\(standardIndent)\(isolationPrefix)static func \(publicConstructionFunctionName(of: node))(\(parameters.joined(separator: ", "))) -> \(returnType) {")
 		lines.append(contentsOf: resolutions)
 		lines.append("\(standardIndent)\(standardIndent)\(resolutions.isEmpty ? "" : "return ")if let \(builderName) { \(builderName)(\(builderArguments.joined(separator: ", "))) } else { \(construction) }")
 		lines.append("\(standardIndent)}")
-		lines.append("}")
-		// A public member's default names the provider through a module-level function, which a public declaration's
-		// default argument can name without naming the type, which may be narrower than `public`.
-		let optionalDefaultValueTypes = optionalDefaultParameters.map { defaultParameter in
-			(label: defaultParameter.label, valueType: defaultParameter.valueTypeDescription)
-		}
-		for (label, valueType) in optionalDefaultValueTypes where context.access(ofTypes: [valueType], admittedModules: admittedModules).level == .public {
-			lines.append("@usableFromInline nonisolated func \(context.forwarderName(of: concreteType, label: label))() -> \(valueType.asSource) { \(concreteType.asSource).\(PublicMockContext.providerName(label: label))() }")
-		}
 		return lines
 	}
 }

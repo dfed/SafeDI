@@ -252,12 +252,36 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case retentionPublicMockValueBeforeBuilderLeafThroughInstantiator
 	/// `RetainLive`, the fill, reads `retainNavigator`, which the known-right path then keeps alive too.
 	case retentionPublicMockValueBeforeBuilderFillReadsValue
+	/// On a stream of its own (`publicMockSharedConstructionRandomSeedMask`), a type a module's public mocks build two ways:
+	/// `ShareService`, which fulfills `ShareApi`, has a hand-written mock that returns `ShareApi` and takes its
+	/// initializer's parameters, and the public mocks of `ShareHolderA` and `ShareHolderB` hold it as `ShareApi`, built
+	/// with that mock, and as itself or erased to `AnyShareApi`, built with its initializer or `instantiate(…)` method, so
+	/// that the module declares both of its construction functions.
+	case sharedConstructionPublicMock
+	/// `ShareService` is declared by an extension, whose `customMockName` method returns `ShareApi`, rather than by a class
+	/// with a `mockOnly` extension's `mock()`.
+	case sharedConstructionPublicMockExtensionBased
+	/// The holder built without the hand-written mock holds `ShareService` erased to `AnyShareApi`.
+	case sharedConstructionPublicMockErased
+	/// `ShareHolderA` holds both properties, and no `ShareHolderB` is declared.
+	case sharedConstructionPublicMockOneHolder
+	/// `ShareHolderA`, whose public mock sorts first, holds the property built without the hand-written mock.
+	case sharedConstructionPublicMockWithoutMockFirst
+	/// The holders are in a consumer module, and `ShareRoot`, a `.public` type of the declaring module, holds `ShareApi`,
+	/// so that the declaring module declares an internal `__safeDI_mock` of its own.
+	case sharedConstructionPublicMockBesideDeclaringModulesOwn
+	/// The holders are in the declaring module.
+	case sharedConstructionPublicMockInDeclaringModule
+	/// `ShareService`'s `mockOnly` mock, which takes one more optional default than its initializer, builds `ShareApi`
+	/// only beneath a cycle edge, in `ShareTicker`, which `ShareService` builds through an instantiator.
+	case sharedConstructionPublicMockBeneathCycleEdge
 
 	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,
-	/// `retentionPublicMockValueBeforeBuilder…`) draws this shape, whose count in accepted graphs the public mock corpus
-	/// pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
+	/// `retentionPublicMockValueBeforeBuilder…`, `sharedConstructionPublicMock…`) draws this shape, whose count in accepted
+	/// graphs the public mock corpus pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
 	var isCountedWhenAccepted: Bool {
 		rawValue.hasPrefix("selfBuildingPublicMock") || rawValue.hasPrefix("placeInsidePublicMockFill") || isRetentionShape
+			|| rawValue.hasPrefix("sharedConstructionPublicMock")
 	}
 
 	/// Whether the retention oracle's gating draw (`retentionPublicMockValueBeforeBuilder…`) draws this shape, whose
@@ -482,6 +506,8 @@ struct GraphFuzzerPublicMockDraw {
 		drawPlaceInsidePublicMockFill(random: &placeInFillRandom)
 		var retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockRetentionRandomSeedMask)
 		drawRetentionPublicMock(random: &retentionRandom)
+		var sharedConstructionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockSharedConstructionRandomSeedMask)
+		drawSharedConstructionPublicMock(random: &sharedConstructionRandom)
 	}
 
 	/// The files of the graph, each beginning with its module's marker: as drawn, or, for the known-right path of the
@@ -593,6 +619,9 @@ struct GraphFuzzerPublicMockDraw {
 	/// (`holeForwardsValue`): a roll added after the rest of the draw was pinned, so that its other shapes are drawn as
 	/// before.
 	static let publicMockHoleForwardingRandomSeedMask: UInt64 = 0x7075626D6B667764
+	/// Draws only a type a module's public mocks build two ways (`drawSharedConstructionPublicMock`): rolls added after the
+	/// rest of the draw was pinned, so that its other shapes are drawn as before.
+	static let publicMockSharedConstructionRandomSeedMask: UInt64 = 0x7075626D6B736863
 	/// What begins the comment in `T6`'s file that holds its hand-written caller's call, after the caller's module:
 	/// `// publicMockCaller in FuzzOther: S1_T6.mock(s1_HoleBuilder: …)`. `GraphFuzzerOracle.addingPublicMockCallers` reads it.
 	static let publicMockCallerMarker = "// publicMockCaller in "
@@ -1980,6 +2009,129 @@ struct GraphFuzzerPublicMockDraw {
 		files.append(File(module: consumerModule, declarations: [Self.renderer(of: app), Self.renderer(of: live)]))
 	}
 
+	/// A type a module's public mocks build two ways, in three graphs in ten: `ShareService`, which fulfills `ShareApi`, is
+	/// declared by a class whose `mockOnly` extension's `mock()` returns `ShareApi`, or, two times in five, by an extension
+	/// whose `customMockName` method does; the hand-written mock takes the parameters of the initializer or of
+	/// `instantiate(…)`: a `String` default, and half the time an optional one, which a provider evaluates. The public mocks
+	/// of `ShareHolderA` and `ShareHolderB` hold it as `ShareApi`, built with the hand-written mock, and as itself or, two
+	/// times in five, erased to `AnyShareApi`, built without it. Which holder holds which is rolled, so that either sorts
+	/// first, and one draw in four `ShareHolderA` holds both. The holders are in a consumer module, or one draw in four in
+	/// the declaring module; in a consumer module, two times in five `ShareRoot`, a `.public` type of the declaring module,
+	/// holds `ShareApi` too, so that the declaring module declares an internal `__safeDI_mock` of its own. Two times in five
+	/// a class's draw instead builds the hand-written mock only beneath a cycle edge: `ShareService` instantiates
+	/// `Instantiator<ShareTicker>`, `ShareTicker` holds `ShareApi`, the `mockOnly` `mock()`, which returns `ShareStub`, takes
+	/// one more optional default than the initializer, `shareMood`, and `ShareHolderA` alone holds `ShareService`, as
+	/// itself or erased, so that the mock is built only where it reads no overrides. Every roll is made before any is read.
+	private mutating func drawSharedConstructionPublicMock(random: inout GraphFuzzerRandomNumberGenerator) {
+		let drawsShape = random.percentChance(30)
+		let isExtensionBased = random.percentChance(40)
+		let hasOptionalDefault = random.percentChance(50)
+		let isErased = random.percentChance(40)
+		let hasOneHolder = random.percentChance(25)
+		let withoutMockFirst = random.percentChance(50)
+		let inDeclaringModule = random.percentChance(25)
+		let besideDeclaringModulesOwn = random.percentChance(40)
+		let consumerModuleRoll = random.integer(in: 0...1)
+		let cycleEdgeRoll = random.percentChance(40)
+		let consumerModules = consumerModules
+		guard drawsShape, !hasDifferingMockCondition else { return }
+		let isBeneathCycleEdge = cycleEdgeRoll && !isExtensionBased
+		let holderModule = inDeclaringModule || consumerModules.isEmpty ? GraphFuzzerModule.seamModule : consumerModules[consumerModuleRoll % consumerModules.count]
+		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
+		let apiName = name("ShareApi")
+		let serviceName = name("ShareService")
+		let erasedName = name("AnyShareApi")
+		var defaults = [DefaultParameter(name: "shareName", type: "String", defaultValue: "\"share\"")]
+		if hasOptionalDefault {
+			defaults.append(DefaultParameter(name: "shareTone", type: "String?", defaultValue: "\"loud\""))
+		}
+		let parameters = defaults.map { "\($0.name): \($0.type) = \($0.defaultValue)" }.joined(separator: ", ")
+		var declaringModuleDeclarations = [protocolDeclaration(apiName)]
+		if isExtensionBased {
+			let inheritance = ([apiName] + conformances).joined(separator: ", ")
+			declaringModuleDeclarations.append { rendering in
+				"\(rendering.modifier(.public))final class \(serviceName): \(inheritance) {\n\t\(rendering.modifier(.public))init() {}\n}"
+			}
+			declaringModuleDeclarations.append { rendering in
+				[
+					"@Instantiable(fulfillingAdditionalTypes: [\(apiName).self], generateMock: true, customMockName: \"customMock\")",
+					"extension \(serviceName): Instantiable {",
+					"\t\(rendering.modifier(.public))static func instantiate(\(parameters)) -> \(serviceName) {",
+					"\t\t\(serviceName)()",
+					"\t}",
+					"",
+					"\t\(rendering.modifier(.public))static func customMock(\(parameters)) -> \(apiName) {",
+					"\t\t\(serviceName)()",
+					"\t}",
+					"}",
+				].joined(separator: "\n")
+			}
+		} else if isBeneathCycleEdge {
+			let tickerName = name("ShareTicker")
+			let stubName = name("ShareStub")
+			var service = InstantiableClass(name: serviceName, conformances: [apiName] + conformances)
+			service.arguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
+			service.properties = [Property(attribute: "@Instantiated", label: "shareTickerBuilder", type: "Instantiator<\(tickerName)>")]
+			service.defaults = defaults
+			var ticker = InstantiableClass(name: tickerName, conformances: conformances)
+			ticker.properties = [Property(attribute: "@Instantiated", label: "shareApi", type: apiName)]
+			let mockParameters = parameters + ", shareMood: String? = \"calm\""
+			declaringModuleDeclarations.append(Self.renderer(of: service))
+			declaringModuleDeclarations.append(Self.renderer(of: ticker))
+			declaringModuleDeclarations.append { rendering in
+				"\(rendering.modifier(.public))struct \(stubName): \(apiName) {}"
+			}
+			declaringModuleDeclarations.append { rendering in
+				"@Instantiable(fulfillingAdditionalTypes: [\(apiName).self], mockOnly: true)\nextension \(serviceName) {\n\t\(rendering.modifier(.public))static func mock(\(mockParameters)) -> \(apiName) {\n\t\t\(stubName)()\n\t}\n}"
+			}
+		} else {
+			var service = InstantiableClass(name: serviceName, conformances: [apiName] + conformances)
+			service.arguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
+			service.defaults = defaults
+			let arguments = defaults.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
+			declaringModuleDeclarations.append(Self.renderer(of: service))
+			declaringModuleDeclarations.append { rendering in
+				"@Instantiable(fulfillingAdditionalTypes: [\(apiName).self], mockOnly: true)\nextension \(serviceName) {\n\t\(rendering.modifier(.public))static func mock(\(parameters)) -> \(apiName) {\n\t\t\(serviceName)(\(arguments))\n\t}\n}"
+			}
+		}
+		if isErased {
+			declaringModuleDeclarations.append { rendering in
+				[
+					"\(rendering.modifier(.public))struct \(erasedName): \(apiName) {",
+					"\t\(rendering.modifier(.public))init(_ value: any \(apiName)) {",
+					"\t\tself.value = value",
+					"\t}",
+					"",
+					"\t\(rendering.modifier(.public))let value: any \(apiName)",
+					"}",
+				].joined(separator: "\n")
+			}
+		}
+		let mockProperty = Property(attribute: "@Instantiated", label: "shareApi", type: apiName)
+		let withoutMockProperty = isErased
+			? Property(attribute: "@Instantiated(fulfilledByType: \"\(serviceName)\", erasedToConcreteExistential: true)", label: "anyShareApi", type: erasedName)
+			: Property(attribute: "@Instantiated", label: "shareService", type: serviceName)
+		func holder(_ suffix: String, properties: [Property]) -> InstantiableClass {
+			var holder = InstantiableClass(name: name(suffix), conformances: conformances)
+			holder.mockGeneration = ".public"
+			holder.properties = properties
+			return holder
+		}
+		let orderedProperties = withoutMockFirst ? [withoutMockProperty, mockProperty] : [mockProperty, withoutMockProperty]
+		let holders = if isBeneathCycleEdge {
+			[holder("ShareHolderA", properties: [withoutMockProperty])]
+		} else if hasOneHolder {
+			[holder("ShareHolderA", properties: orderedProperties)]
+		} else {
+			[holder("ShareHolderA", properties: [orderedProperties[0]]), holder("ShareHolderB", properties: [orderedProperties[1]])]
+		}
+		if holderModule != .seamModule, besideDeclaringModulesOwn, !isBeneathCycleEdge {
+			declaringModuleDeclarations.append(Self.renderer(of: holder("ShareRoot", properties: [mockProperty])))
+		}
+		files.append(File(module: .seamModule, declarations: declaringModuleDeclarations))
+		files.append(File(module: holderModule, declarations: holders.map(Self.renderer(of:))))
+	}
+
 	/// Declares `Logger`, its production type `ConsoleLogger`, which instantiates `Level`, and a fake: a class at `package`
 	/// or `internal` access in a file with no SafeDI content, as a macro expansion would declare it, extended by a
 	/// `mockOnly` extension spelling `package` or no access level, whose `mock` takes a defaulted parameter half the
@@ -3022,6 +3174,31 @@ extension GraphFuzzerPublicMockDraw {
 			}
 			if types.declarations["\(prefix)RetainLive"]?.properties.contains(where: { $0.label == "retainNavigator" }) == true {
 				features.insert(.retentionPublicMockValueBeforeBuilderFillReadsValue)
+			}
+		}
+		if let firstHolder = types.declarations["\(prefix)ShareHolderA"] {
+			features.insert(.sharedConstructionPublicMock)
+			if fixture.swiftFileContent.contains(where: { $0.contains("extension \(prefix)ShareService: Instantiable {") }) {
+				features.insert(.sharedConstructionPublicMockExtensionBased)
+			}
+			if fixture.swiftFileContent.contains(where: { $0.contains("let anyShareApi: \(prefix)AnyShareApi") }) {
+				features.insert(.sharedConstructionPublicMockErased)
+			}
+			if types.declarations["\(prefix)ShareTicker"] != nil {
+				features.insert(.sharedConstructionPublicMockBeneathCycleEdge)
+			} else {
+				if types.declarations["\(prefix)ShareHolderB"] == nil {
+					features.insert(.sharedConstructionPublicMockOneHolder)
+				}
+				if firstHolder.properties.first?.label != "shareApi" {
+					features.insert(.sharedConstructionPublicMockWithoutMockFirst)
+				}
+			}
+			if types.declarations["\(prefix)ShareRoot"] != nil {
+				features.insert(.sharedConstructionPublicMockBesideDeclaringModulesOwn)
+			}
+			if fixture.swiftFileContent.contains(where: { $0.hasPrefix(GraphFuzzerModule.marker + GraphFuzzerModule.seamModule.name) && $0.contains("class \(prefix)ShareHolderA:") }) {
+				features.insert(.sharedConstructionPublicMockInDeclaringModule)
 			}
 		}
 		return features

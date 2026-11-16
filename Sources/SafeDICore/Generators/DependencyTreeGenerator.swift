@@ -487,6 +487,8 @@ public actor DependencyTreeGenerator {
 					)
 					async let configurationTypes = mockRoot.collectConfigurationTypes()
 					async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
+					let isPublicMock = instantiable.generateMock == .public
+					let publicConstructionNodes = isPublicMock ? await mockRoot.collectPublicConstructionNodes() : []
 					return try await GeneratedMockRoot(
 						root: GeneratedRoot(
 							typeDescription: instantiable.concreteInstantiable,
@@ -495,7 +497,8 @@ public actor DependencyTreeGenerator {
 							fulfillers: fulfillers,
 						),
 						configurationTypes: configurationTypes,
-						isPublicMock: instantiable.generateMock == .public,
+						isPublicMock: isPublicMock,
+						publicConstructionNodes: publicConstructionNodes,
 					)
 				}
 			}
@@ -521,8 +524,21 @@ public actor DependencyTreeGenerator {
 		var rootedConfigurationExtensions = [String: String]()
 		var sharedConfigurationExtensions = [ConfigurationExtension]()
 		// The public mocks share one module-level configuration per type (`ScopeGenerator.publicConfigurationDeclarations`),
-		// generated from the first public mock root that reaches the type, in type order, as the internal structs are.
+		// generated from the first public mock root that reaches the type, in type order, as the internal structs are, and
+		// one construction function per construction they build the type with: a type built both with its hand-written mock,
+		// as an additional type the mock returns, and with its initializer, as itself or erased, is built through both
+		// `__safeDI_mock` and `__safeDI_init`, which read the one configuration, whichever root reaches the type first.
 		var seenPublicConfigurationTypes = Set<TypeDescription>()
+		var firstPublicConstructionNodes = [ScopeGenerator.ConstructedType: ScopeGenerator.MockParameterNode]()
+		// Which node of a construction is kept follows root names, yet changes no output: every node a type's one
+		// construction builds calls the same declaration (the same arguments, defaults, isolation and return type), so
+		// each generates the same function.
+		for result in generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription }) {
+			for node in result.publicConstructionNodes {
+				let constructedType = ScopeGenerator.ConstructedType(concreteType: node.concreteType, usesMockInitializer: node.useMockInitializer)
+				firstPublicConstructionNodes[constructedType] = firstPublicConstructionNodes[constructedType] ?? node
+			}
+		}
 		var publicConfigurationDeclarations = [String]()
 		// The shared file extends each configured type, which the property it is built for need not name.
 		var mockConfigurationFulfillers = Set<FulfillerImports.Fulfiller>()
@@ -548,15 +564,25 @@ public actor DependencyTreeGenerator {
 				let structNode = nodesReadingConfiguration[configurationType.concreteType].flatMap { nodeReadingConfiguration in
 					nodeReadingConfiguration.configurationRequirements == configurationType.configurationRequirements ? nil : nodeReadingConfiguration
 				} ?? configurationType
+				// `__safeDI_init` before `__safeDI_mock`. `validateConfigurationsAreBuiltOneWay` rejects a type whose two
+				// constructions take different parameters where both read the configuration, which `structNode` describes.
+				let constructionNodes = [false, true].compactMap { usesMockInitializer in
+					structNode.useMockInitializer == usesMockInitializer
+						? structNode
+						: firstPublicConstructionNodes[ScopeGenerator.ConstructedType(concreteType: configurationType.concreteType, usesMockInitializer: usesMockInitializer)]
+				}
 				publicConfigurationDeclarations.append(ScopeGenerator.publicConfigurationDeclarations(
 					for: structNode,
+					constructionNodes: constructionNodes,
 					configurationTypeName: configurationTypeName,
 					context: publicMockContext,
 					cycleEdges: cycleEdges,
 					requiresSendable: sendableConfigurationTypeNames.contains(configurationType.concreteType.asSource),
 					handWrittenMockDefaultParameters: handWrittenMockDefaultParameters[configurationType.concreteType, default: []],
 				))
-				recordFulfillers(configuredBy: structNode, inMockOf: result.root.typeDescription)
+				for constructionNode in constructionNodes {
+					recordFulfillers(configuredBy: constructionNode, inMockOf: result.root.typeDescription)
+				}
 			}
 		}
 		for result in generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription }) where !result.isPublicMock {
@@ -1268,6 +1294,9 @@ public actor DependencyTreeGenerator {
 		let configurationTypes: [ScopeGenerator.MockParameterNode]
 		/// Whether the root's mock is public, whose tree reads module-level configurations rather than the types' own.
 		let isPublicMock: Bool
+		/// For a public mock, the first node its tree builds with each construction of each type
+		/// (`ScopeGenerator.collectPublicConstructionNodes`); empty for an internal mock.
+		let publicConstructionNodes: [ScopeGenerator.MockParameterNode]
 	}
 
 	/// A type's `SafeDIMockConfiguration` struct, emitted in an extension of the type.
