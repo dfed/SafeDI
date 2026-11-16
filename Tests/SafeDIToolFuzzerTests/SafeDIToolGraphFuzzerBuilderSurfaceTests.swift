@@ -98,6 +98,32 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 		#expect(!GraphFuzzerBuilderSurface.isBuilder(GraphFuzzerBuilderSurface.Parameter("childBuilder: SendableErasedInstantiator<(first: @Sendable () -> Void, second: Int), AnyChild>")))
 	}
 
+	@Test(arguments: [
+		"holeTicketBuilder: @autoclosure @escaping @Sendable () -> ErasedInstantiator<Int, any HoleTicketService>",
+		"holeTicketBuilder: @autoclosure @escaping () -> Instantiator<HoleTicket>",
+		"holeTicketBuilder: @autoclosure @escaping @Sendable () -> SendableInstantiator<HoleTicket>? = nil",
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func isBuilder_rejectsAutoclosure_whenMockTakesInstantiatorItCannotBuild(parameter: String) {
+		// A mock's parameter for an instantiator its tree receives and it cannot build, which it takes as an autoclosure and
+		// passes on unread: a value, not a hole's builder, though its label ends with `Builder` (seam corpus seed 3855).
+		#expect(!GraphFuzzerBuilderSurface.isBuilder(GraphFuzzerBuilderSurface.Parameter(parameter)))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func labelFindings_reportNothing_whenSeamCorpusMockTakesReceivedInstantiatorAsAutoclosure() async throws {
+		// Seam corpus seed 3855: `HoleSeam.mock` takes `holeTicketBuilder`, a received erased instantiator it cannot build,
+		// as an `@autoclosure`, which the label oracle read as a builder the contract would label otherwise.
+		guard case let .accepted(generatedFiles, _) = try await GraphFuzzerOracle.toolOutcome(of: GraphFuzzerGenerator.fixture(forSeed: 3_855, features: [.generateDependencyTree])) else {
+			Issue.record("Seam corpus seed 3855 is no longer accepted")
+			return
+		}
+		let autoclosureParameters = GraphFuzzerBuilderSurface.callables(in: generatedFiles).flatMap(\.parameters).filter { $0.label == "holeTicketBuilder" && $0.type.hasPrefix("@autoclosure ") }
+		#expect(!autoclosureParameters.isEmpty)
+		#expect(GraphFuzzerBuilderSurface.labelFindings(in: generatedFiles) == [])
+	}
+
 	// MARK: Which builders a parameter accepts
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private static let service = GraphFuzzerBuilderSurface.BuilderFacts(fillingType: "ServiceImpl", returnedType: "any Service", isSendable: false)
