@@ -938,7 +938,7 @@ public struct SeamSignature: Sendable {
 		public internal(set) var cases: [Case]
 		/// Whether the seam declares a builder struct for the enum, `__safeDI_Builder<Built>`, with one member per case, which
 		/// its generated-only initializer takes in place of a closure over the enum: true for every enum of a hole type no place
-		/// of which forwards a value or holds a seam's scope (`SeamBuilderFamilies.declaresBuilderStructs(of:holesBySite:)`),
+		/// of which holds a seam's scope (`DependencyTreeGenerator.declaresBuilderStructs(of:)`),
 		/// never for a public mock's.
 		public internal(set) var declaresBuilderStruct = false
 

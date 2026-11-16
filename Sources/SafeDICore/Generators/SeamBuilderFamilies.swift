@@ -242,7 +242,7 @@ extension DependencyTreeGenerator {
 				)
 				// A public mock (`areQualified`) keeps the closure over its enum for now, a deliberate gap: its builder is handed the
 				// scope where the seam's takes nothing.
-				if !scopeTypeNames.areQualified, Self.declaresBuilderStructs(of: byType.enums, holesBySite: holesBySite) {
+				if !scopeTypeNames.areQualified, Self.declaresBuilderStructs(of: byType.enums) {
 					// The seam's tree calls a member per level, bound under names of their own, and binds no payload.
 					holeTypesDeclaringBuilderStructs.insert(holeType)
 					for isSendable in [false, true] {
@@ -283,6 +283,8 @@ extension DependencyTreeGenerator {
 				let rootEnum = SeamSignature.ScopeEnum(key: key, typeName: typeName, builderLabel: builderLabel, cases: cases)
 				let nestedByTypeEnums = byType.enums.filter { $0.rootTypeName != nil }
 				let reachedKeys = Self.enumKeysReached(from: key, in: Dictionary(([rootEnum] + nestedByTypeEnums).map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first }))
+				// The places the builder reaches, which decide the type of the builder a person writes.
+				var reachedPlaces = [SeamSignature.Hole]()
 				for reachedEnum in [rootEnum] + nestedByTypeEnums where reachedKeys.contains(reachedEnum.key) {
 					for enumCase in reachedEnum.cases {
 						let sites: [SeamSignature.Hole.Site] = switch enumCase.kind {
@@ -292,7 +294,9 @@ extension DependencyTreeGenerator {
 							[]
 						}
 						for site in sites {
-							if let hole = holesBySite[site], hole.tierAccess < narrowest.level {
+							guard let hole = holesBySite[site] else { continue }
+							reachedPlaces.append(hole)
+							if hole.tierAccess < narrowest.level {
 								narrowest = (hole.tierAccess, hole.accessCause, nil)
 							}
 						}
@@ -309,14 +313,13 @@ extension DependencyTreeGenerator {
 				let parameterType = takesBuilderStruct
 					? .nested(name: ReservedName.builderStructTypeName, parentType: enumType, generics: [builtType])
 					: Self.builderParameterType(takingEnum: enumType, returning: builtType, isSendable: isSendable)
-				let readableFunctionType = TypeDescription.closure(arguments: [], isAsync: false, doesThrow: false, returnType: builtType)
 				builders.append(SeamSignature.Builder(
 					enumKey: key,
 					label: builderLabel,
 					internalName: internalName,
 					parameterType: parameterType,
 					parameterTypeWithoutAny: parameterType.withoutAny,
-					readableParameterType: takesBuilderStruct ? (isSendable ? readableFunctionType.asSendableFunction : readableFunctionType).asFunctionParameter : parameterType,
+					readableParameterType: takesBuilderStruct ? Self.readableBuilderType(of: Self.builderForm(ofPlaces: reachedPlaces), returning: builtType, isSendable: isSendable) : parameterType,
 					takesBuilderStruct: takesBuilderStruct,
 					tierAccess: narrowest.level,
 					accessCause: narrowest.cause,
@@ -516,17 +519,13 @@ extension DependencyTreeGenerator {
 	}
 
 	/// Whether a seam's builders of a hole type, both families together, take builder structs, its enums being `enums`: when
-	/// no place they reach forwards a value – a place whose case carries a forwarded value: every `Instantiator<T>` place,
-	/// whatever `T` forwards, and an erased instantiator whose forwarded type is not spelled `()` or `Void` – and none holds a
-	/// seam's scope – a call's case, which holds an inner seam's root enum (the seam's own, where its tree builds it again),
-	/// or a case for a builder a call fills. Every other hole type keeps the closure over its enum.
-	static func declaresBuilderStructs(of enums: [SeamSignature.ScopeEnum], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) -> Bool {
+	/// no place they reach holds a seam's scope – a call's case, which holds an inner seam's root enum (the seam's own, where
+	/// its tree builds it again), or a case for a builder a call fills. Every other hole type keeps the closure over its enum.
+	static func declaresBuilderStructs(of enums: [SeamSignature.ScopeEnum]) -> Bool {
 		enums.allSatisfy { scopeEnum in
 			scopeEnum.cases.allSatisfy { enumCase in
 				switch enumCase.kind {
-				case let .place(sites):
-					sites.allSatisfy { holesBySite[$0]?.forwardedType == nil }
-				case .nested:
+				case .place, .nested:
 					true
 				case .inner, .fill:
 					false
@@ -545,6 +544,138 @@ extension DependencyTreeGenerator {
 	/// lists in a fixed order, so a caller's spelling never depends on anything else.
 	private static func returnType(of holeType: SeamSignature.HoleType, in holes: [SeamSignature.Hole]) -> TypeDescription {
 		holes.first { $0.holeType == holeType }?.builtType ?? holeType.builtType
+	}
+
+	// MARK: The type of a builder a person writes
+
+	/// What the builder a person writes for some places of one hole type, in one family, takes: its type follows from what
+	/// the places forward, and nothing else (`builderForm(ofPlaces:)`).
+	enum BuilderForm: Sendable {
+		/// Nothing: every place is a plain or lazy one, or an instantiator that forwards nothing, or `T.ForwardedProperties`
+		/// beside such a place. The builder is `() -> B`.
+		case value
+		/// Every place is an instantiator whose type, `wrapperType`, is spelled alike: the builder is that wrapper's `Builder`,
+		/// or its `Sendable` twin's in the `@Sendable` family.
+		case wrapper(TypeDescription)
+		/// Every place is an instantiator that forwards `forwarded`, through wrappers or spellings that differ: the builder is
+		/// the erased wrapper's `Builder` over it.
+		case erased(forwarded: TypeDescription)
+
+		/// The value the builder takes, or `nil` for a builder that takes none: `()` where a place forwards nothing.
+		var forwardedValue: TypeDescription? {
+			switch self {
+			case .value:
+				nil
+			case let .wrapper(wrapperType):
+				wrapperType.forwardedTypeOfWrapper?.strippingEscaping ?? .void(.tuple)
+			case let .erased(forwarded):
+				forwarded
+			}
+		}
+
+		/// Whether the builder takes `()`: a place spelled as forwarding nothing is among the places.
+		var forwardsNothing: Bool {
+			if case .void = forwardedValue {
+				true
+			} else {
+				false
+			}
+		}
+	}
+
+	/// The form of the builder a person writes for `places`, places of one hole type reached by one family's builder or
+	/// level, whose forwarded values agree (`placesForwardingOtherValues(among:comparison:)` reports those that do not). The
+	/// value the erased form takes is spelled as the first place by location spells it, or `()` where a place forwards
+	/// nothing: never by the order of names or levels. Reads nothing but the places, so a mock's builder can take the same
+	/// type over its own places.
+	static func builderForm(ofPlaces places: [SeamSignature.Hole]) -> BuilderForm {
+		let orderedPlaces = places.sortedByForwardingLocation
+		guard let firstPlace = orderedPlaces.first,
+		      orderedPlaces.allSatisfy(\.property.propertyType.isAnyInstantiator)
+		else { return .value }
+		let wrapperTypes = orderedPlaces.map { $0.property.typeDescription.unwrapped.strippingEscaping }
+		if Set(wrapperTypes.map(\.asSource)).count == 1 {
+			return .wrapper(wrapperTypes[0])
+		}
+		guard !orderedPlaces.contains(where: { $0.forwardedType == nil }), let forwardedType = firstPlace.forwardedType else {
+			return .erased(forwarded: .void(.tuple))
+		}
+		return .erased(forwarded: forwardedType.strippingEscaping)
+	}
+
+	/// The type of the builder a person writes in `form`, returning `builtType`, in the `@Sendable` family where `isSendable`,
+	/// as a parameter of the readable initializer spells it.
+	static func readableBuilderType(of form: BuilderForm, returning builtType: TypeDescription, isSendable: Bool) -> TypeDescription {
+		switch form {
+		case .value:
+			let functionType = TypeDescription.closure(arguments: [], isAsync: false, doesThrow: false, returnType: builtType)
+			return (isSendable ? functionType.asSendableFunction : functionType).asFunctionParameter
+		case let .wrapper(wrapperType):
+			return .attributed(.nested(name: Dependency.wrapperBuilderTypeName, parentType: isSendable ? wrapperType.sendableTwinOfWrapper : wrapperType, generics: []), specifiers: [], attributes: ["escaping"])
+		case let .erased(forwarded):
+			return .attributed(erasedBuilderType(forwarding: forwarded, returning: builtType, isSendable: isSendable), specifiers: [], attributes: ["escaping"])
+		}
+	}
+
+	/// `ErasedInstantiator<forwarded, builtType>.Builder`, or `SendableErasedInstantiator`'s where `isSendable`: how a builder
+	/// struct spells a builder that takes a forwarded value, since the constrained wrappers cannot be spelled over its
+	/// generic parameter.
+	static func erasedBuilderType(forwarding forwarded: TypeDescription, returning builtType: TypeDescription, isSendable: Bool) -> TypeDescription {
+		.nested(
+			name: Dependency.wrapperBuilderTypeName,
+			parentType: .simple(name: isSendable ? Dependency.sendableErasedInstantiatorType : Dependency.erasedInstantiatorType, generics: [forwarded, builtType]),
+			generics: [],
+		)
+	}
+
+	/// How two places of one builder are compared for the value they forward: a type the projection
+	/// `TypeDescription.withoutSpellingDifferences(qualifiedByModulesNamed:orDeclaringModulesNamed:declaredTypeNames:)` shows
+	/// two spellings of are one value, and nothing is the same value as the `ForwardedProperties` of the type that fills
+	/// the builder, which a type that conforms to `Instantiable` by hand may declare as anything.
+	struct ForwardedValueComparison {
+		/// The type a declaration must fulfill to fill the builder.
+		let fillingType: TypeDescription
+		/// The modules that declare each place's owner, by owner.
+		let moduleNameByOwner: [TypeDescription: String]
+		let declaredTypeNames: DeclaredTypeNames
+
+		/// Whether `place` and `otherPlace` forward the same value.
+		func forwardsSameValue(_ place: SeamSignature.Hole, as otherPlace: SeamSignature.Hole) -> Bool {
+			switch (place.forwardedType, otherPlace.forwardedType) {
+			case (nil, nil):
+				true
+			case let (forwardedType?, nil), let (nil, forwardedType?):
+				isForwardedPropertiesOfFillingType(forwardedType, seenFrom: [place, otherPlace])
+			case let (forwardedType?, otherForwardedType?):
+				projected(forwardedType.strippingEscaping, seenFrom: [place, otherPlace]) == projected(otherForwardedType.strippingEscaping, seenFrom: [place, otherPlace])
+			}
+		}
+
+		/// Whether `forwardedType` is `T.ForwardedProperties`, `T` the type that fills the builder.
+		private func isForwardedPropertiesOfFillingType(_ forwardedType: TypeDescription, seenFrom places: [SeamSignature.Hole]) -> Bool {
+			guard case let .nested(name, parentType, generics) = forwardedType, name == Dependency.forwardedPropertiesType, generics.isEmpty else { return false }
+			return projected(parentType, seenFrom: places).spelledCanonically == projected(fillingType, seenFrom: places).spelledCanonically
+		}
+
+		/// `type` without the spelling differences that the modules of `places`' owners, and the modules a spelling of the
+		/// places may be qualified by, show; a name two modules declare is never seen through.
+		private func projected(_ type: TypeDescription, seenFrom places: [SeamSignature.Hole]) -> TypeDescription {
+			let ownerModuleNames = places.compactMap { moduleNameByOwner[$0.ownerType] }
+			return type.withoutSpellingDifferences(
+				qualifiedByModulesNamed: ["Swift"],
+				orDeclaringModulesNamed: ownerModuleNames + places.flatMap(\.declaringModuleNames),
+				declaredTypeNames: declaredTypeNames,
+			)
+		}
+	}
+
+	/// The places among `places`, of one builder, that forward another value than the first place by location, each with
+	/// that first place: the reference follows declaration order by design, never names or the order places are visited in.
+	static func placesForwardingOtherValues(among places: [SeamSignature.Hole], comparison: ForwardedValueComparison) -> [(place: SeamSignature.Hole, reference: SeamSignature.Hole)] {
+		let orderedPlaces = places.sortedByForwardingLocation
+		return orderedPlaces.first.map { reference in
+			orderedPlaces.dropFirst().filter { !comparison.forwardsSameValue($0, as: reference) }.map { (place: $0, reference: reference) }
+		} ?? []
 	}
 
 	/// What one tier names its builders by.
@@ -825,5 +956,24 @@ extension SeamSignature.Hole.Site {
 	/// A spelling that orders sites.
 	var sortKey: String {
 		"\(seamType.asSource) \(path.map(\.asSource).joined(separator: " "))"
+	}
+}
+
+extension SeamSignature.Hole {
+	/// Where a message about the value the place forwards is reported: at its declaration, or, for a place an inner seam
+	/// passes up, at the property of this seam's tree through which the tree reaches that inner seam, since a build never
+	/// reports in a file another module owns.
+	var forwardingLocation: Dependency.DeclarationLocation? {
+		passedUpRoute.first?.declarationLocation ?? declarationLocation
+	}
+}
+
+extension [SeamSignature.Hole] {
+	/// The places by `forwardingLocation`, places at one location in their order here, which keeps an inner seam's order.
+	var sortedByForwardingLocation: [SeamSignature.Hole] {
+		enumerated().sorted { first, second in
+			let (firstLocation, secondLocation) = (first.element.forwardingLocation, second.element.forwardingLocation)
+			return firstLocation == secondLocation ? first.offset < second.offset : Dependency.DeclarationLocation.precedesInSourceOrder(firstLocation, secondLocation)
+		}.map(\.element)
 	}
 }
