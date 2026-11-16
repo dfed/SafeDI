@@ -1022,6 +1022,24 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_acceptPlaceForwardingNothingBesidePlainPlace_whenSeamCorpusDeclaresHoleImplInNamespace() async throws {
+		// Seed 663 declares `HoleImpl` in an extension of `HoleNamespace` and holds a place that forwards nothing beside the
+		// plain place of `any HoleService`, of the same builder: the place names `HoleImpl` as its declaration spells it,
+		// `HoleNamespace.HoleImpl`, which the calling module's fill declares, so the tool accepts the graph.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 663, features: [.generateDependencyTree])
+		#expect(GraphFuzzerFeature.seamDrawFeatures(of: fixture).isSuperset(of: [.holeImplInNamespace, .holeNothingForwardedPlaceBesidePlain]))
+		#expect(fixture.swiftFileContent.contains { $0.contains("@Instantiated(fulfilledByType: \"S663_HoleNamespace.S663_HoleImpl\") let holeServiceLater") })
+
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
+
+		guard case .accepted = runs.firstOutcome else {
+			Issue.record("Seed 663 is expected to be accepted:\n\(runs.firstOutcome.description)")
+			return
+		}
+	}
+
 	@Test(.enabled(if: compileVerificationIsEnabled, "The retention oracle runs compiled code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func valueComparisons_countGraphJudgedHoldingErasedInstantiatorAndFindNoLeak_whenRetentionDrawsLeafPlaceThatForwards() async throws {
@@ -6466,7 +6484,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.samePackageCallerRunWithoutPackageName: 53,
 		.seamModuleRunWithoutPackageName: 62,
 		.seamDependency: 42,
-		.seamDependencyChain: 56,
+		.seamDependencyChain: 55,
 		.hole: 331,
 		.holeOwnedBySeam: 75,
 		.holeProtocolInMarkerFreeFile: 166,
@@ -6642,18 +6660,18 @@ struct SafeDIToolGraphFuzzerTests {
 		.retentionSeamValueBeforeBuilderInnerSeam: 133,
 		.retentionSeamValueBeforeBuilderLeafThroughInstantiator: 190,
 		.retentionSeamValueBeforeBuilderSendable: 108,
-		.holeForwardingPlaceLabeledPair: 71,
-		.holeForwardingPlaceSecondPlace: 75,
-		.holeForwardingPlaceSecondPlaceSpelledOtherwise: 53,
+		.holeForwardingPlaceLabeledPair: 101,
+		.holeForwardingPlaceSecondPlace: 112,
+		.holeForwardingPlaceSecondPlaceSpelledOtherwise: 108,
 		.holeForwardingPlacePassedUp: 65,
 		.holeInstantiatorPlace: 267,
 		.holeInstantiatorPlaceBesideErased: 124,
 		.holeInstantiatorPlaceBesidePlain: 145,
 		.holeInstantiatorPlaceBesidePlainAcrossFamilies: 58,
-		.holeNothingForwardedPlace: 270,
-		.holeNothingForwardedPlaceBesidePlain: 69,
-		.holeNothingForwardedPlaceBesideInstantiator: 73,
-		.holeNothingForwardedPlacePassedUp: 101,
+		.holeNothingForwardedPlace: 321,
+		.holeNothingForwardedPlaceBesidePlain: 178,
+		.holeNothingForwardedPlaceBesideInstantiator: 82,
+		.holeNothingForwardedPlacePassedUp: 119,
 		.retentionSeamValueBeforeBuilderForwardingPlace: 159,
 	]
 
