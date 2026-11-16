@@ -374,9 +374,15 @@ own, which makes this kind disappear; if it does not, B there reads none, which 
 - Three cells for B, laps 2 and later, in today's per-path form: the reopened `Screen` reads `screen.cache` and
   `screen.safeDIBuilder` (in the `@Sendable` cell through two more captured locals, as today's `@Sendable` bodies do).
   Each sits in `withKnownIssue`, so it passes today with its failure recorded and turns into a failure once the
-  generator produces it, which is R3's signal to drop the wrapper. Their expected code differs from the passing pins
-  in two or four lines, each an expression the pins already use at lap 1; the compile check does not reach them until
-  they match. The lazy loop needs no cell: its pinned output already is B.
+  generator produces it, which is R3's signal to drop the wrapper. Each cell also compiles its expected mock with the
+  rest of today's generated code (the verifier, no passed-check cache); a mutated field name there fails it. The lazy loop needs no cell: its pinned output already is B.
+
+### Open after the decision
+
+- Recheck the 424 reads B leaves reading none (no same-type ancestor, name-ordered closing edges) once R2a's D16 fix
+  exists.
+- The release note and the Manual rewording above travel with the 2.3.1 mock pull request and are reviewed there.
+  Nothing here lands before 2.3.0 ships.
 
 ## Questions (not mine to decide)
 
