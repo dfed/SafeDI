@@ -12564,7 +12564,9 @@ enum GraphFuzzerFinding: Equatable {
 	///   rename oracles judge the drawn graph. Nor does a known failure of the builder surface, which judges only the
 	///   surface a person writes against, of which every later oracle is independent. No known failure masks a renamed
 	///   graph's difference, which judges only what the tool generates, nor what the retention oracle or the level function
-	///   capture check finds, since what a graph keeps alive does not depend on how else it fails, so a known failure never hides a leak, nor a failure of
+	///   capture check finds, since what a graph keeps alive does not depend on how else it fails, so a known failure never hides a leak, nor a
+	///   value a public mock builds other than its known-right path does, which the public mock corpus's value oracle alone judges for a
+	///   generated call of a public mock, nor a failure of
 	///   the builder surface (`GraphFuzzerFailure.builderSurfaceKindsNeverMasked`), which judges only the tool's output
 	///   for the graph and its edits, so a known failure of an earlier oracle, such as a hole name that changes with a
 	///   second place, never hides a part of the builder surface its seed's entry does not list – the compile of the call
@@ -12585,7 +12587,7 @@ enum GraphFuzzerFinding: Equatable {
 			// difference of a renamed graph masks none either, whatever order the chain judges in.
 			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderCallDoesNotCompile, .renamedGraphDiffers].contains(failure.kind)
 				|| GraphFuzzerFailure.knownBuilderSurfaceKinds.contains(failure.kind)
-			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers || $0.kind == .seamRetainsWhatInlineFrees || $0.kind == .publicMockRetainsWhatKnownRightFrees || $0.kind == .levelFunctionKeepsValues || GraphFuzzerFailure.builderSurfaceKindsNeverMasked.contains($0.kind)) && !knownIssue.matches($0) }) {
+			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers || $0.kind == .seamRetainsWhatInlineFrees || $0.kind == .publicMockRetainsWhatKnownRightFrees || $0.kind == .publicMockBuildsOtherValuesThanKnownRight || $0.kind == .levelFunctionKeepsValues || GraphFuzzerFailure.builderSurfaceKindsNeverMasked.contains($0.kind)) && !knownIssue.matches($0) }) {
 				self = .failure(unmasked)
 			} else {
 				self = .knownIssue(knownIssue, failure)

@@ -2330,6 +2330,18 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func finding_reportsPublicMockValueDifference_whenEarlierKnownFailureListsTheSeed() {
+		// No known failure hides a value a public mock builds other than its known-right path does: the public mock corpus’s
+		// value oracle is the only judge of the values a generated call of a public mock hands its builders, and what a graph
+		// builds does not depend on how its generated code fails to compile.
+		let knownIssue = Self.compilerErrorKnownIssue
+		let compilerError = GraphFuzzerFailure(seed: knownIssue.seeds[0], kind: .generatedCodeDoesNotCompile, details: "Root+SafeDI.swift:3:5: error: invalid redeclaration of 'value'")
+		let values = GraphFuzzerFailure(seed: knownIssue.seeds[0], kind: .publicMockBuildsOtherValuesThanKnownRight, details: "probe `S84_App.mock()`: S84_Token 1 on the feature path, 2 on the known-right path", valueDifferences: ["probe `S84_App.mock()`: S84_Token 1 on the feature path, 2 on the known-right path"])
+
+		#expect(GraphFuzzerFinding(failure: compilerError, laterFailures: [values], knownIssue: knownIssue) == .failure(values))
+	}
+
+	@Test
 	func finding_isFailure_whenKnownRenamedGraphDifferenceIsFollowedByRetentionFailureTheKnownIssueDoesNotDocument() {
 		let knownIssue = GraphFuzzerKnownIssue(
 			reason: "A mock's parameters are sorted by label",
