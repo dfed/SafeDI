@@ -1192,11 +1192,11 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		"""])
 	}
 
-	// MARK: Tests – a place the mock still takes a value for
+	// MARK: Tests – a builder per hole type for every kind of place
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesValueForPlace_whenPlaceIsHeldLazily() async throws {
+	mutating func generate_takesBuilderForPlace_whenPlaceIsHeldLazily() async throws {
 		let modules = Self.serviceModule(serviceDeclarations: ["@Instantiated public let userService: LazilyInstantiated<any UserService>"])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
@@ -1245,8 +1245,9 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Service {
 		    static func mock(
-		        userService: LazilyInstantiated<any UserService>
+		        userServiceBuilder: @escaping () -> any UserService
 		    ) -> Service {
+		        let userService = LazilyInstantiated<any UserService>(userServiceBuilder)
 		        return Service(userService: userService)
 		    }
 		}
@@ -1256,7 +1257,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesValueForPlace_whenPlaceIsBuiltInSendableFunction() async throws {
+	mutating func generate_takesSendableBuilderForPlace_whenPlaceIsBuiltInSendableFunction() async throws {
 		let modules = Self.serviceModule(serviceDeclarations: ["@Instantiated public let profileBuilder: SendableInstantiator<SendableProfile>"], extraDeclarations: [Self.sendableProfile])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
@@ -1337,13 +1338,12 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        userService: @autoclosure @escaping @Sendable () -> UserService,
+		        userServiceSendableBuilder: @escaping @Sendable () -> any UserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        let __safeDI_userService = userService
 		        let __safeDI_profileBuilder__safeDIBuilder = safeDIOverrides.profileBuilder
 		        @Sendable func __safeDI_profileBuilder() -> SendableProfile {
-		            let userService = __safeDI_userService()
+		            let userService: any UserService = userServiceSendableBuilder()
 		            return if let safeDIBuilder = __safeDI_profileBuilder__safeDIBuilder { safeDIBuilder(userService) } else { SendableProfile(userService: userService) }
 		        }
 		        let profileBuilder = SendableInstantiator<SendableProfile>(__safeDI_profileBuilder)
@@ -1555,7 +1555,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesValueForPlace_whenPlaceIsInstantiatorThatForwardsValue() async throws {
+	mutating func generate_takesWrappersBuilderForPlace_whenPlaceIsInstantiatorThatForwardsValue() async throws {
 		let modules = Self.serviceModule(serviceDeclarations: ["@Instantiated(fulfilledByType: \"DefaultUserService\") public let userServiceBuilder: ErasedInstantiator<String, any UserService>"])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
@@ -1601,8 +1601,9 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Service {
 		    static func mock(
-		        userServiceBuilder: ErasedInstantiator<String, any UserService>
+		        defaultUserService_UserServiceBuilder: @escaping ErasedInstantiator<String, any UserService>.Builder
 		    ) -> Service {
+		        let userServiceBuilder = ErasedInstantiator<String, any UserService>(defaultUserService_UserServiceBuilder)
 		        return Service(userServiceBuilder: userServiceBuilder)
 		    }
 		}
@@ -1612,9 +1613,9 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesCalledMocksBuilderOverItsEnum_whenPlaceIsReachedThroughCallOfAnotherModulesPublicMock() async throws {
+	mutating func generate_takesCalledMocksReadableBuilder_whenPlaceIsReachedThroughCallOfAnotherModulesPublicMock() async throws {
 		// `Panel`, another module's public mock, holds a place of `UserService`, which `Feature` cannot fill: `Service`'s
-		// mock passes it up, taking `Panel`'s builder over its enum, as before.
+		// mock passes it up, taking the builder a person writes, as the seam's readable initializer does.
 		let modules = [
 			ModuleFixture(name: "Core", packageName: "Core", swiftFileContent: [
 				"""
@@ -1772,20 +1773,20 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            panel: ((@escaping (Panel.SafeDIMockScope_UserService) -> any UserService) -> Panel)? = nil
+		            panel: ((@escaping () -> any UserService) -> Panel)? = nil
 		        ) {
 		            self.panel = panel
 		        }
 
-		        let panel: ((@escaping (Panel.SafeDIMockScope_UserService) -> any UserService) -> Panel)?
+		        let panel: ((@escaping () -> any UserService) -> Panel)?
 		    }
 
 		    static func mock(
-		        userServiceBuilder: @escaping (Panel.SafeDIMockScope_UserService) -> any UserService,
+		        userServiceBuilder: @escaping () -> any UserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
 		        _ = Panel.__safeDI_Panel_mock_F6067D88F054320F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let panel = if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(userServiceBuilder) } else { Panel.__safeDI_mock(userServiceBuilder: .init(userService: { __safeDI_userServiceValues in userServiceBuilder(.userService(__safeDI_userServiceValues)) })) }
+		        let panel = if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(userServiceBuilder) } else { Panel.__safeDI_mock(userServiceBuilder: .init(__safeDI_noScope: userServiceBuilder)) }
 		        return Service(panel: panel)
 		    }
 		}
@@ -1793,7 +1794,215 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		"""])
 	}
 
-	// MARK: Tests – a builder per hole type for every kind of place
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesBuilderForPlace_whenPlaceIsBeneathLazilyInstantiated() async throws {
+		// `Profile`, which holds the place, is built when its wrapper is read: so is the place, by the builder.
+		let modules = Self.serviceModule(serviceDeclarations: ["@Instantiated public let profile: LazilyInstantiated<Profile>"])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Service {
+		    nonisolated public enum SafeDIScope_UserService {
+		        nonisolated public struct profile_Values {}
+
+		        nonisolated public enum Profile_Scope {
+		            nonisolated public struct userService_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let userService: (userService_Values) -> __safeDI_Built
+
+		                public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+		                    self.userService = userService
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.userService = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let profile: (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(profile: @escaping (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.profile = profile
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.profile = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public convenience init(userServiceBuilder: @escaping () -> any UserService) {
+		        self.init(__safeDI_userServiceBuilder: .init(__safeDI_noScope: userServiceBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
+		        func __safeDI_profile() -> Profile {
+		            let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(SafeDIScope_UserService.profile_Values())
+		            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.userService_Values())
+		            return Profile(userService: userService)
+		        }
+		        let profile = LazilyInstantiated<Profile>(__safeDI_profile)
+		        self.init(profile: profile)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_0000000000000000 {}
+		}
+
+		#if DEBUG
+		extension Service {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            profile: ((any UserService) -> Profile)? = nil
+		        ) {
+		            self.profile = profile
+		        }
+
+		        let profile: ((any UserService) -> Profile)?
+		    }
+
+		    static func mock(
+		        userServiceBuilder: @escaping () -> any UserService,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Service {
+		        func __safeDI_profile() -> Profile {
+		            let userService: any UserService = userServiceBuilder()
+		            return if let safeDIBuilder = safeDIOverrides.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
+		        }
+		        let profile = LazilyInstantiated<Profile>(__safeDI_profile)
+		        return Service(profile: profile)
+		    }
+		}
+		#endif
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesOneBuilderForOwnPlaceAndCalledMocksPlace_whenHoleTypeIsReachedBothWays() async throws {
+		// `Service` builds a place of `UserService` in `Profile`, and `Panel`, another module's public mock, holds one too: the
+		// seam takes one builder for both, and so does its mock, which builds its own place with it and passes it to `Panel`.
+		let modules = Self.panelModules(serviceDeclarations: ["@Instantiated public let profile: Profile", "@Instantiated public let panel: Panel"])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Service {
+		    nonisolated public enum SafeDIScope_UserService {
+		        nonisolated public struct profile_Values {}
+
+		        nonisolated public struct panel_Values: Sendable {}
+
+		        nonisolated public enum Profile_Scope {
+		            nonisolated public struct userService_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let userService: (userService_Values) -> __safeDI_Built
+
+		                public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+		                    self.userService = userService
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.userService = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let profile: (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let panel: (panel_Values) -> Panel.SafeDIScope_UserService.__safeDI_Builder<__safeDI_Built>
+
+		            public init(profile: @escaping (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>, panel: @escaping (panel_Values) -> Panel.SafeDIScope_UserService.__safeDI_Builder<__safeDI_Built>) {
+		                self.profile = profile
+		                self.panel = panel
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.profile = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
+		        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(SafeDIScope_UserService.profile_Values())
+		        func __safeDI_profile() -> Profile {
+		            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.userService_Values())
+		            return Profile(userService: userService)
+		        }
+		        let profile: Profile = __safeDI_profile()
+		        func __safeDI_panel() -> Panel {
+		            _ = Panel.__safeDI_Panel_A4A565E3243258A7.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Panel(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder.panel(SafeDIScope_UserService.panel_Values()))
+		        }
+		        let panel: Panel = __safeDI_panel()
+		        self.init(profile: profile, panel: panel)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_0000000000000000 {}
+		}
+
+		#if DEBUG
+		extension Service {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            profile: ((any UserService) -> Profile)? = nil,
+		            panel: ((@escaping () -> any UserService) -> Panel)? = nil
+		        ) {
+		            self.profile = profile
+		            self.panel = panel
+		        }
+
+		        let profile: ((any UserService) -> Profile)?
+		        let panel: ((@escaping () -> any UserService) -> Panel)?
+		    }
+
+		    static func mock(
+		        userServiceBuilder: @escaping () -> any UserService,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Service {
+		        func __safeDI_profile() -> Profile {
+		            let userService: any UserService = userServiceBuilder()
+		            return if let safeDIBuilder = safeDIOverrides.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
+		        }
+		        let profile: Profile = __safeDI_profile()
+		        _ = Panel.__safeDI_Panel_mock_F6067D88F054320F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let panel = if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(userServiceBuilder) } else { Panel.__safeDI_mock(userServiceBuilder: .init(__safeDI_noScope: userServiceBuilder)) }
+		        return Service(profile: profile, panel: panel)
+		    }
+		}
+		#endif
+		"""])
+	}
+
+	// MARK: Tests – what a builder builds, against the seam
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -1923,6 +2132,45 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsBuilderForEachPlaceAsSeamDoes_whenSeamThatGeneratesMockReachesPlaceThroughCallOfAnotherModulesPublicMock() async throws {
+		// The mock takes the one builder the seam's readable initializer takes, builds its own place with it and hands it to
+		// `Panel`'s mock, which builds its place with it: each place gets a value of its own, and nothing outlives the service.
+		let body = """
+		let whileHeld = LiveUserService.alive - aliveBefore
+		let distinct = service?.profile.userService !== service?.panel.userService
+		service = nil
+		return "while held \\(whileHeld), distinct \\(distinct), after \\(LiveUserService.alive - aliveBefore)"
+		"""
+		let modules = Self.panelModules(serviceDeclarations: ["@Instantiated public let profile: Profile", "@Instantiated public let panel: Panel"], probes: [
+			"""
+			func referencePlaces() -> String {
+			    let aliveBefore = LiveUserService.alive
+			    var service: Service? = Service(userServiceBuilder: { LiveUserService() })
+			\(body.split(separator: "\n").map { "    \($0)" }.joined(separator: "\n"))
+			}
+
+			func mockPlaces() -> String {
+			    let aliveBefore = LiveUserService.alive
+			    var service: Service? = Service.mock(userServiceBuilder: { LiveUserService() })
+			\(body.split(separator: "\n").map { "    \($0)" }.joined(separator: "\n"))
+			}
+			""",
+		])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("referencePlaces()"), DifferentialValueProbe("mockPlaces()")], filesToDelete: &filesToDelete)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe referencePlaces()
+			String "while held 2, distinct true, after 0"
+			probe mockPlaces()
+			String "while held 2, distinct true, after 0"
+
+			""")
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -1994,6 +2242,65 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 				}
 				""",
 			] + probes, swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration),
+		]
+	}
+
+	/// Module `Core`, which declares `UserService` and `Panel`, a public mock that holds a place of it, and generates its
+	/// plain dependency tree initializers; and module `Feature`, which declares `LiveUserService`, `Profile`, which holds a
+	/// place of `UserService`, and the seam `Service`, which declares `serviceDeclarations` and generates its internal mock;
+	/// then `probes`, with `Feature`'s plain dependency tree initializers where there are any.
+	private static func panelModules(serviceDeclarations: [String], probes: [String] = []) -> [ModuleFixture] {
+		let parameters = serviceDeclarations.map { declaration in
+			declaration.split(separator: " ").drop { !$0.hasSuffix(":") || $0.hasPrefix("@") }.joined(separator: " ")
+		}
+		let labels = parameters.map { $0.prefix { $0 != ":" } }
+		return [
+			ModuleFixture(name: "Core", packageName: "Core", swiftFileContent: [
+				"""
+				import SafeDI
+
+				public protocol UserService: AnyObject {}
+
+				@Instantiable(generateDependencyTree: true, generateMock: .public)
+				public final class Panel: Instantiable {
+				    init(userService: any UserService) {
+				        self.userService = userService
+				    }
+
+				    @Instantiated public let userService: any UserService
+				}
+				""",
+			]),
+			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContent: [
+				"""
+				import Core
+				import SafeDI
+
+				public final class LiveUserService: UserService {
+				    public init() { LiveUserService.alive += 1 }
+				    deinit { LiveUserService.alive -= 1 }
+				    nonisolated(unsafe) public static var alive = 0
+				}
+
+				@Instantiable
+				public final class Profile: Instantiable {
+				    public init(userService: any UserService) {
+				        self.userService = userService
+				    }
+
+				    @Instantiated public let userService: any UserService
+				}
+
+				@Instantiable(generateDependencyTree: true, generateMock: true)
+				public final class Service: Instantiable {
+				    public init(\(parameters.joined(separator: ", "))) {
+				\(labels.map { "        self.\($0) = \($0)" }.joined(separator: "\n"))
+				    }
+
+				\(serviceDeclarations.map { "    \($0)" }.joined(separator: "\n"))
+				}
+				""",
+			] + probes.map { "import Core\nimport SafeDI\n\n" + $0 }, swiftFileContentByFilePath: probes.isEmpty ? [:] : plainDependencyTreeInitializersConfiguration, dependencies: ["Core"]),
 		]
 	}
 

@@ -1413,6 +1413,112 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsKnownRightValues_whenPassingUpMockDeclaresValueFillReadsLazily() async throws {
+		// `Outer` declares `logger` lazily and calls `Inner`’s mock, whose `Detail`, built in an instantiator, receives it; `Root`,
+		// which declares its own `logger`, fills the place `Outer` passes up. `LiveApi` gets `Outer`’s logger, built no earlier
+		// than in the same declarations built in one module.
+		let modules = [
+			ModuleFixture(name: "Up", packageName: "Up", swiftFileContent: [
+				"""
+				import SafeDI
+
+				public protocol Api: AnyObject {}
+
+				public enum Stamp {
+				    nonisolated(unsafe) private static var lastStamp = 0
+
+				    public static func next() -> Int {
+				        lastStamp += 1
+				        return lastStamp
+				    }
+				}
+
+				@Instantiable
+				public final class Logger: Instantiable {
+				    public init() {}
+				    let differentialValueCreationStamp = Stamp.next()
+				}
+
+				@Instantiable
+				public final class Detail: Instantiable {
+				    let differentialValueCreationStamp = Stamp.next()
+				    init(logger: Logger, api: any Api) { self.logger = logger; self.api = api }
+				    @Received public let logger: Logger
+				    @Instantiated public let api: any Api
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class Inner: Instantiable {
+				    let differentialValueCreationStamp = Stamp.next()
+				    init(detailBuilder: Instantiator<Detail>) { self.detailBuilder = detailBuilder }
+				    @Instantiated public let detailBuilder: Instantiator<Detail>
+				}
+				""",
+			]),
+			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContent: [
+				"""
+				import SafeDI
+				import Up
+
+				@Instantiable(generateMock: .public)
+				public final class Outer: Instantiable {
+				    let differentialValueCreationStamp = Stamp.next()
+				    init(logger: LazilyInstantiated<Logger>, inner: Inner) { self.logger = logger; self.inner = inner }
+				    @Instantiated public let logger: LazilyInstantiated<Logger>
+				    @Instantiated public let inner: Inner
+				}
+				""",
+			], dependencies: ["Up"]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+				"""
+				import SafeDI
+				import Up
+				import Feature
+
+				@Instantiable(fulfillingAdditionalTypes: [Api.self])
+				public final class LiveApi: Instantiable, Api {
+				    let differentialValueCreationStamp = Stamp.next()
+				    public init(logger: Logger) { self.logger = logger }
+				    @Received public let logger: Logger
+				}
+
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    let differentialValueCreationStamp = Stamp.next()
+				    public init(logger: Logger, outer: Outer) { self.logger = logger; self.outer = outer }
+				    @Instantiated public let logger: Logger
+				    @Instantiated public let outer: Outer
+				}
+				""",
+				Self.lazyLoggerProbe,
+			], dependencies: ["Up", "Feature"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Up"]?.generatedFiles == ["Up.swift": generatedFileHeader + """
+		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		"""])
+		let probe = DifferentialValueProbe("probeResult()")
+		let feature = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [probe], filesToDelete: &filesToDelete)
+		let knownRight = try await knownRightDescription(of: modules, keeping: Set(modules.map(\.name)), probeSource: "", probe: probe)
+		if compileVerificationIsEnabled {
+			#expect(knownRight == "probe probeResult()\nString \"logger is Outer’s: true; detail.logger is Outer’s: true\"\n")
+			#expect(feature == knownRight)
+		}
+		// Each class is stamped when it is built (`DifferentialValueCreationStamp`), so a logger the mock builds earlier than the
+		// same declarations built in one module would is marked.
+		let orderProbe = DifferentialValueProbe("Root.mock()")
+		let featureOrder = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [orderProbe], filesToDelete: &filesToDelete)
+		let knownRightOrder = try await knownRightDescription(of: modules, keeping: Set(modules.map(\.name)), probeSource: "", probe: orderProbe)
+		if compileVerificationIsEnabled {
+			#expect(featureOrder == knownRightOrder)
+		}
+	}
+
 	// MARK: Tests – an override closure that builds a called mock
 
 	@Test
@@ -1831,6 +1937,20 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 	    let detail = root.outer.middle.inner.detailBuilder.instantiate()
 	    let api = detail.api as? LiveApi
 	    return "logger is Outer’s: \\(api?.logger === root.outer.logger); tag is Middle’s: \\(api?.tag === root.outer.middle.tag); detail.tag is Middle’s: \\(detail.tag === root.outer.middle.tag)"
+	}
+	"""
+
+	/// Reports whether the `LiveApi` and the `Detail` that `Root`’s mock builds hold the instance of `Outer`’s lazy logger.
+	private static let lazyLoggerProbe = """
+	import Feature
+	import SafeDI
+	import Up
+
+	func probeResult() -> String {
+	    let root = Root.mock()
+	    let detail = root.outer.inner.detailBuilder.instantiate()
+	    let api = detail.api as? LiveApi
+	    return "logger is Outer’s: \\(api?.logger === root.outer.logger.instance); detail.logger is Outer’s: \\(detail.logger === root.outer.logger.instance)"
 	}
 	"""
 
