@@ -22,7 +22,8 @@
 
 /// The `__safeDI_` names one generated Swift scope declares. One allocator serves one scope – a seam's initializer body, a
 /// filler's body around one seam call, or a mock's scope that declares the locals its `@Sendable` builder functions read
-/// overrides into – and each name is claimed in a fixed order, so two namers can never hand one name out: a seam's body
+/// overrides into; a closure nested in it claims from a copy holding the names it can see, as a builder struct
+/// conversion's members do – and each name is claimed in a fixed order, so two namers can never hand one name out: a seam's body
 /// claims its builders' internal names, then the functions that build its wrapper places, then the payloads it binds; a
 /// filler's body claims its fills, then its dispatchers; a mock's scope claims each function's locals in the order the
 /// mock's body walk reads the overrides (`ScopeGenerator.SendableOverrideExtractor`).
@@ -516,8 +517,9 @@ extension DependencyTreeGenerator {
 	}
 
 	/// Whether a seam's builders of a hole type, both families together, take builder structs, its enums being `enums`: when
-	/// no place they reach forwards a value – a place whose case carries a forwarded value: every `Instantiator<T>` place,
-	/// whatever `T` forwards, and an erased instantiator whose forwarded type is not spelled `()` or `Void` – and none holds a
+	/// no place they reach forwards a value – a place whose case carries a forwarded value: every `Instantiator<T>` or
+	/// `SendableInstantiator<T>` place, whatever `T` forwards, and an erased one whose forwarded type is not `Void`
+	/// (`TypeDescription.forwardedTypeOfWrapper`) – and none holds a
 	/// seam's scope – a call's case, which holds an inner seam's root enum (the seam's own, where its tree builds it again),
 	/// or a case for a builder a call fills. Every other hole type keeps the closure over its enum.
 	static func declaresBuilderStructs(of enums: [SeamSignature.ScopeEnum], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) -> Bool {
