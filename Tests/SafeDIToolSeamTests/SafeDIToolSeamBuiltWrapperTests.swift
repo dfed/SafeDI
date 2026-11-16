@@ -184,26 +184,37 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 				"Feature.swift": generatedFileHeader + """
 				extension Host {
-				    @frozen public enum SafeDIScope_Panel {
+				    @frozen nonisolated public enum SafeDIScope_Panel {
 				        case part(part_Values, Panel.ForwardedProperties)
 
-				        public struct part_Values {
+				        nonisolated public struct part_Values {
 				            public let analytics: Analytics
+				        }
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let part: (part_Values) -> ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder
+
+				            public init(part: @escaping (part_Values) -> ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+				                self.part = part
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+				                self.part = { _ in __safeDI_builder }
+				            }
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelBuilder: @escaping (SafeDIScope_Panel) -> Panel) {
-				        let part = Instantiator<Panel> {
-				            __safeDI_panelBuilder(.part(SafeDIScope_Panel.part_Values(analytics: analytics), $0))
-				        }
+				    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelBuilder: SafeDIScope_Panel.__safeDI_Builder<Panel>) {
+				        let part = Instantiator<Panel>(__safeDI_panelBuilder.part(SafeDIScope_Panel.part_Values(analytics: analytics)))
 				        self.init(analytics: analytics, part: part)
 				    }
 				}
 
 				extension Host {
-				    public enum __safeDI_Host_C853E827EA721EA0 {}
+				    public enum __safeDI_Host_D3C750BCA7F857DA {}
 				}
 				""",
 			])
@@ -211,22 +222,35 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 				"Feature.swift": generatedFileHeader + """
 				extension Host {
-				    @frozen public enum SafeDISendableScope_Panel {
+				    @frozen nonisolated public enum SafeDISendableScope_Panel {
 				        case part(Panel.ForwardedProperties)
+
+				        nonisolated public struct part_Values: Sendable {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+				            public let part: @Sendable (part_Values) -> SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder
+
+				            public init(part: @escaping @Sendable (part_Values) -> SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+				                self.part = part
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+				                self.part = { _ in __safeDI_builder }
+				            }
+				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelSendableBuilder: @escaping @Sendable (SafeDISendableScope_Panel) -> Panel) {
-				        let part = SendableInstantiator<Panel> {
-				            __safeDI_panelSendableBuilder(.part($0))
-				        }
+				    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelSendableBuilder: SafeDISendableScope_Panel.__safeDI_Builder<Panel>) {
+				        let part = SendableInstantiator<Panel>(__safeDI_panelSendableBuilder.part(SafeDISendableScope_Panel.part_Values()))
 				        self.init(analytics: analytics, part: part)
 				    }
 				}
 
 				extension Host {
-				    public enum __safeDI_Host_0830438FF9BAA4FD {}
+				    public enum __safeDI_Host_2660C87019C5C595 {}
 				}
 				""",
 			])
@@ -234,26 +258,37 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 				"Feature.swift": generatedFileHeader + """
 				extension Host {
-				    @frozen public enum SafeDIScope_NamedGadget_AnyGadget {
+				    @frozen nonisolated public enum SafeDIScope_NamedGadget_AnyGadget {
 				        case part(part_Values, String)
 
-				        public struct part_Values {
+				        nonisolated public struct part_Values {
 				            public let analytics: Analytics
+				        }
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let part: (part_Values) -> ErasedInstantiator<String, __safeDI_Built>.Builder
+
+				            public init(part: @escaping (part_Values) -> ErasedInstantiator<String, __safeDI_Built>.Builder) {
+				                self.part = part
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
+				                self.part = { _ in __safeDI_builder }
+				            }
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public init(__safeDI_analytics analytics: Analytics, __safeDI_namedGadget_AnyGadgetBuilder: @escaping (SafeDIScope_NamedGadget_AnyGadget) -> AnyGadget) {
-				        let part = ErasedInstantiator<String, AnyGadget> {
-				            __safeDI_namedGadget_AnyGadgetBuilder(.part(SafeDIScope_NamedGadget_AnyGadget.part_Values(analytics: analytics), $0))
-				        }
+				    public init(__safeDI_analytics analytics: Analytics, __safeDI_namedGadget_AnyGadgetBuilder: SafeDIScope_NamedGadget_AnyGadget.__safeDI_Builder<AnyGadget>) {
+				        let part = ErasedInstantiator<String, AnyGadget>(__safeDI_namedGadget_AnyGadgetBuilder.part(SafeDIScope_NamedGadget_AnyGadget.part_Values(analytics: analytics)))
 				        self.init(analytics: analytics, part: part)
 				    }
 				}
 
 				extension Host {
-				    public enum __safeDI_Host_9F014CF6FCE98CA7 {}
+				    public enum __safeDI_Host_C368265D048E6E8D {}
 				}
 				""",
 			])
@@ -261,22 +296,35 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 				"Feature.swift": generatedFileHeader + """
 				extension Host {
-				    @frozen public enum SafeDISendableScope_NamedGadget_AnyGadget {
+				    @frozen nonisolated public enum SafeDISendableScope_NamedGadget_AnyGadget {
 				        case part(String)
+
+				        nonisolated public struct part_Values: Sendable {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+				            public let part: @Sendable (part_Values) -> SendableErasedInstantiator<String, __safeDI_Built>.Builder
+
+				            public init(part: @escaping @Sendable (part_Values) -> SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
+				                self.part = part
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
+				                self.part = { _ in __safeDI_builder }
+				            }
+				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public init(__safeDI_analytics analytics: Analytics, __safeDI_namedGadget_AnyGadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_NamedGadget_AnyGadget) -> AnyGadget) {
-				        let part = SendableErasedInstantiator<String, AnyGadget> {
-				            __safeDI_namedGadget_AnyGadgetSendableBuilder(.part($0))
-				        }
+				    public init(__safeDI_analytics analytics: Analytics, __safeDI_namedGadget_AnyGadgetSendableBuilder: SafeDISendableScope_NamedGadget_AnyGadget.__safeDI_Builder<AnyGadget>) {
+				        let part = SendableErasedInstantiator<String, AnyGadget>(__safeDI_namedGadget_AnyGadgetSendableBuilder.part(SafeDISendableScope_NamedGadget_AnyGadget.part_Values()))
 				        self.init(analytics: analytics, part: part)
 				    }
 				}
 
 				extension Host {
-				    public enum __safeDI_Host_D22716F6D1E4AD70 {}
+				    public enum __safeDI_Host_4BAD41597F6DDD60 {}
 				}
 				""",
 			])
@@ -352,18 +400,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    public init() {
 				        let analytics = Analytics()
 				        func __safeDI_host() -> Host {
-				            _ = Host.__safeDI_Host_C853E827EA721EA0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            func __safeDI_panelBuilder_Host(_ scope: Host.SafeDIScope_Panel) -> Panel {
-				                switch scope {
-				                case let .part(scope, __safeDI_forwarded):
-				                    let analytics = scope.analytics
-				                    func __safeDI_part(name: String) -> DefaultPanel {
-				                        DefaultPanel(name: name, analytics: analytics)
-				                    }
-				                    return __safeDI_part(name: __safeDI_forwarded)
+				            _ = Host.__safeDI_Host_D3C750BCA7F857DA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            func __safeDI_panelBuilder_Host_part(analytics: Analytics) -> Instantiator<Panel>.Builder {
+				                func __safeDI_part(name: String) -> DefaultPanel {
+				                    DefaultPanel(name: name, analytics: analytics)
 				                }
+				                return { forwarded in __safeDI_part(name: forwarded) }
 				            }
-				            return Host(__safeDI_analytics: analytics, __safeDI_panelBuilder: __safeDI_panelBuilder_Host)
+				            func __safeDI_panelBuilder_Host() -> Host.SafeDIScope_Panel.__safeDI_Builder<Panel> {
+				                .init(part: { values in __safeDI_panelBuilder_Host_part(analytics: values.analytics) })
+				            }
+				            return Host(__safeDI_analytics: analytics, __safeDI_panelBuilder: __safeDI_panelBuilder_Host())
 				        }
 				        let host: Host = __safeDI_host()
 				        self.init(analytics: analytics, host: host)
@@ -382,17 +429,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    public init() {
 				        let analytics = Analytics()
 				        func __safeDI_host() -> Host {
-				            _ = Host.__safeDI_Host_0830438FF9BAA4FD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            @Sendable func __safeDI_panelSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Panel) -> Panel {
-				                switch scope {
-				                case let .part(__safeDI_forwarded):
-				                    @Sendable func __safeDI_part(name: String) -> DefaultPanel {
-				                        DefaultPanel(name: name, analytics: analytics)
-				                    }
-				                    return __safeDI_part(name: __safeDI_forwarded)
+				            _ = Host.__safeDI_Host_2660C87019C5C595.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            @Sendable nonisolated func __safeDI_panelSendableBuilder_Host_part() -> SendableInstantiator<Panel>.Builder {
+				                @Sendable nonisolated func __safeDI_part(name: String) -> DefaultPanel {
+				                    DefaultPanel(name: name, analytics: analytics)
 				                }
+				                return { forwarded in __safeDI_part(name: forwarded) }
 				            }
-				            return Host(__safeDI_analytics: analytics, __safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder_Host)
+				            @Sendable nonisolated func __safeDI_panelSendableBuilder_Host() -> Host.SafeDISendableScope_Panel.__safeDI_Builder<Panel> {
+				                .init(part: { _ in __safeDI_panelSendableBuilder_Host_part() })
+				            }
+				            return Host(__safeDI_analytics: analytics, __safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder_Host())
 				        }
 				        let host: Host = __safeDI_host()
 				        self.init(analytics: analytics, host: host)
@@ -411,18 +458,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    public init() {
 				        let analytics = Analytics()
 				        func __safeDI_host() -> Host {
-				            _ = Host.__safeDI_Host_9F014CF6FCE98CA7.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            func __safeDI_namedGadget_AnyGadgetBuilder_Host(_ scope: Host.SafeDIScope_NamedGadget_AnyGadget) -> AnyGadget {
-				                switch scope {
-				                case let .part(scope, __safeDI_forwarded):
-				                    let analytics = scope.analytics
-				                    func __safeDI_part(name: String) -> NamedGadget {
-				                        NamedGadget(name: name, analytics: analytics)
-				                    }
-				                    return AnyGadget(__safeDI_part(name: __safeDI_forwarded))
+				            _ = Host.__safeDI_Host_C368265D048E6E8D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            func __safeDI_namedGadget_AnyGadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<String, AnyGadget>.Builder {
+				                func __safeDI_part(name: String) -> NamedGadget {
+				                    NamedGadget(name: name, analytics: analytics)
 				                }
+				                return { forwarded in AnyGadget(__safeDI_part(name: forwarded)) }
 				            }
-				            return Host(__safeDI_analytics: analytics, __safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host)
+				            func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.SafeDIScope_NamedGadget_AnyGadget.__safeDI_Builder<AnyGadget> {
+				                .init(part: { values in __safeDI_namedGadget_AnyGadgetBuilder_Host_part(analytics: values.analytics) })
+				            }
+				            return Host(__safeDI_analytics: analytics, __safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host())
 				        }
 				        let host: Host = __safeDI_host()
 				        self.init(analytics: analytics, host: host)
@@ -441,17 +487,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    public init() {
 				        let analytics = Analytics()
 				        func __safeDI_host() -> Host {
-				            _ = Host.__safeDI_Host_D22716F6D1E4AD70.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            @Sendable func __safeDI_namedGadget_AnyGadgetSendableBuilder_Host(_ scope: Host.SafeDISendableScope_NamedGadget_AnyGadget) -> AnyGadget {
-				                switch scope {
-				                case let .part(__safeDI_forwarded):
-				                    @Sendable func __safeDI_part(name: String) -> NamedGadget {
-				                        NamedGadget(name: name, analytics: analytics)
-				                    }
-				                    return AnyGadget(__safeDI_part(name: __safeDI_forwarded))
+				            _ = Host.__safeDI_Host_4BAD41597F6DDD60.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            @Sendable nonisolated func __safeDI_namedGadget_AnyGadgetSendableBuilder_Host_part() -> SendableErasedInstantiator<String, AnyGadget>.Builder {
+				                @Sendable nonisolated func __safeDI_part(name: String) -> NamedGadget {
+				                    NamedGadget(name: name, analytics: analytics)
 				                }
+				                return { forwarded in AnyGadget(__safeDI_part(name: forwarded)) }
 				            }
-				            return Host(__safeDI_analytics: analytics, __safeDI_namedGadget_AnyGadgetSendableBuilder: __safeDI_namedGadget_AnyGadgetSendableBuilder_Host)
+				            @Sendable nonisolated func __safeDI_namedGadget_AnyGadgetSendableBuilder_Host() -> Host.SafeDISendableScope_NamedGadget_AnyGadget.__safeDI_Builder<AnyGadget> {
+				                .init(part: { _ in __safeDI_namedGadget_AnyGadgetSendableBuilder_Host_part() })
+				            }
+				            return Host(__safeDI_analytics: analytics, __safeDI_namedGadget_AnyGadgetSendableBuilder: __safeDI_namedGadget_AnyGadgetSendableBuilder_Host())
 				        }
 				        let host: Host = __safeDI_host()
 				        self.init(analytics: analytics, host: host)
@@ -495,27 +541,38 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_ActionGadget_Gadget {
+		    @frozen nonisolated public enum SafeDIScope_ActionGadget_Gadget {
 		        case part(part_Values, _ forwarded: nonisolated(nonsending) () async -> Void)
 
-		        public struct part_Values {
+		        nonisolated public struct part_Values {
 		            public let analytics: Analytics
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let part: (part_Values) -> ErasedInstantiator<nonisolated(nonsending) () async -> Void, __safeDI_Built>.Builder
+
+		            public init(part: @escaping (part_Values) -> ErasedInstantiator<nonisolated(nonsending) () async -> Void, __safeDI_Built>.Builder) {
+		                self.part = part
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<nonisolated(nonsending) () async -> Void, __safeDI_Built>.Builder) {
+		                self.part = { _ in __safeDI_builder }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_actionGadget_GadgetBuilder: @escaping (SafeDIScope_ActionGadget_Gadget) -> any Gadget) {
+		    public init(__safeDI_actionGadget_GadgetBuilder: SafeDIScope_ActionGadget_Gadget.__safeDI_Builder<any Gadget>) {
 		        let analytics = Analytics()
-		        let part: ErasedInstantiator<nonisolated(nonsending) () async -> Void, any Gadget> = ErasedInstantiator {
-		            __safeDI_actionGadget_GadgetBuilder(.part(SafeDIScope_ActionGadget_Gadget.part_Values(analytics: analytics), $0))
-		        }
+		        let part: ErasedInstantiator<nonisolated(nonsending) () async -> Void, any Gadget> = ErasedInstantiator(__safeDI_actionGadget_GadgetBuilder.part(SafeDIScope_ActionGadget_Gadget.part_Values(analytics: analytics)))
 		        self.init(analytics: analytics, part: part)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_605099ADFE019365 {}
+		    public enum __safeDI_Host_D0AE4A01F4B19AEF {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
@@ -527,18 +584,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_605099ADFE019365.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_actionGadget_GadgetBuilder_Host(_ scope: Host.SafeDIScope_ActionGadget_Gadget) -> any Gadget {
-			                switch scope {
-			                case let .part(scope, __safeDI_forwarded):
-			                    let analytics = scope.analytics
-			                    func __safeDI_part(run: nonisolated(nonsending) @escaping () async -> Void) -> ActionGadget {
-			                        ActionGadget(run: run, analytics: analytics)
-			                    }
-			                    return __safeDI_part(run: __safeDI_forwarded)
+			            _ = Host.__safeDI_Host_D0AE4A01F4B19AEF.self\(seamCallComment(seam: "Host"))
+			            func __safeDI_actionGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<nonisolated(nonsending) () async -> Void, any Gadget>.Builder {
+			                func __safeDI_part(run: nonisolated(nonsending) @escaping () async -> Void) -> ActionGadget {
+			                    ActionGadget(run: run, analytics: analytics)
 			                }
+			                return { forwarded in __safeDI_part(run: forwarded) }
 			            }
-			            return Host(__safeDI_actionGadget_GadgetBuilder: __safeDI_actionGadget_GadgetBuilder_Host)
+			            func __safeDI_actionGadget_GadgetBuilder_Host() -> Host.SafeDIScope_ActionGadget_Gadget.__safeDI_Builder<any Gadget> {
+			                .init(part: { values in __safeDI_actionGadget_GadgetBuilder_Host_part(analytics: values.analytics) })
+			            }
+			            return Host(__safeDI_actionGadget_GadgetBuilder: __safeDI_actionGadget_GadgetBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
@@ -580,39 +636,61 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_PairGadget_Gadget {
+		    @frozen nonisolated public enum SafeDIScope_PairGadget_Gadget {
 		        case erased(erased_Values, (count: Int, name: String))
 
-		        public struct erased_Values {
+		        nonisolated public struct erased_Values {
 		            public let analytics: Analytics
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let erased: (erased_Values) -> ErasedInstantiator<(count: Int, name: String), __safeDI_Built>.Builder
+
+		            public init(erased: @escaping (erased_Values) -> ErasedInstantiator<(count: Int, name: String), __safeDI_Built>.Builder) {
+		                self.erased = erased
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(count: Int, name: String), __safeDI_Built>.Builder) {
+		                self.erased = { _ in __safeDI_builder }
+		            }
 		        }
 		    }
 
-		    @frozen public enum SafeDIScope_PairPanel {
+		    @frozen nonisolated public enum SafeDIScope_PairPanel {
 		        case held(held_Values, PairPanel.ForwardedProperties)
 
-		        public struct held_Values {
+		        nonisolated public struct held_Values {
 		            public let analytics: Analytics
 		            public let erased: ErasedInstantiator<(count: Int, name: String), any Gadget>
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let held: (held_Values) -> ErasedInstantiator<PairPanel.ForwardedProperties, __safeDI_Built>.Builder
+
+		            public init(held: @escaping (held_Values) -> ErasedInstantiator<PairPanel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.held = held
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<PairPanel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.held = { _ in __safeDI_builder }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_pairGadget_GadgetBuilder: @escaping (SafeDIScope_PairGadget_Gadget) -> any Gadget, __safeDI_pairPanelBuilder: @escaping (SafeDIScope_PairPanel) -> PairPanel) {
+		    public init(__safeDI_pairGadget_GadgetBuilder: SafeDIScope_PairGadget_Gadget.__safeDI_Builder<any Gadget>, __safeDI_pairPanelBuilder: SafeDIScope_PairPanel.__safeDI_Builder<PairPanel>) {
 		        let analytics = Analytics()
-		        let erased = ErasedInstantiator<(count: Int, name: String), any Gadget> {
-		            __safeDI_pairGadget_GadgetBuilder(.erased(SafeDIScope_PairGadget_Gadget.erased_Values(analytics: analytics), $0))
-		        }
-		        let held = Instantiator<PairPanel> {
-		            __safeDI_pairPanelBuilder(.held(SafeDIScope_PairPanel.held_Values(analytics: analytics, erased: erased), $0))
-		        }
+		        let erased = ErasedInstantiator<(count: Int, name: String), any Gadget>(__safeDI_pairGadget_GadgetBuilder.erased(SafeDIScope_PairGadget_Gadget.erased_Values(analytics: analytics)))
+		        let held = Instantiator<PairPanel>(__safeDI_pairPanelBuilder.held(SafeDIScope_PairPanel.held_Values(analytics: analytics, erased: erased)))
 		        self.init(analytics: analytics, erased: erased, held: held)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_2D652FB7EDF8CFC6 {}
+		    public enum __safeDI_Host_575F77B1C357A88C {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
@@ -624,28 +702,26 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_2D652FB7EDF8CFC6.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_pairGadget_GadgetBuilder_Host(_ scope: Host.SafeDIScope_PairGadget_Gadget) -> any Gadget {
-			                switch scope {
-			                case let .erased(scope, __safeDI_forwarded):
-			                    let analytics = scope.analytics
-			                    func __safeDI_erased(count: Int, name: String) -> PairGadget {
-			                        PairGadget(count: count, name: name, analytics: analytics)
-			                    }
-			                    return __safeDI_erased(count: __safeDI_forwarded.count, name: __safeDI_forwarded.name)
+			            _ = Host.__safeDI_Host_575F77B1C357A88C.self\(seamCallComment(seam: "Host"))
+			            func __safeDI_pairGadget_GadgetBuilder_Host_erased(analytics: Analytics) -> ErasedInstantiator<(count: Int, name: String), any Gadget>.Builder {
+			                func __safeDI_erased(count: Int, name: String) -> PairGadget {
+			                    PairGadget(count: count, name: name, analytics: analytics)
 			                }
+			                return { forwarded in __safeDI_erased(count: forwarded.count, name: forwarded.name) }
 			            }
-			            func __safeDI_pairPanelBuilder_Host(_ scope: Host.SafeDIScope_PairPanel) -> PairPanel {
-			                switch scope {
-			                case let .held(scope, __safeDI_forwarded):
-			                    let analytics = scope.analytics
-			                    func __safeDI_held(count: Int, name: String) -> DefaultPairPanel {
-			                        DefaultPairPanel(count: count, name: name, analytics: analytics)
-			                    }
-			                    return __safeDI_held(count: __safeDI_forwarded.count, name: __safeDI_forwarded.name)
+			            func __safeDI_pairPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
+			                func __safeDI_held(count: Int, name: String) -> DefaultPairPanel {
+			                    DefaultPairPanel(count: count, name: name, analytics: analytics)
 			                }
+			                return { forwarded in __safeDI_held(count: forwarded.count, name: forwarded.name) }
 			            }
-			            return Host(__safeDI_pairGadget_GadgetBuilder: __safeDI_pairGadget_GadgetBuilder_Host, __safeDI_pairPanelBuilder: __safeDI_pairPanelBuilder_Host)
+			            func __safeDI_pairGadget_GadgetBuilder_Host() -> Host.SafeDIScope_PairGadget_Gadget.__safeDI_Builder<any Gadget> {
+			                .init(erased: { values in __safeDI_pairGadget_GadgetBuilder_Host_erased(analytics: values.analytics) })
+			            }
+			            func __safeDI_pairPanelBuilder_Host() -> Host.SafeDIScope_PairPanel.__safeDI_Builder<PairPanel> {
+			                .init(held: { values in __safeDI_pairPanelBuilder_Host_held(analytics: values.analytics) })
+			            }
+			            return Host(__safeDI_pairGadget_GadgetBuilder: __safeDI_pairGadget_GadgetBuilder_Host(), __safeDI_pairPanelBuilder: __safeDI_pairPanelBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
@@ -771,27 +847,38 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_EmptyPanel {
+		    @frozen nonisolated public enum SafeDIScope_EmptyPanel {
 		        case held(held_Values, EmptyPanel.ForwardedProperties)
 
-		        public struct held_Values {
+		        nonisolated public struct held_Values {
 		            public let analytics: Analytics
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let held: (held_Values) -> ErasedInstantiator<EmptyPanel.ForwardedProperties, __safeDI_Built>.Builder
+
+		            public init(held: @escaping (held_Values) -> ErasedInstantiator<EmptyPanel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.held = held
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<EmptyPanel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.held = { _ in __safeDI_builder }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_emptyPanelBuilder: @escaping (SafeDIScope_EmptyPanel) -> EmptyPanel) {
+		    public init(__safeDI_emptyPanelBuilder: SafeDIScope_EmptyPanel.__safeDI_Builder<EmptyPanel>) {
 		        let analytics = Analytics()
-		        let held = Instantiator<EmptyPanel> {
-		            __safeDI_emptyPanelBuilder(.held(SafeDIScope_EmptyPanel.held_Values(analytics: analytics), $0))
-		        }
+		        let held = Instantiator<EmptyPanel>(__safeDI_emptyPanelBuilder.held(SafeDIScope_EmptyPanel.held_Values(analytics: analytics)))
 		        self.init(analytics: analytics, held: held)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_CA10D85E14C0AF30 {}
+		    public enum __safeDI_Host_86622AA92E9113E8 {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
@@ -803,18 +890,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_CA10D85E14C0AF30.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_emptyPanelBuilder_Host(_ scope: Host.SafeDIScope_EmptyPanel) -> EmptyPanel {
-			                switch scope {
-			                case let .held(scope, _):
-			                    let analytics = scope.analytics
-			                    func __safeDI_held() -> DefaultEmptyPanel {
-			                        DefaultEmptyPanel(analytics: analytics)
-			                    }
-			                    return __safeDI_held()
+			            _ = Host.__safeDI_Host_86622AA92E9113E8.self\(seamCallComment(seam: "Host"))
+			            func __safeDI_emptyPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+			                func __safeDI_held() -> DefaultEmptyPanel {
+			                    DefaultEmptyPanel(analytics: analytics)
 			                }
+			                return { _ in __safeDI_held() }
 			            }
-			            return Host(__safeDI_emptyPanelBuilder: __safeDI_emptyPanelBuilder_Host)
+			            func __safeDI_emptyPanelBuilder_Host() -> Host.SafeDIScope_EmptyPanel.__safeDI_Builder<EmptyPanel> {
+			                .init(held: { values in __safeDI_emptyPanelBuilder_Host_held(analytics: values.analytics) })
+			            }
+			            return Host(__safeDI_emptyPanelBuilder: __safeDI_emptyPanelBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
@@ -846,18 +932,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_90B07FAED07A2781.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_panelBuilder_Host(_ scope: Host.SafeDIScope_Panel) -> Panel {
-			                switch scope {
-			                case let .forwarded(scope, __safeDI_forwarded_):
-			                    let analytics = scope.analytics
-			                    func __safeDI_forwarded(name: String) -> DefaultPanel {
-			                        DefaultPanel(name: name, analytics: analytics)
-			                    }
-			                    return __safeDI_forwarded(name: __safeDI_forwarded_)
+			            _ = Host.__safeDI_Host_5F580572CD8822D5.self\(seamCallComment(seam: "Host"))
+			            func __safeDI_panelBuilder_Host_forwarded(analytics: Analytics) -> Instantiator<Panel>.Builder {
+			                func __safeDI_forwarded(name: String) -> DefaultPanel {
+			                    DefaultPanel(name: name, analytics: analytics)
 			                }
+			                return { forwarded in __safeDI_forwarded(name: forwarded) }
 			            }
-			            return Host(__safeDI_panelBuilder: __safeDI_panelBuilder_Host)
+			            func __safeDI_panelBuilder_Host() -> Host.SafeDIScope_Panel.__safeDI_Builder<Panel> {
+			                .init(forwarded: { values in __safeDI_panelBuilder_Host_forwarded(analytics: values.analytics) })
+			            }
+			            return Host(__safeDI_panelBuilder: __safeDI_panelBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
@@ -893,20 +978,20 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_D260D3D81CB27970.self\(seamCallComment(seam: "Host"))
-		            @Sendable func __safeDI_loopingGadget_GadgetSendableBuilder_Host(_ scope: Host.SafeDISendableScope_LoopingGadget_Gadget) -> any Gadget {
-		                switch scope {
-		                case let .again(__safeDI_forwarded):
-		                    @Sendable func __safeDI_again(name: String) -> LoopingGadget {
-		                        let again = SendableErasedInstantiator<String, any Gadget> {
-		                            __safeDI_again(name: $0)
-		                        }
-		                        return LoopingGadget(name: name, again: again)
+		            _ = Host.__safeDI_Host_BF41741207A2A3C4.self\(seamCallComment(seam: "Host"))
+		            @Sendable nonisolated func __safeDI_loopingGadget_GadgetSendableBuilder_Host_again() -> SendableErasedInstantiator<String, any Gadget>.Builder {
+		                @Sendable nonisolated func __safeDI_again(name: String) -> LoopingGadget {
+		                    let again = SendableErasedInstantiator<String, any Gadget> {
+		                        __safeDI_again(name: $0)
 		                    }
-		                    return __safeDI_again(name: __safeDI_forwarded)
+		                    return LoopingGadget(name: name, again: again)
 		                }
+		                return { forwarded in __safeDI_again(name: forwarded) }
 		            }
-		            return Host(__safeDI_loopingGadget_GadgetSendableBuilder: __safeDI_loopingGadget_GadgetSendableBuilder_Host)
+		            @Sendable nonisolated func __safeDI_loopingGadget_GadgetSendableBuilder_Host() -> Host.SafeDISendableScope_LoopingGadget_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(again: { _ in __safeDI_loopingGadget_GadgetSendableBuilder_Host_again() })
+		            }
+		            return Host(__safeDI_loopingGadget_GadgetSendableBuilder: __safeDI_loopingGadget_GadgetSendableBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -920,20 +1005,20 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_43F9EB5F427E05C3.self\(seamCallComment(seam: "Host"))
-		            func __safeDI_loopingGadget_GadgetBuilder_Host(_ scope: Host.SafeDIScope_LoopingGadget_Gadget) -> any Gadget {
-		                switch scope {
-		                case let .again(_, __safeDI_forwarded):
-		                    func __safeDI_again(name: String) -> LoopingGadget {
-		                        let again = ErasedInstantiator<String, any Gadget> {
-		                            __safeDI_again(name: $0)
-		                        }
-		                        return LoopingGadget(name: name, again: again)
+		            _ = Host.__safeDI_Host_3B6A1B7B9975BFE9.self\(seamCallComment(seam: "Host"))
+		            func __safeDI_loopingGadget_GadgetBuilder_Host_again() -> ErasedInstantiator<String, any Gadget>.Builder {
+		                func __safeDI_again(name: String) -> LoopingGadget {
+		                    let again = ErasedInstantiator<String, any Gadget> {
+		                        __safeDI_again(name: $0)
 		                    }
-		                    return __safeDI_again(name: __safeDI_forwarded)
+		                    return LoopingGadget(name: name, again: again)
 		                }
+		                return { forwarded in __safeDI_again(name: forwarded) }
 		            }
-		            return Host(__safeDI_loopingGadget_GadgetBuilder: __safeDI_loopingGadget_GadgetBuilder_Host)
+		            func __safeDI_loopingGadget_GadgetBuilder_Host() -> Host.SafeDIScope_LoopingGadget_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(again: { _ in __safeDI_loopingGadget_GadgetBuilder_Host_again() })
+		            }
+		            return Host(__safeDI_loopingGadget_GadgetBuilder: __safeDI_loopingGadget_GadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -963,25 +1048,52 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_Panel {
-		        @frozen public enum Owner_Scope {
+		    @frozen nonisolated public enum SafeDIScope_Panel {
+		        @frozen nonisolated public enum Owner_Scope {
 		            case held(held_Values, Panel.ForwardedProperties)
 
-		            public struct held_Values {}
+		            nonisolated public struct held_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let held: (held_Values) -> ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder
+
+		                public init(held: @escaping (held_Values) -> ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                    self.held = held
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                    self.held = { _ in __safeDI_builder }
+		                }
+		            }
 		        }
 		    }
 
-		    @frozen public enum SafeDISendableScope_Panel {
+		    @frozen nonisolated public enum SafeDISendableScope_Panel {
 		        case ownerBuilder(SafeDIScope_Panel.Owner_Scope)
+
+		        nonisolated public struct ownerBuilder_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let ownerBuilder: @Sendable (ownerBuilder_Values) -> SafeDIScope_Panel.Owner_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(ownerBuilder: @escaping @Sendable (ownerBuilder_Values) -> SafeDIScope_Panel.Owner_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.ownerBuilder = ownerBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.ownerBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelSendableBuilder: @escaping @Sendable (SafeDISendableScope_Panel) -> Panel) {
-		        @Sendable func __safeDI_ownerBuilder() -> Owner {
-		            let held = Instantiator<Panel> {
-		                __safeDI_panelSendableBuilder(.ownerBuilder(.held(SafeDIScope_Panel.Owner_Scope.held_Values(), $0)))
-		            }
+		    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelSendableBuilder: SafeDISendableScope_Panel.__safeDI_Builder<Panel>) {
+		        @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
+		            let __safeDI_panelSendableBuilder_ownerBuilder = __safeDI_panelSendableBuilder.ownerBuilder(SafeDISendableScope_Panel.ownerBuilder_Values())
+		            let held = Instantiator<Panel>(__safeDI_panelSendableBuilder_ownerBuilder.held(SafeDIScope_Panel.Owner_Scope.held_Values()))
 		            return Owner(held: held)
 		        }
 		        let ownerBuilder = SendableInstantiator<Owner>(__safeDI_ownerBuilder)
@@ -990,7 +1102,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_638E6CAD02119102 {}
+		    public enum __safeDI_Host_93BCC6AD86C3E97A {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
@@ -1003,22 +1115,20 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			    public init() {
 			        let analytics = Analytics()
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_638E6CAD02119102.self\(seamCallComment(seam: "Host"))
-			            @Sendable func __safeDI_panelSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Panel) -> Panel {
-			                switch scope {
-			                case let .ownerBuilder(scope): return __safeDI_panelBuilder_Host_Owner_Scope(scope)
+			            _ = Host.__safeDI_Host_93BCC6AD86C3E97A.self\(seamCallComment(seam: "Host"))
+			            @Sendable nonisolated func __safeDI_panelSendableBuilder_Host_Owner_Scope_held() -> Instantiator<Panel>.Builder {
+			                func __safeDI_held(name: String) -> DefaultPanel {
+			                    DefaultPanel(name: name, analytics: analytics)
 			                }
+			                return { forwarded in __safeDI_held(name: forwarded) }
 			            }
-			            @Sendable func __safeDI_panelBuilder_Host_Owner_Scope(_ scope: Host.SafeDIScope_Panel.Owner_Scope) -> Panel {
-			                switch scope {
-			                case let .held(_, __safeDI_forwarded):
-			                    func __safeDI_held(name: String) -> DefaultPanel {
-			                        DefaultPanel(name: name, analytics: analytics)
-			                    }
-			                    return __safeDI_held(name: __safeDI_forwarded)
-			                }
+			            @Sendable nonisolated func __safeDI_panelSendableBuilder_Host() -> Host.SafeDISendableScope_Panel.__safeDI_Builder<Panel> {
+			                .init(ownerBuilder: { _ in __safeDI_panelBuilder_Host_Owner_Scope() })
 			            }
-			            return Host(__safeDI_analytics: analytics, __safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder_Host)
+			            @Sendable nonisolated func __safeDI_panelBuilder_Host_Owner_Scope() -> Host.SafeDIScope_Panel.Owner_Scope.__safeDI_Builder<Panel> {
+			                .init(held: { _ in __safeDI_panelSendableBuilder_Host_Owner_Scope_held() })
+			            }
+			            return Host(__safeDI_analytics: analytics, __safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(analytics: analytics, host: host)
@@ -1063,22 +1173,51 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDISendableScope_Panel {
+		    @frozen nonisolated public enum SafeDISendableScope_Panel {
 		        case ownerBuilder_Sendable(SafeDISendableScope_Panel.Owner_Scope)
 
-		        @frozen public enum Owner_Scope {
+		        nonisolated public struct ownerBuilder_Sendable_Values: Sendable {}
+
+		        @frozen nonisolated public enum Owner_Scope {
 		            case held(Panel.ForwardedProperties)
+
+		            nonisolated public struct held_Values: Sendable {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		                public let held: @Sendable (held_Values) -> SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder
+
+		                public init(held: @escaping @Sendable (held_Values) -> SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                    self.held = held
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                    self.held = { _ in __safeDI_builder }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let ownerBuilder_Sendable: @Sendable (ownerBuilder_Sendable_Values) -> SafeDISendableScope_Panel.Owner_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(ownerBuilder_Sendable: @escaping @Sendable (ownerBuilder_Sendable_Values) -> SafeDISendableScope_Panel.Owner_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.ownerBuilder_Sendable = ownerBuilder_Sendable
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.ownerBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelSendableBuilder: @escaping @Sendable (SafeDISendableScope_Panel) -> Panel) {
-		        @Sendable func __safeDI_ownerBuilder() -> Owner {
+		    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelSendableBuilder: SafeDISendableScope_Panel.__safeDI_Builder<Panel>) {
+		        @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
+		            let __safeDI_panelSendableBuilder_ownerBuilder_Sendable = __safeDI_panelSendableBuilder.ownerBuilder_Sendable(SafeDISendableScope_Panel.ownerBuilder_Sendable_Values())
 		            let tally = Tally()
-		            let held = SendableInstantiator<Panel> {
-		                __safeDI_panelSendableBuilder(.ownerBuilder_Sendable(.held($0)))
-		            }
+		            let held = SendableInstantiator<Panel>(__safeDI_panelSendableBuilder_ownerBuilder_Sendable.held(SafeDISendableScope_Panel.Owner_Scope.held_Values()))
 		            return Owner(tally: tally, held: held)
 		        }
 		        let ownerBuilder = SendableInstantiator<Owner>(__safeDI_ownerBuilder)
@@ -1087,7 +1226,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_6A52DAF3E354F43E {}
+		    public enum __safeDI_Host_D7A400C9B902BB46 {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
@@ -1100,22 +1239,20 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			    public init() {
 			        let analytics = Analytics()
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_6A52DAF3E354F43E.self\(seamCallComment(seam: "Host"))
-			            @Sendable func __safeDI_panelSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Panel) -> Panel {
-			                switch scope {
-			                case let .ownerBuilder_Sendable(scope): return __safeDI_panelSendableBuilder_Host_Owner_Scope(scope)
+			            _ = Host.__safeDI_Host_D7A400C9B902BB46.self\(seamCallComment(seam: "Host"))
+			            @Sendable nonisolated func __safeDI_panelSendableBuilder_Host_Owner_Scope_held() -> SendableInstantiator<Panel>.Builder {
+			                @Sendable nonisolated func __safeDI_held(name: String) -> DefaultPanel {
+			                    DefaultPanel(name: name, analytics: analytics)
 			                }
+			                return { forwarded in __safeDI_held(name: forwarded) }
 			            }
-			            @Sendable func __safeDI_panelSendableBuilder_Host_Owner_Scope(_ scope: Host.SafeDISendableScope_Panel.Owner_Scope) -> Panel {
-			                switch scope {
-			                case let .held(__safeDI_forwarded):
-			                    @Sendable func __safeDI_held(name: String) -> DefaultPanel {
-			                        DefaultPanel(name: name, analytics: analytics)
-			                    }
-			                    return __safeDI_held(name: __safeDI_forwarded)
-			                }
+			            @Sendable nonisolated func __safeDI_panelSendableBuilder_Host() -> Host.SafeDISendableScope_Panel.__safeDI_Builder<Panel> {
+			                .init(ownerBuilder_Sendable: { _ in __safeDI_panelSendableBuilder_Host_Owner_Scope() })
 			            }
-			            return Host(__safeDI_analytics: analytics, __safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder_Host)
+			            @Sendable nonisolated func __safeDI_panelSendableBuilder_Host_Owner_Scope() -> Host.SafeDISendableScope_Panel.Owner_Scope.__safeDI_Builder<Panel> {
+			                .init(held: { _ in __safeDI_panelSendableBuilder_Host_Owner_Scope_held() })
+			            }
+			            return Host(__safeDI_analytics: analytics, __safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(analytics: analytics, host: host)
@@ -1169,24 +1306,35 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Inner {
-		    @frozen public enum SafeDIScope_Panel {
+		    @frozen nonisolated public enum SafeDIScope_Panel {
 		        case part(part_Values, Panel.ForwardedProperties)
 
-		        public struct part_Values {}
+		        nonisolated public struct part_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let part: (part_Values) -> ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder
+
+		            public init(part: @escaping (part_Values) -> ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.part = part
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.part = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_panelBuilder: @escaping (SafeDIScope_Panel) -> Panel) {
-		        let part = Instantiator<Panel> {
-		            __safeDI_panelBuilder(.part(SafeDIScope_Panel.part_Values(), $0))
-		        }
+		    public init(__safeDI_panelBuilder: SafeDIScope_Panel.__safeDI_Builder<Panel>) {
+		        let part = Instantiator<Panel>(__safeDI_panelBuilder.part(SafeDIScope_Panel.part_Values()))
 		        self.init(part: part)
 		    }
 		}
 
 		extension Inner {
-		    public enum __safeDI_Inner_0D39F8A8EF1A9F4A {}
+		    public enum __safeDI_Inner_4DFD790F30FEF71E {}
 		}
 
 		extension Outer {
@@ -1198,8 +1346,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_panelBuilder: @escaping (SafeDIScope_Panel) -> Panel) {
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_0D39F8A8EF1A9F4A.self
-		            return Inner(__safeDI_panelBuilder: { __safeDI_panelBuilder(.inner($0)) })
+		            _ = Inner.__safeDI_Inner_4DFD790F30FEF71E.self
+		            return Inner(__safeDI_panelBuilder: .init(part: { __safeDI_partValues in { forwarded in __safeDI_panelBuilder(.inner(.part(__safeDI_partValues, forwarded))) } }))
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(inner: inner)
@@ -1394,51 +1542,73 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + (access == "public" ? """
 		extension Host {
-		    @frozen public enum SafeDIScope_LabeledGadget_Gadget {
+		    @frozen nonisolated public enum SafeDIScope_LabeledGadget_Gadget {
 		        case part(part_Values, Label)
 
-		        public struct part_Values {
+		        nonisolated public struct part_Values {
 		            public let analytics: Analytics
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let part: (part_Values) -> ErasedInstantiator<Label, __safeDI_Built>.Builder
+
+		            public init(part: @escaping (part_Values) -> ErasedInstantiator<Label, __safeDI_Built>.Builder) {
+		                self.part = part
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Label, __safeDI_Built>.Builder) {
+		                self.part = { _ in __safeDI_builder }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_labeledGadget_GadgetBuilder: @escaping (SafeDIScope_LabeledGadget_Gadget) -> any Gadget) {
+		    public init(__safeDI_labeledGadget_GadgetBuilder: SafeDIScope_LabeledGadget_Gadget.__safeDI_Builder<any Gadget>) {
 		        let analytics = Analytics()
-		        let part = ErasedInstantiator<Label, any Gadget> {
-		            __safeDI_labeledGadget_GadgetBuilder(.part(SafeDIScope_LabeledGadget_Gadget.part_Values(analytics: analytics), $0))
-		        }
+		        let part = ErasedInstantiator<Label, any Gadget>(__safeDI_labeledGadget_GadgetBuilder.part(SafeDIScope_LabeledGadget_Gadget.part_Values(analytics: analytics)))
 		        self.init(analytics: analytics, part: part)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_BACCD4AE3E57FD1D {}
+		    public enum __safeDI_Host_2C0483F2841C6171 {}
 		}
 		""" : """
 		extension Host {
-		    @frozen public enum SafeDIScope_LabeledGadget_Gadget {
+		    @frozen nonisolated public enum SafeDIScope_LabeledGadget_Gadget {
 		        case part(part_Values, Label)
 
-		        public struct part_Values {
+		        nonisolated public struct part_Values {
 		            package let analytics: Analytics
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let part: (part_Values) -> ErasedInstantiator<Label, __safeDI_Built>.Builder
+
+		            public init(part: @escaping (part_Values) -> ErasedInstantiator<Label, __safeDI_Built>.Builder) {
+		                self.part = part
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Label, __safeDI_Built>.Builder) {
+		                self.part = { _ in __safeDI_builder }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    package init(__safeDI_labeledGadget_GadgetBuilder: @escaping (SafeDIScope_LabeledGadget_Gadget) -> any Gadget) {
+		    package init(__safeDI_labeledGadget_GadgetBuilder: SafeDIScope_LabeledGadget_Gadget.__safeDI_Builder<any Gadget>) {
 		        let analytics = Analytics()
-		        let part = ErasedInstantiator<Label, any Gadget> {
-		            __safeDI_labeledGadget_GadgetBuilder(.part(SafeDIScope_LabeledGadget_Gadget.part_Values(analytics: analytics), $0))
-		        }
+		        let part = ErasedInstantiator<Label, any Gadget>(__safeDI_labeledGadget_GadgetBuilder.part(SafeDIScope_LabeledGadget_Gadget.part_Values(analytics: analytics)))
 		        self.init(analytics: analytics, part: part)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_C24AAB772347DDCD {}
+		    public enum __safeDI_Host_401F22AF6F1373A1 {}
 		}
 		""")])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + (access == "public" ? """
@@ -1449,18 +1619,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_BACCD4AE3E57FD1D.self\(seamCallComment(seam: "Host"))
-		            func __safeDI_labeledGadget_GadgetBuilder_Host(_ scope: Host.SafeDIScope_LabeledGadget_Gadget) -> any Gadget {
-		                switch scope {
-		                case let .part(scope, __safeDI_forwarded):
-		                    let analytics = scope.analytics
-		                    func __safeDI_part(label: Label) -> LabeledGadget {
-		                        LabeledGadget(label: label, analytics: analytics)
-		                    }
-		                    return __safeDI_part(label: __safeDI_forwarded)
+		            _ = Host.__safeDI_Host_2C0483F2841C6171.self\(seamCallComment(seam: "Host"))
+		            func __safeDI_labeledGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<Label, any Gadget>.Builder {
+		                func __safeDI_part(label: Label) -> LabeledGadget {
+		                    LabeledGadget(label: label, analytics: analytics)
 		                }
+		                return { forwarded in __safeDI_part(label: forwarded) }
 		            }
-		            return Host(__safeDI_labeledGadget_GadgetBuilder: __safeDI_labeledGadget_GadgetBuilder_Host)
+		            func __safeDI_labeledGadget_GadgetBuilder_Host() -> Host.SafeDIScope_LabeledGadget_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(part: { values in __safeDI_labeledGadget_GadgetBuilder_Host_part(analytics: values.analytics) })
+		            }
+		            return Host(__safeDI_labeledGadget_GadgetBuilder: __safeDI_labeledGadget_GadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1474,18 +1643,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_C24AAB772347DDCD.self\(seamCallComment(seam: "Host"))
-		            func __safeDI_labeledGadget_GadgetBuilder_Host(_ scope: Host.SafeDIScope_LabeledGadget_Gadget) -> any Gadget {
-		                switch scope {
-		                case let .part(scope, __safeDI_forwarded):
-		                    let analytics = scope.analytics
-		                    func __safeDI_part(label: Label) -> LabeledGadget {
-		                        LabeledGadget(label: label, analytics: analytics)
-		                    }
-		                    return __safeDI_part(label: __safeDI_forwarded)
+		            _ = Host.__safeDI_Host_401F22AF6F1373A1.self\(seamCallComment(seam: "Host"))
+		            func __safeDI_labeledGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<Label, any Gadget>.Builder {
+		                func __safeDI_part(label: Label) -> LabeledGadget {
+		                    LabeledGadget(label: label, analytics: analytics)
 		                }
+		                return { forwarded in __safeDI_part(label: forwarded) }
 		            }
-		            return Host(__safeDI_labeledGadget_GadgetBuilder: __safeDI_labeledGadget_GadgetBuilder_Host)
+		            func __safeDI_labeledGadget_GadgetBuilder_Host() -> Host.SafeDIScope_LabeledGadget_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(part: { values in __safeDI_labeledGadget_GadgetBuilder_Host_part(analytics: values.analytics) })
+		            }
+		            return Host(__safeDI_labeledGadget_GadgetBuilder: __safeDI_labeledGadget_GadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1841,27 +2009,38 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_ActionPanel {
+		    @frozen nonisolated public enum SafeDIScope_ActionPanel {
 		        case part(part_Values, ActionPanel.ForwardedProperties)
 
-		        public struct part_Values {
+		        nonisolated public struct part_Values {
 		            public let analytics: Analytics
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let part: (part_Values) -> ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder
+
+		            public init(part: @escaping (part_Values) -> ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.part = part
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.part = { _ in __safeDI_builder }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_actionPanelBuilder: @escaping (SafeDIScope_ActionPanel) -> ActionPanel) {
+		    public init(__safeDI_actionPanelBuilder: SafeDIScope_ActionPanel.__safeDI_Builder<ActionPanel>) {
 		        let analytics = Analytics()
-		        let part = Instantiator<ActionPanel> {
-		            __safeDI_actionPanelBuilder(.part(SafeDIScope_ActionPanel.part_Values(analytics: analytics), $0))
-		        }
+		        let part = Instantiator<ActionPanel>(__safeDI_actionPanelBuilder.part(SafeDIScope_ActionPanel.part_Values(analytics: analytics)))
 		        self.init(analytics: analytics, part: part)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_6B078CAA0BFA4063 {}
+		    public enum __safeDI_Host_A144217981E3FADB {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
@@ -1873,18 +2052,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_6B078CAA0BFA4063.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_actionPanelBuilder_Host(_ scope: Host.SafeDIScope_ActionPanel) -> ActionPanel {
-			                switch scope {
-			                case let .part(scope, __safeDI_forwarded):
-			                    let analytics = scope.analytics
-			                    func __safeDI_part(forwardedAction: @escaping () -> Void) -> DefaultActionPanel {
-			                        DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
-			                    }
-			                    return __safeDI_part(forwardedAction: __safeDI_forwarded)
+			            _ = Host.__safeDI_Host_A144217981E3FADB.self\(seamCallComment(seam: "Host"))
+			            func __safeDI_actionPanelBuilder_Host_part(analytics: Analytics) -> Instantiator<ActionPanel>.Builder {
+			                func __safeDI_part(forwardedAction: @escaping () -> Void) -> DefaultActionPanel {
+			                    DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
 			                }
+			                return { forwarded in __safeDI_part(forwardedAction: forwarded) }
 			            }
-			            return Host(__safeDI_actionPanelBuilder: __safeDI_actionPanelBuilder_Host)
+			            func __safeDI_actionPanelBuilder_Host() -> Host.SafeDIScope_ActionPanel.__safeDI_Builder<ActionPanel> {
+			                .init(part: { values in __safeDI_actionPanelBuilder_Host_part(analytics: values.analytics) })
+			            }
+			            return Host(__safeDI_actionPanelBuilder: __safeDI_actionPanelBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
@@ -1912,22 +2090,35 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDISendableScope_ActionPanel {
+		    @frozen nonisolated public enum SafeDISendableScope_ActionPanel {
 		        case part(ActionPanel.ForwardedProperties)
+
+		        nonisolated public struct part_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let part: @Sendable (part_Values) -> SendableErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder
+
+		            public init(part: @escaping @Sendable (part_Values) -> SendableErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.part = part
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.part = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_analytics analytics: Analytics, __safeDI_actionPanelSendableBuilder: @escaping @Sendable (SafeDISendableScope_ActionPanel) -> ActionPanel) {
-		        let part = SendableInstantiator<ActionPanel> {
-		            __safeDI_actionPanelSendableBuilder(.part($0))
-		        }
+		    public init(__safeDI_analytics analytics: Analytics, __safeDI_actionPanelSendableBuilder: SafeDISendableScope_ActionPanel.__safeDI_Builder<ActionPanel>) {
+		        let part = SendableInstantiator<ActionPanel>(__safeDI_actionPanelSendableBuilder.part(SafeDISendableScope_ActionPanel.part_Values()))
 		        self.init(analytics: analytics, part: part)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_05F9E56B4D95C543 {}
+		    public enum __safeDI_Host_E60CBF18BD8BC0D7 {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
@@ -1940,17 +2131,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			    public init() {
 			        let analytics = Analytics()
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_05F9E56B4D95C543.self\(seamCallComment(seam: "Host"))
-			            @Sendable func __safeDI_actionPanelSendableBuilder_Host(_ scope: Host.SafeDISendableScope_ActionPanel) -> ActionPanel {
-			                switch scope {
-			                case let .part(__safeDI_forwarded):
-			                    @Sendable func __safeDI_part(forwardedAction: @escaping @Sendable () -> Void) -> DefaultActionPanel {
-			                        DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
-			                    }
-			                    return __safeDI_part(forwardedAction: __safeDI_forwarded)
+			            _ = Host.__safeDI_Host_E60CBF18BD8BC0D7.self\(seamCallComment(seam: "Host"))
+			            @Sendable nonisolated func __safeDI_actionPanelSendableBuilder_Host_part() -> SendableInstantiator<ActionPanel>.Builder {
+			                @Sendable nonisolated func __safeDI_part(forwardedAction: @escaping @Sendable () -> Void) -> DefaultActionPanel {
+			                    DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
 			                }
+			                return { forwarded in __safeDI_part(forwardedAction: forwarded) }
 			            }
-			            return Host(__safeDI_analytics: analytics, __safeDI_actionPanelSendableBuilder: __safeDI_actionPanelSendableBuilder_Host)
+			            @Sendable nonisolated func __safeDI_actionPanelSendableBuilder_Host() -> Host.SafeDISendableScope_ActionPanel.__safeDI_Builder<ActionPanel> {
+			                .init(part: { _ in __safeDI_actionPanelSendableBuilder_Host_part() })
+			            }
+			            return Host(__safeDI_analytics: analytics, __safeDI_actionPanelSendableBuilder: __safeDI_actionPanelSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(analytics: analytics, host: host)
@@ -1981,27 +2172,38 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_ActionPanel {
+		    @frozen nonisolated public enum SafeDIScope_ActionPanel {
 		        case part(part_Values, ActionPanel.ForwardedProperties)
 
-		        public struct part_Values {
+		        nonisolated public struct part_Values {
 		            public let analytics: Analytics
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let part: (part_Values) -> ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder
+
+		            public init(part: @escaping (part_Values) -> ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.part = part
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.part = { _ in __safeDI_builder }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_actionPanelBuilder: @escaping (SafeDIScope_ActionPanel) -> ActionPanel) {
+		    public init(__safeDI_actionPanelBuilder: SafeDIScope_ActionPanel.__safeDI_Builder<ActionPanel>) {
 		        let analytics = Analytics()
-		        let part = Instantiator<ActionPanel> {
-		            __safeDI_actionPanelBuilder(.part(SafeDIScope_ActionPanel.part_Values(analytics: analytics), $0))
-		        }
+		        let part = Instantiator<ActionPanel>(__safeDI_actionPanelBuilder.part(SafeDIScope_ActionPanel.part_Values(analytics: analytics)))
 		        self.init(analytics: analytics, part: part)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_6B078CAA0BFA4063 {}
+		    public enum __safeDI_Host_A144217981E3FADB {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
@@ -2013,18 +2215,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_6B078CAA0BFA4063.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_actionPanelBuilder_Host(_ scope: Host.SafeDIScope_ActionPanel) -> ActionPanel {
-			                switch scope {
-			                case let .part(scope, __safeDI_forwarded):
-			                    let analytics = scope.analytics
-			                    func __safeDI_part(forwardedAction: @escaping OnTap) -> DefaultActionPanel {
-			                        DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
-			                    }
-			                    return __safeDI_part(forwardedAction: __safeDI_forwarded)
+			            _ = Host.__safeDI_Host_A144217981E3FADB.self\(seamCallComment(seam: "Host"))
+			            func __safeDI_actionPanelBuilder_Host_part(analytics: Analytics) -> Instantiator<ActionPanel>.Builder {
+			                func __safeDI_part(forwardedAction: @escaping OnTap) -> DefaultActionPanel {
+			                    DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
 			                }
+			                return { forwarded in __safeDI_part(forwardedAction: forwarded) }
 			            }
-			            return Host(__safeDI_actionPanelBuilder: __safeDI_actionPanelBuilder_Host)
+			            func __safeDI_actionPanelBuilder_Host() -> Host.SafeDIScope_ActionPanel.__safeDI_Builder<ActionPanel> {
+			                .init(part: { values in __safeDI_actionPanelBuilder_Host_part(analytics: values.analytics) })
+			            }
+			            return Host(__safeDI_actionPanelBuilder: __safeDI_actionPanelBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
@@ -2053,22 +2254,35 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDISendableScope_ActionPanel {
+		    @frozen nonisolated public enum SafeDISendableScope_ActionPanel {
 		        case part(ActionPanel.ForwardedProperties)
+
+		        nonisolated public struct part_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let part: @Sendable (part_Values) -> SendableErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder
+
+		            public init(part: @escaping @Sendable (part_Values) -> SendableErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.part = part
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.part = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_analytics analytics: Analytics, __safeDI_actionPanelSendableBuilder: @escaping @Sendable (SafeDISendableScope_ActionPanel) -> ActionPanel) {
-		        let part = SendableInstantiator<ActionPanel> {
-		            __safeDI_actionPanelSendableBuilder(.part($0))
-		        }
+		    public init(__safeDI_analytics analytics: Analytics, __safeDI_actionPanelSendableBuilder: SafeDISendableScope_ActionPanel.__safeDI_Builder<ActionPanel>) {
+		        let part = SendableInstantiator<ActionPanel>(__safeDI_actionPanelSendableBuilder.part(SafeDISendableScope_ActionPanel.part_Values()))
 		        self.init(analytics: analytics, part: part)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_05F9E56B4D95C543 {}
+		    public enum __safeDI_Host_E60CBF18BD8BC0D7 {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
@@ -2081,17 +2295,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			    public init() {
 			        let analytics = Analytics()
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_05F9E56B4D95C543.self\(seamCallComment(seam: "Host"))
-			            @Sendable func __safeDI_actionPanelSendableBuilder_Host(_ scope: Host.SafeDISendableScope_ActionPanel) -> ActionPanel {
-			                switch scope {
-			                case let .part(__safeDI_forwarded):
-			                    @Sendable func __safeDI_part(forwardedAction: @escaping SendableOnTap) -> DefaultActionPanel {
-			                        DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
-			                    }
-			                    return __safeDI_part(forwardedAction: __safeDI_forwarded)
+			            _ = Host.__safeDI_Host_E60CBF18BD8BC0D7.self\(seamCallComment(seam: "Host"))
+			            @Sendable nonisolated func __safeDI_actionPanelSendableBuilder_Host_part() -> SendableInstantiator<ActionPanel>.Builder {
+			                @Sendable nonisolated func __safeDI_part(forwardedAction: @escaping SendableOnTap) -> DefaultActionPanel {
+			                    DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
 			                }
+			                return { forwarded in __safeDI_part(forwardedAction: forwarded) }
 			            }
-			            return Host(__safeDI_analytics: analytics, __safeDI_actionPanelSendableBuilder: __safeDI_actionPanelSendableBuilder_Host)
+			            @Sendable nonisolated func __safeDI_actionPanelSendableBuilder_Host() -> Host.SafeDISendableScope_ActionPanel.__safeDI_Builder<ActionPanel> {
+			                .init(part: { _ in __safeDI_actionPanelSendableBuilder_Host_part() })
+			            }
+			            return Host(__safeDI_analytics: analytics, __safeDI_actionPanelSendableBuilder: __safeDI_actionPanelSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(analytics: analytics, host: host)
@@ -2121,27 +2335,38 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_TapGadget_AnyGadget {
+		    @frozen nonisolated public enum SafeDIScope_TapGadget_AnyGadget {
 		        case part(part_Values, OnTap)
 
-		        public struct part_Values {
+		        nonisolated public struct part_Values {
 		            public let analytics: Analytics
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let part: (part_Values) -> ErasedInstantiator<OnTap, __safeDI_Built>.Builder
+
+		            public init(part: @escaping (part_Values) -> ErasedInstantiator<OnTap, __safeDI_Built>.Builder) {
+		                self.part = part
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<OnTap, __safeDI_Built>.Builder) {
+		                self.part = { _ in __safeDI_builder }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_tapGadget_AnyGadgetBuilder: @escaping (SafeDIScope_TapGadget_AnyGadget) -> AnyGadget) {
+		    public init(__safeDI_tapGadget_AnyGadgetBuilder: SafeDIScope_TapGadget_AnyGadget.__safeDI_Builder<AnyGadget>) {
 		        let analytics = Analytics()
-		        let part = ErasedInstantiator<OnTap, AnyGadget> {
-		            __safeDI_tapGadget_AnyGadgetBuilder(.part(SafeDIScope_TapGadget_AnyGadget.part_Values(analytics: analytics), $0))
-		        }
+		        let part = ErasedInstantiator<OnTap, AnyGadget>(__safeDI_tapGadget_AnyGadgetBuilder.part(SafeDIScope_TapGadget_AnyGadget.part_Values(analytics: analytics)))
 		        self.init(analytics: analytics, part: part)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_ED6F3AFD4962488D {}
+		    public enum __safeDI_Host_FC6B37CC0FDFCB89 {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
@@ -2153,18 +2378,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_ED6F3AFD4962488D.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_tapGadget_AnyGadgetBuilder_Host(_ scope: Host.SafeDIScope_TapGadget_AnyGadget) -> AnyGadget {
-			                switch scope {
-			                case let .part(scope, __safeDI_forwarded):
-			                    let analytics = scope.analytics
-			                    func __safeDI_part(onTap: @escaping OnTap) -> TapGadget {
-			                        TapGadget(onTap: onTap, analytics: analytics)
-			                    }
-			                    return AnyGadget(__safeDI_part(onTap: __safeDI_forwarded))
+			            _ = Host.__safeDI_Host_FC6B37CC0FDFCB89.self\(seamCallComment(seam: "Host"))
+			            func __safeDI_tapGadget_AnyGadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<OnTap, AnyGadget>.Builder {
+			                func __safeDI_part(onTap: @escaping OnTap) -> TapGadget {
+			                    TapGadget(onTap: onTap, analytics: analytics)
 			                }
+			                return { forwarded in AnyGadget(__safeDI_part(onTap: forwarded)) }
 			            }
-			            return Host(__safeDI_tapGadget_AnyGadgetBuilder: __safeDI_tapGadget_AnyGadgetBuilder_Host)
+			            func __safeDI_tapGadget_AnyGadgetBuilder_Host() -> Host.SafeDIScope_TapGadget_AnyGadget.__safeDI_Builder<AnyGadget> {
+			                .init(part: { values in __safeDI_tapGadget_AnyGadgetBuilder_Host_part(analytics: values.analytics) })
+			            }
+			            return Host(__safeDI_tapGadget_AnyGadgetBuilder: __safeDI_tapGadget_AnyGadgetBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
@@ -2194,22 +2418,35 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDISendableScope_TapGadget_AnyGadget {
+		    @frozen nonisolated public enum SafeDISendableScope_TapGadget_AnyGadget {
 		        case part(SendableOnTap)
+
+		        nonisolated public struct part_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let part: @Sendable (part_Values) -> SendableErasedInstantiator<SendableOnTap, __safeDI_Built>.Builder
+
+		            public init(part: @escaping @Sendable (part_Values) -> SendableErasedInstantiator<SendableOnTap, __safeDI_Built>.Builder) {
+		                self.part = part
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<SendableOnTap, __safeDI_Built>.Builder) {
+		                self.part = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_analytics analytics: Analytics, __safeDI_tapGadget_AnyGadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_TapGadget_AnyGadget) -> AnyGadget) {
-		        let part = SendableErasedInstantiator<SendableOnTap, AnyGadget> {
-		            __safeDI_tapGadget_AnyGadgetSendableBuilder(.part($0))
-		        }
+		    public init(__safeDI_analytics analytics: Analytics, __safeDI_tapGadget_AnyGadgetSendableBuilder: SafeDISendableScope_TapGadget_AnyGadget.__safeDI_Builder<AnyGadget>) {
+		        let part = SendableErasedInstantiator<SendableOnTap, AnyGadget>(__safeDI_tapGadget_AnyGadgetSendableBuilder.part(SafeDISendableScope_TapGadget_AnyGadget.part_Values()))
 		        self.init(analytics: analytics, part: part)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_5C88E03859F2F40B {}
+		    public enum __safeDI_Host_2D69F7C1BFC7B937 {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
@@ -2222,17 +2459,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			    public init() {
 			        let analytics = Analytics()
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_5C88E03859F2F40B.self\(seamCallComment(seam: "Host"))
-			            @Sendable func __safeDI_tapGadget_AnyGadgetSendableBuilder_Host(_ scope: Host.SafeDISendableScope_TapGadget_AnyGadget) -> AnyGadget {
-			                switch scope {
-			                case let .part(__safeDI_forwarded):
-			                    @Sendable func __safeDI_part(onTap: @escaping SendableOnTap) -> TapGadget {
-			                        TapGadget(onTap: onTap, analytics: analytics)
-			                    }
-			                    return AnyGadget(__safeDI_part(onTap: __safeDI_forwarded))
+			            _ = Host.__safeDI_Host_2D69F7C1BFC7B937.self\(seamCallComment(seam: "Host"))
+			            @Sendable nonisolated func __safeDI_tapGadget_AnyGadgetSendableBuilder_Host_part() -> SendableErasedInstantiator<SendableOnTap, AnyGadget>.Builder {
+			                @Sendable nonisolated func __safeDI_part(onTap: @escaping SendableOnTap) -> TapGadget {
+			                    TapGadget(onTap: onTap, analytics: analytics)
 			                }
+			                return { forwarded in AnyGadget(__safeDI_part(onTap: forwarded)) }
 			            }
-			            return Host(__safeDI_analytics: analytics, __safeDI_tapGadget_AnyGadgetSendableBuilder: __safeDI_tapGadget_AnyGadgetSendableBuilder_Host)
+			            @Sendable nonisolated func __safeDI_tapGadget_AnyGadgetSendableBuilder_Host() -> Host.SafeDISendableScope_TapGadget_AnyGadget.__safeDI_Builder<AnyGadget> {
+			                .init(part: { _ in __safeDI_tapGadget_AnyGadgetSendableBuilder_Host_part() })
+			            }
+			            return Host(__safeDI_analytics: analytics, __safeDI_tapGadget_AnyGadgetSendableBuilder: __safeDI_tapGadget_AnyGadgetSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(analytics: analytics, host: host)
@@ -2557,17 +2794,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_06A02B000D2D4D08.self\(seamCallComment(seam: "Host"))
-		            func __safeDI_namedGadget_AnyGadgetBuilder_Host(_ scope: Host.SafeDIScope_NamedGadget_AnyGadget) -> AnyGadget {
-		                switch scope {
-		                case let .part(_, __safeDI_forwarded):
-		                    func __safeDI_part(label: Feature.Label) -> NamedGadget {
-		                        NamedGadget(label: label)
-		                    }
-		                    return AnyGadget(__safeDI_part(label: __safeDI_forwarded))
+		            _ = Host.__safeDI_Host_5FE7E7198F80C8F8.self\(seamCallComment(seam: "Host"))
+		            func __safeDI_namedGadget_AnyGadgetBuilder_Host_part() -> ErasedInstantiator<Label, AnyGadget>.Builder {
+		                func __safeDI_part(label: Feature.Label) -> NamedGadget {
+		                    NamedGadget(label: label)
 		                }
+		                return { forwarded in AnyGadget(__safeDI_part(label: forwarded)) }
 		            }
-		            return Host(__safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host)
+		            func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.SafeDIScope_NamedGadget_AnyGadget.__safeDI_Builder<AnyGadget> {
+		                .init(part: { _ in __safeDI_namedGadget_AnyGadgetBuilder_Host_part() })
+		            }
+		            return Host(__safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -2581,17 +2818,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_60F5B47274FB04B0.self\(seamCallComment(seam: "Host"))
-		            func __safeDI_namedGadget_AnyGadgetBuilder_Host(_ scope: Host.SafeDIScope_NamedGadget_AnyGadget) -> AnyGadget {
-		                switch scope {
-		                case let .part(_, __safeDI_forwarded):
-		                    func __safeDI_part(label: Label) -> NamedGadget {
-		                        NamedGadget(label: label)
-		                    }
-		                    return AnyGadget(__safeDI_part(label: __safeDI_forwarded))
+		            _ = Host.__safeDI_Host_A361DC4A1691AEC0.self\(seamCallComment(seam: "Host"))
+		            func __safeDI_namedGadget_AnyGadgetBuilder_Host_part() -> ErasedInstantiator<Feature.Label, AnyGadget>.Builder {
+		                func __safeDI_part(label: Label) -> NamedGadget {
+		                    NamedGadget(label: label)
 		                }
+		                return { forwarded in AnyGadget(__safeDI_part(label: forwarded)) }
 		            }
-		            return Host(__safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host)
+		            func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.SafeDIScope_NamedGadget_AnyGadget.__safeDI_Builder<AnyGadget> {
+		                .init(part: { _ in __safeDI_namedGadget_AnyGadgetBuilder_Host_part() })
+		            }
+		            return Host(__safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)

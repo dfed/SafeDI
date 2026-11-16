@@ -1256,32 +1256,43 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen public enum SafeDIScope_LivePanel_Panel {
+		    @frozen nonisolated public enum SafeDIScope_LivePanel_Panel {
 		        case panelBuilder(panelBuilder_Values, String)
 
-		        public struct panelBuilder_Values {
+		        nonisolated public struct panelBuilder_Values {
 		            public let api: any Api
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let panelBuilder: (panelBuilder_Values) -> ErasedInstantiator<String, __safeDI_Built>.Builder
+
+		            public init(panelBuilder: @escaping (panelBuilder_Values) -> ErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                self.panelBuilder = panelBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                self.panelBuilder = { _ in __safeDI_builder }
+		            }
 		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public init(apiBuilder: @escaping () -> any Api, livePanel_PanelBuilder: @escaping (SafeDIScope_LivePanel_Panel) -> any Panel) {
-		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder), __safeDI_livePanel_PanelBuilder: livePanel_PanelBuilder)
+		    public init(apiBuilder: @escaping () -> any Api, livePanel_PanelBuilder: @escaping ErasedInstantiator<String, any Panel>.Builder) {
+		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder), __safeDI_livePanel_PanelBuilder: .init(__safeDI_noScope: livePanel_PanelBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>, __safeDI_livePanel_PanelBuilder: @escaping (SafeDIScope_LivePanel_Panel) -> any Panel) {
+		    public init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>, __safeDI_livePanel_PanelBuilder: SafeDIScope_LivePanel_Panel.__safeDI_Builder<any Panel>) {
 		        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values())
-		        let panelBuilder = ErasedInstantiator<String, any Panel> {
-		            __safeDI_livePanel_PanelBuilder(.panelBuilder(SafeDIScope_LivePanel_Panel.panelBuilder_Values(api: api), $0))
-		        }
+		        let panelBuilder = ErasedInstantiator<String, any Panel>(__safeDI_livePanel_PanelBuilder.panelBuilder(SafeDIScope_LivePanel_Panel.panelBuilder_Values(api: api)))
 		        self.init(api: api, panelBuilder: panelBuilder)
 		    }
 		}
 
 		extension Home {
-		    public enum __safeDI_Home_61E1CB625FF3A2B0 {}
+		    public enum __safeDI_Home_97953C757FA68306 {}
 		}
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
@@ -1292,23 +1303,23 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_home() -> Home {
-		            _ = Home.__safeDI_Home_61E1CB625FF3A2B0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Home.__safeDI_Home_97953C757FA68306.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_livePanel_PanelBuilder_Home_panelBuilder() -> ErasedInstantiator<String, any Panel>.Builder {
+		                func __safeDI_panelBuilder(title: String) -> LivePanel {
+		                    LivePanel(title: title)
+		                }
+		                return { forwarded in __safeDI_panelBuilder(title: forwarded) }
+		            }
 		            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
 		                .init(api: { _ in
 		                    let api: any Api = LiveApi()
 		                    return api
 		                })
 		            }
-		            func __safeDI_livePanel_PanelBuilder_Home(_ scope: Home.SafeDIScope_LivePanel_Panel) -> any Panel {
-		                switch scope {
-		                case let .panelBuilder(_, __safeDI_forwarded):
-		                    func __safeDI_panelBuilder(title: String) -> LivePanel {
-		                        LivePanel(title: title)
-		                    }
-		                    return __safeDI_panelBuilder(title: __safeDI_forwarded)
-		                }
+		            func __safeDI_livePanel_PanelBuilder_Home() -> Home.SafeDIScope_LivePanel_Panel.__safeDI_Builder<any Panel> {
+		                .init(panelBuilder: { _ in __safeDI_livePanel_PanelBuilder_Home_panelBuilder() })
 		            }
-		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home(), __safeDI_livePanel_PanelBuilder: __safeDI_livePanel_PanelBuilder_Home)
+		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home(), __safeDI_livePanel_PanelBuilder: __safeDI_livePanel_PanelBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
 		        self.init(home: home)

@@ -86,29 +86,53 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_NamedGadget_AnyGadget {
+		    @frozen nonisolated public enum SafeDIScope_NamedGadget_AnyGadget {
 		        case panel(panel_Values, SafeDIScope_NamedGadget_AnyGadget.Panel_Scope)
 
-		        public struct panel_Values {}
+		        nonisolated public struct panel_Values {}
 
-		        @frozen public enum Panel_Scope {
+		        @frozen nonisolated public enum Panel_Scope {
 		            case maker(maker_Values, Name)
 
-		            public struct maker_Values {
+		            nonisolated public struct maker_Values {
 		                public let scope: Value
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let maker: (maker_Values) -> ErasedInstantiator<Name, __safeDI_Built>.Builder
+
+		                public init(maker: @escaping (maker_Values) -> ErasedInstantiator<Name, __safeDI_Built>.Builder) {
+		                    self.maker = maker
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Name, __safeDI_Built>.Builder) {
+		                    self.maker = { _ in __safeDI_builder }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let panel: (panel_Values) -> SafeDIScope_NamedGadget_AnyGadget.Panel_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(panel: @escaping (panel_Values) -> SafeDIScope_NamedGadget_AnyGadget.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.panel = panel
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Name, __safeDI_Built>.Builder) {
+		                self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_namedGadget_AnyGadgetBuilder: @escaping (SafeDIScope_NamedGadget_AnyGadget) -> AnyGadget) {
-		        let __safeDI_namedGadget_AnyGadgetValues_panel = SafeDIScope_NamedGadget_AnyGadget.panel_Values()
+		    public init(__safeDI_namedGadget_AnyGadgetBuilder: SafeDIScope_NamedGadget_AnyGadget.__safeDI_Builder<AnyGadget>) {
+		        let __safeDI_namedGadget_AnyGadgetBuilder_panel = __safeDI_namedGadget_AnyGadgetBuilder.panel(SafeDIScope_NamedGadget_AnyGadget.panel_Values())
 		        func __safeDI_panel() -> Panel {
 		            let scope = Value()
-		            let maker = ErasedInstantiator<Name, AnyGadget> {
-		                __safeDI_namedGadget_AnyGadgetBuilder(.panel(__safeDI_namedGadget_AnyGadgetValues_panel, .maker(SafeDIScope_NamedGadget_AnyGadget.Panel_Scope.maker_Values(scope: scope), $0)))
-		            }
+		            let maker = ErasedInstantiator<Name, AnyGadget>(__safeDI_namedGadget_AnyGadgetBuilder_panel.maker(SafeDIScope_NamedGadget_AnyGadget.Panel_Scope.maker_Values(scope: scope)))
 		            return Panel(scope: scope, maker: maker)
 		        }
 		        let panel: Panel = __safeDI_panel()
@@ -117,7 +141,7 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_D2848E65A6A338B3 {}
+		    public enum __safeDI_Host_6DDCA88C5BA55A83 {}
 		}
 		""")
 		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
@@ -128,25 +152,20 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_D2848E65A6A338B3.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_namedGadget_AnyGadgetBuilder_Host_Panel_Scope_maker(_ scope_: Host.SafeDIScope_NamedGadget_AnyGadget.Panel_Scope.maker_Values, _ __safeDI_forwarded: Name) -> AnyGadget {
-		                let scope = scope_.scope
+		            _ = Host.__safeDI_Host_6DDCA88C5BA55A83.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_namedGadget_AnyGadgetBuilder_Host_Panel_Scope_maker(scope: Value) -> ErasedInstantiator<Name, AnyGadget>.Builder {
 		                func __safeDI_maker(name: Name) -> NamedGadget {
 		                    NamedGadget(name: name, scope: scope)
 		                }
-		                return AnyGadget(__safeDI_maker(name: __safeDI_forwarded))
+		                return { forwarded in AnyGadget(__safeDI_maker(name: forwarded)) }
 		            }
-		            func __safeDI_namedGadget_AnyGadgetBuilder_Host(_ scope: Host.SafeDIScope_NamedGadget_AnyGadget) -> AnyGadget {
-		                switch scope {
-		                case let .panel(_, scope): return __safeDI_namedGadget_AnyGadgetBuilder_Host_Panel_Scope(scope)
-		                }
+		            func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.SafeDIScope_NamedGadget_AnyGadget.__safeDI_Builder<AnyGadget> {
+		                .init(panel: { _ in __safeDI_namedGadget_AnyGadgetBuilder_Host_Panel_Scope() })
 		            }
-		            func __safeDI_namedGadget_AnyGadgetBuilder_Host_Panel_Scope(_ scope: Host.SafeDIScope_NamedGadget_AnyGadget.Panel_Scope) -> AnyGadget {
-		                switch scope {
-		                case let .maker(scope, __safeDI_forwarded): return __safeDI_namedGadget_AnyGadgetBuilder_Host_Panel_Scope_maker(scope, __safeDI_forwarded)
-		                }
+		            func __safeDI_namedGadget_AnyGadgetBuilder_Host_Panel_Scope() -> Host.SafeDIScope_NamedGadget_AnyGadget.Panel_Scope.__safeDI_Builder<AnyGadget> {
+		                .init(maker: { values in __safeDI_namedGadget_AnyGadgetBuilder_Host_Panel_Scope_maker(scope: values.scope) })
 		            }
-		            return Host(__safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host)
+		            return Host(__safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
