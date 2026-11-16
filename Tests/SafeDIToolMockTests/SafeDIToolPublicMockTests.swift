@@ -5324,8 +5324,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_declaresEachScopeFieldWithItsOwnAccess_whenHoleScopeHoldsNarrowerTypes() async throws {
 		// M2.13, M7.8: the builder is public, as `UserService`'s proof allows, and its scope struct stays public with a
-		// `package` field for `Session` and an internal one for `Token`; another package passes a builder that reads the
-		// one field it can see.
+		// `package` field for `Session` and an internal one for `Token`. The place forwards nothing, so another package passes
+		// a builder that takes nothing, and reads no field.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
@@ -5374,7 +5374,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 					}
 					""",
 				]),
-				ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Caller.swift": "import Core\n\n#if DEBUG\nfunc call() {\n    _ = Service.mock(userServiceBuilder: { scope in\n        switch scope {\n        case let .userService(values): UserService(analytics: values.analytics)\n        }\n    })\n}\n#endif\n"], dependencies: ["Core"]),
+				ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Caller.swift": "import Core\n\n#if DEBUG\nfunc call() {\n    _ = Service.mock(userServiceBuilder: { UserService(analytics: Analytics()) })\n}\n#endif\n"], dependencies: ["Core"]),
 			],
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
