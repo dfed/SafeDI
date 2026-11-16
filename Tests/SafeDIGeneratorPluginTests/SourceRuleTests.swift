@@ -65,6 +65,16 @@ struct SourceRuleTests {
 	}
 
 	@Test
+	func toolTestSupport_importsNoModuleTestably() throws {
+		let checkedFiles = try Self.checkedFiles.get()
+		#expect(Set(checkedFiles.map(\.file.path)).isSuperset(of: [
+			"Tests/SafeDIToolTestSupport/GraphFuzzerCallingMocks.swift",
+			"Tests/SafeDIToolTestSupport/SafeDIToolTestExecution.swift",
+		]))
+		#expect(try findings(of: [.testableImport]) == [])
+	}
+
+	@Test
 	func waivers_eachNameARuleGiveAReasonAndWaiveASite() throws {
 		let findings = try Self.checkedFiles.get().flatMap { checkedFile in
 			checkedFile.findings.filter { $0.subject == .waiver }.map(\.description)
@@ -442,6 +452,93 @@ struct SourceRuleTests {
 		#expect(findings(in: #"_ = "doesn't" // safedi-source-rule: allow apostrophe — matches the compiler's output verbatim"#) == [])
 	}
 
+	// MARK: Test support imports
+
+	@Test(arguments: [
+		"@testable import SafeDIToolLibrary",
+		"@testable @preconcurrency import SafeDIToolLibrary",
+		"@preconcurrency @testable import SafeDIToolLibrary",
+		"@testable import struct SafeDIToolLibrary.SafeDIToolCommandLine",
+	])
+	func sourceRuleCheck_findsTestableImport_whenTestSupportImportsAModuleTestably(importDeclaration: String) {
+		#expect(findings(in: """
+		import Foundation
+		\(importDeclaration)
+		""", at: "Tests/SafeDIToolTestSupport/Fixture.swift") == [
+			"Tests/SafeDIToolTestSupport/Fixture.swift:2: testableImport: a release build compiles `SafeDIToolTestSupport` without `-enable-testing`, which rejects `@testable import`",
+		])
+	}
+
+	@Test
+	func sourceRuleCheck_findsTestableImport_whenTestSupportImportsAModuleTestablyInAConditionalBlock() {
+		#expect(findings(in: """
+		#if canImport(SafeDIToolLibrary)
+		@testable import SafeDIToolLibrary
+		#endif
+		""", at: "Tests/SafeDIToolTestSupport/Fixture.swift") == [
+			"Tests/SafeDIToolTestSupport/Fixture.swift:2: testableImport: a release build compiles `SafeDIToolTestSupport` without `-enable-testing`, which rejects `@testable import`",
+		])
+	}
+
+	@Test
+	func sourceRuleCheck_findsTestableImport_whenAConditionalBlockInTheImportsAttributesAddsTestable() {
+		#expect(findings(in: """
+		#if canImport(SafeDIToolLibrary)
+		@testable
+		#endif
+		import SafeDIToolLibrary
+		""", at: "Tests/SafeDIToolTestSupport/Fixture.swift") == [
+			"Tests/SafeDIToolTestSupport/Fixture.swift:4: testableImport: a release build compiles `SafeDIToolTestSupport` without `-enable-testing`, which rejects `@testable import`",
+		])
+	}
+
+	@Test(arguments: [
+		"@testable\nimport SafeDIToolLibrary",
+		"@preconcurrency\n@testable import SafeDIToolLibrary",
+	])
+	func sourceRuleCheck_findsTestableImportOnTheImportKeywordsLine_whenTheAttributesSpanLines(importDeclaration: String) {
+		#expect(findings(in: importDeclaration, at: "Tests/SafeDIToolTestSupport/Fixture.swift") == [
+			"Tests/SafeDIToolTestSupport/Fixture.swift:2: testableImport: a release build compiles `SafeDIToolTestSupport` without `-enable-testing`, which rejects `@testable import`",
+		])
+	}
+
+	@Test
+	func sourceRuleCheck_findsNoTestableImport_whenTestSupportImportsPlainly() {
+		#expect(findings(in: """
+		import SafeDIToolLibrary
+		@preconcurrency import SafeDICore
+		import struct SafeDIToolLibrary.SafeDIToolCommandLine
+		""", at: "Tests/SafeDIToolTestSupport/Fixture.swift") == [])
+	}
+
+	@Test
+	func sourceRuleCheck_findsNoTestableImport_whenALiteralSpellsATestableImport() {
+		#expect(findings(in: #"""
+		let imports = moduleNames.map { "@testable import \($0)" }
+		let main = """
+		@testable import Fixture
+		"""
+		"""#, at: "Tests/SafeDIToolTestSupport/Fixture.swift") == [])
+	}
+
+	@Test(arguments: [
+		"Tests/SafeDIToolTests/Fixture.swift",
+		"Tests/SafeDIGeneratorPluginTests/Fixture.swift",
+		"Sources/SafeDICore/Models/Fixture.swift",
+	])
+	func sourceRuleCheck_findsNoTestableImport_whenAFileOutsideTestSupportImportsTestably(path: String) {
+		#expect(findings(in: "@testable import SafeDIToolLibrary", at: path) == [])
+	}
+
+	@Test(arguments: [
+		"@testable import SafeDIToolLibrary",
+		"@testable\nimport SafeDIToolLibrary",
+		"@preconcurrency\n@testable import SafeDIToolLibrary",
+	])
+	func sourceRuleCheck_findsNothing_whenAWaiverWithAReasonFollowsATestableImport(importDeclaration: String) {
+		#expect(findings(in: "\(importDeclaration) // safedi-source-rule: allow testableImport — this target builds only with testing enabled", at: "Tests/SafeDIToolTestSupport/Fixture.swift") == [])
+	}
+
 	// MARK: Waivers
 
 	@Test
@@ -469,7 +566,7 @@ struct SourceRuleTests {
 	func sourceRuleCheck_findsSiteAndWaiver_whenAWaiverNamesNoRule() {
 		#expect(findings(in: "_ = value! // safedi-source-rule: allow forceUnwrapping — `value` is set before this line") == [
 			"Sources/SafeDICore/Models/Fixture.swift:1: forceUnwrap: a force unwrap traps on `nil`",
-			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `generatedTrap`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`",
+			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `generatedTrap`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`, `testableImport`",
 		])
 	}
 
@@ -604,10 +701,10 @@ struct SourceRuleTests {
 		SourceRuleCheck.findings(in: source, at: path).map(\.description)
 	}
 
-	/// The Swift files under `Sources`, `Plugins` and `TuistPlugins`, each with its findings, read and checked once for
-	/// every test of SafeDI's sources.
+	/// The Swift files under `Sources`, `Plugins`, `TuistPlugins` and `Tests/SafeDIToolTestSupport`, each with its
+	/// findings, read and checked once for every test of SafeDI's sources.
 	private static let checkedFiles = Result {
-		try RepositorySwiftFile.files(under: ["Sources", "Plugins", "TuistPlugins"]).map { file in
+		try RepositorySwiftFile.files(under: ["Sources", "Plugins", "TuistPlugins", "Tests/SafeDIToolTestSupport"]).map { file in
 			(file: file, findings: SourceRuleCheck.findings(in: file.source, at: file.path))
 		}
 	}
