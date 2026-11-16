@@ -1,0 +1,2049 @@
+{
+ "tools": [
+  "2.2.0",
+  "main"
+ ],
+ "tool_paths": [
+  "/home/user/safedi-2.2.0/.build/x86_64-unknown-linux-gnu/release/SafeDITool",
+  "/home/user/SafeDI/.build/x86_64-unknown-linux-gnu/release/SafeDITool"
+ ],
+ "tool_versions": [
+  "2.2.0",
+  "03a6874d"
+ ],
+ "machine": {
+  "platform": "Linux-6.18.44-fc-v470-x86_64-with-glibc2.39",
+  "processor": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpus": 4,
+  "compiler": "Swift version 6.2 (swift-6.2-RELEASE)",
+  "load_at_start": [
+   0.400390625,
+   0.8310546875,
+   0.93603515625
+  ],
+  "load_at_end": [
+   1.54931640625,
+   1.29931640625,
+   1.11376953125
+  ]
+ },
+ "runs": 5,
+ "started": "2026-11-16T09:20:55Z",
+ "shapes": {
+  "D12": {
+   "description": "mock-overrides spike shape D, 12 screens, each a public seam in its own module (no 2.2.0 counterpart); runtime: Root.mock() building every screen, per value",
+   "tools": {
+    "2.2.0": {
+     "failure": "M11 did not compile at -Onone: /home/user/bench/fixtures/D12/M11/M11.swift:3:39: error: extra argument 'generateDependencyTree' in macro expansion\n 1 | import SafeDI\n 2 | import Core\n 3 | @Instantiable(generateDependencyTree: true) public final class Screen11: Screen, Instantiable { public init(id: Int, service: Service, model11: Model11) { self.id = id; self.service = service; self.model11 = model11; super.init() }\n   |                                       `- error: extra argument 'generateDependencyTree' in macro expansion\n 4 |     @Forwarded let id: Int\n 5 |     @Received let service: Service"
+    },
+    "main": {
+     "generated_lines": 1317,
+     "generate_wall": {
+      "median": 0.4828279500034114,
+      "min": 0.4530177879933035,
+      "max": 0.49991486700673704,
+      "samples": [
+       0.4530177879933035,
+       0.45459527000275557,
+       0.4828279500034114,
+       0.49991486700673704,
+       0.496470378995582
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 38477824,
+      "min": 38391808,
+      "max": 38711296,
+      "samples": [
+       38432768,
+       38477824,
+       38666240,
+       38711296,
+       38391808
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 2.2654996269920957,
+      "min": 2.0620522379940667,
+      "max": 2.4364878019987373,
+      "samples": [
+       2.297097262005991,
+       2.2654996269920957,
+       2.0620522379940667,
+       2.2020331469975645,
+       2.4364878019987373
+      ]
+     },
+     "compile_O": {
+      "median": 2.543279777000862,
+      "min": 2.530577330999222,
+      "max": 2.671769675005635,
+      "samples": [
+       2.642371426001773,
+       2.543279777000862,
+       2.671769675005635,
+       2.530577330999222,
+       2.5403617339943594
+      ]
+     },
+     "runtime_ns": {
+      "median": 28901.360466236394,
+      "min": 24228.29136719696,
+      "max": 30928.411340206185,
+      "samples": [
+       28901.360466236394,
+       24228.29136719696,
+       28895.169122604257,
+       30928.411340206185,
+       29384.13858961802
+      ]
+     },
+     "values_per_iteration": 106
+    }
+   }
+  },
+  "D16": {
+   "description": "mock-overrides spike shape D, 16 screens, each a public seam in its own module (no 2.2.0 counterpart); runtime: Root.mock() building every screen, per value",
+   "tools": {
+    "2.2.0": {
+     "failure": "M15 did not compile at -Onone: /home/user/bench/fixtures/D16/M15/M15.swift:3:39: error: extra argument 'generateDependencyTree' in macro expansion\n 1 | import SafeDI\n 2 | import Core\n 3 | @Instantiable(generateDependencyTree: true) public final class Screen15: Screen, Instantiable { public init(id: Int, service: Service, model15: Model15) { self.id = id; self.service = service; self.model15 = model15; super.init() }\n   |                                       `- error: extra argument 'generateDependencyTree' in macro expansion\n 4 |     @Forwarded let id: Int\n 5 |     @Received let service: Service"
+    },
+    "main": {
+     "generated_lines": 2493,
+     "generate_wall": {
+      "median": 0.6512502219920862,
+      "min": 0.6011570610062336,
+      "max": 0.6578757220049738,
+      "samples": [
+       0.6578757220049738,
+       0.6134507129972917,
+       0.6560275410010945,
+       0.6512502219920862,
+       0.6011570610062336
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 40558592,
+      "min": 40062976,
+      "max": 40611840,
+      "samples": [
+       40611840,
+       40308736,
+       40579072,
+       40558592,
+       40062976
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 3.883930998003052,
+      "min": 3.722859655998036,
+      "max": 4.170352885994362,
+      "samples": [
+       3.912436655991769,
+       3.883930998003052,
+       3.746459219000826,
+       4.170352885994362,
+       3.722859655998036
+      ]
+     },
+     "compile_O": {
+      "median": 3.544758649004507,
+      "min": 3.272791850999056,
+      "max": 3.758757035993767,
+      "samples": [
+       3.544758649004507,
+       3.758757035993767,
+       3.7302987670045695,
+       3.430659409001237,
+       3.272791850999056
+      ]
+     },
+     "runtime_ns": {
+      "median": 195240.9544567339,
+      "min": 177622.13010053223,
+      "max": 230611.97694081475,
+      "samples": [
+       223889.36343283582,
+       230611.97694081475,
+       177622.13010053223,
+       195240.9544567339,
+       189473.71654040404
+      ]
+     },
+     "values_per_iteration": 322
+    }
+   }
+  },
+  "D20": {
+   "description": "mock-overrides spike shape D, 20 screens, each a public seam in its own module (no 2.2.0 counterpart); runtime: Root.mock() building every screen, per value",
+   "tools": {
+    "2.2.0": {
+     "failure": "M19 did not compile at -Onone: /home/user/bench/fixtures/D20/M19/M19.swift:3:39: error: extra argument 'generateDependencyTree' in macro expansion\n 1 | import SafeDI\n 2 | import Core\n 3 | @Instantiable(generateDependencyTree: true) public final class Screen19: Screen, Instantiable { public init(id: Int, service: Service, model19: Model19) { self.id = id; self.service = service; self.model19 = model19; super.init() }\n   |                                       `- error: extra argument 'generateDependencyTree' in macro expansion\n 4 |     @Forwarded let id: Int\n 5 |     @Received let service: Service"
+    },
+    "main": {
+     "generated_lines": 5229,
+     "generate_wall": {
+      "median": 0.8989867780073837,
+      "min": 0.8513140059949365,
+      "max": 0.963022601994453,
+      "samples": [
+       0.8989867780073837,
+       0.8513140059949365,
+       0.963022601994453,
+       0.8533854019879072,
+       0.9318802629932179
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 45977600,
+      "min": 45371392,
+      "max": 46194688,
+      "samples": [
+       45535232,
+       45977600,
+       46194688,
+       45371392,
+       46026752
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 11.412189233011304,
+      "min": 11.209969117997389,
+      "max": 11.989031507000618,
+      "samples": [
+       11.209969117997389,
+       11.402953848002653,
+       11.412189233011304,
+       11.989031507000618,
+       11.91721756699917
+      ]
+     },
+     "compile_O": {
+      "median": 5.520284892001655,
+      "min": 5.210037883010955,
+      "max": 5.701753911998821,
+      "samples": [
+       5.581886391995795,
+       5.495427872985601,
+       5.520284892001655,
+       5.701753911998821,
+       5.210037883010955
+      ]
+     },
+     "runtime_ns": {
+      "median": 1716934.342857143,
+      "min": 1473228.6862745099,
+      "max": 1953675.525974026,
+      "samples": [
+       1604834.6844919787,
+       1473228.6862745099,
+       1782187.4911242602,
+       1716934.342857143,
+       1953675.525974026
+      ]
+     },
+     "values_per_iteration": 970
+    }
+   }
+  },
+  "D24": {
+   "description": "mock-overrides spike shape D, 24 screens, each a public seam in its own module (no 2.2.0 counterpart); runtime: Root.mock() building every screen, per value",
+   "tools": {
+    "2.2.0": {
+     "failure": "M23 did not compile at -Onone: /home/user/bench/fixtures/D24/M23/M23.swift:3:39: error: extra argument 'generateDependencyTree' in macro expansion\n 1 | import SafeDI\n 2 | import Core\n 3 | @Instantiable(generateDependencyTree: true) public final class Screen23: Screen, Instantiable { public init(id: Int, service: Service, model23: Model23) { self.id = id; self.service = service; self.model23 = model23; super.init() }\n   |                                       `- error: extra argument 'generateDependencyTree' in macro expansion\n 4 |     @Forwarded let id: Int\n 5 |     @Received let service: Service"
+    },
+    "main": {
+     "failure": "App did not compile at -Onone: bol names (ensure you have llvm-symbolizer in your PATH or set the environment var `LLVM_SYMBOLIZER_PATH` to point to it):\n0  swift-frontend 0x000055a14bc34598\n1  swift-frontend 0x000055a14bc3236e\n2  swift-frontend 0x000055a14bc34c31\n3  libc.so.6      0x00007fa070a45330\n4  libc.so.6      0x00007fa070a9ec0c pthread_kill + 284\n5  libc.so.6      0x00007fa070a4527e gsignal + 30\n6  libc.so.6      0x00007fa070a288ff abort + 223\n7  swift-frontend 0x000055a14bb931d4\n8  swift-frontend 0x000055a14bb93212\n9  libstdc++.so.6 0x00007fa070ebb9e8 operator new(unsigned long, std::align_val_t) + 104\n10 swift-frontend 0x000055a1454107da\n11 swift-frontend 0x000055a14541073c\n12 swift-frontend 0x000055a14b83d1ee\n13 swift-frontend 0x000055a14b82f9e6\n14 swift-frontend 0x000055a147486958\n15 swift-frontend 0x000055a147159f2f\n16 swift-frontend 0x000055a14715b8a4\n17 swift-frontend 0x000055a147e90c03\n18 swift-frontend 0x000055a147156151\n19 swift-frontend 0x000055a148cf05a3\n20 swift-frontend 0x000055a14ba54176\n21 swift-frontend 0x000055a14ba5b433\n22 swift-frontend 0x000055a14ba54de5\n23 swift-frontend 0x000055a14587d8eb\n24 swift-frontend 0x000055a14587d0a9\n25 swift-frontend 0x000055a14548f602\n26 swift-frontend 0x000055a14548b058\n27 swift-frontend 0x000055a145489f01\n28 swift-frontend 0x000055a14548c59a\n29 swift-frontend 0x000055a14548bae4\n30 swift-frontend 0x000055a1452431f9\n31 libc.so.6      0x00007fa070a2a1ca\n32 libc.so.6      0x00007fa070a2a28b __libc_start_main + 139\n33 swift-frontend 0x000055a145242345"
+    }
+   }
+  },
+  "D8": {
+   "description": "mock-overrides spike shape D, 8 screens, each a public seam in its own module (no 2.2.0 counterpart); runtime: Root.mock() building every screen, per value",
+   "tools": {
+    "2.2.0": {
+     "failure": "M7 did not compile at -Onone: /home/user/bench/fixtures/D8/M7/M7.swift:3:39: error: extra argument 'generateDependencyTree' in macro expansion\n 1 | import SafeDI\n 2 | import Core\n 3 | @Instantiable(generateDependencyTree: true) public final class Screen7: Screen, Instantiable { public init(id: Int, service: Service, model7: Model7) { self.id = id; self.service = service; self.model7 = model7; super.init() }\n   |                                       `- error: extra argument 'generateDependencyTree' in macro expansion\n 4 |     @Forwarded let id: Int\n 5 |     @Received let service: Service"
+    },
+    "main": {
+     "generated_lines": 693,
+     "generate_wall": {
+      "median": 0.334491290996084,
+      "min": 0.27948724899761146,
+      "max": 0.3684090520000609,
+      "samples": [
+       0.3454704970026796,
+       0.334491290996084,
+       0.3684090520000609,
+       0.3264564240089385,
+       0.27948724899761146
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 37511168,
+      "min": 37212160,
+      "max": 37769216,
+      "samples": [
+       37769216,
+       37556224,
+       37486592,
+       37511168,
+       37212160
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 1.5897460489977675,
+      "min": 1.4794069019990275,
+      "max": 1.6389812099987466,
+      "samples": [
+       1.4794069019990275,
+       1.5640942870049912,
+       1.6389812099987466,
+       1.5897460489977675,
+       1.606390367003769
+      ]
+     },
+     "compile_O": {
+      "median": 1.684006767001847,
+      "min": 1.5709610640005849,
+      "max": 1.7856569110008422,
+      "samples": [
+       1.684006767001847,
+       1.746371506000287,
+       1.7856569110008422,
+       1.5709610640005849,
+       1.6674321060017974
+      ]
+     },
+     "runtime_ns": {
+      "median": 4547.912271659213,
+      "min": 4370.331910554301,
+      "max": 5215.999356700744,
+      "samples": [
+       4547.912271659213,
+       4473.741253839959,
+       5215.999356700744,
+       4559.496116844233,
+       4370.331910554301
+      ]
+     },
+     "values_per_iteration": 34
+    }
+   }
+  },
+  "E16-inline": {
+   "description": "spike 2 shape E16 built inline in one module; runtime: Root() and every path, per value",
+   "tools": {
+    "2.2.0": {
+     "generated_lines": 1572,
+     "generate_wall": {
+      "median": 0.0771718210016843,
+      "min": 0.07214175400076783,
+      "max": 0.08851808799954597,
+      "samples": [
+       0.08268646899887244,
+       0.0766079559980426,
+       0.0771718210016843,
+       0.07214175400076783,
+       0.08851808799954597
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 35934208,
+      "min": 35631104,
+      "max": 36081664,
+      "samples": [
+       35966976,
+       35631104,
+       35852288,
+       36081664,
+       35934208
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 0.7459688929993717,
+      "min": 0.7126704179972876,
+      "max": 0.8827260170000955,
+      "samples": [
+       0.8827260170000955,
+       0.8156917670021357,
+       0.7126704179972876,
+       0.7305722480014083,
+       0.7459688929993717
+      ]
+     },
+     "compile_O": {
+      "median": 1.3873495049992925,
+      "min": 1.1467726080009015,
+      "max": 1.5582571140002983,
+      "samples": [
+       1.5582571140002983,
+       1.3873495049992925,
+       1.1467726080009015,
+       1.3022790489994804,
+       1.4129396150019602
+      ]
+     },
+     "runtime_ns": {
+      "median": 27563.481991914738,
+      "min": 24938.124605153782,
+      "max": 36117.251956181535,
+      "samples": [
+       29776.713279079,
+       36117.251956181535,
+       26793.05144235063,
+       24938.124605153782,
+       27563.481991914738
+      ]
+     },
+     "values_per_iteration": 322
+    },
+    "main": {
+     "generated_lines": 1572,
+     "generate_wall": {
+      "median": 0.08199601600063033,
+      "min": 0.07445693599947845,
+      "max": 0.08945730800041929,
+      "samples": [
+       0.08945730800041929,
+       0.08199601600063033,
+       0.07445693599947845,
+       0.08254731000124593,
+       0.07870358699801727
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 55209984,
+      "min": 54964224,
+      "max": 55685120,
+      "samples": [
+       55209984,
+       55685120,
+       54964224,
+       55414784,
+       55185408
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 0.6671281599992653,
+      "min": 0.6294066840018786,
+      "max": 0.8333818709979823,
+      "samples": [
+       0.6671281599992653,
+       0.8333818709979823,
+       0.6568441039999016,
+       0.6923485360021004,
+       0.6294066840018786
+      ]
+     },
+     "compile_O": {
+      "median": 1.4982111529971007,
+      "min": 1.2310614089983574,
+      "max": 1.4983525329989789,
+      "samples": [
+       1.4983525329989789,
+       1.4413628080001217,
+       1.4982911189981678,
+       1.4982111529971007,
+       1.2310614089983574
+      ]
+     },
+     "runtime_ns": {
+      "median": 32065.595446772124,
+      "min": 27418.090111496986,
+      "max": 36653.65286429706,
+      "samples": [
+       35698.388029509755,
+       29773.22715093778,
+       32065.595446772124,
+       36653.65286429706,
+       27418.090111496986
+      ]
+     },
+     "values_per_iteration": 322
+    }
+   }
+  },
+  "E16-seam": {
+   "description": "spike 2 shape E16 with its seam in module Feature (no 2.2.0 counterpart); runtime: Root() and every path, per value",
+   "tools": {
+    "2.2.0": {
+     "failure": "Feature did not compile at -Onone: /home/user/bench/fixtures/E16-seam/Feature/Types.swift:6:63: error: extra argument 'generatePlainDependencyTreeInitializers' in macro expansion\n  4 | public protocol Api: AnyObject {}\n  5 | \n  6 | #SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n    |                                                               `- error: extra argument 'generatePlainDependencyTreeInitializers' in macro expansion\n  7 | \n  8 | @Instantiable\n\n/home/user/bench/fixtures/E16-seam/Feature/Types.swift:25:39: error: extra argument 'generateDependencyTree' in macro expansion\n 23 | #endif\n 24 | \n 25 | @Instantiable(generateDependencyTree: true)\n    |                                       `- error: extra argument 'generateDependencyTree' in macro expansion\n 26 | public final class Home: Instantiable {\n 27 |     public init(screen0Builder: Instantiator<Screen0>, screen1Builder: Instantiator<Screen1>, screen2Builder: Instantiator<Screen2>, screen3Builder: Instantiator<Screen3>) {"
+    },
+    "main": {
+     "generated_lines": 2410,
+     "generate_wall": {
+      "median": 0.6357671609985118,
+      "min": 0.5313579109970306,
+      "max": 0.7227937379975629,
+      "samples": [
+       0.6215848629981338,
+       0.7193475079984637,
+       0.7227937379975629,
+       0.5313579109970306,
+       0.6357671609985118
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 61939712,
+      "min": 61722624,
+      "max": 62201856,
+      "samples": [
+       61722624,
+       62017536,
+       61939712,
+       62201856,
+       61894656
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 1.365762753997842,
+      "min": 1.3190638209998724,
+      "max": 1.4899834689967975,
+      "samples": [
+       1.3190638209998724,
+       1.4899834689967975,
+       1.3613747699964733,
+       1.4604366809981002,
+       1.365762753997842
+      ]
+     },
+     "compile_O": {
+      "median": 2.371519171003456,
+      "min": 2.2265638380013115,
+      "max": 2.8955714070034446,
+      "samples": [
+       2.8955714070034446,
+       2.699289342999691,
+       2.371519171003456,
+       2.299919368000701,
+       2.2265638380013115
+      ]
+     },
+     "runtime_ns": {
+      "median": 182293.17314702307,
+      "min": 166422.64503605102,
+      "max": 188306.47051442912,
+      "samples": [
+       188306.47051442912,
+       170362.87223168655,
+       186006.94978301303,
+       182293.17314702307,
+       166422.64503605102
+      ]
+     },
+     "values_per_iteration": 322
+    }
+   }
+  },
+  "E24-inline": {
+   "description": "spike 2 shape E24 built inline in one module; runtime: Root() and every path, per value",
+   "tools": {
+    "2.2.0": {
+     "generated_lines": 14100,
+     "generate_wall": {
+      "median": 0.3082829640006821,
+      "min": 0.30289497600097093,
+      "max": 0.3217664639996656,
+      "samples": [
+       0.3082829640006821,
+       0.31051919700257713,
+       0.3217664639996656,
+       0.30289497600097093,
+       0.30774014399867156
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 77742080,
+      "min": 77463552,
+      "max": 78532608,
+      "samples": [
+       78532608,
+       77742080,
+       78098432,
+       77602816,
+       77463552
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 4.689890652000031,
+      "min": 4.608807830998558,
+      "max": 5.069058231001691,
+      "samples": [
+       5.069058231001691,
+       5.001414504000422,
+       4.689890652000031,
+       4.608807830998558,
+       4.682015508999029
+      ]
+     },
+     "compile_O": {
+      "median": 9.525945445002435,
+      "min": 7.786411330002011,
+      "max": 9.670489066997106,
+      "samples": [
+       9.525945445002435,
+       7.786411330002011,
+       9.585521945999062,
+       8.699443227000302,
+       9.670489066997106
+      ]
+     },
+     "runtime_ns": {
+      "median": 445289.31305637985,
+      "min": 347499.7233796296,
+      "max": 529348.253968254,
+      "samples": [
+       529348.253968254,
+       347499.7233796296,
+       478341.16401273885,
+       445289.31305637985,
+       442979.55457227136
+      ]
+     },
+     "values_per_iteration": 2914
+    },
+    "main": {
+     "generated_lines": 14100,
+     "generate_wall": {
+      "median": 0.3878955979998864,
+      "min": 0.3675183499981358,
+      "max": 0.4243733040020743,
+      "samples": [
+       0.3675183499981358,
+       0.4243733040020743,
+       0.39306002000012086,
+       0.37912755999786896,
+       0.3878955979998864
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 214507520,
+      "min": 213975040,
+      "max": 215773184,
+      "samples": [
+       214274048,
+       214507520,
+       215773184,
+       213975040,
+       215003136
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 4.413206737001019,
+      "min": 4.191301105001912,
+      "max": 5.246465421001631,
+      "samples": [
+       4.63147967400073,
+       4.413206737001019,
+       5.246465421001631,
+       4.2628946129989345,
+       4.191301105001912
+      ]
+     },
+     "compile_O": {
+      "median": 9.163752399999794,
+      "min": 8.867490404001728,
+      "max": 9.782197344000451,
+      "samples": [
+       9.782197344000451,
+       9.335270722000132,
+       8.919373777000146,
+       8.867490404001728,
+       9.163752399999794
+      ]
+     },
+     "runtime_ns": {
+      "median": 388889.5038860104,
+      "min": 350781.8095794392,
+      "max": 477183.39268680447,
+      "samples": [
+       444219.825443787,
+       350781.8095794392,
+       373399.236318408,
+       388889.5038860104,
+       477183.39268680447
+      ]
+     },
+     "values_per_iteration": 2914
+    }
+   }
+  },
+  "E24-seam": {
+   "description": "spike 2 shape E24 with its seam in module Feature (no 2.2.0 counterpart); runtime: Root() and every path, per value",
+   "tools": {
+    "2.2.0": {
+     "failure": "Feature did not compile at -Onone: /home/user/bench/fixtures/E24-seam/Feature/Types.swift:6:63: error: extra argument 'generatePlainDependencyTreeInitializers' in macro expansion\n   4 | public protocol Api: AnyObject {}\n   5 | \n   6 | #SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n     |                                                               `- error: extra argument 'generatePlainDependencyTreeInitializers' in macro expansion\n   7 | \n   8 | @Instantiable\n\n/home/user/bench/fixtures/E24-seam/Feature/Types.swift:25:39: error: extra argument 'generateDependencyTree' in macro expansion\n  23 | #endif\n  24 | \n  25 | @Instantiable(generateDependencyTree: true)\n     |                                       `- error: extra argument 'generateDependencyTree' in macro expansion\n  26 | public final class Home: Instantiable {\n  27 |     public init(screen0Builder: Instantiator<Screen0>, screen1Builder: Instantiator<Screen1>, screen2Builder: Instantiator<Screen2>, screen3Builder: Instantiator<Screen3>) {"
+    },
+    "main": {
+     "generated_lines": 17346,
+     "generate_wall": {
+      "median": 9.374789703000715,
+      "min": 7.883187883999199,
+      "max": 10.504663113999413,
+      "samples": [
+       9.561281634996703,
+       7.883187883999199,
+       9.211408017003123,
+       9.374789703000715,
+       10.504663113999413
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 361832448,
+      "min": 360513536,
+      "max": 367583232,
+      "samples": [
+       361832448,
+       360513536,
+       367583232,
+       364027904,
+       361476096
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 9.873315147997346,
+      "min": 9.213872172000265,
+      "max": 10.098821513001894,
+      "samples": [
+       10.098821513001894,
+       9.615625144997466,
+       9.873315147997346,
+       9.213872172000265,
+       10.094787972997437
+      ]
+     },
+     "compile_O": {
+      "median": 22.66780742800256,
+      "min": 21.120993855998677,
+      "max": 23.436512397001934,
+      "samples": [
+       21.678123282999877,
+       23.32835502800299,
+       22.66780742800256,
+       23.436512397001934,
+       21.120993855998677
+      ]
+     },
+     "runtime_ns": {
+      "median": 1907200.6265822784,
+      "min": 1799999.5508982036,
+      "max": 2146205.4857142856,
+      "samples": [
+       2146205.4857142856,
+       2027281.9060402685,
+       1907200.6265822784,
+       1799999.5508982036,
+       1874336.049689441
+      ]
+     },
+     "values_per_iteration": 2914
+    }
+   }
+  },
+  "E32-inline": {
+   "description": "spike 2 shape E32 built inline in one module; runtime: Root() and every path, per value",
+   "tools": {
+    "2.2.0": {
+     "generated_lines": 126852,
+     "generate_wall": {
+      "median": 2.7919921219981916,
+      "min": 2.567729196998698,
+      "max": 3.0247082710011455,
+      "samples": [
+       3.0247082710011455,
+       2.5781182409991743,
+       2.7919921219981916,
+       2.890601841001626,
+       2.567729196998698
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 471592960,
+      "min": 463929344,
+      "max": 483569664,
+      "samples": [
+       468488192,
+       463929344,
+       483569664,
+       471900160,
+       471592960
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 37.3452218099992,
+      "min": 36.530888409997715,
+      "max": 42.66039223500047,
+      "samples": [
+       37.25257938699724,
+       36.530888409997715,
+       37.3452218099992,
+       42.66039223500047,
+       39.70269141500103
+      ]
+     },
+     "compile_O": {
+      "median": 73.44018833099835,
+      "min": 71.22273148599925,
+      "max": 78.09641630500118,
+      "samples": [
+       78.09641630500118,
+       75.56526343699807,
+       71.50089752699932,
+       71.22273148599925,
+       73.44018833099835
+      ]
+     },
+     "runtime_ns": {
+      "median": 2808434.4672897197,
+      "min": 2526010.0756302522,
+      "max": 3582440.273809524,
+      "samples": [
+       2526010.0756302522,
+       3582440.273809524,
+       2910105.548076923,
+       2615481.208695652,
+       2808434.4672897197
+      ]
+     },
+     "values_per_iteration": 26242
+    },
+    "main": {
+     "generated_lines": 126852,
+     "generate_wall": {
+      "median": 3.330473042999074,
+      "min": 3.255551768001169,
+      "max": 3.7597502729986445,
+      "samples": [
+       3.7597502729986445,
+       3.5027485959981277,
+       3.255551768001169,
+       3.3228652620018693,
+       3.330473042999074
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 1672916992,
+      "min": 1669255168,
+      "max": 1678327808,
+      "samples": [
+       1672548352,
+       1673039872,
+       1678327808,
+       1669255168,
+       1672916992
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 37.358363470997574,
+      "min": 36.406219944998156,
+      "max": 42.10168706299737,
+      "samples": [
+       37.358363470997574,
+       36.406219944998156,
+       36.96213858199917,
+       39.948121191999235,
+       42.10168706299737
+      ]
+     },
+     "compile_O": {
+      "median": 75.08406176099743,
+      "min": 74.7530422330019,
+      "max": 81.01236032200177,
+      "samples": [
+       81.01236032200177,
+       75.59414851399924,
+       75.07907524000257,
+       74.7530422330019,
+       75.08406176099743
+      ]
+     },
+     "runtime_ns": {
+      "median": 2869448.0857142857,
+      "min": 2592400.146551724,
+      "max": 3578941.129411765,
+      "samples": [
+       2869448.0857142857,
+       2592400.146551724,
+       3578941.129411765,
+       2751115.963636364,
+       3524387.197674419
+      ]
+     },
+     "values_per_iteration": 26242
+    }
+   }
+  },
+  "E32-seam": {
+   "description": "spike 2 shape E32 with its seam in module Feature (no 2.2.0 counterpart); runtime: Root() and every path, per value",
+   "tools": {
+    "2.2.0": {
+     "failure": "Feature did not compile at -Onone: /home/user/bench/fixtures/E32-seam/Feature/Types.swift:6:63: error: extra argument 'generatePlainDependencyTreeInitializers' in macro expansion\n   4 | public protocol Api: AnyObject {}\n   5 | \n   6 | #SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n     |                                                               `- error: extra argument 'generatePlainDependencyTreeInitializers' in macro expansion\n   7 | \n   8 | @Instantiable\n\n/home/user/bench/fixtures/E32-seam/Feature/Types.swift:25:39: error: extra argument 'generateDependencyTree' in macro expansion\n  23 | #endif\n  24 | \n  25 | @Instantiable(generateDependencyTree: true)\n     |                                       `- error: extra argument 'generateDependencyTree' in macro expansion\n  26 | public final class Home: Instantiable {\n  27 |     public init(screen0Builder: Instantiator<Screen0>, screen1Builder: Instantiator<Screen1>, screen2Builder: Instantiator<Screen2>, screen3Builder: Instantiator<Screen3>) {"
+    },
+    "main": {
+     "generated_lines": 149786,
+     "generate_wall": {
+      "median": 447.81090141599634,
+      "min": 444.22906288500235,
+      "max": 486.9684296380001,
+      "samples": [
+       445.2947259279972,
+       447.81090141599634,
+       444.22906288500235,
+       450.3001279110031,
+       486.9684296380001
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 7162597376,
+      "min": 6919233536,
+      "max": 7258267648,
+      "samples": [
+       7206387712,
+       7258267648,
+       6919233536,
+       7162597376,
+       6962728960
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 92.57108150199929,
+      "min": 85.2092178929961,
+      "max": 95.33434132300317,
+      "samples": [
+       85.2092178929961,
+       87.74834904599993,
+       95.33434132300317,
+       94.69744003899541,
+       92.57108150199929
+      ]
+     },
+     "compile_O": {
+      "median": 201.25771599199652,
+      "min": 190.76128853599948,
+      "max": 212.24862277600187,
+      "samples": [
+       212.24862277600187,
+       197.48604663900915,
+       201.25771599199652,
+       202.2122652179969,
+       190.76128853599948
+      ]
+     },
+     "runtime_ns": {
+      "median": 28438180.545454547,
+      "min": 20822014.533333335,
+      "max": 29453523.545454547,
+      "samples": [
+       29453523.545454547,
+       22019190.92857143,
+       20822014.533333335,
+       28438180.545454547,
+       29153018.454545453
+      ]
+     },
+     "values_per_iteration": 26242
+    }
+   }
+  },
+  "E8-inline": {
+   "description": "spike 2 shape E8 built inline in one module; runtime: Root() and every path, per value",
+   "tools": {
+    "2.2.0": {
+     "generated_lines": 180,
+     "generate_wall": {
+      "median": 0.04445479300193256,
+      "min": 0.04250661699916236,
+      "max": 0.05751538900221931,
+      "samples": [
+       0.04250661699916236,
+       0.04445479300193256,
+       0.05751538900221931,
+       0.047657777002314106,
+       0.042763261997606605
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 55611392,
+      "min": 55611392,
+      "max": 55611392,
+      "samples": [
+       55611392,
+       55611392,
+       55611392,
+       55611392,
+       55611392
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 0.22872481399826938,
+      "min": 0.19954327499726787,
+      "max": 0.24079386799712665,
+      "samples": [
+       0.22872481399826938,
+       0.23052936400199542,
+       0.24079386799712665,
+       0.19954327499726787,
+       0.22249605700199027
+      ]
+     },
+     "compile_O": {
+      "median": 0.36176519600121537,
+      "min": 0.34352305399806937,
+      "max": 0.3838318859998253,
+      "samples": [
+       0.3644286279959488,
+       0.36176519600121537,
+       0.34352305399806937,
+       0.3838318859998253,
+       0.3470664409978781
+      ]
+     },
+     "runtime_ns": {
+      "median": 2533.1700723281574,
+      "min": 2375.6213267027233,
+      "max": 4001.4533231963505,
+      "samples": [
+       2533.1700723281574,
+       2536.721901846716,
+       2375.6213267027233,
+       2486.146508216692,
+       4001.4533231963505
+      ]
+     },
+     "values_per_iteration": 34
+    },
+    "main": {
+     "generated_lines": 180,
+     "generate_wall": {
+      "median": 0.03567249299521791,
+      "min": 0.030285671004094183,
+      "max": 0.04140696099784691,
+      "samples": [
+       0.03567249299521791,
+       0.039646571000048425,
+       0.04140696099784691,
+       0.030285671004094183,
+       0.03207002900307998
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 55611392,
+      "min": 55611392,
+      "max": 55611392,
+      "samples": [
+       55611392,
+       55611392,
+       55611392,
+       55611392,
+       55611392
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 0.22776568100380246,
+      "min": 0.20311785300145857,
+      "max": 0.24467654999898514,
+      "samples": [
+       0.20311785300145857,
+       0.23663502899580635,
+       0.24467654999898514,
+       0.20758626099996036,
+       0.22776568100380246
+      ]
+     },
+     "compile_O": {
+      "median": 0.3666177280028933,
+      "min": 0.30213068799639586,
+      "max": 0.4140558129947749,
+      "samples": [
+       0.3666177280028933,
+       0.31643625300057465,
+       0.3890392100001918,
+       0.30213068799639586,
+       0.4140558129947749
+      ]
+     },
+     "runtime_ns": {
+      "median": 2968.9006016942444,
+      "min": 2378.4103856978636,
+      "max": 3483.315982583454,
+      "samples": [
+       2968.9006016942444,
+       2378.4103856978636,
+       2402.9450527445592,
+       3375.0635856358563,
+       3483.315982583454
+      ]
+     },
+     "values_per_iteration": 34
+    }
+   }
+  },
+  "E8-seam": {
+   "description": "spike 2 shape E8 with its seam in module Feature (no 2.2.0 counterpart); runtime: Root() and every path, per value",
+   "tools": {
+    "2.2.0": {
+     "failure": "Feature did not compile at -Onone: /home/user/bench/fixtures/E8-seam/Feature/Types.swift:6:63: error: extra argument 'generatePlainDependencyTreeInitializers' in macro expansion\n  4 | public protocol Api: AnyObject {}\n  5 | \n  6 | #SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n    |                                                               `- error: extra argument 'generatePlainDependencyTreeInitializers' in macro expansion\n  7 | \n  8 | @Instantiable\n\n/home/user/bench/fixtures/E8-seam/Feature/Types.swift:25:39: error: extra argument 'generateDependencyTree' in macro expansion\n 23 | #endif\n 24 | \n 25 | @Instantiable(generateDependencyTree: true)\n    |                                       `- error: extra argument 'generateDependencyTree' in macro expansion\n 26 | public final class Home: Instantiable {\n 27 |     public init(screen0Builder: Instantiator<Screen0>, screen1Builder: Instantiator<Screen1>, screen2Builder: Instantiator<Screen2>, screen3Builder: Instantiator<Screen3>) {"
+    },
+    "main": {
+     "generated_lines": 530,
+     "generate_wall": {
+      "median": 0.09293140299268998,
+      "min": 0.08775043800415006,
+      "max": 0.11647073699714383,
+      "samples": [
+       0.11647073699714383,
+       0.08999698800471378,
+       0.09293140299268998,
+       0.08775043800415006,
+       0.1014330819962197
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 55611392,
+      "min": 55611392,
+      "max": 55611392,
+      "samples": [
+       55611392,
+       55611392,
+       55611392,
+       55611392,
+       55611392
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 0.4127706939980271,
+      "min": 0.3869844760047272,
+      "max": 0.4963260490039829,
+      "samples": [
+       0.4127706939980271,
+       0.3869844760047272,
+       0.4006445459963288,
+       0.42329262499697506,
+       0.4963260490039829
+      ]
+     },
+     "compile_O": {
+      "median": 0.5812311250119819,
+      "min": 0.5252974730101414,
+      "max": 0.6525333850004245,
+      "samples": [
+       0.6127534409970394,
+       0.5812311250119819,
+       0.6525333850004245,
+       0.5487884980029776,
+       0.5252974730101414
+      ]
+     },
+     "runtime_ns": {
+      "median": 9269.980935018386,
+      "min": 8331.734551614963,
+      "max": 10345.283827586207,
+      "samples": [
+       10345.283827586207,
+       9855.847991064096,
+       8331.734551614963,
+       9269.980935018386,
+       9154.206816586824
+      ]
+     },
+     "values_per_iteration": 34
+    }
+   }
+  },
+  "L240-inline": {
+   "description": "spike 2 shape L240 built inline in one module; runtime: Root() and every path, per value",
+   "tools": {
+    "2.2.0": {
+     "generated_lines": 2289,
+     "generate_wall": {
+      "median": 0.12703091500588926,
+      "min": 0.12544646300375462,
+      "max": 0.1527388710019295,
+      "samples": [
+       0.12703091500588926,
+       0.12544646300375462,
+       0.1527388710019295,
+       0.13114459899952635,
+       0.1260128630019608
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 55611392,
+      "min": 55611392,
+      "max": 55611392,
+      "samples": [
+       55611392,
+       55611392,
+       55611392,
+       55611392,
+       55611392
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 1.7704411090016947,
+      "min": 1.650684035004815,
+      "max": 1.9310625229991274,
+      "samples": [
+       1.8368136619974393,
+       1.7615247959984117,
+       1.650684035004815,
+       1.7704411090016947,
+       1.9310625229991274
+      ]
+     },
+     "compile_O": {
+      "median": 2.970210737999878,
+      "min": 2.890245196998876,
+      "max": 3.6991072310047457,
+      "samples": [
+       2.9046970329945907,
+       3.6991072310047457,
+       2.970210737999878,
+       2.890245196998876,
+       2.9726913800041075
+      ]
+     },
+     "runtime_ns": {
+      "median": 105964.72351694915,
+      "min": 88196.64579659024,
+      "max": 123952.29987608426,
+      "samples": [
+       88196.64579659024,
+       123952.29987608426,
+       91313.06025562994,
+       108430.26625722543,
+       105964.72351694915
+      ]
+     },
+     "values_per_iteration": 635
+    },
+    "main": {
+     "generated_lines": 2289,
+     "generate_wall": {
+      "median": 0.17579028999898583,
+      "min": 0.16249635799613316,
+      "max": 0.18342238900368102,
+      "samples": [
+       0.16592905300058192,
+       0.1796766029947321,
+       0.18342238900368102,
+       0.17579028999898583,
+       0.16249635799613316
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 71266304,
+      "min": 70971392,
+      "max": 71663616,
+      "samples": [
+       71487488,
+       70971392,
+       71663616,
+       71266304,
+       71249920
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 1.6281177459968603,
+      "min": 1.5803771010032506,
+      "max": 1.8642426649967092,
+      "samples": [
+       1.607737090998853,
+       1.6281177459968603,
+       1.8642426649967092,
+       1.5803771010032506,
+       1.7191368999992847
+      ]
+     },
+     "compile_O": {
+      "median": 2.994108630999108,
+      "min": 2.696889528000611,
+      "max": 3.6590437039994868,
+      "samples": [
+       3.6590437039994868,
+       2.994108630999108,
+       2.7222851240003365,
+       3.005920741998125,
+       2.696889528000611
+      ]
+     },
+     "runtime_ns": {
+      "median": 106359.00389932648,
+      "min": 86940.91248913358,
+      "max": 128779.5592274678,
+      "samples": [
+       86940.91248913358,
+       106359.00389932648,
+       128779.5592274678,
+       89300.1335911931,
+       109343.22412536443
+      ]
+     },
+     "values_per_iteration": 635
+    }
+   }
+  },
+  "L240-seam": {
+   "description": "spike 2 shape L240 with its seam in module Feature (no 2.2.0 counterpart); runtime: Root() and every path, per value",
+   "tools": {
+    "2.2.0": {
+     "failure": "Feature did not compile at -Onone: /home/user/bench/fixtures/L240-seam/Feature/Types.swift:8:63: error: extra argument 'generatePlainDependencyTreeInitializers' in macro expansion\n   6 | public protocol Bpi: AnyObject {}\n   7 | \n   8 | #SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n     |                                                               `- error: extra argument 'generatePlainDependencyTreeInitializers' in macro expansion\n   9 | \n  10 | @Instantiable(generateDependencyTree: true)\n\n/home/user/bench/fixtures/L240-seam/Feature/Types.swift:10:39: error: extra argument 'generateDependencyTree' in macro expansion\n   8 | #SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n   9 | \n  10 | @Instantiable(generateDependencyTree: true)\n     |                                       `- error: extra argument 'generateDependencyTree' in macro expansion\n  11 | public final class Hub: Instantiable {\n  12 |     public init(t11: T11, t131Builder: Instantiator<T131>, t145Builder: Instantiator<T145>, t146Builder: Instantiator<T146>, t197Builder: Instantiator<T197>, t212Builder: Instantiator<T212>) {"
+    },
+    "main": {
+     "generated_lines": 5575,
+     "generate_wall": {
+      "median": 0.8662933270024951,
+      "min": 0.7839473959975294,
+      "max": 1.0311158519980381,
+      "samples": [
+       1.0215945279996959,
+       0.7839473959975294,
+       0.8662933270024951,
+       1.0311158519980381,
+       0.8204507929985994
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 80969728,
+      "min": 80326656,
+      "max": 81412096,
+      "samples": [
+       81248256,
+       80613376,
+       80969728,
+       81412096,
+       80326656
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 3.402729831992474,
+      "min": 2.9314231960015604,
+      "max": 3.537298822993762,
+      "samples": [
+       3.537298822993762,
+       3.402729831992474,
+       2.9314231960015604,
+       3.3056230649963254,
+       3.514334207997308
+      ]
+     },
+     "compile_O": {
+      "median": 5.4488050369909615,
+      "min": 5.347123479004949,
+      "max": 6.473067858998547,
+      "samples": [
+       6.473067858998547,
+       5.910255405004136,
+       5.374446320995048,
+       5.347123479004949,
+       5.4488050369909615
+      ]
+     },
+     "runtime_ns": {
+      "median": 352603.93537015276,
+      "min": 329742.85164835164,
+      "max": 447786.2354694486,
+      "samples": [
+       331585.13480662985,
+       329742.85164835164,
+       352603.93537015276,
+       447786.2354694486,
+       390729.8359375
+      ]
+     },
+     "values_per_iteration": 635
+    }
+   }
+  },
+  "L60-inline": {
+   "description": "spike 2 shape L60 built inline in one module; runtime: Root() and every path, per value",
+   "tools": {
+    "2.2.0": {
+     "generated_lines": 822,
+     "generate_wall": {
+      "median": 0.08058483499917202,
+      "min": 0.06572961699566804,
+      "max": 0.08813435899355682,
+      "samples": [
+       0.08058483499917202,
+       0.06572961699566804,
+       0.08813435899355682,
+       0.08143299000221305,
+       0.07687207900016801
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 55611392,
+      "min": 55611392,
+      "max": 55611392,
+      "samples": [
+       55611392,
+       55611392,
+       55611392,
+       55611392,
+       55611392
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 0.5548528020008234,
+      "min": 0.5165287229974638,
+      "max": 0.6030428309968556,
+      "samples": [
+       0.5547180309949908,
+       0.6030428309968556,
+       0.6027321790024871,
+       0.5165287229974638,
+       0.5548528020008234
+      ]
+     },
+     "compile_O": {
+      "median": 0.894306479000079,
+      "min": 0.7583699770038947,
+      "max": 0.9596983969968278,
+      "samples": [
+       0.7583699770038947,
+       0.9596983969968278,
+       0.9340538499964168,
+       0.85777445200074,
+       0.894306479000079
+      ]
+     },
+     "runtime_ns": {
+      "median": 23351.822137463998,
+      "min": 21360.35058739765,
+      "max": 26084.85505608208,
+      "samples": [
+       23351.822137463998,
+       26084.85505608208,
+       24899.101751182672,
+       21360.35058739765,
+       22167.672897886805
+      ]
+     },
+     "values_per_iteration": 174
+    },
+    "main": {
+     "generated_lines": 822,
+     "generate_wall": {
+      "median": 0.0746133889988414,
+      "min": 0.058334641995315906,
+      "max": 0.08134653999877628,
+      "samples": [
+       0.058334641995315906,
+       0.06522634000430116,
+       0.0790020150016062,
+       0.0746133889988414,
+       0.08134653999877628
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 55611392,
+      "min": 55611392,
+      "max": 55611392,
+      "samples": [
+       55611392,
+       55611392,
+       55611392,
+       55611392,
+       55611392
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 0.6228986289934255,
+      "min": 0.5353814039990539,
+      "max": 0.6538200170034543,
+      "samples": [
+       0.6246522049987107,
+       0.6228986289934255,
+       0.5353814039990539,
+       0.6538200170034543,
+       0.5509789999996428
+      ]
+     },
+     "compile_O": {
+      "median": 0.8938273429957917,
+      "min": 0.7935482550019515,
+      "max": 1.0167157140022027,
+      "samples": [
+       0.7935482550019515,
+       0.8022750079981051,
+       1.0167157140022027,
+       0.9588268570005312,
+       0.8938273429957917
+      ]
+     },
+     "runtime_ns": {
+      "median": 28535.00561156553,
+      "min": 22950.334990820073,
+      "max": 35257.8468680221,
+      "samples": [
+       29626.04206576479,
+       22950.334990820073,
+       28535.00561156553,
+       35257.8468680221,
+       25188.40869784233
+      ]
+     },
+     "values_per_iteration": 174
+    }
+   }
+  },
+  "L60-seam": {
+   "description": "spike 2 shape L60 with its seam in module Feature (no 2.2.0 counterpart); runtime: Root() and every path, per value",
+   "tools": {
+    "2.2.0": {
+     "failure": "Feature did not compile at -Onone: /home/user/bench/fixtures/L60-seam/Feature/Types.swift:8:63: error: extra argument 'generatePlainDependencyTreeInitializers' in macro expansion\n   6 | public protocol Bpi: AnyObject {}\n   7 | \n   8 | #SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n     |                                                               `- error: extra argument 'generatePlainDependencyTreeInitializers' in macro expansion\n   9 | \n  10 | @Instantiable(generateDependencyTree: true)\n\n/home/user/bench/fixtures/L60-seam/Feature/Types.swift:10:39: error: extra argument 'generateDependencyTree' in macro expansion\n   8 | #SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n   9 | \n  10 | @Instantiable(generateDependencyTree: true)\n     |                                       `- error: extra argument 'generateDependencyTree' in macro expansion\n  11 | public final class Hub: Instantiable {\n  12 |     public init(t39: T39) {"
+    },
+    "main": {
+     "generated_lines": 3135,
+     "generate_wall": {
+      "median": 0.7637350489967503,
+      "min": 0.6655877509983839,
+      "max": 0.81477348000044,
+      "samples": [
+       0.7637350489967503,
+       0.7367161429938278,
+       0.81477348000044,
+       0.8048877799956244,
+       0.6655877509983839
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 59711488,
+      "min": 59449344,
+      "max": 60166144,
+      "samples": [
+       59719680,
+       59449344,
+       59568128,
+       60166144,
+       59711488
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 1.7535599909970188,
+      "min": 1.5285082049958874,
+      "max": 1.8599190730019473,
+      "samples": [
+       1.8599190730019473,
+       1.5285082049958874,
+       1.7706629930034978,
+       1.7535599909970188,
+       1.6574440090043936
+      ]
+     },
+     "compile_O": {
+      "median": 2.982854829991993,
+      "min": 2.8607631720005884,
+      "max": 3.3752906390000135,
+      "samples": [
+       2.894725361999008,
+       3.3752906390000135,
+       2.982854829991993,
+       2.8607631720005884,
+       3.2353095470025437
+      ]
+     },
+     "runtime_ns": {
+      "median": 272906.69545454544,
+      "min": 216946.89443239334,
+      "max": 280958.32209737826,
+      "samples": [
+       243347.5701540957,
+       272906.69545454544,
+       216946.89443239334,
+       279335.7765363128,
+       280958.32209737826
+      ]
+     },
+     "values_per_iteration": 174
+    }
+   }
+  },
+  "example-package": {
+   "description": "Examples/Example Package Integration (six modules), generate and compile only",
+   "tools": {
+    "2.2.0": {
+     "generated_lines": 133,
+     "generate_wall": {
+      "median": 0.24286106001818553,
+      "min": 0.2158402540080715,
+      "max": 0.25274337698647287,
+      "samples": [
+       0.25274337698647287,
+       0.24286106001818553,
+       0.24358678599674022,
+       0.2158402540080715,
+       0.21627442001044983
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 55611392,
+      "min": 55611392,
+      "max": 55611392,
+      "samples": [
+       55611392,
+       55611392,
+       55611392,
+       55611392,
+       55611392
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 0.6020601720083505,
+      "min": 0.565500429001986,
+      "max": 0.6264433420074056,
+      "samples": [
+       0.565500429001986,
+       0.5805945129905012,
+       0.613902467994194,
+       0.6264433420074056,
+       0.6020601720083505
+      ]
+     },
+     "compile_O": {
+      "median": 0.7584960500025772,
+      "min": 0.7026205799920717,
+      "max": 0.8825611919965013,
+      "samples": [
+       0.7584960500025772,
+       0.8825611919965013,
+       0.7983884169952944,
+       0.7507338200084632,
+       0.7026205799920717
+      ]
+     }
+    },
+    "main": {
+     "generated_lines": 133,
+     "generate_wall": {
+      "median": 0.13977858499856666,
+      "min": 0.126949842000613,
+      "max": 0.14839293200930115,
+      "samples": [
+       0.14839293200930115,
+       0.13977858499856666,
+       0.14555117501004133,
+       0.13089932900766144,
+       0.126949842000613
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 55611392,
+      "min": 55611392,
+      "max": 55611392,
+      "samples": [
+       55611392,
+       55611392,
+       55611392,
+       55611392,
+       55611392
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 0.5796003880022909,
+      "min": 0.5491646340087755,
+      "max": 0.5884975239896448,
+      "samples": [
+       0.5884975239896448,
+       0.5491646340087755,
+       0.5879414890077896,
+       0.5796003880022909,
+       0.5784023940141196
+      ]
+     },
+     "compile_O": {
+      "median": 0.7650861839938443,
+      "min": 0.673843715005205,
+      "max": 0.8300102199864341,
+      "samples": [
+       0.8238376709923614,
+       0.7650861839938443,
+       0.8300102199864341,
+       0.7392968250060221,
+       0.673843715005205
+      ]
+     }
+    }
+   }
+  },
+  "issue646-12": {
+   "description": "#646's generator, 12 screens, seed 1; runtime: Root() and a walk 4 screens deep, per screen",
+   "tools": {
+    "2.2.0": {
+     "generated_lines": 5311,
+     "generate_wall": {
+      "median": 0.15525688899651868,
+      "min": 0.1279803310026182,
+      "max": 0.16020220999780577,
+      "samples": [
+       0.1593083879997721,
+       0.15403307499946095,
+       0.16020220999780577,
+       0.1279803310026182,
+       0.15525688899651868
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 55611392,
+      "min": 55611392,
+      "max": 55611392,
+      "samples": [
+       55611392,
+       55611392,
+       55611392,
+       55611392,
+       55611392
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 1.6720438360061962,
+      "min": 1.6352787470023031,
+      "max": 1.7987801490016864,
+      "samples": [
+       1.660437846003333,
+       1.6352787470023031,
+       1.7987801490016864,
+       1.6720438360061962,
+       1.7419609450007556
+      ]
+     },
+     "compile_O": {
+      "median": 4.294187986000907,
+      "min": 3.4378706319985213,
+      "max": 4.876676172003499,
+      "samples": [
+       4.714981582001201,
+       3.4378706319985213,
+       4.294187986000907,
+       4.876676172003499,
+       3.7481279620042187
+      ]
+     },
+     "runtime_ns": {
+      "median": 48848.046239010095,
+      "min": 45877.08837920489,
+      "max": 64097.49081589065,
+      "samples": [
+       64097.49081589065,
+       48848.046239010095,
+       46448.5328998297,
+       45877.08837920489,
+       53754.92027946973
+      ]
+     },
+     "values_per_iteration": 122
+    },
+    "main": {
+     "generated_lines": 5311,
+     "generate_wall": {
+      "median": 0.5058436489998712,
+      "min": 0.4297597870026948,
+      "max": 0.5296202429963159,
+      "samples": [
+       0.5296202429963159,
+       0.45138552199932747,
+       0.5058436489998712,
+       0.4297597870026948,
+       0.516451624003821
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 135835648,
+      "min": 132988928,
+      "max": 137084928,
+      "samples": [
+       136572928,
+       137084928,
+       135835648,
+       132988928,
+       133558272
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 1.706092445005197,
+      "min": 1.5950364579985035,
+      "max": 1.9268615249966388,
+      "samples": [
+       1.706092445005197,
+       1.9268615249966388,
+       1.5950364579985035,
+       1.6453784149998683,
+       1.7805464640041464
+      ]
+     },
+     "compile_O": {
+      "median": 4.515187293000054,
+      "min": 3.932834835999529,
+      "max": 4.602917979005724,
+      "samples": [
+       4.545294294999621,
+       3.932834835999529,
+       4.494521972999792,
+       4.515187293000054,
+       4.602917979005724
+      ]
+     },
+     "runtime_ns": {
+      "median": 32105.88303905832,
+      "min": 29566.51069281561,
+      "max": 45952.0710675448,
+      "samples": [
+       32105.88303905832,
+       45628.66631178707,
+       45952.0710675448,
+       31767.36605252012,
+       29566.51069281561
+      ]
+     },
+     "values_per_iteration": 122
+    }
+   }
+  },
+  "issue646-16": {
+   "description": "#646's generator, 16 screens, seed 1; runtime: Root() and a walk 4 screens deep, per screen",
+   "tools": {
+    "2.2.0": {
+     "generated_lines": 114024,
+     "generate_wall": {
+      "median": 2.472600187000353,
+      "min": 2.3246574559962028,
+      "max": 2.6715468740003416,
+      "samples": [
+       2.5989882909998414,
+       2.472600187000353,
+       2.3246574559962028,
+       2.370748724002624,
+       2.6715468740003416
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 481464320,
+      "min": 476540928,
+      "max": 486858752,
+      "samples": [
+       486858752,
+       486256640,
+       476540928,
+       480378880,
+       481464320
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 56.549307745997794,
+      "min": 53.11013024499698,
+      "max": 58.161502020004264,
+      "samples": [
+       58.161502020004264,
+       56.476217368996004,
+       57.677867632002744,
+       56.549307745997794,
+       53.11013024499698
+      ]
+     },
+     "compile_O": {
+      "median": 114.0362881139954,
+      "min": 107.83068001400534,
+      "max": 121.10770259000128,
+      "samples": [
+       121.10770259000128,
+       115.87309218400333,
+       109.44363196300401,
+       107.83068001400534,
+       114.0362881139954
+      ]
+     },
+     "runtime_ns": {
+      "median": 50688.703716216216,
+      "min": 45229.556761646316,
+      "max": 54363.5443015039,
+      "samples": [
+       50688.703716216216,
+       54363.5443015039,
+       45229.556761646316,
+       50067.101301735645,
+       51876.41898668511
+      ]
+     },
+     "values_per_iteration": 122
+    },
+    "main": {
+     "generated_lines": 114024,
+     "generate_wall": {
+      "median": 11.183175160003884,
+      "min": 10.793625742000586,
+      "max": 12.729635058996791,
+      "samples": [
+       11.356943264996517,
+       11.182114158997138,
+       10.793625742000586,
+       11.183175160003884,
+       12.729635058996791
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 2138640384,
+      "min": 2090962944,
+      "max": 2197053440,
+      "samples": [
+       2090962944,
+       2184220672,
+       2138640384,
+       2197053440,
+       2134208512
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 50.938098573999014,
+      "min": 48.8251261040059,
+      "max": 53.689542892003374,
+      "samples": [
+       53.38011639100296,
+       53.689542892003374,
+       49.96508590200392,
+       50.938098573999014,
+       48.8251261040059
+      ]
+     },
+     "compile_O": {
+      "median": 130.7451050210002,
+      "min": 124.12930467099795,
+      "max": 131.23755395100306,
+      "samples": [
+       131.07580853900436,
+       126.37645893199806,
+       124.12930467099795,
+       131.23755395100306,
+       130.7451050210002
+      ]
+     },
+     "runtime_ns": {
+      "median": 44282.98922509225,
+      "min": 42183.598987626545,
+      "max": 60420.27909786549,
+      "samples": [
+       43120.59701063524,
+       44282.98922509225,
+       60420.27909786549,
+       42183.598987626545,
+       51186.37775123699
+      ]
+     },
+     "values_per_iteration": 122
+    }
+   }
+  },
+  "issue646-mock-12": {
+   "description": "#646's generator, 12 screens, seed 5, mock; runtime: Root.mock() and a walk 4 screens deep, per screen",
+   "tools": {
+    "2.2.0": {
+     "generated_lines": 339105,
+     "generate_wall": {
+      "median": 5.642921801998455,
+      "min": 5.0249737150006695,
+      "max": 6.5041261250007665,
+      "samples": [
+       6.5041261250007665,
+       6.032661402001395,
+       5.0249737150006695,
+       5.324379502002557,
+       5.642921801998455
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 348389376,
+      "min": 344260608,
+      "max": 364273664,
+      "samples": [
+       364273664,
+       362106880,
+       348389376,
+       345096192,
+       344260608
+      ]
+     },
+     "generate_instructions": null
+    },
+    "main": {
+     "generated_lines": 339105,
+     "generate_wall": {
+      "median": 19.732313630993303,
+      "min": 18.514234465998015,
+      "max": 19.986189277995436,
+      "samples": [
+       19.548954143996525,
+       19.732313630993303,
+       19.82599057799962,
+       18.514234465998015,
+       19.986189277995436
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 970153984,
+      "min": 898613248,
+      "max": 972378112,
+      "samples": [
+       972378112,
+       956243968,
+       898613248,
+       970235904,
+       970153984
+      ]
+     },
+     "generate_instructions": null
+    }
+   }
+  }
+ },
+ "load": {
+  "D12": 0.400390625,
+  "D16": 0.74951171875,
+  "D20": 0.974609375,
+  "D24": 1.0,
+  "D8": 1.0,
+  "E16-inline": 0.94873046875,
+  "E16-seam": 1.015625,
+  "E24-inline": 0.96728515625,
+  "E24-seam": 1.0,
+  "E32-inline": 1.0,
+  "E32-seam": 1.0,
+  "E8-inline": 1.0,
+  "E8-seam": 1.0732421875,
+  "L240-inline": 1.05615234375,
+  "L240-seam": 1.07177734375,
+  "L60-inline": 1.0078125,
+  "L60-seam": 0.89404296875,
+  "example-package": 0.962890625,
+  "issue646-12": 0.97705078125,
+  "issue646-16": 1.0,
+  "issue646-mock-12": 1.0
+ },
+ "finished": "2026-11-16T13:11:08Z"
+}

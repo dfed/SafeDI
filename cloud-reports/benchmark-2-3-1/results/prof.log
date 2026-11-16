@@ -1,0 +1,58 @@
+== phases issue646-16
+8684 samples
+| Phase | Share (each sample once) | Share (anywhere in stack) |
+|---|---|---|
+| validation walks | 5.5% | 5.5% |
+| ScopeGenerator.init facts | 21.7% | 21.7% |
+| createScopeGenerator passes | 10.9% | 11.2% |
+| emission | 54.7% | 88.5% |
+| parsing and scope maps | 0.0% | 0.0% |
+| other | 0.0% |  |
+| unattributed (no frame unwound past the runtime) | 7.2% |  |
+== phases issue646-mock-12
+10912 samples
+| Phase | Share (each sample once) | Share (anywhere in stack) |
+|---|---|---|
+| validation walks | 5.8% | 5.8% |
+| ScopeGenerator.init facts | 28.3% | 28.3% |
+| createScopeGenerator passes | 13.3% | 13.8% |
+| emission | 49.7% | 89.3% |
+| parsing and scope maps | 0.0% | 0.0% |
+| other | 0.1% |  |
+| unattributed (no frame unwound past the runtime) | 2.7% |  |
+== speculation
+issue646-12 main 
+issue646-12 nospec 
+issue646-12 main 
+issue646-12 nospec 
+issue646-12 main 
+issue646-12 nospec 
+issue646-12 main 
+issue646-12 nospec 
+issue646-12 main 
+issue646-12 nospec 
+issue646-12 outputs identical
+issue646-16 main 
+issue646-16 nospec 
+issue646-16 main 
+issue646-16 nospec 
+issue646-16 main 
+issue646-16 nospec 
+issue646-16 main 
+issue646-16 nospec 
+issue646-16 main 
+issue646-16 nospec 
+issue646-16 outputs identical
+issue646-mock-12 main 
+issue646-mock-12 nospec 
+issue646-mock-12 main 
+issue646-mock-12 nospec 
+issue646-mock-12 main 
+issue646-mock-12 nospec 
+issue646-mock-12 main 
+issue646-mock-12 nospec 
+issue646-mock-12 main 
+issue646-mock-12 nospec 
+issue646-mock-12 outputs identical
+== callgrind 12
+done

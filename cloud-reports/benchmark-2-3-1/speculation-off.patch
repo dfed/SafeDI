@@ -1,0 +1,16 @@
+diff --git a/Sources/SafeDICore/Models/Scope.swift b/Sources/SafeDICore/Models/Scope.swift
+index e92f27c9..5950adbd 100644
+--- a/Sources/SafeDICore/Models/Scope.swift
++++ b/Sources/SafeDICore/Models/Scope.swift
+@@ -1315,9 +1315,8 @@ private struct ScopeGeneratorUnderConstruction {
+ 
+ 	/// Kicks off the generation of `scopeGenerator`'s code, which a later request for the code reads from its cache.
+ 	static func startCodeGeneration(of scopeGenerator: ScopeGenerator) {
+-		_ = Task.detached {
+-			try await scopeGenerator.generateCode()
+-		}
++		// Benchmark-only patch, never committed: speculation off.
++		_ = scopeGenerator
+ 	}
+ 
+ 	private let scope: Scope

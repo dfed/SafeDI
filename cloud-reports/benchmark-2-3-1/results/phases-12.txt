@@ -1,0 +1,10 @@
+2028 samples
+| Phase | Share (each sample once) | Share (anywhere in stack) |
+|---|---|---|
+| validation walks | 6.2% | 6.2% |
+| ScopeGenerator.init facts | 18.1% | 18.1% |
+| createScopeGenerator passes | 11.7% | 12.0% |
+| emission | 52.5% | 84.0% |
+| parsing and scope maps | 0.9% | 0.9% |
+| other | 0.2% |  |
+| unattributed (no frame unwound past the runtime) | 10.3% |  |
