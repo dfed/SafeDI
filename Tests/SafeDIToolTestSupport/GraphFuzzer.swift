@@ -9983,6 +9983,14 @@ struct GraphFuzzerOutcomeDifference: Equatable {
 		/// configuration file, along with the reads of it.
 		case mockConfigurationFieldPresence = "which configuration fields its generated mock has"
 		case dependencyTreeCode = "its generated dependency tree code"
+		/// A dependency tree file's code holds the same items of its lists in another order, under a renaming that reorders
+		/// type names or labels: the order of the lists SafeDI sorts by label, such as a seam's builders and pass-throughs.
+		/// Compared with the items of each list and each block sorted, recursively (`listsInCanonicalOrder(of:)`), so only
+		/// siblings within one list or one block may move: a seam's builders and pass-throughs, the declarations and cases
+		/// of its builders, and the statements that bind its values, across line boundaries too. Only while that code, with its
+		/// renaming undone, compiles with the graph and builds the values the graph's own code builds; otherwise the
+		/// difference is the file's code (`GraphFuzzerToolRuns.renamedGraphFailures(refutingOrderOf:)`).
+		case dependencyTreeListOrder = "the order of the label-sorted lists in its generated dependency tree code"
 		case warnings = "its warnings"
 	}
 
@@ -10001,9 +10009,11 @@ struct GraphFuzzerOutcomeDifference: Equatable {
 	}
 
 	/// The aspects of the difference between `code` and `otherCode`, the code of the generated file named `fileName` in
-	/// each outcome: one for each known reason a mock file's difference shows, or, when anything else differs, the
-	/// aspect of the file's code as a whole, which no shape that names a reason documents.
-	static func aspects(ofCodeInFileNamed fileName: String, code: String, otherCode: String, comparedBy mockDifference: GraphFuzzerMockDifference) -> [Aspect] {
+	/// each outcome: one for each known reason a mock file's difference shows, the order of a dependency tree file's
+	/// label-sorted lists where `renaming` reorders type names or labels and nothing but order differs
+	/// (`dependencyTreeListOrder`), or, when anything else differs, the aspect of the file's code as a whole, which no
+	/// shape that names a reason documents.
+	static func aspects(ofCodeInFileNamed fileName: String, code: String, otherCode: String, comparedBy mockDifference: GraphFuzzerMockDifference, renaming: GraphFuzzerRenaming?) -> [Aspect] {
 		let codeAspect: Aspect = if fileName.hasSuffix("+SafeDIMock.swift") {
 			.mockCode
 		} else if fileName.hasSuffix("SafeDIMockConfiguration.swift") {
@@ -10011,7 +10021,13 @@ struct GraphFuzzerOutcomeDifference: Equatable {
 		} else {
 			.dependencyTreeCode
 		}
-		guard codeAspect != .dependencyTreeCode else { return [codeAspect] }
+		guard codeAspect != .dependencyTreeCode else {
+			// A renaming of file names alone moves no label sort, so it never explains a difference of order.
+			guard let renaming, renaming.changesOrderOfTypeNames || renaming.reversesLabels, listsInCanonicalOrder(of: code) == listsInCanonicalOrder(of: otherCode) else {
+				return [codeAspect]
+			}
+			return [.dependencyTreeListOrder]
+		}
 		let reasons = mockDifference.reasons(forDifferenceBetween: code, and: otherCode).map { reason -> Aspect in
 			switch reason {
 			case .orderOfParametersAndFields:
@@ -10021,6 +10037,172 @@ struct GraphFuzzerOutcomeDifference: Equatable {
 			}
 		}
 		return reasons.isEmpty ? [codeAspect] : reasons
+	}
+
+	/// `code` with the items of each of its lists and blocks in sorted order: each balanced `(…)`, `[…]` and generic `<…>`
+	/// group split at its own top-level commas, and each `{…}` block split at its own newlines and semicolons into its
+	/// declarations and statements (a multi-line one, whose other lines are inside a nested group or block, stays one
+	/// item, as does an `#if` region with everything up to its `#endif` and a `#sourceLocation(file:…)` run up to its
+	/// `#sourceLocation()`), each item put in this form itself and trimmed,
+	/// and the items sorted, while everything outside the groups and blocks keeps its order. So two files compare equal
+	/// when they differ only in the order of siblings within one list or one block, recursively: an item moved to
+	/// another list or block, a value swapped between two calls, a changed nesting, a respelled type or a value moved to
+	/// another label still differs. Statement order inside one block is forgiven here because what it means is checked
+	/// apart: a renamed graph whose code this form finds equal is compiled, with its renaming undone, with the graph, and
+	/// compared with the graph's own code by its values (`GraphFuzzerToolRuns.renamedGraphFailures(refutingOrderOf:)`), so a
+	/// use before a declaration, or a reorder that changes what is built, is the file's code. A run of whitespace that holds
+	/// a newline reads as one space inside a list.
+	static func listsInCanonicalOrder(of code: String) -> String {
+		var canonicalizer = GraphFuzzerListOrderCanonicalizer(characters: Array(code))
+		return canonicalizer.sequence()
+	}
+}
+
+/// Puts a generated file's lists and blocks in canonical order (`GraphFuzzerOutcomeDifference.listsInCanonicalOrder(of:)`).
+private struct GraphFuzzerListOrderCanonicalizer {
+	let characters: [Character]
+	var index = 0
+
+	/// The text from `index` to the end, its groups and blocks in canonical form.
+	mutating func sequence() -> String {
+		var text = ""
+		while index < characters.count {
+			appendNext(to: &text)
+		}
+		return text
+	}
+
+	/// Appends the character at `index`, or the canonical form of the group or block it opens, to `text`, and moves past
+	/// it. A run of whitespace that holds a newline is appended as one space.
+	private mutating func appendNext(to text: inout String) {
+		let character = characters[index]
+		if let closer = closer(openedAt: index) {
+			let start = index
+			index += 1
+			if let contents = closer == "}" ? block() : group(closedBy: closer) {
+				text += "\(character)\(contents)\(closer)"
+				return
+			}
+			// Not a group: the opener is text, and the scan resumes after it.
+			index = start + 1
+			text.append(character)
+		} else if character.isWhitespace {
+			let run = whitespaceRun()
+			text += run.contains(where: \.isNewline) ? " " : run
+		} else {
+			text.append(character)
+			index += 1
+		}
+	}
+
+	/// The run of whitespace at `index`, moving past it.
+	private mutating func whitespaceRun() -> String {
+		var run = ""
+		while index < characters.count, characters[index].isWhitespace {
+			run.append(characters[index])
+			index += 1
+		}
+		return run
+	}
+
+	/// The closer of the group or block the character at `position` opens, or `nil`: `(`, `[` and `{` always open one, and
+	/// `<` where it follows a name, as a generic argument list does.
+	private func closer(openedAt position: Int) -> Character? {
+		switch characters[position] {
+		case "(":
+			")"
+		case "[":
+			"]"
+		case "{":
+			"}"
+		case "<":
+			position > 0 && (characters[position - 1].isLetter || characters[position - 1].isNumber || characters[position - 1] == "_") ? ">" : nil
+		default:
+			nil
+		}
+	}
+
+	/// The items of the group whose opener `index` follows, sorted and joined, with `index` moved past `closer`; or `nil`
+	/// where no `closer` balances it: a generic argument list ends at a newline or a brace.
+	private mutating func group(closedBy closer: Character) -> String? {
+		var items = [String]()
+		var item = ""
+		while index < characters.count {
+			let character = characters[index]
+			if character == closer, closer != ">" || characters[index - 1] != "-" {
+				index += 1
+				items.append(item.trimmingCharacters(in: .whitespaces))
+				return items.sorted().joined(separator: ", ")
+			} else if character == "," {
+				items.append(item.trimmingCharacters(in: .whitespaces))
+				item = ""
+				index += 1
+			} else if ")]}".contains(character) || (closer == ">" && (character == "{" || character.isNewline)) {
+				return nil
+			} else {
+				appendNext(to: &item)
+			}
+		}
+		return nil
+	}
+
+	/// The items of the block whose `{` `index` follows, an `#if` region joined into one, sorted and joined, with `index`
+	/// moved past its `}`; or `nil` where no `}` balances it.
+	private mutating func block() -> String? {
+		var items = [String]()
+		var item = ""
+		while index < characters.count {
+			let character = characters[index]
+			if character == "}" {
+				index += 1
+				items.append(item.trimmingCharacters(in: .whitespaces))
+				return Self.joiningRegions(of: items.filter { !$0.isEmpty }).sorted().joined(separator: "; ")
+			} else if character == ";" {
+				items.append(item.trimmingCharacters(in: .whitespaces))
+				item = ""
+				index += 1
+			} else if character == ")" || character == "]" {
+				return nil
+			} else if character.isWhitespace {
+				let run = whitespaceRun()
+				if run.contains(where: \.isNewline) {
+					items.append(item.trimmingCharacters(in: .whitespaces))
+					item = ""
+				} else {
+					item += run
+				}
+			} else {
+				appendNext(to: &item)
+			}
+		}
+		return nil
+	}
+
+	/// `items` with each `#if` item and those after it up to its `#endif`, and each `#sourceLocation(file:…)` item and those
+	/// after it up to the `#sourceLocation()` that ends it, joined into one, in their order.
+	private static func joiningRegions(of items: [String]) -> [String] {
+		var joined = [String]()
+		var region = [String]()
+		var depth = 0
+		for item in items {
+			let opensRegion = item.hasPrefix("#if") || (item.hasPrefix("#sourceLocation(") && item != "#sourceLocation()")
+			if opensRegion {
+				depth += 1
+			}
+			if depth > 0 {
+				region.append(item)
+			} else {
+				joined.append(item)
+			}
+			if item.hasPrefix("#endif") || item == "#sourceLocation()", depth > 0 {
+				depth -= 1
+				if depth == 0 {
+					joined.append(region.joined(separator: "; "))
+					region = []
+				}
+			}
+		}
+		return joined + region
 	}
 }
 
@@ -10092,7 +10274,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 				guard !code.utf8.elementsEqual(otherCode.utf8) else { continue }
 				let differsOnlyInOrderOfExtensions = GraphFuzzerExtensionOrder.sortingExtensionsWithinTheirPlaces(in: code) == GraphFuzzerExtensionOrder.sortingExtensionsWithinTheirPlaces(in: otherCode)
 				guard codeComparison == .byteForByte || !differsOnlyInOrderOfExtensions else { continue }
-				differences += GraphFuzzerOutcomeDifference.aspects(ofCodeInFileNamed: fileName, code: code, otherCode: otherCode, comparedBy: mockDifference).map { aspect in
+				differences += GraphFuzzerOutcomeDifference.aspects(ofCodeInFileNamed: fileName, code: code, otherCode: otherCode, comparedBy: mockDifference, renaming: renaming).map { aspect in
 					GraphFuzzerOutcomeDifference(aspect: aspect, fileName: fileName, differsOnlyInOrderOfExtensions: differsOnlyInOrderOfExtensions)
 				}
 			}
@@ -11594,15 +11776,39 @@ struct GraphFuzzerToolRuns {
 	/// each diagnostic's suggestions in any order, other generated file names, or the code of each generated file that
 	/// differs by more than the order of its extensions.
 	var renamedGraphFailures: [GraphFuzzerFailure] {
-		renamedOutcomes.flatMap { renaming, outcome in
-			GraphFuzzerToolOutcome.differences(between: firstOutcome, and: outcome, comparingCode: .inAnyOrderOfExtensions, renaming: renaming, of: fixture).map { difference in
-				GraphFuzzerFailure(
+		renamedGraphFailures(refutingOrderOf: [:])
+	}
+
+	/// `renamedGraphFailures`, where the renamed graph at each index of `renamedOutcomes` that `refutations` lists has a
+	/// difference of the order of its label-sorted lists that its code does not bear out: the code, with its renaming undone,
+	/// does not compile with the graph, or builds other values than the graph's own code
+	/// (`GraphFuzzerOracle.valueComparisons(of:isolatingValueGraphsOf:)`). Each such difference is the file's code
+	/// (`dependencyTreeCode`), with what refuted the order.
+	func renamedGraphFailures(refutingOrderOf refutations: [Int: String]) -> [GraphFuzzerFailure] {
+		renamedOutcomes.enumerated().flatMap { index, renamed in
+			let (renaming, outcome) = renamed
+			return GraphFuzzerToolOutcome.differences(between: firstOutcome, and: outcome, comparingCode: .inAnyOrderOfExtensions, renaming: renaming, of: fixture).map { difference in
+				let refutation = difference.aspect == .dependencyTreeListOrder ? refutations[index] : nil
+				let reportedDifference = refutation == nil ? difference : GraphFuzzerOutcomeDifference(aspect: .dependencyTreeCode, fileName: difference.fileName)
+				return GraphFuzzerFailure(
 					seed: fixture.seed,
 					kind: .renamedGraphDiffers,
-					details: "\(renaming.description.prefix(1).uppercased())\(renaming.description.dropFirst()) changes \(difference.description).\nThis graph:\n\(firstOutcome.description)\nThe renamed graph, with its renaming undone:\n\(outcome.description)",
-					renamedGraphDifference: difference.aspect,
+					details: "\(renaming.description.prefix(1).uppercased())\(renaming.description.dropFirst()) changes \(reportedDifference.description).\(refutation.map { "\n\($0)" } ?? "")\nThis graph:\n\(firstOutcome.description)\nThe renamed graph, with its renaming undone:\n\(outcome.description)",
+					renamedGraphDifference: reportedDifference.aspect,
 				)
 			}
+		}
+	}
+
+	/// The index in `renamedOutcomes` and the generated files of each renamed graph the tool accepted whose code differs
+	/// from this graph's in the order of its label-sorted lists (`dependencyTreeListOrder`): code that, with its renaming
+	/// undone, must compile with this graph and build its values.
+	var renamedOutcomesDifferingInListOrder: [(index: Int, generatedFiles: [String: String])] {
+		renamedOutcomes.enumerated().compactMap { index, renamed in
+			guard case let .accepted(generatedFiles, _) = renamed.outcome,
+			      GraphFuzzerToolOutcome.differences(between: firstOutcome, and: renamed.outcome, comparingCode: .inAnyOrderOfExtensions, renaming: renamed.renaming, of: fixture).contains(where: { $0.aspect == .dependencyTreeListOrder })
+			else { return nil }
+			return (index, generatedFiles)
 		}
 	}
 
@@ -11848,7 +12054,7 @@ enum GraphFuzzerOracle {
 			try await self.valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && codeCompilationFailures[$0.fixture.seed] == nil }, isolatingValueGraphsOf: isolatedSeeds)
 		}
 		return toolRuns.map { runs in
-			let renamedGraphFailures = runs.renamedGraphFailures
+			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
 			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
@@ -11917,6 +12123,9 @@ enum GraphFuzzerOracle {
 		/// What the retention oracle judged of each graph with a hole whose two builds the comparator compared, failing or
 		/// not, keyed by seed.
 		var retentionCounts = [UInt64: GraphFuzzerRetentionCounts]()
+		/// What refuted each renamed graph's order-only difference, by its index in `renamedOutcomes`, keyed by seed
+		/// (`GraphFuzzerToolRuns.renamedGraphFailures(refutingOrderOf:)`).
+		var listOrderRefutations = [UInt64: [Int: String]]()
 	}
 
 	/// Whether the graph of `fixture` holds a hole, judged by the retention oracle: it draws a type that fills a seam's hole
@@ -11989,6 +12198,48 @@ enum GraphFuzzerOracle {
 			))
 		}
 		guard let comparisons = try await compare(graphs + visibleGraphs + valueOracleGraphs, isolating: isolatedSeeds, filesToDelete: &filesToDelete) else { return ValueComparisons() }
+		// A renamed graph's code that differs from the graph's only in the order of its label-sorted lists and blocks is that
+		// order only if it means the same: with its renaming undone, it must compile with the graph and build the values the
+		// graph's own code builds, against the same inline build. A seed's renamed graphs declare its types again, so each
+		// round holds at most one of each seed's, in one batch.
+		var renamedGraphsByRound = [[(runs: GraphFuzzerToolRuns, graphIndex: Int, renamedIndex: Int, graph: DifferentialValueGraph)]]()
+		for (graphIndex, (runs, graph)) in graphs.enumerated() where runs.knownRightOutcome == nil {
+			let renamedGraphs = runs.renamedOutcomesDifferingInListOrder
+			guard !renamedGraphs.isEmpty else { continue }
+			let storingFixture = GraphFuzzerGenerator.fixture(forSeed: runs.fixture.seed, features: GraphFuzzerGeneratorFeature.features(drawnIn: runs.fixture), storingEveryParameter: true)
+			for (round, (renamedIndex, generatedFiles)) in renamedGraphs.enumerated() {
+				if renamedGraphsByRound.count == round {
+					renamedGraphsByRound.append([])
+				}
+				renamedGraphsByRound[round].append((runs, graphIndex, renamedIndex, DifferentialValueGraph(
+					name: "seed \(runs.fixture.seed), \(runs.renamedOutcomes[renamedIndex].renaming.description)",
+					feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: generatedFiles),
+					knownRight: graph.knownRight,
+					probes: storingFixture.differentialValueProbes(generatedFiles: generatedFiles),
+					samples: graph.samples,
+				)))
+			}
+		}
+		var listOrderRefutations = [UInt64: [Int: String]]()
+		for round in renamedGraphsByRound {
+			guard let renamedComparisons = try await compare(round.map { ($0.runs, $0.graph) }, isolating: isolatedSeeds, filesToDelete: &filesToDelete) else { continue }
+			for (renamed, renamedComparison) in zip(round, renamedComparisons) {
+				let refutation: String? = switch (comparisons[renamed.graphIndex].result, renamedComparison.result) {
+				case let (.success(valueComparison), .success(renamedValueComparison)):
+					valueComparison.differences.map(\.description) == renamedValueComparison.differences.map(\.description)
+						? nil
+						: "Its code, with its renaming undone, builds other values than the graph's own code:\n\(renamedValueComparison.differences.map(\.description).joined(separator: "\n"))\n\(renamedValueComparison.report)"
+				case let (.success, .failure(error)):
+					"Its code, with its renaming undone, does not compile with the graph, or its values cannot be described:\n\(error)"
+				case (.failure, _):
+					// The graph's own code is not described either, which its own failure reports.
+					nil
+				}
+				if let refutation {
+					listOrderRefutations[renamed.runs.fixture.seed, default: [:]][renamed.renamedIndex] = refutation
+				}
+			}
+		}
 		let valueOracleComparisons = zip(valueOracleGraphs.map(\.runs), comparisons.suffix(valueOracleGraphs.count))
 		var failures = [UInt64: [GraphFuzzerFailure]]()
 		var comparedValueOracleSeeds = Set<UInt64>()
@@ -12088,7 +12339,7 @@ enum GraphFuzzerOracle {
 				))
 			}
 		}
-		return ValueComparisons(failures: failures, comparedValueOracleSeeds: comparedValueOracleSeeds, retentionFailures: retentionFailures, retentionCounts: retentionCounts)
+		return ValueComparisons(failures: failures, comparedValueOracleSeeds: comparedValueOracleSeeds, retentionFailures: retentionFailures, retentionCounts: retentionCounts, listOrderRefutations: listOrderRefutations)
 	}
 
 	/// Compares each of `graphs`, beside the runs it judges: the graphs of seeds outside `isolatedSeeds` in one batch,
