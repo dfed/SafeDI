@@ -621,6 +621,410 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		""")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesPassUpParameterApartFromValue_whenFillReadsValueLabeledPassUp() async throws {
+		// The fill `DefaultService` reads a value labeled `passUp`, which the level function of `Desk`’s level hands down
+		// as its wrapper, beside the level function of `Office`’s root, which takes the caller’s struct as `up`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
+					"""
+					import SafeDI
+
+					public protocol Service: Sendable {}
+
+					@Instantiable
+					public final class Token: Instantiable, Sendable {
+					    public init() {}
+					}
+
+					@Instantiable
+					public struct Model: Instantiable, Sendable {
+					    public init(service: any Service) {
+					        self.service = service
+					    }
+
+					    @Instantiated let service: any Service
+					}
+
+					@Instantiable
+					public struct Desk: Instantiable {
+					    public init(passUp: LazilyInstantiated<Token>, model: Model) {
+					        self.passUp = passUp
+					        self.model = model
+					    }
+
+					    @Instantiated let passUp: LazilyInstantiated<Token>
+					    @Instantiated let model: Model
+					}
+
+					@Instantiable(generateMock: .public)
+					public struct Office: Instantiable {
+					    package init(desk: Desk, model: Model) {
+					        self.desk = desk
+					        self.model = model
+					    }
+
+					    @Instantiated let desk: Desk
+					    @Instantiated let model: Model
+					}
+					""",
+				]),
+				ModuleFixture(name: "App", packageName: "app", swiftFileContent: [
+					"""
+					import Core
+					import SafeDI
+
+					@Instantiable(fulfillingAdditionalTypes: [Service.self])
+					public struct DefaultService: Service, Instantiable {
+					    public init(passUp: Token) {
+					        self.passUp = passUp
+					    }
+
+					    @Received let passUp: Token
+					}
+
+					@Instantiable(generateMock: true)
+					public struct OfficeScreen: Instantiable {
+					    public init(office: Office) {
+					        self.office = office
+					    }
+
+					    @Instantiated let office: Office
+					}
+					""",
+				], dependencies: ["Core"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Core"]?.generatedFiles["Core.swift"] == generatedFileHeader + """
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Office {
+		    nonisolated public enum SafeDIMockScope_Service {
+		        nonisolated public struct desk_Values {}
+
+		        nonisolated public struct model_Values {
+		            public let desk: Desk
+		        }
+
+		        nonisolated public enum Desk_Scope {
+		            nonisolated public struct model_Values {
+		                public let passUp: LazilyInstantiated<Token>
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let model: (model_Values) -> SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(model: @escaping (model_Values) -> SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.model = model
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.model = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        nonisolated public enum Model_Scope {
+		            nonisolated public struct service_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let service: (service_Values) -> __safeDI_Built
+
+		                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                    self.service = service
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.service = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let desk: (desk_Values) -> SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let model: (model_Values) -> SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(desk: @escaping (desk_Values) -> SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<__safeDI_Built>, model: @escaping (model_Values) -> SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.desk = desk
+		                self.model = model
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.desk = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.model = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            desk: __safeDI_Core_Desk_MockConfiguration = .init(),
+		            model: ((any Service) -> Model)? = nil
+		        ) {
+		            self.desk = desk
+		            self.model = model
+		        }
+
+		        public let desk: __safeDI_Core_Desk_MockConfiguration
+		        public let model: ((any Service) -> Model)?
+		    }
+
+		    public static func mock(
+		        serviceBuilder: @escaping () -> any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Office {
+		        Office.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        serviceBuilder __safeDI_serviceBuilder: Office.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Office {
+		        let __safeDI_serviceBuilder_desk = __safeDI_serviceBuilder.desk(SafeDIMockScope_Service.desk_Values())
+		        func __safeDI_desk() -> Desk {
+		            func __safeDI_passUp() -> Token {
+		                if let safeDIBuilder = safeDIOverrides.desk.passUp { safeDIBuilder() } else { Token() }
+		            }
+		            let passUp = LazilyInstantiated<Token>(__safeDI_passUp)
+		            let __safeDI_serviceBuilder_model = __safeDI_serviceBuilder_desk.model(SafeDIMockScope_Service.Desk_Scope.model_Values(passUp: passUp))
+		            func __safeDI_model() -> Model {
+		                let service: any Service = __safeDI_serviceBuilder_model.service(SafeDIMockScope_Service.Model_Scope.service_Values())
+		                return if let safeDIBuilder = safeDIOverrides.desk.model { safeDIBuilder(service) } else { Model(service: service) }
+		            }
+		            let model: Model = __safeDI_model()
+		            return Desk.__safeDI_init(passUp: passUp, model: model, safeDIBuilder: safeDIOverrides.desk.safeDIBuilder)
+		        }
+		        let desk: Desk = __safeDI_desk()
+		        let __safeDI_serviceBuilder_model = __safeDI_serviceBuilder.model(SafeDIMockScope_Service.model_Values(desk: desk))
+		        func __safeDI_model() -> Model {
+		            let service: any Service = __safeDI_serviceBuilder_model.service(SafeDIMockScope_Service.Model_Scope.service_Values())
+		            return if let safeDIBuilder = safeDIOverrides.model { safeDIBuilder(service) } else { Model(service: service) }
+		        }
+		        let model: Model = __safeDI_model()
+		        return Office(desk: desk, model: model)
+		    }
+		}
+
+		extension Office {
+		    public enum __safeDI_Office_mock_6A032F660A4E60FC {}
+		}
+		#endif
+
+		#if DEBUG
+		/// Configuration for how `Desk` is constructed within the public mock trees of module `Core`.
+		nonisolated public struct __safeDI_Core_Desk_MockConfiguration {
+		    public init(
+		        passUp: (() -> Token)? = nil,
+		        model: ((any Service) -> Model)? = nil,
+		        _ safeDIBuilder: ((LazilyInstantiated<Token>, Model) -> Desk)? = nil
+		    ) {
+		        self.passUp = passUp
+		        self.model = model
+		        self.safeDIBuilder = safeDIBuilder
+		    }
+
+		    public let passUp: (() -> Token)?
+		    public let model: ((any Service) -> Model)?
+		    /// Overrides how `Desk` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public let safeDIBuilder: ((LazilyInstantiated<Token>, Model) -> Desk)?
+		}
+
+		extension Desk {
+		    static func __safeDI_init(passUp: LazilyInstantiated<Token>, model: Model, safeDIBuilder: ((LazilyInstantiated<Token>, Model) -> Desk)?) -> Desk {
+		        if let safeDIBuilder { safeDIBuilder(passUp, model) } else { Desk(passUp: passUp, model: model) }
+		    }
+		}
+		#endif
+
+		""")
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension OfficeScreen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            office: Office.SafeDIOverrides = .init()
+		        ) {
+		            self.office = office
+		        }
+
+		        let office: Office.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        serviceBuilder: @escaping () -> any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> OfficeScreen {
+		        func __safeDI_office() -> Office {
+		            func __safeDI_serviceBuilder_Office(up: Office.SafeDIMockScope_Service.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(
+		                    desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() },
+		                    model: up.model
+		                )
+		            }
+		            func __safeDI_serviceBuilder_Office_Desk_Scope() -> Office.SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<any Service> {
+		                .init(model: { values in __safeDI_serviceBuilder_Office_Model_Scope(passUp: values.passUp) })
+		            }
+		            func __safeDI_serviceBuilder_Office_Model_Scope(passUp: LazilyInstantiated<Token>) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { _ in DefaultService(passUp: passUp.instance) })
+		            }
+		            _ = Office.__safeDI_Office_mock_6A032F660A4E60FC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(up: .init(__safeDI_noScope: serviceBuilder)), safeDIOverrides: safeDIOverrides.office)
+		        }
+		        let office: Office = __safeDI_office()
+		        return OfficeScreen(office: office)
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesPassUpParameterApartFromValue_whenFillReadsValueLabeledUp() async throws {
+		// The fill `DefaultService` reads a value labeled `up`, which the level function of `Desk`’s level hands down as its
+		// wrapper, so the level function of `Office`’s root, which takes the caller’s struct, names that parameter `up_`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
+					"""
+					import SafeDI
+
+					public protocol Service: Sendable {}
+
+					@Instantiable
+					public final class Token: Instantiable, Sendable {
+					    public init() {}
+					}
+
+					@Instantiable
+					public struct Model: Instantiable, Sendable {
+					    public init(service: any Service) {
+					        self.service = service
+					    }
+
+					    @Instantiated let service: any Service
+					}
+
+					@Instantiable
+					public struct Desk: Instantiable {
+					    public init(up: LazilyInstantiated<Token>, model: Model) {
+					        self.up = up
+					        self.model = model
+					    }
+
+					    @Instantiated let up: LazilyInstantiated<Token>
+					    @Instantiated let model: Model
+					}
+
+					@Instantiable(generateMock: .public)
+					public struct Office: Instantiable {
+					    package init(desk: Desk, model: Model) {
+					        self.desk = desk
+					        self.model = model
+					    }
+
+					    @Instantiated let desk: Desk
+					    @Instantiated let model: Model
+					}
+					""",
+				]),
+				ModuleFixture(name: "App", packageName: "app", swiftFileContent: [
+					"""
+					import Core
+					import SafeDI
+
+					@Instantiable(fulfillingAdditionalTypes: [Service.self])
+					public struct DefaultService: Service, Instantiable {
+					    public init(up: Token) {
+					        self.up = up
+					    }
+
+					    @Received let up: Token
+					}
+
+					@Instantiable(generateMock: true)
+					public struct OfficeScreen: Instantiable {
+					    public init(office: Office) {
+					        self.office = office
+					    }
+
+					    @Instantiated let office: Office
+					}
+					""",
+				], dependencies: ["Core"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension OfficeScreen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            office: Office.SafeDIOverrides = .init()
+		        ) {
+		            self.office = office
+		        }
+
+		        let office: Office.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        serviceBuilder: @escaping () -> any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> OfficeScreen {
+		        func __safeDI_office() -> Office {
+		            func __safeDI_serviceBuilder_Office(up_: Office.SafeDIMockScope_Service.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(
+		                    desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() },
+		                    model: up_.model
+		                )
+		            }
+		            func __safeDI_serviceBuilder_Office_Desk_Scope() -> Office.SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<any Service> {
+		                .init(model: { values in __safeDI_serviceBuilder_Office_Model_Scope(up: values.up) })
+		            }
+		            func __safeDI_serviceBuilder_Office_Model_Scope(up: LazilyInstantiated<Token>) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { _ in DefaultService(up: up.instance) })
+		            }
+		            _ = Office.__safeDI_Office_mock_047D789C5970C53B.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(up_: .init(__safeDI_noScope: serviceBuilder)), safeDIOverrides: safeDIOverrides.office)
+		        }
+		        let office: Office = __safeDI_office()
+		        return OfficeScreen(office: office)
+		    }
+		}
+		#endif
+		""")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
