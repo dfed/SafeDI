@@ -150,20 +150,14 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		// Each type builds `api` first on every path, so no place is handed the instantiator a sibling closes the cycle with.
 		#expect(output.dependencyTreeFiles["Hub+SafeDI.swift"] == generatedFileHeader + """
 		extension Hub {
-		    @frozen nonisolated public enum SafeDIScope_Api {
-		        case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
-		        case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
-
+		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct tBuilder_Values {}
 
 		        nonisolated public struct cBuilder_Values {
 		            public let tBuilder: Instantiator<T>
 		        }
 
-		        @frozen nonisolated public enum T_Scope {
-		            case api(api_Values)
-		            indirect case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
-
+		        nonisolated public enum T_Scope {
 		            nonisolated public struct api_Values {}
 
 		            nonisolated public struct cBuilder_Values {
@@ -187,10 +181,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum C_Scope {
-		            case api(api_Values)
-		            indirect case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
-
+		        nonisolated public enum C_Scope {
 		            nonisolated public struct api_Values {}
 
 		            nonisolated public struct tBuilder_Values {
@@ -344,15 +335,10 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		// `tBuilder` builds does, so the place `api` beneath `otherT` is handed `q` alone.
 		#expect(output.dependencyTreeFiles["Hub+SafeDI.swift"] == generatedFileHeader + """
 		extension Hub {
-		    @frozen nonisolated public enum SafeDIScope_Api {
-		        case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
-
+		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct tBuilder_Values {}
 
-		        @frozen nonisolated public enum T_Scope {
-		            case r(r_Values, SafeDIScope_Api.R_Scope)
-		            indirect case uBuilder(uBuilder_Values, SafeDIScope_Api.U_Scope)
-
+		        nonisolated public enum T_Scope {
 		            nonisolated public struct r_Values {
 		                public let q: Q
 		            }
@@ -379,9 +365,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum R_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum R_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -398,10 +382,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum U_Scope {
-		            case api(api_Values)
-		            indirect case otherT(otherT_Values, SafeDIScope_Api.T_Scope)
-
+		        nonisolated public enum U_Scope {
 		            nonisolated public struct api_Values {}
 
 		            nonisolated public struct otherT_Values {
