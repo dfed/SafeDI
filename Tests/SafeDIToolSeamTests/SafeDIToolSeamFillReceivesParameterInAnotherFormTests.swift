@@ -145,6 +145,33 @@ struct SafeDIToolSeamFillReceivesParameterInAnotherFormTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsParametersShareLabelToReceiveTheSameWay_whenFillReceivesWrapperBesideRequiredOptionalPassThrough() async {
+		// `Reader` requires `tag: Tag?`, which `Host`'s forwarded optional gives it, so `Home` takes a required optional
+		// value, which no wrapper form provides: the remedy is to receive `tag` the same way, as the seam's own tree is told.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Home.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Home`: its tree receives `tag` as `tag: Tag?` on `Reader` and `tag: LazilyInstantiated<Tag>?` on `Impl`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `tag` the same way in every type of the tree.
+			\(fixtures["Feature"]!["Reader.swift"]):7:5: note: `Reader` receives `tag: Tag?` here.
+			\(fixtures["App"]!["Impl.swift"]):9:5: note: `Impl` receives `tag: LazilyInstantiated<Tag>?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: Self.feature(readerDeclarations: ["@Received let tag: Tag?"]),
+					app: [
+						Self.fulfillingType(named: "Impl", declarations: ["@Received(onlyIfAvailable: true) let tag: LazilyInstantiated<Tag>?"]),
+						seamFixtureType(named: "Host", declarations: ["@Forwarded let tag: Tag?", "@Instantiated let home: Home"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let hostBuilder: Instantiator<Host>"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsParametersShareLabel_whenTypeBeneathFillReceivesValueOfOptionalWrapperPassThrough() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
