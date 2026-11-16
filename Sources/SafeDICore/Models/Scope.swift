@@ -859,7 +859,9 @@ private struct ScopeGeneratorUnderConstruction {
 					decidesPerRoute: scope.publicMockCall != nil,
 				)
 			}
-			// A fill a level function calls of an instantiator's place returns the builder its wrapper keeps.
+			// A fill a level function calls of an instantiator's place returns the builder its wrapper keeps. A public mock's
+			// call has no level function here, and keeps a builder that reaches such a place in its converted form (see
+			// `builderCallArguments`): a deliberate gap until the slice that makes every public mock call static.
 			for index in fillsOfThisCall.indices where fillsOfThisCall[index].fill.hole.property.propertyType.isAnyInstantiator {
 				let key = fillsOfThisCall[index].fill.key
 				fillsOfThisCall[index].fill.returnsWrapperBuilder = dispatchersOfThisCall.contains { dispatcher in
@@ -1421,8 +1423,12 @@ private struct ScopeGeneratorUnderConstruction {
 			}
 			guard !isPublicMockCall else {
 				// A dispatcher an enclosing call declares, or a call inside this call's fills reuses, keeps its enum form, so every
-				// call that uses it converts it alike.
-				let staticValue = enclosingFill == nil && !Self.publicMockEnumKeys(calledInside: holeArguments).contains(enumKey) ? "\(dispatcher)()" : nil
+				// call that uses it converts it alike. A builder that reaches a place held in an instantiator converts too: its
+				// level function's member would return the wrapper's builder, which the fill, built before the call is known to
+				// be static, does not return (`fill.returnsWrapperBuilder`, set above). A deliberate gap until the slice that
+				// makes every public mock call static (`public-mock-builders.md`).
+				let reachesNoInstantiatorPlace = reachedSites.allSatisfy { holesBySite[$0]?.property.propertyType.isAnyInstantiator != true }
+				let staticValue = enclosingFill == nil && reachesNoInstantiatorPlace && !Self.publicMockEnumKeys(calledInside: holeArguments).contains(enumKey) ? "\(dispatcher)()" : nil
 				return publicMockCallArgument(value: dispatcher, enclosingFill: enclosingFill, calling: dispatcher, staticValue: staticValue)
 			}
 			guard !returnsBuilderStruct else {

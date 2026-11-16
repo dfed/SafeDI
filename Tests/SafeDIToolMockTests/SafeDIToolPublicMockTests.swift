@@ -6532,26 +6532,26 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        func __safeDI_service() -> Service {
-		            func __safeDI_router_AnyRoutingBuilder_Service_routerBuilder(_ scope: Service.SafeDIMockScope_Router_AnyRouting.routerBuilder_Values) -> AnyRouting {
-		                let analytics = scope.analytics
-		                func __safeDI_routerBuilder(analytics: Analytics) -> Router {
-		                    func __safeDI_tBuilder() -> T {
-		                        let analytics = Analytics()
-		                        let routerBuilder = ErasedInstantiator<(), AnyRouting> {
-		                            AnyRouting(__safeDI_routerBuilder(analytics: analytics))
+		            func __safeDI_router_AnyRoutingBuilder_Service(_ scope: Service.SafeDIMockScope_Router_AnyRouting) -> AnyRouting {
+		                switch scope {
+		                case let .routerBuilder(scope):
+		                    let analytics = scope.analytics
+		                    func __safeDI_routerBuilder(analytics: Analytics) -> Router {
+		                        func __safeDI_tBuilder() -> T {
+		                            let analytics = Analytics()
+		                            let routerBuilder = ErasedInstantiator<(), AnyRouting> {
+		                                AnyRouting(__safeDI_routerBuilder(analytics: analytics))
+		                            }
+		                            return T(analytics: analytics, routerBuilder: routerBuilder)
 		                        }
-		                        return T(analytics: analytics, routerBuilder: routerBuilder)
+		                        let tBuilder = Instantiator<T>(__safeDI_tBuilder)
+		                        return Router(analytics: analytics, tBuilder: tBuilder)
 		                    }
-		                    let tBuilder = Instantiator<T>(__safeDI_tBuilder)
-		                    return Router(analytics: analytics, tBuilder: tBuilder)
+		                    return AnyRouting(__safeDI_routerBuilder(analytics: analytics))
 		                }
-		                return AnyRouting(__safeDI_routerBuilder(analytics: analytics))
-		            }
-		            func __safeDI_router_AnyRoutingBuilder_Service() -> Service.SafeDIMockScope_Router_AnyRouting.__safeDI_Builder<AnyRouting> {
-		                .init(routerBuilder: { scope in __safeDI_router_AnyRoutingBuilder_Service_routerBuilder(scope) })
 		            }
 		            _ = Service.__safeDI_Service_mock_4E6B70B4391A029D.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Service.__safeDI_mock(router_AnyRoutingBuilder: __safeDI_router_AnyRoutingBuilder_Service(), analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		            return Service.__safeDI_mock(router_AnyRoutingBuilder: .init(routerBuilder: { __safeDI_routerBuilderValues in { _ in __safeDI_router_AnyRoutingBuilder_Service(.routerBuilder(__safeDI_routerBuilderValues)) } }), analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
 		        return Screen(service: service)
@@ -6775,27 +6775,27 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    ) -> Screen {
 		        let analytics = if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        func __safeDI_service() -> Service {
-		            func __safeDI_router_AnyRoutingBuilder_Service_routerBuilder(_ scope: Service.SafeDIMockScope_Router_AnyRouting.routerBuilder_Values) -> AnyRouting {
-		                let analytics = scope.analytics
-		                func __safeDI_routerBuilder(filter: (any FilterProtocol)?) -> Router {
-		                    let cache = Cache.mock(filter: filter)
-		                    func __safeDI_tBuilder() -> T {
-		                        let filter: any FilterProtocol = AppFilter()
-		                        let routerBuilder = ErasedInstantiator<(), AnyRouting> {
-		                            AnyRouting(__safeDI_routerBuilder(filter: filter))
+		            func __safeDI_router_AnyRoutingBuilder_Service(_ scope: Service.SafeDIMockScope_Router_AnyRouting) -> AnyRouting {
+		                switch scope {
+		                case let .routerBuilder(scope):
+		                    let analytics = scope.analytics
+		                    func __safeDI_routerBuilder(filter: (any FilterProtocol)?) -> Router {
+		                        let cache = Cache.mock(filter: filter)
+		                        func __safeDI_tBuilder() -> T {
+		                            let filter: any FilterProtocol = AppFilter()
+		                            let routerBuilder = ErasedInstantiator<(), AnyRouting> {
+		                                AnyRouting(__safeDI_routerBuilder(filter: filter))
+		                            }
+		                            return T(filter: filter, routerBuilder: routerBuilder)
 		                        }
-		                        return T(filter: filter, routerBuilder: routerBuilder)
+		                        let tBuilder = Instantiator<T>(__safeDI_tBuilder)
+		                        return Router(analytics: analytics, cache: cache, tBuilder: tBuilder)
 		                    }
-		                    let tBuilder = Instantiator<T>(__safeDI_tBuilder)
-		                    return Router(analytics: analytics, cache: cache, tBuilder: tBuilder)
+		                    return AnyRouting(__safeDI_routerBuilder(filter: filter))
 		                }
-		                return AnyRouting(__safeDI_routerBuilder(filter: filter))
-		            }
-		            func __safeDI_router_AnyRoutingBuilder_Service() -> Service.SafeDIMockScope_Router_AnyRouting.__safeDI_Builder<AnyRouting> {
-		                .init(routerBuilder: { scope in __safeDI_router_AnyRoutingBuilder_Service_routerBuilder(scope) })
 		            }
 		            _ = Service.__safeDI_Service_mock_4E6B70B4391A029D.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Service.__safeDI_mock(router_AnyRoutingBuilder: __safeDI_router_AnyRoutingBuilder_Service(), analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		            return Service.__safeDI_mock(router_AnyRoutingBuilder: .init(routerBuilder: { __safeDI_routerBuilderValues in { _ in __safeDI_router_AnyRoutingBuilder_Service(.routerBuilder(__safeDI_routerBuilderValues)) } }), analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
 		        return Screen(service: service)
