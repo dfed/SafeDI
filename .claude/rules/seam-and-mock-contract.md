@@ -19,7 +19,7 @@ Every design, change and review of a seam (`generateDependencyTree: true`) or a 
 4. **Generated size is linear when every axis grows together**: values, levels and hole types at once.
 5. **A level carries only what its own type binds.** A field exists only where a generated read needs it.
 6. **One case per property, and a shape that ignores type names, file names, module splits and labels that coincide.**
-7. **A public mock differs from its seam only by this list:** a mock takes as parameters the received values its tree cannot build, where production reports an error; its levels follow the mock's tree; it passes one value per name and type to every type that creates it; `mock()` and `SafeDIOverrides` keep build order.
+7. **A public mock differs from its seam only by this list:** a mock takes as parameters the received values its tree cannot build, where production reports an error; its levels follow the mock's tree; it passes one value per name and type to every type that creates it; `mock()` and `SafeDIOverrides` keep build order. A calling mock, a generated `mock()` whose tree calls another module's public mock, fills a place where production fills it, reports production's error where production reports one, and passes a place up only when its module sees no implementation of the place's type, or the implementation reads a name the mock's tree hides.
 
 Rules 5 and 6 govern generated code, not public shape: no hand-written code reads a level or names a case, so a breach of either is a defect any release can fix.
 
