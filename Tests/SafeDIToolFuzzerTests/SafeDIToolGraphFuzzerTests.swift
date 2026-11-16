@@ -6562,8 +6562,10 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `package` initializer in another package (seed 743), two calls of the plain fill (seed 892) and mixed wrapper kinds
 	/// in the cycle (seed 1986); seeds 151, 309, 594 and 969 draw places inside a plain fill that spell their hole type
 	/// with and without `any`, seed 969 with no known issue, and seeds 68 and 84 the remedied read of a value one route
-	/// holds. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 609, 705, 743, 850, 892, 969, 1_010, 1_020, 1_450, 1_814, 1_890, 1_986]
+	/// holds. Seeds 1815 and 4668 fill a hole whose fill receives a parameter of the seam in a form the parameter does not
+	/// provide, which the tool rejects as it rejects the seam whose own tree receives both forms. Pinned by
+	/// `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 609, 705, 743, 850, 892, 969, 1_010, 1_020, 1_450, 1_814, 1_815, 1_890, 1_986, 4_668]
 
 	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xD8FF5EF57A3B334B
 
