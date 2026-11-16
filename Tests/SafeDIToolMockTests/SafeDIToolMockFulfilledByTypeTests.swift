@@ -1662,8 +1662,8 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		                    return filter
 		                }
 		            }
-		            _ = Root.__safeDI_Root_mock_A06D9FC0836608D6.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return if let safeDIBuilder = safeDIOverrides.root { safeDIBuilder(__safeDI_appFilter_FilterProtocolBuilder_Root) } else { Root.mock(appFilter_FilterProtocolBuilder: __safeDI_appFilter_FilterProtocolBuilder_Root) }
+		            _ = Root.__safeDI_Root_mock_B14A32056046B596.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return if let safeDIBuilder = safeDIOverrides.root { safeDIBuilder(__safeDI_appFilter_FilterProtocolBuilder_Root) } else { Root.__safeDI_mock(appFilter_FilterProtocolBuilder: .init(filter: { __safeDI_filterValues in __safeDI_appFilter_FilterProtocolBuilder_Root(.filter(__safeDI_filterValues)) })) }
 		        }
 		        let root: Root = __safeDI_root()
 		        return App(root: root)
