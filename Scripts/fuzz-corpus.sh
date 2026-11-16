@@ -14,7 +14,11 @@ while (( $# )); do case "$1" in
 	--features) features=$2; shift 2 ;; --seed) seed=$2; shift 2 ;; --iterations) iterations=$2; shift 2 ;; --seeds) seeds=$2; [[ -n $seeds ]] || { echo "--seeds takes a list of seeds" >&2; exit 2 }; shift 2 ;;
 	--release) configuration=release; shift ;; *) echo "unknown option $1" >&2; exit 2 ;; esac; done
 cd "$(git rev-parse --show-toplevel)"
-report=$(mktemp -t safedi-fuzz-report.XXXXXX)
+# The report goes under the user's caches directory, never the system temporary directory: on macOS `mktemp -t`
+# writes there whatever $TMPDIR names. It is kept, since the pins line names it; delete the folder to clear old ones.
+if [[ $(uname) == Darwin ]]; then caches=$HOME/Library/Caches; else caches=${XDG_CACHE_HOME:-$HOME/.cache}; fi
+mkdir -p "$caches/SafeDIFuzzReports"
+report=$(mktemp "$caches/SafeDIFuzzReports/safedi-fuzz-report.XXXXXX")
 exit_status=0
 if [[ -n $seeds ]]; then
 	selection=(-u SAFEDI_GRAPH_FUZZER_STARTING_SEED -u SAFEDI_GRAPH_FUZZER_ITERATIONS SAFEDI_GRAPH_FUZZER_SEEDS=$seeds)
