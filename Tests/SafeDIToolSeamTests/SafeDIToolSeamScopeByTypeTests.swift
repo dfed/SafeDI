@@ -46,9 +46,9 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_declaresOneEnumPerTypeAndCallerCompiles_whenTwentyFourScreensOpenTheNextLayerInLayers() async throws {
 		// Shape E: `Home` opens four screens, each screen opens three of the next layer's four, six layers deep, and each
-		// screen of the last layer builds a model whose `api` only `App` can build. One case per path would be 972 cases,
-		// which the caller's switch could not compile; by type it is a case per property: 4 + 20 × 3 + 4 + 4. The caller's
-		// file is compared in full, so the order of its dispatchers and their cases is pinned.
+		// screen of the last layer builds a model whose `api` only `App` can build. One member per path would be 972 members,
+		// which the caller could not compile; by type it is a member of a builder struct per property: 4 + 20 × 3 + 4 + 4. The
+		// caller's file is compared in full, so the order of its level functions and their members is pinned.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.shapeEModules(screenCount: 24),
 			integration: .moduleInfo,
@@ -56,11 +56,11 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		)
 		let featureFile = try #require(output.modules["Feature"]?.generatedFiles["Feature.swift"])
 		let enumDeclaration = try #require(featureFile.components(separatedBy: "    /// Only code SafeDI generates calls this initializer").first)
-		let caseCount = enumDeclaration.components(separatedBy: "\n").filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("case ") }.count
-		let enumCount = enumDeclaration.components(separatedBy: "@frozen nonisolated public enum ").count - 1
-		#expect(caseCount == 72)
+		let memberCount = enumDeclaration.components(separatedBy: "\n").filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("public let ") && $0.contains("_Values) -> ") }.count
+		let enumCount = enumDeclaration.components(separatedBy: "nonisolated public enum ").count - 1
+		#expect(memberCount == 72)
 		#expect(enumCount == 29)
-		// One dispatcher per enum, one-level switches: the caller compiled above.
+		// One level function per enum: the caller compiled above.
 		let appFile = try #require(output.modules["App"]?.generatedFiles["App.swift"])
 		#expect(appFile.components(separatedBy: "func __safeDI_apiBuilder_Home").count - 1 == 29)
 		#expect(appFile == generatedFileHeader + """
@@ -193,12 +193,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
 		extension Home {
-		    @frozen nonisolated public enum SafeDIScope_Api {
-		        case kiloBuilder(kiloBuilder_Values, SafeDIScope_Api.Kilo_Scope)
-		        case echoBuilder(echoBuilder_Values, SafeDIScope_Api.Echo_Scope)
-		        case zuluBuilder(zuluBuilder_Values, SafeDIScope_Api.Zulu_Scope)
-		        case alphaBuilder(alphaBuilder_Values, SafeDIScope_Api.Alpha_Scope)
-
+		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct kiloBuilder_Values {
 		            public var service: Service { __safeDI_service.instance }
 		            let __safeDI_service: LazilyInstantiated<Service>
@@ -247,11 +242,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Kilo_Scope {
-		            case bravoBuilder(bravoBuilder_Values, SafeDIScope_Api.Bravo_Scope)
-		            case yankeeBuilder(yankeeBuilder_Values, SafeDIScope_Api.Yankee_Scope)
-		            case deltaBuilder(deltaBuilder_Values, SafeDIScope_Api.Delta_Scope)
-
+		        nonisolated public enum Kilo_Scope {
 		            nonisolated public struct bravoBuilder_Values {
 		                public let id: Int
 		                public let kiloModel: KiloModel
@@ -290,11 +281,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Echo_Scope {
-		            case mikeBuilder(mikeBuilder_Values, SafeDIScope_Api.Mike_Scope)
-		            case yankeeBuilder(yankeeBuilder_Values, SafeDIScope_Api.Yankee_Scope)
-		            case deltaBuilder(deltaBuilder_Values, SafeDIScope_Api.Delta_Scope)
-
+		        nonisolated public enum Echo_Scope {
 		            nonisolated public struct mikeBuilder_Values {
 		                public let id: Int
 		                public let echoModel: EchoModel
@@ -333,11 +320,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Zulu_Scope {
-		            case mikeBuilder(mikeBuilder_Values, SafeDIScope_Api.Mike_Scope)
-		            case bravoBuilder(bravoBuilder_Values, SafeDIScope_Api.Bravo_Scope)
-		            case deltaBuilder(deltaBuilder_Values, SafeDIScope_Api.Delta_Scope)
-
+		        nonisolated public enum Zulu_Scope {
 		            nonisolated public struct mikeBuilder_Values {
 		                public let id: Int
 		                public let zuluModel: ZuluModel
@@ -376,11 +359,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Alpha_Scope {
-		            case mikeBuilder(mikeBuilder_Values, SafeDIScope_Api.Mike_Scope)
-		            case bravoBuilder(bravoBuilder_Values, SafeDIScope_Api.Bravo_Scope)
-		            case yankeeBuilder(yankeeBuilder_Values, SafeDIScope_Api.Yankee_Scope)
-
+		        nonisolated public enum Alpha_Scope {
 		            nonisolated public struct mikeBuilder_Values {
 		                public let id: Int
 		                public let alphaModel: AlphaModel
@@ -419,9 +398,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Bravo_Scope {
-		            case bravoModel(bravoModel_Values, SafeDIScope_Api.BravoModel_Scope)
-
+		        nonisolated public enum Bravo_Scope {
 		            nonisolated public struct bravoModel_Values {
 		                public let id: Int
 		            }
@@ -440,9 +417,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Yankee_Scope {
-		            case yankeeModel(yankeeModel_Values, SafeDIScope_Api.YankeeModel_Scope)
-
+		        nonisolated public enum Yankee_Scope {
 		            nonisolated public struct yankeeModel_Values {
 		                public let id: Int
 		            }
@@ -461,9 +436,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Delta_Scope {
-		            case deltaModel(deltaModel_Values, SafeDIScope_Api.DeltaModel_Scope)
-
+		        nonisolated public enum Delta_Scope {
 		            nonisolated public struct deltaModel_Values {
 		                public let id: Int
 		            }
@@ -482,9 +455,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Mike_Scope {
-		            case mikeModel(mikeModel_Values, SafeDIScope_Api.MikeModel_Scope)
-
+		        nonisolated public enum Mike_Scope {
 		            nonisolated public struct mikeModel_Values {
 		                public let id: Int
 		            }
@@ -503,9 +474,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum BravoModel_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum BravoModel_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -522,9 +491,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum YankeeModel_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum YankeeModel_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -541,9 +508,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum DeltaModel_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum DeltaModel_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -560,9 +525,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum MikeModel_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum MikeModel_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -957,14 +920,10 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
 		extension Home {
-		    @frozen nonisolated public enum SafeDIScope_Api {
-		        case store(store_Values, SafeDIScope_Api.Store_Scope)
-
+		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct store_Values {}
 
-		        @frozen nonisolated public enum Store_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Store_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1064,16 +1023,12 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_Api {
-		        case job(job_Values, SafeDIScope_Api.Job_Scope_)
-
+		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct job_Values {
 		            public let jobScope: Job_Scope
 		        }
 
-		        @frozen nonisolated public enum Job_Scope_ {
-		            case api(api_Values)
-
+		        nonisolated public enum Job_Scope_ {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1182,14 +1137,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
 		extension Home {
-		    @frozen nonisolated public enum SafeDIScope_Api {
-		        case fourth(fourth_Values, SafeDIScope_Api.Feature_A_B_C_D_Scope)
-		        case second(second_Values, SafeDIScope_Api.Feature_A_B_C_D_____Scope)
-		        case sixth(sixth_Values, SafeDIScope_Api.Feature_A_B_C_D__Scope)
-		        case first(first_Values, SafeDIScope_Api.Feature_A_B_C_D___Scope)
-		        case fifth(fifth_Values, SafeDIScope_Api.Feature_A_B_C_D____Scope)
-		        case third(third_Values, SafeDIScope_Api.Feature_A_B_C_D______Scope)
-
+		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct fourth_Values {}
 
 		        nonisolated public struct second_Values {
@@ -1222,9 +1170,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            public let fifth: A_B.C.D
 		        }
 
-		        @frozen nonisolated public enum Feature_A_B_C_D_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Feature_A_B_C_D_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1241,9 +1187,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Feature_A_B_C_D_____Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Feature_A_B_C_D_____Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1260,9 +1204,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Feature_A_B_C_D__Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Feature_A_B_C_D__Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1279,9 +1221,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Feature_A_B_C_D___Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Feature_A_B_C_D___Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1298,9 +1238,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Feature_A_B_C_D____Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Feature_A_B_C_D____Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1317,9 +1255,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Feature_A_B_C_D______Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Feature_A_B_C_D______Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1503,27 +1439,62 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		#endif
 
 		extension Outer {
-		    @frozen public enum SafeDIScope_Gadget {
-		        case widget(widget_Values, SafeDIScope_Gadget.Widget_Scope_)
-		        case inner_userServiceBuilder(inner_userServiceBuilder_Values, Inner.SafeDIScope_UserService, SafeDIScope_Gadget.DefaultUserService_Scope)
+		    nonisolated public enum SafeDIScope_Gadget {
+		        nonisolated public struct widget_Values {}
 
-		        public struct widget_Values {}
-
-		        public struct inner_userServiceBuilder_Values {
+		        nonisolated public struct inner_userServiceBuilder_Values {
 		            public let widget: Widget
 		        }
 
-		        @frozen public enum Widget_Scope_ {
-		            case gadget(gadget_Values)
+		        nonisolated public enum Widget_Scope_ {
+		            nonisolated public struct gadget_Values {}
 
-		            public struct gadget_Values {}
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let gadget: (gadget_Values) -> __safeDI_Built
+
+		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
+		                    self.gadget = gadget
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.gadget = { _ in __safeDI_builder() }
+		                }
+		            }
 		        }
 
-		        @frozen public enum DefaultUserService_Scope {
-		            case gadget(gadget_Values)
-
-		            public struct gadget_Values {
+		        nonisolated public enum DefaultUserService_Scope {
+		            nonisolated public struct gadget_Values {
 		                public let widgetScope: Widget_Scope
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let gadget: (gadget_Values) -> __safeDI_Built
+
+		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
+		                    self.gadget = gadget
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.gadget = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let widget: (widget_Values) -> SafeDIScope_Gadget.Widget_Scope_.__safeDI_Builder<__safeDI_Built>
+		            public let inner_userServiceBuilder: (inner_userServiceBuilder_Values) -> Inner.SafeDIScope_UserService.__safeDI_Builder<SafeDIScope_Gadget.DefaultUserService_Scope.__safeDI_Builder<__safeDI_Built>>
+
+		            public init(widget: @escaping (widget_Values) -> SafeDIScope_Gadget.Widget_Scope_.__safeDI_Builder<__safeDI_Built>, inner_userServiceBuilder: @escaping (inner_userServiceBuilder_Values) -> Inner.SafeDIScope_UserService.__safeDI_Builder<SafeDIScope_Gadget.DefaultUserService_Scope.__safeDI_Builder<__safeDI_Built>>) {
+		                self.widget = widget
+		                self.inner_userServiceBuilder = inner_userServiceBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.widget = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.inner_userServiceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
 		            }
 		        }
 		    }
@@ -1531,38 +1502,32 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public convenience init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
-		        let __safeDI_gadgetValues_widget = SafeDIScope_Gadget.widget_Values()
+		    public convenience init(__safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
+		        let __safeDI_gadgetBuilder_widget = __safeDI_gadgetBuilder.widget(SafeDIScope_Gadget.widget_Values())
 		        func __safeDI_widget() -> Widget {
-		            let gadget: any Gadget = __safeDI_gadgetBuilder(.widget(__safeDI_gadgetValues_widget, .gadget(SafeDIScope_Gadget.Widget_Scope_.gadget_Values())))
+		            let gadget: any Gadget = __safeDI_gadgetBuilder_widget.gadget(SafeDIScope_Gadget.Widget_Scope_.gadget_Values())
 		            return Widget(gadget: gadget)
 		        }
 		        let widget: Widget = __safeDI_widget()
-		        let __safeDI_gadgetValues_inner_userServiceBuilder = SafeDIScope_Gadget.inner_userServiceBuilder_Values(widget: widget)
+		        let __safeDI_gadgetBuilder_inner_userServiceBuilder = __safeDI_gadgetBuilder.inner_userServiceBuilder(SafeDIScope_Gadget.inner_userServiceBuilder_Values(widget: widget))
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_38C8EF5D4844984A.self // \(Self.moduleInfoComment)
-		            func __safeDI_userServiceBuilder_Inner(_ __safeDI_inner_userServiceBuilder: Inner.SafeDIScope_UserService) -> any UserService {
-		                switch __safeDI_inner_userServiceBuilder {
-		                case let .avatar(_, scope): return __safeDI_userServiceBuilder_Inner_Avatar_Scope(scope, __safeDI_inner_userServiceBuilder: __safeDI_inner_userServiceBuilder)
+		            func __safeDI_userServiceBuilder_Inner_Avatar_Scope_userService(_ scope: Inner.SafeDIScope_UserService.Avatar_Scope.userService_Values, __safeDI_inner_userServiceBuilder: SafeDIScope_Gadget.DefaultUserService_Scope.__safeDI_Builder<any Gadget>) -> any UserService {
+		                func __safeDI_userService() -> DefaultUserService {
+		                    let widgetScope = Widget_Scope()
+		                    let gadget: any Gadget = __safeDI_inner_userServiceBuilder.gadget(SafeDIScope_Gadget.DefaultUserService_Scope.gadget_Values(widgetScope: widgetScope))
+		                    return DefaultUserService(widgetScope: widgetScope, gadget: gadget)
 		                }
+		                let userService: any UserService = __safeDI_userService()
+		                return userService
 		            }
-		            func __safeDI_userServiceBuilder_Inner_Avatar_Scope(_ scope: Inner.SafeDIScope_UserService.Avatar_Scope, __safeDI_inner_userServiceBuilder: Inner.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    func __safeDI_userService() -> DefaultUserService {
-		                        let widgetScope = Widget_Scope()
-		                        let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_userServiceBuilder(__safeDI_gadgetValues_inner_userServiceBuilder, __safeDI_inner_userServiceBuilder, .gadget(SafeDIScope_Gadget.DefaultUserService_Scope.gadget_Values(widgetScope: widgetScope))))
-		                        return DefaultUserService(widgetScope: widgetScope, gadget: gadget)
-		                    }
-		                    let userService: any UserService = __safeDI_userService()
-		                    return userService
-		                }
+		            func __safeDI_userServiceBuilder_Inner(up: Inner.SafeDIScope_UserService.__safeDI_Builder<SafeDIScope_Gadget.DefaultUserService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+		                .init(avatar: { values in __safeDI_userServiceBuilder_Inner_Avatar_Scope(up: up.avatar(values)) })
 		            }
-		            return Inner(__safeDI_userServiceBuilder: .init(
-		                avatar: { __safeDI_avatarValues in
-		                    .init(userService: { __safeDI_userServiceValues in __safeDI_userServiceBuilder_Inner(.avatar(__safeDI_avatarValues, .userService(__safeDI_userServiceValues))) })
-		                }
-		            ))
+		            func __safeDI_userServiceBuilder_Inner_Avatar_Scope(up: Inner.SafeDIScope_UserService.Avatar_Scope.__safeDI_Builder<SafeDIScope_Gadget.DefaultUserService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.SafeDIScope_UserService.Avatar_Scope.__safeDI_Builder<any UserService> {
+		                .init(userService: { scope in __safeDI_userServiceBuilder_Inner_Avatar_Scope_userService(scope, __safeDI_inner_userServiceBuilder: up.userService(scope)) })
+		            }
+		            return Inner(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Inner(up: __safeDI_gadgetBuilder_inner_userServiceBuilder))
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(widget: widget, inner: inner)
@@ -1570,7 +1535,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		}
 
 		extension Outer {
-		    public enum __safeDI_Outer_AA37FBAC181F631D {}
+		    public enum __safeDI_Outer_E2B0210F49D34DC1 {}
 		}
 		""")
 	}
@@ -1653,16 +1618,12 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
 		extension Home {
-		    @frozen nonisolated public enum SafeDIScope_Api {
-		        case store(store_Values, SafeDIScope_Api.Store_Scope)
-
+		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct store_Values {
 		            public let apiValues_store: Clock
 		        }
 
-		        @frozen nonisolated public enum Store_Scope {
-		            case shelf(shelf_Values, SafeDIScope_Api.Shelf_Scope)
-
+		        nonisolated public enum Store_Scope {
 		            nonisolated public struct shelf_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1679,9 +1640,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Shelf_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Shelf_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.

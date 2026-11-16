@@ -14245,9 +14245,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				#endif
 
 				extension FeedScreen {
-				    @frozen nonisolated public enum SafeDIScope_FeedService {
-				        case service(service_Values)
-
+				    nonisolated public enum SafeDIScope_FeedService {
 				        nonisolated public struct service_Values {
 				            public let shared: SharedThing
 				            internal let store: FeedStore
@@ -14356,9 +14354,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				#endif
 
 				extension FeedScreen {
-				    @frozen nonisolated public enum SafeDIScope_FeedService {
-				        case service(service_Values)
-
+				    nonisolated public enum SafeDIScope_FeedService {
 				        nonisolated public struct service_Values {
 				            public let shared: SharedThing
 				            internal let store: FeedStore
@@ -14481,9 +14477,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				#endif
 
 				extension FeedScreen {
-				    @frozen nonisolated public enum SafeDIScope_FeedService {
-				        case service(service_Values)
-
+				    nonisolated public enum SafeDIScope_FeedService {
 				        nonisolated public struct service_Values {
 				            public let shared: SharedThing
 				            internal let store: FeedStore
@@ -14592,9 +14586,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				#endif
 
 				extension FeedScreen {
-				    @frozen nonisolated public enum SafeDIScope_FeedService {
-				        case service(service_Values)
-
+				    nonisolated public enum SafeDIScope_FeedService {
 				        nonisolated public struct service_Values {
 				            public let shared: SharedThing
 				            internal let store: FeedStore

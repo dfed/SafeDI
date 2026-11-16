@@ -1372,9 +1372,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles["Service+SafeDI.swift"] == generatedFileHeader + """
 		extension Service {
-		    @frozen nonisolated public enum SafeDIScope_UserService {
-		        case userService(userService_Values)
-
+		    nonisolated public enum SafeDIScope_UserService {
 		        nonisolated public struct userService_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.

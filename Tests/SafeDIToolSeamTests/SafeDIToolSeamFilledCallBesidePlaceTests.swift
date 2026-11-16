@@ -73,9 +73,7 @@ struct SafeDIToolSeamFilledCallBesidePlaceTests: ~Copyable {
 		#endif
 
 		extension Outer {
-		    @frozen nonisolated public enum SafeDIScope_Service {
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIScope_Service {
 		        nonisolated public struct service_Values {
 		            public let inner: Inner
 		        }
