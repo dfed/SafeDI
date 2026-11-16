@@ -30,3 +30,22 @@ whose text an argument decides.
 Where a rebase brings new or changed tests: record the changed suites on the rebased head (filter run, a few seconds
 each with a built tree), write the manifest, run the tool without `--helpers-only` and with `--only <file name>` per
 changed file, lint, delete helpers nothing reads (`delete_dead.py <base>`), and run the changed suites.
+
+## After the lead's review (c4437122 and the commit above it)
+
+The same-line search missed helpers called on an earlier line, shared constants and locals. Scripts added here:
+
+- `from_records.py`: a library over the records of a run. `rewrite_calls` replaces each call of a helper with the
+  files its test generated (matching a guard hash in the call); `switch_on_argument` turns a comparison that reads a
+  property of the test's argument into a switch between whole files; `rewrite_file` writes out every comparison of a
+  file whose expected side is not spelled out, where the test has one recorded file set. It leaves, with the reason,
+  tests that take another argument, run the tool several times, or name a checkout path, and never touches a
+  comparison of one run's files with another's.
+- `delete_unreferenced.py FILE…`: deletes private members nothing references, to a fixed point (stricter than
+  `delete_dead.py`: it matches a call by its argument labels, so a helper named like a property is found).
+- `delete_unused_locals.py < build output`: deletes the locals `swift build` warns were never used.
+- `delete_nested.py FILE NAME…`: deletes a nested property no `.NAME` reads.
+- `inline_helper.py FILE HELPER`: inlines a one-expression helper at calls that pass it string literals.
+
+Loop used: rewrite, `delete_unreferenced.py`, build, `delete_unused_locals.py`, repeat until no warning, lint,
+`verify-touched.py HEAD`, then the whole suite once.
