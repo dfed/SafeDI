@@ -10891,16 +10891,18 @@ struct GraphFuzzerKnownIssue: Equatable {
 		}
 	}
 
-	/// Whether every shape of the issue is a value, retention or builder-surface difference, which documents only the
-	/// differences its signatures match and masks no later failure of the oracle's chain (`GraphFuzzerFinding`): a
-	/// graph listed under such an issue still reports a new failure of any oracle, so the gating draws count it as
-	/// judged.
+	/// Whether every shape of the issue is a value, retention or builder-surface difference, or a difference of a renamed
+	/// graph, which documents only the differences its signatures match and masks no later failure of the oracle's chain
+	/// (`GraphFuzzerFinding`): a graph listed under such an issue still reports a new failure of any oracle, so the gating
+	/// draws count it as judged. The chain judges a renamed graph after every oracle but retention, so a graph whose first
+	/// failure is a renamed difference passed every earlier oracle, and `GraphFuzzerFinding` masks no later failure of
+	/// such a known difference.
 	var masksNoLaterFailure: Bool {
 		signatures.allSatisfy { signature in
 			switch signature {
-			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderSurface:
+			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderSurface, .renamedGraphDiffers:
 				true
-			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
+			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
 				false
 			}
 		}
@@ -11121,8 +11123,9 @@ enum GraphFuzzerFinding: Equatable {
 			self = retentionIsJudged || !knownIssue.documentsOnlyRetention ? .staleKnownIssue(knownIssue) : .passed
 		case let (failure?, knownIssue?) where knownIssue.matches(failure):
 			// No signature lists the compile of `C` (`builderCallDoesNotCompile`), so a known failure of its kind never arises
-			// today; it is listed here so that one never masks a later failure should a signature come to list it.
-			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderCallDoesNotCompile].contains(failure.kind)
+			// today; it is listed here so that one never masks a later failure should a signature come to list it. A known
+			// difference of a renamed graph masks none either, whatever order the chain judges in.
+			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderCallDoesNotCompile, .renamedGraphDiffers].contains(failure.kind)
 				|| GraphFuzzerFailure.knownBuilderSurfaceKinds.contains(failure.kind)
 			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers || $0.kind == .seamRetainsWhatInlineFrees || $0.kind == .publicMockRetainsWhatKnownRightFrees || GraphFuzzerFailure.builderSurfaceKindsNeverMasked.contains($0.kind)) && !knownIssue.matches($0) }) {
 				self = .failure(unmasked)
