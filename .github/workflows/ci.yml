@@ -1435,6 +1435,11 @@ jobs:
       # refuses values that are not known to be of the commit it edits.
       - name: Check the Fuzzer Pins Script Against Its Fixtures
         run: python3 -I .claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py --self-test "$RUNNER_TEMP/apply-fuzzer-pins-self-test"
+      # .claude/skills/verify-touched/verify-touched.py chooses the suites a
+      # local run tests before a full Verify, so it proves on fixtures which
+      # suites a change selects and which lines of a run it reports.
+      - name: Check the Touched Suites Script Against Its Fixtures
+        run: python3 -I .claude/skills/verify-touched/verify-touched.py --self-test
       # The check is the only thing between an unexecuted line and main, so
       # its script proves on fixtures that it unions the platforms, resolves
       # symbolic links and refuses missing data before it reads the reports.
