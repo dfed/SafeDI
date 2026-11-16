@@ -81,7 +81,16 @@ def mock_overrides(type_):
     return ".init(" + ", ".join(arguments) + ")"
 
 lines.append("public func runFixture() {")
-lines.append("    for overridden in [false, true] {")
+lines.append("    runFixture(overrides: [false, true])")
+lines.append("}")
+lines.append("")
+lines.append("/// The timing run's walk: every mock with no overrides.")
+lines.append("public func runPlain() {")
+lines.append("    runFixture(overrides: [false])")
+lines.append("}")
+lines.append("")
+lines.append("func runFixture(overrides: [Bool]) {")
+lines.append("    for overridden in overrides {")
 lines.append("        do {")
 lines.append("            var keep = [AnyObject]()")
 lines.append(f"            let root = overridden ? Root.mock(safeDIOverrides: {mock_overrides('Root')}) : Root.mock()")

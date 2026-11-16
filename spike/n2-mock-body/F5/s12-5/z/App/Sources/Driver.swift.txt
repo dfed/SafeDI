@@ -1,0 +1,6 @@
+import Harness
+import SafeDI
+
+/// The floor: only the production root tree every variant also compiles; no mock.
+public func runFixture() {}
+public func runPlain() {}

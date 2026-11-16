@@ -1,0 +1,5 @@
+{"fixture": "s12-5", "variant": "s", "optimization": "Onone", "module": "App", "generatedLines": 39933, "compileWallSeconds": [46.72, 46.2, 47.6], "compileMedian": 46.72, "peakKilobytes": [1733152, 1733936, 1733076], "nsPerWalk": 4528267}
+{"fixture": "s12-5", "variant": "s", "optimization": "O", "module": "App", "generatedLines": 39933, "compileWallSeconds": [374.85, 377.73, 374.83], "compileMedian": 374.85, "peakKilobytes": [1963740, 1963628, 1963604], "nsPerWalk": 1495645}
+{"fixture": "s12-5", "variant": "u", "optimization": "Onone", "module": "App", "generatedLines": 10858, "compileWallSeconds": [7.93, 8.52, 8.02], "compileMedian": 8.02, "peakKilobytes": [270188, 269636, 269592], "nsPerWalk": 1837747}
+{"fixture": "s12-5", "variant": "u", "optimization": "O", "module": "App", "generatedLines": 10858, "compileWallSeconds": [72.03, 71.02, 69.8], "compileMedian": 71.02, "peakKilobytes": [532948, 532800, 533364], "nsPerWalk": 779817}
+{"fixture": "s12-5", "variant": "b", "optimization": "Onone", "module": "App", "generatedLines": 339108, "compileWallSeconds": [384.08], "compileMedian": 384.08, "peakKilobytes": [13218932], "nsPerWalk": 3184765}

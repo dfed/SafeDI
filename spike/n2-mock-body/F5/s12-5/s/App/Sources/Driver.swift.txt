@@ -122,7 +122,16 @@ func walk(_ s: Screen11, _ depth: Int, _ keep: inout [AnyObject]) {
     walk(s.screen6Builder.instantiate(6), depth - 1, &keep)
 }
 public func runFixture() {
-    for overridden in [false, true] {
+    runFixture(overrides: [false, true])
+}
+
+/// The timing run's walk: every mock with no overrides.
+public func runPlain() {
+    runFixture(overrides: [false])
+}
+
+func runFixture(overrides: [Bool]) {
+    for overridden in overrides {
         do {
             var keep = [AnyObject]()
             let root = overridden ? Root.mock(safeDIOverrides: .init(service: { Registry.note("override service"); return Service() }, context: { Registry.note("override context"); return Context() }, screen0Builder: configurationScreen0("screen0Builder"))) : Root.mock()
