@@ -227,6 +227,20 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		#expect(output.modules["Middle"]?.generatedFiles == expectedFiles["Middle"].map { ["Middle.swift": $0] })
 		#expect(output.modules["App"]?.generatedFiles == expectedFiles["App"].map { ["App.swift": $0] })
 		try Self.expectCompiles(output)
+		let modules = Self.twoFills(placeOrder: placeOrder)
+		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("liveGadgetsHoldingOnlyAlpha()")])
+		let description = try await DifferentialValueOracle.describe(
+			DifferentialValuePath(output: output, modules: modules),
+			probes: [DifferentialValueProbe("liveGadgetsHoldingOnlyAlpha()")],
+			filesToDelete: &filesToDelete,
+		)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe liveGadgetsHoldingOnlyAlpha()
+			Int 1
+
+			""")
+		}
 	}
 
 	@Test
@@ -2228,6 +2242,981 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		try Self.expectCompiles(output)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reentersFunctionOfFirstOpening_whenKeptSeamPassesUpScreenThatOpensItself() async throws {
+		// `Home`'s `Screen` builds another through `next`, and `Shell` passes `Home`'s place up and keeps its closure over its
+		// enum: the member for `next` calls the function of the level the route first opened, with the wrap it was given
+		// there, so a screen four or eight levels deep keeps one `Live` alive, as inline, where `Home`'s closure over its own
+		// enum kept two.
+		let modules = Self.fixtures["nextUnderKeptShell"] ?? []
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Shell {
+		    @frozen public enum SafeDIScope_Api {
+		        case home(Home.SafeDIScope_Api)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
+		        func __safeDI_home() -> Home {
+		            _ = Home.__safeDI_Home_0F7FF883EEE00B05.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Home(_ __safeDI_apiBuilder_Home_wrap: @escaping (Home.SafeDIScope_Api) -> Home.SafeDIScope_Api) -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
+		                .init(screenBuilder: { __safeDI_screenBuilderValues in __safeDI_apiBuilder_Home_Screen_Scope({ __safeDI_apiBuilder_Home_wrap(.screenBuilder(__safeDI_screenBuilderValues, $0)) }) })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen_Scope(_ __safeDI_apiBuilder_Home_Screen_Scope_wrap: @escaping (Home.SafeDIScope_Api.Screen_Scope) -> Home.SafeDIScope_Api) -> Home.SafeDIScope_Api.Screen_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { __safeDI_apiValues in __safeDI_apiBuilder(.home(__safeDI_apiBuilder_Home_Screen_Scope_wrap(.api(__safeDI_apiValues)))) }, next: { _ in __safeDI_apiBuilder_Home_Screen_Scope(__safeDI_apiBuilder_Home_Screen_Scope_wrap) })
+		            }
+		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home({ $0 }))
+		        }
+		        let home: Home = __safeDI_home()
+		        self.init(home: home)
+		    }
+		}
+
+		extension Shell {
+		    public enum __safeDI_Shell_991B6DC4D15E60E0 {}
+		}
+		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Home {
+		    @frozen nonisolated public enum SafeDIScope_Api {
+		        case screenBuilder(screenBuilder_Values, SafeDIScope_Api.Screen_Scope)
+
+		        nonisolated public struct screenBuilder_Values {}
+
+		        @frozen nonisolated public enum Screen_Scope {
+		            case api(api_Values)
+		            indirect case next(next_Values, SafeDIScope_Api.Screen_Scope)
+
+		            nonisolated public struct api_Values {
+		                public let id: Int
+		            }
+
+		            nonisolated public struct next_Values {
+		                public let id: Int
+		                public let api: any Api
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let api: (api_Values) -> __safeDI_Built
+		                public let next: (next_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(api: @escaping (api_Values) -> __safeDI_Built, next: @escaping (next_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.api = api
+		                    self.next = next
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.api = { _ in __safeDI_builder() }
+		                    self.next = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let screenBuilder: (screenBuilder_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(screenBuilder: @escaping (screenBuilder_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.screenBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder(SafeDIScope_Api.screenBuilder_Values())
+		        func __safeDI_screenBuilder(id: Int) -> Screen {
+		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api(SafeDIScope_Api.Screen_Scope.api_Values(id: id))
+		            let __safeDI_apiBuilder_next = __safeDI_apiBuilder_screenBuilder.next(SafeDIScope_Api.Screen_Scope.next_Values(id: id, api: api))
+		            func __safeDI_next(id: Int) -> Screen {
+		                let api: any Api = __safeDI_apiBuilder_next.api(SafeDIScope_Api.Screen_Scope.api_Values(id: id))
+		                let next = Instantiator<Screen> {
+		                    __safeDI_next(id: $0)
+		                }
+		                return Screen(id: id, api: api, next: next)
+		            }
+		            let next = Instantiator<Screen> {
+		                __safeDI_next(id: $0)
+		            }
+		            return Screen(id: id, api: api, next: next)
+		        }
+		        let screenBuilder = Instantiator<Screen> {
+		            __safeDI_screenBuilder(id: $0)
+		        }
+		        self.init(screenBuilder: screenBuilder)
+		    }
+		}
+
+		extension Home {
+		    public enum __safeDI_Home_0F7FF883EEE00B05 {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_shell() -> Shell {
+		            _ = Shell.__safeDI_Shell_991B6DC4D15E60E0.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Shell(_ scope: Shell.SafeDIScope_Api) -> any Api {
+		                switch scope {
+		                case let .home(scope): return __safeDI_apiBuilder_Home(scope)
+		                }
+		            }
+		            func __safeDI_apiBuilder_Home(_ scope: Home.SafeDIScope_Api) -> any Api {
+		                switch scope {
+		                case let .screenBuilder(_, scope): return __safeDI_apiBuilder_Home_Screen_Scope(scope)
+		                }
+		            }
+		            func __safeDI_apiBuilder_Home_Screen_Scope(_ scope: Home.SafeDIScope_Api.Screen_Scope) -> any Api {
+		                switch scope {
+		                case let .api(scope):
+		                    let id = scope.id
+		                    let api: any Api = Live(id: id)
+		                    return api
+		                case let .next(_, scope): return __safeDI_apiBuilder_Home_Screen_Scope(scope)
+		                }
+		            }
+		            return Shell(__safeDI_apiBuilder: __safeDI_apiBuilder_Shell)
+		        }
+		        let shell: Shell = __safeDI_shell()
+		        self.init(shell: shell)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().shell.home.screenBuilder.instantiate(1).next.instantiate(2).next.instantiate(3)")])
+		let description = try await DifferentialValueOracle.describe(
+			DifferentialValuePath(output: output, modules: modules),
+			probes: [DifferentialValueProbe("liveCountHoldingOnlyScreen(atDepth: 4)"), DifferentialValueProbe("liveCountHoldingOnlyScreen(atDepth: 8)")],
+			filesToDelete: &filesToDelete,
+		)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe liveCountHoldingOnlyScreen(atDepth: 4)
+			Int 1
+			probe liveCountHoldingOnlyScreen(atDepth: 8)
+			Int 1
+
+			""")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_convertsThroughSendableFunctions_whenKeptSeamPassesUpScreenThatOpensItselfInSendableInstantiator() async throws {
+		// `Screen` builds another in a `SendableInstantiator`, so the level its `again` reopens is the `@Sendable` family's:
+		// `Shell`'s conversion functions are `@Sendable nonisolated`, and their wraps `@Sendable`.
+		let modules = Self.fixtures["sendableLoopUnderKeptShell"] ?? []
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Shell {
+		    @frozen public enum SafeDIScope_Api {
+		        case home(Home.SafeDIScope_Api)
+		    }
+
+		    @frozen public enum SafeDISendableScope_Api {
+		        case home_Sendable(Home.SafeDISendableScope_Api)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api, __safeDI_apiSendableBuilder: @escaping @Sendable (SafeDISendableScope_Api) -> any Api) {
+		        func __safeDI_home() -> Home {
+		            _ = Home.__safeDI_Home_DDF3277A5E18075E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Home(__safeDI_apiBuilder: .init(
+		                screenBuilder: { __safeDI_screenBuilderValues in
+		                    .init(api: { __safeDI_apiValues in __safeDI_apiBuilder(.home(.screenBuilder(__safeDI_screenBuilderValues, .api(__safeDI_apiValues)))) })
+		                }
+		            ), __safeDI_apiSendableBuilder: .init(
+		                screenBuilder_Sendable: { _ in
+		                    .init(
+		                        again: { _ in
+		                            .init(api: { __safeDI_apiValues in __safeDI_apiSendableBuilder(.home_Sendable(.screenBuilder_Sendable(.again(.api(__safeDI_apiValues))))) })
+		                        }
+		                    )
+		                }
+		            ))
+		        }
+		        let home: Home = __safeDI_home()
+		        self.init(home: home)
+		    }
+		}
+
+		extension Shell {
+		    public enum __safeDI_Shell_B7406FFD173F1141 {}
+		}
+		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Home {
+		    @frozen nonisolated public enum SafeDIScope_Api {
+		        case screenBuilder(screenBuilder_Values, SafeDIScope_Api.Screen_Scope)
+
+		        nonisolated public struct screenBuilder_Values {}
+
+		        @frozen nonisolated public enum Screen_Scope {
+		            case api(api_Values)
+
+		            nonisolated public struct api_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let api: (api_Values) -> __safeDI_Built
+
+		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                    self.api = api
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.api = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let screenBuilder: (screenBuilder_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(screenBuilder: @escaping (screenBuilder_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.screenBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    @frozen nonisolated public enum SafeDISendableScope_Api {
+		        case screenBuilder_Sendable(SafeDISendableScope_Api.Screen_Scope)
+
+		        nonisolated public struct screenBuilder_Sendable_Values: Sendable {}
+
+		        @frozen nonisolated public enum Screen_Scope {
+		            case again(SafeDIScope_Api.Screen_Scope)
+
+		            nonisolated public struct again_Values: Sendable {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		                public let again: @Sendable (again_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(again: @escaping @Sendable (again_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.again = again
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                    self.again = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let screenBuilder_Sendable: @Sendable (screenBuilder_Sendable_Values) -> SafeDISendableScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(screenBuilder_Sendable: @escaping @Sendable (screenBuilder_Sendable_Values) -> SafeDISendableScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.screenBuilder_Sendable = screenBuilder_Sendable
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.screenBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
+		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder(SafeDIScope_Api.screenBuilder_Values())
+		        let __safeDI_apiSendableBuilder_screenBuilder_Sendable = __safeDI_apiSendableBuilder.screenBuilder_Sendable(SafeDISendableScope_Api.screenBuilder_Sendable_Values())
+		        func __safeDI_screenBuilder() -> Screen {
+		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api(SafeDIScope_Api.Screen_Scope.api_Values())
+		            @Sendable nonisolated func __safeDI_again() -> Screen {
+		                let __safeDI_apiSendableBuilder_again = __safeDI_apiSendableBuilder_screenBuilder_Sendable.again(SafeDISendableScope_Api.Screen_Scope.again_Values())
+		                let api: any Api = __safeDI_apiSendableBuilder_again.api(SafeDIScope_Api.Screen_Scope.api_Values())
+		                let again = SendableInstantiator<Screen>(__safeDI_again)
+		                return Screen(api: api, again: again)
+		            }
+		            let again = SendableInstantiator<Screen>(__safeDI_again)
+		            return Screen(api: api, again: again)
+		        }
+		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		        self.init(screenBuilder: screenBuilder)
+		    }
+		}
+
+		extension Home {
+		    public enum __safeDI_Home_DDF3277A5E18075E {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_shell() -> Shell {
+		            _ = Shell.__safeDI_Shell_B7406FFD173F1141.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Shell(_ scope: Shell.SafeDIScope_Api) -> any Api {
+		                switch scope {
+		                case let .home(scope): return __safeDI_apiBuilder_Home(scope)
+		                }
+		            }
+		            func __safeDI_apiBuilder_Home(_ scope: Home.SafeDIScope_Api) -> any Api {
+		                switch scope {
+		                case let .screenBuilder(_, scope): return __safeDI_apiBuilder_Home_Screen_Scope(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_apiBuilder_Home_Screen_Scope(_ scope: Home.SafeDIScope_Api.Screen_Scope) -> any Api {
+		                switch scope {
+		                case .api:
+		                    let api: any Api = LiveApi()
+		                    return api
+		                }
+		            }
+		            @Sendable func __safeDI_apiSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Api) -> any Api {
+		                switch scope {
+		                case let .home_Sendable(scope): return __safeDI_apiSendableBuilder_Home(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_apiSendableBuilder_Home(_ scope: Home.SafeDISendableScope_Api) -> any Api {
+		                switch scope {
+		                case let .screenBuilder_Sendable(scope): return __safeDI_apiSendableBuilder_Home_Screen_Scope(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_apiSendableBuilder_Home_Screen_Scope(_ scope: Home.SafeDISendableScope_Api.Screen_Scope) -> any Api {
+		                switch scope {
+		                case let .again(scope): return __safeDI_apiBuilder_Home_Screen_Scope(scope)
+		                }
+		            }
+		            return Shell(__safeDI_apiBuilder: __safeDI_apiBuilder_Shell, __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Shell)
+		        }
+		        let shell: Shell = __safeDI_shell()
+		        self.init(shell: shell)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().shell.home.screenBuilder.instantiate().again.instantiate().again.instantiate()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_convertsThroughSendableFunctions_whenKeptSeamPassesUpCycleClosingOnFunctionBuiltByValue() async throws {
+		// `Hub` builds `A` by value, and `B`, built in `A`'s `SendableInstantiator`, builds `A` again, which calls the function
+		// `Hub`'s tree builds `A` with from a `@Sendable` closure; `Shell` passes `Hub`'s place up.
+		let modules = Self.fixtures["byValueLoopUnderKeptShell"] ?? []
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Shell {
+		    @frozen public enum SafeDISendableScope_Api {
+		        case hub_Sendable(Hub.SafeDISendableScope_Api)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_apiSendableBuilder: @escaping @Sendable (SafeDISendableScope_Api) -> any Api) {
+		        func __safeDI_hub() -> Hub {
+		            _ = Hub.__safeDI_Hub_F6C9110E771DBEC3.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Hub(__safeDI_apiSendableBuilder: .init(
+		                a_Sendable: { _ in
+		                    .init(
+		                        bBuilder: { _ in
+		                            .init(api: { __safeDI_apiValues in __safeDI_apiSendableBuilder(.hub_Sendable(.a_Sendable(.bBuilder(.api(__safeDI_apiValues))))) })
+		                        }
+		                    )
+		                }
+		            ))
+		        }
+		        let hub: Hub = __safeDI_hub()
+		        self.init(hub: hub)
+		    }
+		}
+
+		extension Shell {
+		    public enum __safeDI_Shell_A3269389D0097933 {}
+		}
+		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Hub {
+		    @frozen nonisolated public enum SafeDIScope_Api {
+		        @frozen nonisolated public enum B_Scope {
+		            case api(api_Values)
+
+		            nonisolated public struct api_Values {
+		                public let a: A
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let api: (api_Values) -> __safeDI_Built
+
+		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                    self.api = api
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.api = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+		    }
+
+		    @frozen nonisolated public enum SafeDISendableScope_Api {
+		        case a_Sendable(SafeDISendableScope_Api.A_Scope)
+
+		        nonisolated public struct a_Sendable_Values: Sendable {}
+
+		        @frozen nonisolated public enum A_Scope {
+		            case bBuilder(SafeDIScope_Api.B_Scope)
+
+		            nonisolated public struct bBuilder_Values: Sendable {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		                public let bBuilder: @Sendable (bBuilder_Values) -> SafeDIScope_Api.B_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(bBuilder: @escaping @Sendable (bBuilder_Values) -> SafeDIScope_Api.B_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.bBuilder = bBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let a_Sendable: @Sendable (a_Sendable_Values) -> SafeDISendableScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(a_Sendable: @escaping @Sendable (a_Sendable_Values) -> SafeDISendableScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.a_Sendable = a_Sendable
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.a_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
+		        @Sendable nonisolated func __safeDI_a() -> A {
+		            let __safeDI_apiSendableBuilder_a_Sendable = __safeDI_apiSendableBuilder.a_Sendable(SafeDISendableScope_Api.a_Sendable_Values())
+		            @Sendable nonisolated func __safeDI_bBuilder() -> B {
+		                let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_a_Sendable.bBuilder(SafeDISendableScope_Api.A_Scope.bBuilder_Values())
+		                let a: A = __safeDI_a()
+		                let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(SafeDIScope_Api.B_Scope.api_Values(a: a))
+		                return B(api: api, a: a)
+		            }
+		            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
+		            return A(bBuilder: bBuilder)
+		        }
+		        let a: A = __safeDI_a()
+		        self.init(a: a)
+		    }
+		}
+
+		extension Hub {
+		    public enum __safeDI_Hub_F6C9110E771DBEC3 {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_shell() -> Shell {
+		            _ = Shell.__safeDI_Shell_A3269389D0097933.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            @Sendable func __safeDI_apiSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Api) -> any Api {
+		                switch scope {
+		                case let .hub_Sendable(scope): return __safeDI_apiSendableBuilder_Hub(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_apiSendableBuilder_Hub(_ scope: Hub.SafeDISendableScope_Api) -> any Api {
+		                switch scope {
+		                case let .a_Sendable(scope): return __safeDI_apiSendableBuilder_Hub_A_Scope(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_apiSendableBuilder_Hub_A_Scope(_ scope: Hub.SafeDISendableScope_Api.A_Scope) -> any Api {
+		                switch scope {
+		                case let .bBuilder(scope): return __safeDI_apiBuilder_Hub_B_Scope(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_apiBuilder_Hub_B_Scope(_ scope: Hub.SafeDIScope_Api.B_Scope) -> any Api {
+		                switch scope {
+		                case .api:
+		                    let api: any Api = LiveApi()
+		                    return api
+		                }
+		            }
+		            return Shell(__safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Shell)
+		        }
+		        let shell: Shell = __safeDI_shell()
+		        self.init(shell: shell)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().shell.hub.a.bBuilder.instantiate().a.bBuilder.instantiate()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesConversionFunctionPerLevelPerRoot_whenKeptSeamPassesUpBothFamiliesOverOneLoopedLevel() async throws {
+		// `Home` builds `Screen` in an `Instantiator` and in a `SendableInstantiator`, and `Screen` builds itself again through
+		// `next`: the looped level is reached from both root enums, so `Shell` converts it through a function per root.
+		let modules = Self.fixtures["bothFamiliesLoopUnderKeptShell"] ?? []
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Shell {
+		    @frozen public enum SafeDIScope_Api {
+		        case home(Home.SafeDIScope_Api)
+		    }
+
+		    @frozen public enum SafeDISendableScope_Api {
+		        case home_Sendable(Home.SafeDISendableScope_Api)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api, __safeDI_apiSendableBuilder: @escaping @Sendable (SafeDISendableScope_Api) -> any Api) {
+		        func __safeDI_home() -> Home {
+		            _ = Home.__safeDI_Home_45DF3A0889531357.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Home(_ __safeDI_apiBuilder_Home_wrap: @escaping (Home.SafeDIScope_Api) -> Home.SafeDIScope_Api) -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
+		                .init(screenBuilder: { __safeDI_screenBuilderValues in __safeDI_apiBuilder_Home_Screen_Scope({ __safeDI_apiBuilder_Home_wrap(.screenBuilder(__safeDI_screenBuilderValues, $0)) }) })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen_Scope(_ __safeDI_apiBuilder_Home_Screen_Scope_wrap: @escaping (Home.SafeDIScope_Api.Screen_Scope) -> Home.SafeDIScope_Api) -> Home.SafeDIScope_Api.Screen_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { __safeDI_apiValues in __safeDI_apiBuilder(.home(__safeDI_apiBuilder_Home_Screen_Scope_wrap(.api(__safeDI_apiValues)))) }, next: { _ in __safeDI_apiBuilder_Home_Screen_Scope(__safeDI_apiBuilder_Home_Screen_Scope_wrap) })
+		            }
+		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Home(_ __safeDI_apiSendableBuilder_Home_wrap: @escaping @Sendable (Home.SafeDISendableScope_Api) -> Home.SafeDISendableScope_Api) -> Home.SafeDISendableScope_Api.__safeDI_Builder<any Api> {
+		                .init(sendableScreenBuilder: { _ in __safeDI_apiBuilder_Home_Screen_Scope_({ __safeDI_apiSendableBuilder_Home_wrap(.sendableScreenBuilder($0)) }) })
+		            }
+		            @Sendable nonisolated func __safeDI_apiBuilder_Home_Screen_Scope_(_ __safeDI_apiBuilder_Home_Screen_Scope__wrap: @escaping (Home.SafeDIScope_Api.Screen_Scope) -> Home.SafeDISendableScope_Api) -> Home.SafeDIScope_Api.Screen_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { __safeDI_apiValues in __safeDI_apiSendableBuilder(.home_Sendable(__safeDI_apiBuilder_Home_Screen_Scope__wrap(.api(__safeDI_apiValues)))) }, next: { _ in __safeDI_apiBuilder_Home_Screen_Scope_(__safeDI_apiBuilder_Home_Screen_Scope__wrap) })
+		            }
+		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home({ $0 }), __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Home({ $0 }))
+		        }
+		        let home: Home = __safeDI_home()
+		        self.init(home: home)
+		    }
+		}
+
+		extension Shell {
+		    public enum __safeDI_Shell_647DF25A4AE0DA8E {}
+		}
+		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Home {
+		    @frozen nonisolated public enum SafeDIScope_Api {
+		        case screenBuilder(screenBuilder_Values, SafeDIScope_Api.Screen_Scope)
+
+		        nonisolated public struct screenBuilder_Values {}
+
+		        @frozen nonisolated public enum Screen_Scope {
+		            case api(api_Values)
+		            indirect case next(next_Values, SafeDIScope_Api.Screen_Scope)
+
+		            nonisolated public struct api_Values {}
+
+		            nonisolated public struct next_Values {
+		                public let api: any Api
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let api: (api_Values) -> __safeDI_Built
+		                public let next: (next_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(api: @escaping (api_Values) -> __safeDI_Built, next: @escaping (next_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.api = api
+		                    self.next = next
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.api = { _ in __safeDI_builder() }
+		                    self.next = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let screenBuilder: (screenBuilder_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(screenBuilder: @escaping (screenBuilder_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.screenBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    @frozen nonisolated public enum SafeDISendableScope_Api {
+		        case sendableScreenBuilder(SafeDIScope_Api.Screen_Scope)
+
+		        nonisolated public struct sendableScreenBuilder_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let sendableScreenBuilder: @Sendable (sendableScreenBuilder_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(sendableScreenBuilder: @escaping @Sendable (sendableScreenBuilder_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.sendableScreenBuilder = sendableScreenBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.sendableScreenBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
+		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder(SafeDIScope_Api.screenBuilder_Values())
+		        func __safeDI_screenBuilder() -> Screen {
+		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api(SafeDIScope_Api.Screen_Scope.api_Values())
+		            let __safeDI_apiBuilder_next = __safeDI_apiBuilder_screenBuilder.next(SafeDIScope_Api.Screen_Scope.next_Values(api: api))
+		            func __safeDI_next() -> Screen {
+		                let api: any Api = __safeDI_apiBuilder_next.api(SafeDIScope_Api.Screen_Scope.api_Values())
+		                let next = Instantiator<Screen>(__safeDI_next)
+		                return Screen(api: api, next: next)
+		            }
+		            let next = Instantiator<Screen>(__safeDI_next)
+		            return Screen(api: api, next: next)
+		        }
+		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		        @Sendable nonisolated func __safeDI_sendableScreenBuilder() -> Screen {
+		            let __safeDI_apiSendableBuilder_sendableScreenBuilder = __safeDI_apiSendableBuilder.sendableScreenBuilder(SafeDISendableScope_Api.sendableScreenBuilder_Values())
+		            let api: any Api = __safeDI_apiSendableBuilder_sendableScreenBuilder.api(SafeDIScope_Api.Screen_Scope.api_Values())
+		            let __safeDI_apiSendableBuilder_next = __safeDI_apiSendableBuilder_sendableScreenBuilder.next(SafeDIScope_Api.Screen_Scope.next_Values(api: api))
+		            func __safeDI_next() -> Screen {
+		                let api: any Api = __safeDI_apiSendableBuilder_next.api(SafeDIScope_Api.Screen_Scope.api_Values())
+		                let next = Instantiator<Screen>(__safeDI_next)
+		                return Screen(api: api, next: next)
+		            }
+		            let next = Instantiator<Screen>(__safeDI_next)
+		            return Screen(api: api, next: next)
+		        }
+		        let sendableScreenBuilder = SendableInstantiator<Screen>(__safeDI_sendableScreenBuilder)
+		        self.init(screenBuilder: screenBuilder, sendableScreenBuilder: sendableScreenBuilder)
+		    }
+		}
+
+		extension Home {
+		    public enum __safeDI_Home_45DF3A0889531357 {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_shell() -> Shell {
+		            _ = Shell.__safeDI_Shell_647DF25A4AE0DA8E.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Shell(_ scope: Shell.SafeDIScope_Api) -> any Api {
+		                switch scope {
+		                case let .home(scope): return __safeDI_apiBuilder_Home(scope)
+		                }
+		            }
+		            func __safeDI_apiBuilder_Home(_ scope: Home.SafeDIScope_Api) -> any Api {
+		                switch scope {
+		                case let .screenBuilder(_, scope): return __safeDI_apiBuilder_Home_Screen_Scope(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_apiBuilder_Home_Screen_Scope(_ scope: Home.SafeDIScope_Api.Screen_Scope) -> any Api {
+		                switch scope {
+		                case .api:
+		                    let api: any Api = LiveApi()
+		                    return api
+		                case let .next(_, scope): return __safeDI_apiBuilder_Home_Screen_Scope(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_apiSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Api) -> any Api {
+		                switch scope {
+		                case let .home_Sendable(scope): return __safeDI_apiSendableBuilder_Home(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_apiSendableBuilder_Home(_ scope: Home.SafeDISendableScope_Api) -> any Api {
+		                switch scope {
+		                case let .sendableScreenBuilder(scope): return __safeDI_apiBuilder_Home_Screen_Scope(scope)
+		                }
+		            }
+		            return Shell(__safeDI_apiBuilder: __safeDI_apiBuilder_Shell, __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Shell)
+		        }
+		        let shell: Shell = __safeDI_shell()
+		        self.init(shell: shell)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().shell.home.screenBuilder.instantiate().next.instantiate()"), DifferentialValueProbe("Root().shell.home.sendableScreenBuilder.instantiate().next.instantiate()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresConversionFunctionsBesideDispatchers_whenKeptSeamsFillCaseCarriesCalleeWhoseLevelReopens() async throws {
+		// `Outer` fills `Inner`'s `service` with a type that holds `Outer`'s own place, so its dispatchers keep their switch
+		// over `Inner`'s enum, and `Inner`'s `Screen` builds itself again through `next`: the conversion's functions, named
+		// apart from the dispatchers, call them with the rebuilt case.
+		let modules = Self.fixtures["insideFillLoop"] ?? []
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Outer {
+		    @frozen public enum SafeDIScope_Gadget {
+		        case inner_serviceBuilder(inner_serviceBuilder_Values, Inner.SafeDIScope_Service, SafeDIScope_Gadget.DefaultService_Scope)
+
+		        public struct inner_serviceBuilder_Values {
+		            public let tag: Tag
+		        }
+
+		        @frozen public enum DefaultService_Scope {
+		            case gadget(gadget_Values)
+
+		            public struct gadget_Values {}
+		        }
+		    }
+
+		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
+		        let tag = Tag()
+		        let __safeDI_gadgetValues_inner_serviceBuilder = SafeDIScope_Gadget.inner_serviceBuilder_Values(tag: tag)
+		        func __safeDI_inner() -> Inner {
+		            _ = Inner.__safeDI_Inner_6B5D4EDA14A201DE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_serviceBuilder_Inner(_ __safeDI_inner_serviceBuilder: Inner.SafeDIScope_Service) -> any Service {
+		                switch __safeDI_inner_serviceBuilder {
+		                case let .screenBuilder(_, scope): return __safeDI_serviceBuilder_Inner_Screen_Scope(scope, __safeDI_inner_serviceBuilder: __safeDI_inner_serviceBuilder)
+		                case .service:
+		                    func __safeDI_service() -> DefaultService {
+		                        let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_serviceBuilder(__safeDI_gadgetValues_inner_serviceBuilder, __safeDI_inner_serviceBuilder, .gadget(SafeDIScope_Gadget.DefaultService_Scope.gadget_Values())))
+		                        return DefaultService(gadget: gadget)
+		                    }
+		                    let service: any Service = __safeDI_service()
+		                    return service
+		                }
+		            }
+		            func __safeDI_serviceBuilder_Inner_Screen_Scope(_ scope: Inner.SafeDIScope_Service.Screen_Scope, __safeDI_inner_serviceBuilder: Inner.SafeDIScope_Service) -> any Service {
+		                switch scope {
+		                case .service:
+		                    func __safeDI_service() -> DefaultService {
+		                        let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_serviceBuilder(__safeDI_gadgetValues_inner_serviceBuilder, __safeDI_inner_serviceBuilder, .gadget(SafeDIScope_Gadget.DefaultService_Scope.gadget_Values())))
+		                        return DefaultService(gadget: gadget)
+		                    }
+		                    let service: any Service = __safeDI_service()
+		                    return service
+		                case let .next(_, scope): return __safeDI_serviceBuilder_Inner_Screen_Scope(scope, __safeDI_inner_serviceBuilder: __safeDI_inner_serviceBuilder)
+		                }
+		            }
+		            func __safeDI_serviceBuilder_Inner_(_ __safeDI_serviceBuilder_Inner__wrap: @escaping (Inner.SafeDIScope_Service) -> Inner.SafeDIScope_Service) -> Inner.SafeDIScope_Service.__safeDI_Builder<any Service> {
+		                .init(screenBuilder: { __safeDI_screenBuilderValues in __safeDI_serviceBuilder_Inner_Screen_Scope_({ __safeDI_serviceBuilder_Inner__wrap(.screenBuilder(__safeDI_screenBuilderValues, $0)) }) }, service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(__safeDI_serviceBuilder_Inner__wrap(.service(__safeDI_serviceValues))) })
+		            }
+		            func __safeDI_serviceBuilder_Inner_Screen_Scope_(_ __safeDI_serviceBuilder_Inner_Screen_Scope__wrap: @escaping (Inner.SafeDIScope_Service.Screen_Scope) -> Inner.SafeDIScope_Service) -> Inner.SafeDIScope_Service.Screen_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(__safeDI_serviceBuilder_Inner_Screen_Scope__wrap(.service(__safeDI_serviceValues))) }, next: { _ in __safeDI_serviceBuilder_Inner_Screen_Scope_(__safeDI_serviceBuilder_Inner_Screen_Scope__wrap) })
+		            }
+		            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Inner_({ $0 }))
+		        }
+		        let inner: Inner = __safeDI_inner()
+		        self.init(tag: tag, inner: inner)
+		    }
+		}
+
+		extension Outer {
+		    public enum __safeDI_Outer_1B72E7E5150E823D {}
+		}
+		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Inner {
+		    @frozen nonisolated public enum SafeDIScope_Service {
+		        case screenBuilder(screenBuilder_Values, SafeDIScope_Service.Screen_Scope)
+		        case service(service_Values)
+
+		        nonisolated public struct screenBuilder_Values {}
+
+		        nonisolated public struct service_Values {
+		            public let screenBuilder: Instantiator<Screen>
+		        }
+
+		        @frozen nonisolated public enum Screen_Scope {
+		            case service(service_Values)
+		            indirect case next(next_Values, SafeDIScope_Service.Screen_Scope)
+
+		            nonisolated public struct service_Values {
+		                public let id: Int
+		            }
+
+		            nonisolated public struct next_Values {
+		                public let id: Int
+		                public let service: any Service
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let service: (service_Values) -> __safeDI_Built
+		                public let next: (next_Values) -> SafeDIScope_Service.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(service: @escaping (service_Values) -> __safeDI_Built, next: @escaping (next_Values) -> SafeDIScope_Service.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.service = service
+		                    self.next = next
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.service = { _ in __safeDI_builder() }
+		                    self.next = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let screenBuilder: (screenBuilder_Values) -> SafeDIScope_Service.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let service: (service_Values) -> __safeDI_Built
+
+		            public init(screenBuilder: @escaping (screenBuilder_Values) -> SafeDIScope_Service.Screen_Scope.__safeDI_Builder<__safeDI_Built>, service: @escaping (service_Values) -> __safeDI_Built) {
+		                self.screenBuilder = screenBuilder
+		                self.service = service
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.screenBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.service = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+		        let __safeDI_serviceBuilder_screenBuilder = __safeDI_serviceBuilder.screenBuilder(SafeDIScope_Service.screenBuilder_Values())
+		        func __safeDI_screenBuilder(id: Int) -> Screen {
+		            let service: any Service = __safeDI_serviceBuilder_screenBuilder.service(SafeDIScope_Service.Screen_Scope.service_Values(id: id))
+		            let __safeDI_serviceBuilder_next = __safeDI_serviceBuilder_screenBuilder.next(SafeDIScope_Service.Screen_Scope.next_Values(id: id, service: service))
+		            func __safeDI_next(id: Int) -> Screen {
+		                let service: any Service = __safeDI_serviceBuilder_next.service(SafeDIScope_Service.Screen_Scope.service_Values(id: id))
+		                let next = Instantiator<Screen> {
+		                    __safeDI_next(id: $0)
+		                }
+		                return Screen(id: id, service: service, next: next)
+		            }
+		            let next = Instantiator<Screen> {
+		                __safeDI_next(id: $0)
+		            }
+		            return Screen(id: id, service: service, next: next)
+		        }
+		        let screenBuilder = Instantiator<Screen> {
+		            __safeDI_screenBuilder(id: $0)
+		        }
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values(screenBuilder: screenBuilder))
+		        self.init(screenBuilder: screenBuilder, service: service)
+		    }
+		}
+
+		extension Inner {
+		    public enum __safeDI_Inner_6B5D4EDA14A201DE {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_1B72E7E5150E823D.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_gadgetBuilder_Outer(_ scope: Outer.SafeDIScope_Gadget) -> any Gadget {
+		                switch scope {
+		                case let .inner_serviceBuilder(values, innerScope, scope): return __safeDI_gadgetBuilder_Outer_DefaultService_Scope(scope, id: __safeDI_id_Inner_SafeDIScope_Service(innerScope), tag: values.tag)
+		                }
+		            }
+		            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(_ scope: Outer.SafeDIScope_Gadget.DefaultService_Scope, id: Int?, tag: Tag) -> any Gadget {
+		                switch scope {
+		                case .gadget:
+		                    let gadget: any Gadget = LiveGadget(tag: tag, id: id)
+		                    return gadget
+		                }
+		            }
+		            func __safeDI_id_Inner_SafeDIScope_Service(_ scope: Inner.SafeDIScope_Service) -> Int? {
+		                switch scope {
+		                case let .screenBuilder(_, scope): return __safeDI_id_Inner_Screen_Scope(scope)
+		                case .service: return nil
+		                }
+		            }
+		            func __safeDI_id_Inner_Screen_Scope(_ scope: Inner.SafeDIScope_Service.Screen_Scope) -> Int {
+		                switch scope {
+		                case let .service(values): return values.id
+		                case let .next(_, scope): return __safeDI_id_Inner_Screen_Scope(scope)
+		                }
+		            }
+		            return Outer(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Outer)
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().outer.inner.screenBuilder.instantiate(7).next.instantiate(8)")])
+	}
+
 	// MARK: Expected files
 
 	/// What each module of `twoFills(placeOrder:)` generates, by the place order joined with `-`.
@@ -2629,8 +3618,32 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 				seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated public let tag: Tag", "@Instantiated public let inner: Inner"]),
 			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
-				fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received public let tag: Tag"]),
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [Gadget.self])
+				public final class LiveGadget: Instantiable, Gadget {
+				    public init(tag: Tag) {
+				        self.tag = tag
+				        LiveGadget.alive += 1
+				    }
+
+				    deinit {
+				        LiveGadget.alive -= 1
+				    }
+
+				    @Received public let tag: Tag
+				    nonisolated(unsafe) static var alive = 0
+				}
+				""",
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let outer: Outer"]),
+				"""
+				func liveGadgetsHoldingOnlyAlpha() -> Int {
+				    var alpha: (any Alpha)?
+				    do {
+				        alpha = Root().outer.inner.alpha
+				    }
+				    return withExtendedLifetime(alpha) { LiveGadget.alive }
+				}
+				""",
 			].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
 		]
 	}
@@ -2946,6 +3959,115 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		"forwardingPlaceBesideSendablePlainPlace": panelModules(hostDeclarations: ["@Instantiated public let held: Instantiator<Panel>", "@Instantiated public let workerBuilder: SendableInstantiator<Worker>"]),
 		// One builder: a plain place that forwards nothing and a place held in an `Instantiator`, which forwards.
 		"plainPlaceBesideForwardingPlace": panelModules(hostDeclarations: ["@Instantiated public let panel: Panel", "@Instantiated public let held: Instantiator<Panel>"]),
+		// `Home`'s `Screen` builds another `Screen` through `next`; `Shell` passes `Home`'s place up.
+		"nextUnderKeptShell": [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: AnyObject {}",
+				seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Forwarded public let id: Int", "@Instantiated public let api: any Api", "@Instantiated public let next: Instantiator<Screen>"]),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let screenBuilder: Instantiator<Screen>"]),
+			]),
+			ModuleFixture(name: "Middle", packageName: "Other", swiftFileContent: [
+				seamFixtureType(named: "Shell", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [Api.self])
+				public final class Live: Instantiable, Api {
+				    public init(id: Int) {
+				        self.id = id
+				        Live.alive += 1
+				    }
+
+				    deinit {
+				        Live.alive -= 1
+				    }
+
+				    @Received public let id: Int
+				    nonisolated(unsafe) static var alive = 0
+				}
+				""",
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let shell: Shell"]),
+				"""
+				func liveCountHoldingOnlyScreen(atDepth depth: Int) -> Int {
+				    var screen: Screen?
+				    do {
+				        var current = Root().shell.home.screenBuilder.instantiate(1)
+				        for id in 2...depth {
+				            current = current.next.instantiate(id)
+				        }
+				        screen = current
+				    }
+				    return withExtendedLifetime(screen) { Live.alive }
+				}
+				""",
+			].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+		],
+		// `Home`'s `Screen` builds another `Screen` in a `SendableInstantiator`; `Shell` passes `Home`'s place up.
+		"sendableLoopUnderKeptShell": [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: Sendable {}",
+				seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Instantiated public let api: any Api", "@Instantiated public let again: SendableInstantiator<Screen>"], conformances: ", Sendable"),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let screenBuilder: Instantiator<Screen>"]),
+			]),
+			ModuleFixture(name: "Middle", packageName: "Other", swiftFileContent: [
+				seamFixtureType(named: "Shell", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: []),
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let shell: Shell"]),
+			].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+		],
+		// `Hub` builds `A` by value; `B`, built in `A`'s `SendableInstantiator`, builds `A` again; `Shell` passes `Hub`'s place
+		// up.
+		"byValueLoopUnderKeptShell": [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: Sendable {}",
+				seamFixtureType(named: "A", declarations: ["@Instantiated public let bBuilder: SendableInstantiator<B>"], conformances: ", Sendable"),
+				seamFixtureType(named: "B", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let a: A"], conformances: ", Sendable"),
+				seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let a: A"], conformances: ", Sendable"),
+			]),
+			ModuleFixture(name: "Middle", packageName: "Other", swiftFileContent: [
+				seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated public let hub: Hub"]),
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: []),
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let shell: Shell"]),
+			].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+		],
+		// `Home` builds `Screen` in an `Instantiator` and in a `SendableInstantiator`, and `Screen` builds itself again through
+		// `next`; `Shell` passes `Home`'s place up.
+		"bothFamiliesLoopUnderKeptShell": [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: Sendable {}",
+				seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Instantiated public let api: any Api", "@Instantiated public let next: Instantiator<Screen>"]),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let screenBuilder: Instantiator<Screen>", "@Instantiated public let sendableScreenBuilder: SendableInstantiator<Screen>"]),
+			]),
+			ModuleFixture(name: "Middle", packageName: "Other", swiftFileContent: [
+				seamFixtureType(named: "Shell", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: []),
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let shell: Shell"]),
+			].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+		],
+		// `Outer` fills `Inner`'s `service` with a type that holds `Outer`'s own place; `Inner`'s `Screen` builds itself again
+		// through `next`.
+		"insideFillLoop": [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Service {}\npublic protocol Gadget {}",
+				seamFixtureType(named: "Screen", declarations: ["@Forwarded public let id: Int", "@Instantiated public let service: any Service", "@Instantiated public let next: Instantiator<Screen>"]),
+				seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated public let screenBuilder: Instantiator<Screen>", "@Instantiated public let service: any Service"]),
+			]),
+			ModuleFixture(name: "Middle", packageName: "Other", swiftFileContent: [
+				seamFixtureType(named: "Tag", isFinalClass: true, declarations: []),
+				fulfillingType(named: "DefaultService", fulfilling: "Service", declarations: ["@Instantiated public let gadget: any Gadget"]),
+				seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated public let tag: Tag", "@Instantiated public let inner: Inner"]),
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received public let tag: Tag", "@Received(onlyIfAvailable: true) public let id: Int?"]),
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let outer: Outer"]),
+			].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+		],
 	]
 
 	/// The compiler settings of a module whose declarations default to the main actor.
