@@ -327,10 +327,10 @@ struct SafeDIToolGraphFuzzerTests {
 	func passes_countsGraph_whenItsOnlyRenamedDifferenceIsTheBuilderOrderItsEntryLists() {
 		let knownIssue = GraphFuzzerKnownIssue(
 			reason: "\(Self.seamBuilderOrderReason); and \(Self.inSeamLeakReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode)] + Self.inSeamLeakSignatures,
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)] + Self.inSeamLeakSignatures,
 			seeds: [309],
 		)
-		let result = Self.acceptedResult(seed: 309, failingWith: [Self.renamedGraphFailure(seed: 309, aspect: .dependencyTreeCode)])
+		let result = Self.acceptedResult(seed: 309, failingWith: [Self.renamedGraphFailure(seed: 309, aspect: .dependencyTreeListOrder)])
 
 		#expect(result.passes(butForRetentionDocumentedBy: knownIssue, butForBuilderOrderDocumentedBy: Self.seamBuilderOrderShape(listedBy: knownIssue)))
 	}
@@ -341,11 +341,11 @@ struct SafeDIToolGraphFuzzerTests {
 		// renamed graph's mock that drops a field still keeps the graph from counting.
 		let knownIssue = GraphFuzzerKnownIssue(
 			reason: "\(Self.seamBuilderOrderReason); and \(Self.lazyCycleConfigurationFieldReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [19],
 		)
 		let result = Self.acceptedResult(seed: 19, failingWith: [
-			Self.renamedGraphFailure(seed: 19, aspect: .dependencyTreeCode),
+			Self.renamedGraphFailure(seed: 19, aspect: .dependencyTreeListOrder),
 			Self.renamedGraphFailure(seed: 19, aspect: .mockConfigurationFieldPresence),
 		])
 
@@ -358,13 +358,312 @@ struct SafeDIToolGraphFuzzerTests {
 		// order, so no shape is handed over and the difference keeps the graph from counting.
 		let knownIssue = GraphFuzzerKnownIssue(
 			reason: Self.labelSortedPassThroughReason,
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode)],
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
 			seeds: [950],
 		)
-		let result = Self.acceptedResult(seed: 950, failingWith: [Self.renamedGraphFailure(seed: 950, aspect: .dependencyTreeCode)])
+		let result = Self.acceptedResult(seed: 950, failingWith: [Self.renamedGraphFailure(seed: 950, aspect: .dependencyTreeListOrder)])
 
 		#expect(Self.seamBuilderOrderShape(listedBy: knownIssue) == nil)
 		#expect(!result.passes(butForRetentionDocumentedBy: knownIssue, butForBuilderOrderDocumentedBy: Self.seamBuilderOrderShape(listedBy: knownIssue)))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_reportListOrder_whenTypeNameRenamingReordersSeamsBuilders() {
+		let differences = Self.treeDifferences(code: Self.builderOrderCode, otherCode: Self.builderOrderReorderedCode, renaming: Self.movingTypeNames)
+
+		#expect(differences == [GraphFuzzerOutcomeDifference(aspect: .dependencyTreeListOrder, fileName: "FuzzFeature/S1_HoleSeam+SafeDI.swift")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_reportListOrder_whenArgumentsSpanningSeveralLinesMove() {
+		// Seed 163's kept outer seam calls `HoleSeam` with builder structs spelled over several lines, which the move of type
+		// names reorders: each argument's lines move with it, so no line holds the same parts in both outcomes.
+		let differences = Self.treeDifferences(code: Self.multiLineBuildersCode, otherCode: Self.multiLineBuildersReorderedCode, renaming: Self.movingTypeNames)
+
+		#expect(differences == [GraphFuzzerOutcomeDifference(aspect: .dependencyTreeListOrder, fileName: "FuzzFeature/S1_HoleSeam+SafeDI.swift")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_reportTreeCode_whenFileNameReversalReordersSeamsBuilders() {
+		// Reversing file names moves no label sort, so the same reorder is the file's code.
+		let differences = Self.treeDifferences(code: Self.builderOrderCode, otherCode: Self.builderOrderReorderedCode, renaming: Self.reversingFileNames)
+
+		#expect(differences == [GraphFuzzerOutcomeDifference(aspect: .dependencyTreeCode, fileName: "FuzzFeature/S1_HoleSeam+SafeDI.swift")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_reportTreeCode_whenReorderComesWithRespelledType() {
+		// Seed 163's readable initializer: its builders reordered, and the forwarded `Int` spelled `Swift.Int`.
+		let otherCode = Self.builderOrderReorderedCode.replacingOccurrences(of: "ErasedInstantiator<Int,", with: "ErasedInstantiator<Swift.Int,")
+		#expect(otherCode != Self.builderOrderReorderedCode)
+
+		let differences = Self.treeDifferences(code: Self.builderOrderCode, otherCode: otherCode, renaming: Self.movingTypeNames)
+
+		#expect(differences == [GraphFuzzerOutcomeDifference(aspect: .dependencyTreeCode, fileName: "FuzzFeature/S1_HoleSeam+SafeDI.swift")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_reportTreeCode_whenArgumentValuesSwapBetweenLabels() {
+		let code = "        self.init(holeService: holeService, holeTicket: holeTicket)\n"
+		let otherCode = "        self.init(holeService: holeTicket, holeTicket: holeService)\n"
+
+		let differences = Self.treeDifferences(code: code, otherCode: otherCode, renaming: Self.movingTypeNames)
+
+		#expect(differences == [GraphFuzzerOutcomeDifference(aspect: .dependencyTreeCode, fileName: "FuzzFeature/S1_HoleSeam+SafeDI.swift")])
+	}
+
+	@Test(arguments: [
+		// A value swapped between two nested calls: the same parts, each call's list another.
+		(
+			"        __safeDI_holeServiceBuilder(.holeSeam(.holeOwner(holeOwnerValues), .holeService(holeServiceValues)))\n",
+			"        __safeDI_holeServiceBuilder(.holeSeam(.holeOwner(holeServiceValues), .holeService(holeOwnerValues)))\n",
+		),
+		// An argument moved from one call to another.
+		(
+			"        self.init(holeSeam: .init(holeService: holeService, holeTicket: holeTicket), holeOuter: .init(holeAnalytics: holeAnalytics))\n",
+			"        self.init(holeSeam: .init(holeService: holeService), holeOuter: .init(holeTicket: holeTicket, holeAnalytics: holeAnalytics))\n",
+		),
+		// An argument moved into a call nested in its list.
+		(
+			"        self.init(holeSeam: .init(holeService: holeService), holeTicket: holeTicket)\n",
+			"        self.init(holeSeam: .init(holeService: holeService, holeTicket: holeTicket))\n",
+		),
+		// A statement moved out of the `#sourceLocation` run it was in, in one block.
+		(
+			"    func __safeDI_holeSeam() -> HoleSeam {\n        #sourceLocation(file: \"HoleSeam.swift\", line: 3)\n        let holeService = HoleImpl()\n        #sourceLocation()\n        return HoleSeam(holeService: holeService)\n    }\n",
+			"    func __safeDI_holeSeam() -> HoleSeam {\n        #sourceLocation(file: \"HoleSeam.swift\", line: 3)\n        #sourceLocation()\n        let holeService = HoleImpl()\n        return HoleSeam(holeService: holeService)\n    }\n",
+		),
+		// A statement moved from one function's body to another's.
+		(
+			"    func __safeDI_holeSeam() -> HoleSeam {\n        let holeService = HoleImpl()\n        let holeTicket = HoleTicket()\n        return HoleSeam(holeService: holeService)\n    }\n    func __safeDI_holeOuter() -> HoleOuter {\n        return HoleOuter()\n    }\n",
+			"    func __safeDI_holeSeam() -> HoleSeam {\n        let holeService = HoleImpl()\n        return HoleSeam(holeService: holeService)\n    }\n    func __safeDI_holeOuter() -> HoleOuter {\n        let holeTicket = HoleTicket()\n        return HoleOuter()\n    }\n",
+		),
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_reportTreeCode_whenListsHoldOtherItemsThoughTheFileHoldsTheSameParts(code: String, otherCode: String) {
+		let differences = Self.treeDifferences(code: code, otherCode: otherCode, renaming: Self.movingTypeNames)
+
+		#expect(differences == [GraphFuzzerOutcomeDifference(aspect: .dependencyTreeCode, fileName: "FuzzFeature/S1_HoleSeam+SafeDI.swift")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_reportListOrder_whenSiblingDeclarationsOfOneBlockMove() {
+		// A seam's builder functions, declared in one body in label order, which the move of type names reorders with the
+		// cases of a switch: each function's lines move with it, and its own statements keep their block.
+		let code = "extension Root {\n    func __safeDI_holeServiceBuilder(_ scope: Scope) -> any HoleService {\n        switch scope {\n        case let .holeOwner(values): return HoleImpl(values.holeAnalytics)\n        case let .holeSeam(values): return HoleImpl(values.holeAnalytics)\n        }\n    }\n    func __safeDI_holeTicketBuilder(_ scope: Scope) -> any HoleTicket {\n        switch scope {\n        case let .holeTicketHolder(values): return HoleTicketImpl()\n        }\n    }\n}\n"
+		let otherCode = "extension Root {\n    func __safeDI_holeTicketBuilder(_ scope: Scope) -> any HoleTicket {\n        switch scope {\n        case let .holeTicketHolder(values): return HoleTicketImpl()\n        }\n    }\n    func __safeDI_holeServiceBuilder(_ scope: Scope) -> any HoleService {\n        switch scope {\n        case let .holeSeam(values): return HoleImpl(values.holeAnalytics)\n        case let .holeOwner(values): return HoleImpl(values.holeAnalytics)\n        }\n    }\n}\n"
+
+		let differences = Self.treeDifferences(code: code, otherCode: otherCode, renaming: Self.movingTypeNames)
+
+		#expect(differences == [GraphFuzzerOutcomeDifference(aspect: .dependencyTreeListOrder, fileName: "FuzzFeature/S1_HoleSeam+SafeDI.swift")])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "An order-only difference is checked by compiling the renamed graph's code"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func results_reportTreeCode_whenRenamedGraphsOrderOnlyDifferenceReadsValueBeforeItsDeclaration() async throws {
+		// A renamed graph whose code, with its renaming undone, differs from the graph's only in the order of two statements
+		// of one block, the first of which now reads the value the second declares: the canonical form finds an order alone,
+		// but the code does not compile with the graph, so the difference is the file's code.
+		let renamedRuns = try #require(try await Self.seed454Runs(withRenamedCodeEditedBy: Self.codeReadingValueBeforeItsDeclaration(in:)))
+		#expect(renamedRuns.renamedGraphFailures.map(\.renamedGraphDifference) == [.dependencyTreeListOrder])
+
+		let result = try #require(try await GraphFuzzerOracle.results(of: [renamedRuns]).first)
+
+		#expect(result.renamedGraphFailures.map(\.renamedGraphDifference) == [.dependencyTreeCode])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "An order-only difference is checked by comparing the renamed graph's values"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func listOrderRefutation_refutesOrder_whenRenamedCodeSwapsUnlabeledArgumentsOfOneType() async throws {
+		// Two unlabeled arguments of one type swapped: the canonical form sorts a list's items, labeled or not, so it finds
+		// an order alone, and the code compiles; its values differ, which refutes the order.
+		let fixture = """
+		public final class Holder {
+		    public init(label: String) {
+		        self.label = label
+		    }
+		    public let label: String
+		}
+
+		public final class Pair {
+		    public init(_ first: Holder, _ second: Holder) {
+		        self.first = first
+		        self.second = second
+		    }
+		    public let first: Holder
+		    public let second: Holder
+		}
+		"""
+		let code = "extension Pair {\n    static func make() -> Pair {\n        let left = Holder(label: \"left\")\n        let right = Holder(label: \"right\")\n        return Pair(left, right)\n    }\n}\n"
+		let swappedCode = code.replacingOccurrences(of: "Pair(left, right)", with: "Pair(right, left)")
+		#expect(swappedCode != code)
+		#expect(GraphFuzzerOutcomeDifference.listsInCanonicalOrder(of: swappedCode) == GraphFuzzerOutcomeDifference.listsInCanonicalOrder(of: code))
+		var filesToDelete = [URL]()
+		defer {
+			for fileToDelete in filesToDelete {
+				try? FileManager.default.removeItem(at: fileToDelete)
+			}
+		}
+		func comparison(of featureCode: String) async throws -> DifferentialValueComparison {
+			try #require(try await DifferentialValueOracle.compare(
+				feature: DifferentialValuePath(fixtureFiles: ["Pair.swift": fixture], generatedFiles: ["Pair+SafeDI.swift": featureCode]),
+				knownRight: DifferentialValuePath(fixtureFiles: ["Pair.swift": fixture], generatedFiles: ["Pair+SafeDI.swift": code]),
+				probes: [DifferentialValueProbe("Pair.make()")],
+				filesToDelete: &filesToDelete,
+			))
+		}
+		let ownComparison = try await comparison(of: code)
+		let swappedComparison = try await comparison(of: swappedCode)
+		#expect(ownComparison.differences.isEmpty)
+
+		#expect(GraphFuzzerOracle.listOrderRefutation(of: .success(ownComparison), by: .success(swappedComparison)) != nil)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "An order-only difference is checked by compiling the renamed graph's code"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func listOrderRefutation_refutesOrder_whenRenamedCodeDoesNotCompileBesideOwnComparisonThatRanOutOfTraversals() async throws {
+		// Seed 391's shape: the graph's own probes run out of traversals, so its own comparison fails as they run. A renamed
+		// graph whose order-only difference reads a value before its declaration fails otherwise, as it compiles, so the
+		// difference is still the file's code.
+		let renamedRuns = try #require(try await Self.seed454Runs(withRenamedCodeEditedBy: Self.codeReadingValueBeforeItsDeclaration(in:)))
+		let graph = try #require(GraphFuzzerOracle.seamValueGraph(of: renamedRuns))
+		let (renamedIndex, renamedGraph) = try #require(GraphFuzzerOracle.listOrderGraphs(of: renamedRuns, beside: graph).first)
+		var filesToDelete = [URL]()
+		defer {
+			for fileToDelete in filesToDelete {
+				try? FileManager.default.removeItem(at: fileToDelete)
+			}
+		}
+		let renamedComparison = try #require(try await DifferentialValueOracle.compare(graphs: [renamedGraph], limits: DifferentialValueLimits(), filesToDelete: &filesToDelete)?.first)
+		let ownFailure = DifferentialValueOracleError(path: .feature, stage: .runningProbes, description: "probe `S454_Root0()` spent its 200000 traversals")
+
+		let refutation = try #require(GraphFuzzerOracle.listOrderRefutation(of: .failure(ownFailure), by: renamedComparison.result))
+
+		#expect(renamedRuns.renamedGraphFailures(refutingOrderOf: [renamedIndex: refutation]).map(\.renamedGraphDifference) == [.dependencyTreeCode])
+	}
+
+	/// Seed 454's runs, with one renamed outcome: the graph's own generated code, one file of which `edit` changes (`nil`
+	/// when `edit` finds nothing to change, or the tool rejects the graph).
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func seed454Runs(withRenamedCodeEditedBy edit: ([String: String]) -> (fileName: String, code: String)?) async throws -> GraphFuzzerToolRuns? {
+		let runs = try await GraphFuzzerOracle.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: 454, features: [.generateDependencyTree]), renamings: [])
+		guard case let .accepted(generatedFiles, warnings) = runs.firstOutcome, let (fileName, editedCode) = edit(generatedFiles) else { return nil }
+		var renamedFiles = generatedFiles
+		renamedFiles[fileName] = editedCode
+		return GraphFuzzerToolRuns(
+			fixture: runs.fixture,
+			firstOutcome: runs.firstOutcome,
+			secondOutcome: runs.secondOutcome,
+			renamedOutcomes: [(movingTypeNames, .accepted(generatedFiles: renamedFiles, warnings: warnings))],
+			inlineOutcome: runs.inlineOutcome,
+			visibleOutcome: runs.visibleOutcome,
+		)
+	}
+
+	/// The first generated file, by name, with a one-line `let` statement swapped with the one-line statement after it at
+	/// its indentation that reads the value it declares, and that file's name; or `nil` when no file has such a pair.
+	private static func codeReadingValueBeforeItsDeclaration(in generatedFiles: [String: String]) -> (fileName: String, code: String)? {
+		for (fileName, code) in generatedFiles.sorted(by: { $0.key < $1.key }) {
+			var lines = code.components(separatedBy: "\n")
+			for index in lines.indices.dropLast() {
+				let line = lines[index]
+				let next = lines[index + 1]
+				let indentation = line.prefix { $0 == " " }
+				let statement = line.dropFirst(indentation.count)
+				let name = statement.dropFirst("let ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
+				func isIdentifierCharacter(_ character: Character) -> Bool {
+					character.isLetter || character.isNumber || character == "_"
+				}
+				guard statement.hasPrefix("let "), !name.isEmpty, statement.contains(" = "),
+				      next.prefix(while: { $0 == " " }) == indentation,
+				      next.split(whereSeparator: { !isIdentifierCharacter($0) }).contains(name),
+				      [line, next].allSatisfy({ $0.filter { "({[".contains($0) }.count == $0.filter { ")}]".contains($0) }.count })
+				else { continue }
+				lines.swapAt(index, index + 1)
+				return (fileName, lines.joined(separator: "\n"))
+			}
+		}
+		return nil
+	}
+
+	/// Seed 163's readable initializer, an excerpt of its generated `HoleSeam` file.
+	private static let builderOrderCode = """
+	    public convenience init(s163_HoleGadgetServiceBuilder: @escaping () -> any S163_HoleGadgetService, s163_HoleHandedBuilder: @escaping () -> S163_HoleHanded, s163_HoleServiceBuilder: @escaping () -> any S163_HoleService, s163_HoleTicketImpl_S163_HoleTicketServiceBuilder: @escaping ErasedInstantiator<Int, any S163_HoleTicketService>.Builder) {
+	        self.init(__safeDI_s163_HoleGadgetServiceBuilder: .init(__safeDI_noScope: s163_HoleGadgetServiceBuilder), __safeDI_s163_HoleHandedBuilder: .init(__safeDI_noScope: s163_HoleHandedBuilder))
+	    }
+
+	"""
+
+	/// Seed 163's call of `HoleSeam` from its kept outer seam `HoleOuter`, whose builder structs span several lines.
+	private static let multiLineBuildersCode = """
+	            return S163_HoleSeam(__safeDI_s163_HoleGadgetServiceBuilder: .init(
+	                holeGadgetOwner: { __safeDI_holeGadgetOwnerValues in
+	                    .init(holeGadget: { __safeDI_holeGadgetValues in __safeDI_s163_HoleGadgetServiceBuilder(.holeSeam(.holeGadgetOwner(__safeDI_holeGadgetOwnerValues, .holeGadget(__safeDI_holeGadgetValues)))) })
+	                }
+	            ), __safeDI_s163_HoleHandedBuilder: .init(
+	                holeHandedHolder: { __safeDI_holeHandedHolderValues in
+	                    .init(holeHandedBuilder: { __safeDI_holeHandedBuilderValues in { forwarded in __safeDI_s163_HoleHandedBuilder(.holeSeam(.holeHandedHolder(__safeDI_holeHandedHolderValues, .holeHandedBuilder(__safeDI_holeHandedBuilderValues, forwarded)))) } })
+	                },
+	                holeHandedErased: { __safeDI_holeHandedErasedValues in { forwarded in __safeDI_s163_HoleHandedBuilder(.holeSeam(.holeHandedErased(__safeDI_holeHandedErasedValues, forwarded))) } },
+	                holeHandedValue: { __safeDI_holeHandedValueValues in __safeDI_s163_HoleHandedBuilder(.holeSeam(.holeHandedValue(__safeDI_holeHandedValueValues))) },
+	                holeHandedLater: { __safeDI_holeHandedLaterValues in { _ in __safeDI_s163_HoleHandedBuilder(.holeSeam(.holeHandedLater(__safeDI_holeHandedLaterValues))) } }
+	            ), __safeDI_s163_HoleServiceBuilder: .init(holeService: { __safeDI_holeServiceValues in __safeDI_s163_HoleServiceBuilder(.holeSeam(.holeService(__safeDI_holeServiceValues))) }, holeServiceLazy: { __safeDI_holeServiceLazyValues in __safeDI_s163_HoleServiceBuilder(.holeSeam(.holeServiceLazy(__safeDI_holeServiceLazyValues))) }), __safeDI_s163_HoleTicketImpl_S163_HoleTicketServiceBuilder: .init(
+	                holeTicketBuilder: { __safeDI_holeTicketBuilderValues in { forwarded in __safeDI_s163_HoleTicketImpl_S163_HoleTicketServiceBuilder(.holeSeam(.holeTicketBuilder(__safeDI_holeTicketBuilderValues, forwarded))) } },
+	                holeTicketHolder: { __safeDI_holeTicketHolderValues in
+	                    .init(holeTicketOther: { __safeDI_holeTicketOtherValues in { forwarded in __safeDI_s163_HoleTicketImpl_S163_HoleTicketServiceBuilder(.holeSeam(.holeTicketHolder(__safeDI_holeTicketHolderValues, .holeTicketOther(__safeDI_holeTicketOtherValues, forwarded)))) } })
+	                }
+	            ))
+
+	"""
+
+	/// `multiLineBuildersCode` with its builders in the order the move of type names gives them.
+	private static let multiLineBuildersReorderedCode = """
+	            return S163_HoleSeam(__safeDI_s163_HoleGadgetServiceBuilder: .init(
+	                holeGadgetOwner: { __safeDI_holeGadgetOwnerValues in
+	                    .init(holeGadget: { __safeDI_holeGadgetValues in __safeDI_s163_HoleGadgetServiceBuilder(.holeSeam(.holeGadgetOwner(__safeDI_holeGadgetOwnerValues, .holeGadget(__safeDI_holeGadgetValues)))) })
+	                }
+	            ), __safeDI_s163_HoleTicketImpl_S163_HoleTicketServiceBuilder: .init(
+	                holeTicketBuilder: { __safeDI_holeTicketBuilderValues in { forwarded in __safeDI_s163_HoleTicketImpl_S163_HoleTicketServiceBuilder(.holeSeam(.holeTicketBuilder(__safeDI_holeTicketBuilderValues, forwarded))) } },
+	                holeTicketHolder: { __safeDI_holeTicketHolderValues in
+	                    .init(holeTicketOther: { __safeDI_holeTicketOtherValues in { forwarded in __safeDI_s163_HoleTicketImpl_S163_HoleTicketServiceBuilder(.holeSeam(.holeTicketHolder(__safeDI_holeTicketHolderValues, .holeTicketOther(__safeDI_holeTicketOtherValues, forwarded)))) } })
+	                }
+	            ), __safeDI_s163_HoleHandedBuilder: .init(
+	                holeHandedHolder: { __safeDI_holeHandedHolderValues in
+	                    .init(holeHandedBuilder: { __safeDI_holeHandedBuilderValues in { forwarded in __safeDI_s163_HoleHandedBuilder(.holeSeam(.holeHandedHolder(__safeDI_holeHandedHolderValues, .holeHandedBuilder(__safeDI_holeHandedBuilderValues, forwarded)))) } })
+	                },
+	                holeHandedErased: { __safeDI_holeHandedErasedValues in { forwarded in __safeDI_s163_HoleHandedBuilder(.holeSeam(.holeHandedErased(__safeDI_holeHandedErasedValues, forwarded))) } },
+	                holeHandedValue: { __safeDI_holeHandedValueValues in __safeDI_s163_HoleHandedBuilder(.holeSeam(.holeHandedValue(__safeDI_holeHandedValueValues))) },
+	                holeHandedLater: { __safeDI_holeHandedLaterValues in { _ in __safeDI_s163_HoleHandedBuilder(.holeSeam(.holeHandedLater(__safeDI_holeHandedLaterValues))) } }
+	            ), __safeDI_s163_HoleServiceBuilder: .init(holeService: { __safeDI_holeServiceValues in __safeDI_s163_HoleServiceBuilder(.holeSeam(.holeService(__safeDI_holeServiceValues))) }, holeServiceLazy: { __safeDI_holeServiceLazyValues in __safeDI_s163_HoleServiceBuilder(.holeSeam(.holeServiceLazy(__safeDI_holeServiceLazyValues))) }))
+
+	"""
+
+	/// `builderOrderCode` with its builders in another order, as a renaming that reorders their labels gives it.
+	private static let builderOrderReorderedCode = """
+	    public convenience init(s163_HoleHandedBuilder: @escaping () -> S163_HoleHanded, s163_HoleTicketImpl_S163_HoleTicketServiceBuilder: @escaping ErasedInstantiator<Int, any S163_HoleTicketService>.Builder, s163_HoleGadgetServiceBuilder: @escaping () -> any S163_HoleGadgetService, s163_HoleServiceBuilder: @escaping () -> any S163_HoleService) {
+	        self.init(__safeDI_s163_HoleHandedBuilder: .init(__safeDI_noScope: s163_HoleHandedBuilder), __safeDI_s163_HoleGadgetServiceBuilder: .init(__safeDI_noScope: s163_HoleGadgetServiceBuilder))
+	    }
+
+	"""
+
+	private static let movingTypeNames = GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: false, movesTypeNamesAcrossWrapperNames: true)
+
+	private static let reversingFileNames = GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: true)
+
+	/// The differences of a seam's dependency tree file whose code is `code` in one outcome and `otherCode` in the other.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func treeDifferences(code: String, otherCode: String, renaming: GraphFuzzerRenaming) -> [GraphFuzzerOutcomeDifference] {
+		GraphFuzzerToolOutcome.differences(
+			between: .accepted(generatedFiles: ["FuzzFeature/S1_HoleSeam+SafeDI.swift": code], warnings: []),
+			and: .accepted(generatedFiles: ["FuzzFeature/S1_HoleSeam+SafeDI.swift": otherCode], warnings: []),
+			renaming: renaming,
+		)
 	}
 
 	private static func renamedGraphFailure(seed: UInt64, aspect: GraphFuzzerOutcomeDifference.Aspect) -> GraphFuzzerFailure {
@@ -6373,12 +6672,12 @@ struct SafeDIToolGraphFuzzerTests {
 	} + [
 		GraphFuzzerKnownIssue(
 			reason: labelSortedPassThroughReason,
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode)],
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
 			seeds: labelSortedPassThroughSeeds,
 		),
 		GraphFuzzerKnownIssue(
 			reason: labelSortedPassThroughAndMockParametersReason,
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
 			seeds: labelSortedPassThroughSeedsWhoseMockParametersAlsoChange,
 		),
 		// The nested builders' design orders a seam's builders by label, so by their hole types' names, which the move
@@ -6386,7 +6685,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// `HoleGadgetImpl`, labeled by the types they return.
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode)],
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
 			seeds: [78, 93, 108, 121, 164, 273, 298, 304, 308, 326, 347, 362, 365, 391, 407, 481, 494, 527, 568, 594, 670, 699, 701, 750, 794, 797, 832, 850, 858, 876, 929, 931, 947],
 		),
 		// The forwarding place's hole type is a second hole type beside `HoleService`, so its builders reorder too; and the
@@ -6394,22 +6693,22 @@ struct SafeDIToolGraphFuzzerTests {
 		// lists 311, 338, 595, 836 and 948 under.
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [19, 116, 311, 338, 567, 595, 836, 948],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason); and \(inSeamLeakReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)] + inSeamLeakSignatures,
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)] + inSeamLeakSignatures,
 			seeds: [163, 854, 940],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(mockParameterAndFieldOrderReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
 			seeds: [281],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(mockParameterAndFieldOrderReason); and \(inSeamLeakReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockParameterAndFieldOrder)] + inSeamLeakSignatures,
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockParameterAndFieldOrder)] + inSeamLeakSignatures,
 			seeds: [548],
 		),
 		// A fill that re-enters its own seam: the place the re-entered seam builds is handed the root dispatcher, not the
@@ -6417,12 +6716,12 @@ struct SafeDIToolGraphFuzzerTests {
 		// build pass it.
 		GraphFuzzerKnownIssue(
 			reason: "\(fillReenteringItsSeamLosesValueReason); and \(seamBuilderOrderReason); and \(inSeamLeakReason)",
-			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures,
+			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures,
 			seeds: [600],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(fillReenteringItsSeamLosesValueReason); and \(seamBuilderOrderReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
-			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
+			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
 			seeds: [945],
 		),
 		// The in-seam leak (rule 3 of the seam contract), which the retention check must fail on until its fix: a seam's
@@ -6438,7 +6737,7 @@ struct SafeDIToolGraphFuzzerTests {
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures,
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures,
 			seeds: [15, 83, 98, 227, 309, 663, 787, 883, 892],
 		),
 		GraphFuzzerKnownIssue(
@@ -6448,14 +6747,14 @@ struct SafeDIToolGraphFuzzerTests {
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
 			seeds: [930],
 		),
 		// The in-seam leak in graphs that also show a shape the seam corpus inherits from the base corpus's list, or the
 		// order of a seam's pass-throughs.
 		GraphFuzzerKnownIssue(
 			reason: "\(labelSortedPassThroughReason); and \(inSeamLeakReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures,
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures,
 			seeds: [330, 809],
 		),
 		GraphFuzzerKnownIssue(
@@ -6578,17 +6877,17 @@ struct SafeDIToolGraphFuzzerTests {
 	static let seamSmokeKnownIssuesBeyondTheCorpus: [GraphFuzzerKnownIssue] = [
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode)],
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
 			seeds: [1_010, 1_020],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
 			seeds: [1_450],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures,
+			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures,
 			seeds: [1_890],
 		),
 	]
@@ -7057,7 +7356,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// reason a known issue lists is handed to `GraphFuzzerResult.passes(butForRetentionDocumentedBy:butForBuilderOrderDocumentedBy:)`.
 	static func seamBuilderOrderShape(listedBy knownIssue: GraphFuzzerKnownIssue?) -> GraphFuzzerKnownIssue? {
 		guard let knownIssue, knownIssue.reason.components(separatedBy: "; and ").contains(seamBuilderOrderReason) else { return nil }
-		return GraphFuzzerKnownIssue(reason: seamBuilderOrderReason, signatures: [.renamedGraphDiffers(.dependencyTreeCode)], seeds: knownIssue.seeds)
+		return GraphFuzzerKnownIssue(reason: seamBuilderOrderReason, signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)], seeds: knownIssue.seeds)
 	}
 
 	private static let seamBuilderOrderReason = "A seam's builders are ordered by label, which its hole type's names spell, so moving type names across wrapper names reorders the builders of a seam with two hole types, its generated initializers and the calls of them"
