@@ -1429,6 +1429,11 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+      # .claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py writes a corpus
+      # run's values into the fuzzer's pins, so it proves on fixtures that it
+      # refuses values that are not known to be of the commit it edits.
+      - name: Check the Fuzzer Pins Script Against Its Fixtures
+        run: python3 -I .claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py --self-test "$RUNNER_TEMP/apply-fuzzer-pins-self-test"
       # The check is the only thing between an unexecuted line and main, so
       # its script proves on fixtures that it unions the platforms, resolves
       # symbolic links and refuses missing data before it reads the reports.

@@ -5,6 +5,9 @@
 # Default: the base corpus, seeds 0..<100, debug build. `--iterations corpus` runs the whole selected corpus and
 # checks its pins; the shard line's accepted count and sum are what corpusAcceptedSeedCount and corpusAcceptedSeedsSum pin.
 # --seeds runs exactly the listed seeds in one process, in place of --seed and --iterations.
+# Every run draws the whole selected corpus first and prints a problem line with the new value when
+# its fixture hash (or the base corpus's partition hash) moved, so `--iterations 1` derives a corpus's hashes in under
+# a minute after the build (measured in debug: base 25 s, generateDependencyTree 20 s, generateMockPublic 10 s).
 set -euo pipefail
 features="" seed=0 iterations=100 seeds="" configuration=debug
 while (( $# )); do case "$1" in
@@ -21,5 +24,5 @@ fi
 # A shard left in the environment would also select seeds; -u keeps the run to what the options name.
 env -u SAFEDI_GRAPH_FUZZER_SHARD $selection SAFEDI_GRAPH_FUZZER_FEATURES=$features SAFEDI_GRAPH_FUZZER_REPORT=$report \
 	swift test -c $configuration --traits sourceBuild --filter 'SafeDIToolGraphFuzzerTests/longRun' || exit_status=$?
-echo "--- pins (report: $report)"; grep -E '^(shard|seeds|corpus|cpu) ' "$report" || true
+echo "--- pins (report: $report)"; grep -E '^(shard|seeds|corpus|cpu) |^problem .*(fixture|partition) hash ' "$report" || true
 exit $exit_status
