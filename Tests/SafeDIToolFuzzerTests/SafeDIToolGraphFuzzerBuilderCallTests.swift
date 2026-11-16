@@ -134,7 +134,8 @@ struct SafeDIToolGraphFuzzerBuilderCallTests {
 		#expect(failures.keys.sorted() == [seed])
 		#expect(failures[seed]?.kind == .builderCallDoesNotCompile)
 		#expect(failures[seed]?.details.contains("S1000000102_Home+SafeDIBuilderCall.swift:") == true)
-		#expect(failures[seed]?.details.contains("+SafeDI.swift:") == false)	}
+		#expect(failures[seed]?.details.contains("+SafeDI.swift:") == false)
+	}
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
