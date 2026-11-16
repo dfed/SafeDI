@@ -7,7 +7,10 @@ The override each place reads is taken from today's text, place by place: a func
 plus its label, `nil` when it reads none, and otherwise the fixed path it reads (kept in the key). `context` follows
 the dynamic rule (#646's fix): each place gets the nearest declaration on the path that built it.
 
-Usage: shared_form.py TODAY.swift OUT.swift STATS.json [--uniform]
+Usage: shared_form.py TODAY.swift OUT.swift STATS.json [--uniform | --loop [--boxed]]
+
+--loop is --uniform, except that a cycle's closing edge hands the re-entered type the configuration its nearest
+ancestor of that type read (a `__safeDI_Loop` value every function passes on), so every override applies on every lap.
 
 --uniform replaces today's reads with one rule (every place reads its parent's field for it when the parent's type has
 one; the mock root's children read the root's field), so one function serves each (type, context form, construction):
@@ -95,7 +98,11 @@ def rewrite_mock(body_lines, return_line, indent, stats):
     def expression_for(place, label, callee):
         if UNIFORM:
             # The uniform rule: every place reads its parent's field for it when the parent's type has one.
-            return "param" if label in CONFIGURATION_FIELDS.get(place.type, ()) else "nil"
+            if label in CONFIGURATION_FIELDS.get(place.type, ()):
+                return "param"
+            # The loop rule: a cycle's closing edge hands the re-entered type the configuration its nearest ancestor of
+            # that type read, so every override applies on every lap of the cycle.
+            return "loop:" + callee.type if LOOP else "nil"
         if callee.path is None:
             return "nil"
         if place.path is not None and callee.path == f"{place.path}.{label}":
@@ -157,23 +164,48 @@ def rewrite_mock(body_lines, return_line, indent, stats):
             return f"__safeDI_overrides?.{label}"
         if expression == "nil":
             return "nil"
+        if expression.startswith("loop:"):
+            return "__safeDI_loop.t_" + expression[len("loop:"):]
         return "safeDIOverrides." + expression[len("fixed:"):]
 
     def instantiator(label, child_type, expression, number, context_available, pad):
         callee_place, callee_context, _ = functions[number]
         context_argument = ", context: context" if (callee_context is not None and not callee_place.declares_context) else ""
+        loop_argument = (", __safeDI_loop: __safeDI_loop" if context_available else ", __safeDI_loop: __safeDI_Loop()") if LOOP else ""
         return [f"{pad}let {label} = Instantiator<{child_type}> {{",
-                f"{pad}    __safeDI_shared{number}(id: $0{context_argument}, safeDIOverrides: {expression_text(expression, label)})",
+                f"{pad}    __safeDI_shared{number}(id: $0{context_argument}, safeDIOverrides: {expression_text(expression, label)}{loop_argument})",
                 f"{pad}}}"]
 
     pad = " " * indent
     out = [pad + line for line in root.prologue]
+    loop_types = sorted({e[len("loop:"):] for _, _, calls in functions for _, _, e, _ in calls if e.startswith("loop:")})
+    if LOOP:
+        out.append(f"{pad}struct __safeDI_Loop {{")
+        if BOXED:
+            # Each loop configuration is held in a box, so copying or capturing the loop value retains a few
+            # references instead of copying every configuration it holds.
+            out.append(f"{pad}    final class Box<Value> {{ let value: Value; init(_ value: Value) {{ self.value = value }} }}")
+            for t in loop_types:
+                out.append(f"{pad}    var b_{t}: Box<{t}.SafeDIMockConfiguration?>? = nil")
+                out.append(f"{pad}    var t_{t}: {t}.SafeDIMockConfiguration? {{ b_{t}?.value }}")
+            for t in loop_types:
+                out.append(f"{pad}    func entering{t}(_ configuration: {t}.SafeDIMockConfiguration?) -> __safeDI_Loop {{ var loop = self; loop.b_{t} = Box(configuration); return loop }}")
+        else:
+            for t in loop_types:
+                out.append(f"{pad}    var t_{t}: {t}.SafeDIMockConfiguration? = nil")
+            for t in loop_types:
+                out.append(f"{pad}    func entering{t}(_ configuration: {t}.SafeDIMockConfiguration?) -> __safeDI_Loop {{ var loop = self; loop.t_{t} = configuration; return loop }}")
+        out.append(f"{pad}}}")
     for number, (place, context_type, calls) in enumerate(functions):
         parameters = "id: Int"
         if not place.declares_context and context_type is not None:
             parameters += f", context: {context_type}"
         parameters += f", safeDIOverrides __safeDI_overrides: {place.type}.SafeDIMockConfiguration?"
+        if LOOP:
+            parameters += ", __safeDI_loop: __safeDI_Loop"
         out.append(f"{pad}func __safeDI_shared{number}({parameters}) -> {place.type} {{")
+        if LOOP and place.type in loop_types:
+            out.append(f"{pad}    let __safeDI_loop = __safeDI_loop.entering{place.type}(__safeDI_overrides)")
         if place.declares_context:
             out.append(f"{pad}    let context = if let safeDIBuilder = __safeDI_overrides?.context {{ safeDIBuilder() }} else {{ Context() }}")
         for label, child_type, expression, callee_number in calls:
@@ -182,7 +214,7 @@ def rewrite_mock(body_lines, return_line, indent, stats):
         out.append(f"{pad}    return if let safeDIBuilder = __safeDI_overrides?.safeDIBuilder {{ safeDIBuilder({argument_values}) }} else {{ {place.type}({place.arguments}) }}")
         out.append(f"{pad}}}")
     for label, child_type, expression, number in root_calls:
-        out += instantiator(label, child_type, expression, number, True, pad)
+        out += instantiator(label, child_type, expression, number, False, pad)
     out.append(pad + return_line)
     stats.append({"places": len(places), "functions": len(functions),
                   "types": len({p.type for p, _, _ in functions}),
@@ -191,13 +223,17 @@ def rewrite_mock(body_lines, return_line, indent, stats):
 
 
 UNIFORM = False
+LOOP = False
+BOXED = False
 CONFIGURATION_FIELDS = {}
 
 
 def main():
-    global UNIFORM
+    global UNIFORM, LOOP, BOXED
+    BOXED = "--boxed" in sys.argv[4:]
     today, out_path, stats_path = sys.argv[1:4]
-    UNIFORM = "--uniform" in sys.argv[4:]
+    LOOP = "--loop" in sys.argv[4:]
+    UNIFORM = "--uniform" in sys.argv[4:] or LOOP
     text = open(today).read()
     for m in re.finditer(r"extension (\w+) \{\n(?:    ///[^\n]*\n)?    struct SafeDIMockConfiguration \{\n        init\(\n(.*?)\n        \) \{", text, re.S):
         CONFIGURATION_FIELDS[m.group(1)] = {l.strip().split(":")[0] for l in m.group(2).split("\n") if not l.strip().startswith("_ ")}

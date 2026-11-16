@@ -288,9 +288,99 @@ keeps #646's mock variant at today's size (339,108 lines, 384 s and 13.2 GB at `
 - **Today's #646 mock at 12 screens needs 13.2 GB to compile at `-Onone`.** A 16 GB machine is the floor for that
   graph today.
 
+## Follow-up: overrides on a cycle's later laps (decided: option B)
+
+After the first hand-back, the maintainer chose (decision 2-3-1-MOCK-CYCLE-LAP-OVERRIDES): **in a mock, a type a cycle
+builds again reads lap 1's overrides on every lap.** The three options were A (the "one rule" above: no overrides on
+later laps), B (lap 1's overrides on every lap) and C (today's reads). All three build exactly production's tree; they
+differ only in which `SafeDIOverrides` entries still apply after a test goes around a loop once.
+
+### What each option reads, on the smallest loop
+
+`Home` builds `Screen`; `Screen` builds `Step` through `Instantiator<Step>`; `Step` builds `Screen` again through
+`Instantiator<Screen>`. Overrides: `screen.cache` and `screen.stepBuilder.model`. On lap 2:
+
+| | lap 2's `Screen`, its `cache` | lap 2's `Step`, its `model` |
+|---|---|---|
+| C, today (`Instantiator`, `SendableInstantiator`, public mock) | real, real | **overridden** (lap 1's entries) |
+| C, today (`LazilyInstantiated` loop) | overridden | overridden |
+| A | real, real | real |
+| **B** | overridden, overridden | overridden |
+
+Today is inconsistent twice: within one lap (the `Step` keeps its entries, the `Screen` that builds it does not), and
+across loop kinds (a lazy loop already does B). B extends the lazy behaviour to instantiator loops.
+
+### B in the shared form, and what it costs
+
+B keeps one function per type: each function takes one more parameter, `__safeDI_loop`, a value holding, for each type
+a closing edge re-enters, the configuration its **nearest** ancestor of that type read. A function of such a type
+records its own configuration there; a closing edge hands the re-entered type that recorded configuration. The boxed
+variant (`lb`) holds each configuration in a small final class, so passing or capturing the value retains a few
+references instead of copying configurations. Rewriter: `F5/shared_form.py --loop [--boxed]`.
+
+#646's mock variant at 12 screens, same machine and harness, one build each (A remeasured alongside):
+
+| Form | Functions | Mock lines | `-Onone` compile | `-O` compile | ns per walk `-Onone` / `-O` |
+|---|---|---|---|---|---|
+| C, today (per path) | 27,175 | 331,007 | 384 s, 13.2 GB | not done in 20 min | 3.2–4.5 ms / — |
+| C, shared (`s`) | 2,549 | 31,832 | 47 s, 1.7 GB | 375 s, 2.0 GB | 4.4–4.7 ms / 1.35–1.41 ms |
+| A (`u`) | 156 | 2,757 | 7.8 s, 0.27 GB | 72 s, 0.53 GB | 1.9 ms / 0.71 ms |
+| B, struct (`l`) | 156 | 3,017 | 12.0 s, 0.56 GB | 97 s, 0.65 GB | 3.1 ms / 1.54 ms |
+| **B, boxed (`lb`)** | **156** | **3,108** | **9.0 s, 0.29 GB** | **87 s, 0.57 GB** | **2.4 ms / 1.36 ms** |
+
+Net of the production tree (4.9 s / 53 s), B boxed costs 4 s at `-Onone` and 34 s at `-O` against A's 3 s and 19 s:
+still one function per type, a tenth of C's shared `-O` compile, and as fast at runtime as C's shared form. Values,
+frees equal today's: at both levels the traces (`results/l-*.txt`, `lb-*.txt`) differ from today's only in 16
+override lines, listed below.
+
+### Which reads B moves against today
+
+Static count over every mock in F5 (`F5/list_moves.py --loop`, list in `results/loop-rule-moves.json.gz`): 8,988
+(place, read) pairs in 6,289 places. 7,922 read none today and lap 1's entry under B (the reopened subtrees); 642 read
+the first place's entry today and the nearest lap's entry under B (where one type sits at two depths of one loop); 424
+read the first place's entry today and none under B. On the depth-3 driver, 16 trace lines differ from today, all of
+the last kind.
+
+The last kind is worth a look in R2a: the closing edge sits where no ancestor of the re-entered type is on the build
+path, because today's cycle edges are chosen per type by a type-name walk (D16), not per path. There is no lap 1 to
+read, so B reads none; today reads some other place's entry. R2a's D16 fix should give those places an entry of their
+own, which makes this kind disappear; if it does not, B there reads none, which matches the Manual's cycle sentence.
+
+### Fit with the contract and with 3.0
+
+- **Mirrors production.** Each lap is the same production shape, and B gives each lap the same overrides.
+- **The Manual.** "Dependency cycles" says a cycle's closing dependency "has no `SafeDIOverrides` entry, and neither
+  does anything built through it". That stays true of the struct under B (no new fields), but the sentence reads as
+  "built with no override", which B contradicts. Draft replacement for that sentence: "In a generated mock, one
+  dependency in each cycle of `@Instantiated` properties has no `SafeDIOverrides` entry of its own: a type the cycle
+  builds again is built with the overrides of the place that first built it on that path, so a mock's overrides hold
+  however many times a test goes around the loop."
+- **Design D (3.0, per the lead's reading of THREE-ZERO.md §2.3).** D is positional: lap 2's re-entered type gets a
+  slot of its own, one level deeper, and D says nothing past it. B's nearest-ancestor rule is D's natural extension for
+  laps 3 and on (lap 3 reads lap 2's slot), so B keeps "nearest", not "first place". Going from B in 2.3.1 to D in 3.0
+  changes what lap 2 reads; nothing in B blocks D, since B adds no API and D adds the lap-2 slot as new API. D sets no
+  requirement that loop configuration cross a module boundary, and B threads it only within one mock body.
+- **Release note (2.3.1, known break):** "A mock's overrides now apply on every lap of a cycle of instantiators, as
+  they already did for a lazy cycle: a type built again through a cycle reads the overrides of the place that first
+  built it on that path. Before, the type the cycle reopened was built with no overrides while the types it built kept
+  theirs."
+
+### Test cells
+
+`Tests/SafeDIToolMockTests/SafeDIToolMockCycleOverrideReadTests.swift` (spike branch only):
+
+- Four pins of today's output, passing with the compile check on: `Instantiator`, `SendableInstantiator`, lazy, and
+  public-mock loops.
+- Three cells for B, laps 2 and later, in today's per-path form: the reopened `Screen` reads `screen.cache` and
+  `screen.safeDIBuilder` (in the `@Sendable` cell through two more captured locals, as today's `@Sendable` bodies do).
+  Each sits in `withKnownIssue`, so it passes today with its failure recorded and turns into a failure once the
+  generator produces it, which is R3's signal to drop the wrapper. Their expected code differs from the passing pins
+  in two or four lines, each an expression the pins already use at lap 1; the compile check does not reach them until
+  they match. The lazy loop needs no cell: its pinned output already is B.
+
 ## Questions (not mine to decide)
 
-1. **Exact reads or one read rule in R3?** Exact reads keep every override where it is (F5: 2,549 functions, 31,832
+1. **(Decided: B; see the follow-up above.) Exact reads or one read rule in R3?** Exact reads keep every override where it is (F5: 2,549 functions, 31,832
    mock lines, 42 s at `-Onone` and 322 s at `-O` net of the production tree); one rule (each place reads its parent's
    field for it when the parent's type has one, else none) gives one function per type (156 functions, 2,757 mock
    lines, 3 s and 18 s) and changes which override some places beneath a cycle read. Recommendation: one rule, landed

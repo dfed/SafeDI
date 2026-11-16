@@ -1,0 +1,1545 @@
+Root.mock, overridden false:
+  Service#1()
+  Context#1()
+  Root#1(service: Service#1, context: Context#1, screen0Builder: builder)
+  Context#2()
+  Screen0#1(id: 0, service: Service#1, context: Context#2, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#3()
+  Screen5#1(id: 5, service: Service#1, context: Context#3, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#1(id: 2, service: Service#1, context: Context#3, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#1(id: 1, service: Service#1, context: Context#3, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#1(id: 6, service: Service#1, context: Context#3, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#1(id: 8, service: Service#1, context: Context#3, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen7#1(id: 7, service: Service#1, context: Context#3, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#4()
+  Screen0#2(id: 0, service: Service#1, context: Context#4, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#2(id: 2, service: Service#1, context: Context#3, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#1(id: 10, service: Service#1, context: Context#3, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen11#1(id: 11, service: Service#1, context: Context#3, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Context#5()
+  Screen0#3(id: 0, service: Service#1, context: Context#5, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#6()
+  Screen5#2(id: 5, service: Service#1, context: Context#6, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#2(id: 6, service: Service#1, context: Context#3, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen6#3(id: 6, service: Service#1, context: Context#2, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#3(id: 2, service: Service#1, context: Context#2, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#2(id: 1, service: Service#1, context: Context#2, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#4(id: 6, service: Service#1, context: Context#2, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#2(id: 8, service: Service#1, context: Context#2, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen8#3(id: 8, service: Service#1, context: Context#2, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#4(id: 2, service: Service#1, context: Context#2, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#1(id: 3, service: Service#1, context: Context#2, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#2(id: 10, service: Service#1, context: Context#2, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#3(id: 10, service: Service#1, context: Context#2, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#5(id: 2, service: Service#1, context: Context#2, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#2(id: 3, service: Service#1, context: Context#2, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#5(id: 6, service: Service#1, context: Context#2, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#4(id: 10, service: Service#1, context: Context#2, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#6(id: 2, service: Service#1, context: Context#2, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#3(id: 1, service: Service#1, context: Context#2, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#6(id: 6, service: Service#1, context: Context#2, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#4(id: 8, service: Service#1, context: Context#2, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen3#3(id: 3, service: Service#1, context: Context#2, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#4(id: 1, service: Service#1, context: Context#2, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#2(id: 7, service: Service#1, context: Context#2, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#1(id: 9, service: Service#1, context: Context#2, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen6#7(id: 6, service: Service#1, context: Context#2, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#7(id: 2, service: Service#1, context: Context#2, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#5(id: 8, service: Service#1, context: Context#2, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#5(id: 10, service: Service#1, context: Context#2, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+alive after dropping everything: none
+Screen0.mock, overridden false:
+  Context#7()
+  Service#2()
+  Screen0#4(id: 0, service: Service#2, context: Context#7, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#8()
+  Screen5#3(id: 5, service: Service#2, context: Context#8, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#8(id: 2, service: Service#2, context: Context#8, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#5(id: 1, service: Service#2, context: Context#8, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#8(id: 6, service: Service#2, context: Context#8, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#6(id: 8, service: Service#2, context: Context#8, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen7#3(id: 7, service: Service#2, context: Context#8, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#9()
+  Screen0#5(id: 0, service: Service#2, context: Context#9, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#9(id: 2, service: Service#2, context: Context#8, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#6(id: 10, service: Service#2, context: Context#8, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen11#2(id: 11, service: Service#2, context: Context#8, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Context#10()
+  Screen0#6(id: 0, service: Service#2, context: Context#10, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#11()
+  Screen5#4(id: 5, service: Service#2, context: Context#11, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#9(id: 6, service: Service#2, context: Context#8, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen6#10(id: 6, service: Service#2, context: Context#7, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#10(id: 2, service: Service#2, context: Context#7, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#6(id: 1, service: Service#2, context: Context#7, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#11(id: 6, service: Service#2, context: Context#7, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#7(id: 8, service: Service#2, context: Context#7, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen8#8(id: 8, service: Service#2, context: Context#7, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#11(id: 2, service: Service#2, context: Context#7, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#4(id: 3, service: Service#2, context: Context#7, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#7(id: 10, service: Service#2, context: Context#7, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#8(id: 10, service: Service#2, context: Context#7, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#12(id: 2, service: Service#2, context: Context#7, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#5(id: 3, service: Service#2, context: Context#7, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#12(id: 6, service: Service#2, context: Context#7, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#9(id: 10, service: Service#2, context: Context#7, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#13(id: 2, service: Service#2, context: Context#7, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#7(id: 1, service: Service#2, context: Context#7, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#13(id: 6, service: Service#2, context: Context#7, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#9(id: 8, service: Service#2, context: Context#7, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen3#6(id: 3, service: Service#2, context: Context#7, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#8(id: 1, service: Service#2, context: Context#7, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#4(id: 7, service: Service#2, context: Context#7, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#2(id: 9, service: Service#2, context: Context#7, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen6#14(id: 6, service: Service#2, context: Context#7, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#14(id: 2, service: Service#2, context: Context#7, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#10(id: 8, service: Service#2, context: Context#7, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#10(id: 10, service: Service#2, context: Context#7, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+alive after dropping everything: none
+Screen1.mock, overridden false:
+  Service#3()
+  Context#12()
+  Screen1#9(id: 1, service: Service#3, context: Context#12, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#13()
+  Screen0#7(id: 0, service: Service#3, context: Context#13, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#14()
+  Screen5#5(id: 5, service: Service#3, context: Context#14, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#15(id: 2, service: Service#3, context: Context#14, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen7#5(id: 7, service: Service#3, context: Context#14, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen11#3(id: 11, service: Service#3, context: Context#14, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Screen6#15(id: 6, service: Service#3, context: Context#13, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#16(id: 2, service: Service#3, context: Context#13, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#11(id: 8, service: Service#3, context: Context#13, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#11(id: 10, service: Service#3, context: Context#13, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#12(id: 10, service: Service#3, context: Context#13, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#17(id: 2, service: Service#3, context: Context#13, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#7(id: 3, service: Service#3, context: Context#13, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#16(id: 6, service: Service#3, context: Context#13, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen4#1(id: 4, service: Service#3, context: Context#12, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Context#15()
+  Screen0#8(id: 0, service: Service#3, context: Context#15, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#16()
+  Screen5#6(id: 5, service: Service#3, context: Context#16, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#17(id: 6, service: Service#3, context: Context#15, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#13(id: 10, service: Service#3, context: Context#15, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen3#8(id: 3, service: Service#3, context: Context#12, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#10(id: 1, service: Service#3, context: Context#12, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#6(id: 7, service: Service#3, context: Context#12, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#3(id: 9, service: Service#3, context: Context#12, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen7#7(id: 7, service: Service#3, context: Context#12, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#17()
+  Screen0#9(id: 0, service: Service#3, context: Context#17, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#18(id: 2, service: Service#3, context: Context#12, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#14(id: 10, service: Service#3, context: Context#12, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen8#12(id: 8, service: Service#3, context: Context#12, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#19(id: 2, service: Service#3, context: Context#12, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#11(id: 1, service: Service#3, context: Context#12, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#18(id: 6, service: Service#3, context: Context#12, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#13(id: 8, service: Service#3, context: Context#12, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen3#9(id: 3, service: Service#3, context: Context#12, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#12(id: 1, service: Service#3, context: Context#12, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#8(id: 7, service: Service#3, context: Context#12, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#4(id: 9, service: Service#3, context: Context#12, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen10#15(id: 10, service: Service#3, context: Context#12, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#20(id: 2, service: Service#3, context: Context#12, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#10(id: 3, service: Service#3, context: Context#12, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#19(id: 6, service: Service#3, context: Context#12, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+alive after dropping everything: none
+Screen2.mock, overridden false:
+  Service#4()
+  Context#18()
+  Screen2#21(id: 2, service: Service#4, context: Context#18, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#13(id: 1, service: Service#4, context: Context#18, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#19()
+  Screen0#10(id: 0, service: Service#4, context: Context#19, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#20()
+  Screen5#7(id: 5, service: Service#4, context: Context#20, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#20(id: 6, service: Service#4, context: Context#19, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#16(id: 10, service: Service#4, context: Context#19, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen4#2(id: 4, service: Service#4, context: Context#18, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Context#21()
+  Screen0#11(id: 0, service: Service#4, context: Context#21, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen3#11(id: 3, service: Service#4, context: Context#18, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen7#9(id: 7, service: Service#4, context: Context#18, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen8#14(id: 8, service: Service#4, context: Context#18, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#22(id: 2, service: Service#4, context: Context#18, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#12(id: 3, service: Service#4, context: Context#18, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#17(id: 10, service: Service#4, context: Context#18, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen6#21(id: 6, service: Service#4, context: Context#18, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#23(id: 2, service: Service#4, context: Context#18, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#14(id: 1, service: Service#4, context: Context#18, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#22(id: 6, service: Service#4, context: Context#18, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#15(id: 8, service: Service#4, context: Context#18, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen8#16(id: 8, service: Service#4, context: Context#18, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#24(id: 2, service: Service#4, context: Context#18, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#13(id: 3, service: Service#4, context: Context#18, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#18(id: 10, service: Service#4, context: Context#18, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#19(id: 10, service: Service#4, context: Context#18, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#25(id: 2, service: Service#4, context: Context#18, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#14(id: 3, service: Service#4, context: Context#18, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#23(id: 6, service: Service#4, context: Context#18, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#17(id: 8, service: Service#4, context: Context#18, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#26(id: 2, service: Service#4, context: Context#18, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#15(id: 1, service: Service#4, context: Context#18, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#24(id: 6, service: Service#4, context: Context#18, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#18(id: 8, service: Service#4, context: Context#18, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen3#15(id: 3, service: Service#4, context: Context#18, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#16(id: 1, service: Service#4, context: Context#18, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#10(id: 7, service: Service#4, context: Context#18, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#5(id: 9, service: Service#4, context: Context#18, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen10#20(id: 10, service: Service#4, context: Context#18, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#27(id: 2, service: Service#4, context: Context#18, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#16(id: 3, service: Service#4, context: Context#18, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#25(id: 6, service: Service#4, context: Context#18, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+alive after dropping everything: none
+Screen3.mock, overridden false:
+  Service#5()
+  Context#22()
+  Screen3#17(id: 3, service: Service#5, context: Context#22, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#17(id: 1, service: Service#5, context: Context#22, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#23()
+  Screen0#12(id: 0, service: Service#5, context: Context#23, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#24()
+  Screen5#8(id: 5, service: Service#5, context: Context#24, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#26(id: 6, service: Service#5, context: Context#23, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#21(id: 10, service: Service#5, context: Context#23, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen4#3(id: 4, service: Service#5, context: Context#22, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Context#25()
+  Screen0#13(id: 0, service: Service#5, context: Context#25, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen3#18(id: 3, service: Service#5, context: Context#22, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen7#11(id: 7, service: Service#5, context: Context#22, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen8#19(id: 8, service: Service#5, context: Context#22, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#28(id: 2, service: Service#5, context: Context#22, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#19(id: 3, service: Service#5, context: Context#22, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#22(id: 10, service: Service#5, context: Context#22, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen7#12(id: 7, service: Service#5, context: Context#22, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#26()
+  Screen0#14(id: 0, service: Service#5, context: Context#26, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#27()
+  Screen5#9(id: 5, service: Service#5, context: Context#27, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#27(id: 6, service: Service#5, context: Context#26, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#23(id: 10, service: Service#5, context: Context#26, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#29(id: 2, service: Service#5, context: Context#22, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#18(id: 1, service: Service#5, context: Context#22, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#28(id: 6, service: Service#5, context: Context#22, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#20(id: 8, service: Service#5, context: Context#22, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#24(id: 10, service: Service#5, context: Context#22, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#30(id: 2, service: Service#5, context: Context#22, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#20(id: 3, service: Service#5, context: Context#22, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#29(id: 6, service: Service#5, context: Context#22, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen9#6(id: 9, service: Service#5, context: Context#22, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen3#21(id: 3, service: Service#5, context: Context#22, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#19(id: 1, service: Service#5, context: Context#22, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#13(id: 7, service: Service#5, context: Context#22, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#7(id: 9, service: Service#5, context: Context#22, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Context#28()
+  Screen5#10(id: 5, service: Service#5, context: Context#28, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#31(id: 2, service: Service#5, context: Context#28, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen7#14(id: 7, service: Service#5, context: Context#28, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen11#4(id: 11, service: Service#5, context: Context#28, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Screen8#21(id: 8, service: Service#5, context: Context#22, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#32(id: 2, service: Service#5, context: Context#22, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#22(id: 3, service: Service#5, context: Context#22, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#25(id: 10, service: Service#5, context: Context#22, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+alive after dropping everything: none
+Screen4.mock, overridden false:
+  Service#6()
+  Context#29()
+  Screen4#4(id: 4, service: Service#6, context: Context#29, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Context#30()
+  Screen0#15(id: 0, service: Service#6, context: Context#30, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#31()
+  Screen5#11(id: 5, service: Service#6, context: Context#31, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#33(id: 2, service: Service#6, context: Context#31, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen7#15(id: 7, service: Service#6, context: Context#31, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen11#5(id: 11, service: Service#6, context: Context#31, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Screen6#30(id: 6, service: Service#6, context: Context#30, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#34(id: 2, service: Service#6, context: Context#30, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#22(id: 8, service: Service#6, context: Context#30, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#26(id: 10, service: Service#6, context: Context#30, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#27(id: 10, service: Service#6, context: Context#30, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#35(id: 2, service: Service#6, context: Context#30, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#23(id: 3, service: Service#6, context: Context#30, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#31(id: 6, service: Service#6, context: Context#30, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen3#24(id: 3, service: Service#6, context: Context#29, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#20(id: 1, service: Service#6, context: Context#29, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#32()
+  Screen0#16(id: 0, service: Service#6, context: Context#32, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen4#5(id: 4, service: Service#6, context: Context#29, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Screen8#23(id: 8, service: Service#6, context: Context#29, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen7#16(id: 7, service: Service#6, context: Context#29, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#33()
+  Screen0#17(id: 0, service: Service#6, context: Context#33, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#36(id: 2, service: Service#6, context: Context#29, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#28(id: 10, service: Service#6, context: Context#29, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen9#8(id: 9, service: Service#6, context: Context#29, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen3#25(id: 3, service: Service#6, context: Context#29, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Context#34()
+  Screen5#12(id: 5, service: Service#6, context: Context#34, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen8#24(id: 8, service: Service#6, context: Context#29, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen7#17(id: 7, service: Service#6, context: Context#29, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#35()
+  Screen0#18(id: 0, service: Service#6, context: Context#35, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#36()
+  Screen5#13(id: 5, service: Service#6, context: Context#36, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#32(id: 6, service: Service#6, context: Context#35, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#29(id: 10, service: Service#6, context: Context#35, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#37(id: 2, service: Service#6, context: Context#29, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#21(id: 1, service: Service#6, context: Context#29, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#33(id: 6, service: Service#6, context: Context#29, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#25(id: 8, service: Service#6, context: Context#29, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#30(id: 10, service: Service#6, context: Context#29, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#38(id: 2, service: Service#6, context: Context#29, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#26(id: 3, service: Service#6, context: Context#29, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#34(id: 6, service: Service#6, context: Context#29, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+alive after dropping everything: none
+Screen5.mock, overridden false:
+  Context#37()
+  Service#7()
+  Screen5#14(id: 5, service: Service#7, context: Context#37, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#39(id: 2, service: Service#7, context: Context#37, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#22(id: 1, service: Service#7, context: Context#37, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#38()
+  Screen0#19(id: 0, service: Service#7, context: Context#38, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen4#6(id: 4, service: Service#7, context: Context#37, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Screen8#26(id: 8, service: Service#7, context: Context#37, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen6#35(id: 6, service: Service#7, context: Context#37, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#40(id: 2, service: Service#7, context: Context#37, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#27(id: 8, service: Service#7, context: Context#37, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#31(id: 10, service: Service#7, context: Context#37, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen8#28(id: 8, service: Service#7, context: Context#37, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#41(id: 2, service: Service#7, context: Context#37, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#27(id: 3, service: Service#7, context: Context#37, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#32(id: 10, service: Service#7, context: Context#37, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen7#18(id: 7, service: Service#7, context: Context#37, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#39()
+  Screen0#20(id: 0, service: Service#7, context: Context#39, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#40()
+  Screen5#15(id: 5, service: Service#7, context: Context#40, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#36(id: 6, service: Service#7, context: Context#39, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#33(id: 10, service: Service#7, context: Context#39, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#42(id: 2, service: Service#7, context: Context#37, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#23(id: 1, service: Service#7, context: Context#37, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#37(id: 6, service: Service#7, context: Context#37, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#29(id: 8, service: Service#7, context: Context#37, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#34(id: 10, service: Service#7, context: Context#37, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#43(id: 2, service: Service#7, context: Context#37, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#28(id: 3, service: Service#7, context: Context#37, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#38(id: 6, service: Service#7, context: Context#37, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen11#6(id: 11, service: Service#7, context: Context#37, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Context#41()
+  Screen0#21(id: 0, service: Service#7, context: Context#41, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#42()
+  Screen5#16(id: 5, service: Service#7, context: Context#42, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#39(id: 6, service: Service#7, context: Context#41, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#35(id: 10, service: Service#7, context: Context#41, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Context#43()
+  Screen5#17(id: 5, service: Service#7, context: Context#43, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#44(id: 2, service: Service#7, context: Context#43, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen7#19(id: 7, service: Service#7, context: Context#43, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen11#7(id: 11, service: Service#7, context: Context#43, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Screen6#40(id: 6, service: Service#7, context: Context#37, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#45(id: 2, service: Service#7, context: Context#37, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#30(id: 8, service: Service#7, context: Context#37, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#36(id: 10, service: Service#7, context: Context#37, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+alive after dropping everything: none
+Screen6.mock, overridden false:
+  Service#8()
+  Context#44()
+  Screen6#41(id: 6, service: Service#8, context: Context#44, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#46(id: 2, service: Service#8, context: Context#44, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#24(id: 1, service: Service#8, context: Context#44, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#45()
+  Screen0#22(id: 0, service: Service#8, context: Context#45, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen4#7(id: 4, service: Service#8, context: Context#44, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Screen8#31(id: 8, service: Service#8, context: Context#44, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen6#42(id: 6, service: Service#8, context: Context#44, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#47(id: 2, service: Service#8, context: Context#44, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#32(id: 8, service: Service#8, context: Context#44, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#37(id: 10, service: Service#8, context: Context#44, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen8#33(id: 8, service: Service#8, context: Context#44, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#48(id: 2, service: Service#8, context: Context#44, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#29(id: 3, service: Service#8, context: Context#44, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#38(id: 10, service: Service#8, context: Context#44, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen8#34(id: 8, service: Service#8, context: Context#44, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#49(id: 2, service: Service#8, context: Context#44, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#25(id: 1, service: Service#8, context: Context#44, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#43(id: 6, service: Service#8, context: Context#44, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#35(id: 8, service: Service#8, context: Context#44, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen3#30(id: 3, service: Service#8, context: Context#44, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#26(id: 1, service: Service#8, context: Context#44, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#20(id: 7, service: Service#8, context: Context#44, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#9(id: 9, service: Service#8, context: Context#44, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen10#39(id: 10, service: Service#8, context: Context#44, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#50(id: 2, service: Service#8, context: Context#44, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#31(id: 3, service: Service#8, context: Context#44, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#44(id: 6, service: Service#8, context: Context#44, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#40(id: 10, service: Service#8, context: Context#44, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#51(id: 2, service: Service#8, context: Context#44, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#27(id: 1, service: Service#8, context: Context#44, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#45(id: 6, service: Service#8, context: Context#44, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#36(id: 8, service: Service#8, context: Context#44, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen3#32(id: 3, service: Service#8, context: Context#44, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#28(id: 1, service: Service#8, context: Context#44, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#21(id: 7, service: Service#8, context: Context#44, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#10(id: 9, service: Service#8, context: Context#44, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen6#46(id: 6, service: Service#8, context: Context#44, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#52(id: 2, service: Service#8, context: Context#44, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#37(id: 8, service: Service#8, context: Context#44, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#41(id: 10, service: Service#8, context: Context#44, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+alive after dropping everything: none
+Screen7.mock, overridden false:
+  Service#9()
+  Context#46()
+  Screen7#22(id: 7, service: Service#9, context: Context#46, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#47()
+  Screen0#23(id: 0, service: Service#9, context: Context#47, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#48()
+  Screen5#18(id: 5, service: Service#9, context: Context#48, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#53(id: 2, service: Service#9, context: Context#48, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen7#23(id: 7, service: Service#9, context: Context#48, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen11#8(id: 11, service: Service#9, context: Context#48, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Screen6#47(id: 6, service: Service#9, context: Context#47, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#54(id: 2, service: Service#9, context: Context#47, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#38(id: 8, service: Service#9, context: Context#47, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#42(id: 10, service: Service#9, context: Context#47, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#43(id: 10, service: Service#9, context: Context#47, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#55(id: 2, service: Service#9, context: Context#47, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#33(id: 3, service: Service#9, context: Context#47, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#48(id: 6, service: Service#9, context: Context#47, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#56(id: 2, service: Service#9, context: Context#46, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#29(id: 1, service: Service#9, context: Context#46, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#49()
+  Screen0#24(id: 0, service: Service#9, context: Context#49, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen4#8(id: 4, service: Service#9, context: Context#46, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Screen8#39(id: 8, service: Service#9, context: Context#46, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen6#49(id: 6, service: Service#9, context: Context#46, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#57(id: 2, service: Service#9, context: Context#46, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#40(id: 8, service: Service#9, context: Context#46, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#44(id: 10, service: Service#9, context: Context#46, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen8#41(id: 8, service: Service#9, context: Context#46, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#58(id: 2, service: Service#9, context: Context#46, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#34(id: 3, service: Service#9, context: Context#46, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#45(id: 10, service: Service#9, context: Context#46, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#46(id: 10, service: Service#9, context: Context#46, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#59(id: 2, service: Service#9, context: Context#46, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#30(id: 1, service: Service#9, context: Context#46, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#50(id: 6, service: Service#9, context: Context#46, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#42(id: 8, service: Service#9, context: Context#46, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen3#35(id: 3, service: Service#9, context: Context#46, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#31(id: 1, service: Service#9, context: Context#46, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#24(id: 7, service: Service#9, context: Context#46, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#11(id: 9, service: Service#9, context: Context#46, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen6#51(id: 6, service: Service#9, context: Context#46, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#60(id: 2, service: Service#9, context: Context#46, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#43(id: 8, service: Service#9, context: Context#46, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#47(id: 10, service: Service#9, context: Context#46, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+alive after dropping everything: none
+Screen8.mock, overridden false:
+  Service#10()
+  Context#50()
+  Screen8#44(id: 8, service: Service#10, context: Context#50, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#61(id: 2, service: Service#10, context: Context#50, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#32(id: 1, service: Service#10, context: Context#50, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#51()
+  Screen0#25(id: 0, service: Service#10, context: Context#51, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen4#9(id: 4, service: Service#10, context: Context#50, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Screen8#45(id: 8, service: Service#10, context: Context#50, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen6#52(id: 6, service: Service#10, context: Context#50, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#62(id: 2, service: Service#10, context: Context#50, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#46(id: 8, service: Service#10, context: Context#50, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#48(id: 10, service: Service#10, context: Context#50, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen8#47(id: 8, service: Service#10, context: Context#50, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#63(id: 2, service: Service#10, context: Context#50, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#36(id: 3, service: Service#10, context: Context#50, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#49(id: 10, service: Service#10, context: Context#50, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen3#37(id: 3, service: Service#10, context: Context#50, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#33(id: 1, service: Service#10, context: Context#50, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#52()
+  Screen0#26(id: 0, service: Service#10, context: Context#52, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen4#10(id: 4, service: Service#10, context: Context#50, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Screen8#48(id: 8, service: Service#10, context: Context#50, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen7#25(id: 7, service: Service#10, context: Context#50, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#53()
+  Screen0#27(id: 0, service: Service#10, context: Context#53, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#64(id: 2, service: Service#10, context: Context#50, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#50(id: 10, service: Service#10, context: Context#50, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen9#12(id: 9, service: Service#10, context: Context#50, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen3#38(id: 3, service: Service#10, context: Context#50, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Context#54()
+  Screen5#19(id: 5, service: Service#10, context: Context#54, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen8#49(id: 8, service: Service#10, context: Context#50, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#51(id: 10, service: Service#10, context: Context#50, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#65(id: 2, service: Service#10, context: Context#50, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#34(id: 1, service: Service#10, context: Context#50, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#53(id: 6, service: Service#10, context: Context#50, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#50(id: 8, service: Service#10, context: Context#50, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen3#39(id: 3, service: Service#10, context: Context#50, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#35(id: 1, service: Service#10, context: Context#50, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#26(id: 7, service: Service#10, context: Context#50, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#13(id: 9, service: Service#10, context: Context#50, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen6#54(id: 6, service: Service#10, context: Context#50, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#66(id: 2, service: Service#10, context: Context#50, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#51(id: 8, service: Service#10, context: Context#50, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#52(id: 10, service: Service#10, context: Context#50, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+alive after dropping everything: none
+Screen9.mock, overridden false:
+  Service#11()
+  Context#55()
+  Screen9#14(id: 9, service: Service#11, context: Context#55, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen3#40(id: 3, service: Service#11, context: Context#55, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#36(id: 1, service: Service#11, context: Context#55, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#56()
+  Screen0#28(id: 0, service: Service#11, context: Context#56, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen4#11(id: 4, service: Service#11, context: Context#55, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Screen8#52(id: 8, service: Service#11, context: Context#55, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen7#27(id: 7, service: Service#11, context: Context#55, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#57()
+  Screen0#29(id: 0, service: Service#11, context: Context#57, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#67(id: 2, service: Service#11, context: Context#55, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#53(id: 10, service: Service#11, context: Context#55, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen9#15(id: 9, service: Service#11, context: Context#55, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen3#41(id: 3, service: Service#11, context: Context#55, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Context#58()
+  Screen5#20(id: 5, service: Service#11, context: Context#58, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen8#53(id: 8, service: Service#11, context: Context#55, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Context#59()
+  Screen5#21(id: 5, service: Service#11, context: Context#59, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#68(id: 2, service: Service#11, context: Context#59, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#37(id: 1, service: Service#11, context: Context#59, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#55(id: 6, service: Service#11, context: Context#59, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#54(id: 8, service: Service#11, context: Context#59, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen7#28(id: 7, service: Service#11, context: Context#59, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#60()
+  Screen0#30(id: 0, service: Service#11, context: Context#60, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#69(id: 2, service: Service#11, context: Context#59, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#54(id: 10, service: Service#11, context: Context#59, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen11#9(id: 11, service: Service#11, context: Context#59, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Context#61()
+  Screen0#31(id: 0, service: Service#11, context: Context#61, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#62()
+  Screen5#22(id: 5, service: Service#11, context: Context#62, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#56(id: 6, service: Service#11, context: Context#59, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#55(id: 8, service: Service#11, context: Context#55, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#70(id: 2, service: Service#11, context: Context#55, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#38(id: 1, service: Service#11, context: Context#55, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#57(id: 6, service: Service#11, context: Context#55, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#56(id: 8, service: Service#11, context: Context#55, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen3#42(id: 3, service: Service#11, context: Context#55, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#39(id: 1, service: Service#11, context: Context#55, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#29(id: 7, service: Service#11, context: Context#55, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#16(id: 9, service: Service#11, context: Context#55, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen10#55(id: 10, service: Service#11, context: Context#55, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#71(id: 2, service: Service#11, context: Context#55, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#43(id: 3, service: Service#11, context: Context#55, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#58(id: 6, service: Service#11, context: Context#55, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+alive after dropping everything: none
+Screen10.mock, overridden false:
+  Service#12()
+  Context#63()
+  Screen10#56(id: 10, service: Service#12, context: Context#63, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#72(id: 2, service: Service#12, context: Context#63, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#40(id: 1, service: Service#12, context: Context#63, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#64()
+  Screen0#32(id: 0, service: Service#12, context: Context#64, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen4#12(id: 4, service: Service#12, context: Context#63, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Screen8#57(id: 8, service: Service#12, context: Context#63, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen6#59(id: 6, service: Service#12, context: Context#63, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#73(id: 2, service: Service#12, context: Context#63, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#58(id: 8, service: Service#12, context: Context#63, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#57(id: 10, service: Service#12, context: Context#63, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen8#59(id: 8, service: Service#12, context: Context#63, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#74(id: 2, service: Service#12, context: Context#63, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#44(id: 3, service: Service#12, context: Context#63, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#58(id: 10, service: Service#12, context: Context#63, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen3#45(id: 3, service: Service#12, context: Context#63, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#41(id: 1, service: Service#12, context: Context#63, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#65()
+  Screen0#33(id: 0, service: Service#12, context: Context#65, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen4#13(id: 4, service: Service#12, context: Context#63, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Screen8#60(id: 8, service: Service#12, context: Context#63, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen7#30(id: 7, service: Service#12, context: Context#63, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#66()
+  Screen0#34(id: 0, service: Service#12, context: Context#66, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#75(id: 2, service: Service#12, context: Context#63, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#59(id: 10, service: Service#12, context: Context#63, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen9#17(id: 9, service: Service#12, context: Context#63, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen3#46(id: 3, service: Service#12, context: Context#63, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Context#67()
+  Screen5#23(id: 5, service: Service#12, context: Context#67, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen8#61(id: 8, service: Service#12, context: Context#63, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen6#60(id: 6, service: Service#12, context: Context#63, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#76(id: 2, service: Service#12, context: Context#63, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#42(id: 1, service: Service#12, context: Context#63, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#61(id: 6, service: Service#12, context: Context#63, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#62(id: 8, service: Service#12, context: Context#63, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen8#63(id: 8, service: Service#12, context: Context#63, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#77(id: 2, service: Service#12, context: Context#63, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#47(id: 3, service: Service#12, context: Context#63, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#60(id: 10, service: Service#12, context: Context#63, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#61(id: 10, service: Service#12, context: Context#63, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#78(id: 2, service: Service#12, context: Context#63, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#48(id: 3, service: Service#12, context: Context#63, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#62(id: 6, service: Service#12, context: Context#63, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+alive after dropping everything: none
+Screen11.mock, overridden false:
+  Service#13()
+  Context#68()
+  Screen11#10(id: 11, service: Service#13, context: Context#68, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Context#69()
+  Screen0#35(id: 0, service: Service#13, context: Context#69, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#70()
+  Screen5#24(id: 5, service: Service#13, context: Context#70, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#79(id: 2, service: Service#13, context: Context#70, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen7#31(id: 7, service: Service#13, context: Context#70, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen11#11(id: 11, service: Service#13, context: Context#70, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Screen6#63(id: 6, service: Service#13, context: Context#69, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#80(id: 2, service: Service#13, context: Context#69, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen8#64(id: 8, service: Service#13, context: Context#69, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#62(id: 10, service: Service#13, context: Context#69, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#63(id: 10, service: Service#13, context: Context#69, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#81(id: 2, service: Service#13, context: Context#69, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#49(id: 3, service: Service#13, context: Context#69, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#64(id: 6, service: Service#13, context: Context#69, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Context#71()
+  Screen5#25(id: 5, service: Service#13, context: Context#71, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#82(id: 2, service: Service#13, context: Context#71, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#43(id: 1, service: Service#13, context: Context#71, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#65(id: 6, service: Service#13, context: Context#71, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#65(id: 8, service: Service#13, context: Context#71, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen7#32(id: 7, service: Service#13, context: Context#71, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#72()
+  Screen0#36(id: 0, service: Service#13, context: Context#72, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#83(id: 2, service: Service#13, context: Context#71, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#64(id: 10, service: Service#13, context: Context#71, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen11#12(id: 11, service: Service#13, context: Context#71, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Context#73()
+  Screen0#37(id: 0, service: Service#13, context: Context#73, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#74()
+  Screen5#26(id: 5, service: Service#13, context: Context#74, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#66(id: 6, service: Service#13, context: Context#71, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen6#67(id: 6, service: Service#13, context: Context#68, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#84(id: 2, service: Service#13, context: Context#68, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#44(id: 1, service: Service#13, context: Context#68, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#68(id: 6, service: Service#13, context: Context#68, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#66(id: 8, service: Service#13, context: Context#68, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen8#67(id: 8, service: Service#13, context: Context#68, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#85(id: 2, service: Service#13, context: Context#68, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#50(id: 3, service: Service#13, context: Context#68, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#65(id: 10, service: Service#13, context: Context#68, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#66(id: 10, service: Service#13, context: Context#68, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#86(id: 2, service: Service#13, context: Context#68, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#51(id: 3, service: Service#13, context: Context#68, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#69(id: 6, service: Service#13, context: Context#68, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+alive after dropping everything: none
+Root.mock, overridden true:
+  override service
+  Service#14()
+  override context
+  Context#75()
+  Root#2(service: Service#14, context: Context#75, screen0Builder: builder)
+  override screen0Builder.context
+  Context#76()
+  override screen0Builder.safeDIBuilder
+  Screen0#38(id: 0, service: Service#14, context: Context#76, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen5Builder.context
+  Context#77()
+  override screen0Builder.screen5Builder.safeDIBuilder
+  Screen5#27(id: 5, service: Service#14, context: Context#77, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#87(id: 2, service: Service#14, context: Context#77, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#45(id: 1, service: Service#14, context: Context#77, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#70(id: 6, service: Service#14, context: Context#77, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#68(id: 8, service: Service#14, context: Context#77, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen5Builder.screen7Builder.safeDIBuilder
+  Screen7#33(id: 7, service: Service#14, context: Context#77, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen0Builder.context
+  Context#78()
+  override screen0Builder.safeDIBuilder
+  Screen0#39(id: 0, service: Service#14, context: Context#78, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#88(id: 2, service: Service#14, context: Context#77, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#67(id: 10, service: Service#14, context: Context#77, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen0Builder.screen5Builder.screen11Builder.safeDIBuilder
+  Screen11#13(id: 11, service: Service#14, context: Context#77, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  override screen0Builder.context
+  Context#79()
+  override screen0Builder.safeDIBuilder
+  Screen0#40(id: 0, service: Service#14, context: Context#79, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen5Builder.context
+  Context#80()
+  override screen0Builder.screen5Builder.safeDIBuilder
+  Screen5#28(id: 5, service: Service#14, context: Context#80, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  override screen0Builder.screen5Builder.screen11Builder.screen6Builder.safeDIBuilder
+  Screen6#71(id: 6, service: Service#14, context: Context#77, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen6Builder.safeDIBuilder
+  Screen6#72(id: 6, service: Service#14, context: Context#76, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#89(id: 2, service: Service#14, context: Context#76, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#46(id: 1, service: Service#14, context: Context#76, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#73(id: 6, service: Service#14, context: Context#76, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#69(id: 8, service: Service#14, context: Context#76, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#70(id: 8, service: Service#14, context: Context#76, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#90(id: 2, service: Service#14, context: Context#76, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#52(id: 3, service: Service#14, context: Context#76, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#68(id: 10, service: Service#14, context: Context#76, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#69(id: 10, service: Service#14, context: Context#76, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#91(id: 2, service: Service#14, context: Context#76, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#53(id: 3, service: Service#14, context: Context#76, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#74(id: 6, service: Service#14, context: Context#76, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen10Builder.safeDIBuilder
+  Screen10#70(id: 10, service: Service#14, context: Context#76, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen0Builder.screen10Builder.screen2Builder.safeDIBuilder
+  Screen2#92(id: 2, service: Service#14, context: Context#76, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen10Builder.screen2Builder.screen1Builder.safeDIBuilder
+  Screen1#47(id: 1, service: Service#14, context: Context#76, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen10Builder.screen2Builder.screen6Builder.safeDIBuilder
+  Screen6#75(id: 6, service: Service#14, context: Context#76, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen10Builder.screen2Builder.screen8Builder.safeDIBuilder
+  Screen8#71(id: 8, service: Service#14, context: Context#76, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen10Builder.screen3Builder.safeDIBuilder
+  Screen3#54(id: 3, service: Service#14, context: Context#76, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#48(id: 1, service: Service#14, context: Context#76, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen10Builder.screen3Builder.screen7Builder.safeDIBuilder
+  Screen7#34(id: 7, service: Service#14, context: Context#76, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen10Builder.screen3Builder.screen9Builder.safeDIBuilder
+  Screen9#18(id: 9, service: Service#14, context: Context#76, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen10Builder.screen6Builder.safeDIBuilder
+  Screen6#76(id: 6, service: Service#14, context: Context#76, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#93(id: 2, service: Service#14, context: Context#76, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen10Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#72(id: 8, service: Service#14, context: Context#76, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen10Builder.safeDIBuilder
+  Screen10#71(id: 10, service: Service#14, context: Context#76, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+alive after dropping everything: none
+Screen0.mock, overridden true:
+  override context
+  Context#81()
+  override service
+  Service#15()
+  Screen0#41(id: 0, service: Service#15, context: Context#81, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen5Builder.context
+  Context#82()
+  override screen5Builder.safeDIBuilder
+  Screen5#29(id: 5, service: Service#15, context: Context#82, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#94(id: 2, service: Service#15, context: Context#82, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#49(id: 1, service: Service#15, context: Context#82, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#77(id: 6, service: Service#15, context: Context#82, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#73(id: 8, service: Service#15, context: Context#82, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen5Builder.screen7Builder.safeDIBuilder
+  Screen7#35(id: 7, service: Service#15, context: Context#82, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#83()
+  Screen0#42(id: 0, service: Service#15, context: Context#83, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#95(id: 2, service: Service#15, context: Context#82, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#72(id: 10, service: Service#15, context: Context#82, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen5Builder.screen11Builder.safeDIBuilder
+  Screen11#14(id: 11, service: Service#15, context: Context#82, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Context#84()
+  Screen0#43(id: 0, service: Service#15, context: Context#84, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen5Builder.context
+  Context#85()
+  override screen5Builder.safeDIBuilder
+  Screen5#30(id: 5, service: Service#15, context: Context#85, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  override screen5Builder.screen11Builder.screen6Builder.safeDIBuilder
+  Screen6#78(id: 6, service: Service#15, context: Context#82, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen6Builder.safeDIBuilder
+  Screen6#79(id: 6, service: Service#15, context: Context#81, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#96(id: 2, service: Service#15, context: Context#81, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#50(id: 1, service: Service#15, context: Context#81, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#80(id: 6, service: Service#15, context: Context#81, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#74(id: 8, service: Service#15, context: Context#81, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#75(id: 8, service: Service#15, context: Context#81, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#97(id: 2, service: Service#15, context: Context#81, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#55(id: 3, service: Service#15, context: Context#81, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#73(id: 10, service: Service#15, context: Context#81, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#74(id: 10, service: Service#15, context: Context#81, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#98(id: 2, service: Service#15, context: Context#81, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#56(id: 3, service: Service#15, context: Context#81, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#81(id: 6, service: Service#15, context: Context#81, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen10Builder.safeDIBuilder
+  Screen10#75(id: 10, service: Service#15, context: Context#81, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen10Builder.screen2Builder.safeDIBuilder
+  Screen2#99(id: 2, service: Service#15, context: Context#81, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen2Builder.screen1Builder.safeDIBuilder
+  Screen1#51(id: 1, service: Service#15, context: Context#81, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen2Builder.screen6Builder.safeDIBuilder
+  Screen6#82(id: 6, service: Service#15, context: Context#81, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen10Builder.screen2Builder.screen8Builder.safeDIBuilder
+  Screen8#76(id: 8, service: Service#15, context: Context#81, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen10Builder.screen3Builder.safeDIBuilder
+  Screen3#57(id: 3, service: Service#15, context: Context#81, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#52(id: 1, service: Service#15, context: Context#81, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen3Builder.screen7Builder.safeDIBuilder
+  Screen7#36(id: 7, service: Service#15, context: Context#81, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen10Builder.screen3Builder.screen9Builder.safeDIBuilder
+  Screen9#19(id: 9, service: Service#15, context: Context#81, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen6Builder.safeDIBuilder
+  Screen6#83(id: 6, service: Service#15, context: Context#81, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#100(id: 2, service: Service#15, context: Context#81, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#77(id: 8, service: Service#15, context: Context#81, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen10Builder.safeDIBuilder
+  Screen10#76(id: 10, service: Service#15, context: Context#81, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+alive after dropping everything: none
+Screen1.mock, overridden true:
+  override service
+  Service#16()
+  override context
+  Context#86()
+  Screen1#53(id: 1, service: Service#16, context: Context#86, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  override screen0Builder.context
+  Context#87()
+  override screen0Builder.safeDIBuilder
+  Screen0#44(id: 0, service: Service#16, context: Context#87, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen5Builder.context
+  Context#88()
+  override screen0Builder.screen5Builder.safeDIBuilder
+  Screen5#31(id: 5, service: Service#16, context: Context#88, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#101(id: 2, service: Service#16, context: Context#88, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen5Builder.screen7Builder.safeDIBuilder
+  Screen7#37(id: 7, service: Service#16, context: Context#88, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen5Builder.screen11Builder.safeDIBuilder
+  Screen11#15(id: 11, service: Service#16, context: Context#88, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  override screen0Builder.screen6Builder.safeDIBuilder
+  Screen6#84(id: 6, service: Service#16, context: Context#87, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#102(id: 2, service: Service#16, context: Context#87, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#78(id: 8, service: Service#16, context: Context#87, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#77(id: 10, service: Service#16, context: Context#87, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen0Builder.screen10Builder.safeDIBuilder
+  Screen10#78(id: 10, service: Service#16, context: Context#87, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen0Builder.screen10Builder.screen2Builder.safeDIBuilder
+  Screen2#103(id: 2, service: Service#16, context: Context#87, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen10Builder.screen3Builder.safeDIBuilder
+  Screen3#58(id: 3, service: Service#16, context: Context#87, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  override screen0Builder.screen10Builder.screen6Builder.safeDIBuilder
+  Screen6#85(id: 6, service: Service#16, context: Context#87, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen4Builder.safeDIBuilder
+  Screen4#14(id: 4, service: Service#16, context: Context#86, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Context#89()
+  Screen0#45(id: 0, service: Service#16, context: Context#89, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#90()
+  Screen5#32(id: 5, service: Service#16, context: Context#90, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#86(id: 6, service: Service#16, context: Context#89, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#79(id: 10, service: Service#16, context: Context#89, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen4Builder.screen3Builder.safeDIBuilder
+  Screen3#59(id: 3, service: Service#16, context: Context#86, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#54(id: 1, service: Service#16, context: Context#86, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  override screen4Builder.screen3Builder.screen7Builder.safeDIBuilder
+  Screen7#38(id: 7, service: Service#16, context: Context#86, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen4Builder.screen3Builder.screen9Builder.safeDIBuilder
+  Screen9#20(id: 9, service: Service#16, context: Context#86, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  override screen4Builder.screen7Builder.safeDIBuilder
+  Screen7#39(id: 7, service: Service#16, context: Context#86, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#91()
+  Screen0#46(id: 0, service: Service#16, context: Context#91, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#104(id: 2, service: Service#16, context: Context#86, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#80(id: 10, service: Service#16, context: Context#86, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen8Builder.safeDIBuilder
+  Screen8#79(id: 8, service: Service#16, context: Context#86, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#105(id: 2, service: Service#16, context: Context#86, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#55(id: 1, service: Service#16, context: Context#86, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#87(id: 6, service: Service#16, context: Context#86, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#80(id: 8, service: Service#16, context: Context#86, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen3#60(id: 3, service: Service#16, context: Context#86, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#56(id: 1, service: Service#16, context: Context#86, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#40(id: 7, service: Service#16, context: Context#86, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#21(id: 9, service: Service#16, context: Context#86, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen10#81(id: 10, service: Service#16, context: Context#86, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#106(id: 2, service: Service#16, context: Context#86, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#61(id: 3, service: Service#16, context: Context#86, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#88(id: 6, service: Service#16, context: Context#86, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+alive after dropping everything: none
+Screen2.mock, overridden true:
+  override service
+  Service#17()
+  override context
+  Context#92()
+  Screen2#107(id: 2, service: Service#17, context: Context#92, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen1Builder.safeDIBuilder
+  Screen1#57(id: 1, service: Service#17, context: Context#92, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#93()
+  Screen0#47(id: 0, service: Service#17, context: Context#93, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#94()
+  Screen5#33(id: 5, service: Service#17, context: Context#94, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#89(id: 6, service: Service#17, context: Context#93, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#82(id: 10, service: Service#17, context: Context#93, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen1Builder.screen4Builder.safeDIBuilder
+  Screen4#15(id: 4, service: Service#17, context: Context#92, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Context#95()
+  Screen0#48(id: 0, service: Service#17, context: Context#95, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen1Builder.screen4Builder.screen3Builder.safeDIBuilder
+  Screen3#62(id: 3, service: Service#17, context: Context#92, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  override screen1Builder.screen4Builder.screen7Builder.safeDIBuilder
+  Screen7#41(id: 7, service: Service#17, context: Context#92, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen1Builder.screen8Builder.safeDIBuilder
+  Screen8#81(id: 8, service: Service#17, context: Context#92, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#108(id: 2, service: Service#17, context: Context#92, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#63(id: 3, service: Service#17, context: Context#92, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#83(id: 10, service: Service#17, context: Context#92, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen6Builder.safeDIBuilder
+  Screen6#90(id: 6, service: Service#17, context: Context#92, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#109(id: 2, service: Service#17, context: Context#92, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#58(id: 1, service: Service#17, context: Context#92, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#91(id: 6, service: Service#17, context: Context#92, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#82(id: 8, service: Service#17, context: Context#92, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#83(id: 8, service: Service#17, context: Context#92, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#110(id: 2, service: Service#17, context: Context#92, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#64(id: 3, service: Service#17, context: Context#92, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#84(id: 10, service: Service#17, context: Context#92, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#85(id: 10, service: Service#17, context: Context#92, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#111(id: 2, service: Service#17, context: Context#92, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#65(id: 3, service: Service#17, context: Context#92, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#92(id: 6, service: Service#17, context: Context#92, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen8Builder.safeDIBuilder
+  Screen8#84(id: 8, service: Service#17, context: Context#92, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#112(id: 2, service: Service#17, context: Context#92, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#59(id: 1, service: Service#17, context: Context#92, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#93(id: 6, service: Service#17, context: Context#92, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#85(id: 8, service: Service#17, context: Context#92, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen3#66(id: 3, service: Service#17, context: Context#92, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#60(id: 1, service: Service#17, context: Context#92, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#42(id: 7, service: Service#17, context: Context#92, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#22(id: 9, service: Service#17, context: Context#92, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen10#86(id: 10, service: Service#17, context: Context#92, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#113(id: 2, service: Service#17, context: Context#92, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#67(id: 3, service: Service#17, context: Context#92, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#94(id: 6, service: Service#17, context: Context#92, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+alive after dropping everything: none
+Screen3.mock, overridden true:
+  override service
+  Service#18()
+  override context
+  Context#96()
+  Screen3#68(id: 3, service: Service#18, context: Context#96, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  override screen1Builder.safeDIBuilder
+  Screen1#61(id: 1, service: Service#18, context: Context#96, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#97()
+  Screen0#49(id: 0, service: Service#18, context: Context#97, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#98()
+  Screen5#34(id: 5, service: Service#18, context: Context#98, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#95(id: 6, service: Service#18, context: Context#97, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#87(id: 10, service: Service#18, context: Context#97, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen1Builder.screen4Builder.safeDIBuilder
+  Screen4#16(id: 4, service: Service#18, context: Context#96, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Context#99()
+  Screen0#50(id: 0, service: Service#18, context: Context#99, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen1Builder.screen4Builder.screen3Builder.safeDIBuilder
+  Screen3#69(id: 3, service: Service#18, context: Context#96, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  override screen1Builder.screen4Builder.screen7Builder.safeDIBuilder
+  Screen7#43(id: 7, service: Service#18, context: Context#96, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen1Builder.screen8Builder.safeDIBuilder
+  Screen8#86(id: 8, service: Service#18, context: Context#96, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#114(id: 2, service: Service#18, context: Context#96, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#70(id: 3, service: Service#18, context: Context#96, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#88(id: 10, service: Service#18, context: Context#96, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen7Builder.safeDIBuilder
+  Screen7#44(id: 7, service: Service#18, context: Context#96, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#100()
+  Screen0#51(id: 0, service: Service#18, context: Context#100, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#101()
+  Screen5#35(id: 5, service: Service#18, context: Context#101, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#96(id: 6, service: Service#18, context: Context#100, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#89(id: 10, service: Service#18, context: Context#100, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#115(id: 2, service: Service#18, context: Context#96, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#62(id: 1, service: Service#18, context: Context#96, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#97(id: 6, service: Service#18, context: Context#96, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#87(id: 8, service: Service#18, context: Context#96, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#90(id: 10, service: Service#18, context: Context#96, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#116(id: 2, service: Service#18, context: Context#96, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#71(id: 3, service: Service#18, context: Context#96, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#98(id: 6, service: Service#18, context: Context#96, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen9Builder.safeDIBuilder
+  Screen9#23(id: 9, service: Service#18, context: Context#96, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen3#72(id: 3, service: Service#18, context: Context#96, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#63(id: 1, service: Service#18, context: Context#96, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#45(id: 7, service: Service#18, context: Context#96, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#24(id: 9, service: Service#18, context: Context#96, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  override screen9Builder.screen5Builder.context
+  Context#102()
+  override screen9Builder.screen5Builder.safeDIBuilder
+  Screen5#36(id: 5, service: Service#18, context: Context#102, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#117(id: 2, service: Service#18, context: Context#102, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen9Builder.screen5Builder.screen7Builder.safeDIBuilder
+  Screen7#46(id: 7, service: Service#18, context: Context#102, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen9Builder.screen5Builder.screen11Builder.safeDIBuilder
+  Screen11#16(id: 11, service: Service#18, context: Context#102, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  override screen9Builder.screen8Builder.safeDIBuilder
+  Screen8#88(id: 8, service: Service#18, context: Context#96, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#118(id: 2, service: Service#18, context: Context#96, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#73(id: 3, service: Service#18, context: Context#96, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#91(id: 10, service: Service#18, context: Context#96, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+alive after dropping everything: none
+Screen4.mock, overridden true:
+  override service
+  Service#19()
+  override context
+  Context#103()
+  Screen4#17(id: 4, service: Service#19, context: Context#103, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  override screen0Builder.context
+  Context#104()
+  override screen0Builder.safeDIBuilder
+  Screen0#52(id: 0, service: Service#19, context: Context#104, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen5Builder.context
+  Context#105()
+  override screen0Builder.screen5Builder.safeDIBuilder
+  Screen5#37(id: 5, service: Service#19, context: Context#105, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#119(id: 2, service: Service#19, context: Context#105, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen5Builder.screen7Builder.safeDIBuilder
+  Screen7#47(id: 7, service: Service#19, context: Context#105, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen5Builder.screen11Builder.safeDIBuilder
+  Screen11#17(id: 11, service: Service#19, context: Context#105, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  override screen0Builder.screen6Builder.safeDIBuilder
+  Screen6#99(id: 6, service: Service#19, context: Context#104, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#120(id: 2, service: Service#19, context: Context#104, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#89(id: 8, service: Service#19, context: Context#104, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#92(id: 10, service: Service#19, context: Context#104, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen0Builder.screen10Builder.safeDIBuilder
+  Screen10#93(id: 10, service: Service#19, context: Context#104, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen0Builder.screen10Builder.screen2Builder.safeDIBuilder
+  Screen2#121(id: 2, service: Service#19, context: Context#104, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen10Builder.screen3Builder.safeDIBuilder
+  Screen3#74(id: 3, service: Service#19, context: Context#104, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  override screen0Builder.screen10Builder.screen6Builder.safeDIBuilder
+  Screen6#100(id: 6, service: Service#19, context: Context#104, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen3Builder.safeDIBuilder
+  Screen3#75(id: 3, service: Service#19, context: Context#103, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#64(id: 1, service: Service#19, context: Context#103, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#106()
+  Screen0#53(id: 0, service: Service#19, context: Context#106, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen4#18(id: 4, service: Service#19, context: Context#103, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Screen8#90(id: 8, service: Service#19, context: Context#103, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen3Builder.screen7Builder.safeDIBuilder
+  Screen7#48(id: 7, service: Service#19, context: Context#103, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#107()
+  Screen0#54(id: 0, service: Service#19, context: Context#107, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#122(id: 2, service: Service#19, context: Context#103, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#94(id: 10, service: Service#19, context: Context#103, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen3Builder.screen9Builder.safeDIBuilder
+  Screen9#25(id: 9, service: Service#19, context: Context#103, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  override screen3Builder.safeDIBuilder
+  Screen3#76(id: 3, service: Service#19, context: Context#103, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  override screen3Builder.screen9Builder.screen5Builder.context
+  Context#108()
+  override screen3Builder.screen9Builder.screen5Builder.safeDIBuilder
+  Screen5#38(id: 5, service: Service#19, context: Context#108, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  override screen3Builder.screen9Builder.screen8Builder.safeDIBuilder
+  Screen8#91(id: 8, service: Service#19, context: Context#103, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen7Builder.safeDIBuilder
+  Screen7#49(id: 7, service: Service#19, context: Context#103, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#109()
+  Screen0#55(id: 0, service: Service#19, context: Context#109, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#110()
+  Screen5#39(id: 5, service: Service#19, context: Context#110, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#101(id: 6, service: Service#19, context: Context#109, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#95(id: 10, service: Service#19, context: Context#109, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#123(id: 2, service: Service#19, context: Context#103, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#65(id: 1, service: Service#19, context: Context#103, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#102(id: 6, service: Service#19, context: Context#103, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#92(id: 8, service: Service#19, context: Context#103, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#96(id: 10, service: Service#19, context: Context#103, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#124(id: 2, service: Service#19, context: Context#103, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#77(id: 3, service: Service#19, context: Context#103, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#103(id: 6, service: Service#19, context: Context#103, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+alive after dropping everything: none
+Screen5.mock, overridden true:
+  override context
+  Context#111()
+  override service
+  Service#20()
+  Screen5#40(id: 5, service: Service#20, context: Context#111, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#125(id: 2, service: Service#20, context: Context#111, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen2Builder.screen1Builder.safeDIBuilder
+  Screen1#66(id: 1, service: Service#20, context: Context#111, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#112()
+  Screen0#56(id: 0, service: Service#20, context: Context#112, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen2Builder.screen1Builder.screen4Builder.safeDIBuilder
+  Screen4#19(id: 4, service: Service#20, context: Context#111, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  override screen2Builder.screen1Builder.screen8Builder.safeDIBuilder
+  Screen8#93(id: 8, service: Service#20, context: Context#111, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen2Builder.screen6Builder.safeDIBuilder
+  Screen6#104(id: 6, service: Service#20, context: Context#111, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#126(id: 2, service: Service#20, context: Context#111, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen2Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#94(id: 8, service: Service#20, context: Context#111, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#97(id: 10, service: Service#20, context: Context#111, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen2Builder.screen8Builder.safeDIBuilder
+  Screen8#95(id: 8, service: Service#20, context: Context#111, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#127(id: 2, service: Service#20, context: Context#111, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#78(id: 3, service: Service#20, context: Context#111, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#98(id: 10, service: Service#20, context: Context#111, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen7Builder.safeDIBuilder
+  Screen7#50(id: 7, service: Service#20, context: Context#111, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#113()
+  Screen0#57(id: 0, service: Service#20, context: Context#113, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#114()
+  Screen5#41(id: 5, service: Service#20, context: Context#114, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#105(id: 6, service: Service#20, context: Context#113, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#99(id: 10, service: Service#20, context: Context#113, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#128(id: 2, service: Service#20, context: Context#111, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#67(id: 1, service: Service#20, context: Context#111, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#106(id: 6, service: Service#20, context: Context#111, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#96(id: 8, service: Service#20, context: Context#111, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#100(id: 10, service: Service#20, context: Context#111, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#129(id: 2, service: Service#20, context: Context#111, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#79(id: 3, service: Service#20, context: Context#111, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#107(id: 6, service: Service#20, context: Context#111, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen11Builder.safeDIBuilder
+  Screen11#18(id: 11, service: Service#20, context: Context#111, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Context#115()
+  Screen0#58(id: 0, service: Service#20, context: Context#115, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Context#116()
+  Screen5#42(id: 5, service: Service#20, context: Context#116, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen6#108(id: 6, service: Service#20, context: Context#115, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen10#101(id: 10, service: Service#20, context: Context#115, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Context#117()
+  Screen5#43(id: 5, service: Service#20, context: Context#117, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#130(id: 2, service: Service#20, context: Context#117, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen7#51(id: 7, service: Service#20, context: Context#117, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen11#19(id: 11, service: Service#20, context: Context#117, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  override screen11Builder.screen6Builder.safeDIBuilder
+  Screen6#109(id: 6, service: Service#20, context: Context#111, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#131(id: 2, service: Service#20, context: Context#111, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen11Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#97(id: 8, service: Service#20, context: Context#111, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#102(id: 10, service: Service#20, context: Context#111, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+alive after dropping everything: none
+Screen6.mock, overridden true:
+  override service
+  Service#21()
+  override context
+  Context#118()
+  Screen6#110(id: 6, service: Service#21, context: Context#118, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#132(id: 2, service: Service#21, context: Context#118, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen2Builder.screen1Builder.safeDIBuilder
+  Screen1#68(id: 1, service: Service#21, context: Context#118, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#119()
+  Screen0#59(id: 0, service: Service#21, context: Context#119, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen2Builder.screen1Builder.screen4Builder.safeDIBuilder
+  Screen4#20(id: 4, service: Service#21, context: Context#118, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  override screen2Builder.screen1Builder.screen8Builder.safeDIBuilder
+  Screen8#98(id: 8, service: Service#21, context: Context#118, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen2Builder.screen6Builder.safeDIBuilder
+  Screen6#111(id: 6, service: Service#21, context: Context#118, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#133(id: 2, service: Service#21, context: Context#118, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen2Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#99(id: 8, service: Service#21, context: Context#118, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#103(id: 10, service: Service#21, context: Context#118, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen2Builder.screen8Builder.safeDIBuilder
+  Screen8#100(id: 8, service: Service#21, context: Context#118, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#134(id: 2, service: Service#21, context: Context#118, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#80(id: 3, service: Service#21, context: Context#118, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#104(id: 10, service: Service#21, context: Context#118, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen8Builder.safeDIBuilder
+  Screen8#101(id: 8, service: Service#21, context: Context#118, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#135(id: 2, service: Service#21, context: Context#118, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#69(id: 1, service: Service#21, context: Context#118, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#112(id: 6, service: Service#21, context: Context#118, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#102(id: 8, service: Service#21, context: Context#118, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen3#81(id: 3, service: Service#21, context: Context#118, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#70(id: 1, service: Service#21, context: Context#118, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#52(id: 7, service: Service#21, context: Context#118, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#26(id: 9, service: Service#21, context: Context#118, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen10#105(id: 10, service: Service#21, context: Context#118, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#136(id: 2, service: Service#21, context: Context#118, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#82(id: 3, service: Service#21, context: Context#118, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#113(id: 6, service: Service#21, context: Context#118, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen10Builder.safeDIBuilder
+  Screen10#106(id: 10, service: Service#21, context: Context#118, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen10Builder.screen2Builder.safeDIBuilder
+  Screen2#137(id: 2, service: Service#21, context: Context#118, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen2Builder.screen1Builder.safeDIBuilder
+  Screen1#71(id: 1, service: Service#21, context: Context#118, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen2Builder.screen6Builder.safeDIBuilder
+  Screen6#114(id: 6, service: Service#21, context: Context#118, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen10Builder.screen2Builder.screen8Builder.safeDIBuilder
+  Screen8#103(id: 8, service: Service#21, context: Context#118, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen10Builder.screen3Builder.safeDIBuilder
+  Screen3#83(id: 3, service: Service#21, context: Context#118, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#72(id: 1, service: Service#21, context: Context#118, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen3Builder.screen7Builder.safeDIBuilder
+  Screen7#53(id: 7, service: Service#21, context: Context#118, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen10Builder.screen3Builder.screen9Builder.safeDIBuilder
+  Screen9#27(id: 9, service: Service#21, context: Context#118, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen6Builder.safeDIBuilder
+  Screen6#115(id: 6, service: Service#21, context: Context#118, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#138(id: 2, service: Service#21, context: Context#118, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#104(id: 8, service: Service#21, context: Context#118, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen10Builder.safeDIBuilder
+  Screen10#107(id: 10, service: Service#21, context: Context#118, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+alive after dropping everything: none
+Screen7.mock, overridden true:
+  override service
+  Service#22()
+  override context
+  Context#120()
+  Screen7#54(id: 7, service: Service#22, context: Context#120, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen0Builder.context
+  Context#121()
+  override screen0Builder.safeDIBuilder
+  Screen0#60(id: 0, service: Service#22, context: Context#121, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen5Builder.context
+  Context#122()
+  override screen0Builder.screen5Builder.safeDIBuilder
+  Screen5#44(id: 5, service: Service#22, context: Context#122, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#139(id: 2, service: Service#22, context: Context#122, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen5Builder.screen7Builder.safeDIBuilder
+  Screen7#55(id: 7, service: Service#22, context: Context#122, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen5Builder.screen11Builder.safeDIBuilder
+  Screen11#20(id: 11, service: Service#22, context: Context#122, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  override screen0Builder.screen6Builder.safeDIBuilder
+  Screen6#116(id: 6, service: Service#22, context: Context#121, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#140(id: 2, service: Service#22, context: Context#121, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#105(id: 8, service: Service#22, context: Context#121, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#108(id: 10, service: Service#22, context: Context#121, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen0Builder.screen10Builder.safeDIBuilder
+  Screen10#109(id: 10, service: Service#22, context: Context#121, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen0Builder.screen10Builder.screen2Builder.safeDIBuilder
+  Screen2#141(id: 2, service: Service#22, context: Context#121, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen10Builder.screen3Builder.safeDIBuilder
+  Screen3#84(id: 3, service: Service#22, context: Context#121, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  override screen0Builder.screen10Builder.screen6Builder.safeDIBuilder
+  Screen6#117(id: 6, service: Service#22, context: Context#121, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#142(id: 2, service: Service#22, context: Context#120, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen2Builder.screen1Builder.safeDIBuilder
+  Screen1#73(id: 1, service: Service#22, context: Context#120, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#123()
+  Screen0#61(id: 0, service: Service#22, context: Context#123, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen2Builder.screen1Builder.screen4Builder.safeDIBuilder
+  Screen4#21(id: 4, service: Service#22, context: Context#120, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  override screen2Builder.screen1Builder.screen8Builder.safeDIBuilder
+  Screen8#106(id: 8, service: Service#22, context: Context#120, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen2Builder.screen6Builder.safeDIBuilder
+  Screen6#118(id: 6, service: Service#22, context: Context#120, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#143(id: 2, service: Service#22, context: Context#120, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen2Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#107(id: 8, service: Service#22, context: Context#120, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#110(id: 10, service: Service#22, context: Context#120, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen2Builder.screen8Builder.safeDIBuilder
+  Screen8#108(id: 8, service: Service#22, context: Context#120, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#144(id: 2, service: Service#22, context: Context#120, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#85(id: 3, service: Service#22, context: Context#120, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#111(id: 10, service: Service#22, context: Context#120, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen10Builder.safeDIBuilder
+  Screen10#112(id: 10, service: Service#22, context: Context#120, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen10Builder.screen2Builder.safeDIBuilder
+  Screen2#145(id: 2, service: Service#22, context: Context#120, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen2Builder.screen1Builder.safeDIBuilder
+  Screen1#74(id: 1, service: Service#22, context: Context#120, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen2Builder.screen6Builder.safeDIBuilder
+  Screen6#119(id: 6, service: Service#22, context: Context#120, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen10Builder.screen2Builder.screen8Builder.safeDIBuilder
+  Screen8#109(id: 8, service: Service#22, context: Context#120, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen10Builder.screen3Builder.safeDIBuilder
+  Screen3#86(id: 3, service: Service#22, context: Context#120, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#75(id: 1, service: Service#22, context: Context#120, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen3Builder.screen7Builder.safeDIBuilder
+  Screen7#56(id: 7, service: Service#22, context: Context#120, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen10Builder.screen3Builder.screen9Builder.safeDIBuilder
+  Screen9#28(id: 9, service: Service#22, context: Context#120, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen6Builder.safeDIBuilder
+  Screen6#120(id: 6, service: Service#22, context: Context#120, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#146(id: 2, service: Service#22, context: Context#120, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#110(id: 8, service: Service#22, context: Context#120, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen10Builder.safeDIBuilder
+  Screen10#113(id: 10, service: Service#22, context: Context#120, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+alive after dropping everything: none
+Screen8.mock, overridden true:
+  override service
+  Service#23()
+  override context
+  Context#124()
+  Screen8#111(id: 8, service: Service#23, context: Context#124, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#147(id: 2, service: Service#23, context: Context#124, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen2Builder.screen1Builder.safeDIBuilder
+  Screen1#76(id: 1, service: Service#23, context: Context#124, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#125()
+  Screen0#62(id: 0, service: Service#23, context: Context#125, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen2Builder.screen1Builder.screen4Builder.safeDIBuilder
+  Screen4#22(id: 4, service: Service#23, context: Context#124, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  override screen2Builder.screen1Builder.screen8Builder.safeDIBuilder
+  Screen8#112(id: 8, service: Service#23, context: Context#124, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen2Builder.screen6Builder.safeDIBuilder
+  Screen6#121(id: 6, service: Service#23, context: Context#124, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#148(id: 2, service: Service#23, context: Context#124, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen2Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#113(id: 8, service: Service#23, context: Context#124, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#114(id: 10, service: Service#23, context: Context#124, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen2Builder.screen8Builder.safeDIBuilder
+  Screen8#114(id: 8, service: Service#23, context: Context#124, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#149(id: 2, service: Service#23, context: Context#124, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#87(id: 3, service: Service#23, context: Context#124, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#115(id: 10, service: Service#23, context: Context#124, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen3Builder.safeDIBuilder
+  Screen3#88(id: 3, service: Service#23, context: Context#124, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#77(id: 1, service: Service#23, context: Context#124, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#126()
+  Screen0#63(id: 0, service: Service#23, context: Context#126, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen4#23(id: 4, service: Service#23, context: Context#124, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Screen8#115(id: 8, service: Service#23, context: Context#124, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen3Builder.screen7Builder.safeDIBuilder
+  Screen7#57(id: 7, service: Service#23, context: Context#124, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#127()
+  Screen0#64(id: 0, service: Service#23, context: Context#127, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#150(id: 2, service: Service#23, context: Context#124, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#116(id: 10, service: Service#23, context: Context#124, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen3Builder.screen9Builder.safeDIBuilder
+  Screen9#29(id: 9, service: Service#23, context: Context#124, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  override screen3Builder.safeDIBuilder
+  Screen3#89(id: 3, service: Service#23, context: Context#124, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  override screen3Builder.screen9Builder.screen5Builder.context
+  Context#128()
+  override screen3Builder.screen9Builder.screen5Builder.safeDIBuilder
+  Screen5#45(id: 5, service: Service#23, context: Context#128, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  override screen3Builder.screen9Builder.screen8Builder.safeDIBuilder
+  Screen8#116(id: 8, service: Service#23, context: Context#124, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen10Builder.safeDIBuilder
+  Screen10#117(id: 10, service: Service#23, context: Context#124, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen10Builder.screen2Builder.safeDIBuilder
+  Screen2#151(id: 2, service: Service#23, context: Context#124, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen2Builder.screen1Builder.safeDIBuilder
+  Screen1#78(id: 1, service: Service#23, context: Context#124, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen2Builder.screen6Builder.safeDIBuilder
+  Screen6#122(id: 6, service: Service#23, context: Context#124, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen10Builder.screen2Builder.screen8Builder.safeDIBuilder
+  Screen8#117(id: 8, service: Service#23, context: Context#124, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen10Builder.screen3Builder.safeDIBuilder
+  Screen3#90(id: 3, service: Service#23, context: Context#124, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#79(id: 1, service: Service#23, context: Context#124, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen3Builder.screen7Builder.safeDIBuilder
+  Screen7#58(id: 7, service: Service#23, context: Context#124, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen10Builder.screen3Builder.screen9Builder.safeDIBuilder
+  Screen9#30(id: 9, service: Service#23, context: Context#124, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen6Builder.safeDIBuilder
+  Screen6#123(id: 6, service: Service#23, context: Context#124, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#152(id: 2, service: Service#23, context: Context#124, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen10Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#118(id: 8, service: Service#23, context: Context#124, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen10Builder.safeDIBuilder
+  Screen10#118(id: 10, service: Service#23, context: Context#124, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+alive after dropping everything: none
+Screen9.mock, overridden true:
+  override service
+  Service#24()
+  override context
+  Context#129()
+  Screen9#31(id: 9, service: Service#24, context: Context#129, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  override screen3Builder.safeDIBuilder
+  Screen3#91(id: 3, service: Service#24, context: Context#129, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#80(id: 1, service: Service#24, context: Context#129, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#130()
+  Screen0#65(id: 0, service: Service#24, context: Context#130, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen4#24(id: 4, service: Service#24, context: Context#129, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Screen8#119(id: 8, service: Service#24, context: Context#129, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen3Builder.screen7Builder.safeDIBuilder
+  Screen7#59(id: 7, service: Service#24, context: Context#129, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#131()
+  Screen0#66(id: 0, service: Service#24, context: Context#131, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#153(id: 2, service: Service#24, context: Context#129, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#119(id: 10, service: Service#24, context: Context#129, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen3Builder.screen9Builder.safeDIBuilder
+  Screen9#32(id: 9, service: Service#24, context: Context#129, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  override screen3Builder.safeDIBuilder
+  Screen3#92(id: 3, service: Service#24, context: Context#129, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  override screen3Builder.screen9Builder.screen5Builder.context
+  Context#132()
+  override screen3Builder.screen9Builder.screen5Builder.safeDIBuilder
+  Screen5#46(id: 5, service: Service#24, context: Context#132, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  override screen3Builder.screen9Builder.screen8Builder.safeDIBuilder
+  Screen8#120(id: 8, service: Service#24, context: Context#129, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen5Builder.context
+  Context#133()
+  override screen5Builder.safeDIBuilder
+  Screen5#47(id: 5, service: Service#24, context: Context#133, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#154(id: 2, service: Service#24, context: Context#133, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#81(id: 1, service: Service#24, context: Context#133, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#124(id: 6, service: Service#24, context: Context#133, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#121(id: 8, service: Service#24, context: Context#133, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen5Builder.screen7Builder.safeDIBuilder
+  Screen7#60(id: 7, service: Service#24, context: Context#133, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#134()
+  Screen0#67(id: 0, service: Service#24, context: Context#134, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#155(id: 2, service: Service#24, context: Context#133, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#120(id: 10, service: Service#24, context: Context#133, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen5Builder.screen11Builder.safeDIBuilder
+  Screen11#21(id: 11, service: Service#24, context: Context#133, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Context#135()
+  Screen0#68(id: 0, service: Service#24, context: Context#135, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen5Builder.context
+  Context#136()
+  override screen5Builder.safeDIBuilder
+  Screen5#48(id: 5, service: Service#24, context: Context#136, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  override screen5Builder.screen11Builder.screen6Builder.safeDIBuilder
+  Screen6#125(id: 6, service: Service#24, context: Context#133, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen8Builder.safeDIBuilder
+  Screen8#122(id: 8, service: Service#24, context: Context#129, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#156(id: 2, service: Service#24, context: Context#129, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#82(id: 1, service: Service#24, context: Context#129, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#126(id: 6, service: Service#24, context: Context#129, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#123(id: 8, service: Service#24, context: Context#129, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen3#93(id: 3, service: Service#24, context: Context#129, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#83(id: 1, service: Service#24, context: Context#129, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen7#61(id: 7, service: Service#24, context: Context#129, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Screen9#33(id: 9, service: Service#24, context: Context#129, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  Screen10#121(id: 10, service: Service#24, context: Context#129, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#157(id: 2, service: Service#24, context: Context#129, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#94(id: 3, service: Service#24, context: Context#129, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#127(id: 6, service: Service#24, context: Context#129, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+alive after dropping everything: none
+Screen10.mock, overridden true:
+  override service
+  Service#25()
+  override context
+  Context#137()
+  Screen10#122(id: 10, service: Service#25, context: Context#137, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#158(id: 2, service: Service#25, context: Context#137, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen2Builder.screen1Builder.safeDIBuilder
+  Screen1#84(id: 1, service: Service#25, context: Context#137, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#138()
+  Screen0#69(id: 0, service: Service#25, context: Context#138, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen2Builder.screen1Builder.screen4Builder.safeDIBuilder
+  Screen4#25(id: 4, service: Service#25, context: Context#137, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  override screen2Builder.screen1Builder.screen8Builder.safeDIBuilder
+  Screen8#124(id: 8, service: Service#25, context: Context#137, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen2Builder.screen6Builder.safeDIBuilder
+  Screen6#128(id: 6, service: Service#25, context: Context#137, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#159(id: 2, service: Service#25, context: Context#137, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen2Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#125(id: 8, service: Service#25, context: Context#137, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#123(id: 10, service: Service#25, context: Context#137, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen2Builder.screen8Builder.safeDIBuilder
+  Screen8#126(id: 8, service: Service#25, context: Context#137, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen2Builder.safeDIBuilder
+  Screen2#160(id: 2, service: Service#25, context: Context#137, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#95(id: 3, service: Service#25, context: Context#137, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#124(id: 10, service: Service#25, context: Context#137, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen3Builder.safeDIBuilder
+  Screen3#96(id: 3, service: Service#25, context: Context#137, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen1#85(id: 1, service: Service#25, context: Context#137, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Context#139()
+  Screen0#70(id: 0, service: Service#25, context: Context#139, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen4#26(id: 4, service: Service#25, context: Context#137, screen0Builder: builder, screen3Builder: builder, screen7Builder: builder)
+  Screen8#127(id: 8, service: Service#25, context: Context#137, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen3Builder.screen7Builder.safeDIBuilder
+  Screen7#62(id: 7, service: Service#25, context: Context#137, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#140()
+  Screen0#71(id: 0, service: Service#25, context: Context#140, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#161(id: 2, service: Service#25, context: Context#137, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#125(id: 10, service: Service#25, context: Context#137, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen3Builder.screen9Builder.safeDIBuilder
+  Screen9#34(id: 9, service: Service#25, context: Context#137, screen3Builder: builder, screen5Builder: builder, screen8Builder: builder)
+  override screen3Builder.safeDIBuilder
+  Screen3#97(id: 3, service: Service#25, context: Context#137, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  override screen3Builder.screen9Builder.screen5Builder.context
+  Context#141()
+  override screen3Builder.screen9Builder.screen5Builder.safeDIBuilder
+  Screen5#49(id: 5, service: Service#25, context: Context#141, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  override screen3Builder.screen9Builder.screen8Builder.safeDIBuilder
+  Screen8#128(id: 8, service: Service#25, context: Context#137, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen6Builder.safeDIBuilder
+  Screen6#129(id: 6, service: Service#25, context: Context#137, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#162(id: 2, service: Service#25, context: Context#137, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#86(id: 1, service: Service#25, context: Context#137, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#130(id: 6, service: Service#25, context: Context#137, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#129(id: 8, service: Service#25, context: Context#137, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#130(id: 8, service: Service#25, context: Context#137, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#163(id: 2, service: Service#25, context: Context#137, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#98(id: 3, service: Service#25, context: Context#137, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#126(id: 10, service: Service#25, context: Context#137, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#127(id: 10, service: Service#25, context: Context#137, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#164(id: 2, service: Service#25, context: Context#137, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#99(id: 3, service: Service#25, context: Context#137, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#131(id: 6, service: Service#25, context: Context#137, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+alive after dropping everything: none
+Screen11.mock, overridden true:
+  override service
+  Service#26()
+  override context
+  Context#142()
+  Screen11#22(id: 11, service: Service#26, context: Context#142, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  override screen0Builder.context
+  Context#143()
+  override screen0Builder.safeDIBuilder
+  Screen0#72(id: 0, service: Service#26, context: Context#143, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen5Builder.context
+  Context#144()
+  override screen0Builder.screen5Builder.safeDIBuilder
+  Screen5#50(id: 5, service: Service#26, context: Context#144, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#165(id: 2, service: Service#26, context: Context#144, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen5Builder.screen7Builder.safeDIBuilder
+  Screen7#63(id: 7, service: Service#26, context: Context#144, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  override screen0Builder.screen5Builder.screen11Builder.safeDIBuilder
+  Screen11#23(id: 11, service: Service#26, context: Context#144, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  override screen0Builder.screen6Builder.safeDIBuilder
+  Screen6#132(id: 6, service: Service#26, context: Context#143, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#166(id: 2, service: Service#26, context: Context#143, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#131(id: 8, service: Service#26, context: Context#143, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen10#128(id: 10, service: Service#26, context: Context#143, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen0Builder.screen10Builder.safeDIBuilder
+  Screen10#129(id: 10, service: Service#26, context: Context#143, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen0Builder.screen10Builder.screen2Builder.safeDIBuilder
+  Screen2#167(id: 2, service: Service#26, context: Context#143, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  override screen0Builder.screen10Builder.screen3Builder.safeDIBuilder
+  Screen3#100(id: 3, service: Service#26, context: Context#143, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  override screen0Builder.screen10Builder.screen6Builder.safeDIBuilder
+  Screen6#133(id: 6, service: Service#26, context: Context#143, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen5Builder.context
+  Context#145()
+  override screen5Builder.safeDIBuilder
+  Screen5#51(id: 5, service: Service#26, context: Context#145, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  Screen2#168(id: 2, service: Service#26, context: Context#145, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#87(id: 1, service: Service#26, context: Context#145, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#134(id: 6, service: Service#26, context: Context#145, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#132(id: 8, service: Service#26, context: Context#145, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen5Builder.screen7Builder.safeDIBuilder
+  Screen7#64(id: 7, service: Service#26, context: Context#145, screen0Builder: builder, screen2Builder: builder, screen10Builder: builder)
+  Context#146()
+  Screen0#73(id: 0, service: Service#26, context: Context#146, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  Screen2#169(id: 2, service: Service#26, context: Context#145, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen10#130(id: 10, service: Service#26, context: Context#145, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  override screen5Builder.screen11Builder.safeDIBuilder
+  Screen11#24(id: 11, service: Service#26, context: Context#145, screen0Builder: builder, screen5Builder: builder, screen6Builder: builder)
+  Context#147()
+  Screen0#74(id: 0, service: Service#26, context: Context#147, screen5Builder: builder, screen6Builder: builder, screen10Builder: builder)
+  override screen5Builder.context
+  Context#148()
+  override screen5Builder.safeDIBuilder
+  Screen5#52(id: 5, service: Service#26, context: Context#148, screen2Builder: builder, screen7Builder: builder, screen11Builder: builder)
+  override screen5Builder.screen11Builder.screen6Builder.safeDIBuilder
+  Screen6#135(id: 6, service: Service#26, context: Context#145, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  override screen6Builder.safeDIBuilder
+  Screen6#136(id: 6, service: Service#26, context: Context#142, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen2#170(id: 2, service: Service#26, context: Context#142, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen1#88(id: 1, service: Service#26, context: Context#142, screen0Builder: builder, screen4Builder: builder, screen8Builder: builder)
+  Screen6#137(id: 6, service: Service#26, context: Context#142, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+  Screen8#133(id: 8, service: Service#26, context: Context#142, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  override screen6Builder.screen8Builder.safeDIBuilder
+  Screen8#134(id: 8, service: Service#26, context: Context#142, screen2Builder: builder, screen3Builder: builder, screen10Builder: builder)
+  Screen2#171(id: 2, service: Service#26, context: Context#142, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#101(id: 3, service: Service#26, context: Context#142, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen10#131(id: 10, service: Service#26, context: Context#142, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen10#132(id: 10, service: Service#26, context: Context#142, screen2Builder: builder, screen3Builder: builder, screen6Builder: builder)
+  Screen2#172(id: 2, service: Service#26, context: Context#142, screen1Builder: builder, screen6Builder: builder, screen8Builder: builder)
+  Screen3#102(id: 3, service: Service#26, context: Context#142, screen1Builder: builder, screen7Builder: builder, screen9Builder: builder)
+  Screen6#138(id: 6, service: Service#26, context: Context#142, screen2Builder: builder, screen8Builder: builder, screen10Builder: builder)
+alive after dropping everything: none
