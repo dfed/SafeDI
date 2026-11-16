@@ -25,9 +25,9 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// What a hole's implementation is handed for a value the seam takes as an `@autoclosure`: the seam hands the hole's
-/// struct the `LazilyInstantiated` it holds the value in, behind a field that reads its instance, so a hand-written
-/// implementation creates the value when it reads the field, and the implementation the app generates reads the
-/// app's own declaration of the label, as inline, so the value is created when the implementation uses it. A
+/// struct the `LazilyInstantiated` it holds the value in, behind a field that reads its instance, and a hand-written
+/// implementation, which takes nothing, reads the calling code's own value, as the implementation the app generates
+/// reads the app's own declaration of the label, as inline, so the value is created when the implementation uses it. A
 /// `@Sendable` function in the implementation that reads a wrapper the app declares is reported, as inline.
 struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 	// MARK: Initialization
@@ -52,7 +52,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		// hand-written fill, which takes nothing, reads the caller's own memo there: each service is created when its
 		// `UploadJob` is built.
 		let feature = Self.feature()
-		let app = Self.app(declarations: Self.uploaderBuildingJobs, handWrittenFill: Self.handWrittenFillReadingField)
+		let app = Self.app(declarations: Self.uploaderBuildingJobs, handWrittenFill: Self.handWrittenFillReadingCallersMemo)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app, featureConfiguration: plainDependencyTreeInitializersConfiguration), integration: integration, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"ExportFeature": """
@@ -1379,7 +1379,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 	private static let uploaderBuildingJobs = ["@Instantiated let jobBuilder: Instantiator<UploadJob>"]
 
 	/// A fill that reads the struct's `exportService` where its `jobBuilder` builds an `UploadJob`.
-	private static let handWrittenFillReadingField = "{ DefaultUploader(jobBuilder: Instantiator { UploadJob(exportService: exportService.instance) }) }"
+	private static let handWrittenFillReadingCallersMemo = "{ DefaultUploader(jobBuilder: Instantiator { UploadJob(exportService: exportService.instance) }) }"
 
 	/// `App`: `DefaultUploader`, with `declarations`, `UploadJob`, which receives `jobDeclarations`, `Root`, which holds
 	/// `rootDeclarations` and `rootChild`, and `makeHandBuilt()`, which calls `ExportFeature` with `handWrittenFill`

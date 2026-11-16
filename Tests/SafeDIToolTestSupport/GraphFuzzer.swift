@@ -11838,7 +11838,8 @@ enum GraphFuzzerOracle {
 	/// scope type an extension declares, as `<Type>.<scope>`; and each case of one, as `<Type>.<scope>.<case>`. A seam's
 	/// labels are read from the initializer only generated code calls, which every module generates, without their
 	/// `__safeDI_` prefix: they are the labels of the plain initializer a module that sets
-	/// `generatePlainDependencyTreeInitializers` generates beside it, which names the same builders.
+	/// `generatePlainDependencyTreeInitializers` generates beside it, which names the same builders. A builder struct's
+	/// members are read through the cases they are named for; a member without a case would need this reader extended.
 	static func holeBuilderNames(in generatedFiles: [String: String]) -> Set<String> {
 		let scopeDeclaration = try! NSRegularExpression(pattern: #"^    (?:@frozen )?(?:nonisolated )?(?:public |package |internal )?(?:enum|struct) (SafeDI\w*Scope_\w+) \{$"#)
 		let scopeCase = try! NSRegularExpression(pattern: #"^        (?:indirect )?case (\w+)"#)

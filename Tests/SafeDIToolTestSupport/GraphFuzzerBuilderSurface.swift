@@ -1245,13 +1245,15 @@ extension GraphFuzzerFailure {
 	/// Every kind of failure of the builder surface, which no known failure of an earlier oracle masks
 	/// (`GraphFuzzerFinding.init`): each judges only what the tool generates for the graph and its edits, so it does not
 	/// depend on how else the graph fails.
-	static let builderSurfaceKindsNeverMasked: Set<Kind> = knownBuilderSurfaceKinds.union([.remedyOfPlacesForwardingOtherValuesRejected, .remedyAddsBuilder])
+	static let builderSurfaceKindsNeverMasked: Set<Kind> = knownBuilderSurfaceKinds.union([.remedyOfPlacesForwardingOtherValuesRejected])
 
 	/// The kinds of failure of the builder surface a known issue may list (`GraphFuzzerKnownIssue.Signature.builderSurface`).
 	/// The rejection of a remedy is not among them: no seed lists it. A remedy accepted with other builders is listed only
 	/// for the transitional builder-kind flip (a seam takes builder structs only while no place of its builders forwards a
 	/// value, so the remedy, whose places forward the same values, can turn a builder that took a closure over a scope enum
-	/// into one that takes a struct); never masked (`builderSurfaceKindsNeverMasked`); emptied by slices 3 and 4.
+	/// into one that takes a struct); never masked (`builderSurfaceKindsNeverMasked`); emptied once every builder takes a
+	/// struct. While it is here, a graph that fails only this kind counts among the graphs that pass besides the builder
+	/// surface (`passesBesidesBuilderSurface`), listed or not; an unlisted one is still reported.
 	static let knownBuilderSurfaceKinds: Set<Kind> = [
 		.builderSurfaceNamesGeneratedType,
 		.remedyAddsBuilder,
