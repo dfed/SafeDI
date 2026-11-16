@@ -883,7 +883,7 @@ public actor DependencyTreeGenerator {
 		for builder in parameters.seamMockBuilders {
 			requiredParameters.append(TypeRequirements.RequiredParameter(
 				label: builder.label,
-				typeSource: builder.parameterType.asSource,
+				typeSource: builder.parameterType.strippingEscaping.asSource,
 				defaultExpression: nil,
 				reason: .noInstantiableFulfillsType(builder.holeType.instantiatedType),
 			))
