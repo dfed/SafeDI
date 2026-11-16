@@ -9,7 +9,9 @@ PLAN.md holds one table row per planned item, bottom of the stack first:
 
 state is one of:
     lane      a lane is working on it now; detail names the lane. The branch must show a push or a
-              workflow run within the quiet limit (default 90 minutes), or the row is questioned.
+              workflow run, or the row's since time must be, within the quiet limit (default 90
+              minutes), or the row is questioned. since is when the row was last confirmed true,
+              so a lane that pushes nothing is kept alive by whoever updates its row.
     waiting   nobody works on it; detail says on what ("on #752", "on slice 6", "on Dan"). A wait on a
               pull request that is no longer open, or on an item that is done, is questioned.
     done      landed or dropped.
@@ -87,13 +89,17 @@ def main():
             if not branch or branch == "-":
                 questions.append(f"{item}: a lane is named but no branch. Where is the work?")
                 continue
-            times = [time for time in (last_push(repository, branch), newest_run.get(branch)) if time]
-            if not times:
-                questions.append(f"{item}: {branch} is not on the remote and has no run. Has {detail or 'the lane'} started?")
-            else:
+            confirmed = None
+            try:
+                confirmed = datetime.strptime(since, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+            except ValueError:
+                questions.append(f"{item}: 'since' is not a time like 2026-11-16 22:25. When was this row last true?")
+            # A lane on the lead's machine pushes nothing, so the row's own time counts as a sign of life.
+            times = [time for time in (last_push(repository, branch), newest_run.get(branch), confirmed) if time]
+            if times:
                 quiet = (now - max(times)).total_seconds() / 60
                 if quiet > quiet_minutes:
-                    questions.append(f"{item}: {branch} has had no push and no run for {quiet:.0f} minutes. Is {detail or 'the lane'} still on it?")
+                    questions.append(f"{item} ({detail}): no push, no run and no word on {branch} for {quiet:.0f} minutes. Is the lane still on it?")
         elif state == "waiting":
             if not detail:
                 questions.append(f"{item}: it waits, but on what? Give the reason or a lane.")
