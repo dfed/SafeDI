@@ -1638,8 +1638,6 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		]
 	}
 
-
-
 	/// `Feature`'s file for the tree `feature(…)` makes sendableCycle.
 	private static let sendableCycleFeature = """
 	#if canImport(SafeDI)
@@ -1801,8 +1799,6 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	#endif
 
 	"""
-
-
 
 	/// `Feature`'s file for the tree `feature(…)` makes plainCycle.
 	private static let plainCycleFeature = """
@@ -2020,7 +2016,6 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 	"""
 
-
 	/// `Feature`'s file for the tree `feature(…)` makes plainNoCycle.
 	private static let plainNoCycleFeature = """
 	#if canImport(SafeDI)
@@ -2137,7 +2132,6 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	}
 	#endif
 	"""
-
 
 	/// `Feature`'s file for the tree `feature(…)` makes plainCycleOnlyIfAvailable.
 	private static let plainCycleOnlyIfAvailableFeature = """

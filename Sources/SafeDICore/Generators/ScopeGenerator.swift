@@ -7552,7 +7552,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			/// builds, or, where every place is an erased instantiator, that wrapper's `Builder`.
 			var parameterType: TypeDescription {
 				let wrapperTypes = places.map(\.property.typeDescription.unwrapped.strippingEscaping)
-				let form: DependencyTreeGenerator.BuilderForm = if let wrapperType = wrapperTypes.first, places.allSatisfy({ $0.property.propertyType.isAnyInstantiator }) {
+				let form: DependencyTreeGenerator.BuilderForm = if let wrapperType = wrapperTypes.first, places.allSatisfy(\.property.propertyType.isAnyInstantiator) {
 					Set(wrapperTypes.map(\.asSource)).count == 1 ? .wrapper(wrapperType) : .erased(forwarded: .void(.tuple))
 				} else {
 					.value
