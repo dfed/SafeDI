@@ -11,10 +11,12 @@ branch `X` is at another commit. It prints the commit it uses. `--old-base` is t
 start after: an ancestor of `HEAD` with at least one commit after it. Without it the script takes the merge base of
 `HEAD` and NEW_BASE. A base that was itself rebuilt, the usual case in a stack, no longer holds the commits the branch
 sits on, so that merge base is older and the rebase would replay the old base's commits: when the reflog of NEW_BASE's
-remote-tracking ref or local branch shows the branch left it at another commit, the script stops and prints that
-commit as the `--old-base` to pass, and it warns when a given `--old-base` is not that commit. A checkout whose
-reflogs never saw the old base (a fresh clone, a NEW_BASE given as a commit) cannot tell: read the list of commits it
-prints before the rebase. It runs from the checkout's top level, on a branch, with nothing uncommitted and no
+remote-tracking ref or local branch, or of any other branch or remote-tracking ref at the new base's commit, shows
+the branch left it at another commit, the script stops and prints that commit as the `--old-base` to pass, and it
+warns when a given `--old-base` is not that commit. A checkout whose reflogs never saw the old base (a fresh clone)
+cannot tell: read the list of commits it prints before the rebase. When the old base holds a commit whose subject
+the new base lacks (one that moved up the stack, or was dropped), nothing would replay it, so the script names it and
+stops with status 1 before the rebase; `--accept-drop` goes on without it. It runs from the checkout's top level, on a branch, with nothing uncommitted and no
 untracked file the test step would count as a change (any but those no test reaches).
 
 What it does, stopping at the first step that fails:
@@ -25,12 +27,14 @@ What it does, stopping at the first step that fails:
    this script again with `--continue`, which skips this step and takes the old base and the branch's earlier head
    from what this step recorded under `.git`. When the rebased branch lacks a commit it had (git drops one whose
    change the new base already holds, and `git rebase --skip` drops one), it names the missing subjects and stops with
-   status 1; `--continue --accept-drop` goes on.
+   status 1; `--continue --accept-drop` goes on. A signal during the rebase is held until git returns. The record
+   is the branch's own, and is removed once every step passed.
 2. Fails on a conflict marker left in any file the branch or the base's move touched.
 3. Builds the tests and runs the suites the branch touches and the suites the base's move touched, through the
    `verify-touched` skill's script: its runner, its own `TMPDIR` and log, generated code compiled unless
-   `--skip-compile-checks`. A compile error is a failure there. When a change reaches every test, it runs none and
-   prints the full Verify to dispatch: the whole suite is not this machine's work.
+   `--skip-compile-checks`. A compile error is a failure there. The whole suite is not this machine's work: when
+   the base's move reaches every test it runs only the suites the branch touches, when the branch's own change
+   does it runs none, and either way it prints the full Verify to dispatch.
 4. `./CLI/lint.sh --check`, through the runner.
 
 Then it prints the new head. It never pushes: a restacked branch is pushed by whoever owns it, under their own rules.
@@ -119,14 +123,18 @@ def new_base_commit(name):
     explicit = name.startswith("origin/")
     branch = name[len("origin/"):] if explicit else name
     # The full name: `--heads X` would also match `refs/heads/other/X`.
-    if git("ls-remote", "--exit-code", "origin", f"refs/heads/{branch}", check=False).returncode == 0:
+    listed = git("ls-remote", "--exit-code", "origin", f"refs/heads/{branch}", check=False)
+    # 2 is `--exit-code`'s "no such ref"; anything else is an origin that could not be asked.
+    if listed.returncode not in (0, 2):
+        return None, f"origin could not be asked for `{branch}`: {listed.stderr.strip()}"
+    if listed.returncode == 0:
         fetched = git("fetch", "origin", f"refs/heads/{branch}", check=False)
         if fetched.returncode != 0:
             return None, fetched.stderr.strip()
         remote = git("rev-parse", "FETCH_HEAD").stdout.strip()
         local = commit_of(f"refs/heads/{branch}")
         if not explicit and local is not None and local != remote:
-            return None, f"the local branch `{branch}` is at {local} and origin's is at {remote}; pass `origin/{branch}` or the commit you mean."
+            return None, f"the local branch `{branch}` is at {local} and origin's is at {remote}; pass `origin/{branch}` for origin's, or {local} for yours."
         return remote, f"origin's `{branch}`, fetched now"
     if explicit:
         return None, f"origin has no branch `{branch}`."
@@ -136,24 +144,33 @@ def new_base_commit(name):
     return commit, "as named; origin has no branch of that name"
 
 
-def fork_point(name):
-    """The commit of `HEAD` the branch left NAME at, by NAME's reflogs here, or None when they do not say.
+def references_named(name):
+    branch = name[len("origin/"):] if name.startswith("origin/") else name
+    return [f"refs/remotes/origin/{branch}", f"refs/heads/{branch}"]
+
+
+def references_at(commit, current_branch):
+    """The local branches and remote-tracking refs at `commit`, but for the branch being moved."""
+    own = {f"refs/heads/{current_branch}", f"refs/remotes/origin/{current_branch}"}
+    listed = git("for-each-ref", "--format=%(refname)", "--points-at", commit, "refs/heads", "refs/remotes").stdout.split("\n")
+    return [reference for reference in listed if reference and reference not in own and not reference.endswith("/HEAD")]
+
+
+def fork_points(references):
+    """Where `HEAD` left each of `references`, by its reflog here, with the count of commits after it; none when no reflog says.
 
     A base that was rebuilt, on `origin` or in this repository, no longer holds the commits the branch sits on, so the
     merge base with it is older than where the branch's own commits start, and a rebase from there would replay the
-    old base's commits. The reflog of the remote-tracking ref and of the local branch still hold the old tip. Asked
-    before the fetch, which moves the remote-tracking ref.
+    old base's commits. The reflog of the base's remote-tracking ref or local branch still holds the old tip.
     """
-    branch = name[len("origin/"):] if name.startswith("origin/") else name
     found = []
-    for reference in (f"refs/remotes/origin/{branch}", f"refs/heads/{branch}"):
+    for reference in references:
         if commit_of(reference) is None:
             continue
         point = git("merge-base", "--fork-point", reference, "HEAD", check=False).stdout.strip()
         if point:
             found.append((int(git("rev-list", "--count", f"{point}..HEAD").stdout.strip()), point))
-    # The latest of them: the branch's own commits start after the last tip of the base it held.
-    return min(found)[1] if found else None
+    return found
 
 
 def untracked_files_a_run_would_take(verify_touched):
@@ -217,6 +234,28 @@ def reports_dropped_commits(old_base, head_before, new_base, accept_drop):
     return True
 
 
+class SignalsHeld:
+    """Holds the signals that end the script while git rewrites the branch, and ends the script afterwards.
+
+    Ended inside the rebase, the script would leave it half done with nothing printed about where it stopped. git
+    itself still receives a terminal's interrupt, and stops as a conflict does.
+    """
+
+    NUMBERS = (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)
+
+    def __enter__(self):
+        self.received = None
+        self.previous = {number: signal.signal(number, self.hold) for number in self.NUMBERS}
+        return self
+
+    def hold(self, signal_number, _frame):
+        self.received = signal_number
+
+    def __exit__(self, *_exception):
+        for number, handler in self.previous.items():
+            signal.signal(number, handler)
+
+
 class Children:
     """The process this script waits on, ended when the script is: `swift test` must not outlive a cancelled restack.
 
@@ -276,13 +315,18 @@ def moved(arguments, verify_touched):
         print("restack-lane: HEAD is detached; check out the branch to move.", file=sys.stderr)
         return 2
 
-    # Before the fetch, which moves the remote-tracking ref.
-    forked_at = None if arguments.resume else fork_point(arguments.new_base)
+    # Asked of the refs NEW_BASE names before the fetch, which moves the remote-tracking ref, and afterwards of every
+    # ref at the new base, which finds a base named by its commit and a lower branch rebuilt here and not pushed.
+    found = [] if arguments.resume else fork_points(references_named(arguments.new_base))
     new_base, how = new_base_commit(arguments.new_base)
     if new_base is None:
         print(f"restack-lane: {how}", file=sys.stderr)
         return 2
     print(f"New base: {new_base} ({how}).")
+    if not arguments.resume:
+        found += fork_points(references_at(new_base, current_branch))
+    # The latest of them: the branch's own commits start after the last tip of the base it held.
+    forked_at = min(found)[1] if found else None
 
     old_base = None
     if arguments.old_base:
@@ -296,7 +340,7 @@ def moved(arguments, verify_touched):
             print(f"restack-lane: --continue, but HEAD is not on {new_base[:9]}.", file=sys.stderr)
             return 2
         state = read_state()
-        if state is not None and state.get("new_base") != new_base:
+        if state is not None and (state.get("new_base") != new_base or state.get("branch") != current_branch):
             state = None
         if old_base is None and state is not None:
             old_base = state["old_base"]
@@ -323,15 +367,32 @@ def moved(arguments, verify_touched):
     if before == 0:
         print(f"restack-lane: no commit follows the old base {old_base[:9]}; there is nothing to move.", file=sys.stderr)
         return 2
+    # A rebuilt base that lost a commit the old one had, which moved up the stack or was dropped: nothing replays it,
+    # since it is before the old base, and the new base lacks it.
+    fork = git("merge-base", old_base, new_base).stdout.strip()
+    lost = dropped_subjects(subjects(f"{fork}..{old_base}"), subjects(f"{fork}..{new_base}"))
+    if lost:
+        print(f"The old base {old_base[:9]} holds these commits and the new base holds none of their subjects, so the rebase would leave them out:")
+        for subject in lost:
+            print(f"  {subject}")
+        if arguments.accept_drop:
+            print("Accepted (--accept-drop).")
+        else:
+            print("If the branch should carry one of them, pass an --old-base before it. If none of them is wanted, run this script again with --accept-drop.")
+            return 1
     undo = git("rev-parse", "HEAD").stdout.strip()
     # `ORIG_HEAD` would do until the next command that sets it, which a resolved conflict can be.
-    state_path().write_text(json.dumps({"head": undo, "old_base": old_base, "new_base": new_base}))
+    state_path().write_text(json.dumps({"branch": current_branch, "head": undo, "old_base": old_base, "new_base": new_base}))
     step(f"Rebase onto {new_base[:9]} the {before} commits after {old_base[:9]}")
     print(git("log", "--oneline", "--reverse", f"{old_base}..HEAD").stdout, end="")
     print(f"To undo: git reset --hard {undo}", flush=True)
     # A configured `rebase.updateRefs` would move other branches that point into the range, and an autostash
     # would carry changes this script refused above.
-    rebased = subprocess.run(["git", "rebase", "--no-update-refs", "--no-autostash", "--onto", new_base, old_base])
+    with SignalsHeld() as signals:
+        rebased = subprocess.run(["git", "rebase", "--no-update-refs", "--no-autostash", "--onto", new_base, old_base])
+    if signals.received is not None:
+        print(f"Signalled during the rebase, which {'ended' if rebased.returncode == 0 else 'stopped'}; nothing was checked. Go on with --continue.", flush=True)
+        sys.exit(128 + signals.received)
     if rebased.returncode != 0:
         conflicted = sorted(paths_of("--diff-filter=U"))
         print("Conflicts in:" if conflicted else "The rebase stopped.")
@@ -370,41 +431,55 @@ def run(arguments):
 
     runner = shlex.split(arguments.runner)
     children = Children()
+    try:
+        return checked(arguments, children, runner, verify_touched, verify_touched_path, new_base, lane_paths, base_paths)
+    finally:
+        children.restore()
+
+
+def checked(arguments, children, runner, verify_touched, verify_touched_path, new_base, lane_paths, base_paths):
+    """Runs the test step and the lint; returns the status to exit with."""
     # verify-touched builds the tests, reports a compile error as a failure, and gives the run its own `TMPDIR`, log,
     # runner and cleanup.
     step("Build, then the suites the branch touches and the suites the base's move touched")
     command = [sys.executable, "-I", str(verify_touched_path), new_base, "--runner", arguments.runner]
+    if arguments.skip_compile_checks:
+        command.append("--skip-compile-checks")
+    owed = None
     try:
         # The branch's own paths are verify-touched's to select; asked here only for whether they reach every test.
         verify_touched.filters_of_changes(lane_paths, read_text_in_checkout)
-        for pattern in verify_touched.filters_of_changes(base_paths, read_text_in_checkout):
-            command += ["--also", pattern]
     except verify_touched.WholeSuite as reason:
-        branch = git("symbolic-ref", "--quiet", "--short", "HEAD", check=False).stdout.strip()
-        print(f"{reason} changed, which reaches every test. The whole suite is a full Verify's work, not this machine's:")
-        print(f"  push the branch, then: gh workflow run verify.yml --ref {branch}")
-        print("Lint still runs here.")
+        owed = f"The branch changed {reason}, which reaches every test, so no test runs here."
         command = None
     if command is not None:
-        if arguments.skip_compile_checks:
-            command.append("--skip-compile-checks")
+        try:
+            for pattern in verify_touched.filters_of_changes(base_paths, read_text_in_checkout):
+                command += ["--also", pattern]
+        except verify_touched.WholeSuite as reason:
+            owed = f"The base's move changed {reason}, which reaches every test, so only the suites the branch touches run here."
+    if owed is not None:
+        branch = git("symbolic-ref", "--quiet", "--short", "HEAD", check=False).stdout.strip()
+        print(owed)
+        print("The whole suite is a full Verify's work, not this machine's:")
+        print(f"  push the branch, then: gh workflow run verify.yml --ref {branch}", flush=True)
+    if command is not None:
         status, _ = children.run(command)
         if status != 0:
-            children.restore()
             return 1
 
     step("Lint")
     status, output = children.run([*runner, "./CLI/lint.sh", "--check"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    children.restore()
     if status != 0:
         print(output[-3000:])
         return 1
     print("Clean.")
 
     head = git("rev-parse", "HEAD").stdout.strip()
+    state_path().unlink(missing_ok=True)
     print(f"\nRestacked: {head}")
-    print("Not pushed." + ("" if command is not None else " The whole suite is still owed: dispatch the full Verify."))
-    return 0 if command is not None else 3
+    print("Not pushed." + ("" if owed is None else " The whole suite is still owed: dispatch the full Verify."))
+    return 0 if owed is None else 3
 
 
 def ended(process_identifier):
@@ -446,9 +521,11 @@ def signal_ends_children(expect, root):
 
 def guards(expect, verify_touched):
     """Runs `moved` and `run` in a repository made for the purpose, once per guard."""
+    # A machine that never ran the tests, as a CI runner is, has no caches folder yet.
+    verify_touched.caches_directory().mkdir(parents=True, exist_ok=True)
     root = pathlib.Path(tempfile.mkdtemp(prefix="restack-lane-self-test-", dir=verify_touched.caches_directory()))
     start = pathlib.Path.cwd()
-    environment = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com", "GIT_CONFIG_GLOBAL": os.devnull}
+    environment = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_EDITOR": "true"}
     saved = {name: os.environ.get(name) for name in environment}
     os.environ.update(environment)
 
@@ -463,17 +540,17 @@ def guards(expect, verify_touched):
     def head(revision="HEAD"):
         return git("rev-parse", revision).stdout.strip()
 
-    def options(new_base, old_base, resume, accept_drop):
-        return argparse.Namespace(new_base=new_base, old_base=old_base, resume=resume, accept_drop=accept_drop, runner="", skip_compile_checks=False)
+    def options(new_base, old_base, resume, accept_drop, runner=""):
+        return argparse.Namespace(new_base=new_base, old_base=old_base, resume=resume, accept_drop=accept_drop, runner=runner, skip_compile_checks=False)
 
     def status(new_base, old_base=None, resume=False, accept_drop=False):
         with contextlib.redirect_stdout(io.StringIO()) as printed, contextlib.redirect_stderr(printed):
             result = moved(options(new_base, old_base, resume, accept_drop), verify_touched)
         return result, printed.getvalue()
 
-    def status_of_run(new_base):
+    def status_of_run(new_base, runner=""):
         with contextlib.redirect_stdout(io.StringIO()) as printed, contextlib.redirect_stderr(printed):
-            result = run(options(new_base, None, False, False))
+            result = run(options(new_base, None, False, False, runner))
         return result, printed.getvalue()
 
     try:
@@ -495,9 +572,11 @@ def guards(expect, verify_touched):
         commit("c2")
         # origin's `base` is rebuilt, as a restacked branch below this one is; the checkout has not fetched it.
         git("checkout", "-q", "-B", "elsewhere", first)
-        base_new = commit("b2")
-        # Pushed by path, which leaves the remote-tracking ref where it was, as another checkout's push does.
+        base_new = commit("b", "rebuilt\n")
+        # As another checkout's push leaves it: the remote-tracking ref stays where it was. Set back, since some
+        # versions of git move it on a push by path too.
         git("push", "-q", "--force", str(origin), "elsewhere:base")
+        git("update-ref", "refs/remotes/origin/base", base_old)
         git("checkout", "-q", "lane")
 
         expect(head("refs/remotes/origin/base"), base_old, "the remote-tracking ref is stale before `origin/NAME` is first asked for")
@@ -543,12 +622,54 @@ def guards(expect, verify_touched):
         git("checkout", "-q", "-b", "upper")
         commit("u")
         git("checkout", "-q", "-B", "lower", first)
-        lower_new = commit("l2")
+        lower_new = commit("l", "rebuilt\n")
         git("checkout", "-q", "upper")
         result, text = status("lower")
         expect((result, f"--old-base {lower_old}" in text), (2, True), "a base rebuilt in this repository stops the script without --old-base, and names the commit to pass")
+        result, text = status(lower_new)
+        expect((result, f"--old-base {lower_old}" in text), (2, True), "and so does that base named by its commit, by the reflog of the branch at it")
         result, text = status("lower", old_base=lower_old)
         expect(result, (lower_new, lower_old), "and moves with it")
+        result, text = status("lower", resume=True)
+        expect((result, "did not begin" in text), ((lower_new, lower_old), False), "--continue takes the old base from what the rebase recorded")
+
+        # A base rebuilt without a commit it had: nothing would replay that commit.
+        git("checkout", "-q", "-b", "two", first)
+        commit("p")
+        two_old = commit("q")
+        git("checkout", "-q", "-b", "top")
+        top_old = commit("t")
+        git("checkout", "-q", "-B", "two", first)
+        two_new = commit("p")
+        git("checkout", "-q", "top")
+        result, text = status("two", old_base=two_old)
+        expect((result, "\n  q\n" in text, head()), (1, True, top_old), "a commit of the old base that the new base lacks stops the script before the rebase, and is named")
+        result, text = status("two", old_base=two_old, accept_drop=True)
+        expect(result, (two_new, two_old), "--accept-drop goes on without it")
+        git("checkout", "-q", "upper")
+        result, text = status("lower", resume=True)
+        expect((result, "did not begin" in text), ((lower_new, None), True), "--continue on a branch whose rebase this script did not record says what it cannot check")
+
+        # A conflict stops the script with the rebase in progress; --continue goes on from what it recorded.
+        git("checkout", "-q", "-b", "under", first)
+        under_old = commit("f", "1\n")
+        git("checkout", "-q", "-b", "over")
+        commit("f", "2\n", subject="over")
+        git("checkout", "-q", "-B", "under", first)
+        under_new = commit("f", "3\n")
+        git("checkout", "-q", "over")
+        result, text = status("under", old_base=under_old)
+        expect((result, "Conflicts in:\n  f\n" in text), (1, True), "a conflict stops the script and names the file")
+        result, text = status("under", old_base=under_old)
+        expect((result, "uncommitted" in text), (2, True), "an unresolved conflict stops the script")
+        pathlib.Path("f").write_text("4\n")
+        git("add", "f")
+        git("commit", "-q", "-m", "over")
+        result, text = status("under", old_base=under_old)
+        expect((result, "a rebase is in progress" in text), (2, True), "a rebase in progress stops the script")
+        git("rebase", "--continue")
+        result, text = status("under", resume=True)
+        expect(result, (under_new, under_old), "--continue after a resolved conflict takes both bases from the record")
 
         # A branch above this one holds this one's commits too, which is no reason to stop.
         git("checkout", "-q", "main")
@@ -577,14 +698,26 @@ def guards(expect, verify_touched):
         expect((result, "detached" in text), (2, True), "--continue needs a branch too")
         git("checkout", "-q", "plain")
 
-        # `run`, with a lint that passes or fails and a change that reaches every test, so that no test is run.
+        # `run`, with a lint that passes or fails, and changes that reach no test, one suite, or every test.
+        git("checkout", "-q", "-b", "runs", "main")
         commit("CLI/lint.sh", "#!/bin/sh\necho linted\nexit 0\n")
         pathlib.Path("CLI/lint.sh").chmod(0o755)
-        commit("Package.swift", "// swift-tools-version: 6.2\n")
         git("add", "CLI/lint.sh")
         git("commit", "-q", "-m", "executable")
         result, text = status_of_run("main")
-        expect((result, "gh workflow run verify.yml --ref plain" in text, "Clean." in text), (3, True, True), "a change that reaches every test runs none, names the Verify to dispatch, lints, and exits 3")
+        expect((result, "Clean." in text, state_path().exists()), (0, True, False), "a branch that reaches no test passes on the lint, and the record of its rebase is removed")
+        git("checkout", "-q", "main")
+        commit("unruled")
+        git("push", "-q", "origin", "main")
+        git("checkout", "-q", "runs")
+        result, text = status_of_run("main")
+        expect((result, "The base's move changed unruled" in text, "Clean." in text), (3, True, True), "a base whose move reaches every test runs the branch's own suites, lints, and exits 3")
+        commit("Plugins/A.swift")
+        result, text = status_of_run("main", runner="false")
+        expect((result, "== Lint" in text), (1, False), "a failed test step fails the script before the lint")
+        commit("Package.swift", "// swift-tools-version: 6.2\n")
+        result, text = status_of_run("main")
+        expect((result, "The branch changed Package.swift" in text, "gh workflow run verify.yml --ref runs" in text, "Clean." in text), (3, True, True, True), "a branch that reaches every test runs none, names the Verify to dispatch, lints, and exits 3")
         commit("CLI/lint.sh", "#!/bin/sh\necho misformatted\nexit 1\n")
         result, text = status_of_run("main")
         expect((result, "misformatted" in text), (1, True), "a failed lint fails the script and its output is printed")
@@ -596,6 +729,10 @@ def guards(expect, verify_touched):
         git("add", "d")
         result, text = status("main", resume=True)
         expect((result, "uncommitted" in text), (2, True), "--continue needs a clean checkout too")
+        git("reset", "-q", "--hard")
+        git("remote", "set-url", "origin", str(root / "missing.git"))
+        result, text = status("main")
+        expect((result, "could not be asked" in text), (2, True), "an origin that cannot be reached is an error, not a branch origin lacks")
     finally:
         os.chdir(start)
         for name, value in saved.items():
@@ -641,6 +778,8 @@ def main():
     parser.add_argument("--runner", metavar="COMMAND", default=os.environ.get("SAFEDI_VERIFY_RUNNER", ""))
     parser.add_argument("--self-test", action="store_true")
     arguments = parser.parse_args()
+    # Each line out before the next child writes, so that the two streams and the children's output keep their order.
+    sys.stdout.reconfigure(line_buffering=True)
     if arguments.self_test:
         return self_test()
     if not arguments.new_base:
