@@ -1386,6 +1386,8 @@ extension DependencyTreeGenerator {
 			let sameLabelFields = fields.filter { $0.property.label == property.label }
 			// A value a cycle in the seam's tree hands the site's owner when it builds it again is wrong at every level but the
 			// first, whether a field carries the label or the fill reads it from the caller's scope.
+			// This rejection keeps a builder struct's re-entry of a reopened level safe, which carries nothing bound above it
+			// (the reopening member's deliberate gap in `ScopeGenerator.builderStructConversion`).
 			if let declaration = hole.cycleReentryDeclarations.first(where: { $0.property.label == property.label }) {
 				findings.append(.init(hole: hole, kind: .declarationBoundOnCycleReentry(reader: reader, declaration: declaration, seamModule: seamModule)))
 			} else if let field = sameLabelFields.first(where: { field in
