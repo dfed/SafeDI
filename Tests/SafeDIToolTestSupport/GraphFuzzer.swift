@@ -10446,7 +10446,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// file-name reversal reorders them – and of the two lists of the forms of a label one cycle parameter cannot carry
 	/// ("receive `x` as `x: X?` and `x: LazilyInstantiated<X>?`, which one value cannot carry together. Receive `x: X?`
 	/// and `x: LazilyInstantiated<X>?` under different labels to fix.", `unpassableCycleLabel`), and of each list of the
-	/// places one fill finding holds for ("the builders for `A`’s `x: X` (case `A_Scope.x` of `xBuilder`) and `B`’s `y: Y`",
+	/// places one fill finding holds for ("the builders for `A`’s `x: X` (member `A_Scope.x` of `xBuilder`) and `B`’s `y: Y`",
 	/// "the builder `Seam` takes for `A`’s `x: X`, `B`’s `y: Y`, and `B`’s `z: Z` on unchanged", `FillFinding`), each of
 	/// which SafeDI lists in the order of their types' names – sorted as text, each item in its place among the list's
 	/// separators, so two diagnostics that list the same items in another order compare equal, and any other difference,
@@ -10454,9 +10454,9 @@ enum GraphFuzzerToolOutcome: Equatable {
 	private static func sortingSuggestions(in diagnostic: String) -> String {
 		// Each item is a property's or a declaration's source between backticks, and no fuzzer label or type contains one.
 		let backtickedItem = "`[^`]*`"
-		// A place is the type that declares it and its property, then the case of the builder's scope enum that holds it
+		// A place is the type that declares it and its property, then the member of the builder that holds it
 		// and the seam whose tree holds it, where the message names them.
-		let place = "`[^`]*`’s `[^`]*`(?: \\(case `[^`]*` of `[^`]*`\\))?(?: in `[^`]*`’s tree)?"
+		let place = "`[^`]*`’s `[^`]*`(?: \\(member `[^`]*` of `[^`]*`\\))?(?: in `[^`]*`’s tree)?"
 		var diagnostic = diagnostic
 		for (list, item) in [
 			("(?<=Did you mean one of )`[^`]*`(?:, `[^`]*`)+(?=\\?)", backtickedItem),
