@@ -239,9 +239,22 @@ struct GraphFuzzerFixture: Equatable {
 	/// `HoleNest`'s `holeNestScreenBuilder`, which forwards `holeNestId`, so that it traverses the route of the inner seam's
 	/// enum a place inside a plain fill reads `holeNestId` from (`DifferentialValueSample`). Empty for a graph without it.
 	var holeDrawForwardedPropertiesSamples: [DifferentialValueSample] {
+		var samples = [DifferentialValueSample]()
 		let screenName = typeNamePrefix + "HoleNestScreen"
-		guard swiftFileContent.contains(where: { $0.contains("final class \(screenName): ") }) else { return [] }
-		return [DifferentialValueSample(type: "\(screenName).ForwardedProperties", expression: "7")]
+		if swiftFileContent.contains(where: { $0.contains("final class \(screenName): ") }) {
+			samples.append(DifferentialValueSample(type: "\(screenName).ForwardedProperties", expression: "7"))
+		}
+		// `HoleHanded`'s `ForwardedProperties`, which its declaration says: the instantiator place's, and the erased place's
+		// beside it.
+		let handedName = typeNamePrefix + "HoleHanded"
+		if let declaration = swiftFileContent.first(where: { $0.contains("open class \(handedName): ") }) {
+			if declaration.contains("ForwardedProperties = Int\n") {
+				samples.append(DifferentialValueSample(type: "\(handedName).ForwardedProperties", expression: "7"))
+			} else if declaration.contains("ForwardedProperties = (holeHandedId: Int, holeHandedName: String)") {
+				samples.append(DifferentialValueSample(type: "\(handedName).ForwardedProperties", expression: "(holeHandedId: 7, holeHandedName: \"7\")"))
+			}
+		}
+		return samples
 	}
 
 	/// The sample values the comparator calls the instantiators `addingForwardedLabelAcrossSeamCallShapes` draws with:
@@ -1284,6 +1297,38 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `HoleSeam`'s erased instantiator of `any HoleTicketService`, which `HoleTicketImpl` fills: a place whose wrapper
 	/// forwards a value, `holeTicketId`, to its builder.
 	case holeForwardingPlace
+	/// `holeTicketBuilder` forwards a labeled pair, `holeTicketId` and `holeTicketName`, which `HoleTicketImpl` reads by label.
+	case holeForwardingPlaceLabeledPair
+	/// A second place of `holeTicketBuilder`'s builder, `HoleTicketHolder`'s `holeTicketOther`, forwarding the same value.
+	case holeForwardingPlaceSecondPlace
+	/// The second place spells the value it forwards otherwise, `Swift.Int` for `Int`: the builder takes the erased
+	/// wrapper's `Builder`.
+	case holeForwardingPlaceSecondPlaceSpelledOtherwise
+	/// `HoleOuter` passes up `HoleSeam`'s forwarding place: the kept seam rebuilds the place's case around the value it
+	/// forwards.
+	case holeForwardingPlacePassedUp
+	/// `HoleHandedHolder`'s place held in an `Instantiator` or `SendableInstantiator` of `HoleHanded`, a class of the seam's
+	/// module that conforms to `Instantiable` by hand, filled by its subclass `HoleHandedImpl`: it forwards nothing, an
+	/// `Int` or a labeled pair.
+	case holeInstantiatorPlace
+	/// Beside it, the seam's erased place of `HoleHanded.ForwardedProperties`, which the calling module trusts as it trusts
+	/// the instantiator place.
+	case holeInstantiatorPlaceBesideErased
+	/// Where `HoleHanded` forwards nothing, the seam's plain place of it, a level above the instantiator place: the builder
+	/// takes nothing.
+	case holeInstantiatorPlaceBesidePlain
+	/// That pair, with `HoleHandedHolder` built also through a `SendableInstantiator`: the families' builders take
+	/// different types over one plain level.
+	case holeInstantiatorPlaceBesidePlainAcrossFamilies
+	/// The seam's place of an erased instantiator that forwards nothing, spelled `()` or `Void`, alone in its builder.
+	case holeNothingForwardedPlace
+	/// That place beside the plain place of `any HoleService`, of the same builder.
+	case holeNothingForwardedPlaceBesidePlain
+	/// That place beside the instantiator place of `HoleHanded`, which forwards nothing.
+	case holeNothingForwardedPlaceBesideInstantiator
+	/// `HoleOuter` passes up the place that forwards nothing: the kept seam hands the place's member a builder that ignores
+	/// what it is handed.
+	case holeNothingForwardedPlacePassedUp
 	/// `HoleBoth`, a seam that builds `HoleSeam` by value and in a `SendableInstantiator`: an inner seam reached by a plain
 	/// and a `@Sendable` route.
 	case holeInnerSeamPlainAndSendableRoutes
@@ -1596,6 +1641,9 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case retentionSeamValueBeforeBuilderFillReadsValue
 	/// The instantiators are `SendableInstantiator`s, so the place is in the `@Sendable` family.
 	case retentionSeamValueBeforeBuilderSendable
+	/// `RetainLeaf`'s place is held in an erased instantiator that forwards `retainTicket`, which `RetainLive` takes: the
+	/// builder the wrapper keeps is the one the retention oracle holds.
+	case retentionSeamValueBeforeBuilderForwardingPlace
 
 	/// Whether `addingCycleParameterShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
 	/// (`acceptedDrawFeatureCounts`).
@@ -1619,6 +1667,12 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// corpus pins too (`acceptedDrawFeatureCounts`), at least ten each.
 	var isErasurePlaceShape: Bool {
 		rawValue.hasPrefix("holeErasure")
+	}
+
+	/// Whether `addingHoleShapes` draws this shape of a place held in an instantiator, whose count in accepted graphs the seam
+	/// corpus pins (`acceptedDrawFeatureCounts`), at least ten each, and whose judged graphs the long run floors.
+	var isForwardingPlaceShape: Bool {
+		rawValue.hasPrefix("holeForwardingPlace") || rawValue.hasPrefix("holeInstantiatorPlace") || rawValue.hasPrefix("holeNothingForwardedPlace")
 	}
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
@@ -4993,8 +5047,10 @@ enum GraphFuzzerGenerator {
 		/// place on a `@Sendable` route; a cycle of two seams with a `@Sendable` edge; an inner seam reached by a plain and a
 		/// `@Sendable` route, now and then passed up with both enums; and a place inside a `@Sendable` fill the seam generates.
 		/// Four more draw the shapes a scope nested by type is for: types shared under a hole, a tangle of cycles, a place
-		/// inside a plain fill, and a hole under a later member of a loop of received instantiators. The pass records the
-		/// property that gives the graph its second place of a hole (`secondHolePlace`).
+		/// inside a plain fill, and a hole under a later member of a loop of received instantiators. Three more draw places held
+		/// in instantiators: the forwarding place's labeled pair and second place, a place of an instantiator of a class that
+		/// conforms to `Instantiable` by hand with an erased or a plain place of its builder beside it, and an erased place that
+		/// forwards nothing. The pass records the property that gives the graph its second place of a hole (`secondHolePlace`).
 		private mutating func addingHoleShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.contains(.generateDependencyTree), holeRandom.percentChance(33) else { return declarations }
 			var declarations = declarations
@@ -5045,6 +5101,33 @@ enum GraphFuzzerGenerator {
 			let drawsSecondHoleType = holeRolls.secondHoleType.percentChance(25)
 			let drawsForwardingPlace = holeRolls.forwardingPlace.percentChance(35)
 			let forwardingPlaceWrapper = holeRolls.forwardingPlace.element(of: sendability == .nonSendable ? ["ErasedInstantiator"] : sendability == .sendable ? ["SendableErasedInstantiator"] : ["ErasedInstantiator", "SendableErasedInstantiator"])
+			let erasedInstantiators = switch sendability {
+			case .nonSendable:
+				["ErasedInstantiator"]
+			case .sendable:
+				["SendableErasedInstantiator"]
+			case .mixed:
+				["ErasedInstantiator", "SendableErasedInstantiator"]
+			}
+			// The forwarding place's rolls, the instantiator place's, and the place that forwards nothing, each on a generator
+			// of its own, made whatever the base draw.
+			let forwardsTicketPair = holeRolls.forwardingPlaceShapes.percentChance(50)
+			let drawsSecondTicketPlace = holeRolls.forwardingPlaceShapes.percentChance(60)
+			let secondTicketPlaceSpelledOtherwise = holeRolls.forwardingPlaceShapes.percentChance(70)
+			// Where the base draw passes nothing up, `HoleOuter` passes the forwarding place up now and then, so that a kept seam
+			// rebuilds its case around the value it forwards (`holeForwardingPlacePassedUp`).
+			let passesUpForwardingPlace = holeRolls.forwardingPlaceShapes.percentChance(40)
+			let drawsInstantiatorPlace = holeRolls.instantiatorPlace.percentChance(80)
+			let handedForwardsRoll = holeRolls.instantiatorPlace.integer(in: 0...4)
+			let handedWrapper = holeRolls.instantiatorPlace.element(of: instantiators)
+			let handedHolderAlsoSendable = holeRolls.instantiatorPlace.percentChance(90)
+			let drawsErasedBesideInstantiator = holeRolls.instantiatorPlace.percentChance(50)
+			let handedErasedWrapper = holeRolls.instantiatorPlace.element(of: erasedInstantiators)
+			let drawsPlainBesideInstantiator = holeRolls.instantiatorPlace.percentChance(90)
+			let drawsNothingForwardedPlace = holeRolls.nothingForwardedPlace.percentChance(80)
+			let nothingForwardedPlacement = holeRolls.nothingForwardedPlace.integer(in: 0...6)
+			let nothingForwardedSpelling = holeRolls.nothingForwardedPlace.element(of: ["()", "Void"])
+			let nothingForwardedWrapper = holeRolls.nothingForwardedPlace.element(of: erasedInstantiators)
 			// Six in ten, so that the second erasure lands in enough accepted graphs for the builder surface's floor of its pair
 			// (`secondErasureOfFillingType`).
 			let secondHoleTypeCollides = holeRolls.secondHoleType.percentChance(60)
@@ -5174,7 +5257,7 @@ enum GraphFuzzerGenerator {
 
 			// A second seam of the seam's module that calls `HoleSeam`, whose builder it passes up.
 			var outerIndex: Int?
-			if holePassUpRandom.percentChance(25) {
+			if holePassUpRandom.percentChance(25) || drawsForwardingPlace && passesUpForwardingPlace {
 				var outer = instantiable("HoleOuter", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeSeam", type: seamName)])
 				outer.instantiableArguments = ["generateDependencyTree: true"]
 				if serviceAccess == .package {
@@ -5404,11 +5487,109 @@ enum GraphFuzzerGenerator {
 				let ticketServiceName = name("HoleTicketService")
 				seam.additionalDeclarations.append("public protocol \(ticketServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
 				var ticketImpl = instantiable("HoleTicketImpl", module: fillerModule, properties: [PropertyDeclaration(attribute: "@Forwarded", label: "holeTicketId", type: "Int")])
+				// Now and then the place forwards a labeled pair, which the fill reads by label (`holeForwardingPlaceLabeledPair`).
+				if forwardsTicketPair {
+					ticketImpl.properties.append(PropertyDeclaration(attribute: "@Forwarded", label: "holeTicketName", type: "String"))
+				}
 				ticketImpl.additionalConformances.append(ticketServiceName)
 				ticketImpl.fillsHole = true
 				callerDeclarations.append(ticketImpl)
-				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(ticketImpl.name)\")", label: "holeTicketBuilder", type: "\(forwardingPlaceWrapper)<Int, any \(ticketServiceName)>"))
+				let forwardedTicket = forwardsTicketPair ? "(holeTicketId: Int, holeTicketName: String)" : "Int"
+				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(ticketImpl.name)\")", label: "holeTicketBuilder", type: "\(forwardingPlaceWrapper)<\(forwardedTicket), any \(ticketServiceName)>"))
 				drawnHolePlaces.append(GraphFuzzerDrawnHolePlace(kind: .forwarding, returnedTypeName: ticketServiceName))
+				// A second place of the same builder on `HoleTicketHolder`, which the seam builds by value, forwarding the same
+				// value spelled alike, or spelled `Swift.Int`, which makes the builder the erased wrapper's
+				// (`holeForwardingPlaceSecondPlace`, `holeForwardingPlaceSecondPlaceSpelledOtherwise`).
+				if drawsSecondTicketPlace {
+					let otherTicket = forwardsTicketPair ? "(holeTicketId: Swift.Int, holeTicketName: String)" : "Swift.Int"
+					let holder = instantiable("HoleTicketHolder", module: .seamModule, properties: [
+						PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(ticketImpl.name)\")", label: "holeTicketOther", type: "\(forwardingPlaceWrapper)<\(secondTicketPlaceSpelledOtherwise ? otherTicket : forwardedTicket), any \(ticketServiceName)>"),
+					])
+					seamModuleDeclarations.append(holder)
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeTicketHolder", type: holder.name))
+					drawnHolePlaces.append(GraphFuzzerDrawnHolePlace(kind: .forwarding, returnedTypeName: ticketServiceName))
+				}
+			}
+			// A place held in an instantiator of `HoleHanded`, a class of the seam's module that conforms to `Instantiable` by
+			// hand and that `HoleHandedImpl`, its subclass in the fillers' module, fills: it forwards nothing, an `Int` or a
+			// labeled pair, which its own `ForwardedProperties` says. The place is on `HoleHandedHolder`, which the seam builds
+			// by value, and also through a `SendableInstantiator` now and then. Beside it, an erased place of
+			// `HoleHanded.ForwardedProperties` on the seam, and, where it forwards nothing, a plain place of `HoleHanded` on the
+			// seam, a level above (`holeInstantiatorPlace` and its rolls).
+			// Three times in five it forwards nothing, so that the plain place and the place that forwards nothing are drawn beside
+			// it.
+			let handedForwardedType: String? = switch handedForwardsRoll {
+			case 0, 1, 2:
+				nil
+			case 3:
+				"Int"
+			default:
+				"(holeHandedId: Int, holeHandedName: String)"
+			}
+			var handedName: String?
+			if drawsInstantiatorPlace {
+				let handed = name("HoleHanded")
+				handedName = handed
+				let typealiasLine = handedForwardedType.map { "\tpublic typealias ForwardedProperties = \($0)\n\n" } ?? ""
+				seam.additionalDeclarations.append("open class \(handed): Instantiable, @unchecked Sendable {\n\(typealiasLine)\tpublic init() {}\n}")
+				var forwardedProperties = [(label: String, type: String)]()
+				if handedForwardedType != nil {
+					forwardedProperties.append((label: "holeHandedId", type: "Int"))
+				}
+				if handedForwardsRoll == 4 {
+					forwardedProperties.append((label: "holeHandedName", type: "String"))
+				}
+				let parameters = forwardedProperties.map { "\($0.label): \($0.type)" }.joined(separator: ", ")
+				let assignments = forwardedProperties.map { "\t\tself.\($0.label) = \($0.label)\n" }.joined()
+				let declarations = forwardedProperties.map { "\t@Forwarded let \($0.label): \($0.type)\n" }.joined()
+				impl.additionalDeclarations.append("@Instantiable(fulfillingAdditionalTypes: [\(handed).self], conformsElsewhere: true)\npublic final class \(handed)Impl: \(handed), @unchecked Sendable {\n\tpublic \(parameters.isEmpty ? "override " : "")init(\(parameters)) {\n\(assignments)\t\tsuper.init()\n\t}\(declarations.isEmpty ? "" : "\n\n" + declarations.dropLast())\n}")
+				let holder = instantiable("HoleHandedHolder", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeHandedBuilder", type: "\(handedWrapper)<\(handed)>")])
+				seamModuleDeclarations.append(holder)
+				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeHandedHolder", type: holder.name))
+				// The builder surface's forwarding floor counts a place that forwards a value; one that forwards nothing is
+				// judged under `holeNothingForwardedPlace`, as the places that forward `()` are.
+				if handedForwardedType != nil {
+					drawnHolePlaces.append(GraphFuzzerDrawnHolePlace(kind: .forwarding, returnedTypeName: handed))
+				}
+				if handedHolderAlsoSendable, sendability != .nonSendable {
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeHandedHolderBuilder", type: "SendableInstantiator<\(holder.name)>"))
+				}
+				if drawsErasedBesideInstantiator {
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(handed)\")", label: "holeHandedErased", type: "\(handedErasedWrapper)<\(handed).ForwardedProperties, \(handed)>"))
+					if handedForwardedType != nil {
+						drawnHolePlaces.append(GraphFuzzerDrawnHolePlace(kind: .forwarding, returnedTypeName: handed))
+					}
+				}
+				if drawsPlainBesideInstantiator, handedForwardedType == nil {
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeHandedValue", type: handed))
+				}
+			}
+			// A place of an erased instantiator that forwards nothing, spelled `()` or `Void`: alone, of `any HoleLaterService`,
+			// which `HoleLaterImpl` fills; beside the plain place of `any HoleService`, of the same builder; or beside the
+			// instantiator place of `HoleHanded` where it forwards nothing, of `HoleHanded` (`holeNothingForwardedPlace` and its
+			// placements). A `@Sendable` place of `any HoleService` could read nothing `HoleImpl` reads, so a graph whose types
+			// are all `Sendable` places it alone.
+			if drawsNothingForwardedPlace {
+				if nothingForwardedPlacement >= 3, let handedName, handedForwardedType == nil {
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(handedName)\")", label: "holeHandedLater", type: "\(nothingForwardedWrapper)<\(nothingForwardedSpelling), \(handedName)>"))
+				} else if nothingForwardedPlacement == 1 || nothingForwardedPlacement == 2, sendability != .sendable {
+					// Beside the plain place, on `HoleOwner` where it holds it, so `HoleImpl` reads there what it reads at the plain
+					// place: a value the owner aliases, or `holeAnalytics` where the owner instantiates it.
+					let property = PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(impl.name)\")", label: "holeServiceLater", type: "ErasedInstantiator<\(nothingForwardedSpelling), any \(serviceName)>")
+					if let ownerIndex {
+						seamModuleDeclarations[ownerIndex].properties.append(property)
+					} else {
+						seam.properties.append(property)
+					}
+				} else {
+					let laterServiceName = name("HoleLaterService")
+					seam.additionalDeclarations.append("public protocol \(laterServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+					var laterImpl = instantiable("HoleLaterImpl", module: fillerModule)
+					laterImpl.additionalConformances.append(laterServiceName)
+					laterImpl.fillsHole = true
+					callerDeclarations.append(laterImpl)
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(laterImpl.name)\")", label: "holeLaterBuilder", type: "\(nothingForwardedWrapper)<\(nothingForwardedSpelling), any \(laterServiceName)>"))
+				}
 			}
 			// A wrapper of the hole beside its by-value place, on the type that holds it: a `LazilyInstantiated`, a plain
 			// wrapper whose place is a case of the plain enum, or a `SendableLazilyInstantiated`, whose place is a case of the `@Sendable` enum. A mock
@@ -5814,6 +5995,9 @@ enum GraphFuzzerGenerator {
 				loopPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6552696E67)
 				forwardingPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C65466F7277)
 				erasurePlaces = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6545726173)
+				forwardingPlaceShapes = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C65466F5368)
+				instantiatorPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6548616E64)
+				nothingForwardedPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654E6F7468)
 			}
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
@@ -5848,6 +6032,12 @@ enum GraphFuzzerGenerator {
 			/// in the `@Sendable` family (`holeErasureInsidePlainFill`, `holeErasureInsideSendableFill`,
 			/// `holeErasureBeneathSeamInSendableFamily`).
 			var erasurePlaces: GraphFuzzerRandomNumberGenerator
+			/// That place's rolls: a labeled pair, and a second place of its builder.
+			var forwardingPlaceShapes: GraphFuzzerRandomNumberGenerator
+			/// A place held in an instantiator of a class that conforms to `Instantiable` by hand (`holeInstantiatorPlace`).
+			var instantiatorPlace: GraphFuzzerRandomNumberGenerator
+			/// A place of an erased instantiator that forwards nothing (`holeNothingForwardedPlace`).
+			var nothingForwardedPlace: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -7154,7 +7344,9 @@ enum GraphFuzzerGenerator {
 		/// keeps alive. 35 in 100 draws make it `RetainInnerDetail`, a seam of its own that passes its place up, the shape
 		/// #703 fixed, across seams; 35 in 100 make `RetainLive` read `retainNavigator`, which the inline build then
 		/// keeps alive too. The instantiators are `Sendable` as the graph's sendability allows, and then the place is in the
-		/// `@Sendable` family, whose cases carry no values, so the fill reads nothing.
+		/// `@Sendable` family, whose cases carry no values, so the fill reads nothing. Four in ten hold `RetainLeaf`'s place in
+		/// an erased instantiator, `ErasedInstantiator` or its `Sendable` twin as the instantiators are, which `RetainLive`
+		/// fills forwarding `retainTicket`, so the oracle holds the builder that wrapper keeps.
 		///
 		/// `retentionRandom` draws only for this pass, which runs after every other pass and only in a graph another pass
 		/// split, so that every graph in one module, and every other draw of a graph it draws in, draws as before.
@@ -7166,6 +7358,9 @@ enum GraphFuzzerGenerator {
 			let leafThroughInstantiator = retentionRandom.percentChance(50)
 			let fillReadsNavigator = retentionRandom.percentChance(35)
 			let sendableRoll = retentionRandom.percentChance(50)
+			// `RetainLeaf`'s place held in an erased instantiator, which `RetainLive` fills forwarding `retainTicket`: a place
+			// whose builder takes the value it forwards (`retentionSeamValueBeforeBuilderForwardingPlace`).
+			let leafPlaceForwards = retentionRandom.percentChance(40)
 			let isSendable = switch sendability {
 			case .nonSendable: false
 			case .sendable: true
@@ -7181,7 +7376,12 @@ enum GraphFuzzerGenerator {
 			}
 			let apiName = "\(prefix)RetainApi"
 			let navigator = instantiable("RetainNavigator")
-			let leaf = instantiable("RetainLeaf", properties: [PropertyDeclaration(attribute: "@Instantiated", label: "retainApi", type: "any \(apiName)")])
+			let leafPlace = if leafPlaceForwards {
+				PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(prefix)RetainLive\")", label: "retainApiBuilder", type: "\(isSendable ? "SendableErasedInstantiator" : "ErasedInstantiator")<Int, any \(apiName)>")
+			} else {
+				PropertyDeclaration(attribute: "@Instantiated", label: "retainApi", type: "any \(apiName)")
+			}
+			let leaf = instantiable("RetainLeaf", properties: [leafPlace])
 			var detail = instantiable(detailIsSeam ? "RetainInnerDetail" : "RetainDetail", properties: [
 				leafThroughInstantiator
 					? PropertyDeclaration(attribute: "@Instantiated", label: "retainLeafBuilder", type: "\(instantiator)<\(leaf.name)>")
@@ -7200,6 +7400,9 @@ enum GraphFuzzerGenerator {
 			live.instantiableArguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
 			live.additionalConformances.append(apiName)
 			live.fillsHole = true
+			if leafPlaceForwards {
+				live.properties.append(PropertyDeclaration(attribute: "@Forwarded", label: "retainTicket", type: "Int"))
+			}
 			// A fill of a place another seam passes up reads its caller's scope, which holds no navigator; nor does a place in
 			// the `@Sendable` family, whose cases carry no values, so there the tool would reject the read, and with it every
 			// other shape of the graph.
@@ -8783,6 +8986,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		if homeProperties.contains(where: { $0.type.hasPrefix("SendableInstantiator<") }) {
 			features.insert(.retentionSeamValueBeforeBuilderSendable)
 		}
+		if propertiesByType[prefix + "RetainLeaf"]?.contains(where: { $0.label == "retainApiBuilder" }) == true {
+			features.insert(.retentionSeamValueBeforeBuilderForwardingPlace)
+		}
 		return features
 	}
 
@@ -9120,8 +9326,46 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		} else if declares("HoleGadgetOwner") {
 			features.insert(.holeSecondHoleType)
 		}
-		if seamProperties.contains(where: { $0.label == "holeTicketBuilder" }) {
+		if let ticketPlace = seamProperties.first(where: { $0.label == "holeTicketBuilder" }) {
 			features.insert(.holeForwardingPlace)
+			if ticketPlace.type.contains("holeTicketName") {
+				features.insert(.holeForwardingPlaceLabeledPair)
+			}
+			if let otherPlace = properties(of: "HoleTicketHolder").first(where: { $0.label == "holeTicketOther" }) {
+				features.insert(.holeForwardingPlaceSecondPlace)
+				if otherPlace.type.contains("Swift.Int") {
+					features.insert(.holeForwardingPlaceSecondPlaceSpelledOtherwise)
+				}
+			}
+			if declares("HoleOuter") {
+				features.insert(.holeForwardingPlacePassedUp)
+			}
+		}
+		if properties(of: "HoleHandedHolder").contains(where: { $0.label == "holeHandedBuilder" }) {
+			features.insert(.holeInstantiatorPlace)
+			if seamProperties.contains(where: { $0.label == "holeHandedErased" }) {
+				features.insert(.holeInstantiatorPlaceBesideErased)
+			}
+			if seamProperties.contains(where: { $0.label == "holeHandedValue" }) {
+				features.insert(.holeInstantiatorPlaceBesidePlain)
+				if seamProperties.contains(where: { $0.label == "holeHandedHolderBuilder" }) {
+					features.insert(.holeInstantiatorPlaceBesidePlainAcrossFamilies)
+				}
+			}
+		}
+		// `holeServiceLater` is beside the plain place of `any HoleService`: on the seam, or on `HoleOwner`.
+		let drawsServiceLater = (seamProperties + properties(of: "HoleOwner")).contains { $0.label == "holeServiceLater" }
+		if drawsServiceLater || seamProperties.contains(where: { ["holeLaterBuilder", "holeHandedLater"].contains($0.label) }) {
+			features.insert(.holeNothingForwardedPlace)
+			if drawsServiceLater {
+				features.insert(.holeNothingForwardedPlaceBesidePlain)
+			}
+			if seamProperties.contains(where: { $0.label == "holeHandedLater" }) {
+				features.insert(.holeNothingForwardedPlaceBesideInstantiator)
+			}
+			if declares("HoleOuter") {
+				features.insert(.holeNothingForwardedPlacePassedUp)
+			}
 		}
 		if declares("HoleBoth") {
 			features.insert(.holeInnerSeamPlainAndSendableRoutes)
@@ -10338,10 +10582,25 @@ struct GraphFuzzerRetentionCounts: Equatable {
 	/// The retention experiments only one path ran, over every probe of every judged graph: each a wrapper one path's value
 	/// holds where the other's holds none, which judges nothing.
 	var unpairedExperiments = 0
+	/// The judged graphs in which both paths ran an experiment holding a place held in an instantiator, by the wrapper the
+	/// place is held in (`forwardingWrapperName(ofHeldLabels:in:)`): an experiment that holds such a wrapper judges what the
+	/// builder the wrapper keeps keeps alive.
+	var judgedHoldingForwardingWrapper = [String: Int]()
+
+	/// The wrappers `judgedHoldingForwardingWrapper` counts graphs by, in the order the report writes them.
+	static let forwardingWrapperNames = ["ErasedInstantiator", "SendableErasedInstantiator", "Instantiator", "SendableInstantiator"]
+
+	/// The labels of the places held in an instantiator that `addingHoleShapes` and `addingRetentionShapes` draw, which an
+	/// experiment holding one counts in `judgedHoldingForwardingWrapper`.
+	static let forwardingPlaceLabels: Set = ["holeTicketBuilder", "holeTicketOther", "holeHandedBuilder", "holeHandedErased", "holeHandedLater", "holeLaterBuilder", "holeServiceLater", "retainApiBuilder"]
 
 	/// The counts as the long run's report and `combine-graph-fuzzer-reports.py` write them.
 	var reportField: String {
-		"judged=\(judged),drawJudged=\(judgedDrawingRetentionShape),handWrittenJudged=\(judgedThroughHandWrittenBuilder),unpairedExperiments=\(unpairedExperiments)"
+		var field = "judged=\(judged),drawJudged=\(judgedDrawingRetentionShape),handWrittenJudged=\(judgedThroughHandWrittenBuilder),unpairedExperiments=\(unpairedExperiments)"
+		for wrapperName in Self.forwardingWrapperNames {
+			field += ",forwardingJudged\(wrapperName)=\(judgedHoldingForwardingWrapper[wrapperName, default: 0])"
+		}
+		return field
 	}
 
 	mutating func add(_ other: GraphFuzzerRetentionCounts) {
@@ -10349,6 +10608,23 @@ struct GraphFuzzerRetentionCounts: Equatable {
 		judgedDrawingRetentionShape += other.judgedDrawingRetentionShape
 		judgedThroughHandWrittenBuilder += other.judgedThroughHandWrittenBuilder
 		unpairedExperiments += other.unpairedExperiments
+		judgedHoldingForwardingWrapper.merge(other.judgedHoldingForwardingWrapper, uniquingKeysWith: +)
+	}
+
+	/// The wrappers of the places held in an instantiator among `heldLabels`, the labels experiments held, each once, as
+	/// `fixture` declares them: `ErasedInstantiator` for `holeTicketBuilder: ErasedInstantiator<Int, any HoleTicketService>`.
+	static func forwardingWrapperNames(ofHeldLabels heldLabels: Set<String>, in fixture: GraphFuzzerFixture) -> Set<String> {
+		var wrapperNames = Set<String>()
+		for content in fixture.swiftFileContent {
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				guard case let .property(_, label, type) = line, forwardingPlaceLabels.contains(label), heldLabels.contains(label) else { continue }
+				let wrapperName = String(type.prefix { $0 != "<" })
+				if forwardingWrapperNames.contains(wrapperName) {
+					wrapperNames.insert(wrapperName)
+				}
+			}
+		}
+		return wrapperNames
 	}
 
 	/// Whether `fixture` draws the retention oracle's own shape, in the seam corpus or the public mock corpus.
@@ -11923,6 +12199,10 @@ enum GraphFuzzerOracle {
 				judgedDrawingRetentionShape: !judgedProbes.isEmpty && GraphFuzzerRetentionCounts.drawsRetentionShape(runs.fixture) ? 1 : 0,
 				judgedThroughHandWrittenBuilder: judgedProbes.contains { $0.hasSuffix(GraphFuzzerFixture.handWrittenBuilderProbeNameSuffix) } ? 1 : 0,
 				unpairedExperiments: valueComparison.unpairedRetentionExperimentCount,
+				judgedHoldingForwardingWrapper: Dictionary(
+					GraphFuzzerRetentionCounts.forwardingWrapperNames(ofHeldLabels: valueComparison.retentionPairedWrapperLabels, in: runs.fixture).map { ($0, 1) },
+					uniquingKeysWith: +,
+				),
 			)
 			let differences = valueComparison.retentionDifferences
 			guard !differences.isEmpty else { continue }
