@@ -1,0 +1,199 @@
+== swift --version
+swift-driver version: 1.127.14.1 Apple Swift version 6.2 (swiftlang-6.2.0.19.9 clang-1700.3.19.1)
+Target: arm64-apple-macosx26.0
+== swift build --traits sourceBuild
+[220/223] Compiling SafeDIToolTestSupport GraphFuzzerMockDifference.swift
+[221/223] Compiling SafeDIToolTestSupport GraphFuzzerMockMirrors.swift
+[222/223] Compiling SafeDIToolTestSupport GraphFuzzerMockOverrideProbes.swift
+[223/223] Compiling SafeDIToolTestSupport GraphFuzzerMultiModule.swift
+Build complete! (125.56s)
+== run-all.sh
+== G2X/plain
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: trace equals a-Onone.txt
+b -O: trace equals a-Onone.txt
+c -Onone: trace equals a-Onone.txt
+c -O: trace equals a-Onone.txt
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== G2X/scall
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: trace equals a-Onone.txt
+b -O: trace equals a-Onone.txt
+c -Onone: trace equals a-Onone.txt
+c -O: trace equals a-Onone.txt
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== G2X/sfam
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: trace equals a-Onone.txt
+b -O: trace equals a-Onone.txt
+c -Onone: trace equals a-Onone.txt
+c -O: trace equals a-Onone.txt
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== G2L/plain
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (       1 distinct errors)
+b -O: does not compile (       1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== G2L/scall
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (       1 distinct errors)
+b -O: does not compile (       1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== G2L/sfam
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (       1 distinct errors)
+b -O: does not compile (       1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== SND/sdb
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (       1 distinct errors)
+b -O: does not compile (       1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== SND/both
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (       1 distinct errors)
+b -O: does not compile (       1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== RE2/req
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (       1 distinct errors)
+b -O: does not compile (       1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== RE2/opt
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (       1 distinct errors)
+b -O: does not compile (       1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== RE2/one
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (       1 distinct errors)
+b -O: does not compile (       1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== STG3/base
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (       4 distinct errors)
+b -O: does not compile (       4 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== PM3
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+c2 -Onone: trace DIFFERS from a-Onone.txt
+c2 -O: trace DIFFERS from a-Onone.txt
+h -Onone: trace equals a-Onone.txt
+h -O: trace equals a-Onone.txt
+== W1/base
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (       1 distinct errors)
+b -O: does not compile (       1 distinct errors)
+== PM/acc
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: trace equals a-Onone.txt
+b -O: trace equals a-Onone.txt
+== PM/w1
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (       1 distinct errors)
+b -O: does not compile (       1 distinct errors)
+== PMRE/base
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (       2 distinct errors)
+b -O: does not compile (       2 distinct errors)
+== PMG/order
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (       3 distinct errors)
+b -O: does not compile (       3 distinct errors)
+b2 -Onone: trace DIFFERS from a-Onone.txt
+b2 -O: trace DIFFERS from a-Onone.txt
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== PMG/loop
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (       2 distinct errors)
+b -O: does not compile (       2 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+run-all exit: 0
+== git status --short spike
+ M spike/w1-derisk/G2L/plain/results/summary.txt
+ M spike/w1-derisk/G2L/scall/results/summary.txt
+ M spike/w1-derisk/G2L/sfam/results/summary.txt
+ M spike/w1-derisk/PM/w1/results/summary.txt
+ M spike/w1-derisk/PMG/loop/results/b-O.error.txt
+ M spike/w1-derisk/PMG/loop/results/b-Onone.error.txt
+ M spike/w1-derisk/PMG/loop/results/summary.txt
+ M spike/w1-derisk/PMG/order/results/b-O.error.txt
+ M spike/w1-derisk/PMG/order/results/b-Onone.error.txt
+ M spike/w1-derisk/PMG/order/results/summary.txt
+ M spike/w1-derisk/PMRE/base/results/summary.txt
+ M spike/w1-derisk/RE2/one/results/summary.txt
+ M spike/w1-derisk/RE2/opt/results/summary.txt
+ M spike/w1-derisk/RE2/req/results/summary.txt
+ M spike/w1-derisk/SND/both/results/summary.txt
+ M spike/w1-derisk/SND/sdb/results/summary.txt
+ M spike/w1-derisk/STG3/base/results/summary.txt
+ M spike/w1-derisk/W1/base/results/summary.txt
+== git diff --stat spike
+ spike/w1-derisk/G2L/plain/results/summary.txt       | 4 ++--
+ spike/w1-derisk/G2L/scall/results/summary.txt       | 4 ++--
+ spike/w1-derisk/G2L/sfam/results/summary.txt        | 4 ++--
+ spike/w1-derisk/PM/w1/results/summary.txt           | 4 ++--
+ spike/w1-derisk/PMG/loop/results/b-O.error.txt      | 2 +-
+ spike/w1-derisk/PMG/loop/results/b-Onone.error.txt  | 2 +-
+ spike/w1-derisk/PMG/loop/results/summary.txt        | 4 ++--
+ spike/w1-derisk/PMG/order/results/b-O.error.txt     | 4 ++--
+ spike/w1-derisk/PMG/order/results/b-Onone.error.txt | 4 ++--
+ spike/w1-derisk/PMG/order/results/summary.txt       | 4 ++--
+ spike/w1-derisk/PMRE/base/results/summary.txt       | 4 ++--
+ spike/w1-derisk/RE2/one/results/summary.txt         | 4 ++--
+ spike/w1-derisk/RE2/opt/results/summary.txt         | 4 ++--
+ spike/w1-derisk/RE2/req/results/summary.txt         | 4 ++--
+ spike/w1-derisk/SND/both/results/summary.txt        | 4 ++--
+ spike/w1-derisk/SND/sdb/results/summary.txt         | 4 ++--
+ spike/w1-derisk/STG3/base/results/summary.txt       | 4 ++--
+ spike/w1-derisk/W1/base/results/summary.txt         | 4 ++--
+ 18 files changed, 34 insertions(+), 34 deletions(-)
+== git diff spike -- results (head 300)
+fatal: bad revision 'spike'
