@@ -63,4 +63,5 @@ do {
 	Registry.printTrace()
 	withExtendedLifetime((root, step3)) {}
 }
+
 Registry.printAlive("after dropping everything")

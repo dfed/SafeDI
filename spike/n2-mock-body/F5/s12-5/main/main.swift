@@ -10,7 +10,9 @@ if let iterations = ProcessInfoLite.benchIterations {
 	var rounds = [Double]()
 	for _ in 0..<5 {
 		let start = ContinuousClock.now
-		for _ in 0..<iterations { runPlain() }
+		for _ in 0..<iterations {
+			runPlain()
+		}
 		let elapsed = ContinuousClock.now - start
 		rounds.append(Double(elapsed.components.seconds) * 1e9 + Double(elapsed.components.attoseconds) / 1e9)
 	}

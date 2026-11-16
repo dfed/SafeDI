@@ -3,88 +3,108 @@
 // Please refrain from editing this file directly.
 
 #if canImport(Harness)
-import Harness
+	import Harness
 #endif
 #if canImport(SafeDI)
-import SafeDI
+	import SafeDI
 #endif
 
 #if DEBUG
-extension App {
-    /// Overrides for the mock dependency tree.
-    struct SafeDIOverrides {
-        init(
-            theme: (() -> Theme)? = nil,
-            editor: Editor.SafeDIMockConfiguration = .init()
-        ) {
-            self.theme = theme
-            self.editor = editor
-        }
+	extension App {
+		/// Overrides for the mock dependency tree.
+		struct SafeDIOverrides {
+			init(
+				theme: (() -> Theme)? = nil,
+				editor: Editor.SafeDIMockConfiguration = .init(),
+			) {
+				self.theme = theme
+				self.editor = editor
+			}
 
-        let theme: (() -> Theme)?
-        let editor: Editor.SafeDIMockConfiguration
-    }
+			let theme: (() -> Theme)?
+			let editor: Editor.SafeDIMockConfiguration
+		}
 
-    static func mock(
-        safeDIOverrides: SafeDIOverrides = .init()
-    ) -> App {
-        let theme = if let safeDIBuilder = safeDIOverrides.theme { safeDIBuilder() } else { Theme() }
-        // One function per key, at the body's top level. Every place of each type reads the same configuration (today's
-        // closing call re-enters `__safeDI_editor`), so each captures it; `theme` is declared again in every Preview, so
-        // Editor takes it as a parameter (today's cycle parameter).
-        func __safeDI_editor(theme: Theme) -> Editor {
-            let previewBuilder = Instantiator<Preview>(__safeDI_previewBuilder)
-            let toolbar = if let safeDIBuilder = safeDIOverrides.editor.toolbar { safeDIBuilder(theme) } else { Toolbar(theme: theme) }
-            return if let safeDIBuilder = safeDIOverrides.editor.safeDIBuilder { safeDIBuilder(previewBuilder, toolbar) } else { Editor(previewBuilder: previewBuilder, toolbar: toolbar) }
-        }
-        func __safeDI_previewBuilder() -> Preview {
-            let theme = if let safeDIBuilder = safeDIOverrides.editor.previewBuilder.theme { safeDIBuilder() } else { Theme() }
-            let editor = LazilyInstantiated<Editor> {
-                __safeDI_editor(theme: theme)
-            }
-            return if let safeDIBuilder = safeDIOverrides.editor.previewBuilder.safeDIBuilder { safeDIBuilder(theme, editor) } else { Preview(theme: theme, editor: editor) }
-        }
-        let editor: Editor = __safeDI_editor(theme: theme)
-        return App(theme: theme, editor: editor)
-    }
-}
+		static func mock(
+			safeDIOverrides: SafeDIOverrides = .init(),
+		) -> App {
+			let theme = if let safeDIBuilder = safeDIOverrides.theme {
+				safeDIBuilder()
+			} else {
+				Theme()
+			}
+			// One function per key, at the body's top level. Every place of each type reads the same configuration (today's
+			// closing call re-enters `__safeDI_editor`), so each captures it; `theme` is declared again in every Preview, so
+			// Editor takes it as a parameter (today's cycle parameter).
+			func __safeDI_editor(theme: Theme) -> Editor {
+				let previewBuilder = Instantiator<Preview>(__safeDI_previewBuilder)
+				let toolbar = if let safeDIBuilder = safeDIOverrides.editor.toolbar {
+					safeDIBuilder(theme)
+				} else {
+					Toolbar(theme: theme)
+				}
+				return if let safeDIBuilder = safeDIOverrides.editor.safeDIBuilder {
+					safeDIBuilder(previewBuilder, toolbar)
+				} else {
+					Editor(previewBuilder: previewBuilder, toolbar: toolbar)
+				}
+			}
+			func __safeDI_previewBuilder() -> Preview {
+				let theme = if let safeDIBuilder = safeDIOverrides.editor.previewBuilder.theme {
+					safeDIBuilder()
+				} else {
+					Theme()
+				}
+				let editor = LazilyInstantiated<Editor> {
+					__safeDI_editor(theme: theme)
+				}
+				return if let safeDIBuilder = safeDIOverrides.editor.previewBuilder.safeDIBuilder {
+					safeDIBuilder(theme, editor)
+				} else {
+					Preview(theme: theme, editor: editor)
+				}
+			}
+			let editor: Editor = __safeDI_editor(theme: theme)
+			return App(theme: theme, editor: editor)
+		}
+	}
 #endif
 
 #if DEBUG
-extension Preview {
-    /// Configuration for how this type is constructed within a mock tree.
-    struct SafeDIMockConfiguration {
-        init(
-            theme: (() -> Theme)? = nil,
-            _ safeDIBuilder: ((Theme, LazilyInstantiated<Editor>) -> Preview)? = nil
-        ) {
-            self.theme = theme
-            self.safeDIBuilder = safeDIBuilder
-        }
+	extension Preview {
+		/// Configuration for how this type is constructed within a mock tree.
+		struct SafeDIMockConfiguration {
+			init(
+				theme: (() -> Theme)? = nil,
+				_ safeDIBuilder: ((Theme, LazilyInstantiated<Editor>) -> Preview)? = nil,
+			) {
+				self.theme = theme
+				self.safeDIBuilder = safeDIBuilder
+			}
 
-        let theme: (() -> Theme)?
-        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-        let safeDIBuilder: ((Theme, LazilyInstantiated<Editor>) -> Preview)?
-    }
-}
+			let theme: (() -> Theme)?
+			/// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			let safeDIBuilder: ((Theme, LazilyInstantiated<Editor>) -> Preview)?
+		}
+	}
 
-extension Editor {
-    /// Configuration for how this type is constructed within a mock tree.
-    struct SafeDIMockConfiguration {
-        init(
-            previewBuilder: Preview.SafeDIMockConfiguration = .init(),
-            toolbar: ((Theme) -> Toolbar)? = nil,
-            _ safeDIBuilder: ((Instantiator<Preview>, Toolbar) -> Editor)? = nil
-        ) {
-            self.previewBuilder = previewBuilder
-            self.toolbar = toolbar
-            self.safeDIBuilder = safeDIBuilder
-        }
+	extension Editor {
+		/// Configuration for how this type is constructed within a mock tree.
+		struct SafeDIMockConfiguration {
+			init(
+				previewBuilder: Preview.SafeDIMockConfiguration = .init(),
+				toolbar: ((Theme) -> Toolbar)? = nil,
+				_ safeDIBuilder: ((Instantiator<Preview>, Toolbar) -> Editor)? = nil,
+			) {
+				self.previewBuilder = previewBuilder
+				self.toolbar = toolbar
+				self.safeDIBuilder = safeDIBuilder
+			}
 
-        let previewBuilder: Preview.SafeDIMockConfiguration
-        let toolbar: ((Theme) -> Toolbar)?
-        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-        let safeDIBuilder: ((Instantiator<Preview>, Toolbar) -> Editor)?
-    }
-}
+			let previewBuilder: Preview.SafeDIMockConfiguration
+			let toolbar: ((Theme) -> Toolbar)?
+			/// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			let safeDIBuilder: ((Instantiator<Preview>, Toolbar) -> Editor)?
+		}
+	}
 #endif

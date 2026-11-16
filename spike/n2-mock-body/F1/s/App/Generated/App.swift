@@ -3,139 +3,167 @@
 // Please refrain from editing this file directly.
 
 #if canImport(Harness)
-import Harness
+	import Harness
 #endif
 #if canImport(SafeDI)
-import SafeDI
+	import SafeDI
 #endif
 
 #if DEBUG
-extension Root {
-    /// Overrides for the mock dependency tree.
-    struct SafeDIOverrides {
-        init(
-            service: (() -> Service)? = nil,
-            a: A.SafeDIMockConfiguration = .init(),
-            b: B.SafeDIMockConfiguration = .init(),
-            cBuilder: C.SafeDIMockConfiguration = .init(),
-            badge: Badge? = nil
-        ) {
-            self.service = service
-            self.a = a
-            self.b = b
-            self.cBuilder = cBuilder
-            self.badge = badge
-        }
+	extension Root {
+		/// Overrides for the mock dependency tree.
+		struct SafeDIOverrides {
+			init(
+				service: (() -> Service)? = nil,
+				a: A.SafeDIMockConfiguration = .init(),
+				b: B.SafeDIMockConfiguration = .init(),
+				cBuilder: C.SafeDIMockConfiguration = .init(),
+				badge: Badge? = nil,
+			) {
+				self.service = service
+				self.a = a
+				self.b = b
+				self.cBuilder = cBuilder
+				self.badge = badge
+			}
 
-        let service: (() -> Service)?
-        let a: A.SafeDIMockConfiguration
-        let b: B.SafeDIMockConfiguration
-        let cBuilder: C.SafeDIMockConfiguration
-        let badge: Badge?
-    }
+			let service: (() -> Service)?
+			let a: A.SafeDIMockConfiguration
+			let b: B.SafeDIMockConfiguration
+			let cBuilder: C.SafeDIMockConfiguration
+			let badge: Badge?
+		}
 
-    static func mock(
-        user: User,
-        safeDIOverrides: SafeDIOverrides = .init()
-    ) -> Root {
-        let badge: Badge? = safeDIOverrides.badge
-        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
-        // One function per key: Leaf, reading `service` and `user` (captured: one declaration at every place),
-        // `badge` (passed: the root override at two places, B's at one) and a configuration (passed: each place's own).
-        func __safeDI_leaf(badge: Badge?, safeDIOverrides: Leaf.SafeDIMockConfiguration) -> Leaf {
-            let detail = if let safeDIBuilder = safeDIOverrides.detail { safeDIBuilder(service) } else { Detail(service: service) }
-            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(service, user, detail, badge) } else { Leaf(service: service, user: user, detail: detail, badge: badge) }
-        }
-        func __safeDI_a() -> A {
-            let leaf: Leaf = __safeDI_leaf(badge: badge, safeDIOverrides: safeDIOverrides.a.leaf)
-            return if let safeDIBuilder = safeDIOverrides.a.safeDIBuilder { safeDIBuilder(leaf) } else { A(leaf: leaf) }
-        }
-        let a: A = __safeDI_a()
-        func __safeDI_b() -> B {
-            let badge = if let safeDIBuilder = safeDIOverrides.b.badge { safeDIBuilder() } else { Badge() }
-            let leaf: Leaf = __safeDI_leaf(badge: badge, safeDIOverrides: safeDIOverrides.b.leaf)
-            return if let safeDIBuilder = safeDIOverrides.b.safeDIBuilder { safeDIBuilder(badge, leaf) } else { B(badge: badge, leaf: leaf) }
-        }
-        let b: B = __safeDI_b()
-        func __safeDI_cBuilder() -> C {
-            let leaf: Leaf = __safeDI_leaf(badge: badge, safeDIOverrides: safeDIOverrides.cBuilder.leaf)
-            return if let safeDIBuilder = safeDIOverrides.cBuilder.safeDIBuilder { safeDIBuilder(leaf) } else { C(leaf: leaf) }
-        }
-        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-        return Root(service: service, user: user, a: a, b: b, cBuilder: cBuilder)
-    }
-}
+		static func mock(
+			user: User,
+			safeDIOverrides: SafeDIOverrides = .init(),
+		) -> Root {
+			let badge: Badge? = safeDIOverrides.badge
+			let service = if let safeDIBuilder = safeDIOverrides.service {
+				safeDIBuilder()
+			} else {
+				Service()
+			}
+			// One function per key: Leaf, reading `service` and `user` (captured: one declaration at every place),
+			// `badge` (passed: the root override at two places, B's at one) and a configuration (passed: each place's own).
+			func __safeDI_leaf(badge: Badge?, safeDIOverrides: Leaf.SafeDIMockConfiguration) -> Leaf {
+				let detail = if let safeDIBuilder = safeDIOverrides.detail {
+					safeDIBuilder(service)
+				} else {
+					Detail(service: service)
+				}
+				return if let safeDIBuilder = safeDIOverrides.safeDIBuilder {
+					safeDIBuilder(service, user, detail, badge)
+				} else {
+					Leaf(service: service, user: user, detail: detail, badge: badge)
+				}
+			}
+			func __safeDI_a() -> A {
+				let leaf: Leaf = __safeDI_leaf(badge: badge, safeDIOverrides: safeDIOverrides.a.leaf)
+				return if let safeDIBuilder = safeDIOverrides.a.safeDIBuilder {
+					safeDIBuilder(leaf)
+				} else {
+					A(leaf: leaf)
+				}
+			}
+			let a: A = __safeDI_a()
+			func __safeDI_b() -> B {
+				let badge = if let safeDIBuilder = safeDIOverrides.b.badge {
+					safeDIBuilder()
+				} else {
+					Badge()
+				}
+				let leaf: Leaf = __safeDI_leaf(badge: badge, safeDIOverrides: safeDIOverrides.b.leaf)
+				return if let safeDIBuilder = safeDIOverrides.b.safeDIBuilder {
+					safeDIBuilder(badge, leaf)
+				} else {
+					B(badge: badge, leaf: leaf)
+				}
+			}
+			let b: B = __safeDI_b()
+			func __safeDI_cBuilder() -> C {
+				let leaf: Leaf = __safeDI_leaf(badge: badge, safeDIOverrides: safeDIOverrides.cBuilder.leaf)
+				return if let safeDIBuilder = safeDIOverrides.cBuilder.safeDIBuilder {
+					safeDIBuilder(leaf)
+				} else {
+					C(leaf: leaf)
+				}
+			}
+			let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			return Root(service: service, user: user, a: a, b: b, cBuilder: cBuilder)
+		}
+	}
 #endif
 
 #if DEBUG
-extension Leaf {
-    /// Configuration for how this type is constructed within a mock tree.
-    struct SafeDIMockConfiguration {
-        init(
-            detail: ((Service) -> Detail)? = nil,
-            _ safeDIBuilder: ((Service, User, Detail, Badge?) -> Leaf)? = nil
-        ) {
-            self.detail = detail
-            self.safeDIBuilder = safeDIBuilder
-        }
+	extension Leaf {
+		/// Configuration for how this type is constructed within a mock tree.
+		struct SafeDIMockConfiguration {
+			init(
+				detail: ((Service) -> Detail)? = nil,
+				_ safeDIBuilder: ((Service, User, Detail, Badge?) -> Leaf)? = nil,
+			) {
+				self.detail = detail
+				self.safeDIBuilder = safeDIBuilder
+			}
 
-        let detail: ((Service) -> Detail)?
-        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-        let safeDIBuilder: ((Service, User, Detail, Badge?) -> Leaf)?
-    }
-}
+			let detail: ((Service) -> Detail)?
+			/// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			let safeDIBuilder: ((Service, User, Detail, Badge?) -> Leaf)?
+		}
+	}
 
-extension A {
-    /// Configuration for how this type is constructed within a mock tree.
-    struct SafeDIMockConfiguration {
-        init(
-            leaf: Leaf.SafeDIMockConfiguration = .init(),
-            _ safeDIBuilder: ((Leaf) -> A)? = nil
-        ) {
-            self.leaf = leaf
-            self.safeDIBuilder = safeDIBuilder
-        }
+	extension A {
+		/// Configuration for how this type is constructed within a mock tree.
+		struct SafeDIMockConfiguration {
+			init(
+				leaf: Leaf.SafeDIMockConfiguration = .init(),
+				_ safeDIBuilder: ((Leaf) -> A)? = nil,
+			) {
+				self.leaf = leaf
+				self.safeDIBuilder = safeDIBuilder
+			}
 
-        let leaf: Leaf.SafeDIMockConfiguration
-        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-        let safeDIBuilder: ((Leaf) -> A)?
-    }
-}
+			let leaf: Leaf.SafeDIMockConfiguration
+			/// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			let safeDIBuilder: ((Leaf) -> A)?
+		}
+	}
 
-extension B {
-    /// Configuration for how this type is constructed within a mock tree.
-    struct SafeDIMockConfiguration {
-        init(
-            badge: (() -> Badge)? = nil,
-            leaf: Leaf.SafeDIMockConfiguration = .init(),
-            _ safeDIBuilder: ((Badge, Leaf) -> B)? = nil
-        ) {
-            self.badge = badge
-            self.leaf = leaf
-            self.safeDIBuilder = safeDIBuilder
-        }
+	extension B {
+		/// Configuration for how this type is constructed within a mock tree.
+		struct SafeDIMockConfiguration {
+			init(
+				badge: (() -> Badge)? = nil,
+				leaf: Leaf.SafeDIMockConfiguration = .init(),
+				_ safeDIBuilder: ((Badge, Leaf) -> B)? = nil,
+			) {
+				self.badge = badge
+				self.leaf = leaf
+				self.safeDIBuilder = safeDIBuilder
+			}
 
-        let badge: (() -> Badge)?
-        let leaf: Leaf.SafeDIMockConfiguration
-        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-        let safeDIBuilder: ((Badge, Leaf) -> B)?
-    }
-}
+			let badge: (() -> Badge)?
+			let leaf: Leaf.SafeDIMockConfiguration
+			/// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			let safeDIBuilder: ((Badge, Leaf) -> B)?
+		}
+	}
 
-extension C {
-    /// Configuration for how this type is constructed within a mock tree.
-    struct SafeDIMockConfiguration {
-        init(
-            leaf: Leaf.SafeDIMockConfiguration = .init(),
-            _ safeDIBuilder: ((Leaf) -> C)? = nil
-        ) {
-            self.leaf = leaf
-            self.safeDIBuilder = safeDIBuilder
-        }
+	extension C {
+		/// Configuration for how this type is constructed within a mock tree.
+		struct SafeDIMockConfiguration {
+			init(
+				leaf: Leaf.SafeDIMockConfiguration = .init(),
+				_ safeDIBuilder: ((Leaf) -> C)? = nil,
+			) {
+				self.leaf = leaf
+				self.safeDIBuilder = safeDIBuilder
+			}
 
-        let leaf: Leaf.SafeDIMockConfiguration
-        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-        let safeDIBuilder: ((Leaf) -> C)?
-    }
-}
+			let leaf: Leaf.SafeDIMockConfiguration
+			/// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			let safeDIBuilder: ((Leaf) -> C)?
+		}
+	}
 #endif

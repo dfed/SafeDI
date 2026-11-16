@@ -10,7 +10,9 @@ if let iterations = ProcessInfoLite.benchIterations {
 	var rounds = [Double]()
 	for _ in 0..<5 {
 		let start = ContinuousClock.now
-		for _ in 0..<iterations { runFixture() }
+		for _ in 0..<iterations {
+			runFixture()
+		}
 		let elapsed = ContinuousClock.now - start
 		rounds.append(Double(elapsed.components.seconds) * 1e9 + Double(elapsed.components.attoseconds) / 1e9)
 	}
@@ -18,5 +20,7 @@ if let iterations = ProcessInfoLite.benchIterations {
 	FileHandleLite.error("bench ns per walk: \(Int(median))")
 } else {
 	runFixture()
-	if let run = overridesRunner { run() }
+	if let run = overridesRunner {
+		run()
+	}
 }
