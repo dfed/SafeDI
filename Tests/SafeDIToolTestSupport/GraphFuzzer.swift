@@ -10270,10 +10270,15 @@ struct GraphFuzzerResult {
 	/// oracle, whose failure `knownIssue` documents: counts of what passing graphs show (the spellings the long run
 	/// counts, the shapes of the seam smoke batch) count it as passing while the builder structs and the leak fix it awaits
 	/// are not built.
-	func passes(butForRetentionDocumentedBy knownIssue: GraphFuzzerKnownIssue?) -> Bool {
+	/// - Parameter builderOrder: The shape of the builder label sort alone, which orders a seam's builders by label, as its
+	///   seed's entry lists it, or `nil`. A difference of a renamed graph it documents passes too, since the order is
+	///   sanctioned and the graph exercises its shapes as any graph does; the caller passes no other shape, so that no other
+	///   difference of a renamed graph passes.
+	func passes(butForRetentionDocumentedBy knownIssue: GraphFuzzerKnownIssue?, butForBuilderOrderDocumentedBy builderOrder: GraphFuzzerKnownIssue? = nil) -> Bool {
 		([failure] + laterFailures).compactMap(\.self).allSatisfy { failure in
 			GraphFuzzerFailure.knownBuilderSurfaceKinds.contains(failure.kind)
 				|| [.seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees].contains(failure.kind) && knownIssue?.matches(failure) == true
+				|| failure.kind == .renamedGraphDiffers && builderOrder?.matches(failure) == true
 		}
 	}
 
