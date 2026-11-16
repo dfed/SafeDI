@@ -19,8 +19,10 @@
 // SOFTWARE.
 
 /// What generated code calls to construct a type: its initializer, an extension-based type's `instantiate(…)`, or a mock
-/// method. Every construction SafeDI writes, in production trees, seams, fills and mocks, is spelled through it, so the
-/// call takes one form wherever the type is built.
+/// method. Every call SafeDITool generates of one of these, in production trees, seams, fills and mocks, is spelled
+/// through it, so the call takes one form wherever the type is built. Two constructions are not: the construction
+/// function a public mock declares in the configured type's extension (`__safeDI_init`, `__safeDI_mock`), a generated
+/// function rather than one of the type's, and the macro's fix-its, which the macro target spells without `Generators/`.
 enum ConstructionTarget: Hashable, Sendable {
 	/// The type's initializer: `T(…)`.
 	case initializer
@@ -47,9 +49,9 @@ enum ConstructionTarget: Hashable, Sendable {
 		case .initializer:
 			concreteType.asSource
 		case .instantiate:
-			"\(concreteType.asMemberAccessBase).\(InstantiableVisitor.instantiateMethodName)"
+			"\(concreteType.asSource).\(InstantiableVisitor.instantiateMethodName)"
 		case let .mock(methodName):
-			"\(concreteType.asMemberAccessBase).\(methodName)"
+			"\(concreteType.asSource).\(methodName)"
 		}
 	}
 
