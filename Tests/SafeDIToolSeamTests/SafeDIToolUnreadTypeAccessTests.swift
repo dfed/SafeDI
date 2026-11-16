@@ -615,9 +615,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 			extension Screen {
 			    // SafeDI counts `Image` as `public`: no module it reads declares it narrower. If `Image` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
-			    @frozen nonisolated public enum SafeDIScope_UserService {
-			        case service(service_Values)
-
+			    nonisolated public enum SafeDIScope_UserService {
 			        nonisolated public struct service_Values {
 			            public let image: Image
 			            internal let cache: Cache
@@ -674,9 +672,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			#endif
 
 			extension Screen {
-			    @frozen nonisolated public enum SafeDIScope_Renderer {
-			        case renderer(renderer_Values)
-
+			    nonisolated public enum SafeDIScope_Renderer {
 			        nonisolated public struct renderer_Values {
 			            internal let cache: Cache
 			        }
@@ -5745,9 +5741,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			#endif
 
 			extension Screen {
-			    @frozen nonisolated public enum SafeDIScope_UserService {
-			        case service(service_Values)
-
+			    nonisolated public enum SafeDIScope_UserService {
 			        nonisolated public struct service_Values {
 			            public let badgeBuilder: Instantiator<Badge>.Builder
 			            public let sendableBadgeBuilder: SendableInstantiator<Badge>.Builder

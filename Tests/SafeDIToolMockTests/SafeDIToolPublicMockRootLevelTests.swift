@@ -1686,9 +1686,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			case .forwarded:
 				"""
 				extension Detail {
-				    @frozen nonisolated public enum SafeDIScope_Api {
-				        case api(api_Values)
-
+				    nonisolated public enum SafeDIScope_Api {
 				        nonisolated public struct api_Values {
 				            public let id: Int
 				        }
@@ -1747,9 +1745,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			case .receivedThatMockCannotBuild:
 				"""
 				extension Detail {
-				    @frozen nonisolated public enum SafeDIScope_Api {
-				        case api(api_Values)
-
+				    nonisolated public enum SafeDIScope_Api {
 				        nonisolated public struct api_Values {
 				            public let session: Session
 				        }
@@ -1808,9 +1804,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			case .receivedOnlyIfAvailable:
 				"""
 				extension Detail {
-				    @frozen nonisolated public enum SafeDIScope_Api {
-				        case api(api_Values)
-
+				    nonisolated public enum SafeDIScope_Api {
 				        nonisolated public struct api_Values {
 				            public let token: Token?
 				        }
@@ -1869,9 +1863,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			case .receivedLazilyInstantiated:
 				"""
 				extension Detail {
-				    @frozen nonisolated public enum SafeDIScope_Api {
-				        case api(api_Values)
-
+				    nonisolated public enum SafeDIScope_Api {
 				        nonisolated public struct api_Values {
 				            public let session: LazilyInstantiated<Session>
 				        }
@@ -1931,9 +1923,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			case .receivedLazilyInstantiatedOnlyIfAvailable:
 				"""
 				extension Detail {
-				    @frozen nonisolated public enum SafeDIScope_Api {
-				        case api(api_Values)
-
+				    nonisolated public enum SafeDIScope_Api {
 				        nonisolated public struct api_Values {
 				            public let session: LazilyInstantiated<Session>?
 				        }

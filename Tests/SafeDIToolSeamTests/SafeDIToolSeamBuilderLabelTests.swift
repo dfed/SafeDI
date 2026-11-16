@@ -63,9 +63,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Toolbar {
-		    @frozen nonisolated public enum SafeDIScope_LivePanel_Panel {
-		        case panelBuilder(panelBuilder_Values, String)
-
+		    nonisolated public enum SafeDIScope_LivePanel_Panel {
 		        nonisolated public struct panelBuilder_Values {
 		            public let theme: Theme
 		        }
@@ -149,9 +147,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Toolbar {
-		    @frozen nonisolated public enum SafeDISendableScope_LivePanel_Panel {
-		        case panelBuilder(String)
-
+		    nonisolated public enum SafeDISendableScope_LivePanel_Panel {
 		        nonisolated public struct panelBuilder_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -224,9 +220,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		let besideChild = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [Self.protocols, Self.f(holdingChild: true), Self.child], swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration)])
 		#expect(alone.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension F {
-		    @frozen nonisolated public enum SafeDIScope_Impl_Api {
-		        case a(a_Values, Int)
-
+		    nonisolated public enum SafeDIScope_Impl_Api {
 		        nonisolated public struct a_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -286,9 +280,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		"""])
 		#expect(besideChild.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension F {
-		    @frozen nonisolated public enum SafeDIScope_Impl_Api {
-		        case a(a_Values, Int)
-
+		    nonisolated public enum SafeDIScope_Impl_Api {
 		        nonisolated public struct a_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -305,16 +297,12 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDIScope_Impl_Other {
-		        case child(child_Values, SafeDIScope_Impl_Other.Child_Scope)
-
+		    nonisolated public enum SafeDIScope_Impl_Other {
 		        nonisolated public struct child_Values {
 		            public let a: ErasedInstantiator<Int, any Api>
 		        }
 
-		        @frozen nonisolated public enum Child_Scope {
-		            case o(o_Values, Int)
-
+		        nonisolated public enum Child_Scope {
 		            nonisolated public struct o_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -441,9 +429,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		])
 		#expect(output.modules["Lib"]?.generatedFiles == ["Lib.swift": generatedFileHeader + """
 		extension Inner {
-		    @frozen nonisolated public enum SafeDIScope_Impl_Other {
-		        case a2(a2_Values, Int)
-
+		    nonisolated public enum SafeDIScope_Impl_Other {
 		        nonisolated public struct a2_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -507,9 +493,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		#endif
 
 		extension F {
-		    @frozen nonisolated public enum SafeDIScope_Impl_Api {
-		        case a(a_Values, Int)
-
+		    nonisolated public enum SafeDIScope_Impl_Api {
 		        nonisolated public struct a_Values {
 		            public let inner: Inner
 		        }
@@ -528,22 +512,35 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen public enum SafeDIScope_Impl_Other {
-		        case inner(Inner.SafeDIScope_Impl_Other)
+		    nonisolated public enum SafeDIScope_Impl_Other {
+		        nonisolated public struct inner_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let inner: (inner_Values) -> Inner.SafeDIScope_Impl_Other.__safeDI_Builder<__safeDI_Built>
+
+		            public init(inner: @escaping (inner_Values) -> Inner.SafeDIScope_Impl_Other.__safeDI_Builder<__safeDI_Built>) {
+		                self.inner = inner
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public init(impl_ApiBuilder: @escaping ErasedInstantiator<Int, any Api>.Builder, impl_OtherBuilder: @escaping (SafeDIScope_Impl_Other) -> any Other) {
-		        self.init(__safeDI_impl_ApiBuilder: .init(__safeDI_noScope: impl_ApiBuilder), __safeDI_impl_OtherBuilder: impl_OtherBuilder)
+		    public init(impl_ApiBuilder: @escaping ErasedInstantiator<Int, any Api>.Builder, impl_OtherBuilder: @escaping ErasedInstantiator<Int, any Other>.Builder) {
+		        self.init(__safeDI_impl_ApiBuilder: .init(__safeDI_noScope: impl_ApiBuilder), __safeDI_impl_OtherBuilder: .init(__safeDI_noScope: impl_OtherBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public init(__safeDI_impl_ApiBuilder: SafeDIScope_Impl_Api.__safeDI_Builder<any Api>, __safeDI_impl_OtherBuilder: @escaping (SafeDIScope_Impl_Other) -> any Other) {
+		    public init(__safeDI_impl_ApiBuilder: SafeDIScope_Impl_Api.__safeDI_Builder<any Api>, __safeDI_impl_OtherBuilder: SafeDIScope_Impl_Other.__safeDI_Builder<any Other>) {
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_BF35686520210643.self // If this line does not compile, compile the code SafeDI generates for module Lib into Lib: under Bazel, add Lib’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Inner(__safeDI_impl_OtherBuilder: .init(a2: { __safeDI_a2Values in { forwarded in __safeDI_impl_OtherBuilder(.inner(.a2(__safeDI_a2Values, forwarded))) } }))
+		            return Inner(__safeDI_impl_OtherBuilder: __safeDI_impl_OtherBuilder.inner(SafeDIScope_Impl_Other.inner_Values()))
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        let a = ErasedInstantiator<Int, any Api>(__safeDI_impl_ApiBuilder.a(SafeDIScope_Impl_Api.a_Values(inner: inner)))
@@ -552,7 +549,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		}
 
 		extension F {
-		    public enum __safeDI_F_29555442510693A4 {}
+		    public enum __safeDI_F_1F9BE246D7992B4E {}
 		}
 
 		#if DEBUG
@@ -653,9 +650,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_Api {
-		        case api(api_Values)
-
+		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct api_Values {
 		            public let apiBuilder: Int
 		        }
@@ -729,16 +724,12 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_Api {
-		        case api(api_Values)
-
+		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct api_Values {
 		            public let apiBuilder: Int
 		        }
 
-		        @frozen nonisolated public enum Worker_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Worker_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -769,9 +760,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDISendableScope_Api {
-		        case workerBuilder(SafeDIScope_Api.Worker_Scope)
-
+		    nonisolated public enum SafeDISendableScope_Api {
 		        nonisolated public struct workerBuilder_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -821,16 +810,12 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_Api {
-		        case api(api_Values)
-
+		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct api_Values {
 		            public let apiSendableBuilder: Int
 		        }
 
-		        @frozen nonisolated public enum Worker_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Worker_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -861,9 +846,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDISendableScope_Api {
-		        case workerBuilder(SafeDIScope_Api.Worker_Scope)
-
+		    nonisolated public enum SafeDISendableScope_Api {
 		        nonisolated public struct workerBuilder_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -921,9 +904,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_Impl_Api_Impl {
-		        case api(api_Values)
-
+		    nonisolated public enum SafeDIScope_Impl_Api_Impl {
 		        nonisolated public struct api_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -940,9 +921,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDIScope_Impl_Api_Impl_Api {
-		        case implApi(implApi_Values)
-
+		    nonisolated public enum SafeDIScope_Impl_Api_Impl_Api {
 		        nonisolated public struct implApi_Values {
 		            public let api: any Api
 		        }
@@ -1051,9 +1030,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		let body = order.compactMap { builds[$0] }.joined(separator: "\n")
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDISendableScope_Outer_ThingSendable_Outer_ThingSendable {
-		        case sendable(Outer_ThingSendable.ForwardedProperties)
-
+		    nonisolated public enum SafeDISendableScope_Outer_ThingSendable_Outer_ThingSendable {
 		        nonisolated public struct sendable_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1070,9 +1047,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDISendableScope_Outer_Thing_Outer_Thing {
-		        case nested(Outer.Thing.ForwardedProperties)
-
+		    nonisolated public enum SafeDISendableScope_Outer_Thing_Outer_Thing {
 		        nonisolated public struct nested_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1089,9 +1064,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDISendableScope_Outer_Thing_Outer_Thing_ {
-		        case joined(Outer_Thing.ForwardedProperties)
-
+		    nonisolated public enum SafeDISendableScope_Outer_Thing_Outer_Thing_ {
 		        nonisolated public struct joined_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1166,9 +1139,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		let body = order.compactMap { builds[$0] }.joined(separator: "\n")
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDISendableScope_Impl_ApiSendable_Impl_ApiSendable {
-		        case implApiSendable(Impl_ApiSendable.ForwardedProperties)
-
+		    nonisolated public enum SafeDISendableScope_Impl_ApiSendable_Impl_ApiSendable {
 		        nonisolated public struct implApiSendable_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1185,9 +1156,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDISendableScope_Impl_Api_Impl {
-		        case api(String)
-
+		    nonisolated public enum SafeDISendableScope_Impl_Api_Impl {
 		        nonisolated public struct api_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1204,9 +1173,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		        }
 		    }
 
-		    @frozen nonisolated public enum SafeDISendableScope_Impl_Api_Impl_Api {
-		        case implApi(Impl_Api.ForwardedProperties)
-
+		    nonisolated public enum SafeDISendableScope_Impl_Api_Impl_Api {
 		        nonisolated public struct implApi_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1270,9 +1237,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Host {
-			    @frozen nonisolated public enum SafeDISendableScope_ServiceSendable_Service {
-			        case serviceSendableService(ServiceSendable_Service.ForwardedProperties)
-
+			    nonisolated public enum SafeDISendableScope_ServiceSendable_Service {
 			        nonisolated public struct serviceSendableService_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1289,9 +1254,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDIScope_ServiceSendable_ServiceSendable_ {
-			        case serviceSendable(serviceSendable_Values)
-
+			    nonisolated public enum SafeDIScope_ServiceSendable_ServiceSendable_ {
 			        nonisolated public struct serviceSendable_Values {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1308,9 +1271,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Service_Service {
-			        case service(Service.ForwardedProperties)
-
+			    nonisolated public enum SafeDISendableScope_Service_Service {
 			        nonisolated public struct service_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.

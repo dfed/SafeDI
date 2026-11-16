@@ -283,14 +283,10 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 			"Feature.swift": generatedFileHeader + """
 			extension Flow {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
-
+			    nonisolated public enum SafeDIScope_Widget {
 			        nonisolated public struct aBuilder_Values {}
 
-			        @frozen nonisolated public enum A_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum A_Scope {
 			            nonisolated public struct widget_Values {
 			                public let bBuilder: Instantiator<B>
 			            }
@@ -399,10 +395,8 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 			"Feature.swift": generatedFileHeader + """
 			extension Flow {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        @frozen nonisolated public enum A_Scope {
-			            case widget(widget_Values)
-
+			    nonisolated public enum SafeDIScope_Widget {
+			        nonisolated public enum A_Scope {
 			            nonisolated public struct widget_Values {
 			                public let bBuilder: SendableInstantiator<B>
 			            }
@@ -422,9 +416,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Widget {
-			        case aBuilder(SafeDIScope_Widget.A_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Widget {
 			        nonisolated public struct aBuilder_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -521,14 +513,10 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 			"Feature.swift": generatedFileHeader + """
 			extension Flow {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        case xBuilder(xBuilder_Values, SafeDIScope_Widget.X_Scope)
-
+			    nonisolated public enum SafeDIScope_Widget {
 			        nonisolated public struct xBuilder_Values {}
 
-			        @frozen nonisolated public enum X_Scope {
-			            case p(p_Values, SafeDIScope_Widget.P_Scope)
-
+			        nonisolated public enum X_Scope {
 			            nonisolated public struct p_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -545,9 +533,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum P_Scope {
-			            case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
-
+			        nonisolated public enum P_Scope {
 			            nonisolated public struct aBuilder_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -564,9 +550,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum A_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum A_Scope {
 			            nonisolated public struct widget_Values {
 			                public let bBuilder: Instantiator<B>
 			                public let xBuilder: Instantiator<X>
@@ -698,17 +682,12 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 			"Feature.swift": generatedFileHeader + """
 			extension Flow {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
-			        case bBuilder(bBuilder_Values, SafeDIScope_Widget.B_Scope)
-
+			    nonisolated public enum SafeDIScope_Widget {
 			        nonisolated public struct aBuilder_Values {}
 
 			        nonisolated public struct bBuilder_Values {}
 
-			        @frozen nonisolated public enum A_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum A_Scope {
 			            nonisolated public struct widget_Values {
 			                public let bBuilder: Instantiator<B>
 			                public let mark: Mark
@@ -728,9 +707,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum B_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum B_Scope {
 			            nonisolated public struct widget_Values {
 			                public let aBuilder: Instantiator<A>
 			                public let mark: Mark
@@ -858,14 +835,10 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 			"Feature.swift": generatedFileHeader + """
 			extension Flow {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        case bBuilder(bBuilder_Values, SafeDIScope_Widget.B_Scope)
-
+			    nonisolated public enum SafeDIScope_Widget {
 			        nonisolated public struct bBuilder_Values {}
 
-			        @frozen nonisolated public enum B_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum B_Scope {
 			            nonisolated public struct widget_Values {
 			                public let aBuilder: Instantiator<A>
 			                public let mark: Mark
@@ -953,11 +926,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 			"Feature.swift": generatedFileHeader + """
 			extension Flow {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
-			        case bBuilder(bBuilder_Values, SafeDIScope_Widget.B_Scope)
-			        case leaf(leaf_Values, SafeDIScope_Widget.Leaf_Scope)
-
+			    nonisolated public enum SafeDIScope_Widget {
 			        nonisolated public struct aBuilder_Values {}
 
 			        nonisolated public struct bBuilder_Values {}
@@ -968,10 +937,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            public let cBuilder: Instantiator<C>
 			        }
 
-			        @frozen nonisolated public enum A_Scope {
-			            case leaf(leaf_Values, SafeDIScope_Widget.Leaf_Scope)
-			            case widget(widget_Values)
-
+			        nonisolated public enum A_Scope {
 			            nonisolated public struct leaf_Values {
 			                public let cBuilder: Instantiator<C>
 			                public let mark: Mark
@@ -1000,9 +966,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum B_Scope {
-			            case leaf(leaf_Values, SafeDIScope_Widget.Leaf_Scope)
-
+			        nonisolated public enum B_Scope {
 			            nonisolated public struct leaf_Values {
 			                public let aBuilder: Instantiator<A>
 			                public let cBuilder: Instantiator<C>
@@ -1022,9 +986,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum Leaf_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum Leaf_Scope {
 			            nonisolated public struct widget_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1146,10 +1108,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 			"Feature.swift": generatedFileHeader + """
 			extension Hub {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        case flow(flow_Values, SafeDIScope_Widget.Flow_Scope)
-			        case a(a_Values, SafeDIScope_Widget.A_Scope)
-
+			    nonisolated public enum SafeDIScope_Widget {
 			        nonisolated public struct flow_Values {
 			            public let bBuilder: Instantiator<B>?
 			        }
@@ -1159,9 +1118,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            public let flow: Flow
 			        }
 
-			        @frozen nonisolated public enum Flow_Scope {
-			            case aBuilder(aBuilder_Values, SafeDIScope_Widget.A_Scope)
-
+			        nonisolated public enum Flow_Scope {
 			            nonisolated public struct aBuilder_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1178,9 +1135,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum A_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum A_Scope {
 			            nonisolated public struct widget_Values {
 			                public let bBuilder: Instantiator<B>?
 			                public let mark: Mark

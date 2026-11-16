@@ -103,16 +103,12 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 			featureFile: [
 				"Feature.swift": generatedFileHeader + """
 				extension Hub {
-				    @frozen nonisolated public enum SafeDIScope_Api {
-				        case aBuilder(aBuilder_Values, SafeDIScope_Api.A_Scope)
-
+				    nonisolated public enum SafeDIScope_Api {
 				        nonisolated public struct aBuilder_Values {
 				            public let tag: LazilyInstantiated<Tag>
 				        }
 
-				        @frozen nonisolated public enum A_Scope {
-				            case api(api_Values)
-
+				        nonisolated public enum A_Scope {
 				            nonisolated public struct api_Values {
 				                public let tag: LazilyInstantiated<Tag>?
 				                public let reader: Reader
@@ -225,16 +221,12 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 			featureFile: [
 				"Feature.swift": generatedFileHeader + """
 				extension Hub {
-				    @frozen nonisolated public enum SafeDIScope_Api {
-				        case aBuilder(aBuilder_Values, SafeDIScope_Api.A_Scope)
-
+				    nonisolated public enum SafeDIScope_Api {
 				        nonisolated public struct aBuilder_Values {
 				            public let tag: LazilyInstantiated<Tag>
 				        }
 
-				        @frozen nonisolated public enum A_Scope {
-				            case api(api_Values)
-
+				        nonisolated public enum A_Scope {
 				            nonisolated public struct api_Values {
 				                public let tag: LazilyInstantiated<Tag>
 				                public let reader: Reader
