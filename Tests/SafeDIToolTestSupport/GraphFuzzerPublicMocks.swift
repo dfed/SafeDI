@@ -1348,16 +1348,15 @@ struct GraphFuzzerPublicMockDraw {
 				declaration.names(hostAccess)
 				declaringFiles.append(File(module: .seamModule, declarations: [Self.renderer(of: host)]))
 			}
-			// The call: a builder named by the type the hole instantiates, `<type, leading capitals lowered>Builder`, handed an
-			// enum of the places, whose case carries an `Instantiator`'s forwarded value; or, for a place built inside a
-			// `@Sendable` builder function, the `@Sendable` builder, `<…>SendableBuilder`, handed the `@Sendable` enum. It returns
-			// the plain value.
-			let instantiatedTypeName = switch spelling {
-			case .plain, .instantiator: holeName
-			case .existential: protocolName
-			case .erasedConstant, .erasedInstantiator: fillName
+			// The call: a builder named by the type the hole instantiates, `<type, leading capitals lowered>Builder`, followed by
+			// `_<returned type>` where the hole returns another type, handed an enum of the places, whose case carries an
+			// `Instantiator`'s forwarded value; or, for a place built inside a `@Sendable` builder function, the `@Sendable`
+			// builder, `<…>SendableBuilder`, handed the `@Sendable` enum. It returns the plain value.
+			let enumBuilderLabel = switch spelling {
+			case .plain, .instantiator: Self.builderLabel(ofTypeNamed: holeName)
+			case .existential: Self.builderLabel(ofTypeNamed: protocolName)
+			case .erasedConstant, .erasedInstantiator: "\(Self.builderLabel(ofTypeNamed: fillName).dropLast("Builder".count))_\(erasedName)Builder"
 			}
-			let enumBuilderLabel = Self.builderLabel(ofTypeNamed: instantiatedTypeName)
 			// What the mock takes before its builders that it cannot build: `holeSession`, or both its forms, named apart and
 			// ordered by type.
 			let leadingArguments = switch rootLevelShape {

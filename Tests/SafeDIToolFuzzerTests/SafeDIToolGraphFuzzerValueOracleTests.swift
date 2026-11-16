@@ -755,7 +755,7 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 				switch signature {
 				case .mockBuildsOtherValuesThanProduction, .valueOracleFixtureDoesNotCompile, .valueOracleFixtureRejected, .remedyLeavesErrorAtSite:
 					false
-				case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .holeNamesChangeWithSecondPlace:
+				case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .holeNamesChangeWithSecondPlace, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
 					true
 				case .builderSurface:
 					true

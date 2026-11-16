@@ -91,9 +91,9 @@ extension DependencyTreeGenerator {
 	/// caller fills or passes up per instantiated type, so every place one of its enums reaches is filled or none is; a public
 	/// mock's caller decides per place.
 	///
-	/// Each tier names its builders apart from the parameters it takes, which are its own and those of every wider tier, so
-	/// a parameter only a narrower tier takes never renames a wider tier's builder. The widest tier's stems name the enums,
-	/// one per hole type and family whatever tier takes them.
+	/// A builder's label depends only on what it builds: its hole type's stem (`stems(of:)`), which also names the enums,
+	/// one per hole type and family whatever tier takes them. Each tier appends `_` to a label that equals a parameter
+	/// it takes, its own or a wider tier's, so a parameter only a narrower tier takes never relabels a wider tier's builder.
 	/// - Parameters:
 	///   - otherParameters: The labels of a public mock's parameters, each with the access of the narrowest tier that takes
 	///     it, which its builders follow and are named apart from as a seam's builders are from its parameters.
@@ -181,27 +181,26 @@ extension DependencyTreeGenerator {
 			}
 		}
 
-		// The stem of each hole type, from its instantiated type, named apart.
+		// The stem of each hole type, from what it builds alone, named apart only from another hole type's.
 		let holeTypes = holeTypesInReachOrder.sorted { ($0.instantiatedType.asSource, $0.builtType.asSource) < ($1.instantiatedType.asSource, $1.builtType.asSource) }
-		// Each tier's labels, widest first: the widest tier's stems also name the enums and order the builders.
+		// Each tier's labels, widest first: the widest tier's also order the builders and name what is derived from a label.
 		let tierNames = Self.tierNames(
 			of: holeTypes,
 			parameters: parameters.map { (label: $0.property.label, access: $0.tierAccess) } + otherParameters,
 			widestTier: seamTypeAccess,
 		)
-		let stemByHoleType = tierNames[0].stemByHoleType
+		let stemByHoleType = tierNames.stemByHoleType
 		func label(of holeType: SeamSignature.HoleType, isSendable: Bool, in names: TierNames) -> String {
-			let stem = names.stemByHoleType[holeType, default: ""]
-			return isSendable ? Self.sendableBuilderLabel(ofStem: stem) : Self.plainBuilderLabel(ofStem: stem)
+			names.label(ofStem: stemByHoleType[holeType, default: ""], isSendable: isSendable)
 		}
 		func label(of holeType: SeamSignature.HoleType, isSendable: Bool) -> String {
-			label(of: holeType, isSendable: isSendable, in: tierNames[0])
+			label(of: holeType, isSendable: isSendable, in: tierNames.tiers[0])
 		}
 		/// The labels the narrower tiers take a builder under where they differ from the widest tier's.
 		func narrowerTierLabels(of holeType: SeamSignature.HoleType, isSendable: Bool) -> [AccessLevel: String] {
 			var labels = [AccessLevel: String]()
 			let widestLabel = label(of: holeType, isSendable: isSendable)
-			for names in tierNames.dropFirst() where label(of: holeType, isSendable: isSendable, in: names) != widestLabel {
+			for names in tierNames.tiers.dropFirst() where label(of: holeType, isSendable: isSendable, in: names) != widestLabel {
 				labels[names.tier] = label(of: holeType, isSendable: isSendable, in: names)
 			}
 			return labels
@@ -499,51 +498,72 @@ extension DependencyTreeGenerator {
 		let tier: AccessLevel
 		/// The labels of the parameters the tier takes: its own and every wider tier's.
 		let parameterLabels: Set<String>
-		let stemByHoleType: [SeamSignature.HoleType: String]
+
+		/// The label the tier takes the builder of a hole type of `stem` under, in its family: the stem's label, with `_`
+		/// appended while a parameter the tier takes has it.
+		func label(ofStem stem: String, isSendable: Bool) -> String {
+			var label = isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem)
+			while parameterLabels.contains(label) {
+				label = "\(label)_".spelledAsJoinedIdentifier
+			}
+			return label
+		}
 	}
 
-	/// The names of each tier that `parameters`, each with the access of the narrowest tier that takes it, give `holeTypes`,
-	/// widest first: `widestTier`, then each narrower access among `parameters`, each tier's stems computed from the labels
-	/// it takes alone, so they never depend on the order the parameters are declared in.
+	/// The stems of a seam's or a public mock's hole types, and the names of each of its tiers.
+	struct BuilderNames {
+		let stemByHoleType: [SeamSignature.HoleType: String]
+		/// Each tier's names, widest first.
+		let tiers: [TierNames]
+	}
+
+	/// The stems of `holeTypes`, and the names of each tier that `parameters`, each with the access of the narrowest tier
+	/// that takes it, give their builders, widest first: `widestTier`, then each narrower access among `parameters`, each
+	/// tier's labels computed from the labels it takes alone, so they never depend on the order the parameters are
+	/// declared in.
 	private static func tierNames(
 		of holeTypes: [SeamSignature.HoleType],
 		parameters: [(label: String, access: AccessLevel)],
 		widestTier: AccessLevel,
-	) -> [TierNames] {
+	) -> BuilderNames {
 		let tiers = [widestTier] + Set(parameters.map(\.access)).filter { $0 < widestTier }.sorted(by: >)
-		return tiers.map { tier in
-			let parameterLabels = Set(parameters.filter { $0.access >= tier }.map(\.label))
-			return TierNames(tier: tier, parameterLabels: parameterLabels, stemByHoleType: stems(of: holeTypes, parameterLabels: parameterLabels))
-		}
+		return BuilderNames(
+			stemByHoleType: stems(of: holeTypes),
+			tiers: tiers.map { tier in
+				TierNames(tier: tier, parameterLabels: Set(parameters.filter { $0.access >= tier }.map(\.label)))
+			},
+		)
 	}
 
-	/// The stem each of `holeTypes` is named by: its instantiated type as an identifier, unless it collides with another's or a
-	/// label equals a parameter's, when it takes the returned type's stem after it. What still collides is named apart by its
-	/// types; no rung names an owner or a path, so adding a place never renames a hole type.
-	private static func stems(of holeTypes: [SeamSignature.HoleType], parameterLabels: Set<String>) -> [SeamSignature.HoleType: String] {
+	/// The stem each of `holeTypes` is named by, from what it builds alone: its instantiated type as an identifier where
+	/// the type it returns is the same, else the instantiated type's followed by `_` and the returned type's. Only a stem
+	/// that equals another's, or gives a label another gives, is named apart, by its types; no rung names an owner, a
+	/// path or a parameter, so adding a place of a hole type already built never renames one, and adding a hole type renames
+	/// another only when their stems or labels coincide.
+	private static func stems(of holeTypes: [SeamSignature.HoleType]) -> [SeamSignature.HoleType: String] {
 		func stem(of type: TypeDescription) -> String {
 			type.simplified.asIdentifier.spelledWithoutBackticks
 		}
 		func labels(of stem: String) -> Set<String> {
 			[plainBuilderLabel(ofStem: stem), sendableBuilderLabel(ofStem: stem)]
 		}
-		let firstStems = holeTypes.map { stem(of: $0.instantiatedType) }
 		func collides(_ index: Int, among stems: [String]) -> Bool {
-			!labels(of: stems[index]).isDisjoint(with: parameterLabels)
-				|| stems.indices.contains { other in
-					other != index && (stems[other] == stems[index] || !labels(of: stems[other]).isDisjoint(with: labels(of: stems[index])))
-				}
+			stems.indices.contains { other in
+				other != index && (stems[other] == stems[index] || !labels(of: stems[other]).isDisjoint(with: labels(of: stems[index])))
+			}
 		}
-		var stems = holeTypes.indices.map { index in
-			collides(index, among: firstStems) ? "\(firstStems[index])_\(stem(of: holeTypes[index].builtType))" : firstStems[index]
+		var stems = holeTypes.map { holeType in
+			holeType.instantiatedType == holeType.builtType
+				? stem(of: holeType.instantiatedType)
+				: "\(stem(of: holeType.instantiatedType))_\(stem(of: holeType.builtType))"
 		}
-		let stillColliding = holeTypes.indices.filter { collides($0, among: stems) }
-		if !stillColliding.isEmpty {
+		let colliding = holeTypes.indices.filter { collides($0, among: stems) }
+		if !colliding.isEmpty {
 			let renamed = ScopeGenerator.identifierSafeNames(
-				for: stillColliding.map { (label: stems[$0], suffixTypes: [holeTypes[$0].instantiatedType, holeTypes[$0].builtType]) },
-				reservedNames: Set(holeTypes.indices.filter { !stillColliding.contains($0) }.map { stems[$0] }),
+				for: colliding.map { (label: stems[$0], suffixTypes: [holeTypes[$0].instantiatedType, holeTypes[$0].builtType]) },
+				reservedNames: Set(holeTypes.indices.filter { !colliding.contains($0) }.map { stems[$0] }),
 			)
-			for (index, name) in zip(stillColliding, renamed) {
+			for (index, name) in zip(colliding, renamed) {
 				stems[index] = name.spelledWithoutBackticks
 			}
 			// Two stems may still give one label: each that does takes a trailing underscore until none does.
