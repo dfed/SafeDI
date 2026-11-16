@@ -1473,10 +1473,10 @@ struct SafeDIToolGraphFuzzerTests {
 	func seamKnownIssues_listEachSeedOnceInIncreasingOrder_belowSeamCorpusSeedCount() {
 		#expect(Self.knownIssueListProblems(Self.seamKnownIssues, corpusSeedCount: Self.seamCorpusSeedCount) == [])
 		// A seed left out of the inherited shapes must be one of theirs, or the entry filters nothing.
-		#expect(Self.seamCorpusSeedsOfOtherShapes.subtracting(Self.knownIssues.flatMap(\.seeds)) == [])
+		#expect(Self.seamCorpusSeedsOfOtherShapes.subtracting(Self.knownIssuesBesideReportedIssueShapes.flatMap(\.seeds)) == [])
 		// A seed added to an inherited shape must name a shape, and be one its list lacks, or the entry adds nothing.
-		#expect(Set(Self.seamCorpusSeedsAddedToInheritedShapes.keys).subtracting(Self.knownIssues.map(\.reason)) == [])
-		#expect(Set(Self.seamCorpusSeedsAddedToInheritedShapes.values.joined()).intersection(Self.knownIssues.flatMap(\.seeds)) == [])
+		#expect(Set(Self.seamCorpusSeedsAddedToInheritedShapes.keys).subtracting(Self.knownIssuesBesideReportedIssueShapes.map(\.reason)) == [])
+		#expect(Set(Self.seamCorpusSeedsAddedToInheritedShapes.values.joined()).intersection(Self.knownIssuesBesideReportedIssueShapes.flatMap(\.seeds)) == [])
 	}
 
 	@Test
@@ -5177,7 +5177,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 14, 18, 25, 30, 40, 59, 62, 70, 97, 99, 133, 161, 212, 267, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x9219996BA2BD0A1A
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x95B1CE043D165C3F
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -5187,7 +5187,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xB211B1F9E0A1B180
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xD90FDF2DA27B1587
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -5399,7 +5399,7 @@ struct SafeDIToolGraphFuzzerTests {
 		acceptedFeatureCounts: corpusAcceptedFeatureCounts,
 		knownIssues: knownIssues,
 		knownIssuesName: "knownIssues",
-		staleSeedRemedy: { _, _ in "remove it from `knownIssues`, and from `seamCorpusSeedsOfOtherShapes` when it is listed there" },
+		staleSeedRemedy: { _, _ in "remove it from `knownIssuesBesideReportedIssueShapes`, or from `reservedLabelSeeds` or `repeatedAncestorSeeds` for a reported issue’s shape, and from `seamCorpusSeedsOfOtherShapes` when it is listed there" },
 		valueOracleInspectedGraphCount: corpusValueOracleInspectedGraphCount,
 		spellingDrawFeatures: [],
 		omittedValueGraphCount: 0,
@@ -5476,7 +5476,7 @@ struct SafeDIToolGraphFuzzerTests {
 			} else if seamCorpusSeedsAddedToInheritedShapes[knownIssue.reason]?.contains(seed) == true {
 				"remove it from `seamCorpusSeedsAddedToInheritedShapes`"
 			} else {
-				"remove it from `knownIssues` if the base corpus reports it stale too, else add it to `seamCorpusSeedsOfOtherShapes`"
+				"remove it from `knownIssuesBesideReportedIssueShapes` if the base corpus reports it stale too, else add it to `seamCorpusSeedsOfOtherShapes`"
 			}
 		},
 		valueOracleInspectedGraphCount: seamCorpusValueOracleInspectedGraphCount,
@@ -5925,7 +5925,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`seamCorpusSeedsAddedToInheritedShapes`): the inherited shapes are listed from `knownIssues` with those
 	/// adjustments, a shape left with no seed dropped, so that a fix there is a fix here, and the long run reports a
 	/// seed that diverges as stale or new. The seam's own shape follows them. Each seed is listed once.
-	static let seamKnownIssuesBesideBuilderSurface: [GraphFuzzerKnownIssue] = knownIssues.compactMap { knownIssue in
+	static let seamKnownIssuesBesideBuilderSurface: [GraphFuzzerKnownIssue] = knownIssuesBesideReportedIssueShapes.compactMap { knownIssue in
 		// The base corpus's value oracle runs in no other corpus.
 		guard !knownIssue.isBaseCorpusValueOracleShape else { return nil }
 		let seeds = (knownIssue.seeds.filter { $0 < UInt64(seamCorpusSeedCount) && !seamCorpusSeedsOfOtherShapes.contains($0) }
@@ -7014,7 +7014,57 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
-	static let knownIssues: [GraphFuzzerKnownIssue] = [
+	static let knownIssues = addingReportedIssueShapes(to: knownIssuesBesideReportedIssueShapes)
+
+	/// Why a graph that draws `GraphFuzzerGenerator.addingReservedLabelShapes`'s roll fails today: issue #719.
+	static let reservedLabelReason = "#719: a mock’s `SafeDIOverrides` declares a member named by a dependency’s label without the backticks a word Swift reserves in a member declaration needs there, such as `Type` or `Protocol`, so the generated mock does not compile (mock_escapesOverrideMember_whenDependencyIsLabeledType)"
+
+	/// Why a graph that draws `GraphFuzzerGenerator.addingRepeatedAncestorShapes`'s roll fails today: issue #720.
+	static let repeatedAncestorReason = "#720: a type built only beneath a cycle edge that repeats an ancestor, where a hand-written mock of that ancestor omits it, gets no `SafeDIMockConfiguration` though the generated mock that builds it reads one, so the mock does not compile (mock_generatesConfigurationOfTypeBuiltOnlyBeneathRepeatedAncestor_whenHandWrittenMockOfOuterAncestorOmitsIt)"
+
+	/// The seeds of the base corpus whose graphs draw the roll of #719's shape and whose generated mock does not compile
+	/// for its reason, copied from a run of the rolls' seeds.
+	static let reservedLabelSeeds: [UInt64] = [
+		215, 276, 407, 852, 1_031, 1_034, 1_211, 1_315, 1_548, 1_579, 1_747, 1_759, 1_763, 1_770, 1_786, 1_795,
+		2_066, 2_096, 2_331, 2_442, 2_520, 2_563, 2_575, 2_647, 2_937, 3_069, 3_070, 3_114, 3_155, 3_537, 3_553, 3_692,
+		3_736, 3_859, 3_931, 3_943, 3_993, 4_017, 4_039, 4_066, 4_074, 4_087, 4_138, 4_310, 4_436, 4_535, 4_732, 4_762,
+		4_765, 4_841,
+	]
+
+	/// The seeds of the base corpus whose graphs draw the roll of #720's shape and whose generated mock does not compile
+	/// for its reason, copied from a run of the rolls' seeds.
+	static let repeatedAncestorSeeds: [UInt64] = [
+		16, 24, 168, 171, 249, 277, 318, 355, 532, 579, 587, 592, 609, 653, 663, 809,
+		850, 860, 882, 1_014, 1_031, 1_093, 1_121, 1_153, 1_175, 1_194, 1_238, 1_258, 1_450, 1_464, 1_467, 1_513,
+		1_538, 1_539, 1_572, 1_631, 1_661, 1_674, 1_677, 1_759, 1_925, 1_999, 2_096, 2_147, 2_173, 2_248, 2_298, 2_412,
+		2_430, 2_456, 2_620, 2_645, 2_873, 2_932, 2_981, 2_999, 3_197, 3_292, 3_344, 3_350, 3_393, 3_464, 3_501, 3_522,
+		3_557, 3_575, 3_870, 3_901, 3_909, 3_971, 4_010, 4_123, 4_125, 4_279, 4_306, 4_537, 4_629,
+	]
+
+	/// Why a graph that draws `GraphFuzzerGenerator.addingRepeatedAncestorShapes`'s roll changes under a renaming: the
+	/// roll's `RepeatScreen` and `RepeatFlow` are a two-type lazy cycle, which shows `lazyCycleConfigurationFieldReason`.
+	static let repeatedAncestorLazyCycleReason = "#720's roll closes a two-type lazy cycle, `RepeatScreen` building `RepeatFlow`, which builds `RepeatScreen` through an instantiator, and which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct, with the reads of it, is present under one naming and absent under another"
+
+	/// The seeds of the base corpus whose graphs draw the roll of #720's shape and whose lazy cycle loses another field
+	/// of its configuration under a renaming, but for those already listed under that shape, copied from a run of the
+	/// rolls' seeds.
+	static let repeatedAncestorLazyCycleSeeds: [UInt64] = [
+		16, 24, 249, 279, 355, 579, 609, 850, 1_014, 1_093, 1_121, 1_175, 1_391, 1_513, 1_538, 1_572,
+		1_661, 1_677, 1_759, 2_096, 2_147, 2_173, 2_298, 2_330, 2_620, 2_645, 2_665, 3_049, 3_080, 3_393, 3_909, 3_964,
+		4_123,
+	]
+
+	/// `issues` with the shapes of the reported issues the base corpus's rolls draw, each combined with a seed's other
+	/// shapes in an entry of its own, since a seed is listed once. Only the base corpus draws these rolls, so the seam
+	/// corpus inherits `knownIssuesBesideReportedIssueShapes`.
+	private static func addingReportedIssueShapes(to issues: [GraphFuzzerKnownIssue]) -> [GraphFuzzerKnownIssue] {
+		var issues = GraphFuzzerKnownIssue.adding(.renamedGraphDiffers(.mockConfigurationFieldPresence), reason: repeatedAncestorLazyCycleReason, seeds: repeatedAncestorLazyCycleSeeds, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.compilerError(containing: "type member must not be named"), reason: reservedLabelReason, seeds: reservedLabelSeeds, to: issues)
+		return GraphFuzzerKnownIssue.adding(.compilerError(containing: "_RepeatBadge' has no member 'SafeDIMockConfiguration'"), reason: repeatedAncestorReason, seeds: repeatedAncestorSeeds, to: issues)
+	}
+
+	/// `knownIssues` but for the shapes of the reported issues only the base corpus draws (`addingReportedIssueShapes`).
+	static let knownIssuesBesideReportedIssueShapes: [GraphFuzzerKnownIssue] = [
 		GraphFuzzerKnownIssue(
 			reason: mockParameterAndFieldOrderReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],

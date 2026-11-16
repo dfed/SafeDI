@@ -2242,6 +2242,8 @@ enum GraphFuzzerGenerator {
 			cycleParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.cycleParameterRandomSeedMask)
 			forwardedLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.forwardedLabelRandomSeedMask)
 			retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionRandomSeedMask)
+			reservedLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reservedLabelRandomSeedMask)
+			repeatedAncestorRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.repeatedAncestorRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2314,6 +2316,8 @@ enum GraphFuzzerGenerator {
 			var finalDeclarations = addingMockVocabulary(to: movingSelfContainedSeamsIntoSeamModule(
 				addingMockOnlyBlockParameterTypes(to: addingUnreadParameterTypes(to: addingLabelFormsSeam(to: addingHoleShapes(to: addingAccessProofExtensions(to: addingAccessProofShapes(to: aliasDeclarations)))))),
 			))
+			// Drawn after it, each from a stream of its own, so that every other draw of a graph they draw in is drawn as before.
+			finalDeclarations = addingRepeatedAncestorShapes(to: addingReservedLabelShapes(to: finalDeclarations))
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -2651,6 +2655,12 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingRetentionShapes`' choices: whether a split graph gains `RetainHome`'s tree, whose seam binds a
 		/// value nothing beneath its instantiator reads, and every shape of that tree.
 		private var retentionRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingReservedLabelShapes`' choices: whether a graph gains `ReservedHost`'s tree, whose label is a word
+		/// a member declaration must spell with backticks, and every shape of that tree.
+		private var reservedLabelRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingRepeatedAncestorShapes`' choices: whether a graph gains `RepeatRoot`'s tree, in which a type is
+		/// built only beneath a cycle edge that repeats an ancestor, and every shape of that tree.
+		private var repeatedAncestorRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -6354,6 +6364,136 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let mockVocabularyRandomSeedMask: UInt64 = 0x6D6F636B566F6361
+
+		// MARK: Shapes of reported issues
+
+		/// The words `addingReservedLabelShapes` labels a property with, each spelled with backticks, as a declaration
+		/// must spell it: `Type` and `Protocol`, which only a member's declaration reserves, and two keywords.
+		static let reservedLabels = ["`Type`", "`Protocol`", "`default`", "`class`"]
+
+		/// In one base corpus graph in twenty-five, adds `ReservedHost`, which instantiates `ReservedLeaf` under a label
+		/// drawn from `reservedLabels`, and now and then `ReservedReader`, which receives it, so that a mock of the host,
+		/// or of `ReservedOuter`, which builds the host, names the label in its `SafeDIOverrides` or in the host's
+		/// `SafeDIMockConfiguration`. Issue #719: a member declared with such a label must spell it with backticks.
+		/// `reservedLabelRandom` draws only for this pass, after every other base pass, and only in the base corpus.
+		private mutating func addingReservedLabelShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, reservedLabelRandom.percentChance(4) else { return declarations }
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let label = reservedLabelRandom.element(of: Self.reservedLabels)
+			let hostIsMocked = reservedLabelRandom.percentChance(50)
+			let outerRoll = reservedLabelRandom.percentChance(50)
+			let readerRoll = reservedLabelRandom.percentChance(30)
+			let leafName = "\(prefix)ReservedLeaf"
+			let hostName = "\(prefix)ReservedHost"
+			let readerName = "\(prefix)ReservedReader"
+			// A host no mock builds names the label in no generated member.
+			let hasOuter = outerRoll || !hostIsMocked
+			var host = TypeDeclaration(
+				name: hostName,
+				instantiableArguments: hostIsMocked ? ["generateMock: true"] : [],
+				properties: [PropertyDeclaration(attribute: "@Instantiated", label: label, type: leafName)],
+				declaresHelperTypes: false,
+			)
+			var declarations = declarations
+			if readerRoll {
+				host.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "reservedReader", type: readerName))
+				var reader = TypeDeclaration(name: readerName, instantiableArguments: [], properties: [PropertyDeclaration(attribute: "@Received", label: label, type: leafName)], declaresHelperTypes: false)
+				declarations.append(reader)
+			}
+			declarations.append(host)
+			var leaf = TypeDeclaration(name: leafName, instantiableArguments: [], properties: [], declaresHelperTypes: false)
+			declarations.append(leaf)
+			if hasOuter {
+				var outer = TypeDeclaration(
+					name: "\(prefix)ReservedOuter",
+					instantiableArguments: ["generateMock: true"],
+					properties: [PropertyDeclaration(attribute: "@Instantiated", label: "reservedHost", type: hostName)],
+					declaresHelperTypes: false,
+				)
+				declarations.append(outer)
+			}
+			return declarations
+		}
+
+		private static let reservedLabelRandomSeedMask: UInt64 = 0x7265736572766566
+
+		/// In one base corpus graph in twenty-five, adds the shape of issue #720: `RepeatRoot`, whose mock is generated,
+		/// builds `RepeatScreen` through `RepeatScreenProtocol`, whose hand-written `mockOnly` mock takes `repeatFlow` and,
+		/// three times in four, not `repeatBadge`; `RepeatFlow` builds `RepeatScreen` again through an instantiator, with
+		/// `init`, beneath the cycle edge, where it builds `RepeatBadge`, built nowhere else, whose hand-written `mockOnly`
+		/// mock's default for `flag` the call reads from `RepeatBadge.SafeDIMockConfiguration`. A mock that takes
+		/// `repeatBadge` builds it itself, which main generates code for that compiles.
+		/// `repeatedAncestorRandom` draws only for this pass, after every other base pass, and only in the base corpus.
+		private mutating func addingRepeatedAncestorShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, repeatedAncestorRandom.percentChance(4) else { return declarations }
+			let mockOmitsBadge = repeatedAncestorRandom.percentChance(75)
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let protocolConformance = sendability == .sendable ? ": Sendable" : ""
+			let rootName = "\(prefix)RepeatRoot"
+			let screenName = "\(prefix)RepeatScreen"
+			let flowName = "\(prefix)RepeatFlow"
+			let badgeName = "\(prefix)RepeatBadge"
+			let screenProtocolName = "\(screenName)Protocol"
+			let badgeProtocolName = "\(badgeName)Protocol"
+			var root = TypeDeclaration(
+				name: rootName,
+				instantiableArguments: ["generateMock: true"],
+				properties: [PropertyDeclaration(attribute: "@Instantiated", label: "repeatScreen", type: screenProtocolName)],
+				declaresHelperTypes: false,
+			)
+			var screen = TypeDeclaration(
+				name: screenName,
+				instantiableArguments: ["fulfillingAdditionalTypes: [\(screenProtocolName).self]"],
+				properties: [
+					PropertyDeclaration(attribute: "@Instantiated", label: "repeatFlow", type: "\(instantiator)<\(flowName)>"),
+					PropertyDeclaration(attribute: "@Instantiated", label: "repeatBadge", type: badgeName),
+				],
+				declaresHelperTypes: false,
+				additionalConformances: [screenProtocolName],
+			)
+			screen.precedingDeclarations.append("public protocol \(screenProtocolName)\(protocolConformance) {}")
+			let badgeParameter = mockOmitsBadge ? "" : ", repeatBadge: \(badgeName) = \(badgeName)()"
+			let badgeArgument = mockOmitsBadge ? "\(badgeName)()" : "repeatBadge"
+			screen.additionalDeclarations.append([
+				"@Instantiable(fulfillingAdditionalTypes: [\(screenProtocolName).self], mockOnly: true)",
+				"extension \(screenName) {",
+				"\tpublic static func mock(repeatFlow: \(instantiator)<\(flowName)> = \(instantiator) { .unused() }\(badgeParameter)) -> \(screenProtocolName) {",
+				"\t\t\(screenName)(repeatFlow: repeatFlow, repeatBadge: \(badgeArgument))",
+				"\t}",
+				"}",
+			].joined(separator: "\n"))
+			var flow = TypeDeclaration(
+				name: flowName,
+				instantiableArguments: [],
+				properties: [PropertyDeclaration(attribute: "@Instantiated", label: "repeatScreenBuilder", type: "\(instantiator)<\(screenName)>")],
+				declaresHelperTypes: false,
+			)
+			flow.precedingDeclarations.append([
+				"extension \(flowName) {",
+				"\tpublic static func unused() -> \(flowName) {",
+				"\t\t\(flowName)(repeatScreenBuilder: \(instantiator) { \(screenName)(repeatFlow: \(instantiator) { unused() }, repeatBadge: \(badgeName)()) })",
+				"\t}",
+				"}",
+			].joined(separator: "\n"))
+			var badge = TypeDeclaration(
+				name: badgeName,
+				instantiableArguments: ["fulfillingAdditionalTypes: [\(badgeProtocolName).self]"],
+				properties: [],
+				declaresHelperTypes: false,
+				additionalConformances: [badgeProtocolName],
+			)
+			badge.defaultValuedParameters = [ParameterDeclaration(name: "flag", type: "Bool", defaultValue: "true")]
+			badge.precedingDeclarations.append("public protocol \(badgeProtocolName)\(protocolConformance) {}")
+			badge.additionalDeclarations.append([
+				"@Instantiable(fulfillingAdditionalTypes: [\(badgeProtocolName).self], mockOnly: true)",
+				"extension \(badgeName) {",
+				"\tpublic static func mock(flag: Bool = true) -> \(badgeProtocolName) { \(badgeName)(flag: flag) }",
+				"}",
+			].joined(separator: "\n"))
+			return declarations + [root, screen, flow, badge]
+		}
+
+		private static let repeatedAncestorRandomSeedMask: UInt64 = 0x7265706561744166
 
 		// MARK: Cycle parameters
 
