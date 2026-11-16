@@ -250,7 +250,24 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.dependencyTreeFiles == ["Screen+SafeDI.swift": generatedFileHeader + Self.screenInitializer])
+		#expect(output.dependencyTreeFiles == [
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
+			        let database = LazilyInstantiated<Database>(__safeDI_database)
+			        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
+			        let cache = Cache(database: database.instance, logger: logger.instance)
+			        self.init(user: user, cache: cache)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_3192EA1C03ABD98F {}
+			}
+			""",
+		])
 		#expect(output.mockFiles == ["Screen+SafeDIMock.swift": generatedFileHeader + """
 		#if DEBUG
 		extension Screen {
@@ -307,32 +324,85 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let callerComment = integration.seamCallComment(type: "Screen", declaringModule: "Feature")
-		let rootCode = """
-		#if canImport(Feature)
-		import Feature
-		#endif
-
-		extension Root {
-		    public init() {
-		        let user = User()
-		        let database = Database()
-		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_3192EA1C03ABD98F.self\(callerComment)
-		            return Screen(__safeDI_user: user, __safeDI_database: database, __safeDI_logger: nil)
-		        }
-		        let screen: Screen = __safeDI_screen()
-		        self.init(user: user, database: database, screen: screen)
-		    }
-		}
-		"""
 		switch integration {
 		case .moduleInfo:
-			#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.screenInitializer])
-			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + rootCode])
+			#expect(output.modules["Feature"]?.generatedFiles == [
+				integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
+				extension Screen {
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
+				        let database = LazilyInstantiated<Database>(__safeDI_database)
+				        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
+				        let cache = Cache(database: database.instance, logger: logger.instance)
+				        self.init(user: user, cache: cache)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_3192EA1C03ABD98F {}
+				}
+				""",
+			])
+			#expect(output.modules["App"]?.generatedFiles == [
+				integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        let user = User()
+				        let database = Database()
+				        func __safeDI_screen() -> Screen {
+				            _ = Screen.__safeDI_Screen_3192EA1C03ABD98F.self\(integration.seamCallComment(type: "Screen", declaringModule: "Feature"))
+				            return Screen(__safeDI_user: user, __safeDI_database: database, __safeDI_logger: nil)
+				        }
+				        let screen: Screen = __safeDI_screen()
+				        self.init(user: user, database: database, screen: screen)
+				    }
+				}
+				""",
+			])
 		case .swiftPackagePlugin:
-			#expect(output.modules["Feature"]?.generatedFiles == ["Screen+SafeDI.swift": generatedFileHeader + Self.screenInitializer])
-			#expect(output.modules["App"]?.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader + rootCode])
+			#expect(output.modules["Feature"]?.generatedFiles == [
+				integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
+				extension Screen {
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
+				        let database = LazilyInstantiated<Database>(__safeDI_database)
+				        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
+				        let cache = Cache(database: database.instance, logger: logger.instance)
+				        self.init(user: user, cache: cache)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_3192EA1C03ABD98F {}
+				}
+				""",
+			])
+			#expect(output.modules["App"]?.generatedFiles == [
+				integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        let user = User()
+				        let database = Database()
+				        func __safeDI_screen() -> Screen {
+				            _ = Screen.__safeDI_Screen_3192EA1C03ABD98F.self\(integration.seamCallComment(type: "Screen", declaringModule: "Feature"))
+				            return Screen(__safeDI_user: user, __safeDI_database: database, __safeDI_logger: nil)
+				        }
+				        let screen: Screen = __safeDI_screen()
+				        self.init(user: user, database: database, screen: screen)
+				    }
+				}
+				""",
+			])
 		}
 	}
 
@@ -353,7 +423,29 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.modules["Feature"]?.generatedFiles == ["Screen+SafeDI.swift": generatedFileHeader + Self.screenInitializers])
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
+			    public init(user: User, database: Database, logger: Logger?) {
+			        self.init(__safeDI_user: user, __safeDI_database: database, __safeDI_logger: logger)
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// From code you write, call the initializer above instead.
+			    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
+			        let database = LazilyInstantiated<Database>(__safeDI_database)
+			        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
+			        let cache = Cache(database: database.instance, logger: logger.instance)
+			        self.init(user: user, cache: cache)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_3192EA1C03ABD98F {}
+			}
+			""",
+		])
 		guard compileVerificationIsEnabled else { return }
 		let compilation = try #require(output.compilation)
 		#expect(compilation.modules.map(\.moduleName) == ["Feature", "Legacy"])
@@ -427,24 +519,6 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 
 	    @Received let user: User
 	    @Instantiated let cache: Cache
-	}
-	"""
-
-	/// What `Feature` generates for `screen` beside `cache(receivingAnalytics: false)`.
-	private static let screenInitializer = """
-	extension Screen {
-	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-	    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
-	        let database = LazilyInstantiated<Database>(__safeDI_database)
-	        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
-	        let cache = Cache(database: database.instance, logger: logger.instance)
-	        self.init(user: user, cache: cache)
-	    }
-	}
-
-	extension Screen {
-	    public enum __safeDI_Screen_3192EA1C03ABD98F {}
 	}
 	"""
 

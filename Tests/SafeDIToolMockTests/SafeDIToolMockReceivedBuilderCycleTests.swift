@@ -97,7 +97,265 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 		// fixed number of lines for each screen, as production does.
 		let output = try await executeSafeDIToolTest(swiftFileContent: Self.screensOpeningOneAnother(screenCount: 24), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.mockFiles == [
-			"Root+SafeDIMock.swift": generatedFileHeader + Self.expectedMockOfScreensOpeningOneAnother(screenCount: 24),
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            s0Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s1Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s2Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s3Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s4Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s5Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s6Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s7Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s8Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s9Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s10Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s11Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s12Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s13Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s14Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s15Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s16Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s17Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s18Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s19Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s20Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s21Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s22Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
+			            s23Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil
+			        ) {
+			            self.s0Builder = s0Builder
+			            self.s1Builder = s1Builder
+			            self.s2Builder = s2Builder
+			            self.s3Builder = s3Builder
+			            self.s4Builder = s4Builder
+			            self.s5Builder = s5Builder
+			            self.s6Builder = s6Builder
+			            self.s7Builder = s7Builder
+			            self.s8Builder = s8Builder
+			            self.s9Builder = s9Builder
+			            self.s10Builder = s10Builder
+			            self.s11Builder = s11Builder
+			            self.s12Builder = s12Builder
+			            self.s13Builder = s13Builder
+			            self.s14Builder = s14Builder
+			            self.s15Builder = s15Builder
+			            self.s16Builder = s16Builder
+			            self.s17Builder = s17Builder
+			            self.s18Builder = s18Builder
+			            self.s19Builder = s19Builder
+			            self.s20Builder = s20Builder
+			            self.s21Builder = s21Builder
+			            self.s22Builder = s22Builder
+			            self.s23Builder = s23Builder
+			        }
+
+			        let s0Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s1Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s2Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s3Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s4Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s5Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s6Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s7Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s8Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s9Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s10Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s11Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s12Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s13Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s14Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s15Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s16Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s17Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s18Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s19Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s20Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s21Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s22Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        let s23Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_s0Builder() -> any Screen {
+			            let s1Builder = ErasedInstantiator<(), any Screen>(__safeDI_s1Builder)
+			            let s2Builder = ErasedInstantiator<(), any Screen>(__safeDI_s2Builder)
+			            let s5Builder = ErasedInstantiator<(), any Screen>(__safeDI_s5Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s0Builder { safeDIBuilder(s1Builder, s2Builder, s5Builder) } else { S0(s1Builder: s1Builder, s2Builder: s2Builder, s5Builder: s5Builder) }
+			        }
+			        func __safeDI_s1Builder() -> any Screen {
+			            let s2Builder = ErasedInstantiator<(), any Screen>(__safeDI_s2Builder)
+			            let s3Builder = ErasedInstantiator<(), any Screen>(__safeDI_s3Builder)
+			            let s6Builder = ErasedInstantiator<(), any Screen>(__safeDI_s6Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s1Builder { safeDIBuilder(s2Builder, s3Builder, s6Builder) } else { S1(s2Builder: s2Builder, s3Builder: s3Builder, s6Builder: s6Builder) }
+			        }
+			        func __safeDI_s2Builder() -> any Screen {
+			            let s3Builder = ErasedInstantiator<(), any Screen>(__safeDI_s3Builder)
+			            let s4Builder = ErasedInstantiator<(), any Screen>(__safeDI_s4Builder)
+			            let s7Builder = ErasedInstantiator<(), any Screen>(__safeDI_s7Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s2Builder { safeDIBuilder(s3Builder, s4Builder, s7Builder) } else { S2(s3Builder: s3Builder, s4Builder: s4Builder, s7Builder: s7Builder) }
+			        }
+			        func __safeDI_s3Builder() -> any Screen {
+			            let s4Builder = ErasedInstantiator<(), any Screen>(__safeDI_s4Builder)
+			            let s5Builder = ErasedInstantiator<(), any Screen>(__safeDI_s5Builder)
+			            let s8Builder = ErasedInstantiator<(), any Screen>(__safeDI_s8Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s3Builder { safeDIBuilder(s4Builder, s5Builder, s8Builder) } else { S3(s4Builder: s4Builder, s5Builder: s5Builder, s8Builder: s8Builder) }
+			        }
+			        func __safeDI_s4Builder() -> any Screen {
+			            let s5Builder = ErasedInstantiator<(), any Screen>(__safeDI_s5Builder)
+			            let s6Builder = ErasedInstantiator<(), any Screen>(__safeDI_s6Builder)
+			            let s9Builder = ErasedInstantiator<(), any Screen>(__safeDI_s9Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s4Builder { safeDIBuilder(s5Builder, s6Builder, s9Builder) } else { S4(s5Builder: s5Builder, s6Builder: s6Builder, s9Builder: s9Builder) }
+			        }
+			        func __safeDI_s5Builder() -> any Screen {
+			            let s6Builder = ErasedInstantiator<(), any Screen>(__safeDI_s6Builder)
+			            let s7Builder = ErasedInstantiator<(), any Screen>(__safeDI_s7Builder)
+			            let s10Builder = ErasedInstantiator<(), any Screen>(__safeDI_s10Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s5Builder { safeDIBuilder(s6Builder, s7Builder, s10Builder) } else { S5(s6Builder: s6Builder, s7Builder: s7Builder, s10Builder: s10Builder) }
+			        }
+			        func __safeDI_s6Builder() -> any Screen {
+			            let s7Builder = ErasedInstantiator<(), any Screen>(__safeDI_s7Builder)
+			            let s8Builder = ErasedInstantiator<(), any Screen>(__safeDI_s8Builder)
+			            let s11Builder = ErasedInstantiator<(), any Screen>(__safeDI_s11Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s6Builder { safeDIBuilder(s7Builder, s8Builder, s11Builder) } else { S6(s7Builder: s7Builder, s8Builder: s8Builder, s11Builder: s11Builder) }
+			        }
+			        func __safeDI_s7Builder() -> any Screen {
+			            let s8Builder = ErasedInstantiator<(), any Screen>(__safeDI_s8Builder)
+			            let s9Builder = ErasedInstantiator<(), any Screen>(__safeDI_s9Builder)
+			            let s12Builder = ErasedInstantiator<(), any Screen>(__safeDI_s12Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s7Builder { safeDIBuilder(s8Builder, s9Builder, s12Builder) } else { S7(s8Builder: s8Builder, s9Builder: s9Builder, s12Builder: s12Builder) }
+			        }
+			        func __safeDI_s8Builder() -> any Screen {
+			            let s9Builder = ErasedInstantiator<(), any Screen>(__safeDI_s9Builder)
+			            let s10Builder = ErasedInstantiator<(), any Screen>(__safeDI_s10Builder)
+			            let s13Builder = ErasedInstantiator<(), any Screen>(__safeDI_s13Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s8Builder { safeDIBuilder(s9Builder, s10Builder, s13Builder) } else { S8(s9Builder: s9Builder, s10Builder: s10Builder, s13Builder: s13Builder) }
+			        }
+			        func __safeDI_s9Builder() -> any Screen {
+			            let s10Builder = ErasedInstantiator<(), any Screen>(__safeDI_s10Builder)
+			            let s11Builder = ErasedInstantiator<(), any Screen>(__safeDI_s11Builder)
+			            let s14Builder = ErasedInstantiator<(), any Screen>(__safeDI_s14Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s9Builder { safeDIBuilder(s10Builder, s11Builder, s14Builder) } else { S9(s10Builder: s10Builder, s11Builder: s11Builder, s14Builder: s14Builder) }
+			        }
+			        func __safeDI_s10Builder() -> any Screen {
+			            let s11Builder = ErasedInstantiator<(), any Screen>(__safeDI_s11Builder)
+			            let s12Builder = ErasedInstantiator<(), any Screen>(__safeDI_s12Builder)
+			            let s15Builder = ErasedInstantiator<(), any Screen>(__safeDI_s15Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s10Builder { safeDIBuilder(s11Builder, s12Builder, s15Builder) } else { S10(s11Builder: s11Builder, s12Builder: s12Builder, s15Builder: s15Builder) }
+			        }
+			        func __safeDI_s11Builder() -> any Screen {
+			            let s12Builder = ErasedInstantiator<(), any Screen>(__safeDI_s12Builder)
+			            let s13Builder = ErasedInstantiator<(), any Screen>(__safeDI_s13Builder)
+			            let s16Builder = ErasedInstantiator<(), any Screen>(__safeDI_s16Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s11Builder { safeDIBuilder(s12Builder, s13Builder, s16Builder) } else { S11(s12Builder: s12Builder, s13Builder: s13Builder, s16Builder: s16Builder) }
+			        }
+			        func __safeDI_s12Builder() -> any Screen {
+			            let s13Builder = ErasedInstantiator<(), any Screen>(__safeDI_s13Builder)
+			            let s14Builder = ErasedInstantiator<(), any Screen>(__safeDI_s14Builder)
+			            let s17Builder = ErasedInstantiator<(), any Screen>(__safeDI_s17Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s12Builder { safeDIBuilder(s13Builder, s14Builder, s17Builder) } else { S12(s13Builder: s13Builder, s14Builder: s14Builder, s17Builder: s17Builder) }
+			        }
+			        func __safeDI_s13Builder() -> any Screen {
+			            let s14Builder = ErasedInstantiator<(), any Screen>(__safeDI_s14Builder)
+			            let s15Builder = ErasedInstantiator<(), any Screen>(__safeDI_s15Builder)
+			            let s18Builder = ErasedInstantiator<(), any Screen>(__safeDI_s18Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s13Builder { safeDIBuilder(s14Builder, s15Builder, s18Builder) } else { S13(s14Builder: s14Builder, s15Builder: s15Builder, s18Builder: s18Builder) }
+			        }
+			        func __safeDI_s14Builder() -> any Screen {
+			            let s15Builder = ErasedInstantiator<(), any Screen>(__safeDI_s15Builder)
+			            let s16Builder = ErasedInstantiator<(), any Screen>(__safeDI_s16Builder)
+			            let s19Builder = ErasedInstantiator<(), any Screen>(__safeDI_s19Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s14Builder { safeDIBuilder(s15Builder, s16Builder, s19Builder) } else { S14(s15Builder: s15Builder, s16Builder: s16Builder, s19Builder: s19Builder) }
+			        }
+			        func __safeDI_s15Builder() -> any Screen {
+			            let s16Builder = ErasedInstantiator<(), any Screen>(__safeDI_s16Builder)
+			            let s17Builder = ErasedInstantiator<(), any Screen>(__safeDI_s17Builder)
+			            let s20Builder = ErasedInstantiator<(), any Screen>(__safeDI_s20Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s15Builder { safeDIBuilder(s16Builder, s17Builder, s20Builder) } else { S15(s16Builder: s16Builder, s17Builder: s17Builder, s20Builder: s20Builder) }
+			        }
+			        func __safeDI_s16Builder() -> any Screen {
+			            let s17Builder = ErasedInstantiator<(), any Screen>(__safeDI_s17Builder)
+			            let s18Builder = ErasedInstantiator<(), any Screen>(__safeDI_s18Builder)
+			            let s21Builder = ErasedInstantiator<(), any Screen>(__safeDI_s21Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s16Builder { safeDIBuilder(s17Builder, s18Builder, s21Builder) } else { S16(s17Builder: s17Builder, s18Builder: s18Builder, s21Builder: s21Builder) }
+			        }
+			        func __safeDI_s17Builder() -> any Screen {
+			            let s18Builder = ErasedInstantiator<(), any Screen>(__safeDI_s18Builder)
+			            let s19Builder = ErasedInstantiator<(), any Screen>(__safeDI_s19Builder)
+			            let s22Builder = ErasedInstantiator<(), any Screen>(__safeDI_s22Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s17Builder { safeDIBuilder(s18Builder, s19Builder, s22Builder) } else { S17(s18Builder: s18Builder, s19Builder: s19Builder, s22Builder: s22Builder) }
+			        }
+			        func __safeDI_s18Builder() -> any Screen {
+			            let s19Builder = ErasedInstantiator<(), any Screen>(__safeDI_s19Builder)
+			            let s20Builder = ErasedInstantiator<(), any Screen>(__safeDI_s20Builder)
+			            let s23Builder = ErasedInstantiator<(), any Screen>(__safeDI_s23Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s18Builder { safeDIBuilder(s19Builder, s20Builder, s23Builder) } else { S18(s19Builder: s19Builder, s20Builder: s20Builder, s23Builder: s23Builder) }
+			        }
+			        func __safeDI_s19Builder() -> any Screen {
+			            let s20Builder = ErasedInstantiator<(), any Screen>(__safeDI_s20Builder)
+			            let s21Builder = ErasedInstantiator<(), any Screen>(__safeDI_s21Builder)
+			            let s0Builder = ErasedInstantiator<(), any Screen>(__safeDI_s0Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s19Builder { safeDIBuilder(s20Builder, s21Builder, s0Builder) } else { S19(s20Builder: s20Builder, s21Builder: s21Builder, s0Builder: s0Builder) }
+			        }
+			        func __safeDI_s20Builder() -> any Screen {
+			            let s21Builder = ErasedInstantiator<(), any Screen>(__safeDI_s21Builder)
+			            let s22Builder = ErasedInstantiator<(), any Screen>(__safeDI_s22Builder)
+			            let s1Builder = ErasedInstantiator<(), any Screen>(__safeDI_s1Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s20Builder { safeDIBuilder(s21Builder, s22Builder, s1Builder) } else { S20(s21Builder: s21Builder, s22Builder: s22Builder, s1Builder: s1Builder) }
+			        }
+			        func __safeDI_s21Builder() -> any Screen {
+			            let s22Builder = ErasedInstantiator<(), any Screen>(__safeDI_s22Builder)
+			            let s23Builder = ErasedInstantiator<(), any Screen>(__safeDI_s23Builder)
+			            let s2Builder = ErasedInstantiator<(), any Screen>(__safeDI_s2Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s21Builder { safeDIBuilder(s22Builder, s23Builder, s2Builder) } else { S21(s22Builder: s22Builder, s23Builder: s23Builder, s2Builder: s2Builder) }
+			        }
+			        func __safeDI_s22Builder() -> any Screen {
+			            let s23Builder = ErasedInstantiator<(), any Screen>(__safeDI_s23Builder)
+			            let s0Builder = ErasedInstantiator<(), any Screen>(__safeDI_s0Builder)
+			            let s3Builder = ErasedInstantiator<(), any Screen>(__safeDI_s3Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s22Builder { safeDIBuilder(s23Builder, s0Builder, s3Builder) } else { S22(s23Builder: s23Builder, s0Builder: s0Builder, s3Builder: s3Builder) }
+			        }
+			        func __safeDI_s23Builder() -> any Screen {
+			            let s0Builder = ErasedInstantiator<(), any Screen>(__safeDI_s0Builder)
+			            let s1Builder = ErasedInstantiator<(), any Screen>(__safeDI_s1Builder)
+			            let s4Builder = ErasedInstantiator<(), any Screen>(__safeDI_s4Builder)
+			            return if let safeDIBuilder = safeDIOverrides.s23Builder { safeDIBuilder(s0Builder, s1Builder, s4Builder) } else { S23(s0Builder: s0Builder, s1Builder: s1Builder, s4Builder: s4Builder) }
+			        }
+			        let s0Builder = ErasedInstantiator<(), any Screen>(__safeDI_s0Builder)
+			        let s1Builder = ErasedInstantiator<(), any Screen>(__safeDI_s1Builder)
+			        let s2Builder = ErasedInstantiator<(), any Screen>(__safeDI_s2Builder)
+			        let s3Builder = ErasedInstantiator<(), any Screen>(__safeDI_s3Builder)
+			        let s4Builder = ErasedInstantiator<(), any Screen>(__safeDI_s4Builder)
+			        let s5Builder = ErasedInstantiator<(), any Screen>(__safeDI_s5Builder)
+			        let s6Builder = ErasedInstantiator<(), any Screen>(__safeDI_s6Builder)
+			        let s7Builder = ErasedInstantiator<(), any Screen>(__safeDI_s7Builder)
+			        let s8Builder = ErasedInstantiator<(), any Screen>(__safeDI_s8Builder)
+			        let s9Builder = ErasedInstantiator<(), any Screen>(__safeDI_s9Builder)
+			        let s10Builder = ErasedInstantiator<(), any Screen>(__safeDI_s10Builder)
+			        let s11Builder = ErasedInstantiator<(), any Screen>(__safeDI_s11Builder)
+			        let s12Builder = ErasedInstantiator<(), any Screen>(__safeDI_s12Builder)
+			        let s13Builder = ErasedInstantiator<(), any Screen>(__safeDI_s13Builder)
+			        let s14Builder = ErasedInstantiator<(), any Screen>(__safeDI_s14Builder)
+			        let s15Builder = ErasedInstantiator<(), any Screen>(__safeDI_s15Builder)
+			        let s16Builder = ErasedInstantiator<(), any Screen>(__safeDI_s16Builder)
+			        let s17Builder = ErasedInstantiator<(), any Screen>(__safeDI_s17Builder)
+			        let s18Builder = ErasedInstantiator<(), any Screen>(__safeDI_s18Builder)
+			        let s19Builder = ErasedInstantiator<(), any Screen>(__safeDI_s19Builder)
+			        let s20Builder = ErasedInstantiator<(), any Screen>(__safeDI_s20Builder)
+			        let s21Builder = ErasedInstantiator<(), any Screen>(__safeDI_s21Builder)
+			        let s22Builder = ErasedInstantiator<(), any Screen>(__safeDI_s22Builder)
+			        let s23Builder = ErasedInstantiator<(), any Screen>(__safeDI_s23Builder)
+			        return Root(s0Builder: s0Builder, s1Builder: s1Builder, s2Builder: s2Builder, s3Builder: s3Builder, s4Builder: s4Builder, s5Builder: s5Builder, s6Builder: s6Builder, s7Builder: s7Builder, s8Builder: s8Builder, s9Builder: s9Builder, s10Builder: s10Builder, s11Builder: s11Builder, s12Builder: s12Builder, s13Builder: s13Builder, s14Builder: s14Builder, s15Builder: s15Builder, s16Builder: s16Builder, s17Builder: s17Builder, s18Builder: s18Builder, s19Builder: s19Builder, s20Builder: s20Builder, s21Builder: s21Builder, s22Builder: s22Builder, s23Builder: s23Builder)
+			    }
+			}
+			#endif
+			""",
 		], "Unexpected output \(output.mockFiles)")
 	}
 
@@ -765,7 +1023,135 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_rebindsTheFormEachLabelIsRead_whenMockPromotesSixLabelsInTwoFormsOnOneLoop() async throws {
 		let output = try await executeSafeDIToolTest(swiftFileContent: Self.labelsPromotedInTwoForms(count: 6), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		#expect(output.mockFiles == ["Root+SafeDIMock.swift": generatedFileHeader + Self.expectedMockOfLabelsPromotedInTwoForms(count: 6)], "Unexpected output \(output.mockFiles)")
+		#expect(output.mockFiles == [
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            c0Builder_Instantiator__C0: ((Instantiator<Peer>) -> C0)? = nil,
+			            c1Builder_Instantiator__C1: ((Instantiator<Peer>) -> C1)? = nil,
+			            c2Builder_Instantiator__C2: ((Instantiator<Peer>) -> C2)? = nil,
+			            c3Builder_Instantiator__C3: ((Instantiator<Peer>) -> C3)? = nil,
+			            c4Builder_Instantiator__C4: ((Instantiator<Peer>) -> C4)? = nil,
+			            c5Builder_Instantiator__C5: ((Instantiator<Peer>) -> C5)? = nil,
+			            peerBuilder: ((Instantiator<C0>?, Instantiator<C1>?, Instantiator<C2>?, Instantiator<C3>?, Instantiator<C4>?, Instantiator<C5>?) -> Peer)? = nil,
+			            c0Builder_Instantiator__C0_Optional: ((Instantiator<Peer>) -> C0)? = nil,
+			            c1Builder_Instantiator__C1_Optional: ((Instantiator<Peer>) -> C1)? = nil,
+			            c2Builder_Instantiator__C2_Optional: ((Instantiator<Peer>) -> C2)? = nil,
+			            c3Builder_Instantiator__C3_Optional: ((Instantiator<Peer>) -> C3)? = nil,
+			            c4Builder_Instantiator__C4_Optional: ((Instantiator<Peer>) -> C4)? = nil,
+			            c5Builder_Instantiator__C5_Optional: ((Instantiator<Peer>) -> C5)? = nil
+			        ) {
+			            self.c0Builder_Instantiator__C0 = c0Builder_Instantiator__C0
+			            self.c1Builder_Instantiator__C1 = c1Builder_Instantiator__C1
+			            self.c2Builder_Instantiator__C2 = c2Builder_Instantiator__C2
+			            self.c3Builder_Instantiator__C3 = c3Builder_Instantiator__C3
+			            self.c4Builder_Instantiator__C4 = c4Builder_Instantiator__C4
+			            self.c5Builder_Instantiator__C5 = c5Builder_Instantiator__C5
+			            self.peerBuilder = peerBuilder
+			            self.c0Builder_Instantiator__C0_Optional = c0Builder_Instantiator__C0_Optional
+			            self.c1Builder_Instantiator__C1_Optional = c1Builder_Instantiator__C1_Optional
+			            self.c2Builder_Instantiator__C2_Optional = c2Builder_Instantiator__C2_Optional
+			            self.c3Builder_Instantiator__C3_Optional = c3Builder_Instantiator__C3_Optional
+			            self.c4Builder_Instantiator__C4_Optional = c4Builder_Instantiator__C4_Optional
+			            self.c5Builder_Instantiator__C5_Optional = c5Builder_Instantiator__C5_Optional
+			        }
+
+			        let c0Builder_Instantiator__C0: ((Instantiator<Peer>) -> C0)?
+			        let c1Builder_Instantiator__C1: ((Instantiator<Peer>) -> C1)?
+			        let c2Builder_Instantiator__C2: ((Instantiator<Peer>) -> C2)?
+			        let c3Builder_Instantiator__C3: ((Instantiator<Peer>) -> C3)?
+			        let c4Builder_Instantiator__C4: ((Instantiator<Peer>) -> C4)?
+			        let c5Builder_Instantiator__C5: ((Instantiator<Peer>) -> C5)?
+			        let peerBuilder: ((Instantiator<C0>?, Instantiator<C1>?, Instantiator<C2>?, Instantiator<C3>?, Instantiator<C4>?, Instantiator<C5>?) -> Peer)?
+			        let c0Builder_Instantiator__C0_Optional: ((Instantiator<Peer>) -> C0)?
+			        let c1Builder_Instantiator__C1_Optional: ((Instantiator<Peer>) -> C1)?
+			        let c2Builder_Instantiator__C2_Optional: ((Instantiator<Peer>) -> C2)?
+			        let c3Builder_Instantiator__C3_Optional: ((Instantiator<Peer>) -> C3)?
+			        let c4Builder_Instantiator__C4_Optional: ((Instantiator<Peer>) -> C4)?
+			        let c5Builder_Instantiator__C5_Optional: ((Instantiator<Peer>) -> C5)?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_c0Builder_Instantiator__C0() -> C0 {
+			            let peerBuilder = Instantiator<Peer>(__safeDI_peerBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.c0Builder_Instantiator__C0 { safeDIBuilder(peerBuilder) } else { C0(peerBuilder: peerBuilder) }
+			        }
+			        func __safeDI_c1Builder_Instantiator__C1() -> C1 {
+			            let peerBuilder = Instantiator<Peer>(__safeDI_peerBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.c1Builder_Instantiator__C1 { safeDIBuilder(peerBuilder) } else { C1(peerBuilder: peerBuilder) }
+			        }
+			        func __safeDI_c2Builder_Instantiator__C2() -> C2 {
+			            let peerBuilder = Instantiator<Peer>(__safeDI_peerBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.c2Builder_Instantiator__C2 { safeDIBuilder(peerBuilder) } else { C2(peerBuilder: peerBuilder) }
+			        }
+			        func __safeDI_c3Builder_Instantiator__C3() -> C3 {
+			            let peerBuilder = Instantiator<Peer>(__safeDI_peerBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.c3Builder_Instantiator__C3 { safeDIBuilder(peerBuilder) } else { C3(peerBuilder: peerBuilder) }
+			        }
+			        func __safeDI_c4Builder_Instantiator__C4() -> C4 {
+			            let peerBuilder = Instantiator<Peer>(__safeDI_peerBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.c4Builder_Instantiator__C4 { safeDIBuilder(peerBuilder) } else { C4(peerBuilder: peerBuilder) }
+			        }
+			        func __safeDI_c5Builder_Instantiator__C5() -> C5 {
+			            let peerBuilder = Instantiator<Peer>(__safeDI_peerBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.c5Builder_Instantiator__C5 { safeDIBuilder(peerBuilder) } else { C5(peerBuilder: peerBuilder) }
+			        }
+			        func __safeDI_peerBuilder() -> Peer {
+			            let c0Builder_Instantiator__C0_Optional = Instantiator<C0>(__safeDI_c0Builder_Instantiator__C0_Optional)
+			            let c1Builder_Instantiator__C1_Optional = Instantiator<C1>(__safeDI_c1Builder_Instantiator__C1_Optional)
+			            let c2Builder_Instantiator__C2_Optional = Instantiator<C2>(__safeDI_c2Builder_Instantiator__C2_Optional)
+			            let c3Builder_Instantiator__C3_Optional = Instantiator<C3>(__safeDI_c3Builder_Instantiator__C3_Optional)
+			            let c4Builder_Instantiator__C4_Optional = Instantiator<C4>(__safeDI_c4Builder_Instantiator__C4_Optional)
+			            let c5Builder_Instantiator__C5_Optional = Instantiator<C5>(__safeDI_c5Builder_Instantiator__C5_Optional)
+			            let c0Builder: Instantiator<C0>? = c0Builder_Instantiator__C0_Optional
+			            let c1Builder: Instantiator<C1>? = c1Builder_Instantiator__C1_Optional
+			            let c2Builder: Instantiator<C2>? = c2Builder_Instantiator__C2_Optional
+			            let c3Builder: Instantiator<C3>? = c3Builder_Instantiator__C3_Optional
+			            let c4Builder: Instantiator<C4>? = c4Builder_Instantiator__C4_Optional
+			            let c5Builder: Instantiator<C5>? = c5Builder_Instantiator__C5_Optional
+			            return if let safeDIBuilder = safeDIOverrides.peerBuilder { safeDIBuilder(c0Builder, c1Builder, c2Builder, c3Builder, c4Builder, c5Builder) } else { Peer(c0Builder: c0Builder, c1Builder: c1Builder, c2Builder: c2Builder, c3Builder: c3Builder, c4Builder: c4Builder, c5Builder: c5Builder) }
+			        }
+			        func __safeDI_c0Builder_Instantiator__C0_Optional() -> C0 {
+			            let peerBuilder = Instantiator<Peer>(__safeDI_peerBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.c0Builder_Instantiator__C0_Optional { safeDIBuilder(peerBuilder) } else { C0(peerBuilder: peerBuilder) }
+			        }
+			        func __safeDI_c1Builder_Instantiator__C1_Optional() -> C1 {
+			            let peerBuilder = Instantiator<Peer>(__safeDI_peerBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.c1Builder_Instantiator__C1_Optional { safeDIBuilder(peerBuilder) } else { C1(peerBuilder: peerBuilder) }
+			        }
+			        func __safeDI_c2Builder_Instantiator__C2_Optional() -> C2 {
+			            let peerBuilder = Instantiator<Peer>(__safeDI_peerBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.c2Builder_Instantiator__C2_Optional { safeDIBuilder(peerBuilder) } else { C2(peerBuilder: peerBuilder) }
+			        }
+			        func __safeDI_c3Builder_Instantiator__C3_Optional() -> C3 {
+			            let peerBuilder = Instantiator<Peer>(__safeDI_peerBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.c3Builder_Instantiator__C3_Optional { safeDIBuilder(peerBuilder) } else { C3(peerBuilder: peerBuilder) }
+			        }
+			        func __safeDI_c4Builder_Instantiator__C4_Optional() -> C4 {
+			            let peerBuilder = Instantiator<Peer>(__safeDI_peerBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.c4Builder_Instantiator__C4_Optional { safeDIBuilder(peerBuilder) } else { C4(peerBuilder: peerBuilder) }
+			        }
+			        func __safeDI_c5Builder_Instantiator__C5_Optional() -> C5 {
+			            let peerBuilder = Instantiator<Peer>(__safeDI_peerBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.c5Builder_Instantiator__C5_Optional { safeDIBuilder(peerBuilder) } else { C5(peerBuilder: peerBuilder) }
+			        }
+			        let c0Builder_Instantiator__C0 = Instantiator<C0>(__safeDI_c0Builder_Instantiator__C0)
+			        let c1Builder_Instantiator__C1 = Instantiator<C1>(__safeDI_c1Builder_Instantiator__C1)
+			        let c2Builder_Instantiator__C2 = Instantiator<C2>(__safeDI_c2Builder_Instantiator__C2)
+			        let c3Builder_Instantiator__C3 = Instantiator<C3>(__safeDI_c3Builder_Instantiator__C3)
+			        let c4Builder_Instantiator__C4 = Instantiator<C4>(__safeDI_c4Builder_Instantiator__C4)
+			        let c5Builder_Instantiator__C5 = Instantiator<C5>(__safeDI_c5Builder_Instantiator__C5)
+			        return Root(c0Builder: c0Builder_Instantiator__C0, c1Builder: c1Builder_Instantiator__C1, c2Builder: c2Builder_Instantiator__C2, c3Builder: c3Builder_Instantiator__C3, c4Builder: c4Builder_Instantiator__C4, c5Builder: c5Builder_Instantiator__C5)
+			    }
+			}
+			#endif
+			""",
+		], "Unexpected output \(output.mockFiles)")
 	}
 
 	// MARK: Tests – Builders whose functions take cycle parameters
@@ -2798,51 +3184,6 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 		[1, 2, 5].map { (index + $0) % screenCount }
 	}
 
-	/// The mock of the root of `screensOpeningOneAnother(screenCount:)`, after the generated file's header: for each
-	/// screen, an override, a builder function that wraps again the three builders the screen receives, and a binding.
-	private static func expectedMockOfScreensOpeningOneAnother(screenCount: Int) -> String {
-		let builderType = "ErasedInstantiator<(), any Screen>"
-		let overrideType = "((\(builderType), \(builderType), \(builderType)) -> any Screen)?"
-		let indices = 0..<screenCount
-		var lines = ["#if DEBUG", "extension Root {", "    /// Overrides for the mock dependency tree.", "    struct SafeDIOverrides {", "        init("]
-		for index in indices {
-			lines.append("            s\(index)Builder: \(overrideType) = nil\(index == screenCount - 1 ? "" : ",")")
-		}
-		lines.append("        ) {")
-		for index in indices {
-			lines.append("            self.s\(index)Builder = s\(index)Builder")
-		}
-		lines.append("        }")
-		lines.append("")
-		for index in indices {
-			lines.append("        let s\(index)Builder: \(overrideType)")
-		}
-		lines.append("    }")
-		lines.append("")
-		lines.append("    static func mock(")
-		lines.append("        safeDIOverrides: SafeDIOverrides = .init()")
-		lines.append("    ) -> Root {")
-		for index in indices {
-			let openedLabels = openedScreenIndices(from: index, screenCount: screenCount).map { "s\($0)Builder" }
-			lines.append("        func __safeDI_s\(index)Builder() -> any Screen {")
-			for label in openedLabels {
-				lines.append("            let \(label) = \(builderType)(__safeDI_\(label))")
-			}
-			let arguments = openedLabels.joined(separator: ", ")
-			let labeledArguments = openedLabels.map { "\($0): \($0)" }.joined(separator: ", ")
-			lines.append("            return if let safeDIBuilder = safeDIOverrides.s\(index)Builder { safeDIBuilder(\(arguments)) } else { S\(index)(\(labeledArguments)) }")
-			lines.append("        }")
-		}
-		for index in indices {
-			lines.append("        let s\(index)Builder = \(builderType)(__safeDI_s\(index)Builder)")
-		}
-		lines.append("        return Root(\(indices.map { "s\($0)Builder: s\($0)Builder" }.joined(separator: ", ")))")
-		lines.append("    }")
-		lines.append("}")
-		lines.append("#endif")
-		return lines.joined(separator: "\n")
-	}
-
 	/// `Step` declares its own `session` and closes a cycle on `screenBuilder`, so `__safeDI_screenBuilder` takes
 	/// `session`, and `Detail` receives `screenBuilder` inside its tree.
 	private static let loopMemberTakingCycleParameterFixture = [
@@ -2863,73 +3204,6 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 		}
 		files.append(type("Peer", (0..<count).map { "@Received let c\($0)Builder: Instantiator<C\($0)>?" }))
 		return files
-	}
-
-	/// The mock of the root of `labelsPromotedInTwoForms(count:)`, after the generated file's header: an override for each
-	/// child's builder in each form and for `peerBuilder`, whose function wraps again the optional form of every child's
-	/// builder, the form `Peer` reads, and a binding of each non-optional form, which the root's construction reads.
-	private static func expectedMockOfLabelsPromotedInTwoForms(count: Int) -> String {
-		let indices = 0..<count
-		let peerOverrideType = "((\(indices.map { "Instantiator<C\($0)>?" }.joined(separator: ", "))) -> Peer)?"
-		var fields = [(name: String, type: String)]()
-		for index in indices {
-			fields.append(("c\(index)Builder_Instantiator__C\(index)", "((Instantiator<Peer>) -> C\(index))?"))
-		}
-		fields.append(("peerBuilder", peerOverrideType))
-		for index in indices {
-			fields.append(("c\(index)Builder_Instantiator__C\(index)_Optional", "((Instantiator<Peer>) -> C\(index))?"))
-		}
-		var lines = ["#if DEBUG", "extension Root {", "    /// Overrides for the mock dependency tree.", "    struct SafeDIOverrides {", "        init("]
-		for (position, field) in fields.enumerated() {
-			lines.append("            \(field.name): \(field.type) = nil\(position == fields.count - 1 ? "" : ",")")
-		}
-		lines.append("        ) {")
-		for field in fields {
-			lines.append("            self.\(field.name) = \(field.name)")
-		}
-		lines.append("        }")
-		lines.append("")
-		for field in fields {
-			lines.append("        let \(field.name): \(field.type)")
-		}
-		lines.append("    }")
-		lines.append("")
-		lines.append("    static func mock(")
-		lines.append("        safeDIOverrides: SafeDIOverrides = .init()")
-		lines.append("    ) -> Root {")
-		/// The builder function of a child's builder, in the form `suffix` names.
-		func childFunction(_ index: Int, suffix: String) {
-			let name = "c\(index)Builder_Instantiator__C\(index)\(suffix)"
-			lines.append("        func __safeDI_\(name)() -> C\(index) {")
-			lines.append("            let peerBuilder = Instantiator<Peer>(__safeDI_peerBuilder)")
-			lines.append("            return if let safeDIBuilder = safeDIOverrides.\(name) { safeDIBuilder(peerBuilder) } else { C\(index)(peerBuilder: peerBuilder) }")
-			lines.append("        }")
-		}
-		for index in indices {
-			childFunction(index, suffix: "")
-		}
-		lines.append("        func __safeDI_peerBuilder() -> Peer {")
-		for index in indices {
-			lines.append("            let c\(index)Builder_Instantiator__C\(index)_Optional = Instantiator<C\(index)>(__safeDI_c\(index)Builder_Instantiator__C\(index)_Optional)")
-		}
-		for index in indices {
-			lines.append("            let c\(index)Builder: Instantiator<C\(index)>? = c\(index)Builder_Instantiator__C\(index)_Optional")
-		}
-		let arguments = indices.map { "c\($0)Builder" }.joined(separator: ", ")
-		let labeledArguments = indices.map { "c\($0)Builder: c\($0)Builder" }.joined(separator: ", ")
-		lines.append("            return if let safeDIBuilder = safeDIOverrides.peerBuilder { safeDIBuilder(\(arguments)) } else { Peer(\(labeledArguments)) }")
-		lines.append("        }")
-		for index in indices {
-			childFunction(index, suffix: "_Optional")
-		}
-		for index in indices {
-			lines.append("        let c\(index)Builder_Instantiator__C\(index) = Instantiator<C\(index)>(__safeDI_c\(index)Builder_Instantiator__C\(index))")
-		}
-		lines.append("        return Root(\(indices.map { "c\($0)Builder: c\($0)Builder_Instantiator__C\($0)" }.joined(separator: ", ")))")
-		lines.append("    }")
-		lines.append("}")
-		lines.append("#endif")
-		return lines.joined(separator: "\n")
 	}
 
 	/// `fixture`'s files, named by their position.

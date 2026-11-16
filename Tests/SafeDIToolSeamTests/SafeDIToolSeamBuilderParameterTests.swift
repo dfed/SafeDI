@@ -1556,7 +1556,68 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service", "@Instantiated let filter: any FilterProtocol"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + Self.canonicalServiceCode])
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+			"Feature.swift": generatedFileHeader + """
+			extension Service {
+			    @frozen nonisolated public enum SafeDIScope_UserService {
+			        case profile(profile_Values, SafeDIScope_UserService.Profile_Scope)
+
+			        nonisolated public struct profile_Values {
+			            public let analytics: Analytics
+			        }
+
+			        @frozen nonisolated public enum Profile_Scope {
+			            case userService(userService_Values)
+
+			            nonisolated public struct userService_Values {}
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let userService: (userService_Values) -> __safeDI_Built
+
+			                public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+			                    self.userService = userService
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.userService = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let profile: (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(profile: @escaping (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.profile = profile
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.profile = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
+			        let analytics = Analytics()
+			        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(SafeDIScope_UserService.profile_Values(analytics: analytics))
+			        func __safeDI_profile() -> Profile {
+			            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.userService_Values())
+			            return Profile(userService: userService, analytics: analytics)
+			        }
+			        let profile: Profile = __safeDI_profile()
+			        self.init(analytics: analytics, profile: profile)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_BEE5EF0BBCBFF8CE {}
+			}
+			""",
+		])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
 			"App.swift": generatedFileHeader + """
 			#if canImport(Feature)
@@ -3355,7 +3416,43 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    public enum __safeDI_Service_3049937ADFFE428A {}
 		}
 		"""])
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.reenteringServiceAppFiles)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger = Logger()
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_3049937ADFFE428A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .xBuilder(_, scope): return __safeDI_userServiceBuilder_Service_X_Scope(scope)
+			                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_X_Scope(_ scope: Service.SafeDIScope_UserService.X_Scope) -> any UserService {
+			                switch scope {
+			                case let .serviceBuilder(scope): return __safeDI_userServiceBuilder_Service(scope)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    let userService: any UserService = DefaultUserService(analytics: analytics, logger: logger)
+			                    return userService
+			                }
+			            }
+			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(logger: logger, service: service)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
 	}
 
@@ -6649,44 +6746,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let service: Service"])
 		return (modules(feature: feature, app: fulfillers + [root]), modules(feature: feature + fulfillers, app: [root]))
 	}
-
-	/// What `App` generates for G4's root when `Service`'s builder reads `analytics` from its struct and `logger` from
-	/// `Root`, however `Service`'s tree reaches `Service` again.
-	private static let reenteringServiceAppFiles = ["App.swift": generatedFileHeader + """
-	#if canImport(Feature)
-	import Feature
-	#endif
-
-	extension Root {
-	    public init() {
-	        let logger = Logger()
-	        func __safeDI_service() -> Service {
-	            _ = Service.__safeDI_Service_3049937ADFFE428A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-	            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-	                switch scope {
-	                case let .xBuilder(_, scope): return __safeDI_userServiceBuilder_Service_X_Scope(scope)
-	                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
-	                }
-	            }
-	            func __safeDI_userServiceBuilder_Service_X_Scope(_ scope: Service.SafeDIScope_UserService.X_Scope) -> any UserService {
-	                switch scope {
-	                case let .serviceBuilder(scope): return __safeDI_userServiceBuilder_Service(scope)
-	                }
-	            }
-	            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
-	                switch scope {
-	                case .userService:
-	                    let userService: any UserService = DefaultUserService(analytics: analytics, logger: logger)
-	                    return userService
-	                }
-	            }
-	            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
-	        }
-	        let service: Service = __safeDI_service()
-	        self.init(logger: logger, service: service)
-	    }
-	}
-	"""]
 
 	/// C9.4b's module: a `#SafeDIConfiguration` that adds a directory, `UserService`, and `Root`, which instantiates
 	/// `service`.

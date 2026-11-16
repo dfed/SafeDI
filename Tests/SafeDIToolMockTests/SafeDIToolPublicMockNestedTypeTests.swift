@@ -1852,35 +1852,145 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 		}
 		#endif
 		"""
-		let configuration = """
-		#if DEBUG
-		/// Configuration for how `Child` is constructed within the public mock trees of module `App`.
-		nonisolated public struct __safeDI_App_Child_MockConfiguration {
-		    public init(
-		        theme: Child.Theme? = nil,
-		        _ safeDIBuilder: ((Child.Theme) -> Child)? = nil
-		    ) {
-		        self.theme = theme
-		        self.safeDIBuilder = safeDIBuilder
-		    }
-
-		    /// `nil` keeps the default of `Child`’s `theme`.
-		    public let theme: Child.Theme?
-		    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Child.Theme) -> Child)?
-		}
-
-		extension Child {
-		    static func __safeDI_init(theme: Child.Theme?, safeDIBuilder: ((Child.Theme) -> Child)?) -> Child {
-		        let theme = theme ?? (.light)
-		        return if let safeDIBuilder { safeDIBuilder(theme) } else { Child(theme: theme) }
-		    }
-		}
-		#endif
-		"""
 		switch integration {
 		case .moduleInfo:
-			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + imports + rootMock + "\n\n" + configuration + "\n"])
+			#expect(output.modules["App"]?.generatedFiles == (integration == .moduleInfo ? [
+				"App.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Root {
+				    /// Overrides for the mock dependency tree.
+				    nonisolated public struct SafeDIOverrides {
+				        public init(
+				            child: __safeDI_App_Child_MockConfiguration = .init()
+				        ) {
+				            self.child = child
+				        }
+
+				        public let child: __safeDI_App_Child_MockConfiguration
+				    }
+
+				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        func __safeDI_child() -> Child {
+				            return Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+				        }
+				        let child: Child = __safeDI_child()
+				        return Root(child: child)
+				    }
+				}
+
+				extension Root {
+				    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+				}
+				#endif
+
+				#if DEBUG
+				/// Configuration for how `Child` is constructed within the public mock trees of module `App`.
+				nonisolated public struct __safeDI_App_Child_MockConfiguration {
+				    public init(
+				        theme: Child.Theme? = nil,
+				        _ safeDIBuilder: ((Child.Theme) -> Child)? = nil
+				    ) {
+				        self.theme = theme
+				        self.safeDIBuilder = safeDIBuilder
+				    }
+
+				    /// `nil` keeps the default of `Child`’s `theme`.
+				    public let theme: Child.Theme?
+				    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
+				    public let safeDIBuilder: ((Child.Theme) -> Child)?
+				}
+
+				extension Child {
+				    static func __safeDI_init(theme: Child.Theme?, safeDIBuilder: ((Child.Theme) -> Child)?) -> Child {
+				        let theme = theme ?? (.light)
+				        return if let safeDIBuilder { safeDIBuilder(theme) } else { Child(theme: theme) }
+				    }
+				}
+				#endif
+
+				""",
+			] : [
+				"Root+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Root {
+				    /// Overrides for the mock dependency tree.
+				    nonisolated public struct SafeDIOverrides {
+				        public init(
+				            child: __safeDI_App_Child_MockConfiguration = .init()
+				        ) {
+				            self.child = child
+				        }
+
+				        public let child: __safeDI_App_Child_MockConfiguration
+				    }
+
+				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        func __safeDI_child() -> Child {
+				            return Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+				        }
+				        let child: Child = __safeDI_child()
+				        return Root(child: child)
+				    }
+				}
+
+				extension Root {
+				    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				/// Configuration for how `Child` is constructed within the public mock trees of module `App`.
+				nonisolated public struct __safeDI_App_Child_MockConfiguration {
+				    public init(
+				        theme: Child.Theme? = nil,
+				        _ safeDIBuilder: ((Child.Theme) -> Child)? = nil
+				    ) {
+				        self.theme = theme
+				        self.safeDIBuilder = safeDIBuilder
+				    }
+
+				    /// `nil` keeps the default of `Child`’s `theme`.
+				    public let theme: Child.Theme?
+				    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
+				    public let safeDIBuilder: ((Child.Theme) -> Child)?
+				}
+
+				extension Child {
+				    static func __safeDI_init(theme: Child.Theme?, safeDIBuilder: ((Child.Theme) -> Child)?) -> Child {
+				        let theme = theme ?? (.light)
+				        return if let safeDIBuilder { safeDIBuilder(theme) } else { Child(theme: theme) }
+				    }
+				}
+				#endif
+
+				""",
+			]))
 		case .swiftPackagePlugin:
 			#expect(output.modules["App"]?.generatedFiles["Root+SafeDIMock.swift"] == generatedFileHeader + imports + rootMock)
 			#expect(output.modules["App"]?.generatedFiles["SafeDIMockConfiguration.swift"] == generatedFileHeader + """
