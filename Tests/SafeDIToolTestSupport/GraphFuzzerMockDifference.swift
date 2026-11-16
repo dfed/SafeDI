@@ -337,8 +337,22 @@ private final class MockMethodCollector: SyntaxVisitor {
 	/// The types with a public mock, each of whose tiers sorts the parameters it takes as `T? = nil`.
 	var typesWithPublicMock = Set<String>()
 
+	/// Whether `declaration` is a tier of a mock: `mock()`, or the function only generated code calls, which a tier that
+	/// takes a builder struct declares beside it with the same parameters (`__safeDI_mock` without the construction
+	/// function's `safeDIBuilder` parameter).
+	static func isMockMethod(_ declaration: FunctionDeclSyntax) -> Bool {
+		switch declaration.name.text {
+		case "mock":
+			true
+		case "__safeDI_mock":
+			!declaration.signature.parameterClause.parameters.contains { $0.firstName.text == "safeDIBuilder" }
+		default:
+			false
+		}
+	}
+
 	override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-		guard node.name.text == "mock" else { return .skipChildren }
+		guard Self.isMockMethod(node) else { return .skipChildren }
 		var extendedType: String?
 		var ancestor = node.parent
 		while let current = ancestor, extendedType == nil {
@@ -432,7 +446,7 @@ private struct Rendering {
 		} else if let declaration = node.as(StructDeclSyntax.self) {
 			scope.configurationOwner = isConfigurationStruct(named: declaration.name.text) ? configurationOwner(named: declaration.name.text, extendedType: scope.extendedType) : nil
 		} else if let declaration = node.as(FunctionDeclSyntax.self) {
-			scope.isMockMethod = !scope.isInFunctionBody && declaration.name.text == "mock"
+			scope.isMockMethod = !scope.isInFunctionBody && MockMethodCollector.isMockMethod(declaration)
 			scope.isPublicMockMethod = scope.isMockMethod && scope.extendedType.map(mockMethods.typesWithPublicMock.contains) == true
 			scope.optionalParametersOfPublicMock = scope.isPublicMockMethod ? Set(declaration.signature.parameterClause.parameters.filter { $0.defaultValue?.value.is(NilLiteralExprSyntax.self) == true }.map { ($0.secondName ?? $0.firstName).text }) : []
 			scope.isConfigurationInitializer = false
@@ -597,7 +611,7 @@ private struct Rendering {
 		      let label = argument.label?.text,
 		      let call = list.parent?.as(FunctionCallExprSyntax.self),
 		      let callee = call.calledExpression.as(MemberAccessExprSyntax.self),
-		      callee.declName.baseName.text == "mock",
+		      ["mock", "__safeDI_mock"].contains(callee.declName.baseName.text),
 		      callee.base?.trimmedDescription == scope.extendedType
 		else { return nil }
 		return scope.optionalParametersOfPublicMock.contains(label) || argument.expression.is(NilLiteralExprSyntax.self) ? label : nil
