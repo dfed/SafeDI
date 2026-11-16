@@ -10,6 +10,10 @@
 # Output:  ROOT/.safedi-out/<Module>.swift (generated), <Module>.safedi, <Module>.swiftmodule, <Module>.o
 # Conditions (default DEBUG) go to `generate` as --active-compilation-conditions and to swiftc as -D flags.
 set -euo pipefail
+# A command that fails ends the script (`set -e`), and not every command prints why, so say which step it was. A
+# subshell that fails stays quiet, so that the step is named once, by the line that started it.
+step="reading the arguments"
+trap '(( ZSH_SUBSHELL )) || print -ru2 -- "${0:t}: failed with status $? at line $LINENO, while $step"' ZERR
 conditions=DEBUG
 if [[ "${1:-}" == "--conditions" ]]; then conditions=$2; shift 2; fi
 (( $# >= 2 )) || { echo "usage: $0 [--conditions DEBUG,X] ROOT MODULE..." >&2; exit 2; }
@@ -19,12 +23,14 @@ package=$( [[ -f "$root/package.txt" ]] && head -1 "$root/package.txt" || basena
 output="$root/.safedi-out"; mkdir -p "$output"
 condition_list=(${(s:,:)conditions})
 
+step="building SafeDITool, SafeDI and the macros"
 echo "Building SafeDITool, SafeDI and the macros (--traits sourceBuild)…" >&2
 (cd "$repository" && swift build --traits sourceBuild >&2)
 bin=$(cd "$repository" && swift build --traits sourceBuild --show-bin-path)
 tool="$bin/SafeDITool"
 # As SafeDIBuildArtifactLocator finds them: SwiftPM's native build names the macro executable `SafeDIMacros-tool`,
 # Swift Build names it `SafeDIMacros` beside a `SafeDIMacros.swiftmodule` directory.
+step="finding what the build made"
 macros=""
 for candidate in "$bin/SafeDIMacros-tool" "$bin/SafeDIMacros-tool.exe" "$bin/SafeDIMacros"; do
 	[[ -f "$candidate" ]] && { macros=$candidate; break; }
@@ -35,6 +41,7 @@ module_search_path="$bin/Modules"; [[ -e "$module_search_path/SafeDI.swiftmodule
 swiftc=(swiftc); command -v xcrun >/dev/null 2>&1 && swiftc=(xcrun swiftc)
 
 for module in "$@"; do
+	step="preparing to generate $module"
 	sources=("$root/$module"/Sources/**/*.swift(N))
 	(( ${#sources} )) || { echo "$module: no Swift files under $root/$module/Sources" >&2; exit 2; }
 	print -rn -- "${(j:,:)sources}" >"$output/$module.csv"
@@ -45,7 +52,9 @@ for module in "$@"; do
 		--package-name "$package")
 	(( ${#condition_list} )) && arguments+=(--active-compilation-conditions "${condition_list[@]}")
 	dependencies=()
-	[[ -f "$root/$module/dependencies.txt" ]] && dependencies=(${(f)"$(grep -v '^[[:space:]]*$' "$root/$module/dependencies.txt")"})
+	# sed, not `grep -v`: grep's status is 1 when it selects no line, which ended the script without a word on a
+	# `dependencies.txt` that is empty or holds only blank lines.
+	[[ -f "$root/$module/dependencies.txt" ]] && dependencies=(${(f)"$(sed '/^[[:space:]]*$/d' "$root/$module/dependencies.txt")"})
 	if (( ${#dependencies} )); then
 		# One path per dependency, built element by element: a nested substitution inside double quotes joins the array
 		# into one word before an outer prefix or suffix applies.
@@ -54,12 +63,14 @@ for module in "$@"; do
 		print -rn -- "${(j:,:)dependency_paths}" >"$output/$module-dependencies.csv"
 		arguments+=(--dependent-module-info-file-path "$output/$module-dependencies.csv")
 	fi
+	step="generating $module"
 	echo "--- generate $module" >&2
 	"$tool" generate "${arguments[@]}"
 done
 
 for module in "$@"; do
 	sources=("$root/$module"/Sources/**/*.swift(N))
+	step="compiling $module"
 	echo "--- swiftc $module" >&2
 	"${swiftc[@]}" -emit-object -whole-module-optimization -parse-as-library \
 		-o "$output/$module.o" -module-name "$module" -package-name "$package" \
