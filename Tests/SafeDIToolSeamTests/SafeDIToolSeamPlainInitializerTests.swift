@@ -869,9 +869,9 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func handWrittenCall_createsArgumentBeforeSeamIsBuilt_whenHoleImplementationReadsItsStructField() async throws {
-		// The Manual's hand-written call: the implementation reads the struct's field only when a `Job` is built, but the
-		// argument is a value, so it exists already.
+	mutating func handWrittenCall_createsArgumentBeforeSeamIsBuilt_whenHoleImplementationReadsCallersValue() async throws {
+		// The Manual's hand-written call: the implementation reads the value the caller passes the seam only when a `Job` is
+		// built, but the argument is a value, so it exists already.
 		let path = try await jobHolePath(appFileNamedScenarios: """
 		import Feature
 		import SafeDI
@@ -890,11 +890,9 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 
 		func handWrittenCall() -> [String] {
 		    traceSink = []
-		    let seam = JobHoleSeam(c: C(), jobUploaderBuilder: { scope in
-		        switch scope {
-		        case let .uploader(values):
-		            HandWrittenUploader(jobBuilder: Instantiator { Job(c: values.c) })
-		        }
+		    let c = C()
+		    let seam = JobHoleSeam(c: c, jobUploaderBuilder: {
+		        HandWrittenUploader(jobBuilder: Instantiator { Job(c: c) })
 		    })
 		    trace("built")
 		    seam.uploader.buildJob()
@@ -1374,27 +1372,40 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles["Service+SafeDI.swift"] == generatedFileHeader + """
 		extension Service {
-		    @frozen public enum SafeDIScope_UserService {
+		    @frozen nonisolated public enum SafeDIScope_UserService {
 		        case userService(userService_Values)
 
-		        public struct userService_Values {}
+		        nonisolated public struct userService_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let userService: (userService_Values) -> __safeDI_Built
+
+		            public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+		                self.userService = userService
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.userService = { _ in __safeDI_builder() }
+		            }
+		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public init(userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
-		        self.init(__safeDI_userServiceBuilder: userServiceBuilder)
+		    public init(userServiceBuilder: @escaping () -> any UserService) {
+		        self.init(__safeDI_userServiceBuilder: .init(__safeDI_noScope: userServiceBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
-		        let userService: any UserService = __safeDI_userServiceBuilder(.userService(SafeDIScope_UserService.userService_Values()))
+		    public init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
+		        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.userService_Values())
 		        self.init(userService: userService)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_47FCCD49F0077492 {}
+		    public enum __safeDI_Service_DE15AB8B7FF442DE {}
 		}
 		""")
 	}

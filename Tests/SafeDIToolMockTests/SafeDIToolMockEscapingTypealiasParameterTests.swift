@@ -856,7 +856,80 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		)
 
 		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
-		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "Mid", imports: ["Feature"], mockedTypeName: "Middle", code: Self.middleMock(under: integration)), "Unexpected output \(generatedFiles)")
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"Mid.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				#if DEBUG
+				extension Middle {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            inner: Inner.SafeDIOverrides = .init()
+				        ) {
+				            self.inner = inner
+				        }
+
+				        let inner: Inner.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        onTap: @escaping OnTap,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Middle {
+				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        return Middle(inner: inner)
+				    }
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Middle+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				#if DEBUG
+				extension Middle {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            inner: Inner.SafeDIOverrides = .init()
+				        ) {
+				            self.inner = inner
+				        }
+
+				        let inner: Inner.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        onTap: @escaping OnTap,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Middle {
+				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
+				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        return Middle(inner: inner)
+				    }
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+
+				""",
+			]
+		}
+		#expect(generatedFiles == expectedFiles, "Unexpected output \(generatedFiles)")
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -869,7 +942,88 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		)
 
 		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
-		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "Mid", imports: ["Feature"], mockedTypeName: "Middle", code: Self.middleMock(under: integration, isPublic: true)), "Unexpected output \(generatedFiles)")
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"Mid.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				#if DEBUG
+				extension Middle {
+				    /// Overrides for the mock dependency tree.
+				    nonisolated public struct SafeDIOverrides {
+				        public init(
+				            inner: Inner.SafeDIOverrides = .init()
+				        ) {
+				            self.inner = inner
+				        }
+
+				        public let inner: Inner.SafeDIOverrides
+				    }
+
+				    public static func mock(
+				        onTap: @escaping OnTap,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Middle {
+				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        return Middle(inner: inner)
+				    }
+				}
+
+				extension Middle {
+				    public enum __safeDI_Middle_mock_DE28F65876F78D79 {}
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Middle+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				#if DEBUG
+				extension Middle {
+				    /// Overrides for the mock dependency tree.
+				    nonisolated public struct SafeDIOverrides {
+				        public init(
+				            inner: Inner.SafeDIOverrides = .init()
+				        ) {
+				            self.inner = inner
+				        }
+
+				        public let inner: Inner.SafeDIOverrides
+				    }
+
+				    public static func mock(
+				        onTap: @escaping OnTap,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Middle {
+				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
+				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        return Middle(inner: inner)
+				    }
+				}
+
+				extension Middle {
+				    public enum __safeDI_Middle_mock_DE28F65876F78D79 {}
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+
+				""",
+			]
+		}
+		#expect(generatedFiles == expectedFiles, "Unexpected output \(generatedFiles)")
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -882,7 +1036,80 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		)
 
 		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
-		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "Mid", imports: ["Feature"], mockedTypeName: "Middle", code: Self.middleMock(under: integration)), "Unexpected output \(generatedFiles)")
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"Mid.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				#if DEBUG
+				extension Middle {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            inner: Inner.SafeDIOverrides = .init()
+				        ) {
+				            self.inner = inner
+				        }
+
+				        let inner: Inner.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        onTap: @escaping OnTap,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Middle {
+				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        return Middle(inner: inner)
+				    }
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Middle+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				#if DEBUG
+				extension Middle {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            inner: Inner.SafeDIOverrides = .init()
+				        ) {
+				            self.inner = inner
+				        }
+
+				        let inner: Inner.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        onTap: @escaping OnTap,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Middle {
+				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
+				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        return Middle(inner: inner)
+				    }
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+
+				""",
+			]
+		}
+		#expect(generatedFiles == expectedFiles, "Unexpected output \(generatedFiles)")
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -895,34 +1122,86 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		)
 
 		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
-		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "Mid", imports: ["Feature"], mockedTypeName: "Middle", code: """
-		#if DEBUG
-		extension Middle {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            innerBuilder: Inner.SafeDIOverrides = .init()
-		        ) {
-		            self.innerBuilder = innerBuilder
-		        }
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"Mid.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
 
-		        let innerBuilder: Inner.SafeDIOverrides
-		    }
+				#if DEBUG
+				extension Middle {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            innerBuilder: Inner.SafeDIOverrides = .init()
+				        ) {
+				            self.innerBuilder = innerBuilder
+				        }
 
-		    static func mock(
-		        onTap: @escaping OnTap,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Middle {
-		        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // \(Self.guardComment(under: integration, moduleName: "Feature", typeName: "Inner"))
-		        func __safeDI_innerBuilder() -> Inner {
-		            Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.innerBuilder)
-		        }
-		        let innerBuilder = Instantiator<Inner>(__safeDI_innerBuilder)
-		        return Middle(innerBuilder: innerBuilder)
-		    }
+				        let innerBuilder: Inner.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        onTap: @escaping OnTap,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Middle {
+				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // \(Self.guardComment(under: integration, moduleName: "Feature", typeName: "Inner"))
+				        func __safeDI_innerBuilder() -> Inner {
+				            Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.innerBuilder)
+				        }
+				        let innerBuilder = Instantiator<Inner>(__safeDI_innerBuilder)
+				        return Middle(innerBuilder: innerBuilder)
+				    }
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Middle+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				#if DEBUG
+				extension Middle {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            innerBuilder: Inner.SafeDIOverrides = .init()
+				        ) {
+				            self.innerBuilder = innerBuilder
+				        }
+
+				        let innerBuilder: Inner.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        onTap: @escaping OnTap,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Middle {
+				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // \(Self.guardComment(under: integration, moduleName: "Feature", typeName: "Inner"))
+				        func __safeDI_innerBuilder() -> Inner {
+				            Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.innerBuilder)
+				        }
+				        let innerBuilder = Instantiator<Inner>(__safeDI_innerBuilder)
+				        return Middle(innerBuilder: innerBuilder)
+				    }
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+
+				""",
+			]
 		}
-		#endif
-		"""), "Unexpected output \(generatedFiles)")
+		#expect(generatedFiles == expectedFiles, "Unexpected output \(generatedFiles)")
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -935,7 +1214,80 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		)
 
 		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
-		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "Mid", imports: ["Feature"], mockedTypeName: "Middle", code: Self.middleMock(under: integration, onTapType: "Space.OnTap", calledGuardHash: "9E97244FDF6BDF5D")), "Unexpected output \(generatedFiles)")
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"Mid.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				#if DEBUG
+				extension Middle {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            inner: Inner.SafeDIOverrides = .init()
+				        ) {
+				            self.inner = inner
+				        }
+
+				        let inner: Inner.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        onTap: @escaping Space.OnTap,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Middle {
+				        _ = Inner.__safeDI_Inner_mock_9E97244FDF6BDF5D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        return Middle(inner: inner)
+				    }
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Middle+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				#if DEBUG
+				extension Middle {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            inner: Inner.SafeDIOverrides = .init()
+				        ) {
+				            self.inner = inner
+				        }
+
+				        let inner: Inner.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        onTap: @escaping Space.OnTap,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Middle {
+				        _ = Inner.__safeDI_Inner_mock_9E97244FDF6BDF5D.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
+				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        return Middle(inner: inner)
+				    }
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+
+				""",
+			]
+		}
+		#expect(generatedFiles == expectedFiles, "Unexpected output \(generatedFiles)")
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -961,31 +1313,89 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		)
 
 		let generatedFiles = try #require(output.modules["App"]).generatedFiles
-		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "App", imports: ["Feature", "Mid"], mockedTypeName: "Outer", code: """
-		#if DEBUG
-		extension Outer {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            middle: Middle.SafeDIOverrides = .init()
-		        ) {
-		            self.middle = middle
-		        }
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(Mid)
+				import Mid
+				#endif
 
-		        let middle: Middle.SafeDIOverrides
-		    }
+				#if DEBUG
+				extension Outer {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            middle: Middle.SafeDIOverrides = .init()
+				        ) {
+				            self.middle = middle
+				        }
 
-		    static func mock(
-		        onTap: @escaping OnTap,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Outer {
-		        _ = Middle.__safeDI_Middle_mock_DE28F65876F78D79.self // \(Self.guardComment(under: integration, moduleName: "Mid", typeName: "Middle"))
-		        let middle = Middle.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.middle)
-		        return Outer(middle: middle)
-		    }
+				        let middle: Middle.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        onTap: @escaping OnTap,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Outer {
+				        _ = Middle.__safeDI_Middle_mock_DE28F65876F78D79.self // \(Self.guardComment(under: integration, moduleName: "Mid", typeName: "Middle"))
+				        let middle = Middle.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.middle)
+				        return Outer(middle: middle)
+				    }
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Outer+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(Mid)
+				import Mid
+				#endif
+
+				#if DEBUG
+				extension Outer {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            middle: Middle.SafeDIOverrides = .init()
+				        ) {
+				            self.middle = middle
+				        }
+
+				        let middle: Middle.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        onTap: @escaping OnTap,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Outer {
+				        _ = Middle.__safeDI_Middle_mock_DE28F65876F78D79.self // \(Self.guardComment(under: integration, moduleName: "Mid", typeName: "Middle"))
+				        let middle = Middle.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.middle)
+				        return Outer(middle: middle)
+				    }
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(Mid)
+				import Mid
+				#endif
+
+
+				""",
+			]
 		}
-		#endif
-		"""), "Unexpected output \(generatedFiles)")
+		#expect(generatedFiles == expectedFiles, "Unexpected output \(generatedFiles)")
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1078,43 +1488,6 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		]
 	}
 
-	/// `Middle`'s generated mock, which calls the public mock of `Inner`.
-	private static func middleMock(under integration: MultiModuleIntegration, isPublic: Bool = false, onTapType: String = "OnTap", calledGuardHash: String = "DE28F65876F78D79") -> String {
-		let modifier = isPublic ? "public " : ""
-		let ownGuard = isPublic ? """
-
-
-		extension Middle {
-		    public enum __safeDI_Middle_mock_\(calledGuardHash) {}
-		}
-		""" : ""
-		return """
-		#if DEBUG
-		extension Middle {
-		    /// Overrides for the mock dependency tree.
-		    \(isPublic ? "nonisolated public " : "")struct SafeDIOverrides {
-		        \(modifier)init(
-		            inner: Inner.SafeDIOverrides = .init()
-		        ) {
-		            self.inner = inner
-		        }
-
-		        \(modifier)let inner: Inner.SafeDIOverrides
-		    }
-
-		    \(modifier)static func mock(
-		        onTap: @escaping \(onTapType),
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Middle {
-		        _ = Inner.__safeDI_Inner_mock_\(calledGuardHash).self // \(guardComment(under: integration, moduleName: "Feature", typeName: "Inner"))
-		        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
-		        return Middle(inner: inner)
-		    }
-		}\(ownGuard)
-		#endif
-		"""
-	}
-
 	/// The comment on a generated line that names the guard enum of `typeName`, declared in module `moduleName`.
 	private static func guardComment(under integration: MultiModuleIntegration, moduleName: String, typeName: String) -> String {
 		switch integration {
@@ -1122,16 +1495,6 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 			"If this line does not compile, compile the code SafeDI generates for module \(moduleName) into \(moduleName): under Bazel, add \(moduleName)’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
 		case .swiftPackagePlugin:
 			"If this line does not compile, add the SafeDI plugin to the target that declares \(typeName)."
-		}
-	}
-
-	private static func mockFiles(under integration: MultiModuleIntegration, moduleName: String, imports: [String], mockedTypeName: String, code: String) -> [String: String] {
-		let header = generatedFileHeader + imports.map { "#if canImport(\($0))\nimport \($0)\n#endif" }.joined(separator: "\n") + "\n\n"
-		return switch integration {
-		case .moduleInfo:
-			["\(moduleName).swift": header + code]
-		case .swiftPackagePlugin:
-			["\(mockedTypeName)+SafeDIMock.swift": header + code, "SafeDIMockConfiguration.swift": header]
 		}
 	}
 }

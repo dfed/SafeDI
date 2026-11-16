@@ -272,11 +272,11 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			),
 			expectedFeatureFile: (name: "Feature.swift", contents: """
 			extension Hub {
-			    @frozen public enum SafeDIScope_Api {
+			    @frozen nonisolated public enum SafeDIScope_Api {
 			        case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
 			        case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
 
-			        public struct tBuilder_Values {
+			        nonisolated public struct tBuilder_Values {
 			            public var mark: Mark? { __safeDI_mark.instance }
 			            let __safeDI_mark: LazilyInstantiated<Mark?>
 
@@ -285,7 +285,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            }
 			        }
 
-			        public struct cBuilder_Values {
+			        nonisolated public struct cBuilder_Values {
 			            public var mark: Mark? { __safeDI_mark.instance }
 			            public let tBuilder: Instantiator<T>
 			            let __safeDI_mark: LazilyInstantiated<Mark?>
@@ -296,36 +296,81 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen public enum T_Scope {
+			        @frozen nonisolated public enum T_Scope {
 			            indirect case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
 			            case api(api_Values)
 
-			            public struct cBuilder_Values {
+			            nonisolated public struct cBuilder_Values {
 			                public let mark: Mark?
 			                public let reader: MarkReader
 			            }
 
-			            public struct api_Values {
+			            nonisolated public struct api_Values {
 			                public let mark: Mark?
 			                public let reader: MarkReader
 			                public let cBuilder: Instantiator<C>
 			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let cBuilder: (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>
+			                public let api: (api_Values) -> __safeDI_Built
+
+			                public init(cBuilder: @escaping (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>, api: @escaping (api_Values) -> __safeDI_Built) {
+			                    self.cBuilder = cBuilder
+			                    self.api = api
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.cBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.api = { _ in __safeDI_builder() }
+			                }
+			            }
 			        }
 
-			        @frozen public enum C_Scope {
+			        @frozen nonisolated public enum C_Scope {
 			            indirect case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
 
-			            public struct tBuilder_Values {
+			            nonisolated public struct tBuilder_Values {
 			                public let mark: Mark
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let tBuilder: (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>
+
+			                public init(tBuilder: @escaping (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                    self.tBuilder = tBuilder
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.tBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let tBuilder: (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let cBuilder: (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(tBuilder: @escaping (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>, cBuilder: @escaping (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.tBuilder = tBuilder
+			                self.cBuilder = cBuilder
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.tBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.cBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 			            }
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_mark __safeDI_mark_: @autoclosure @escaping () -> Mark?, __safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
+			    public init(__safeDI_mark __safeDI_mark_: @autoclosure @escaping () -> Mark?, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
 			        let mark = LazilyInstantiated<Mark?>(__safeDI_mark_)
-			        let __safeDI_apiValues_tBuilder = SafeDIScope_Api.tBuilder_Values(mark: mark)
+			        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder(SafeDIScope_Api.tBuilder_Values(mark: mark))
 			        func __safeDI_tBuilder(mark: Mark?) -> T {
 			            let reader = MarkReader(mark: mark)
 			            func __safeDI_cBuilder() -> C {
@@ -336,20 +381,20 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			                return C(mark: mark, tBuilder: tBuilder)
 			            }
 			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			            let api: any Api = __safeDI_apiBuilder(.tBuilder(__safeDI_apiValues_tBuilder, .api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder))))
+			            let api: any Api = __safeDI_apiBuilder_tBuilder.api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder))
 			            return T(reader: reader, cBuilder: cBuilder, api: api)
 			        }
 			        let tBuilder = Instantiator<T> {
 			            __safeDI_tBuilder(mark: mark.instance)
 			        }
-			        let __safeDI_apiValues_cBuilder = SafeDIScope_Api.cBuilder_Values(mark: mark, tBuilder: tBuilder)
+			        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(SafeDIScope_Api.cBuilder_Values(mark: mark, tBuilder: tBuilder))
 			        func __safeDI_cBuilder() -> C {
 			            let mark = Mark()
-			            let __safeDI_apiValues_tBuilder = SafeDIScope_Api.C_Scope.tBuilder_Values(mark: mark)
+			            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(SafeDIScope_Api.C_Scope.tBuilder_Values(mark: mark))
 			            func __safeDI_tBuilder() -> T {
 			                let reader = MarkReader(mark: mark)
 			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                let api: any Api = __safeDI_apiBuilder(.cBuilder(__safeDI_apiValues_cBuilder, .tBuilder(__safeDI_apiValues_tBuilder, .api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder)))))
+			                let api: any Api = __safeDI_apiBuilder_tBuilder.api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder))
 			                return T(reader: reader, cBuilder: cBuilder, api: api)
 			            }
 			            let tBuilder = Instantiator<T>(__safeDI_tBuilder)
@@ -361,7 +406,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_0A2311840283A6E1 {}
+			    public enum __safeDI_Hub_3346DB48A8E1A345 {}
 			}
 			"""),
 			expectedApp: """
@@ -372,28 +417,24 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_hub() -> Hub {
-			            _ = Hub.__safeDI_Hub_0A2311840283A6E1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_apiBuilder_Hub(_ scope: Hub.SafeDIScope_Api) -> any Api {
-			                switch scope {
-			                case let .tBuilder(_, scope): return __safeDI_apiBuilder_Hub_T_Scope(scope)
-			                case let .cBuilder(_, scope): return __safeDI_apiBuilder_Hub_C_Scope(scope)
-			                }
+			            _ = Hub.__safeDI_Hub_3346DB48A8E1A345.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIScope_Api.__safeDI_Builder<any Api> {
+			                .init(tBuilder: { _ in __safeDI_apiBuilder_Hub_T_Scope() }, cBuilder: { _ in __safeDI_apiBuilder_Hub_C_Scope() })
 			            }
-			            func __safeDI_apiBuilder_Hub_T_Scope(_ scope: Hub.SafeDIScope_Api.T_Scope) -> any Api {
-			                switch scope {
-			                case let .cBuilder(_, scope): return __safeDI_apiBuilder_Hub_C_Scope(scope)
-			                case let .api(scope):
-			                    let mark = scope.mark
-			                    let api: any Api = LiveApi(mark: mark)
-			                    return api
-			                }
+			            func __safeDI_apiBuilder_Hub_T_Scope() -> Hub.SafeDIScope_Api.T_Scope.__safeDI_Builder<any Api> {
+			                .init(
+			                    cBuilder: { _ in __safeDI_apiBuilder_Hub_C_Scope() },
+			                    api: { scope in
+			                        let mark = scope.mark
+			                        let api: any Api = LiveApi(mark: mark)
+			                        return api
+			                    }
+			                )
 			            }
-			            func __safeDI_apiBuilder_Hub_C_Scope(_ scope: Hub.SafeDIScope_Api.C_Scope) -> any Api {
-			                switch scope {
-			                case let .tBuilder(_, scope): return __safeDI_apiBuilder_Hub_T_Scope(scope)
-			                }
+			            func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.SafeDIScope_Api.C_Scope.__safeDI_Builder<any Api> {
+			                .init(tBuilder: { _ in __safeDI_apiBuilder_Hub_T_Scope() })
 			            }
-			            return Hub(__safeDI_mark: nil, __safeDI_apiBuilder: __safeDI_apiBuilder_Hub)
+			            return Hub(__safeDI_mark: nil, __safeDI_apiBuilder: __safeDI_apiBuilder_Hub())
 			        }
 			        let hub: Hub = __safeDI_hub()
 			        self.init(hub: hub)
@@ -429,12 +470,12 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			),
 			expectedFeatureFile: (name: "Feature.swift", contents: """
 			extension Hub {
-			    @frozen public enum SafeDIScope_Api {
+			    @frozen nonisolated public enum SafeDIScope_Api {
 			        case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
 			        case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
 			        case t(t_Values, SafeDIScope_Api.T_Scope)
 
-			        public struct tBuilder_Values {
+			        nonisolated public struct tBuilder_Values {
 			            public var mark: Mark { __safeDI_mark.instance }
 			            let __safeDI_mark: LazilyInstantiated<Mark>
 
@@ -443,7 +484,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            }
 			        }
 
-			        public struct cBuilder_Values {
+			        nonisolated public struct cBuilder_Values {
 			            public var mark: Mark { __safeDI_mark.instance }
 			            public let tBuilder: Instantiator<T>
 			            let __safeDI_mark: LazilyInstantiated<Mark>
@@ -454,7 +495,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            }
 			        }
 
-			        public struct t_Values {
+			        nonisolated public struct t_Values {
 			            public var mark: Mark { __safeDI_mark.instance }
 			            public let tBuilder: Instantiator<T>
 			            public let cBuilder: Instantiator<C>
@@ -467,36 +508,84 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen public enum T_Scope {
+			        @frozen nonisolated public enum T_Scope {
 			            indirect case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
 			            case api(api_Values)
 
-			            public struct cBuilder_Values {
+			            nonisolated public struct cBuilder_Values {
 			                public let mark: Mark
 			                public let reader: MarkReader
 			            }
 
-			            public struct api_Values {
+			            nonisolated public struct api_Values {
 			                public let mark: Mark
 			                public let reader: MarkReader
 			                public let cBuilder: Instantiator<C>
 			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let cBuilder: (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>
+			                public let api: (api_Values) -> __safeDI_Built
+
+			                public init(cBuilder: @escaping (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>, api: @escaping (api_Values) -> __safeDI_Built) {
+			                    self.cBuilder = cBuilder
+			                    self.api = api
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.cBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.api = { _ in __safeDI_builder() }
+			                }
+			            }
 			        }
 
-			        @frozen public enum C_Scope {
+			        @frozen nonisolated public enum C_Scope {
 			            indirect case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
 
-			            public struct tBuilder_Values {
+			            nonisolated public struct tBuilder_Values {
 			                public let mark: Mark
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let tBuilder: (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>
+
+			                public init(tBuilder: @escaping (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                    self.tBuilder = tBuilder
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.tBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let tBuilder: (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let cBuilder: (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let t: (t_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(tBuilder: @escaping (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>, cBuilder: @escaping (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>, t: @escaping (t_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.tBuilder = tBuilder
+			                self.cBuilder = cBuilder
+			                self.t = t
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.tBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.cBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.t = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 			            }
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_mark __safeDI_mark_: @autoclosure @escaping () -> Mark, __safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
+			    public init(__safeDI_mark __safeDI_mark_: @autoclosure @escaping () -> Mark, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
 			        let mark = LazilyInstantiated<Mark>(__safeDI_mark_)
-			        let __safeDI_apiValues_tBuilder = SafeDIScope_Api.tBuilder_Values(mark: mark)
+			        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder(SafeDIScope_Api.tBuilder_Values(mark: mark))
 			        func __safeDI_tBuilder(mark: Mark) -> T {
 			            let reader = MarkReader(mark: mark)
 			            func __safeDI_cBuilder() -> C {
@@ -507,44 +596,44 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			                return C(mark: mark, tBuilder: tBuilder)
 			            }
 			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			            let api: any Api = __safeDI_apiBuilder(.tBuilder(__safeDI_apiValues_tBuilder, .api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder))))
+			            let api: any Api = __safeDI_apiBuilder_tBuilder.api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder))
 			            return T(reader: reader, cBuilder: cBuilder, api: api)
 			        }
 			        let tBuilder = Instantiator<T> {
 			            __safeDI_tBuilder(mark: mark.instance)
 			        }
-			        let __safeDI_apiValues_cBuilder = SafeDIScope_Api.cBuilder_Values(mark: mark, tBuilder: tBuilder)
+			        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(SafeDIScope_Api.cBuilder_Values(mark: mark, tBuilder: tBuilder))
 			        func __safeDI_cBuilder() -> C {
 			            let mark = Mark()
-			            let __safeDI_apiValues_tBuilder = SafeDIScope_Api.C_Scope.tBuilder_Values(mark: mark)
+			            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(SafeDIScope_Api.C_Scope.tBuilder_Values(mark: mark))
 			            func __safeDI_tBuilder() -> T {
 			                let reader = MarkReader(mark: mark)
 			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                let api: any Api = __safeDI_apiBuilder(.cBuilder(__safeDI_apiValues_cBuilder, .tBuilder(__safeDI_apiValues_tBuilder, .api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder)))))
+			                let api: any Api = __safeDI_apiBuilder_tBuilder.api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder))
 			                return T(reader: reader, cBuilder: cBuilder, api: api)
 			            }
 			            let tBuilder = Instantiator<T>(__safeDI_tBuilder)
 			            return C(mark: mark, tBuilder: tBuilder)
 			        }
 			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			        let __safeDI_apiValues_t = SafeDIScope_Api.t_Values(mark: mark, tBuilder: tBuilder, cBuilder: cBuilder)
+			        let __safeDI_apiBuilder_t = __safeDI_apiBuilder.t(SafeDIScope_Api.t_Values(mark: mark, tBuilder: tBuilder, cBuilder: cBuilder))
 			        func __safeDI_t() -> T {
 			            let reader = MarkReader(mark: mark.instance)
-			            let __safeDI_apiValues_cBuilder = SafeDIScope_Api.T_Scope.cBuilder_Values(mark: mark.instance, reader: reader)
+			            let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder_t.cBuilder(SafeDIScope_Api.T_Scope.cBuilder_Values(mark: mark.instance, reader: reader))
 			            func __safeDI_cBuilder() -> C {
 			                let mark = Mark()
-			                let __safeDI_apiValues_tBuilder = SafeDIScope_Api.C_Scope.tBuilder_Values(mark: mark)
+			                let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(SafeDIScope_Api.C_Scope.tBuilder_Values(mark: mark))
 			                func __safeDI_tBuilder() -> T {
 			                    let reader = MarkReader(mark: mark)
 			                    let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                    let api: any Api = __safeDI_apiBuilder(.t(__safeDI_apiValues_t, .cBuilder(__safeDI_apiValues_cBuilder, .tBuilder(__safeDI_apiValues_tBuilder, .api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder))))))
+			                    let api: any Api = __safeDI_apiBuilder_tBuilder.api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder))
 			                    return T(reader: reader, cBuilder: cBuilder, api: api)
 			                }
 			                let tBuilder = Instantiator<T>(__safeDI_tBuilder)
 			                return C(mark: mark, tBuilder: tBuilder)
 			            }
 			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			            let api: any Api = __safeDI_apiBuilder(.t(__safeDI_apiValues_t, .api(SafeDIScope_Api.T_Scope.api_Values(mark: mark.instance, reader: reader, cBuilder: cBuilder))))
+			            let api: any Api = __safeDI_apiBuilder_t.api(SafeDIScope_Api.T_Scope.api_Values(mark: mark.instance, reader: reader, cBuilder: cBuilder))
 			            return T(reader: reader, cBuilder: cBuilder, api: api)
 			        }
 			        let t: T = __safeDI_t()
@@ -553,7 +642,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_D0F5785AAF1C3F7F {}
+			    public enum __safeDI_Hub_0F039E5C53108ED1 {}
 			}
 			"""),
 			expectedApp: """
@@ -565,29 +654,24 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			    public init() {
 			        let mark = Mark()
 			        func __safeDI_hub() -> Hub {
-			            _ = Hub.__safeDI_Hub_D0F5785AAF1C3F7F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_apiBuilder_Hub(_ scope: Hub.SafeDIScope_Api) -> any Api {
-			                switch scope {
-			                case let .tBuilder(_, scope): return __safeDI_apiBuilder_Hub_T_Scope(scope)
-			                case let .cBuilder(_, scope): return __safeDI_apiBuilder_Hub_C_Scope(scope)
-			                case let .t(_, scope): return __safeDI_apiBuilder_Hub_T_Scope(scope)
-			                }
+			            _ = Hub.__safeDI_Hub_0F039E5C53108ED1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIScope_Api.__safeDI_Builder<any Api> {
+			                .init(tBuilder: { _ in __safeDI_apiBuilder_Hub_T_Scope() }, cBuilder: { _ in __safeDI_apiBuilder_Hub_C_Scope() }, t: { _ in __safeDI_apiBuilder_Hub_T_Scope() })
 			            }
-			            func __safeDI_apiBuilder_Hub_T_Scope(_ scope: Hub.SafeDIScope_Api.T_Scope) -> any Api {
-			                switch scope {
-			                case let .cBuilder(_, scope): return __safeDI_apiBuilder_Hub_C_Scope(scope)
-			                case let .api(scope):
-			                    let mark = scope.mark
-			                    let api: any Api = LiveApi(mark: mark)
-			                    return api
-			                }
+			            func __safeDI_apiBuilder_Hub_T_Scope() -> Hub.SafeDIScope_Api.T_Scope.__safeDI_Builder<any Api> {
+			                .init(
+			                    cBuilder: { _ in __safeDI_apiBuilder_Hub_C_Scope() },
+			                    api: { scope in
+			                        let mark = scope.mark
+			                        let api: any Api = LiveApi(mark: mark)
+			                        return api
+			                    }
+			                )
 			            }
-			            func __safeDI_apiBuilder_Hub_C_Scope(_ scope: Hub.SafeDIScope_Api.C_Scope) -> any Api {
-			                switch scope {
-			                case let .tBuilder(_, scope): return __safeDI_apiBuilder_Hub_T_Scope(scope)
-			                }
+			            func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.SafeDIScope_Api.C_Scope.__safeDI_Builder<any Api> {
+			                .init(tBuilder: { _ in __safeDI_apiBuilder_Hub_T_Scope() })
 			            }
-			            return Hub(__safeDI_mark: mark, __safeDI_apiBuilder: __safeDI_apiBuilder_Hub)
+			            return Hub(__safeDI_mark: mark, __safeDI_apiBuilder: __safeDI_apiBuilder_Hub())
 			        }
 			        let hub: Hub = __safeDI_hub()
 			        self.init(mark: mark, hub: hub)
@@ -622,59 +706,107 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			),
 			expectedFeatureFile: (name: "Feature.swift", contents: """
 			extension Hub {
-			    @frozen public enum SafeDIScope_Api {
+			    @frozen nonisolated public enum SafeDIScope_Api {
 			        case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
 			        case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
 			        case t(t_Values, SafeDIScope_Api.T_Scope)
 
-			        public struct tBuilder_Values {
+			        nonisolated public struct tBuilder_Values {
 			            public let mark: LazilyInstantiated<Mark>
 			        }
 
-			        public struct cBuilder_Values {
+			        nonisolated public struct cBuilder_Values {
 			            public let mark: LazilyInstantiated<Mark>
 			            public let tBuilder: Instantiator<T>
 			        }
 
-			        public struct t_Values {
+			        nonisolated public struct t_Values {
 			            public let mark: LazilyInstantiated<Mark>
 			            public let tBuilder: Instantiator<T>
 			            public let cBuilder: Instantiator<C>
 			        }
 
-			        @frozen public enum T_Scope {
+			        @frozen nonisolated public enum T_Scope {
 			            indirect case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
 			            case api(api_Values)
 
-			            public struct cBuilder_Values {
+			            nonisolated public struct cBuilder_Values {
 			                public let mark: Mark
 			                public let reader: MarkReader
 			            }
 
-			            public struct api_Values {
+			            nonisolated public struct api_Values {
 			                public let mark: Mark
 			                public let reader: MarkReader
 			                public let cBuilder: Instantiator<C>
 			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let cBuilder: (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>
+			                public let api: (api_Values) -> __safeDI_Built
+
+			                public init(cBuilder: @escaping (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>, api: @escaping (api_Values) -> __safeDI_Built) {
+			                    self.cBuilder = cBuilder
+			                    self.api = api
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.cBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.api = { _ in __safeDI_builder() }
+			                }
+			            }
 			        }
 
-			        @frozen public enum C_Scope {
+			        @frozen nonisolated public enum C_Scope {
 			            indirect case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
 
-			            public struct tBuilder_Values {
+			            nonisolated public struct tBuilder_Values {
 			                public let mark: Mark
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let tBuilder: (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>
+
+			                public init(tBuilder: @escaping (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                    self.tBuilder = tBuilder
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.tBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let tBuilder: (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let cBuilder: (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let t: (t_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(tBuilder: @escaping (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>, cBuilder: @escaping (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>, t: @escaping (t_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.tBuilder = tBuilder
+			                self.cBuilder = cBuilder
+			                self.t = t
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.tBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.cBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.t = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 			            }
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
+			    public init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
 			        func __safeDI_mark() -> Mark {
 			            Mark()
 			        }
 			        let mark = LazilyInstantiated<Mark>(__safeDI_mark)
-			        let __safeDI_apiValues_tBuilder = SafeDIScope_Api.tBuilder_Values(mark: mark)
+			        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder(SafeDIScope_Api.tBuilder_Values(mark: mark))
 			        func __safeDI_tBuilder(mark: Mark) -> T {
 			            let reader = MarkReader(mark: mark)
 			            func __safeDI_cBuilder() -> C {
@@ -685,44 +817,44 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			                return C(mark: mark, tBuilder: tBuilder)
 			            }
 			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			            let api: any Api = __safeDI_apiBuilder(.tBuilder(__safeDI_apiValues_tBuilder, .api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder))))
+			            let api: any Api = __safeDI_apiBuilder_tBuilder.api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder))
 			            return T(reader: reader, cBuilder: cBuilder, api: api)
 			        }
 			        let tBuilder = Instantiator<T> {
 			            __safeDI_tBuilder(mark: mark.instance)
 			        }
-			        let __safeDI_apiValues_cBuilder = SafeDIScope_Api.cBuilder_Values(mark: mark, tBuilder: tBuilder)
+			        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(SafeDIScope_Api.cBuilder_Values(mark: mark, tBuilder: tBuilder))
 			        func __safeDI_cBuilder() -> C {
 			            let mark = Mark()
-			            let __safeDI_apiValues_tBuilder = SafeDIScope_Api.C_Scope.tBuilder_Values(mark: mark)
+			            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(SafeDIScope_Api.C_Scope.tBuilder_Values(mark: mark))
 			            func __safeDI_tBuilder() -> T {
 			                let reader = MarkReader(mark: mark)
 			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                let api: any Api = __safeDI_apiBuilder(.cBuilder(__safeDI_apiValues_cBuilder, .tBuilder(__safeDI_apiValues_tBuilder, .api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder)))))
+			                let api: any Api = __safeDI_apiBuilder_tBuilder.api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder))
 			                return T(reader: reader, cBuilder: cBuilder, api: api)
 			            }
 			            let tBuilder = Instantiator<T>(__safeDI_tBuilder)
 			            return C(mark: mark, tBuilder: tBuilder)
 			        }
 			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			        let __safeDI_apiValues_t = SafeDIScope_Api.t_Values(mark: mark, tBuilder: tBuilder, cBuilder: cBuilder)
+			        let __safeDI_apiBuilder_t = __safeDI_apiBuilder.t(SafeDIScope_Api.t_Values(mark: mark, tBuilder: tBuilder, cBuilder: cBuilder))
 			        func __safeDI_t() -> T {
 			            let reader = MarkReader(mark: mark.instance)
-			            let __safeDI_apiValues_cBuilder = SafeDIScope_Api.T_Scope.cBuilder_Values(mark: mark.instance, reader: reader)
+			            let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder_t.cBuilder(SafeDIScope_Api.T_Scope.cBuilder_Values(mark: mark.instance, reader: reader))
 			            func __safeDI_cBuilder() -> C {
 			                let mark = Mark()
-			                let __safeDI_apiValues_tBuilder = SafeDIScope_Api.C_Scope.tBuilder_Values(mark: mark)
+			                let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(SafeDIScope_Api.C_Scope.tBuilder_Values(mark: mark))
 			                func __safeDI_tBuilder() -> T {
 			                    let reader = MarkReader(mark: mark)
 			                    let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                    let api: any Api = __safeDI_apiBuilder(.t(__safeDI_apiValues_t, .cBuilder(__safeDI_apiValues_cBuilder, .tBuilder(__safeDI_apiValues_tBuilder, .api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder))))))
+			                    let api: any Api = __safeDI_apiBuilder_tBuilder.api(SafeDIScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder))
 			                    return T(reader: reader, cBuilder: cBuilder, api: api)
 			                }
 			                let tBuilder = Instantiator<T>(__safeDI_tBuilder)
 			                return C(mark: mark, tBuilder: tBuilder)
 			            }
 			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			            let api: any Api = __safeDI_apiBuilder(.t(__safeDI_apiValues_t, .api(SafeDIScope_Api.T_Scope.api_Values(mark: mark.instance, reader: reader, cBuilder: cBuilder))))
+			            let api: any Api = __safeDI_apiBuilder_t.api(SafeDIScope_Api.T_Scope.api_Values(mark: mark.instance, reader: reader, cBuilder: cBuilder))
 			            return T(reader: reader, cBuilder: cBuilder, api: api)
 			        }
 			        let t: T = __safeDI_t()
@@ -731,7 +863,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_4B8CEE95B37FC739 {}
+			    public enum __safeDI_Hub_626F8E43B86CADA1 {}
 			}
 			"""),
 			expectedApp: """
@@ -742,29 +874,24 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_hub() -> Hub {
-			            _ = Hub.__safeDI_Hub_4B8CEE95B37FC739.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_apiBuilder_Hub(_ scope: Hub.SafeDIScope_Api) -> any Api {
-			                switch scope {
-			                case let .tBuilder(_, scope): return __safeDI_apiBuilder_Hub_T_Scope(scope)
-			                case let .cBuilder(_, scope): return __safeDI_apiBuilder_Hub_C_Scope(scope)
-			                case let .t(_, scope): return __safeDI_apiBuilder_Hub_T_Scope(scope)
-			                }
+			            _ = Hub.__safeDI_Hub_626F8E43B86CADA1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIScope_Api.__safeDI_Builder<any Api> {
+			                .init(tBuilder: { _ in __safeDI_apiBuilder_Hub_T_Scope() }, cBuilder: { _ in __safeDI_apiBuilder_Hub_C_Scope() }, t: { _ in __safeDI_apiBuilder_Hub_T_Scope() })
 			            }
-			            func __safeDI_apiBuilder_Hub_T_Scope(_ scope: Hub.SafeDIScope_Api.T_Scope) -> any Api {
-			                switch scope {
-			                case let .cBuilder(_, scope): return __safeDI_apiBuilder_Hub_C_Scope(scope)
-			                case let .api(scope):
-			                    let mark = scope.mark
-			                    let api: any Api = LiveApi(mark: mark)
-			                    return api
-			                }
+			            func __safeDI_apiBuilder_Hub_T_Scope() -> Hub.SafeDIScope_Api.T_Scope.__safeDI_Builder<any Api> {
+			                .init(
+			                    cBuilder: { _ in __safeDI_apiBuilder_Hub_C_Scope() },
+			                    api: { scope in
+			                        let mark = scope.mark
+			                        let api: any Api = LiveApi(mark: mark)
+			                        return api
+			                    }
+			                )
 			            }
-			            func __safeDI_apiBuilder_Hub_C_Scope(_ scope: Hub.SafeDIScope_Api.C_Scope) -> any Api {
-			                switch scope {
-			                case let .tBuilder(_, scope): return __safeDI_apiBuilder_Hub_T_Scope(scope)
-			                }
+			            func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.SafeDIScope_Api.C_Scope.__safeDI_Builder<any Api> {
+			                .init(tBuilder: { _ in __safeDI_apiBuilder_Hub_T_Scope() })
 			            }
-			            return Hub(__safeDI_apiBuilder: __safeDI_apiBuilder_Hub)
+			            return Hub(__safeDI_apiBuilder: __safeDI_apiBuilder_Hub())
 			        }
 			        let hub: Hub = __safeDI_hub()
 			        self.init(hub: hub)
@@ -932,31 +1059,76 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			),
 			expectedFeatureFile: (name: "Feature.swift", contents: """
 			extension Hub {
-			    @frozen public enum SafeDIScope_Api {
-			        @frozen public enum B_Scope {
+			    @frozen nonisolated public enum SafeDIScope_Api {
+			        @frozen nonisolated public enum B_Scope {
 			            case api(api_Values)
 
-			            public struct api_Values {
+			            nonisolated public struct api_Values {
 			                public let a: A
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let api: (api_Values) -> __safeDI_Built
+
+			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+			                    self.api = api
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.api = { _ in __safeDI_builder() }
+			                }
 			            }
 			        }
 			    }
 
-			    @frozen public enum SafeDISendableScope_Api {
+			    @frozen nonisolated public enum SafeDISendableScope_Api {
 			        case a_Sendable(SafeDISendableScope_Api.A_Scope)
 
-			        @frozen public enum A_Scope {
+			        nonisolated public struct a_Sendable_Values: Sendable {}
+
+			        @frozen nonisolated public enum A_Scope {
 			            case bBuilder(SafeDIScope_Api.B_Scope)
+
+			            nonisolated public struct bBuilder_Values: Sendable {}
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			                public let bBuilder: @Sendable (bBuilder_Values) -> SafeDIScope_Api.B_Scope.__safeDI_Builder<__safeDI_Built>
+
+			                public init(bBuilder: @escaping @Sendable (bBuilder_Values) -> SafeDIScope_Api.B_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                    self.bBuilder = bBuilder
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let a_Sendable: @Sendable (a_Sendable_Values) -> SafeDISendableScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(a_Sendable: @escaping @Sendable (a_Sendable_Values) -> SafeDISendableScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.a_Sendable = a_Sendable
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                self.a_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_apiSendableBuilder: @escaping @Sendable (SafeDISendableScope_Api) -> any Api) {
-			        @Sendable func __safeDI_a() -> A {
-			            @Sendable func __safeDI_bBuilder() -> B {
+			    public init(__safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
+			        @Sendable nonisolated func __safeDI_a() -> A {
+			            let __safeDI_apiSendableBuilder_a_Sendable = __safeDI_apiSendableBuilder.a_Sendable(SafeDISendableScope_Api.a_Sendable_Values())
+			            @Sendable nonisolated func __safeDI_bBuilder() -> B {
+			                let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_a_Sendable.bBuilder(SafeDISendableScope_Api.A_Scope.bBuilder_Values())
 			                let a: A = __safeDI_a()
-			                let api: any Api = __safeDI_apiSendableBuilder(.a_Sendable(.bBuilder(.api(SafeDIScope_Api.B_Scope.api_Values(a: a)))))
+			                let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(SafeDIScope_Api.B_Scope.api_Values(a: a))
 			                return B(api: api, a: a)
 			            }
 			            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
@@ -968,7 +1140,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_168DCE00C8B4949D {}
+			    public enum __safeDI_Hub_F6C9110E771DBEC3 {}
 			}
 			"""),
 			expectedApp: """
@@ -979,25 +1151,20 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_hub() -> Hub {
-			            _ = Hub.__safeDI_Hub_168DCE00C8B4949D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable func __safeDI_apiSendableBuilder_Hub(_ scope: Hub.SafeDISendableScope_Api) -> any Api {
-			                switch scope {
-			                case let .a_Sendable(scope): return __safeDI_apiSendableBuilder_Hub_A_Scope(scope)
-			                }
+			            _ = Hub.__safeDI_Hub_F6C9110E771DBEC3.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableScope_Api.__safeDI_Builder<any Api> {
+			                .init(a_Sendable: { _ in __safeDI_apiSendableBuilder_Hub_A_Scope() })
 			            }
-			            @Sendable func __safeDI_apiSendableBuilder_Hub_A_Scope(_ scope: Hub.SafeDISendableScope_Api.A_Scope) -> any Api {
-			                switch scope {
-			                case let .bBuilder(scope): return __safeDI_apiBuilder_Hub_B_Scope(scope)
-			                }
+			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub_A_Scope() -> Hub.SafeDISendableScope_Api.A_Scope.__safeDI_Builder<any Api> {
+			                .init(bBuilder: { _ in __safeDI_apiBuilder_Hub_B_Scope() })
 			            }
-			            @Sendable func __safeDI_apiBuilder_Hub_B_Scope(_ scope: Hub.SafeDIScope_Api.B_Scope) -> any Api {
-			                switch scope {
-			                case .api:
+			            @Sendable nonisolated func __safeDI_apiBuilder_Hub_B_Scope() -> Hub.SafeDIScope_Api.B_Scope.__safeDI_Builder<any Api> {
+			                .init(api: { _ in
 			                    let api: any Api = LiveApi()
 			                    return api
-			                }
+			                })
 			            }
-			            return Hub(__safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Hub)
+			            return Hub(__safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Hub())
 			        }
 			        let hub: Hub = __safeDI_hub()
 			        self.init(hub: hub)

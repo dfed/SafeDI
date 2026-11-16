@@ -558,10 +558,11 @@ public struct SeamSignature: Sendable {
 
 		/// Where a scope enum carries a place.
 		public struct EnumPlace: Sendable {
-			init(nestedByTypeIn enumTypeName: String, rootEnumTypeName: String?, caseName: String, valuesTypeName: String?, isBuiltBySendableBuilder: Bool, route: [RouteStep], values: [Field]) {
+			init(nestedByTypeIn enumTypeName: String, rootEnumTypeName: String?, caseName: String, valuesTypeName: String?, memberValuesTypeName: String? = nil, isBuiltBySendableBuilder: Bool, route: [RouteStep], values: [Field]) {
 				self.enumTypeName = enumTypeName
 				self.caseName = caseName
 				self.valuesTypeName = valuesTypeName
+				self.memberValuesTypeName = memberValuesTypeName
 				self.isBuiltBySendableBuilder = isBuiltBySendableBuilder
 				self.rootEnumTypeName = rootEnumTypeName
 				self.route = route
@@ -574,6 +575,10 @@ public struct SeamSignature: Sendable {
 			/// The name of the case's payload struct, or `nil` for a case of a `@Sendable` enum, which carries no values: a place
 			/// held in a `Sendable` wrapper.
 			public let valuesTypeName: String?
+			/// The name of the struct the place's member takes where its enum declares a builder struct: the payload struct's,
+			/// or the empty `Sendable` struct of a case of a `@Sendable` enum (`ScopeEnum.Case.memberValuesTypeName`); `nil`
+			/// where the enum declares none, and the seam's tree hands the builder the case.
+			public let memberValuesTypeName: String?
 			/// The name of the root enum `enumTypeName` is nested in, or `nil` where the place's case is the root enum's own.
 			public let rootEnumTypeName: String?
 			/// The cases that lead from the root enum to the place's own, outermost first: each wraps the next.
@@ -608,11 +613,12 @@ public struct SeamSignature: Sendable {
 		/// A case on the way from a root enum nested by type to a place, which wraps the next: its name, and what it carries
 		/// before the value it wraps.
 		public struct RouteStep: Sendable {
-			init(caseName: String, values: Values?, innerScope: InnerScope? = nil, leadsIntoFill: Bool = false) {
+			init(caseName: String, values: Values?, innerScope: InnerScope? = nil, leadsIntoFill: Bool = false, member: Member? = nil) {
 				self.caseName = caseName
 				self.values = values
 				self.innerScope = innerScope
 				self.leadsIntoFill = leadsIntoFill
+				self.member = member
 			}
 
 			public let caseName: String
@@ -626,6 +632,23 @@ public struct SeamSignature: Sendable {
 			public let innerScope: InnerScope?
 			/// Whether the case is a call's for a builder it fills, which leads into what the fill builds.
 			let leadsIntoFill: Bool
+			/// Where the enum declares a builder struct (`ScopeEnum.declaresBuilderStruct`), the call of the case's member the
+			/// seam's tree makes, whose result the next step's call, or the place's, is made on; `nil` for an enum that declares
+			/// none.
+			let member: Member?
+
+			/// The call of a case's member on a route: the name the seam's tree binds the struct it returns under, the type of
+			/// the struct it is handed, as the seam's extension spells it, that struct's fields, the path of the property the
+			/// call is made for, and whether it is made at the top of that property's own builder function rather than just
+			/// before it: a member of a `@Sendable` enum whose property is built in a `@Sendable` function, since what it returns
+			/// can be a plain struct, which that function could not capture.
+			struct Member: Sendable {
+				let bindingName: String
+				let valuesType: TypeDescription
+				let fields: [Field]
+				let bindingPath: [Property]
+				let isCalledInsideFunction: Bool
+			}
 
 			/// A case's payload on a route: the name the seam's tree binds it under, before the case's property is built, the
 			/// type of its struct, as the seam's extension spells it, and its fields, what the case's type binds before its
@@ -657,13 +680,17 @@ public struct SeamSignature: Sendable {
 				public let name: String
 			}
 
-			/// The step with its payload bound under `bindingName`, and its inner scope named `innerScopeName`.
-			func named(_ bindingName: String?, innerScopeName: String? = nil) -> RouteStep {
+			/// The step with its payload bound under `bindingName`, and its inner scope named `innerScopeName`; with its member
+			/// call bound under `memberBindingName` where that is given, and with no member call where it is not.
+			func named(_ bindingName: String?, innerScopeName: String? = nil, memberBindingName: String? = nil) -> RouteStep {
 				RouteStep(
 					caseName: caseName,
 					values: values.map { Values(bindingName: bindingName ?? $0.bindingName, type: $0.type, fields: $0.fields, bindingPath: $0.bindingPath) },
 					innerScope: innerScope.map { InnerScope(callPath: $0.callPath, innerKey: $0.innerKey, enumType: $0.enumType, builderLabel: $0.builderLabel, name: innerScopeName ?? $0.name) },
 					leadsIntoFill: leadsIntoFill,
+					member: memberBindingName.flatMap { name in
+						member.map { Member(bindingName: name, valuesType: $0.valuesType, fields: $0.fields, bindingPath: $0.bindingPath, isCalledInsideFunction: $0.isCalledInsideFunction) }
+					},
 				)
 			}
 
@@ -860,10 +887,11 @@ public struct SeamSignature: Sendable {
 		}
 
 		public struct Case: Sendable {
-			public init(name: String, kind: Kind, values: Values? = nil) {
+			public init(name: String, kind: Kind, values: Values? = nil, memberValuesTypeName: String? = nil) {
 				self.name = name
 				self.kind = kind
 				self.values = values
+				self.memberValuesTypeName = memberValuesTypeName ?? values?.typeName
 			}
 
 			public enum Kind: Sendable {
@@ -887,6 +915,10 @@ public struct SeamSignature: Sendable {
 			public internal(set) var kind: Kind
 			/// What the type the enum describes binds before the case's property; `nil` for a case of a `@Sendable` enum.
 			public let values: Values?
+			/// The name of the struct the member of the case takes, in an enum that declares a builder struct
+			/// (`ScopeEnum.declaresBuilderStruct`): the payload struct's, or, for a case of a `@Sendable` enum, which carries no
+			/// values, an empty `Sendable` struct's, named apart as a payload struct is.
+			public let memberValuesTypeName: String?
 		}
 
 		public init(key: Key, typeName: String, rootTypeName: String? = nil, builderLabel: String, cases: [Case]) {
@@ -904,6 +936,11 @@ public struct SeamSignature: Sendable {
 		/// The label of the builder this enum is handed to, which names its dispatcher.
 		public let builderLabel: String
 		public internal(set) var cases: [Case]
+		/// Whether the seam declares a builder struct for the enum, `__safeDI_Builder<Built>`, with one member per case, which
+		/// its generated-only initializer takes in place of a closure over the enum: true for every enum of a hole type no place
+		/// of which forwards a value or holds a seam's scope (`SeamBuilderFamilies.declaresBuilderStructs(of:holesBySite:)`),
+		/// never for a public mock's.
+		public internal(set) var declaresBuilderStruct = false
 
 		/// The enum's type, as a module that does not declare it spells it: qualified by the seam's type, through the root
 		/// enum.
@@ -968,11 +1005,18 @@ public struct SeamSignature: Sendable {
 		/// The label the widest tier takes the builder under.
 		public let label: String
 		public let internalName: String
-		/// The parameter's type, as the initializer's signature spells it.
+		/// The parameter's type, as the initializer only generated code calls spells it: the root enum's builder struct
+		/// where the enum declares one (`ScopeEnum.declaresBuilderStruct`), else a closure over the enum.
 		public let parameterType: TypeDescription
 		/// `parameterType` without `any` at every depth, which the guard hashes: made by the same function, so nothing can be
 		/// emitted and not hashed.
 		public let parameterTypeWithoutAny: TypeDescription
+		/// The parameter's type, as the initializer people call spells it, which a diagnostic names: a closure that takes
+		/// nothing where the generated-only initializer takes a builder struct, which the readable initializer makes from it
+		/// (`init(__safeDI_noScope:)`), else `parameterType`.
+		public let readableParameterType: TypeDescription
+		/// Whether the generated-only initializer takes the root enum's builder struct.
+		public let takesBuilderStruct: Bool
 		/// The access each tier that takes the builder must have no more than: the narrowest of what its type names.
 		public let tierAccess: AccessLevel
 		/// How the narrowest type the builder's type names is proven, or `nil` when every type it names is `public`.
@@ -1007,6 +1051,8 @@ public struct SeamSignature: Sendable {
 				internalName: internalName,
 				parameterType: parameterType,
 				parameterTypeWithoutAny: parameterTypeWithoutAny,
+				readableParameterType: readableParameterType,
+				takesBuilderStruct: takesBuilderStruct,
 				tierAccess: tierAccess,
 				accessCause: accessCause,
 				narrowingInnerSeam: narrowingInnerSeam,

@@ -998,90 +998,237 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		let coreImports = """
-		#if canImport(SafeDI)
-		import SafeDI
-		#endif
-		"""
-		let serviceMock = """
-		#if DEBUG
-		extension Service {
-		    /// Overrides for the mock dependency tree.
-		    nonisolated public struct SafeDIOverrides {
-		        public init() {
-		            self.session = nil
-		        }
-
-		        package init(
-		            session: (() -> Session)? = nil
-		        ) {
-		            self.session = session
-		        }
-
-		        package let session: (() -> Session)?
-		    }
-
-		    public static func mock(
-		        retries: (() -> Int)? = nil,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Service {
-		        let retries = retries ?? ({ 3 })
-		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
-		        return Service(session: session, retries: retries())
-		    }
-		}
-
-		extension Service {
-		    public enum __safeDI_Service_mock_88F7917B74D30085 {}
-		}
-		#endif
-		"""
-		let appImports = """
-		#if canImport(Core)
-		import Core
-		#endif
-		#if canImport(SafeDI)
-		import SafeDI
-		#endif
-		"""
 		let pluginComment = integration.seamCallComment(type: "Service", declaringModule: "Core")
-		let screenMock = """
-		#if DEBUG
-		extension Screen {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            service: Service.SafeDIOverrides = .init()
-		        ) {
-		            self.service = service
-		        }
-
-		        let service: Service.SafeDIOverrides
-		    }
-
-		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Screen {
-		        _ = Service.__safeDI_Service_mock_88F7917B74D30085.self\(pluginComment)
-		        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
-		        return Screen(service: service)
-		    }
-		}
-		#endif
-		"""
 		switch integration {
 		case .moduleInfo:
-			#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + coreImports + "\n\n" + serviceMock])
-			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + appImports + "\n\n" + screenMock])
+			#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Service {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init() {
+			            self.session = nil
+			        }
+
+			        package init(
+			            session: (() -> Session)? = nil
+			        ) {
+			            self.session = session
+			        }
+
+			        package let session: (() -> Session)?
+			    }
+
+			    public static func mock(
+			        retries: (() -> Int)? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Service {
+			        let retries = retries ?? ({ 3 })
+			        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+			        return Service(session: session, retries: retries())
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_mock_88F7917B74D30085 {}
+			}
+			#endif
+			"""])
+			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            service: Service.SafeDIOverrides = .init()
+			        ) {
+			            self.service = service
+			        }
+
+			        let service: Service.SafeDIOverrides
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        _ = Service.__safeDI_Service_mock_88F7917B74D30085.self\(pluginComment)
+			        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
+			        return Screen(service: service)
+			    }
+			}
+			#endif
+			"""])
 		case .swiftPackagePlugin:
-			#expect(output.modules["Core"]?.generatedFiles == [
-				"SafeDIMockConfiguration.swift": generatedFileHeader + coreImports + "\n\n",
-				"Service+SafeDIMock.swift": generatedFileHeader + coreImports + "\n\n" + serviceMock,
-			])
-			#expect(output.modules["App"]?.generatedFiles == [
-				"SafeDIMockConfiguration.swift": generatedFileHeader + appImports + "\n\n",
-				"Screen+SafeDIMock.swift": generatedFileHeader + appImports + "\n\n" + screenMock,
-			])
+			#expect(output.modules["Core"]?.generatedFiles == (integration == .moduleInfo ? [
+				"Core.swift": generatedFileHeader + """
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Service {
+				    /// Overrides for the mock dependency tree.
+				    nonisolated public struct SafeDIOverrides {
+				        public init() {
+				            self.session = nil
+				        }
+
+				        package init(
+				            session: (() -> Session)? = nil
+				        ) {
+				            self.session = session
+				        }
+
+				        package let session: (() -> Session)?
+				    }
+
+				    public static func mock(
+				        retries: (() -> Int)? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Service {
+				        let retries = retries ?? ({ 3 })
+				        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+				        return Service(session: session, retries: retries())
+				    }
+				}
+
+				extension Service {
+				    public enum __safeDI_Service_mock_88F7917B74D30085 {}
+				}
+				#endif
+				""",
+			] : [
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+
+				""",
+				"Service+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Service {
+				    /// Overrides for the mock dependency tree.
+				    nonisolated public struct SafeDIOverrides {
+				        public init() {
+				            self.session = nil
+				        }
+
+				        package init(
+				            session: (() -> Session)? = nil
+				        ) {
+				            self.session = session
+				        }
+
+				        package let session: (() -> Session)?
+				    }
+
+				    public static func mock(
+				        retries: (() -> Int)? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Service {
+				        let retries = retries ?? ({ 3 })
+				        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+				        return Service(session: session, retries: retries())
+				    }
+				}
+
+				extension Service {
+				    public enum __safeDI_Service_mock_88F7917B74D30085 {}
+				}
+				#endif
+				""",
+			]))
+			#expect(output.modules["App"]?.generatedFiles == (integration == .moduleInfo ? [
+				"App.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Screen {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            service: Service.SafeDIOverrides = .init()
+				        ) {
+				            self.service = service
+				        }
+
+				        let service: Service.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Screen {
+				        _ = Service.__safeDI_Service_mock_88F7917B74D30085.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
+				        return Screen(service: service)
+				    }
+				}
+				#endif
+				""",
+			] : [
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+
+				""",
+				"Screen+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Screen {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            service: Service.SafeDIOverrides = .init()
+				        ) {
+				            self.service = service
+				        }
+
+				        let service: Service.SafeDIOverrides
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Screen {
+				        _ = Service.__safeDI_Service_mock_88F7917B74D30085.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
+				        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
+				        return Screen(service: service)
+				    }
+				}
+				#endif
+				""",
+			]))
 		}
 	}
 

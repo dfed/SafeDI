@@ -776,7 +776,8 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 		])
 		// The `B` built again receives the `session` of the `C` that builds it.
 		try await expectValuesAgree(of: fixture, output: output, knownRight: [
@@ -1057,7 +1058,41 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			}
 			#endif
 			""",
-			"SafeDIMockConfiguration.swift": generatedFileHeader + Self.mockConfigurationsOfCAndB + "\n",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			extension C {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            _ safeDIBuilder: ((A) -> C)? = nil
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((A) -> C)?
+			    }
+			}
+
+			extension B {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            cBuilder: C.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((Instantiator<C>) -> B)? = nil
+			        ) {
+			            self.cBuilder = cBuilder
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let cBuilder: C.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Instantiator<C>) -> B)?
+			    }
+			}
+			#endif
+
+			""",
 		])
 		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": Self.handBuiltFamily + """
@@ -1177,7 +1212,8 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 		])
 		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": Self.handBuiltFamily + """
@@ -1296,7 +1332,8 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 		])
 	}
 
@@ -1437,7 +1474,8 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 		])
 	}
 
@@ -1574,6 +1612,62 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			Self.type("C", "@Instantiated let a: SendableLazilyInstantiated<A>", conformances: ", Sendable"),
 		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.generatedFiles == [
+			"A+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension A {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            b: B.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.b = b
+			        }
+
+			        let b: B.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> A {
+			        let __safeDI_b__b_cBuilder_safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder
+			        let __safeDI_b__safeDIBuilder = safeDIOverrides.b.safeDIBuilder
+			        @Sendable func __safeDI_b() -> B {
+			            @Sendable func __safeDI_cBuilder() -> C {
+			                @Sendable func __safeDI_a() -> A {
+			                    let b: B = __safeDI_b()
+			                    return A(b: b)
+			                }
+			                let a = SendableLazilyInstantiated<A>(__safeDI_a)
+			                return if let safeDIBuilder = __safeDI_b__b_cBuilder_safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
+			            }
+			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
+			            return if let safeDIBuilder = __safeDI_b__safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			        }
+			        let b: B = __safeDI_b()
+			        return A(b: b)
+			    }
+			}
+			#endif
+
+			#if DEBUG
+			extension A {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            b: B.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: (@Sendable (B) -> A)? = nil
+			        ) {
+			            self.b = b
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let b: B.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: (@Sendable (B) -> A)?
+			    }
+			}
+			#endif
+			""",
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
@@ -1594,8 +1688,41 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    }
 			}
 			""",
-			"A+SafeDIMock.swift": Self.sendableFamilyMockOfA,
-			"SafeDIMockConfiguration.swift": Self.sendableFamilyMockConfigurations(instantiatorType: "SendableInstantiator<C>"),
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			extension C {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            _ safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)? = nil
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)?
+			    }
+			}
+
+			extension B {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            cBuilder: C.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: (@Sendable (SendableInstantiator<C>) -> B)? = nil
+			        ) {
+			            self.cBuilder = cBuilder
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let cBuilder: C.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: (@Sendable (SendableInstantiator<C>) -> B)?
+			    }
+			}
+			#endif
+
+			""",
 		])
 	}
 
@@ -1609,6 +1736,62 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			Self.type("C", "@Instantiated let a: SendableLazilyInstantiated<A>", conformances: ", Sendable"),
 		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.generatedFiles == [
+			"A+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension A {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            b: B.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.b = b
+			        }
+
+			        let b: B.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> A {
+			        let __safeDI_b__b_cBuilder_safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder
+			        let __safeDI_b__safeDIBuilder = safeDIOverrides.b.safeDIBuilder
+			        @Sendable func __safeDI_b() -> B {
+			            @Sendable func __safeDI_cBuilder() -> C {
+			                @Sendable func __safeDI_a() -> A {
+			                    let b: B = __safeDI_b()
+			                    return A(b: b)
+			                }
+			                let a = SendableLazilyInstantiated<A>(__safeDI_a)
+			                return if let safeDIBuilder = __safeDI_b__b_cBuilder_safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
+			            }
+			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
+			            return if let safeDIBuilder = __safeDI_b__safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			        }
+			        let b: B = __safeDI_b()
+			        return A(b: b)
+			    }
+			}
+			#endif
+
+			#if DEBUG
+			extension A {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            b: B.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: (@Sendable (B) -> A)? = nil
+			        ) {
+			            self.b = b
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let b: B.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: (@Sendable (B) -> A)?
+			    }
+			}
+			#endif
+			""",
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
@@ -1629,8 +1812,41 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    }
 			}
 			""",
-			"A+SafeDIMock.swift": Self.sendableFamilyMockOfA,
-			"SafeDIMockConfiguration.swift": Self.sendableFamilyMockConfigurations(instantiatorType: "SendableInstantiator<C>"),
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			extension C {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            _ safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)? = nil
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)?
+			    }
+			}
+
+			extension B {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            cBuilder: C.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: (@Sendable (SendableInstantiator<C>) -> B)? = nil
+			        ) {
+			            self.cBuilder = cBuilder
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let cBuilder: C.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: (@Sendable (SendableInstantiator<C>) -> B)?
+			    }
+			}
+			#endif
+
+			""",
 		])
 	}
 
@@ -1725,26 +1941,6 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			Self.type("C", "@Instantiated let a: SendableLazilyInstantiated<A>", conformances: ", Sendable"),
 		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.generatedFiles == [
-			"Root+SafeDI.swift": generatedFileHeader + """
-			extension Root {
-			    public convenience init() {
-			        @Sendable func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let a = SendableLazilyInstantiated<A>(__safeDI_a)
-			                    return C(a: a)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
-			            let b: B = __safeDI_b()
-			            return A(b: b)
-			        }
-			        let a: A = __safeDI_a()
-			        self.init(a: a)
-			    }
-			}
-			""",
 			"A+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension A {
@@ -1801,7 +1997,61 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			}
 			#endif
 			""",
-			"SafeDIMockConfiguration.swift": Self.sendableFamilyMockConfigurations(instantiatorType: "Instantiator<C>"),
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        @Sendable func __safeDI_a() -> A {
+			            func __safeDI_b() -> B {
+			                func __safeDI_cBuilder() -> C {
+			                    let a = SendableLazilyInstantiated<A>(__safeDI_a)
+			                    return C(a: a)
+			                }
+			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			                return B(cBuilder: cBuilder)
+			            }
+			            let b: B = __safeDI_b()
+			            return A(b: b)
+			        }
+			        let a: A = __safeDI_a()
+			        self.init(a: a)
+			    }
+			}
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			extension C {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            _ safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)? = nil
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)?
+			    }
+			}
+
+			extension B {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            cBuilder: C.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: (@Sendable (Instantiator<C>) -> B)? = nil
+			        ) {
+			            self.cBuilder = cBuilder
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let cBuilder: C.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: (@Sendable (Instantiator<C>) -> B)?
+			    }
+			}
+			#endif
+
+			""",
 		])
 	}
 
@@ -3147,141 +3397,6 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 	    A(b: B(cBuilder: Instantiator<C> { C(a: makeA()) }))
 	}
 	"""
-
-	/// The configurations of `C` and `B` in the `A -> B -> Instantiator<C> -> C -> A` family, when `A` is mocked.
-	private static let mockConfigurationsOfCAndB = """
-	#if DEBUG
-	extension C {
-	    /// Configuration for how this type is constructed within a mock tree.
-	    struct SafeDIMockConfiguration {
-	        init(
-	            _ safeDIBuilder: ((A) -> C)? = nil
-	        ) {
-	            self.safeDIBuilder = safeDIBuilder
-	        }
-
-	        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-	        let safeDIBuilder: ((A) -> C)?
-	    }
-	}
-
-	extension B {
-	    /// Configuration for how this type is constructed within a mock tree.
-	    struct SafeDIMockConfiguration {
-	        init(
-	            cBuilder: C.SafeDIMockConfiguration = .init(),
-	            _ safeDIBuilder: ((Instantiator<C>) -> B)? = nil
-	        ) {
-	            self.cBuilder = cBuilder
-	            self.safeDIBuilder = safeDIBuilder
-	        }
-
-	        let cBuilder: C.SafeDIMockConfiguration
-	        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-	        let safeDIBuilder: ((Instantiator<C>) -> B)?
-	    }
-	}
-	#endif
-	"""
-
-	/// `A.mock()` of the `Sendable` family `A -> B -> SendableInstantiator<C> -> C -> SendableLazilyInstantiated<A>`: the
-	/// function `b` builds in is `@Sendable`, since the cycle closes on it from inside `cBuilder`'s, and reads its overrides
-	/// into locals declared before it.
-	private static let sendableFamilyMockOfA = generatedFileHeader + """
-	#if DEBUG
-	extension A {
-	    /// Overrides for the mock dependency tree.
-	    struct SafeDIOverrides {
-	        init(
-	            b: B.SafeDIMockConfiguration = .init()
-	        ) {
-	            self.b = b
-	        }
-
-	        let b: B.SafeDIMockConfiguration
-	    }
-
-	    static func mock(
-	        safeDIOverrides: SafeDIOverrides = .init()
-	    ) -> A {
-	        let __safeDI_b__b_cBuilder_safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder
-	        let __safeDI_b__safeDIBuilder = safeDIOverrides.b.safeDIBuilder
-	        @Sendable func __safeDI_b() -> B {
-	            @Sendable func __safeDI_cBuilder() -> C {
-	                @Sendable func __safeDI_a() -> A {
-	                    let b: B = __safeDI_b()
-	                    return A(b: b)
-	                }
-	                let a = SendableLazilyInstantiated<A>(__safeDI_a)
-	                return if let safeDIBuilder = __safeDI_b__b_cBuilder_safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
-	            }
-	            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
-	            return if let safeDIBuilder = __safeDI_b__safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
-	        }
-	        let b: B = __safeDI_b()
-	        return A(b: b)
-	    }
-	}
-	#endif
-
-	#if DEBUG
-	extension A {
-	    /// Configuration for how this type is constructed within a mock tree.
-	    struct SafeDIMockConfiguration {
-	        init(
-	            b: B.SafeDIMockConfiguration = .init(),
-	            _ safeDIBuilder: (@Sendable (B) -> A)? = nil
-	        ) {
-	            self.b = b
-	            self.safeDIBuilder = safeDIBuilder
-	        }
-
-	        let b: B.SafeDIMockConfiguration
-	        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-	        let safeDIBuilder: (@Sendable (B) -> A)?
-	    }
-	}
-	#endif
-	"""
-
-	/// The configurations of `C` and `B` in a family whose `C` closes the cycle with a `SendableLazilyInstantiated<A>`,
-	/// built by an instantiator of `instantiatorType`.
-	private static func sendableFamilyMockConfigurations(instantiatorType: String) -> String {
-		generatedFileHeader + """
-		#if DEBUG
-		extension C {
-		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
-		        init(
-		            _ safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)? = nil
-		        ) {
-		            self.safeDIBuilder = safeDIBuilder
-		        }
-
-		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)?
-		    }
-		}
-
-		extension B {
-		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
-		        init(
-		            cBuilder: C.SafeDIMockConfiguration = .init(),
-		            _ safeDIBuilder: (@Sendable (\(instantiatorType)) -> B)? = nil
-		        ) {
-		            self.cBuilder = cBuilder
-		            self.safeDIBuilder = safeDIBuilder
-		        }
-
-		        let cBuilder: C.SafeDIMockConfiguration
-		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: (@Sendable (\(instantiatorType)) -> B)?
-		    }
-		}
-		#endif
-		""" + "\n"
-	}
 
 	/// A root whose `flow` is a `LoggedInFlow`, which holds an instantiator of `Settings`, whose own flow is
 	/// `settingsFlow`, with `settingsFlowDeclaration`, when given, declared by `SettingsFlow`.
