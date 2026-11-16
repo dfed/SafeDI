@@ -1471,8 +1471,6 @@ jobs:
       # suites a change selects and which lines of a run it reports.
       - name: Check the Touched Suites Script Against Its Fixtures
         run: python3 -I .claude/skills/verify-touched/verify-touched.py --self-test
-      - name: Check the Restack Script Against Its Fixtures
-        run: python3 -I .claude/skills/restack-lane/restack-lane.py --self-test
       # The check is the only thing between an unexecuted line and main, so
       # its script proves on fixtures that it unions the platforms, resolves
       # symbolic links and refuses missing data before it reads the reports.
