@@ -879,6 +879,15 @@ public actor DependencyTreeGenerator {
 				reason: .noInstantiableFulfillsType(uncoveredParameter.instantiatedType),
 			))
 		}
+		// The builders the internal mock of a type that generates its dependency tree takes in place of its places' parameters.
+		for builder in parameters.seamMockBuilders {
+			requiredParameters.append(TypeRequirements.RequiredParameter(
+				label: builder.label,
+				typeSource: builder.parameterType.asSource,
+				defaultExpression: nil,
+				reason: .noInstantiableFulfillsType(builder.holeType.instantiatedType),
+			))
+		}
 
 		return TypeRequirements(
 			typeDescription: concreteType,

@@ -972,8 +972,9 @@ extension ScopeGenerator {
 		let holes = shapedBuilders?.holes ?? []
 		let builders = shapedBuilders?.builders ?? []
 		for builder in builders {
-			// The function type the builder is, without `@escaping`, which a caller's leaf receives it as.
-			let functionType = builder.parameterType.strippingEscaping
+			// The function type the builder is, without `@escaping`, which a caller's leaf receives it as: a closure over the
+			// enum, whose places a caller passes up, also where the mock takes the builder struct, which the call converts it to.
+			let functionType = Self.enumFormParameterType(of: builder).strippingEscaping
 			leadingParameters.append(PublicMockParameter(
 				name: builder.label,
 				type: functionType,
@@ -1010,9 +1011,10 @@ extension ScopeGenerator {
 			parameters.append(PublicMockParameter(name: ReservedName.mockOverridesParameterName, type: overridesType, typeSource: overridesType.asSource, defaultSource: ".init()", defaultKind: .expression, access: .public, role: .overrides))
 		}
 		let tiers = [AccessLevel.public] + Set(parameters.map(\.access)).filter { $0 < .public }.sorted(by: >)
-		// The narrowest tier's body binds each builder by the name that tier takes it under.
+		// The narrowest tier's body binds each builder by the name that tier takes it under, but a builder struct, which the
+		// function only generated code calls takes under that name.
 		let narrowestTier = tiers[tiers.count - 1]
-		defaultResolutions.insert(contentsOf: builders.map { "\(bodyIndent)let \($0.internalName) = \($0.label(inTierAt: narrowestTier))" }, at: 0)
+		defaultResolutions.insert(contentsOf: builders.filter { !$0.takesBuilderStruct }.map { "\(bodyIndent)let \($0.internalName) = \($0.label(inTierAt: narrowestTier))" }, at: 0)
 		var hash = SeamSignatureHash()
 		for parameter in parameters {
 			hash.combine(parameter.name)
@@ -1040,6 +1042,16 @@ extension ScopeGenerator {
 		plan.builders = builders
 		plan.scopeEnums = shapedBuilders?.scopeEnums ?? []
 		return plan
+	}
+
+	/// The type of `builder` as a closure over its root enum: its parameter's type, or, where the mock takes the enum's builder
+	/// struct, a closure over the enum the struct is nested in, which a caller that passes the builder's places up takes.
+	static func enumFormParameterType(of builder: SeamSignature.Builder) -> TypeDescription {
+		guard builder.takesBuilderStruct, case let .nested(_, enumType, generics) = builder.parameterType, let builtType = generics.first else {
+			return builder.parameterType
+		}
+		let functionType = TypeDescription.closure(arguments: [enumType], isAsync: false, doesThrow: false, returnType: builtType)
+		return (builder.enumKey.isSendable ? functionType.asSendableFunction : functionType).asFunctionParameter
 	}
 
 	/// How visible a public mock's parameter of `type` is: as visible as the narrowest type it names, as the declarations of
@@ -1114,26 +1126,65 @@ extension ScopeGenerator {
 				lines.append(marker)
 			}
 			lines.append(contentsOf: parameters.flatMap(\.sharedValueDocumentation).map { "\(indent)\($0)" })
-			let declarationPrefix = "\(indent)\(attributesPrefix)\(tier == .internal ? "" : "\(tier.spelledOnGeneratedDeclaration) ")static func mock("
-			// Only the `public` tier can take nothing, when every parameter is narrower: each narrower tier takes a parameter
-			// of its own level.
-			if parameters.isEmpty {
-				lines.append("\(declarationPrefix)) -> \(returnType) {")
-			} else {
-				lines.append(declarationPrefix)
-				lines.append(parameters.map { parameter in
-					"\(bodyIndent)\(parameter.name.spelledAsArgumentLabel): \(parameter.typeSource)\(parameter.defaultSource.map { " = \($0)" } ?? "")"
-				}.joined(separator: ",\n"))
-				lines.append("\(indent)) -> \(returnType) {")
+			let accessPrefix = "\(indent)\(attributesPrefix)\(tier == .internal ? "" : "\(tier.spelledOnGeneratedDeclaration) ")"
+			// A tier that takes a builder struct is a pair: `mock()` takes each such builder as a closure that takes nothing and
+			// calls the tier's function only generated code calls, which takes the struct and holds what `mock()` holds
+			// elsewhere.
+			let takesBuilderStruct = parameters.contains { $0.builder?.takesBuilderStruct == true }
+			/// The lines that declare the tier's function named `functionName`, each parameter spelled by `spelling`.
+			func appendSignature(functionName: String, spelling: (PublicMockParameter) -> String) {
+				let declarationPrefix = "\(accessPrefix)static func \(functionName)("
+				// Only the `public` tier can take nothing, when every parameter is narrower: each narrower tier takes a parameter
+				// of its own level.
+				if parameters.isEmpty {
+					lines.append("\(declarationPrefix)) -> \(returnType) {")
+				} else {
+					lines.append(declarationPrefix)
+					lines.append(parameters.map { parameter in
+						"\(bodyIndent)\(spelling(parameter))\(parameter.defaultSource.map { " = \($0)" } ?? "")"
+					}.joined(separator: ",\n"))
+					lines.append("\(indent)) -> \(returnType) {")
+				}
+			}
+			appendSignature(functionName: InstantiableVisitor.mockMethodName) { parameter in
+				if let builder = parameter.builder, builder.takesBuilderStruct {
+					"\(parameter.name.spelledAsArgumentLabel): \(builder.readableParameterType.asSource)"
+				} else {
+					"\(parameter.name.spelledAsArgumentLabel): \(parameter.typeSource)"
+				}
+			}
+			if takesBuilderStruct {
+				let arguments = parameters.map { parameter in
+					let value = if parameter.builder?.takesBuilderStruct == true {
+						".init(\(ReservedName.noScopeArgumentLabel): \(parameter.name))"
+					} else {
+						parameter.name
+					}
+					return "\(parameter.name.spelledAsArgumentLabel): \(value)"
+				}
+				lines.append("\(bodyIndent)\(typeName).\(ReservedName.publicMockFunctionName)(\(arguments.joined(separator: ", ")))")
+				lines.append("\(indent)}")
+				lines.append("")
+				lines.append("\(indent)/// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.")
+				appendSignature(functionName: ReservedName.publicMockFunctionName) { parameter in
+					if let builder = parameter.builder, builder.takesBuilderStruct {
+						"\(parameter.name.spelledAsArgumentLabel) \(builder.internalName): \(parameter.typeSource)"
+					} else {
+						"\(parameter.name.spelledAsArgumentLabel): \(parameter.typeSource)"
+					}
+				}
 			}
 			if index == plan.tiers.count - 1 {
 				lines.append(contentsOf: narrowestBody)
 			} else {
 				// An omitted parameter that defaults to a provider is passed the provider's value, the declaration's
-				// default, which `nil` would replace. A builder can take another name in the narrower tier.
+				// default, which `nil` would replace. A builder can take another name in the narrower tier, and a builder
+				// struct is passed by the name the function takes it under.
 				let narrowerTier = plan.tiers[index + 1]
 				let arguments = plan.parameters.filter { $0.access >= narrowerTier }.map { parameter in
-					let value = if parameter.access >= tier {
+					let value = if parameter.access >= tier, takesBuilderStruct, let builder = parameter.builder, builder.takesBuilderStruct {
+						builder.internalName
+					} else if parameter.access >= tier {
 						parameter.name(inTier: tier)
 					} else if parameter.defaultKind == .provider, let defaultSource = parameter.defaultSource {
 						defaultSource
@@ -1142,7 +1193,8 @@ extension ScopeGenerator {
 					}
 					return "\(parameter.name(inTier: narrowerTier).spelledAsArgumentLabel): \(value)"
 				}
-				lines.append("\(bodyIndent)\(typeName).mock(\(arguments.joined(separator: ", ")))")
+				let functionName = takesBuilderStruct ? ReservedName.publicMockFunctionName : InstantiableVisitor.mockMethodName
+				lines.append("\(bodyIndent)\(typeName).\(functionName)(\(arguments.joined(separator: ", ")))")
 			}
 			lines.append("\(indent)}")
 			if index < plan.tiers.count - 1 {
@@ -1508,6 +1560,12 @@ struct PublicMockCall: Sendable {
 	/// The builders the call passes.
 	var calledBuilders: CalledBuilders {
 		CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums)
+	}
+
+	/// The function the call calls: the one only generated code calls where the mock takes a builder struct, which the call
+	/// passes, and `mock()` otherwise.
+	var functionName: String {
+		builders.contains(where: \.takesBuilderStruct) ? ReservedName.publicMockFunctionName : InstantiableVisitor.mockMethodName
 	}
 
 	/// The sites of the places the call fills on every route.
