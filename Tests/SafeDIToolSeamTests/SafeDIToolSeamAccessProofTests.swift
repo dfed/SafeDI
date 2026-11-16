@@ -3596,9 +3596,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			#endif
 
 			extension FeedScreen {
-			    @frozen nonisolated public enum SafeDIScope_FeedService {
-			        case service(service_Values)
-
+			    nonisolated public enum SafeDIScope_FeedService {
 			        nonisolated public struct service_Values {
 			            package let shared: SharedThing
 			            internal let store: FeedStore

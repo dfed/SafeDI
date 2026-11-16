@@ -75,20 +75,17 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_outerSeam() -> OuterSeam {
-		            _ = OuterSeam.__safeDI_OuterSeam_B6BA515B690D5B03.self\(integration.seamCallComment(type: "OuterSeam", declaringModule: "OuterSeamModule"))
-		            func __safeDI_trackerBuilder_OuterSeam(_ scope: OuterSeam.SafeDIScope_Tracker) -> any Tracker {
-		                switch scope {
-		                case let .innerSeam(scope): return __safeDI_trackerBuilder_InnerSeam(scope)
-		                }
+		            _ = OuterSeam.__safeDI_OuterSeam_1E59630E85ECD15B.self\(integration.seamCallComment(type: "OuterSeam", declaringModule: "OuterSeamModule"))
+		            func __safeDI_trackerBuilder_OuterSeam() -> OuterSeam.SafeDIScope_Tracker.__safeDI_Builder<any Tracker> {
+		                .init(innerSeam: { _ in __safeDI_trackerBuilder_InnerSeam() })
 		            }
-		            func __safeDI_trackerBuilder_InnerSeam(_ scope: InnerSeam.SafeDIScope_Tracker) -> any Tracker {
-		                switch scope {
-		                case .tracker:
+		            func __safeDI_trackerBuilder_InnerSeam() -> InnerSeam.SafeDIScope_Tracker.__safeDI_Builder<any Tracker> {
+		                .init(tracker: { _ in
 		                    let tracker: any Tracker = TrackerImpl()
 		                    return tracker
-		                }
+		                })
 		            }
-		            return OuterSeam(__safeDI_trackerBuilder: __safeDI_trackerBuilder_OuterSeam)
+		            return OuterSeam(__safeDI_trackerBuilder: __safeDI_trackerBuilder_OuterSeam())
 		        }
 		        let outerSeam: OuterSeam = __safeDI_outerSeam()
 		        self.init(outerSeam: outerSeam)
@@ -183,20 +180,17 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_outerSeam() -> OuterSeam {
-		            _ = OuterSeam.__safeDI_OuterSeam_B6BA515B690D5B03.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "OuterSeam", declaringModule: "OuterSeamModule"))
-		            func __safeDI_trackerBuilder_OuterSeam(_ scope: OuterSeam.SafeDIScope_Tracker) -> any Tracker {
-		                switch scope {
-		                case let .innerSeam(scope): return __safeDI_trackerBuilder_InnerSeam(scope)
-		                }
+		            _ = OuterSeam.__safeDI_OuterSeam_1E59630E85ECD15B.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "OuterSeam", declaringModule: "OuterSeamModule"))
+		            func __safeDI_trackerBuilder_OuterSeam() -> OuterSeam.SafeDIScope_Tracker.__safeDI_Builder<any Tracker> {
+		                .init(innerSeam: { _ in __safeDI_trackerBuilder_InnerSeam() })
 		            }
-		            func __safeDI_trackerBuilder_InnerSeam(_ scope: InnerSeam.SafeDIScope_Tracker) -> any Tracker {
-		                switch scope {
-		                case .tracker:
+		            func __safeDI_trackerBuilder_InnerSeam() -> InnerSeam.SafeDIScope_Tracker.__safeDI_Builder<any Tracker> {
+		                .init(tracker: { _ in
 		                    let tracker: any Tracker = TrackerImpl()
 		                    return tracker
-		                }
+		                })
 		            }
-		            return OuterSeam(__safeDI_trackerBuilder: __safeDI_trackerBuilder_OuterSeam)
+		            return OuterSeam(__safeDI_trackerBuilder: __safeDI_trackerBuilder_OuterSeam())
 		        }
 		        let outerSeam: OuterSeam = __safeDI_outerSeam()
 		        self.init(outerSeam: outerSeam)
