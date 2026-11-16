@@ -138,7 +138,7 @@ struct SafeDIToolPublicMockCycleRedeclarationTests: ~Copyable {
 		// direct call is.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Live.swift"]):11:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: Instantiator<Step>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but the scope SafeDI hands the builder for `Step`’s `api: any Api` (case `Step_Scope.api` of `apiBuilder`) holds the same values at every level of that cycle. Give `cache` on `Screen` another label, or declare an @Instantiable type that fulfills `Api` in module `Feat` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["Live.swift"]):11:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: Instantiator<Step>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but the values struct SafeDI hands the builder for `Step`’s `api: any Api` (member `Step_Scope.api` of `apiBuilder`) holds the same values at every level of that cycle. Give `cache` on `Screen` another label, or declare an @Instantiable type that fulfills `Api` in module `Feat` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feat"]!["Feat.swift"]):19:5: note: `Screen` declares `cache: Cache` here.
 			"""
 		}) {
@@ -448,25 +448,20 @@ struct SafeDIToolPublicMockCycleRedeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_home() -> Home {
-		            func __safeDI_apiBuilder_Home(_ scope: Home.SafeDIMockScope_Api) -> any Api {
-		                switch scope {
-		                case let .screen(values, scope): return __safeDI_apiBuilder_Home_Screen_Scope(scope, cache: values.cache)
-		                }
+		            func __safeDI_apiBuilder_Home() -> Home.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(screen: { values in __safeDI_apiBuilder_Home_Screen_Scope(cache: values.cache) })
 		            }
-		            func __safeDI_apiBuilder_Home_Screen_Scope(_ scope: Home.SafeDIMockScope_Api.Screen_Scope, cache: Cache) -> any Api {
-		                switch scope {
-		                case let .stepBuilder(_, scope): return __safeDI_apiBuilder_Home_Step_Scope(scope, cache: cache)
-		                }
+		            func __safeDI_apiBuilder_Home_Screen_Scope(cache: Cache) -> Home.SafeDIMockScope_Api.Screen_Scope.__safeDI_Builder<any Api> {
+		                .init(stepBuilder: { _ in __safeDI_apiBuilder_Home_Step_Scope(cache: cache) })
 		            }
-		            func __safeDI_apiBuilder_Home_Step_Scope(_ scope: Home.SafeDIMockScope_Api.Step_Scope, cache: Cache) -> any Api {
-		                switch scope {
-		                case .api:
+		            func __safeDI_apiBuilder_Home_Step_Scope(cache: Cache) -> Home.SafeDIMockScope_Api.Step_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { _ in
 		                    let api: any Api = Live(cache: cache)
 		                    return api
-		                }
+		                })
 		            }
-		            _ = Home.__safeDI_Home_mock_B981D08F2CFD6B45.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Home.mock(apiBuilder: __safeDI_apiBuilder_Home, safeDIOverrides: safeDIOverrides.home)
+		            _ = Home.__safeDI_Home_mock_E59AA37ED2CB4611.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Home.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Home(), safeDIOverrides: safeDIOverrides.home)
 		        }
 		        let home: Home = __safeDI_home()
 		        return Root(home: home)

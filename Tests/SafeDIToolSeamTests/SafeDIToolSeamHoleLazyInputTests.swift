@@ -1515,12 +1515,25 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			"ExportFeature+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension ExportFeature {
-			    @frozen public enum SafeDIMockScope_Uploader {
+			    @frozen nonisolated public enum SafeDIMockScope_Uploader {
 			        case uploader(uploader_Values)
 
-			        public struct uploader_Values {
+			        nonisolated public struct uploader_Values {
 			            public let exportService: ExportService
 			            public let screenBuilder: Instantiator<ExportScreen>
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let uploader: (uploader_Values) -> __safeDI_Built
+
+			            public init(uploader: @escaping (uploader_Values) -> __safeDI_Built) {
+			                self.uploader = uploader
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.uploader = { _ in __safeDI_builder() }
+			            }
 			        }
 			    }
 
@@ -1539,23 +1552,31 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    }
 
 			    public static func mock(
-			        uploaderBuilder: @escaping (ExportFeature.SafeDIMockScope_Uploader) -> any Uploader,
+			        uploaderBuilder: @escaping () -> any Uploader,
 			        exportService: ExportService? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> ExportFeature {
-			        let __safeDI_uploaderBuilder = uploaderBuilder
+			        ExportFeature.__safeDI_mock(uploaderBuilder: .init(__safeDI_noScope: uploaderBuilder), exportService: exportService, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        uploaderBuilder __safeDI_uploaderBuilder: ExportFeature.SafeDIMockScope_Uploader.__safeDI_Builder<any Uploader>,
+			        exportService: ExportService? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> ExportFeature {
 			        let exportService = if let exportService { exportService } else if let safeDIBuilder = safeDIOverrides.exportService { safeDIBuilder() } else { ExportService() }
 			        func __safeDI_screenBuilder() -> ExportScreen {
 			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(exportService) } else { ExportScreen(exportService: exportService) }
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
-			        let uploader: any Uploader = __safeDI_uploaderBuilder(.uploader(SafeDIMockScope_Uploader.uploader_Values(exportService: exportService, screenBuilder: screenBuilder)))
+			        let uploader: any Uploader = __safeDI_uploaderBuilder.uploader(SafeDIMockScope_Uploader.uploader_Values(exportService: exportService, screenBuilder: screenBuilder))
 			        return ExportFeature(screenBuilder: screenBuilder, uploader: uploader)
 			    }
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_mock_5387C56349D21FD6 {}
+			    public enum __safeDI_ExportFeature_mock_5983C25B8928E9B6 {}
 			}
 			#endif
 			""",

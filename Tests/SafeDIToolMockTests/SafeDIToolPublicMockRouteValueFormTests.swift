@@ -394,8 +394,13 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		                    return service
 		                }
 		            }
-		            _ = Inner.__safeDI_Inner_mock_2EFBE0AFAF545FB2.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner, safeDIOverrides: safeDIOverrides.inner)
+		            _ = Inner.__safeDI_Inner_mock_718C21DDAD65EAF2.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Inner.__safeDI_mock(serviceBuilder: .init(
+		                screenBuilder: { __safeDI_screenBuilderValues in
+		                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.screenBuilder(__safeDI_screenBuilderValues, .service(__safeDI_serviceValues))) })
+		                },
+		                service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) }
+		            ), safeDIOverrides: safeDIOverrides.inner)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        let __safeDI_gadgetValues_holder = SafeDIMockScope_Gadget.holder_Values(inner: inner)

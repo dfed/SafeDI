@@ -658,15 +658,41 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 		#if DEBUG
 		extension FeedScreen {
-		    @frozen public enum SafeDIMockScope_Clock {
+		    @frozen nonisolated public enum SafeDIMockScope_Clock {
 		        case innerScreen(innerScreen_Values, SafeDIMockScope_Clock.InnerScreen_Scope)
 
-		        public struct innerScreen_Values {}
+		        nonisolated public struct innerScreen_Values {}
 
-		        @frozen public enum InnerScreen_Scope {
+		        @frozen nonisolated public enum InnerScreen_Scope {
 		            case clock(clock_Values)
 
-		            public struct clock_Values {}
+		            nonisolated public struct clock_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let clock: (clock_Values) -> __safeDI_Built
+
+		                public init(clock: @escaping (clock_Values) -> __safeDI_Built) {
+		                    self.clock = clock
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.clock = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let innerScreen: (innerScreen_Values) -> SafeDIMockScope_Clock.InnerScreen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(innerScreen: @escaping (innerScreen_Values) -> SafeDIMockScope_Clock.InnerScreen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.innerScreen = innerScreen
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.innerScreen = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
 		        }
 		    }
 
@@ -682,13 +708,20 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        clockBuilder: @escaping (FeedScreen.SafeDIMockScope_Clock) -> Clock,
+		        clockBuilder: @escaping () -> Clock,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> FeedScreen {
-		        let __safeDI_clockBuilder = clockBuilder
-		        let __safeDI_clockValues_innerScreen = SafeDIMockScope_Clock.innerScreen_Values()
+		        FeedScreen.__safeDI_mock(clockBuilder: .init(__safeDI_noScope: clockBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        clockBuilder __safeDI_clockBuilder: FeedScreen.SafeDIMockScope_Clock.__safeDI_Builder<Clock>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> FeedScreen {
+		        let __safeDI_clockBuilder_innerScreen = __safeDI_clockBuilder.innerScreen(SafeDIMockScope_Clock.innerScreen_Values())
 		        func __safeDI_innerScreen() -> InnerScreen {
-		            let clock: Clock = __safeDI_clockBuilder(.innerScreen(__safeDI_clockValues_innerScreen, .clock(SafeDIMockScope_Clock.InnerScreen_Scope.clock_Values())))
+		            let clock: Clock = __safeDI_clockBuilder_innerScreen.clock(SafeDIMockScope_Clock.InnerScreen_Scope.clock_Values())
 		            return if let safeDIBuilder = safeDIOverrides.innerScreen { safeDIBuilder(clock) } else { InnerScreen(clock: clock) }
 		        }
 		        let innerScreen: InnerScreen = __safeDI_innerScreen()
@@ -697,7 +730,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}
 
 		extension FeedScreen {
-		    public enum __safeDI_FeedScreen_mock_64F86A264DA8A439 {}
+		    public enum __safeDI_FeedScreen_mock_85187824E4926A1D {}
 		}
 		#endif
 		"""])

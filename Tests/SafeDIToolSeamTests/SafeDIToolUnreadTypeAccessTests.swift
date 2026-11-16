@@ -2636,16 +2636,42 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    // SafeDI counts `Brush` and `Image` as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
-		    @frozen public enum SafeDIMockScope_Brush {
+		    @frozen nonisolated public enum SafeDIMockScope_Brush {
 		        case badgeBuilder(badgeBuilder_Values, SafeDIMockScope_Brush.Badge_Scope)
 
-		        public struct badgeBuilder_Values {}
+		        nonisolated public struct badgeBuilder_Values {}
 
-		        @frozen public enum Badge_Scope {
+		        @frozen nonisolated public enum Badge_Scope {
 		            case brush(brush_Values)
 
-		            public struct brush_Values {
+		            nonisolated public struct brush_Values {
 		                public let image: Image
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let brush: (brush_Values) -> __safeDI_Built
+
+		                public init(brush: @escaping (brush_Values) -> __safeDI_Built) {
+		                    self.brush = brush
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.brush = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let badgeBuilder: (badgeBuilder_Values) -> SafeDIMockScope_Brush.Badge_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(badgeBuilder: @escaping (badgeBuilder_Values) -> SafeDIMockScope_Brush.Badge_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.badgeBuilder = badgeBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.badgeBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
 		    }
@@ -2666,13 +2692,20 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        brushBuilder: @escaping (Screen.SafeDIMockScope_Brush) -> Brush,
+		        brushBuilder: @escaping () -> Brush,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let __safeDI_brushBuilder = brushBuilder
-		        let __safeDI_brushValues_badgeBuilder = SafeDIMockScope_Brush.badgeBuilder_Values()
+		        Screen.__safeDI_mock(brushBuilder: .init(__safeDI_noScope: brushBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        brushBuilder __safeDI_brushBuilder: Screen.SafeDIMockScope_Brush.__safeDI_Builder<Brush>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let __safeDI_brushBuilder_badgeBuilder = __safeDI_brushBuilder.badgeBuilder(SafeDIMockScope_Brush.badgeBuilder_Values())
 		        func __safeDI_badgeBuilder(image: Image) -> Badge {
-		            let brush: Brush = __safeDI_brushBuilder(.badgeBuilder(__safeDI_brushValues_badgeBuilder, .brush(SafeDIMockScope_Brush.Badge_Scope.brush_Values(image: image))))
+		            let brush: Brush = __safeDI_brushBuilder_badgeBuilder.brush(SafeDIMockScope_Brush.Badge_Scope.brush_Values(image: image))
 		            return if let safeDIBuilder = safeDIOverrides.badgeBuilder { safeDIBuilder(image, brush) } else { Badge(image: image, brush: brush) }
 		        }
 		        let badgeBuilder = Instantiator<Badge> {
@@ -2683,7 +2716,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_mock_942B20BC2A7A7001 {}
+		    public enum __safeDI_Screen_mock_DE66497ED46825A5 {}
 		}
 		#endif
 		"""])
