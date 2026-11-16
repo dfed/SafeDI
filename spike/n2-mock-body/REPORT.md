@@ -6,7 +6,8 @@ Spike only: nothing under `Sources/` changed, no pull request, nothing posted. E
 ## Answer
 
 **Yes: one function per key serves every place of a mock body**, with each place passing its own configuration, and
-gives inline's values and frees and exactly today's override reads, in all five fixtures. Public mocks can take the
+gives inline's values and frees and exactly today's override reads, in all five fixtures (F5's values are checked
+against today's mock, which equals production there only by the mechanisms F1–F3 check). Public mocks can take the
 full shared form in 2.3.1.
 
 **But the key is bigger than "reads a configuration".** To give exactly today's reads, the key must also hold, for
@@ -17,15 +18,20 @@ place, and the difference spreads up through every function that reaches it.
 
 What that costs, on #646's mock variant at 12 screens (13 mocks in one file):
 
-| Form | Functions (all mocks) | Root mock: places → functions | Lines | `-Onone` compile | Values, frees | Override reads |
-|---|---|---|---|---|---|---|
-| today (per path) | 6,592 places | 672 → 672 | 339,108 | 6 min 15 s, 13.2 GB | reference | reference |
-| shared, today's reads (`s`) | 2,549 | 672 → 150 | 39,933 | 48 s, 1.7 GB | = today | **= today** |
-| shared, one read rule (`u`) | 156 | 672 → 12 | 10,858 | 8 s, 0.27 GB | = today | 47 trace lines differ |
+| Form | Functions (13 mocks) | Root mock: places → functions | Mock lines | `-Onone` compile | `-O` compile | Values, frees | Override reads |
+|---|---|---|---|---|---|---|---|
+| today (per path) | 27,175 | 672 → 672 | 331,007 | 384 s, 13.2 GB | not done in 20 min | reference | reference |
+| shared, today's reads (`s`) | 2,549 | 672 → 150 | 31,832 | 47 s, 1.7 GB | 375 s, 2.0 GB | = today | **= today** |
+| shared, one read rule (`u`) | 156 | 672 → 12 | 2,757 | 8 s, 0.27 GB | 71 s, 0.53 GB | = today | 47 trace lines differ |
 
-(`-O` figures and runtime: section F5.) So the shared form is a large win either way, and the remaining choice is
-whether R3 keeps today's reads beneath cycles (about 12 functions per type in this graph) or adopts one read rule
-(one function per type). That choice is the maintainer's; it is question 1 below.
+Compile times are the whole module, which also holds the production root's per-path tree (8,101 lines, untouched
+here): that alone takes 4.9 s at `-Onone` and 53 s at `-O`. Net of it, the mocks cost about 379 s (today), 42 s
+(`s`) and 3 s (`u`) at `-Onone`, and more than 20 minutes, 322 s and 18 s at `-O`.
+
+So the shared form is a large win either way. The remaining choice is whether R3 keeps today's reads beneath cycles
+(about 12 functions per type in this graph, slow to optimize at `-O`, no faster than today at runtime) or adopts one
+read rule (one function per type, 3 s at `-Onone`, twice as fast as today at runtime). That choice changes which
+override some places beneath a cycle read, so it is the maintainer's (question 1); I recommend the one rule.
 
 ## Setup
 
@@ -50,15 +56,15 @@ whether R3 keeps today's reads beneath cycles (about 12 functions per type in th
 means the trace without overrides equals `p`'s (F1–F3: except `Top#1`, the production root that F1's mock promotes
 `service` out of).
 
-| Fixture | Shape | Places → functions | Values, frees | Override reads | Lines today → shared |
+| Fixture | Shape | Places → functions | Values, frees | Override reads | Generated lines, today → shared |
 |---|---|---|---|---|---|
 | F1 | internal mock; promoted `service`, flat `user`, root `onlyIfAvailable` override `badge`; overrides three deep; `Leaf` at three places | `Leaf` 3 → 1 | = inline, = today | = today | 147 → 141 |
 | F2 | `Screen ↔ Step` through `Instantiator`s; `cache` declared again in every `Screen`, read by `Model` in the loop | `Screen` first + reopened → 1, `Step` → 1 | = inline, = today | = today | 90 → 88 |
 | F3 | lazy cycle (`Preview` lazily builds `Editor` again); `Toolbar` reads `theme` inside the cycle | already one per type today | = inline, = today | = today | 87 → 90 |
 | F4 | public mock with a hole; the fill reads `cache`, bound in the loop (F3 of the per-type seam spike) | `Screen` first + reopened → 1, `Step` → 1 | = inline (`a`) | = `h` and = inline on every field both have | 168 (`h`) → 166 |
-| F5 | #646's mock variant, 12 screens, seed 5, 13 mocks | 6,592 → 2,549 (`s`), 156 (`u`) | = today (depth 3, every mock) | `s` = today; `u` differs | 339,108 → 39,933 (`s`), 10,858 (`u`) |
+| F5 | #646's mock variant, 12 screens, seed 5, 13 mocks | 27,175 → 2,549 (`s`), 156 (`u`) | = today (depth 3, every mock) | `s` = today; `u` differs | 339,108 → 39,933 (`s`), 10,858 (`u`) |
 
-Trace files: `spike/n2-mock-body/F*/results/`. Line counts include the comments the shared forms carry (3–4 lines).
+Trace files: `spike/n2-mock-body/F*/results/`. Line counts include the comments the shared forms carry (3–4 lines), and are of the files as written, before `./CLI/lint.sh` reformatted the committed copies.
 
 ### F1: promoted root, flat parameter, three places
 
@@ -146,7 +152,29 @@ subtree, through closing calls, reaches a different set of fixed paths is a diff
 That is one function per type in every mock (12 each), with values and frees equal to today's. Its reads differ from
 today's at closing calls: 47 trace lines (293 override reads today, 246 under `u`).
 
-FIGURES-F5
+`measure.sh F5/s12-5 App 3 20 s u` and `… 1 20 b`, plus `z`, the production root tree alone (the floor every
+variant compiles):
+
+| Variant | Generated lines | `-Onone` compile s (min–max), peak | `-O` compile s, peak | Runtime `-Onone` ms | Runtime `-O` ms |
+|---|---|---|---|---|---|
+| today (`b`) | 339,108 | 384 (n=1), 13.2 GB | stopped at the 20-minute cap | 3.2–4.5 | – |
+| shared, today's reads (`s`) | 39,933 | 46.7 (46.2–47.6), 1.7 GB | 374.9 (374.8–377.7), 2.0 GB | 4.4–4.7 | 1.35–1.41 |
+| shared, one read rule (`u`) | 10,858 | 8.0 (7.9–8.5), 0.27 GB | 71.0 (69.8–72.0), 0.53 GB | 1.8–2.6 | 0.71–1.03 |
+| floor (`z`, production tree only) | 8,112 | 4.9 (4.7–5.4), 0.18 GB | 52.9 (50.2–53.0), 0.42 GB | – | – |
+
+Runtime is one walk of every mock (13) three levels deep with no overrides, in milliseconds, the range over four runs
+of `BENCH=20` (median of five rounds each). It includes building each mock's default `SafeDIOverrides`, which is the
+same in every variant.
+
+Two things stand out:
+
+- **`s` is slow to optimize.** At `-O`, 2,549 mutually recursive local functions take 322 s net of the floor, against
+  42 s at `-Onone`; `u`'s 156 take 18 s. The exact-reads form is still far cheaper than today's (which did not finish
+  in 20 minutes), but it is the one result here that grows faster than the text. I did not look into which pass
+  costs it.
+- **`s` is no faster than today at runtime at `-Onone`** (4.4–4.7 against 3.2–4.5 ms); `u` is about twice as fast.
+  Every call of a shared function copies its configuration (today's `let` storage, small here); spike 3's enum box
+  makes that one reference. I did not measure the box here.
 
 ## Compile time and runtime, F1–F4
 
@@ -246,7 +274,7 @@ configuration a parameter carries is one reference.
 
 It is not, so the fallback is not needed for public mocks. For the record, the fallback (W1 derisk variant `h`: per-path
 body, the loop-closing function takes its level struct as a cycle parameter) costs 4–6 h per the W1 derisk report and
-keeps #646's mock variant at today's size (339,108 lines, 6 min 15 s and 13.2 GB at `-Onone` for 12 screens here).
+keeps #646's mock variant at today's size (339,108 lines, 384 s and 13.2 GB at `-Onone` for 12 screens here, and no `-O` build within 20 minutes).
 
 ## Findings on main
 
@@ -262,12 +290,15 @@ keeps #646's mock variant at today's size (339,108 lines, 6 min 15 s and 13.2 GB
 
 ## Questions (not mine to decide)
 
-1. **Exact reads or one read rule in R3?** Exact reads keep every override where it is (F5: 2,549 functions, 39,933
-   lines); one rule (each place reads its parent's field for it when the parent's type has one, else none) gives one
-   function per type (156 functions, 10,858 lines) and changes which override some places beneath a cycle read.
-   Recommendation: one rule, landed with R2a's D16 fix, which already changes which configuration fields exist beneath
-   cycles, so the two changes ship as one known break with one release note. If the maintainer wants no override
-   change in 2.3.1, exact reads are still 8.5 times smaller than today and compile 8 times faster here.
+1. **Exact reads or one read rule in R3?** Exact reads keep every override where it is (F5: 2,549 functions, 31,832
+   mock lines, 42 s at `-Onone` and 322 s at `-O` net of the production tree); one rule (each place reads its parent's
+   field for it when the parent's type has one, else none) gives one function per type (156 functions, 2,757 mock
+   lines, 3 s and 18 s) and changes which override some places beneath a cycle read. Recommendation: one rule, landed
+   with R2a's D16 fix, which already changes which configuration fields exist beneath cycles, so the two changes ship
+   as one known break with one release note (Dan's 2026-11-15 ruling allows a known break where 2.2.0 was surprising;
+   F2 against F3 is such a surprise). If the maintainer wants no override change in 2.3.1, exact reads are still ten
+   times smaller than today and compile nine times faster at `-Onone`, but their `-O` compile is the risk to watch
+   in N1.
 2. **Placement.** Every shared function here sits at the body's top level, as spike 3's D2 did. The plan places at the
    lowest body every call passes through; both compile, and top level never needs to thread a captured value through
    an intermediate function, because every captured value here is a top-level declaration.
@@ -285,4 +316,45 @@ keeps #646's mock variant at today's size (339,108 lines, 6 min 15 s and 13.2 GB
 
 Not applicable: spike, no pull request. For R3's eventual description: "Mock bodies now build each type in one local
 function per way it is built, with the override configuration as a parameter, so a mock's size grows with its types,
-not with the paths to them. #646's 12-screen mock variant goes from 339,108 generated lines to …".
+not with the paths to them. #646's 12-screen mock variant goes from 339,108 generated lines to …", with the figure
+from R3's own run.
+
+## Done-when, item by item
+
+| Item | Done | Evidence |
+|---|---|---|
+| Each fixture equal to inline in values and frees | yes, all five | `F*/results/*-Onone.txt`, `*-O.txt`; F5 against today's mock (`b`) only, not against production; `summary.txt` per fixture |
+| The override each place reads equals today's | yes, all five (F5 only after the key refinement; `u` deliberately not) | the `every override set` sections of each trace; F4 against `h` and inline |
+| Compile time and runtime against today's per-path body | yes; today's F5 `-O` did not finish in 20 minutes | `F*/results/measure.jsonl`, `bench-F1-F4.txt` |
+| Generated lines | yes | tables above |
+| Yes/no for "public mocks fully shared in 2.3.1" | yes, with question 1 | F4, F5 |
+| Shapes that cannot share, against spike 3's list | none found; the undrawn ones are listed | "Shapes that cannot share" |
+| E4's hook, one page | yes | "E4's hook interface" |
+| If no: the breaking shape and the fallback's cost | not applicable; fallback cost restated | "If the answer were no" |
+
+## Hand-back facts
+
+- Branch `claude/project-thread-71tust`, pushed; head: see the commit this file is in. Base `origin/main` `a6d44af`.
+- Full suite: not run. Nothing under `Sources/`, `Plugins/` or `Tests/` changed; the branch adds `spike/` only.
+- Seeds or tests that fail before and pass after: none (no generator change).
+- Defects on main beyond the ones named: none that give a wrong value. The override-read asymmetry and the 13.2 GB
+  compile are under "Findings on main".
+- Deviations: F5's `id` is `Int`, not the issue's `String`, so the harness can print it (same generated shape). F5's
+  shared forms are written by a script over today's text rather than by hand or by spike 1's emitter. F5 is compared
+  with today's mock only; its driver does not walk the production root, so "= inline" for F5 rests on today's mock
+  being right, which F1–F3 checked for the same mechanisms.
+- Pins: none touched.
+
+## Time and friction
+
+About 4 hours of hands-on work, 2026-11-16, plus about an hour of waiting on compiles (today's F5 module: 384 s per
+`-Onone` build, 20 minutes for the failed `-O` one).
+
+- No Swift on the machine: installed 6.2.4 from the tarball (`swiftly` was not tried, given spike 2's key trouble) and
+  zsh and GNU `time` from apt.
+- Spike 2's `build.zsh` strips its output path only for fixtures under `spike/per-type-seam/`; a copy one level up
+  (`common-build.zsh`) fixes it for this folder.
+- Two builds were wasted: a driver changed while today's 6-minute F5 build was running, so its executable no longer
+  linked. Freeze drivers before starting a long build.
+- Today's F5 module needs 13.2 GB to compile at `-Onone`, close to this machine's 15 GB; nothing else could run
+  beside it.
