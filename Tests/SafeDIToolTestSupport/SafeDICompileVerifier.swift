@@ -83,7 +83,14 @@ func verifyGeneratedCodeCompiles(
 		compilerSettings: compilerSettings,
 	)
 	let check = try CompileCheckModule(sources: module, staged: stageCompileSources(of: module, filesToDelete: &filesToDelete), emitsModule: false)
-	let passedCheckKey = try passedCheckCache.map { _ in try PassedCompileCheckCache.key(of: [check]) }
+	var passedCheckKey: String?
+	if let passedCheckCache {
+		if let build = await CompileCheckBuild.description {
+			passedCheckKey = try PassedCompileCheckCache.key(of: [check], build: build)
+		} else {
+			passedCheckCache.countCompiledWithoutAKey()
+		}
+	}
 	if let passedCheckCache, let passedCheckKey, passedCheckCache.holds(passedCheckKey) {
 		return
 	}
@@ -130,7 +137,14 @@ func verifyModulesCompile(
 		try checks.append(CompileCheckModule(sources: module, staged: stageCompileSources(of: module, filesToDelete: &filesToDelete), emitsModule: true))
 	}
 	let passedCheckCache = recordsIssues ? passedCheckCache : nil
-	let passedCheckKey = try passedCheckCache.map { _ in try PassedCompileCheckCache.key(of: checks) }
+	var passedCheckKey: String?
+	if let passedCheckCache {
+		if let build = await CompileCheckBuild.description {
+			passedCheckKey = try PassedCompileCheckCache.key(of: checks, build: build)
+		} else {
+			passedCheckCache.countCompiledWithoutAKey()
+		}
+	}
 	if let passedCheckCache, let passedCheckKey, passedCheckCache.holds(passedCheckKey) {
 		return nil
 	}
@@ -311,7 +325,7 @@ struct MultiModuleCompileOutcome {
 }
 
 /// Stages one module's sources as `stageCompileSources` does, with the module's staging settings.
-private func stageCompileSources(of module: ModuleCompileSources, filesToDelete: inout [URL]) throws -> StagedCompileSources {
+func stageCompileSources(of module: ModuleCompileSources, filesToDelete: inout [URL]) throws -> StagedCompileSources {
 	try stageCompileSources(
 		inputSwiftFiles: module.inputSwiftFiles,
 		generatedFiles: module.generatedFiles,
