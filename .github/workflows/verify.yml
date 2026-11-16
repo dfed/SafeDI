@@ -221,7 +221,9 @@ jobs:
           echo "The bundle lists $tests tests."
       # What a test job needs of the build, as "Build Tests on Linux"
       # packages it for the graph fuzzer's shards: the bundle, SafeDITool and
-      # the macro plugin (which compile checks run), and SafeDI's module.
+      # the macro plugin (which compile checks run), SafeDI's module, and the
+      # build's record of the dependency versions it resolved, which the key
+      # of each compile check names (CompileCheckBuild).
       - name: Package Test Bundle
         if: ${{ steps.split.outputs.split == 'true' }}
         run: |
@@ -230,7 +232,8 @@ jobs:
             "$products/SafeDIPackageTests.xctest" \
             "$products/SafeDITool" \
             "$products/SafeDIMacros-tool" \
-            "$products/Modules/SafeDI.swiftmodule"
+            "$products/Modules/SafeDI.swiftmodule" \
+            .build/workspace-state.json
       - name: Upload Test Bundle
         if: ${{ steps.split.outputs.split == 'true' }}
         uses: actions/upload-artifact@v7

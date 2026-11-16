@@ -34,7 +34,8 @@ import Foundation
 ///
 /// The key covers everything a check's result depends on: what the test process decides
 /// (`key(of:fixtureRoots:build:)`), and what compiles it (`CompileCheckBuild`), which is the compiler and SDK the
-/// process finds in its own environment and the bytes of the SafeDI module and macro plugin it loads. So a pass
+/// process finds in its own environment, the bytes of the SafeDI module it loads, and the dependency versions the
+/// macro plugin it loads was built from. So a pass
 /// recorded under one Xcode, toolchain, container, SDK or build of SafeDI is never read under another, however a job
 /// came to run it. CI keeps one file per hash of the sources that decide what a pass is, this verifier's among them
 /// (`.github/scripts/compile-check-identity.sh`).
@@ -199,15 +200,23 @@ struct PassedCompileCheckCacheError: Error, CustomStringConvertible {
 }
 
 /// What compiles this process's checks, which every check's key includes: the compiler and SDK, as the compiler
-/// itself reports them, and the SafeDI module and macro plugin each check loads, by their bytes.
+/// itself reports them, the SafeDI module each check imports, by its bytes, and the versions of the packages the
+/// macro plugin each check loads was built from.
 ///
 /// The compiler is asked through `swiftCompilerCommand` in this process's environment, as each check's compile is,
 /// so the description names the compiler a check would run under whatever chose it: the selected Xcode,
-/// `DEVELOPER_DIR`, `TOOLCHAINS`, `SDKROOT`, a container's image or the runner's. The module and the plugin are read
-/// where the verifier loads them, so it names what was built whatever built it: another job, other flags, another
-/// build system, other dependency versions. Nothing a workflow says about either is hashed in their place, so a
-/// workflow edit that changes none of this keeps every passed check, and one that changes any of it compiles every
-/// check again without anyone listing which lines count.
+/// `DEVELOPER_DIR`, `TOOLCHAINS`, `SDKROOT`, a container's image or the runner's. The module is read where the
+/// verifier loads it, so it names what was built whatever built it: another job, other flags, another build system.
+/// Nothing a workflow says about either is hashed in their place, so a workflow edit that changes none of this keeps
+/// every passed check, and one that changes any of it compiles every check again without anyone listing which lines
+/// count.
+///
+/// The plugin is not described by its bytes, because they are not the same in two builds of the same sources: two
+/// clean release builds on Linux's Swift 6.2 differ in the build identifier, the `.swift_modhash` section and
+/// debugging information, so a key made from them would never be found again after a build from nothing. Its
+/// sources are SafeDI's, which CI's hash of the list covers (`.github/scripts/compile-check-identity.sh`), and
+/// swift-syntax's, which the build's own record of what it resolved names (`workspace-state.json` in the build
+/// directory), whatever `Package.resolved` says.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 enum CompileCheckBuild {
 	/// What `describe(artifacts:)` returns for the build artifacts the verifier locates, asked once per process, or
@@ -222,8 +231,9 @@ enum CompileCheckBuild {
 	/// What the compiler reports of itself in `environment` (its version, its target information, which names its
 	/// default target, its runtime's compatibility version and the paths it compiles against, and on Apple platforms
 	/// the version and build of the SDK `xcrun` compiles with), on Linux the distribution the process runs on
-	/// (`/etc/os-release`), whose libraries a check compiles against, and the SHA-256 of `artifacts`' SafeDI module
-	/// and macro plugin.
+	/// (`/etc/os-release`), whose libraries a check compiles against, the SHA-256 of `artifacts`' SafeDI module, and
+	/// each package the build that made `artifacts`' macro plugin resolved, with the version and revision it resolved
+	/// it at.
 	static func describe(
 		artifacts: SafeDIBuildArtifacts,
 		environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -257,8 +267,47 @@ enum CompileCheckBuild {
 		for file in try regularFiles(at: module) {
 			description += try "\(file.name) \(sha256HexDigest(of: Data(contentsOf: file.url)))\n"
 		}
-		description += try "SafeDIMacros \(sha256HexDigest(of: Data(contentsOf: artifacts.safeDIMacrosToolPath)))\n"
+		description += "Resolved packages\n"
+		description += try resolvedPackages(ofTheBuildThatMade: artifacts.safeDIMacrosToolPath)
 		return description
+	}
+
+	/// One line per package the build that made `product` depends on, in name order: its identity and the state the
+	/// build resolved it to, which for a package under source control is its revision and version. Read from
+	/// `workspace-state.json`, which SwiftPM keeps in the build directory, two or three directories above a product;
+	/// a job that runs the tests of another job's build carries the file with the products. Fails when no directory
+	/// above `product` holds one, as in a build Xcode made: a key that leaves the dependencies out would stand for
+	/// every version of them.
+	private static func resolvedPackages(ofTheBuildThatMade product: URL) throws -> String {
+		var directory = product.deletingLastPathComponent()
+		var workspaceState: URL?
+		for _ in 0..<3 {
+			let candidate = directory.appendingPathComponent("workspace-state.json")
+			if FileManager.default.fileExists(atPath: candidate.path) {
+				workspaceState = candidate
+				break
+			}
+			directory = directory.deletingLastPathComponent()
+		}
+		guard let workspaceState,
+		      let state = try JSONSerialization.jsonObject(with: Data(contentsOf: workspaceState)) as? [String: Any],
+		      let object = state["object"] as? [String: Any],
+		      let dependencies = object["dependencies"] as? [[String: Any]]
+		else {
+			throw PassedCompileCheckCacheError(description: "Found no workspace-state.json that lists dependencies above \(product.path) to describe the build that compiles the checks.")
+		}
+		var lines = [String]()
+		for dependency in dependencies {
+			guard let package = dependency["packageRef"] as? [String: Any],
+			      let identity = package["identity"] as? String,
+			      let resolved = dependency["state"]
+			else {
+				throw PassedCompileCheckCacheError(description: "\(workspaceState.path) lists a dependency without an identity or a state.")
+			}
+			let spelledState = try String(decoding: JSONSerialization.data(withJSONObject: resolved, options: [.sortedKeys]), as: UTF8.self)
+			lines.append("\(identity) \(spelledState)\n")
+		}
+		return lines.sorted().joined()
 	}
 
 	/// `url` itself when it is a file, named by its last path component, or every regular file under it when it is a

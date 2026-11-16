@@ -174,17 +174,29 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func describe_differs_whenTheMacroPluginDiffersByOneByte() async throws {
-		// The same sources built another way (other flags, another build system, other dependency versions) give other
-		// bytes, and a check that passed against one build has not passed against the other.
+	func describe_differs_whenTheBuildResolvedADependencyAtAnotherRevision() async throws {
+		// A build that resolves swift-syntax at another revision than `Package.resolved` names makes another macro
+		// plugin from the same sources, and a check that passed with one has not passed with the other.
+		let build = try buildDirectory(named: "build", resolvingSwiftSyntaxAt: "0000000000000000000000000000000000000001")
+		let otherBuild = try buildDirectory(named: "other-build", resolvingSwiftSyntaxAt: "0000000000000000000000000000000000000002")
+
+		let description = try await CompileCheckBuild.describe(artifacts: build)
+		let descriptionOfOtherBuild = try await CompileCheckBuild.describe(artifacts: otherBuild)
+
+		#expect(description.contains(#"swift-syntax {"checkoutState":{"revision":"0000000000000000000000000000000000000001","version":"1.0.0"},"name":"sourceControlCheckout"}"#))
+		#expect(description != descriptionOfOtherBuild)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func describe_throws_whenNoDirectoryAboveTheMacroPluginRecordsWhatTheBuildResolved() async throws {
 		let artifacts = try #require(SafeDIBuildArtifactLocator.locate())
-		let otherPlugin = directory.appendingPathComponent("SafeDIMacros-tool")
-		try (Data(contentsOf: artifacts.safeDIMacrosToolPath) + Data([0])).write(to: otherPlugin)
+		let plugin = directory.appendingPathComponent("SafeDIMacros-tool")
+		try Data().write(to: plugin)
 
-		let description = try await CompileCheckBuild.describe(artifacts: artifacts)
-		let descriptionWithOtherPlugin = try await CompileCheckBuild.describe(artifacts: SafeDIBuildArtifacts(swiftModuleSearchPath: artifacts.swiftModuleSearchPath, safeDIMacrosToolPath: otherPlugin))
-
-		#expect(description != descriptionWithOtherPlugin)
+		await #expect(throws: PassedCompileCheckCacheError.self) {
+			try await CompileCheckBuild.describe(artifacts: SafeDIBuildArtifacts(swiftModuleSearchPath: artifacts.swiftModuleSearchPath, safeDIMacrosToolPath: plugin))
+		}
 	}
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
@@ -394,6 +406,24 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 	// MARK: Private
 
 	private let directory: URL
+
+	/// A build directory laid out as SwiftPM lays one out, whose products are this process's SafeDI module and an
+	/// empty macro plugin, and whose `workspace-state.json` says the build resolved swift-syntax at `revision`.
+	private func buildDirectory(named name: String, resolvingSwiftSyntaxAt revision: String) throws -> SafeDIBuildArtifacts {
+		let artifacts = try #require(SafeDIBuildArtifactLocator.locate())
+		let products = directory.appendingPathComponent(name).appendingPathComponent("triple").appendingPathComponent("release")
+		try FileManager.default.createDirectory(at: products.appendingPathComponent("Modules"), withIntermediateDirectories: true)
+		try FileManager.default.copyItem(
+			at: artifacts.swiftModuleSearchPath.appendingPathComponent("SafeDI.swiftmodule"),
+			to: products.appendingPathComponent("Modules").appendingPathComponent("SafeDI.swiftmodule"),
+		)
+		let plugin = products.appendingPathComponent("SafeDIMacros-tool")
+		try Data().write(to: plugin)
+		try """
+		{"object":{"artifacts":[],"dependencies":[{"basedOn":null,"packageRef":{"identity":"swift-syntax","kind":"remoteSourceControl","location":"https://github.com/swiftlang/swift-syntax.git","name":"swift-syntax"},"state":{"checkoutState":{"revision":"\(revision)","version":"1.0.0"},"name":"sourceControlCheckout"},"subpath":"swift-syntax"}]},"version":7}
+		""".write(to: directory.appendingPathComponent(name).appendingPathComponent("workspace-state.json"), atomically: true, encoding: .utf8)
+		return SafeDIBuildArtifacts(swiftModuleSearchPath: products.appendingPathComponent("Modules"), safeDIMacrosToolPath: plugin)
+	}
 
 	/// Makes a directory named `name` to stand for a test process's directory.
 	private func makeRoot(named name: String) throws -> URL {

@@ -7,10 +7,11 @@
 # so a change to anything it covers starts from an empty list.
 #
 # A check's own key already covers what its result depends on: everything the
-# check compiles, the compiler and SDK the test process finds, and the bytes of
-# the SafeDI module and macro plugin it loads (CompileCheckBuild). So no
-# workflow file is hashed here, and a workflow edit keeps every passed check
-# unless it changes one of those.
+# check compiles, the compiler and SDK the test process finds, the bytes of
+# the SafeDI module it loads, and the dependency versions the macro plugin it
+# loads was built from (CompileCheckBuild). So no workflow file is hashed
+# here, and a workflow edit keeps every passed check unless it changes one of
+# those.
 #
 # What this hash adds is what decides which keys a run writes and shares: the
 # sources of the compile verifier and its cache, the actions the test jobs
@@ -21,9 +22,10 @@
 # It also covers the sources of SafeDI's runtime library and macro plugin, the
 # package manifest and its resolved dependencies, the arguments the test step
 # builds with (TEST_ARGUMENT…), the compiler's version and default target, and
-# on macOS the SDK. Each key covers these too, through the built module and
-# plugin; hashing them here only keeps one build's list from growing with the
-# keys of every other.
+# on macOS the SDK. The macro plugin's own sources are covered only here: a
+# key cannot hash the built plugin, whose bytes differ between two builds of
+# the same sources. For the rest, each key covers them too, and hashing them
+# here only keeps one build's list from growing with the keys of every other.
 #
 # The macro plugin compiles SafeDICore through a symbolic link, leaving out the
 # files and directories its target's `exclude` in Package.swift lists: the
