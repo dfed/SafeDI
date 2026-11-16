@@ -1415,6 +1415,11 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		"\(wrappedIfAmbiguous.asSource).self"
 	}
 
+	/// This type as the base of a member access, such as `Service` in `Service.instantiate()`.
+	var asMemberAccessBase: String {
+		wrappedIfAmbiguous.asSource
+	}
+
 	/// A representation of this type that may be wrapped in a single element tuple to ensure cohesiveness of the type description.
 	private var wrappedIfAmbiguous: Self {
 		switch self {
