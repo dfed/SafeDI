@@ -11,6 +11,8 @@ Read `briefs/common-cloud-lane.md` first; this brief overrides it where they dif
 - A 100-module run that calls `generate` once per module with dependency `.safedi` files, as Bazel does (`Scripts/multi-module-repro.sh` shows the per-module invocation). Pick a module graph shape and state it; ask before choosing samples you cannot justify from the brief.
 - The repository's example projects where they build on Linux.
 
+Follow `.claude/rules/generator-design.md`, "Benchmarks are lifelike": a synthetic module takes its shape from measured statistics of a real app (2.3.0's check 7 benchmark records them), with invented names; never copy a private app's source.
+
 **Measures** for each shape and each binary (2.2.0 tag and current main, both `swift build -c release --product SafeDITool`, 2.2.0 built from its tag in a separate worktree; never run 2.2.0's test suite): `generate` wall time and peak memory; generated lines; compile of the generated module at `-Onone` and `-O` (time the frontend job); runtime per value of building the root (or `mock()`) in a loop. Medians of five with min–max. Instructions retired come from `/usr/bin/time -l` on the maintainer's Mac: write the Mac command list into your hand-back; do not try to reach the Mac yourself.
 
 **Done when.** A script (proposed home `Scripts/benchmark-2-3-1.sh`, not merged) that takes two `SafeDITool` paths and prints one table; the baseline table for 2.2.0 and main; two full runs agreeing within 3% on wall-time medians (report any shape that does not); every shape where main is slower than 2.2.0, ranked by ratio; machine, compiler and load recorded. Keep machine load under 1 during timing; run nothing else.
