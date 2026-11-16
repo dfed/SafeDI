@@ -836,8 +836,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_compilesInModulesDefaultingToMainActor_whenMainActorSeamsOwnInitializerIsNonisolated() async throws {
 		// `Inner` is explicitly `@MainActor` and its own initializer `nonisolated`, which stores `Sendable` values; every caller,
-		// `Root` and the hand-written one, is on the main actor, as every declaration of these modules but the stored values'
-		// types is. The generated initializers take `Inner`'s isolation, which their callers share.
+		// `Root` and the hand-written one, is on the main actor, as every declaration of these modules but `Token` is. `Leaf` is
+		// explicitly `@MainActor`, so the generated initializer that builds it compiles only on the main actor: it takes
+		// `Inner`'s isolation, which its callers share, never its own initializer's `nonisolated`.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["mainActorNonisolatedInitializer"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Inner {
@@ -876,6 +877,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		}
 		"""])
 		try await expectCompiles(output, inlineControl: Self.fixtures["mainActorNonisolatedInitializerInline"] ?? [])
+		try await expectValuesEqualInlineBuild(modules: Self.fixtures["mainActorNonisolatedInitializerValues"] ?? [], probes: [DifferentialValueProbe("Root()")])
 	}
 
 	@Test
@@ -3881,11 +3883,14 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 				""",
 			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
 		],
-		// An explicitly `@MainActor` seam in modules whose declarations default to the main actor; `App` fills its place with
-		// a type that builds a `Client` of its own.
 		// `Inner`, explicitly `@MainActor`, whose own initializer is `nonisolated`, built by `Root` and by a hand-written caller.
 		"mainActorNonisolatedInitializer": mainActorModules(feature: mainActorNonisolatedInitializerFeature + [mainActorNonisolatedInitializerHandWrittenCaller], app: mainActorNonisolatedInitializerApp),
 		"mainActorNonisolatedInitializerInline": [ModuleFixture(name: "App", packageName: "Other", swiftFileContent: inlineFixture(mainActorNonisolatedInitializerFeature + mainActorNonisolatedInitializerApp), compilerSettings: mainActorByDefault)],
+		// The same graph with no hand-written caller, whose every type spells its isolation, as the value comparison
+		// compiles it with no default isolation.
+		"mainActorNonisolatedInitializerValues": mainActorModules(feature: mainActorNonisolatedInitializerFeature, app: mainActorNonisolatedInitializerApp),
+		// An explicitly `@MainActor` seam in modules whose declarations default to the main actor; `App` fills its place with
+		// a type that builds a `Client` of its own.
 		"mainActorPlain": mainActorModules(feature: mainActorPlainFeature, app: mainActorPlainApp),
 		"mainActorPlainInline": [ModuleFixture(name: "App", packageName: "Other", swiftFileContent: inlineFixture(mainActorPlainFeature + mainActorPlainApp), compilerSettings: mainActorByDefault)],
 		// The seam is `@MainActor`; `Worker`, `Detail` and the fill, built inside the `@Sendable` function, are `nonisolated`.
@@ -4139,7 +4144,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		    @Instantiated let leaf: Leaf
 		}
 		""",
-		seamFixtureType(named: "Leaf", isFinalClass: true, declarations: [], conformances: ", Sendable").replacingOccurrences(of: "public final class", with: "nonisolated public final class"),
+		"@MainActor\n" + seamFixtureType(named: "Leaf", isFinalClass: true, declarations: []),
 		seamFixtureType(named: "Token", isFinalClass: true, declarations: [], conformances: ", Sendable").replacingOccurrences(of: "public final class", with: "nonisolated public final class"),
 	]
 

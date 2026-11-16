@@ -296,7 +296,7 @@ public final class Root: Instantiable {
 }
 ```
 
-Likewise, if code that is not on the main actor creates a `@MainActor` type with `generateDependencyTree: true`, and nothing its tree builds needs the main actor, give it `generatedInitializerAttributes: "nonisolated"`.
+Likewise, if code that is not on the main actor creates a `@MainActor` type with `generateDependencyTree: true` whose own initializer is `nonisolated`, and nothing its tree builds needs the main actor, give it `generatedInitializerAttributes: "nonisolated"`.
 
 SafeDI writes the text before the generated declaration’s modifiers, on the same line:
 
@@ -618,7 +618,7 @@ public final class Screen: Instantiable {
 @Instantiated private let screenBuilder: SendableInstantiator<Screen>
 ```
 
-Declare the initializer `public nonisolated init()` to fix it. The initializer’s isolation counts, not the type’s: a `@MainActor` class with a `nonisolated init` is fine when its stored properties are `Sendable`. [Attributes for generated declarations](#attributes-for-generated-declarations) do not help, since the function runs on no actor whatever the generated `init()` or `mock()` around it is isolated to.
+Declare the initializer `public nonisolated init()` to fix it. For a type with `generateDependencyTree: true`, its generated initializers need to be `nonisolated` too: give it `generatedInitializerAttributes: "nonisolated"` ([Attributes for generated declarations](#attributes-for-generated-declarations)). The initializer’s isolation counts, not the type’s: a `@MainActor` class with a `nonisolated init` is fine when its stored properties are `Sendable`. [Attributes for generated declarations](#attributes-for-generated-declarations) do not help, since the function runs on no actor whatever the generated `init()` or `mock()` around it is isolated to.
 
 **If you need a `@MainActor` initializer**, declare the wrapper as its non-`Sendable` twin – `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated` – instead. SafeDI builds a non-`Sendable` wrapper’s dependency with the isolation of the generated `init()` or `mock()` around it, so that `init()` or `mock()` must be `@MainActor`: the root or mocked type is, or [attributes for generated declarations](#attributes-for-generated-declarations) say so. This does not work inside a `Sendable` wrapper’s subtree, where nothing runs on an actor.
 

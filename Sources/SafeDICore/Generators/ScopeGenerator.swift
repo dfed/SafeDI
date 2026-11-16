@@ -5502,7 +5502,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// The payloads of the cases on the routes to the places beneath this scope, bound before its builder function, where
 			// the scope's parent binds its labels: each field read as the parent's receivers read it.
 			let valuesBindingLines = builderFunctionNames.loopValuesBindingLines ?? valuesBindingLines
-			// What ends the line that constructs the type, after the construction.
+			// What ends the line that constructs the type, after the construction. A seam built inline here is built with the
+			// caller's isolation; across modules, its generated initializer builds its tree with the type's isolation, or the
+			// one `generatedInitializerAttributes` spells. A deliberate gap, which
+			// `generateSeamRootCode`'s comment on the generated initializers' isolation states too.
 			let constructionLineEnd = builtInlineSeamComment.map { " \($0)" } ?? ""
 			// A call to a seam's generated initializer refers to the enum the seam's module generated for the
 			// signature the call was generated from, on the line before the call, so a call generated from another
