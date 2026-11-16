@@ -234,7 +234,7 @@ public struct SeamSignature: Sendable {
 	public struct Hole: Sendable {
 		/// A value in scope at the site, which the scope struct the builder is handed carries.
 		public struct Field: Sendable {
-			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, parameterTakingType: TypeDescription? = nil, deferral: Parameter.Deferral = .none, bindsMemo: Bool = false) {
+			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, parameterTakingType: TypeDescription? = nil, deferral: Parameter.Deferral = .none, bindsMemo: Bool = false, seamParameterOrigin: SeamParameterOrigin? = nil) {
 				self.property = property
 				self.bindsMemo = bindsMemo
 				self.deferral = deferral
@@ -244,6 +244,24 @@ public struct SeamSignature: Sendable {
 				self.declarationLocation = declarationLocation
 				self.isReceivedOnlyIfAvailable = isReceivedOnlyIfAvailable
 				self.parameterTakingType = parameterTakingType
+				self.seamParameterOrigin = seamParameterOrigin
+			}
+
+			/// What a field bound from a parameter of the seam whose tree holds the site says about that parameter: where
+			/// the seam is declared, whether the parameter passes a receive through or is the seam's own property, and the
+			/// receives in its tree the parameter passes its value to (the seam's own receive, for its own property). A fill
+			/// whose tree receives the label in a form no one parameter takes together with the parameter's gives the seam's
+			/// tree the label in two forms, which the seam reports where it sees both.
+			public struct SeamParameterOrigin: Sendable {
+				public init(seamDeclarationLocation: Dependency.DeclarationLocation?, isPassThrough: Bool, receivers: [Receiver]) {
+					self.seamDeclarationLocation = seamDeclarationLocation
+					self.isPassThrough = isPassThrough
+					self.receivers = receivers
+				}
+
+				public let seamDeclarationLocation: Dependency.DeclarationLocation?
+				public let isPassThrough: Bool
+				public let receivers: [Receiver]
 			}
 
 			/// The value's label and the type of its declaration.
@@ -274,6 +292,9 @@ public struct SeamSignature: Sendable {
 			/// whose instance the fill's tree reads where it reads the value. The field keeps its own property, which decides
 			/// what it satisfies.
 			public let bindsMemo: Bool
+			/// For a field bound from a parameter of a seam, which a public mock's root level never is, that parameter's
+			/// receives and the seam's declaration; `nil` for a field bound from a declaration inside the tree.
+			public let seamParameterOrigin: SeamParameterOrigin?
 
 			/// Whether the field is bound from a deferred parameter (`SeamSignature.Parameter.isDeferred`).
 			public var isDeferredParameter: Bool {
