@@ -7366,8 +7366,12 @@ struct SafeDIToolGraphFuzzerTests {
 		let sameSupply: [UInt64]
 		/// Why `sameSupply`'s graphs fail, which differs by corpus: the defect each corpus's same-supply edits show.
 		let sameSupplyReason: String
-		/// Seeds whose same-supply call stops compiling because the edit flips a builder's kind, `sameSupplyBuilderKindFlipReason`.
+		/// Seeds whose same-supply call stops compiling because the edit flips a builder's kind.
 		let sameSupplyBuilderKindFlips: [UInt64]
+		/// Why `sameSupplyBuilderKindFlips`' graphs fail, which differs by corpus: a seam's builder that flips between a struct
+		/// and a closure over its enum (`sameSupplyBuilderKindFlipReason`), or a public mock's that flips between one that
+		/// takes nothing and one handed the scope (`publicMockBuilderFormFlipReason`).
+		var sameSupplyBuilderKindFlipsReason = sameSupplyBuilderKindFlipReason
 		/// Seeds whose part (iii) remedy flips a builder's kind, so the remedy takes other builders, `remedyBuilderKindFlipReason`.
 		let remedyBuilderKindFlips: [UInt64]
 		let addedSupply: [UInt64]
@@ -7380,7 +7384,7 @@ struct SafeDIToolGraphFuzzerTests {
 		var issues = GraphFuzzerKnownIssue.adding(.builderSurface(.builderSurfaceNamesGeneratedType), reason: builderSurfaceReason, seeds: seeds.base, to: issues)
 		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.builderLabelBreaksContract), reason: labelReason, seeds: seeds.labels, to: issues)
 		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.sameSupplyCallStopsCompiling), reason: seeds.sameSupplyReason, seeds: seeds.sameSupply, to: issues)
-		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.sameSupplyCallStopsCompiling), reason: sameSupplyBuilderKindFlipReason, seeds: seeds.sameSupplyBuilderKindFlips, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.sameSupplyCallStopsCompiling), reason: seeds.sameSupplyBuilderKindFlipsReason, seeds: seeds.sameSupplyBuilderKindFlips, to: issues)
 		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.remedyAddsBuilder), reason: remedyBuilderKindFlipReason, seeds: seeds.remedyBuilderKindFlips, to: issues)
 		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.addedBuilderChangesExistingBuilder), reason: addedSupplyReason, seeds: seeds.addedSupply, to: issues)
 		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.placesForwardingOtherValuesAccepted), reason: forwardingOtherValuesReason, seeds: seeds.forwardingOtherValues, to: issues)
@@ -7399,6 +7403,12 @@ struct SafeDIToolGraphFuzzerTests {
 	/// The public mock corpus's same-supply defect: an internal calling mock takes `hole: S128_Hole` (seed 128), which the
 	/// calling-mock clause of contract rule 7, in the planned builder structs' last mock slice, removes.
 	private static let callingMockTakesHoleValueReason = "An internal calling mock passes the called public mock's hole up as the hole's value, or the wrapper its place spells, rather than filling it where the app fills or taking one builder per filling type, returned type and family (contract rules 7 and 8), so changing the place's wrapper changes the parameter's type or its label"
+
+	/// Transitional: owned by the change that gives every public mock builder one form, which empties these seeds. The
+	/// edit moves a place behind `LazilyInstantiated` or into an instantiator that forwards a value, which keeps the
+	/// builder handed the scope, where the drawn graph's builder takes nothing, or the reverse, so the call written for one
+	/// does not compile against the other: every problem these seeds add names such a builder parameter.
+	private static let publicMockBuilderFormFlipReason = "A transitional builder-form flip: a public mock's builder takes nothing only while none of its places is lazily instantiated, built in a `@Sendable` function, forwards a value or reaches another scope, so an edit that moves a place behind `LazilyInstantiated` or into an instantiator that forwards a value flips the builder to one handed the scope, and a call written for the drawn graph stops compiling, until every public mock builder takes one form"
 
 	/// Transitional: owned by the change that hands every seam builder structs, which empties these seeds.
 	private static let sameSupplyBuilderKindFlipReason = "A transitional builder-kind flip: a seam takes builder structs only while its builders reach no place that forwards a value and hold no scope of another seam, so an edit that adds a place opening another seam's scope (an `.inner` case) flips a builder from a struct to a closure over a scope enum, and a call of the readable initializer stops compiling, until every seam takes builder structs"
@@ -8369,7 +8379,13 @@ struct SafeDIToolGraphFuzzerTests {
 			122, 128, 136, 145, 266, 332, 352, 411, 427, 580, 681, 740, 786, 814, 823, 827, 853, 977,
 		],
 		sameSupplyReason: callingMockTakesHoleValueReason,
-		sameSupplyBuilderKindFlips: [],
+		sameSupplyBuilderKindFlips: [
+			12, 28, 60, 62, 73, 92, 97, 106, 107, 165, 219, 221, 242, 262, 273, 284, 299, 316, 318, 327,
+			328, 337, 350, 361, 397, 406, 417, 423, 435, 449, 455, 463, 489, 559, 562, 563, 564, 587, 591, 595,
+			598, 606, 635, 644, 646, 647, 648, 663, 664, 666, 668, 670, 680, 724, 741, 743, 790, 812, 821, 833,
+			876, 880, 888, 940, 958, 995,
+		],
+		sameSupplyBuilderKindFlipsReason: publicMockBuilderFormFlipReason,
 		remedyBuilderKindFlips: [],
 		addedSupply: [],
 		forwardingOtherValues: [
