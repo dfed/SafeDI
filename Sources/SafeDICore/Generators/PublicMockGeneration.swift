@@ -426,7 +426,9 @@ extension ScopeGenerator {
 		for defaultParameter in optionalDefaultParameters {
 			lines.append("\(standardIndent)nonisolated static func \(PublicMockContext.providerName(label: defaultParameter.label))() -> \(defaultParameter.valueTypeDescription.asSource) { \(defaultParameter.defaultExpression) }")
 		}
-		// The function mirrors the isolation the member it calls spells, so a caller that can call the member can call it.
+		// The function mirrors the isolation the member it calls spells, so a caller that can call the member can call it,
+		// a `@preconcurrency` member's actor included, as before: its callers are generated mocks, which the person isolates,
+		// and a nonisolated function could not return a value that is not `Sendable` from the actor's initializer.
 		let isolationPrefix = node.constructionIsolation.map { "\($0) " } ?? ""
 		lines.append("\(standardIndent)\(isolationPrefix)static func \(publicConstructionFunctionName(of: node))(\(parameters.joined(separator: ", "))) -> \(returnType) {")
 		lines.append(contentsOf: resolutions)

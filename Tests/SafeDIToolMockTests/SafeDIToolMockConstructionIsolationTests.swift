@@ -805,73 +805,7 @@ struct SafeDIToolMockConstructionIsolationTests: ~Copyable {
 		])
 	}
 
-	// MARK: Tests – `@preconcurrency` and extensions
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_spellsPreconcurrencyBesideGlobalActorOfInitializer_whenInitializerIsPreconcurrency() async throws {
-		// `mock()` keeps the `@preconcurrency` of the initializer it calls, so code on no actor can still call it, as it can
-		// call the initializer, and `mock()` calls the initializer without the warning a nonisolated caller gets.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable(generateMock: true)
-				public final class Service: Instantiable {
-				    @preconcurrency @MainActor public init() {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(output.generatedFiles == [
-			"Service+SafeDIMock.swift": generatedFileHeader + """
-			#if DEBUG
-			extension Service {
-			    @preconcurrency @MainActor static func mock() -> Service {
-			        Service()
-			    }
-			}
-			#endif
-			""",
-			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
-		])
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_spellsPreconcurrencyBesideGlobalActorOfHandWrittenMock_whenHandWrittenMockIsPreconcurrency() async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable(generateMock: true, customMockName: "customMock")
-				public final class Service: Instantiable {
-				    public init() {}
-
-				    @preconcurrency @MainActor public static func customMock() -> Service {
-				        Service()
-				    }
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(output.generatedFiles == [
-			"Service+SafeDIMock.swift": generatedFileHeader + """
-			#if DEBUG
-			extension Service {
-			    @preconcurrency @MainActor static func mock() -> Service {
-			        Service.customMock()
-			    }
-			}
-			#endif
-			""",
-			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
-		])
-	}
+	// MARK: Tests – Extensions
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -1069,11 +1003,141 @@ struct SafeDIToolMockConstructionIsolationTests: ~Copyable {
 		])
 	}
 
+	// MARK: Tests – Public mocks
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_constructionFunctionSpellsPreconcurrencyBesideGlobalActor_whenConfiguredTypesInitializerIsPreconcurrency() async throws {
-		// A public mock's construction function mirrors the isolation of the initializer it calls, its `@preconcurrency`
-		// included. `Parent`'s mock builds `Service` in its own body, so it opts in through `mockAttributes`.
+	mutating func generate_isolatesPublicMockAndProviderOfOwnOptionalDefault_toGlobalActorOfHandWrittenMock() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@MainActor
+				public enum Defaults {
+				    public static var name: String? = "name"
+				}
+				""",
+				"""
+				@Instantiable(generateMock: .public, customMockName: "customMock")
+				public final class Service: Instantiable {
+				    public init(child: Child) {
+				        self.child = child
+				    }
+
+				    @Instantiated let child: Child
+
+				    @MainActor public static func customMock(child: Child, name: String? = Defaults.name) -> Service {
+				        Service(child: child)
+				    }
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Service+SafeDIMock.swift": Self.serviceMockFile(construction: "Service.customMock(child: child, name: name)"),
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_isolatesProviderOfOwnOptionalDefault_toGlobalActorMockAttributesSpell_whenTypeDeclarationSpellsAnother() async throws {
+		// `mock()` spells `@PreviewActor`, which outranks the `@MainActor` it would take from `Service`'s extension, so the
+		// provider of `name`'s default, which `mock()`'s parameter calls, is on `PreviewActor` too.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@globalActor
+				public actor PreviewActor {
+				    public static let shared = PreviewActor()
+				}
+
+				@MainActor
+				@Instantiable(mockAttributes: "@PreviewActor", generateMock: .public)
+				public final class Service: Instantiable {
+				    nonisolated public init(name: String? = "name") {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Service+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Service {
+			    @usableFromInline @PreviewActor static func __safeDI_publicMockDefault_name() -> String? { "name" }
+
+			    @PreviewActor public static func mock(
+			        name: String? = Service.__safeDI_publicMockDefault_name()
+			    ) -> Service {
+			        return Service(name: name)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_mock_9B791E5044AD415C {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsProviderOfOwnOptionalDefaultNonisolated_whenMockAttributesSpellNonisolatedOnMainActorType() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@MainActor
+				@Instantiable(mockAttributes: "nonisolated", generateMock: .public)
+				public final class Service: Instantiable {
+				    nonisolated public init(name: String? = "name") {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Service+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Service {
+			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_name() -> String? { "name" }
+
+			    nonisolated public static func mock(
+			        name: String? = Service.__safeDI_publicMockDefault_name()
+			    ) -> Service {
+			        return Service(name: name)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_mock_9B791E5044AD415C {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_constructionFunctionMirrorsGlobalActorOfPreconcurrencyInitializer_whenItsCallerIsOnThatActor() async throws {
+		// A public mock's construction function mirrors the actor of a `@preconcurrency` initializer, as it did before:
+		// `Service` is not `Sendable`, so a nonisolated function could not return it from the actor's initializer.
+		// `Parent`'s mock builds `Service` in its own body, so it opts in through `mockAttributes`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1147,7 +1211,7 @@ struct SafeDIToolMockConstructionIsolationTests: ~Copyable {
 			}
 
 			extension Service {
-			    @preconcurrency @MainActor static func __safeDI_init(retries: Int?, safeDIBuilder: ((Int) -> Service)?) -> Service {
+			    @MainActor static func __safeDI_init(retries: Int?, safeDIBuilder: ((Int) -> Service)?) -> Service {
 			        let retries = retries ?? (3)
 			        return if let safeDIBuilder { safeDIBuilder(retries) } else { Service(retries: retries) }
 			    }
@@ -1155,50 +1219,6 @@ struct SafeDIToolMockConstructionIsolationTests: ~Copyable {
 			#endif
 
 			""",
-		])
-	}
-
-	// MARK: Tests – Public mocks
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_isolatesPublicMockAndProviderOfOwnOptionalDefault_toGlobalActorOfHandWrittenMock() async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@MainActor
-				public enum Defaults {
-				    public static var name: String? = "name"
-				}
-				""",
-				"""
-				@Instantiable(generateMock: .public, customMockName: "customMock")
-				public final class Service: Instantiable {
-				    public init(child: Child) {
-				        self.child = child
-				    }
-
-				    @Instantiated let child: Child
-
-				    @MainActor public static func customMock(child: Child, name: String? = Defaults.name) -> Service {
-				        Service(child: child)
-				    }
-				}
-				""",
-				"""
-				@Instantiable
-				public final class Child: Instantiable {
-				    public init() {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(output.generatedFiles == [
-			"Service+SafeDIMock.swift": Self.serviceMockFile(construction: "Service.customMock(child: child, name: name)"),
-			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
 		])
 	}
 

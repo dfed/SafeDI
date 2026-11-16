@@ -5431,7 +5431,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else {
 					// Attributes precede the initializer's modifiers on its line, as `mockAttributes` precede a mock's, followed by
 					// the global actor of the type's own `init`, which this one calls synchronously, as `mock()` takes its
-					// construction's. A type its tree builds gives it nothing (`mock-generation.md`).
+					// construction's. A type its tree builds gives it nothing (`mock-generation.md`), nor does a
+					// `@preconcurrency` own `init`, whose call then warns: a deliberate gap, as at `mock()`.
 					let attributesPrefix = Self.attributesPrefix(instantiable.generatedInitializerAttributes, isolation: instantiable.generatedInitializerConstructionIsolation)
 					return try await """
 					extension \(instantiable.concreteInstantiable.asSource) {
@@ -6197,6 +6198,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let bodyIndent = "\(Self.standardIndent)\(Self.standardIndent)"
 		// Every initializer carries the attributes a root's generated `init()` carries, and the global actor of the seam's
 		// own initializer, which the narrowest calls synchronously: a caller can reach any of them, and each calls another.
+		// A `@preconcurrency` own initializer gives nothing, and the narrowest's call of it warns: a deliberate gap, as at
+		// `mock()` (`seams.md`).
 		let attributesPrefix = Self.attributesPrefix(instantiable.generatedInitializerAttributes, isolation: instantiable.generatedInitializerConstructionIsolation)
 		// Every tier takes every builder, after its parameters: a hole is required. Each tier takes a builder under its own
 		// label (`SeamSignature.Builder.narrowerTierLabels`). An initializer people call declares no underscored name, which
@@ -6974,7 +6977,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let typeName = instantiable.concreteInstantiable.asSource
 		// `mock()` calls the member it builds the type with (its hand-written mock, `init` or `instantiate(…)`)
 		// synchronously, so it takes the global actor that member has, after the `mockAttributes`, which spell no isolation
-		// where it does. A mock whose tree builds the type takes nothing from it (`mock-generation.md`).
+		// where it does. A mock whose tree builds the type takes nothing from it (`mock-generation.md`). A `@preconcurrency`
+		// member gives nothing, so callers on no actor keep compiling, and the call of it warns: a deliberate gap, as at a
+		// root's `init()` and a seam's initializers.
 		let mockAttributesPrefix = Self.attributesPrefix(instantiable.mockAttributes, isolation: instantiable.generatedMockConstructionIsolation)
 		let indent = Self.standardIndent
 		let bodyIndent = "\(indent)\(indent)"
@@ -7792,8 +7797,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// All arguments from the init or customMock that will be used for construction.
 		/// Determines the builder closure signature (positional unlabeled parameters).
 		let constructionArguments: [Initializer.Argument]
-		/// The isolation the init or customMock spells (`Initializer.spelledIsolation`), which a public mock's
-		/// construction function that calls it mirrors.
+		/// The isolation the init or customMock spells, without a `@preconcurrency` beside it
+		/// (`Initializer.isolationIgnoringPreconcurrency`), which a public mock's construction function that calls it mirrors.
 		let constructionIsolation: String?
 		/// The type's declared dependencies.
 		let dependencies: [Dependency]
@@ -8745,7 +8750,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					childItems: childItems.isEmpty ? nil : MockTreeItems(childItems),
 					defaultParameters: defaultParameters,
 					constructionArguments: constructionArguments,
-					constructionIsolation: constructionInitializer?.spelledIsolation,
+					constructionIsolation: constructionInitializer?.isolationIgnoringPreconcurrency,
 					dependencies: childInstantiable.dependencies,
 					lazilyInstantiatedInstanceProperties: childGenerator.lazilyInstantiatedInstanceProperties,
 					unavailableProperties: childConstructionUnavailableProperties,

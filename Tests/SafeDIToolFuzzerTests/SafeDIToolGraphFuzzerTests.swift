@@ -546,11 +546,11 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	func acceptedFeatureCounts_holdAtLeastTenGraphs_forEachMainActorConstruction() {
-		// The base corpus draws a `@MainActor` hand-written mock, a `@MainActor` initializer of a type without one, and a
-		// `@MainActor` extension whose members spell no isolation, beside a generated `mock()`, which takes the actor of the
-		// member it calls; each draw stands in for unit tests of its shape's neighbours only while it lands in at least ten
+		// The base corpus draws a `@MainActor` hand-written mock, a `@MainActor` initializer of a type without one, a
+		// `@MainActor` extension whose members spell no isolation, and a root's `@MainActor` initializer, whose generated
+		// `mock()` or `init()` takes the actor of the member it calls; each draw stands in for unit tests of its shape's neighbours only while it lands in at least ten
 		// graphs the tool accepts, which the corpus runs pin exactly.
-		for feature in [GraphFuzzerFeature.mainActorCustomMockBesideGeneratedMock, .mainActorInitializerBesideGeneratedMock, .mainActorExtensionBesideGeneratedMock] {
+		for feature in [GraphFuzzerFeature.mainActorCustomMockBesideGeneratedMock, .mainActorInitializerBesideGeneratedMock, .mainActorExtensionBesideGeneratedMock, .mainActorRootInitializer] {
 			#expect(Self.corpusAcceptedFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
 		}
 	}
@@ -5289,7 +5289,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 14, 18, 25, 30, 40, 59, 62, 70, 97, 99, 133, 161, 212, 267, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x13868B366064799F
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x3542B10209838ADF
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -5299,15 +5299,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x85DF62F7E6464A37
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xA08ACF4AE44F1067
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0x928834DBC0141CBB
+	static let corpusFixtureHash: UInt64 = 0xA21D29208AD4A978
 
-	static let corpusPartitionHash: UInt64 = 0xD762AE1EA163A61D
+	static let corpusPartitionHash: UInt64 = 0x9BA8779BF214250B
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -5392,6 +5392,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.mainActorCustomMockBesideGeneratedMock: 75,
 		.mainActorInitializerBesideGeneratedMock: 0,
 		.mainActorExtensionBesideGeneratedMock: 0,
+		.mainActorRootInitializer: 0,
 		.mockOnlyExtensionOfReceivedType: 978,
 		.instantiableStruct: 482,
 		.additionalMockToGenerate: 596,
@@ -5638,7 +5639,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 553, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x492C07E7CB265EE7
+	static let seamCorpusFixtureHash: UInt64 = 0x7747DFFFBCAFA46A
 	static let seamCorpusAcceptedSeedCount = 289
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -5776,7 +5777,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`seamBuilderOrderShape(listedBy:)`). Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x439616D2AB75E50C
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x2A3C1792E9CBBF54
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -5866,8 +5867,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.otherPackageCaller: 221,
 		.samePackageCallerRunWithoutPackageName: 53,
 		.seamModuleRunWithoutPackageName: 62,
-		.seamDependency: 42,
-		.seamDependencyChain: 56,
+		.seamDependency: 43,
+		.seamDependencyChain: 57,
 		.hole: 331,
 		.holeOwnedBySeam: 75,
 		.holeProtocolInMarkerFreeFile: 166,
@@ -5965,6 +5966,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.mockOnlyBlockTypeElseNarrower: 24,
 		.mockOnlyBlockTypeRedeclaredWhereMockConditionIsInactive: 34,
 		.mockOnlyBlockAcrossModules: 27,
+		.actorSeam: 150,
+		.actorSeamBuiltThroughInstantiator: 61,
+		.actorSeamAcrossModules: 42,
 		.formsAcrossModules: 145,
 		.formsSeam: 499,
 		.formsByValueReceive: 271,

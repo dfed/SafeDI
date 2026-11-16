@@ -94,16 +94,25 @@ public struct Initializer: Codable, Hashable, Sendable {
 	/// The isolation the declaration spells, or the extension it is declared in spells when it spells none
 	/// (`InstantiableVisitor` applies `inheritingIsolation(_:)`), which code that calls it from another declaration
 	/// mirrors: `nonisolated` for the modifier, or a global actor attribute (an attribute whose name ends in `Actor`,
-	/// such as `@MainActor`), or `nil` when neither spells either and it takes its type's isolation. A global actor spelled
-	/// beside `@preconcurrency` keeps it (`"@preconcurrency @MainActor"`, `memberIsolation(modifiers:attributes:)`), so a
-	/// caller that mirrors it can still be called by code on no actor, as the declaration can, and calls it without the
-	/// warning a nonisolated caller gets.
+	/// such as `@MainActor`), or `nil` when neither spells either and it takes its type's isolation. A global actor the
+	/// declaration spells beside `@preconcurrency` keeps it (`"@preconcurrency @MainActor"`), which a generated `mock()`,
+	/// a root's `init()` and a seam's initializers take as no isolation, so that code on no actor that called them keeps
+	/// compiling, though their call of the declaration warns, a deliberate gap (`mock-generation.md`), and a public mock's
+	/// construction function takes without it (`isolationIgnoringPreconcurrency`), as it did before. A declaration in an
+	/// extension spelled `@preconcurrency`, or spelled so itself, takes nothing of its extension's.
 	public let spelledIsolation: String?
 
-	/// The global actor `isolation`, a `spelledIsolation`, names: its last word, without `@preconcurrency`.
-	static func globalActor(of isolation: String) -> Substring {
-		isolation.split(separator: " ").last ?? Substring(isolation)
+	/// Whether `spelledIsolation` is a global actor spelled beside `@preconcurrency`.
+	public var isPreconcurrentlyIsolated: Bool {
+		spelledIsolation?.hasPrefix(Self.preconcurrencyPrefix) == true
 	}
+
+	/// `spelledIsolation` without `@preconcurrency`.
+	public var isolationIgnoringPreconcurrency: String? {
+		isPreconcurrentlyIsolated ? spelledIsolation.map { String($0.dropFirst(Self.preconcurrencyPrefix.count)) } : spelledIsolation
+	}
+
+	private static let preconcurrencyPrefix = "@preconcurrency "
 
 	/// See `spelledIsolation`.
 	/// The global actor attribute among `attributes`, a space-separated list of attributes as `mockAttributes` spells
@@ -133,16 +142,27 @@ public struct Initializer: Codable, Hashable, Sendable {
 		)
 	}
 
-	/// The isolation a member or an extension spells, as `spelledIsolation(modifiers:attributes:)` reads it, with
-	/// `@preconcurrency` before a global actor it spells beside one (`spelledIsolation`).
+	/// The isolation a member spells, as `spelledIsolation(modifiers:attributes:)` reads it, with `@preconcurrency` before a
+	/// global actor it spells beside one (`spelledIsolation`).
 	static func memberIsolation(modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax) -> String? {
 		let isolation = spelledIsolation(modifiers: modifiers, attributes: attributes)
-		let isPreconcurrency = attributes.contains { AttributeSyntax($0)?.attributeName.trimmedDescription == "preconcurrency" }
-		return if let isolation, isPreconcurrency, isolation != "nonisolated" {
-			"@preconcurrency \(isolation)"
+		return if let isolation, isolation != "nonisolated", spellsPreconcurrency(attributes) {
+			preconcurrencyPrefix + isolation
 		} else {
 			isolation
 		}
+	}
+
+	/// The isolation an extension gives the members declared in it that spell none: the one it spells, or none when it
+	/// spells `@preconcurrency` (`spelledIsolation`).
+	static func extensionIsolation(modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax) -> String? {
+		spellsPreconcurrency(attributes) ? nil : spelledIsolation(modifiers: modifiers, attributes: attributes)
+	}
+
+	/// Whether `attributes` spell `@preconcurrency`, whose declaration takes no isolation of the extension it is in
+	/// either (`spelledIsolation`).
+	static func spellsPreconcurrency(_ attributes: AttributeListSyntax) -> Bool {
+		attributes.contains { AttributeSyntax($0)?.attributeName.trimmedDescription == "preconcurrency" }
 	}
 
 	static func spelledIsolation(modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax) -> String? {

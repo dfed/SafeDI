@@ -282,7 +282,7 @@ SafeDI generates a root’s `init()`, the initializers of a [seam](#generating-a
 | `mockAttributes` | The generated `mock()`. |
 | `generatedAttributes` | Both. |
 
-Each generated declaration calls one method of the type directly. A root’s `init()` and a seam’s initializers call the type’s initializer. A `mock()` calls its [hand-written mock](#hand-written-mocks), or else its initializer or `instantiate()`. When that method, or the extension that declares it, is bound to a global actor that the type is not, the generated declaration is bound to that actor too, unless its arguments above name an isolation (a global actor or `nonisolated`). SafeDI recognizes a global actor attribute whose name ends in `Actor`, and keeps a method’s `@preconcurrency`, so code on no actor can still call the generated declaration.
+Each generated declaration calls one method of the type directly. A root’s `init()` and a seam’s initializers call the type’s initializer. A `mock()` calls its [hand-written mock](#hand-written-mocks), or else its initializer or `instantiate()`. When that method, or the extension that declares it, is bound to a global actor that the type is not, the generated declaration is bound to that actor too, unless its arguments above name an isolation (a global actor or `nonisolated`). SafeDI recognizes a global actor attribute whose name ends in `Actor`, and takes nothing from a `@preconcurrency` method, so code that called the generated declaration from no actor keeps compiling.
 
 A generated declaration also builds the type’s tree, which SafeDI does not read for isolation. If a root is not bound to the main actor, and its tree builds a type whose initializer is `@MainActor`, give the root `generatedInitializerAttributes: "@MainActor"`:
 

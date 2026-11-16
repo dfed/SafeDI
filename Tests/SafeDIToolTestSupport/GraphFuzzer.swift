@@ -1428,6 +1428,13 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case mockOnlyBlockTypeRedeclaredWhereMockConditionIsInactive
 	/// `DebugSeam`'s tree in the seam's module.
 	case mockOnlyBlockAcrossModules
+	/// `addingActorSeam`'s seam, `ActorSeam`, and its root, `ActorRoot`, whose generated initializers take their own
+	/// initializers' global actor.
+	case actorSeam
+	/// `ActorRoot` building `ActorSeam` through an `Instantiator`.
+	case actorSeamBuiltThroughInstantiator
+	/// `ActorSeam`'s tree in the seam's module.
+	case actorSeamAcrossModules
 	/// `FormsScreen`'s tree in the seam's module.
 	case formsAcrossModules
 	/// `addingLabelFormsSeam`'s seam, `FormsScreen`.
@@ -2298,6 +2305,7 @@ enum GraphFuzzerGenerator {
 			markerFreeFileRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.markerFreeFileRandomSeedMask)
 			holeProtocolAccessRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holeProtocolAccessRandomSeedMask)
 			unreadTypeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unreadTypeRandomSeedMask)
+			actorSeamRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorSeamRandomSeedMask)
 			unreadBoundaryRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unreadBoundaryRandomSeedMask)
 			mockOnlyBlockRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockOnlyBlockRandomSeedMask)
 			mockVocabularyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockVocabularyRandomSeedMask)
@@ -2375,7 +2383,7 @@ enum GraphFuzzerGenerator {
 			// The mock vocabulary is drawn after every other pass, from a stream of its own, so that every other draw of a
 			// graph it draws in is drawn as before.
 			var finalDeclarations = addingMockVocabulary(to: movingSelfContainedSeamsIntoSeamModule(
-				addingMockOnlyBlockParameterTypes(to: addingUnreadParameterTypes(to: addingLabelFormsSeam(to: addingHoleShapes(to: addingAccessProofExtensions(to: addingAccessProofShapes(to: aliasDeclarations)))))),
+				addingActorSeam(to: addingMockOnlyBlockParameterTypes(to: addingUnreadParameterTypes(to: addingLabelFormsSeam(to: addingHoleShapes(to: addingAccessProofExtensions(to: addingAccessProofShapes(to: aliasDeclarations))))))),
 			))
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
@@ -2704,6 +2712,8 @@ enum GraphFuzzerGenerator {
 		/// inside a platform-conditioned `#if` block or a flag's clause, in a `package` extension in a file without a SafeDI
 		/// marker, in an extension of a nested type, or as an `internal` typealias.
 		private var unreadTypeRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingActorSeam`'s choices.
+		private var actorSeamRandom: GraphFuzzerRandomNumberGenerator
 		private var unreadBoundaryRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingMockOnlyBlockParameterTypes`' choices: whether a graph gains its tree with a value of a plain type
 		/// declared in a block that guards mock-only declarations, and how the clauses where `DEBUG` is inactive declare it.
@@ -6184,6 +6194,8 @@ enum GraphFuzzerGenerator {
 				({ ["UnreadSeam", "UnreadChild"].map { "\(prefix)\($0)" }.contains($0) }, true),
 				// Drawn after it, so that a graph without `addingMockOnlyBlockParameterTypes`' tree draws as before.
 				({ ["DebugSeam", "DebugChild"].map { "\(prefix)\($0)" }.contains($0) }, true),
+				// Drawn last, so that a graph without `addingActorSeam`'s tree draws as before. `ActorRoot`, the caller, stays.
+				({ ["ActorSeam", "ActorChild", "ActorToken"].map { "\(prefix)\($0)" }.contains($0) }, true),
 			]
 			for tree in trees {
 				guard declarations.contains(where: { tree.isMember($0.name) }), crossModuleRandom.percentChance(50), tree.isMovable else { continue }
@@ -6308,6 +6320,53 @@ enum GraphFuzzerGenerator {
 		private static let unreadTypeRandomSeedMask: UInt64 = 0x756E726561645479
 		private static let unreadBoundaryRandomSeedMask: UInt64 = 0x756E726561644264
 
+		// MARK: Global-actor seam
+
+		/// With the `generateDependencyTree` feature on, three graphs in twenty gain a small seam tree of their own whose
+		/// seam and root take their own initializers' global actor: `ActorRoot`, a root whose own initializer is
+		/// `@MainActor`, which its generated `init()` and, a third of the time, its generated `mock()` take, instantiates
+		/// `ActorToken` and builds `ActorSeam` by value or, in a graph whose wrappers are not all `Sendable`, through an
+		/// `Instantiator`, which builds on the root's actor; `ActorSeam`, whose own initializer is `@MainActor`, which every
+		/// generated initializer takes, receives the token, a parameter of its generated initializers, and instantiates
+		/// `ActorChild`. In a split graph the seam's tree moves to the seam's module half the time
+		/// (`movingSelfContainedSeamsIntoSeamModule`), so a caller in another module calls the generated initializers. A
+		/// `SendableInstantiator` cannot build the seam: its function runs on no actor, and the Manual's "Sendable wrappers"
+		/// says an initializer it builds must not need one. `actorSeamRandom` draws only for this pass, after every other.
+		private mutating func addingActorSeam(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.contains(.generateDependencyTree), actorSeamRandom.percentChance(15) else { return declarations }
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let seamName = "\(prefix)ActorSeam"
+			let childName = "\(prefix)ActorChild"
+			let tokenName = "\(prefix)ActorToken"
+			var seam = TypeDeclaration(
+				name: seamName,
+				instantiableArguments: ["generateDependencyTree: true"],
+				properties: [
+					PropertyDeclaration(attribute: "@Received", label: "actorToken", type: tokenName),
+					PropertyDeclaration(attribute: "@Instantiated", label: "actorChild", type: childName),
+				],
+				declaresHelperTypes: false,
+				additionalConformances: conformances,
+			)
+			seam.initializerIsMainActor = true
+			let child = TypeDeclaration(name: childName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances)
+			let token = TypeDeclaration(name: tokenName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances)
+			let seamProperty = sendability != .sendable && actorSeamRandom.percentChance(50)
+				? PropertyDeclaration(attribute: "@Instantiated", label: "actorSeamBuilder", type: "Instantiator<\(seamName)>")
+				: PropertyDeclaration(attribute: "@Instantiated", label: "actorSeam", type: seamName)
+			var root = TypeDeclaration(
+				name: "\(prefix)ActorRoot",
+				instantiableArguments: actorSeamRandom.percentChance(33) ? ["isRoot: true", "generateMock: true"] : ["isRoot: true"],
+				properties: [PropertyDeclaration(attribute: "@Instantiated", label: "actorToken", type: tokenName), seamProperty],
+				declaresHelperTypes: false,
+				additionalConformances: conformances,
+			)
+			root.initializerIsMainActor = true
+			return declarations + [seam, child, token, root]
+		}
+
+		private static let actorSeamRandomSeedMask: UInt64 = 0x6163746F72536561
+
 		// MARK: Mock-only block parameter types
 
 		/// With the `generateDependencyTree` feature on, a tenth of graphs gain a small seam tree of their own whose value,
@@ -6403,6 +6462,8 @@ enum GraphFuzzerGenerator {
 		///   `mock()` to the main actor too. A mock that builds the type would need `mockAttributes` to call it.
 		/// - A mocked type without a hand-written mock that only its own `mock()` builds has a `@MainActor` initializer in
 		///   half of the graphs that have one (`mockIsolationRandom`), which binds its generated `mock()` to the main actor.
+		/// - In a fifth of the graphs, a root's own initializer is `@MainActor`, which binds its generated `init()`, and its
+		///   generated `mock()` when it has one, to the main actor.
 		/// - In a quarter of the graphs, `Clock`, a type nothing builds, has a `@MainActor` `@Instantiable(generateMock: true)`
 		///   extension in a file of its own (`mainActorExtensionSource`), whose `instantiate()` – or, half the time, a `customMock` that
 		///   `customMockName` names – spells no isolation and has the extension's, which binds the generated `mock()` too.
@@ -6460,6 +6521,11 @@ enum GraphFuzzerGenerator {
 			}
 			if !mainActorInitializerCandidates.isEmpty, mockIsolationRandom.percentChance(50) {
 				declarations[mockIsolationRandom.element(of: mainActorInitializerCandidates)].initializerIsMainActor = true
+			}
+			// A root whose own initializer is `@MainActor`, which its generated `init()` and `mock()` take. Nothing builds a
+			// root, and the probes that build it run on the main actor.
+			if mockIsolationRandom.percentChance(20) {
+				declarations[mockIsolationRandom.integer(in: 0...(rootCount - 1))].initializerIsMainActor = true
 			}
 			// A mocked `@MainActor` extension of a type nothing builds, whose `instantiate()`, or the hand-written mock
 			// `customMockName` names, spells no isolation and has the extension's.
@@ -7742,6 +7808,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// A `@MainActor` `@Instantiable(generateMock: true)` extension whose `instantiate()` or hand-written mock spells no
 	/// isolation and has the extension's, which binds the generated `mock()` that calls it.
 	case mainActorExtensionBesideGeneratedMock
+	/// A root whose own initializer is `@MainActor`, which its generated `init()`, and its generated `mock()` when it has
+	/// one, take.
+	case mainActorRootInitializer
 	/// A `mockOnly` extension of a type with a production declaration that another type receives, so that a mock that
 	/// builds the received type builds it with the extension's mock.
 	case mockOnlyExtensionOfReceivedType
@@ -8244,7 +8313,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		var receivedTypes = Set<String>()
 		for content in fixture.swiftFileContent {
 			let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
+			// The arguments of the last `@Instantiable` attribute read, which tell a root's initializer from another type's.
+			var lastInstantiableAttribute = ""
 			for (line, nextLine) in zip(lines, lines.dropFirst()) {
+				if line.hasPrefix("@Instantiable") {
+					lastInstantiableAttribute = line
+				}
 				if line == "#if DEBUG", nextLine.contains("static func mock("), !nextLine.hasPrefix("@") {
 					// A member: a top-level mock-only declaration begins with its attribute.
 					features.insert(.handWrittenMockUnderMockCondition)
@@ -8256,7 +8330,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					features.insert(.mainActorCustomMockBesideGeneratedMock)
 				}
 				if line.hasPrefix("@MainActor "), line.contains(" init(") {
-					features.insert(.mainActorInitializerBesideGeneratedMock)
+					features.insert(lastInstantiableAttribute.contains("isRoot: true") ? .mainActorRootInitializer : .mainActorInitializerBesideGeneratedMock)
 				}
 				if line.hasPrefix("@Instantiable("), line.contains("generateMock: true"), nextLine.hasPrefix("@MainActor extension ") {
 					features.insert(.mainActorExtensionBesideGeneratedMock)
@@ -8590,6 +8664,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		if declaresType(named: "AliasNeed") {
 			features.insert(.uncreatedAliasFulfillingPropertyRequiredBeside)
 		}
+		if declaresType(named: "ActorSeam") {
+			features.insert(.actorSeam)
+		}
+		if properties(ofTypeNamed: "ActorRoot").contains(where: { $0.label == "actorSeamBuilder" }) {
+			features.insert(.actorSeamBuiltThroughInstantiator)
+		}
 		// `movingSelfContainedSeamsIntoSeamModule`'s trees in the seam's module.
 		for content in fixture.swiftFileContent where GraphFuzzerModule(declaredIn: content).map({ !$0.isCaller }) == true {
 			for line in GraphFuzzerSourceLine.lines(of: content) {
@@ -8604,6 +8684,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					features.insert(.unreadAcrossModules)
 				} else if name.hasSuffix("DebugSeam") {
 					features.insert(.mockOnlyBlockAcrossModules)
+				} else if name.hasSuffix("ActorSeam") {
+					features.insert(.actorSeamAcrossModules)
 				}
 			}
 		}
@@ -12693,9 +12775,10 @@ enum GraphFuzzerOracle {
 			// The modules the generated file imports, which the types a seam's parameters name may need: a module the seam's
 			// module depends on, or `Foundation`.
 			let imports = Set(contents.split(separator: "\n").filter { $0.hasPrefix("import ") }.map(String.init)).sorted()
+			let isolationBySeam = seamInitializerIsolation(inGeneratedFile: contents)
 			for (seamTypeName, initializers) in initializersBySeam {
 				generatedFiles["\(directory)\(seamTypeName)+SafeDISeamCaller.swift"] = imports.map { $0 + "\n" }.joined() + (imports.isEmpty ? "" : "\n")
-					+ seamCaller(named: "\(seamTypeName)SeamCaller", of: seamTypeName, calling: Array(initializers.enumerated()), seamTypeAccess: seamTypeAccess[seamTypeName] ?? "public")
+					+ seamCaller(named: "\(seamTypeName)SeamCaller", of: seamTypeName, calling: Array(initializers.enumerated()), seamTypeAccess: seamTypeAccess[seamTypeName] ?? "public", isolation: isolationBySeam[seamTypeName])
 			}
 			// The callers in the other modules of a split graph, of each seam the seam's module generated.
 			guard fileName.hasPrefix(GraphFuzzerModule.seamModule.name + "/") else { continue }
@@ -12708,7 +12791,7 @@ enum GraphFuzzerOracle {
 					guard let tierIndex = initializers.lastIndex(where: { reachableAccesses.contains($0.access) }) else { continue }
 					let callerImports = Set(imports + ["import \(GraphFuzzerModule.seamModule.name)"]).sorted()
 					generatedFiles["\(module.name)/\(seamTypeName)+SafeDISeamCaller.swift"] = callerImports.map { $0 + "\n" }.joined() + "\n"
-						+ seamCaller(named: "\(seamTypeName)\(callerName)", of: seamTypeName, calling: [(tierIndex, initializers[tierIndex])], seamTypeAccess: seamAccess)
+						+ seamCaller(named: "\(seamTypeName)\(callerName)", of: seamTypeName, calling: [(tierIndex, initializers[tierIndex])], seamTypeAccess: seamAccess, isolation: isolationBySeam[seamTypeName])
 				}
 			}
 		}
@@ -12889,7 +12972,24 @@ enum GraphFuzzerOracle {
 	/// parameter has a default, spelled at the narrower of the tier's access and the seam type's. The call is of the
 	/// initializer every generated call calls, each parameter of the function taken as that initializer takes it: a
 	/// deferred one as an `@autoclosure`, which the call passes on by calling it.
-	private static func seamCaller(named callerName: String, of seamTypeName: String, calling tiers: [(offset: Int, element: (access: String, parameters: [String]))], seamTypeAccess: String) -> String {
+	/// The global actor each seam's generated initializers in `contents` spell, by the seam they extend: the attribute their
+	/// line begins with, which a seam takes from its own initializer (`ActorSeam`). A seam whose initializers spell none is
+	/// absent.
+	private static func seamInitializerIsolation(inGeneratedFile contents: String) -> [String: String] {
+		var isolationBySeam = [String: String]()
+		var extendedTypeName: String?
+		for line in contents.split(separator: "\n") {
+			let trimmed = line.trimmingCharacters(in: .whitespaces)
+			if trimmed.hasPrefix("extension "), trimmed.hasSuffix(" {") {
+				extendedTypeName = String(trimmed.dropFirst("extension ".count).dropLast(" {".count))
+			} else if let extendedTypeName, trimmed.contains(" init("), let attribute = trimmed.split(separator: " ").first, attribute.hasPrefix("@"), attribute.hasSuffix("Actor") {
+				isolationBySeam[extendedTypeName] = String(attribute)
+			}
+		}
+		return isolationBySeam
+	}
+
+	private static func seamCaller(named callerName: String, of seamTypeName: String, calling tiers: [(offset: Int, element: (access: String, parameters: [String]))], seamTypeAccess: String, isolation: String?) -> String {
 		let accessOrder = ["private", "fileprivate", "internal", "package", "public"]
 		var functions = [String]()
 		for (index, tier) in tiers {
@@ -12906,8 +13006,9 @@ enum GraphFuzzerOracle {
 				parameters.append("\(label): \(type)")
 				arguments.append("\(externalLabel): \(label)\(type.hasPrefix("@autoclosure") ? "()" : "")")
 			}
+			// A caller of an initializer bound to a global actor is bound to it too, as code that calls it must be.
 			functions.append("""
-			    \(access) static func callTier\(index)(\(parameters.joined(separator: ", "))) -> \(seamTypeName) {
+			    \(isolation.map { "\($0) " } ?? "")\(access) static func callTier\(index)(\(parameters.joined(separator: ", "))) -> \(seamTypeName) {
 			        \(seamTypeName)(\(arguments.joined(separator: ", ")))
 			    }
 			""")
