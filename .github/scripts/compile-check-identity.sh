@@ -1,7 +1,6 @@
 #!/bin/bash
 # usage: compile-check-identity.sh TEST_ARGUMENT…
 #        compile-check-identity.sh --list-sources
-#        compile-check-identity.sh --list-workflow-lines
 #
 # Prints the SHA-256 of everything a compile check's result depends on that the
 # check's own key leaves out (PassedCompileCheckCache.swift): the sources of
@@ -13,24 +12,10 @@
 # cache and compiles every check.
 #
 # It also covers what decides which passed checks a run writes and shares: the
-# lines of the workflows whose test jobs record them (ci.yml, verify.yml) that
-# name the cache, the actions those jobs restore and upload them with, and this
-# script. Runs on every branch add to one list per identity
-# (share-compile-checks.yml), so a branch that changes how passes are written
-# must write to a list of its own.
-#
-# Only those lines of a workflow, not the file: a workflow edit that touches
-# none of them (another job, a comment, a time limit) cannot change what a check
-# compiles or which passes are recorded, and hashing the whole file made every
-# such edit compile all the checks again, on macOS and on Linux. Of the 60
-# commits on main before 2026-11-16, 17 changed the identity, 12 of them only
-# through a workflow file, and 7 would have with these lines; "Build and Test on
-# Xcode 26" took 28 minutes with the checks skipped (run 43712596551) and 50
-# with all 3,310 compiled (43858793240).
-# The lines are every line that matches `workflow_line_pattern` below, in file
-# order: the identity's computation, the test arguments, the cache's paths, keys
-# and conditions, and the variable that names the file to the tests. A new step
-# that reads or writes the passed checks names one of those, so it is hashed.
+# workflows whose test jobs record them (ci.yml, verify.yml), the actions those
+# jobs restore and upload them with, and this script. Runs on every branch add
+# to one list per identity (share-compile-checks.yml), so a branch that changes
+# how passes are written must write to a list of its own.
 #
 # The macro plugin compiles SafeDICore through a symbolic link, leaving out the
 # files and directories its target's `exclude` in Package.swift lists: the
@@ -43,9 +28,6 @@
 # `--list-sources` prints the SafeDI sources the hash covers, one path per line
 # in the order hashed, and nothing else: `MacroTargetSourceTests` compares them
 # with the files the macro target compiles.
-#
-# `--list-workflow-lines` prints the workflow lines the hash covers, each after
-# its file's path, and nothing else.
 #
 # Reads files rather than `git ls-tree`: in a container job, git refuses to read
 # a checkout another user owns. Uses pipes rather than here-strings, which bash
@@ -129,28 +111,6 @@ if [ "${1:-}" = --list-sources ]; then
 	exit 0
 fi
 
-# The lines of the workflows that decide which passed checks a run reads, writes
-# and shares. A workflow that matches nothing means its jobs no longer name the
-# cache as this script expects, so it fails rather than hash nothing of it.
-workflow_line_pattern='compile-check|COMPILE_CHECK|SWIFT_TEST_ARGUMENTS|passed\.txt'
-hashed_workflow_lines() {
-	local workflow
-	for workflow in .github/workflows/ci.yml .github/workflows/verify.yml; do
-		if ! grep -E -H -e "$workflow_line_pattern" "$workflow"; then
-			echo "compile-check-identity.sh: no line of $workflow names the passed compile checks." >&2
-			return 1
-		fi
-	done
-}
-
-# Assigned first, for the same reason as the sources.
-workflow_lines=$(hashed_workflow_lines)
-
-if [ "${1:-}" = --list-workflow-lines ]; then
-	echo "$workflow_lines"
-	exit 0
-fi
-
 {
 	echo "Test arguments: $*"
 	echo "$sources" | tr '\n' '\0' | sha256_of_files
@@ -160,11 +120,12 @@ fi
 		Tests/SafeDIToolTestSupport/SafeDICompileVerifier.swift \
 		Tests/SafeDIToolTestSupport/PassedCompileCheckCache.swift \
 		Tests/SafeDIToolTestSupport/TestTemporaryDirectory.swift \
+		.github/workflows/ci.yml \
+		.github/workflows/verify.yml \
 		.github/actions/restore-shared-compile-checks/action.yml \
 		.github/actions/upload-passed-compile-checks/action.yml \
 		.github/scripts/compile-check-identity.sh \
 		| sha256_of_files
-	echo "$workflow_lines"
 	"${swiftc[@]}" --version 2>&1
 	"${swiftc[@]}" -print-target-info
 	if command -v xcrun >/dev/null; then
