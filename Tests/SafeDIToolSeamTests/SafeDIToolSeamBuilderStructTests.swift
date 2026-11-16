@@ -49,7 +49,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesBuilderStruct_whenSeamsOnlyPlaceIsAtItsBoundary() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["boundary"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Home {
 		    @frozen nonisolated public enum SafeDIScope_Api {
 		        case api(api_Values)
@@ -86,8 +86,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Home {
 		    public enum __safeDI_Home_74DEAFE93792C3B0 {}
 		}
-		""")
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -108,7 +108,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        self.init(home: home)
 		    }
 		}
-		""")
+		"""])
 		try Self.expectCompiles(output)
 	}
 
@@ -120,7 +120,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		// alive with every `Detail`; the struct's member hands its level function `logger` alone.
 		let modules = Self.fixtures["adopter"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Home {
 		    @frozen nonisolated public enum SafeDIScope_Api {
 		        case detailBuilder(detailBuilder_Values, SafeDIScope_Api.Detail_Scope)
@@ -210,8 +210,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Home {
 		    public enum __safeDI_Home_7826251AC9105FEF {}
 		}
-		""")
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -238,7 +238,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        self.init(home: home)
 		    }
 		}
-		""")
+		"""])
 		try Self.expectCompiles(output)
 		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(output: output, modules: modules),
@@ -258,7 +258,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_callsSendableMemberAtTopOfSendableFunction_whenPlaceIsBuiltInsideSendableInstantiator() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["sendable"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Home {
 		    @frozen nonisolated public enum SafeDIScope_Api {
 		        @frozen nonisolated public enum Worker_Scope {
@@ -348,8 +348,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Home {
 		    public enum __safeDI_Home_1B86BE724F73AD06 {}
 		}
-		""")
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -376,7 +376,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        self.init(home: home)
 		    }
 		}
-		""")
+		"""])
 		try Self.expectCompiles(output)
 	}
 
@@ -384,7 +384,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_returnsNextSendableStructFromOuterMember_whenTwoSendableFunctionsLeadToPlace() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["twoSendable"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Home {
 		    @frozen nonisolated public enum SafeDIScope_Api {
 		        @frozen nonisolated public enum Inner_Scope {
@@ -495,8 +495,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Home {
 		    public enum __safeDI_Home_33C78863D0ED2308 {}
 		}
-		""")
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -526,7 +526,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        self.init(home: home)
 		    }
 		}
-		""")
+		"""])
 		try Self.expectCompiles(output)
 	}
 
@@ -535,10 +535,11 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 	mutating func generate_handsCalledSeamStructBuildingKeptSeamsCase_whenKeptSeamPassesUpSwitchedSeamsPlace() async throws {
 		// `Innermost`'s place forwards nothing, so it takes a builder struct; `Inner` passes it up and keeps its closure over
 		// its enum, whose case holds `Innermost`'s. `Inner` hands `Innermost` a struct whose member for the place calls its
-		// own builder with the case rebuilt from the values each member was handed.
+		// own builder with the case rebuilt from the values each member was handed. While only a `Detail` lives, `Inner` and
+		// its `Navigator` are freed and `Innermost`'s `Logger` is not, as with the closure over `Innermost`'s enum.
 		let modules = Self.fixtures["deep"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Inner {
 		    @frozen public enum SafeDIScope_Service {
 		        case innermost(Innermost.SafeDIScope_Service)
@@ -623,8 +624,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Innermost {
 		    public enum __safeDI_Innermost_AFB8CC1B9186E9DE {}
 		}
-		""")
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -656,9 +657,24 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        self.init(inner: inner)
 		    }
 		}
-		""")
+		"""])
 		try Self.expectCompiles(output)
 		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root()")])
+		let description = try await DifferentialValueOracle.describe(
+			DifferentialValuePath(output: output, modules: modules),
+			probes: [DifferentialValueProbe("freedWhileOnlyDetailLives()")],
+			filesToDelete: &filesToDelete,
+		)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe freedWhileOnlyDetailLives()
+			Array<Bool>
+			  0: Bool true
+			  1: Bool true
+			  2: Bool false
+
+			""")
+		}
 	}
 
 	@Test
@@ -666,10 +682,11 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 	mutating func generate_convertsThroughOneFunctionPerFirstOpening_whenKeptSeamPassesUpSwitchedSeamWhoseLevelsLoop() async throws {
 		// `Hub`'s `T` and `C` each build the other. `Shell` passes `Hub`'s place up and keeps its closure over its enum: one
 		// function per level each route first opens, and a member that opens a level again calls that level's function with
-		// what wrapped the case where the route first opened it.
+		// what wrapped the case where the route first opened it. Holding only a `C` two levels deep, then only a `T` five
+		// levels deep, keeps alive the `Mark`s and `MarkReader`s the closure over `Hub`'s enum keeps alive.
 		let modules = Self.fixtures["tangle"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		#expect(output.modules["Middle"]?.generatedFiles["Middle.swift"] == generatedFileHeader + """
+		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -710,8 +727,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Shell {
 		    public enum __safeDI_Shell_CC5517DC407C149C {}
 		}
-		""")
-		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Hub {
 		    @frozen nonisolated public enum SafeDIScope_Api {
 		        case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
@@ -849,8 +866,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Hub {
 		    public enum __safeDI_Hub_3346DB48A8E1A345 {}
 		}
-		""")
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -893,9 +910,27 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        self.init(shell: shell)
 		    }
 		}
-		""")
+		"""])
 		try Self.expectCompiles(output)
 		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().shell.hub.tBuilder.instantiate().cBuilder.instantiate().tBuilder.instantiate()")])
+		let description = try await DifferentialValueOracle.describe(
+			DifferentialValuePath(output: output, modules: modules),
+			probes: [DifferentialValueProbe("liveMarksAndReaders(holdingOnlyLevelAtDepth: 2)"), DifferentialValueProbe("liveMarksAndReaders(holdingOnlyLevelAtDepth: 5)")],
+			filesToDelete: &filesToDelete,
+		)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe liveMarksAndReaders(holdingOnlyLevelAtDepth: 2)
+			Array<Int>
+			  0: Int 1
+			  1: Int 0
+			probe liveMarksAndReaders(holdingOnlyLevelAtDepth: 5)
+			Array<Int>
+			  0: Int 1
+			  1: Int 1
+
+			""")
+		}
 	}
 
 	@Test
@@ -903,10 +938,11 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 	mutating func generate_handsCallersDispatcherTheRebuiltCase_whenKeptSeamsCaseCarriesSwitchedSeamsScope() async throws {
 		// `Outer` fills `Inner`'s `service` with a type that holds `Outer`'s own place, so `Outer`'s case carries the scope
 		// `Inner` hands the fill, and its dispatchers keep their switch over `Inner`'s enum: `Inner` is handed a struct whose
-		// members hand them the case.
+		// members hand them the case. A screen keeps alive only its own service's gadget, as with the closure over `Inner`'s
+		// enum.
 		let modules = Self.fixtures["insideFill"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		#expect(output.modules["Middle"]?.generatedFiles["Middle.swift"] == generatedFileHeader + """
+		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -972,8 +1008,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Outer {
 		    public enum __safeDI_Outer_B543483265135986 {}
 		}
-		""")
-		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Inner {
 		    @frozen nonisolated public enum SafeDIScope_Service {
 		        case screenBuilder(screenBuilder_Values, SafeDIScope_Service.Screen_Scope)
@@ -1042,8 +1078,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Inner {
 		    public enum __safeDI_Inner_F6242724384070E7 {}
 		}
-		""")
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -1084,16 +1120,28 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        self.init(outer: outer)
 		    }
 		}
-		""")
+		"""])
 		try Self.expectCompiles(output)
 		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().outer.inner.screenBuilder.instantiate(7)")])
+		let description = try await DifferentialValueOracle.describe(
+			DifferentialValuePath(output: output, modules: modules),
+			probes: [DifferentialValueProbe("liveGadgetsHoldingOnlyScreen()")],
+			filesToDelete: &filesToDelete,
+		)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe liveGadgetsHoldingOnlyScreen()
+			Int 1
+
+			""")
+		}
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_namesNoScopeParameterApart_whenPlaceIsBeneathPropertyNamedBuilder() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["builderLabel"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Home {
 		    @frozen nonisolated public enum SafeDIScope_Api {
 		        case builder(builder_Values, SafeDIScope_Api.Part_Scope)
@@ -1154,8 +1202,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Home {
 		    public enum __safeDI_Home_16D534714B302E55 {}
 		}
-		""")
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -1179,7 +1227,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        self.init(home: home)
 		    }
 		}
-		""")
+		"""])
 		try Self.expectCompiles(output)
 	}
 
@@ -1190,7 +1238,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		// the main actor, so `Root`'s `init()` and a nonisolated hand-written caller could call neither unless each spells the
 		// isolation of the initializer it forwards to.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["mainActor"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Inner {
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 		    nonisolated public convenience init(token: Token) {
@@ -1208,8 +1256,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Inner {
 		    public enum __safeDI_Inner_1EB503BFA23A82BA {}
 		}
-		""")
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -1225,7 +1273,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        self.init(token: token, inner: inner)
 		    }
 		}
-		""")
+		"""])
 		try Self.expectCompiles(output)
 	}
 
@@ -1233,7 +1281,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsClosureOverEnumForForwardingBuilderOnly_whenSeamTakesPlainAndForwardingHoleTypes() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["twoHoleTypes"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Home {
 		    @frozen nonisolated public enum SafeDIScope_Api {
 		        case api(api_Values)
@@ -1281,8 +1329,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Home {
 		    public enum __safeDI_Home_61E1CB625FF3A2B0 {}
 		}
-		""")
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -1312,7 +1360,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        self.init(home: home)
 		    }
 		}
-		""")
+		"""])
 		try Self.expectCompiles(output)
 	}
 
@@ -1321,7 +1369,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 	mutating func generate_handsLevelFunctionTheLazyWrapper_whenLazyValueIsOnTheRouteToThePlace() async throws {
 		let modules = Self.fixtures["lazy"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Home {
 		    @frozen nonisolated public enum SafeDIScope_Api {
 		        case detail(detail_Values, SafeDIScope_Api.Detail_Scope)
@@ -1388,8 +1436,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Home {
 		    public enum __safeDI_Home_812FFB5BD10F50D1 {}
 		}
-		""")
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -1413,7 +1461,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        self.init(home: home)
 		    }
 		}
-		""")
+		"""])
 		try Self.expectCompiles(output)
 		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root().home.detail.instance")])
 	}
@@ -1423,7 +1471,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 	mutating func generate_handsEachRoutesOwnValues_whenTwoRoutesReachOneLevel() async throws {
 		let modules = Self.fixtures["twoRoutes"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Home {
 		    @frozen nonisolated public enum SafeDIScope_Api {
 		        case aBuilder(aBuilder_Values, SafeDIScope_Api.A_Scope)
@@ -1554,8 +1602,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Home {
 		    public enum __safeDI_Home_574BB99012C8137C {}
 		}
-		""")
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -1585,7 +1633,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        self.init(home: home)
 		    }
 		}
-		""")
+		"""])
 		try Self.expectCompiles(output)
 		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root().home.aBuilder.instantiate().detailBuilder.instantiate()"), DifferentialValueProbe("Root().home.bBuilder.instantiate().detailBuilder.instantiate()")])
 	}
@@ -1598,7 +1646,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		// screen four or eight levels deep keeps no other screen's `Live` alive, as inline.
 		let modules = Self.fixtures["next"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Home {
 		    @frozen nonisolated public enum SafeDIScope_Api {
 		        case screenBuilder(screenBuilder_Values, SafeDIScope_Api.Screen_Scope)
@@ -1683,8 +1731,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Home {
 		    public enum __safeDI_Home_0F7FF883EEE00B05 {}
 		}
-		""")
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -1712,7 +1760,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        self.init(home: home)
 		    }
 		}
-		""")
+		"""])
 		try Self.expectCompiles(output)
 		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(output: output, modules: modules),
@@ -1751,7 +1799,179 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 	mutating func generate_handsReopenedLevelTheValueItsRouteBinds_whenFillOfReopenedLevelReadsOnlyThatValue() async throws {
 		// The shape above, where `Live` reads only `mark`: no cycle closes on `Screen`'s builder function, so the screen `next`
 		// builds is a level of its own, whose member carries the first step's `mark`, as inline.
-		try await expectValuesEqualInlineBuild(modules: Self.fixtures["markOnly"] ?? [], probes: [DifferentialValueProbe("secondMonitorsMark()")])
+		let modules = Self.fixtures["markOnly"] ?? []
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Home {
+		    @frozen nonisolated public enum SafeDIScope_Api {
+		        case screenBuilder(screenBuilder_Values, SafeDIScope_Api.Screen_Scope)
+
+		        nonisolated public struct screenBuilder_Values {}
+
+		        @frozen nonisolated public enum Screen_Scope {
+		            case monitor(monitor_Values)
+		            indirect case stepBuilder(stepBuilder_Values, SafeDIScope_Api.Step_Scope)
+
+		            nonisolated public struct monitor_Values {
+		                public let cache: Cache
+		            }
+
+		            nonisolated public struct stepBuilder_Values {
+		                public let cache: Cache
+		                public let monitor: any Api
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let monitor: (monitor_Values) -> __safeDI_Built
+		                public let stepBuilder: (stepBuilder_Values) -> SafeDIScope_Api.Step_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(monitor: @escaping (monitor_Values) -> __safeDI_Built, stepBuilder: @escaping (stepBuilder_Values) -> SafeDIScope_Api.Step_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.monitor = monitor
+		                    self.stepBuilder = stepBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.monitor = { _ in __safeDI_builder() }
+		                    self.stepBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        @frozen nonisolated public enum Step_Scope {
+		            case api(api_Values)
+		            indirect case next(next_Values, SafeDIScope_Api.Screen_Scope)
+
+		            nonisolated public struct api_Values {
+		                public let mark: Mark
+		            }
+
+		            nonisolated public struct next_Values {
+		                public let mark: Mark
+		                public let api: any Api
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let api: (api_Values) -> __safeDI_Built
+		                public let next: (next_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(api: @escaping (api_Values) -> __safeDI_Built, next: @escaping (next_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.api = api
+		                    self.next = next
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.api = { _ in __safeDI_builder() }
+		                    self.next = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let screenBuilder: (screenBuilder_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(screenBuilder: @escaping (screenBuilder_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.screenBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public init(apiBuilder: @escaping () -> any Api) {
+		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder(SafeDIScope_Api.screenBuilder_Values())
+		        func __safeDI_screenBuilder() -> Screen {
+		            let cache = Cache()
+		            let monitor: any Api = __safeDI_apiBuilder_screenBuilder.monitor(SafeDIScope_Api.Screen_Scope.monitor_Values(cache: cache))
+		            let __safeDI_apiBuilder_stepBuilder = __safeDI_apiBuilder_screenBuilder.stepBuilder(SafeDIScope_Api.Screen_Scope.stepBuilder_Values(cache: cache, monitor: monitor))
+		            func __safeDI_stepBuilder() -> Step {
+		                let mark = Mark()
+		                let api: any Api = __safeDI_apiBuilder_stepBuilder.api(SafeDIScope_Api.Step_Scope.api_Values(mark: mark))
+		                let __safeDI_apiBuilder_next = __safeDI_apiBuilder_stepBuilder.next(SafeDIScope_Api.Step_Scope.next_Values(mark: mark, api: api))
+		                func __safeDI_next() -> Screen {
+		                    let cache = Cache()
+		                    let monitor: any Api = __safeDI_apiBuilder_next.monitor(SafeDIScope_Api.Screen_Scope.monitor_Values(cache: cache))
+		                    let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+		                    return Screen(cache: cache, monitor: monitor, stepBuilder: stepBuilder)
+		                }
+		                let next = Instantiator<Screen>(__safeDI_next)
+		                return Step(api: api, mark: mark, next: next)
+		            }
+		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+		            return Screen(cache: cache, monitor: monitor, stepBuilder: stepBuilder)
+		        }
+		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		        self.init(screenBuilder: screenBuilder)
+		    }
+		}
+
+		extension Home {
+		    public enum __safeDI_Home_3177105D4A49D671 {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_home() -> Home {
+		            _ = Home.__safeDI_Home_3177105D4A49D671.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
+		                .init(screenBuilder: { _ in __safeDI_apiBuilder_Home_Screen_Scope(mark: nil) })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen_Scope(mark: Mark?) -> Home.SafeDIScope_Api.Screen_Scope.__safeDI_Builder<any Api> {
+		                .init(
+		                    monitor: { _ in
+		                        let monitor: any Api = Live(mark: mark)
+		                        return monitor
+		                    },
+		                    stepBuilder: { _ in __safeDI_apiBuilder_Home_Step_Scope() }
+		                )
+		            }
+		            func __safeDI_apiBuilder_Home_Step_Scope() -> Home.SafeDIScope_Api.Step_Scope.__safeDI_Builder<any Api> {
+		                .init(
+		                    api: { scope in
+		                        let mark = scope.mark
+		                        let api: any Api = Live(mark: mark)
+		                        return api
+		                    },
+		                    next: { values in __safeDI_apiBuilder_Home_Screen_Scope(mark: values.mark) }
+		                )
+		            }
+		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
+		        }
+		        let home: Home = __safeDI_home()
+		        self.init(home: home)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+		let description = try await DifferentialValueOracle.describe(
+			DifferentialValuePath(output: output, modules: modules),
+			probes: [DifferentialValueProbe("secondMonitorsMark()")],
+			filesToDelete: &filesToDelete,
+		)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe secondMonitorsMark()
+			String "the mark of the first step"
+
+			""")
+		}
+		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("secondMonitorsMark()")])
 	}
 
 	@Test
@@ -1764,7 +1984,102 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		// their conversion to its builder struct.
 		let modules = Self.fixtures["reentryThroughKeptSeam"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension HoleRelay {
+		    @frozen public enum SafeDIScope_HoleService {
+		        case holeSeamBuilder(HoleSeam.SafeDIScope_HoleService)
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public init(holeServiceBuilder: @escaping (SafeDIScope_HoleService) -> any HoleService) {
+		        self.init(__safeDI_holeServiceBuilder: holeServiceBuilder)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public init(__safeDI_holeServiceBuilder: @escaping (SafeDIScope_HoleService) -> any HoleService) {
+		        func __safeDI_holeSeamBuilder() -> HoleSeam {
+		            _ = HoleSeam.__safeDI_HoleSeam_4CB00D206C704C2F.self
+		            return HoleSeam(__safeDI_holeServiceBuilder: .init(
+		                holeOwnerBuilder: { __safeDI_holeOwnerBuilderValues in
+		                    .init(holeService: { __safeDI_holeServiceValues in __safeDI_holeServiceBuilder(.holeSeamBuilder(.holeOwnerBuilder(__safeDI_holeOwnerBuilderValues, .holeService(__safeDI_holeServiceValues)))) })
+		                }
+		            ))
+		        }
+		        let holeSeamBuilder = Instantiator<HoleSeam>(__safeDI_holeSeamBuilder)
+		        self.init(holeSeamBuilder: holeSeamBuilder)
+		    }
+		}
+
+		extension HoleRelay {
+		    public enum __safeDI_HoleRelay_06BFEF9C3AC0C4CD {}
+		}
+
+		extension HoleSeam {
+		    @frozen nonisolated public enum SafeDIScope_HoleService {
+		        case holeOwnerBuilder(holeOwnerBuilder_Values, SafeDIScope_HoleService.HoleOwner_Scope)
+
+		        nonisolated public struct holeOwnerBuilder_Values {
+		            public let holeAnalytics: HoleAnalytics
+		        }
+
+		        @frozen nonisolated public enum HoleOwner_Scope {
+		            case holeService(holeService_Values)
+
+		            nonisolated public struct holeService_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let holeService: (holeService_Values) -> __safeDI_Built
+
+		                public init(holeService: @escaping (holeService_Values) -> __safeDI_Built) {
+		                    self.holeService = holeService
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.holeService = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let holeOwnerBuilder: (holeOwnerBuilder_Values) -> SafeDIScope_HoleService.HoleOwner_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(holeOwnerBuilder: @escaping (holeOwnerBuilder_Values) -> SafeDIScope_HoleService.HoleOwner_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.holeOwnerBuilder = holeOwnerBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeOwnerBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public init(holeServiceBuilder: @escaping () -> any HoleService) {
+		        self.init(__safeDI_holeServiceBuilder: .init(__safeDI_noScope: holeServiceBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public init(__safeDI_holeServiceBuilder: SafeDIScope_HoleService.__safeDI_Builder<any HoleService>) {
+		        let holeAnalytics = HoleAnalytics()
+		        let __safeDI_holeServiceBuilder_holeOwnerBuilder = __safeDI_holeServiceBuilder.holeOwnerBuilder(SafeDIScope_HoleService.holeOwnerBuilder_Values(holeAnalytics: holeAnalytics))
+		        func __safeDI_holeOwnerBuilder() -> HoleOwner {
+		            let holeService: any HoleService = __safeDI_holeServiceBuilder_holeOwnerBuilder.holeService(SafeDIScope_HoleService.HoleOwner_Scope.holeService_Values())
+		            return HoleOwner(holeAnalytics: holeAnalytics, holeService: holeService)
+		        }
+		        let holeOwnerBuilder = Instantiator<HoleOwner>(__safeDI_holeOwnerBuilder)
+		        self.init(holeAnalytics: holeAnalytics, holeOwnerBuilder: holeOwnerBuilder)
+		    }
+		}
+
+		extension HoleSeam {
+		    public enum __safeDI_HoleSeam_4CB00D206C704C2F {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
 		#endif
@@ -1808,9 +2123,641 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        self.init(holeSeam: holeSeam)
 		    }
 		}
-		""")
+		"""])
 		try Self.expectCompiles(output)
 		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root().holeSeam.holeOwnerBuilder.instantiate().holeService")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesNestedMembersValuesApart_whenKeptSeamPassesUpPlaceBeneathRepeatedLabel() async throws {
+		// `Innermost` builds `X` and `X` builds `Y` under one label, `child`, and the fill reads a value each level binds. The
+		// member `Inner` hands `X`'s level is a closure inside the one it hands `Innermost`'s, so it names its values apart,
+		// and the rebuilt case hands each level its own.
+		let modules = Self.fixtures["repeatedLabel"] ?? []
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Inner {
+		    @frozen public enum SafeDIScope_Service {
+		        case innermost(Innermost.SafeDIScope_Service)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
+		        func __safeDI_innermost() -> Innermost {
+		            _ = Innermost.__safeDI_Innermost_5D80DAB08C73D795.self
+		            return Innermost(__safeDI_serviceBuilder: .init(
+		                child: { __safeDI_childValues in
+		                    .init(
+		                        child: { __safeDI_childValues_ in
+		                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder(.innermost(.child(__safeDI_childValues, .child(__safeDI_childValues_, .service(__safeDI_serviceValues))))) })
+		                        }
+		                    )
+		                }
+		            ))
+		        }
+		        let innermost: Innermost = __safeDI_innermost()
+		        self.init(innermost: innermost)
+		    }
+		}
+
+		extension Inner {
+		    public enum __safeDI_Inner_3BB8A5C468CDC7A7 {}
+		}
+
+		extension Innermost {
+		    @frozen nonisolated public enum SafeDIScope_Service {
+		        case child(child_Values, SafeDIScope_Service.X_Scope)
+
+		        nonisolated public struct child_Values {
+		            public let tag: Tag
+		        }
+
+		        @frozen nonisolated public enum X_Scope {
+		            case child(child_Values, SafeDIScope_Service.Y_Scope)
+
+		            nonisolated public struct child_Values {
+		                public let logger: Logger
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let child: (child_Values) -> SafeDIScope_Service.Y_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(child: @escaping (child_Values) -> SafeDIScope_Service.Y_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.child = child
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.child = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        @frozen nonisolated public enum Y_Scope {
+		            case service(service_Values)
+
+		            nonisolated public struct service_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let service: (service_Values) -> __safeDI_Built
+
+		                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                    self.service = service
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.service = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let child: (child_Values) -> SafeDIScope_Service.X_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(child: @escaping (child_Values) -> SafeDIScope_Service.X_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.child = child
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.child = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+		        let tag = Tag()
+		        let __safeDI_serviceBuilder_child = __safeDI_serviceBuilder.child(SafeDIScope_Service.child_Values(tag: tag))
+		        func __safeDI_child() -> X {
+		            let logger = Logger()
+		            let __safeDI_serviceBuilder_child_ = __safeDI_serviceBuilder_child.child(SafeDIScope_Service.X_Scope.child_Values(logger: logger))
+		            func __safeDI_child() -> Y {
+		                let service: any Service = __safeDI_serviceBuilder_child_.service(SafeDIScope_Service.Y_Scope.service_Values())
+		                return Y(service: service)
+		            }
+		            let child = Instantiator<Y>(__safeDI_child)
+		            return X(logger: logger, child: child)
+		        }
+		        let child = Instantiator<X>(__safeDI_child)
+		        self.init(tag: tag, child: child)
+		    }
+		}
+
+		extension Innermost {
+		    public enum __safeDI_Innermost_5D80DAB08C73D795 {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_inner() -> Inner {
+		            _ = Inner.__safeDI_Inner_3BB8A5C468CDC7A7.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_serviceBuilder_Inner(_ scope: Inner.SafeDIScope_Service) -> any Service {
+		                switch scope {
+		                case let .innermost(scope): return __safeDI_serviceBuilder_Innermost(scope)
+		                }
+		            }
+		            func __safeDI_serviceBuilder_Innermost(_ scope: Innermost.SafeDIScope_Service) -> any Service {
+		                switch scope {
+		                case let .child(values, scope): return __safeDI_serviceBuilder_Innermost_X_Scope(scope, tag: values.tag)
+		                }
+		            }
+		            func __safeDI_serviceBuilder_Innermost_X_Scope(_ scope: Innermost.SafeDIScope_Service.X_Scope, tag: Tag) -> any Service {
+		                switch scope {
+		                case let .child(values, scope): return __safeDI_serviceBuilder_Innermost_Y_Scope(scope, logger: values.logger, tag: tag)
+		                }
+		            }
+		            func __safeDI_serviceBuilder_Innermost_Y_Scope(_ scope: Innermost.SafeDIScope_Service.Y_Scope, logger: Logger, tag: Tag) -> any Service {
+		                switch scope {
+		                case .service:
+		                    let service: any Service = DefaultService(tag: tag, logger: logger)
+		                    return service
+		                }
+		            }
+		            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Inner)
+		        }
+		        let inner: Inner = __safeDI_inner()
+		        self.init(inner: inner)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().inner.innermost.child.instantiate().child.instantiate().service")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsMembersValuesAsRawIdentifier_whenKeptSeamPassesUpPlaceLabelledWithRawIdentifier() async throws {
+		// `Innermost`'s place is `` `my leaf` ``, so the values its member is handed are named by a raw identifier, which needs
+		// backticks.
+		let modules = Self.fixtures["rawLabel"] ?? []
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Inner {
+		    @frozen public enum SafeDIScope_Service {
+		        case innermost(Innermost.SafeDIScope_Service)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
+		        func __safeDI_innermost() -> Innermost {
+		            _ = Innermost.__safeDI_Innermost_EBCF7E179A6CE15D.self
+		            return Innermost(__safeDI_serviceBuilder: .init(`my leaf`: { `__safeDI_my leafValues` in __safeDI_serviceBuilder(.innermost(.`my leaf`(`__safeDI_my leafValues`))) }))
+		        }
+		        let innermost: Innermost = __safeDI_innermost()
+		        self.init(innermost: innermost)
+		    }
+		}
+
+		extension Inner {
+		    public enum __safeDI_Inner_B08FD93D6DC1EF8F {}
+		}
+
+		extension Innermost {
+		    @frozen nonisolated public enum SafeDIScope_Service {
+		        case `my leaf`(`my leaf_Values`)
+
+		        nonisolated public struct `my leaf_Values` {
+		            public let logger: Logger
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let `my leaf`: (`my leaf_Values`) -> __safeDI_Built
+
+		            public init(`my leaf`: @escaping (`my leaf_Values`) -> __safeDI_Built) {
+		                self.`my leaf` = `my leaf`
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.`my leaf` = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+		        let logger = Logger()
+		        let `my leaf`: any Service = __safeDI_serviceBuilder.`my leaf`(SafeDIScope_Service.`my leaf_Values`(logger: logger))
+		        self.init(logger: logger, `my leaf`: `my leaf`)
+		    }
+		}
+
+		extension Innermost {
+		    public enum __safeDI_Innermost_EBCF7E179A6CE15D {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_inner() -> Inner {
+		            _ = Inner.__safeDI_Inner_B08FD93D6DC1EF8F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_serviceBuilder_Inner(_ scope: Inner.SafeDIScope_Service) -> any Service {
+		                switch scope {
+		                case let .innermost(scope): return __safeDI_serviceBuilder_Innermost(scope)
+		                }
+		            }
+		            func __safeDI_serviceBuilder_Innermost(_ scope: Innermost.SafeDIScope_Service) -> any Service {
+		                switch scope {
+		                case let .`my leaf`(scope):
+		                    let logger = scope.logger
+		                    let `my leaf`: any Service = DefaultService(logger: logger)
+		                    return `my leaf`
+		                }
+		            }
+		            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Inner)
+		        }
+		        let inner: Inner = __safeDI_inner()
+		        self.init(inner: inner)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().inner.innermost.`my leaf`")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsMembersValuesAsRawIdentifier_whenKeptSeamConvertsLoopWhosePlaceIsLabelledWithRawIdentifier() async throws {
+		// The tangle, whose `T` holds its place under `` `my leaf` ``: each conversion function's member for the place names
+		// the values it is handed by a raw identifier.
+		let modules = Self.fixtures["tangleRawLabel"] ?? []
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Shell {
+		    @frozen public enum SafeDIScope_Api {
+		        case hub(Hub.SafeDIScope_Api)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_mark: @autoclosure @escaping () -> Mark?, __safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
+		        let mark = LazilyInstantiated<Mark?>(__safeDI_mark)
+		        func __safeDI_hub() -> Hub {
+		            _ = Hub.__safeDI_Hub_B5251DD495EB89C7.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Hub(_ __safeDI_apiBuilder_Hub_wrap: @escaping (Hub.SafeDIScope_Api) -> Hub.SafeDIScope_Api) -> Hub.SafeDIScope_Api.__safeDI_Builder<any Api> {
+		                .init(tBuilder: { __safeDI_tBuilderValues in __safeDI_apiBuilder_Hub_T_Scope({ __safeDI_apiBuilder_Hub_wrap(.tBuilder(__safeDI_tBuilderValues, $0)) }) }, cBuilder: { __safeDI_cBuilderValues in __safeDI_apiBuilder_Hub_C_Scope_({ __safeDI_apiBuilder_Hub_wrap(.cBuilder(__safeDI_cBuilderValues, $0)) }) })
+		            }
+		            func __safeDI_apiBuilder_Hub_T_Scope(_ __safeDI_apiBuilder_Hub_T_Scope_wrap: @escaping (Hub.SafeDIScope_Api.T_Scope) -> Hub.SafeDIScope_Api) -> Hub.SafeDIScope_Api.T_Scope.__safeDI_Builder<any Api> {
+		                .init(cBuilder: { __safeDI_cBuilderValues in __safeDI_apiBuilder_Hub_C_Scope({ __safeDI_apiBuilder_Hub_T_Scope_wrap(.cBuilder(__safeDI_cBuilderValues, $0)) }, __safeDI_apiBuilder_Hub_T_Scope_wrap: __safeDI_apiBuilder_Hub_T_Scope_wrap) }, `my leaf`: { `__safeDI_my leafValues` in __safeDI_apiBuilder(.hub(__safeDI_apiBuilder_Hub_T_Scope_wrap(.`my leaf`(`__safeDI_my leafValues`)))) })
+		            }
+		            func __safeDI_apiBuilder_Hub_C_Scope(_ __safeDI_apiBuilder_Hub_C_Scope_wrap: @escaping (Hub.SafeDIScope_Api.C_Scope) -> Hub.SafeDIScope_Api, __safeDI_apiBuilder_Hub_T_Scope_wrap: @escaping (Hub.SafeDIScope_Api.T_Scope) -> Hub.SafeDIScope_Api) -> Hub.SafeDIScope_Api.C_Scope.__safeDI_Builder<any Api> {
+		                .init(tBuilder: { _ in __safeDI_apiBuilder_Hub_T_Scope(__safeDI_apiBuilder_Hub_T_Scope_wrap) })
+		            }
+		            func __safeDI_apiBuilder_Hub_C_Scope_(_ __safeDI_apiBuilder_Hub_C_Scope__wrap: @escaping (Hub.SafeDIScope_Api.C_Scope) -> Hub.SafeDIScope_Api) -> Hub.SafeDIScope_Api.C_Scope.__safeDI_Builder<any Api> {
+		                .init(tBuilder: { __safeDI_tBuilderValues in __safeDI_apiBuilder_Hub_T_Scope_({ __safeDI_apiBuilder_Hub_C_Scope__wrap(.tBuilder(__safeDI_tBuilderValues, $0)) }, __safeDI_apiBuilder_Hub_C_Scope__wrap: __safeDI_apiBuilder_Hub_C_Scope__wrap) })
+		            }
+		            func __safeDI_apiBuilder_Hub_T_Scope_(_ __safeDI_apiBuilder_Hub_T_Scope__wrap: @escaping (Hub.SafeDIScope_Api.T_Scope) -> Hub.SafeDIScope_Api, __safeDI_apiBuilder_Hub_C_Scope__wrap: @escaping (Hub.SafeDIScope_Api.C_Scope) -> Hub.SafeDIScope_Api) -> Hub.SafeDIScope_Api.T_Scope.__safeDI_Builder<any Api> {
+		                .init(cBuilder: { _ in __safeDI_apiBuilder_Hub_C_Scope_(__safeDI_apiBuilder_Hub_C_Scope__wrap) }, `my leaf`: { `__safeDI_my leafValues` in __safeDI_apiBuilder(.hub(__safeDI_apiBuilder_Hub_T_Scope__wrap(.`my leaf`(`__safeDI_my leafValues`)))) })
+		            }
+		            return Hub(__safeDI_mark: mark.instance, __safeDI_apiBuilder: __safeDI_apiBuilder_Hub({ $0 }))
+		        }
+		        let hub: Hub = __safeDI_hub()
+		        self.init(hub: hub)
+		    }
+		}
+
+		extension Shell {
+		    public enum __safeDI_Shell_5B3C96E8DABB4852 {}
+		}
+		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Hub {
+		    @frozen nonisolated public enum SafeDIScope_Api {
+		        case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
+		        case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
+
+		        nonisolated public struct tBuilder_Values {
+		            public var mark: Mark? { __safeDI_mark.instance }
+		            let __safeDI_mark: LazilyInstantiated<Mark?>
+
+		            init(mark: LazilyInstantiated<Mark?>) {
+		                __safeDI_mark = mark
+		            }
+		        }
+
+		        nonisolated public struct cBuilder_Values {
+		            public var mark: Mark? { __safeDI_mark.instance }
+		            public let tBuilder: Instantiator<T>
+		            let __safeDI_mark: LazilyInstantiated<Mark?>
+
+		            init(mark: LazilyInstantiated<Mark?>, tBuilder: Instantiator<T>) {
+		                __safeDI_mark = mark
+		                self.tBuilder = tBuilder
+		            }
+		        }
+
+		        @frozen nonisolated public enum T_Scope {
+		            indirect case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
+		            case `my leaf`(`my leaf_Values`)
+
+		            nonisolated public struct cBuilder_Values {
+		                public let mark: Mark?
+		                public let reader: MarkReader
+		            }
+
+		            nonisolated public struct `my leaf_Values` {
+		                public let mark: Mark?
+		                public let reader: MarkReader
+		                public let cBuilder: Instantiator<C>
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let cBuilder: (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let `my leaf`: (`my leaf_Values`) -> __safeDI_Built
+
+		                public init(cBuilder: @escaping (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>, `my leaf`: @escaping (`my leaf_Values`) -> __safeDI_Built) {
+		                    self.cBuilder = cBuilder
+		                    self.`my leaf` = `my leaf`
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.cBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.`my leaf` = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        @frozen nonisolated public enum C_Scope {
+		            indirect case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
+
+		            nonisolated public struct tBuilder_Values {
+		                public let mark: Mark
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let tBuilder: (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(tBuilder: @escaping (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.tBuilder = tBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.tBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let tBuilder: (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let cBuilder: (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(tBuilder: @escaping (tBuilder_Values) -> SafeDIScope_Api.T_Scope.__safeDI_Builder<__safeDI_Built>, cBuilder: @escaping (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.tBuilder = tBuilder
+		                self.cBuilder = cBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.tBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.cBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_mark __safeDI_mark_: @autoclosure @escaping () -> Mark?, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		        let mark = LazilyInstantiated<Mark?>(__safeDI_mark_)
+		        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder(SafeDIScope_Api.tBuilder_Values(mark: mark))
+		        func __safeDI_tBuilder(mark: Mark?) -> T {
+		            let reader = MarkReader(mark: mark)
+		            func __safeDI_cBuilder() -> C {
+		                let mark = Mark()
+		                let tBuilder = Instantiator<T> {
+		                    __safeDI_tBuilder(mark: mark)
+		                }
+		                return C(mark: mark, tBuilder: tBuilder)
+		            }
+		            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+		            let `my leaf`: any Api = __safeDI_apiBuilder_tBuilder.`my leaf`(SafeDIScope_Api.T_Scope.`my leaf_Values`(mark: mark, reader: reader, cBuilder: cBuilder))
+		            return T(reader: reader, cBuilder: cBuilder, `my leaf`: `my leaf`)
+		        }
+		        let tBuilder = Instantiator<T> {
+		            __safeDI_tBuilder(mark: mark.instance)
+		        }
+		        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(SafeDIScope_Api.cBuilder_Values(mark: mark, tBuilder: tBuilder))
+		        func __safeDI_cBuilder() -> C {
+		            let mark = Mark()
+		            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(SafeDIScope_Api.C_Scope.tBuilder_Values(mark: mark))
+		            func __safeDI_tBuilder() -> T {
+		                let reader = MarkReader(mark: mark)
+		                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+		                let `my leaf`: any Api = __safeDI_apiBuilder_tBuilder.`my leaf`(SafeDIScope_Api.T_Scope.`my leaf_Values`(mark: mark, reader: reader, cBuilder: cBuilder))
+		                return T(reader: reader, cBuilder: cBuilder, `my leaf`: `my leaf`)
+		            }
+		            let tBuilder = Instantiator<T>(__safeDI_tBuilder)
+		            return C(mark: mark, tBuilder: tBuilder)
+		        }
+		        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+		        self.init(tBuilder: tBuilder, cBuilder: cBuilder)
+		    }
+		}
+
+		extension Hub {
+		    public enum __safeDI_Hub_B5251DD495EB89C7 {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_shell() -> Shell {
+		            _ = Shell.__safeDI_Shell_5B3C96E8DABB4852.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Shell(_ scope: Shell.SafeDIScope_Api) -> any Api {
+		                switch scope {
+		                case let .hub(scope): return __safeDI_apiBuilder_Hub(scope)
+		                }
+		            }
+		            func __safeDI_apiBuilder_Hub(_ scope: Hub.SafeDIScope_Api) -> any Api {
+		                switch scope {
+		                case let .tBuilder(_, scope): return __safeDI_apiBuilder_Hub_T_Scope(scope)
+		                case let .cBuilder(_, scope): return __safeDI_apiBuilder_Hub_C_Scope(scope)
+		                }
+		            }
+		            func __safeDI_apiBuilder_Hub_T_Scope(_ scope: Hub.SafeDIScope_Api.T_Scope) -> any Api {
+		                switch scope {
+		                case let .cBuilder(_, scope): return __safeDI_apiBuilder_Hub_C_Scope(scope)
+		                case let .`my leaf`(scope):
+		                    let mark = scope.mark
+		                    let `my leaf`: any Api = LiveApi(mark: mark)
+		                    return `my leaf`
+		                }
+		            }
+		            func __safeDI_apiBuilder_Hub_C_Scope(_ scope: Hub.SafeDIScope_Api.C_Scope) -> any Api {
+		                switch scope {
+		                case let .tBuilder(_, scope): return __safeDI_apiBuilder_Hub_T_Scope(scope)
+		                }
+		            }
+		            return Shell(__safeDI_mark: nil, __safeDI_apiBuilder: __safeDI_apiBuilder_Shell)
+		        }
+		        let shell: Shell = __safeDI_shell()
+		        self.init(shell: shell)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().shell.hub.tBuilder.instantiate().cBuilder.instantiate().tBuilder.instantiate()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsIsolationOnce_whenGeneratedInitializerAttributesCarrySeamsInitializersIsolation() async throws {
+		// `Inner`'s own initializer is `@MainActor`, and so is every initializer `generatedInitializerAttributes` gives it.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["isolationInAttributes"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Inner {
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
+		    @MainActor public convenience init(token: Token) {
+		        self.init(__safeDI_token: token)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    @MainActor public convenience init(__safeDI_token token: Token) {
+		        let leaf = Leaf()
+		        self.init(token: token, leaf: leaf)
+		    }
+		}
+
+		extension Inner {
+		    public enum __safeDI_Inner_1EB503BFA23A82BA {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        let token = Token()
+		        func __safeDI_inner() -> Inner {
+		            _ = Inner.__safeDI_Inner_1EB503BFA23A82BA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Inner(__safeDI_token: token)
+		        }
+		        let inner: Inner = __safeDI_inner()
+		        self.init(token: token, inner: inner)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsOnlyAttributesIsolation_whenGeneratedInitializerAttributesNameGlobalActorBesideNonisolatedInitializer() async throws {
+		// `Inner`'s own initializer is `nonisolated`, and `generatedInitializerAttributes` binds each generated initializer to
+		// the main actor, so that it can build `Leaf`, which is `@MainActor`: the attributes' isolation is the one spelled.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["nonisolatedInitializerBesideAttributes"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Inner {
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
+		    @MainActor public convenience init(token: Token) {
+		        self.init(__safeDI_token: token)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    @MainActor public convenience init(__safeDI_token token: Token) {
+		        let leaf = Leaf()
+		        self.init(token: token, leaf: leaf)
+		    }
+		}
+
+		extension Inner {
+		    public enum __safeDI_Inner_1EB503BFA23A82BA {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        let token = Token()
+		        func __safeDI_inner() -> Inner {
+		            _ = Inner.__safeDI_Inner_1EB503BFA23A82BA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Inner(__safeDI_token: token)
+		        }
+		        let inner: Inner = __safeDI_inner()
+		        self.init(token: token, inner: inner)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsNonisolatedOnce_whenGeneratedInitializerAttributesCarrySeamsNonisolatedInitializer() async throws {
+		// `Inner` is `@MainActor`, its own initializer `nonisolated`, and `generatedInitializerAttributes` is `nonisolated` too.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["nonisolatedInAttributes"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Inner {
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
+		    nonisolated public convenience init(token: Token) {
+		        self.init(__safeDI_token: token)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    nonisolated public convenience init(__safeDI_token token: Token) {
+		        let leaf = Leaf()
+		        self.init(token: token, leaf: leaf)
+		    }
+		}
+
+		extension Inner {
+		    public enum __safeDI_Inner_1EB503BFA23A82BA {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        let token = Token()
+		        func __safeDI_inner() -> Inner {
+		            _ = Inner.__safeDI_Inner_1EB503BFA23A82BA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Inner(__safeDI_token: token)
+		        }
+		        let inner: Inner = __safeDI_inner()
+		        self.init(token: token, inner: inner)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
 	}
 
 	// MARK: Fixtures
@@ -1879,6 +2826,22 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
 				fulfillingType(named: "DefaultService", fulfilling: "Service", declarations: ["@Received public let logger: Logger"]),
 				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let inner: Inner"]),
+				"""
+				func freedWhileOnlyDetailLives() -> [Bool] {
+				    weak var weakInner: Inner?
+				    weak var weakNavigator: Navigator?
+				    weak var weakLogger: Logger?
+				    var detail: Detail?
+				    do {
+				        let inner = Root().inner
+				        weakInner = inner
+				        weakNavigator = inner.navigator
+				        weakLogger = inner.innermost.logger
+				        detail = inner.innermost.detailBuilder.instantiate()
+				    }
+				    return withExtendedLifetime(detail) { [weakInner == nil, weakNavigator == nil, weakLogger == nil] }
+				}
+				""",
 			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
 		],
 		"insideFill": [
@@ -1893,15 +2856,69 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 				seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated public let tag: Tag", "@Instantiated public let inner: Inner"]),
 			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
-				fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received public let tag: Tag", "@Received(onlyIfAvailable: true) public let id: Int?"]),
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [Gadget.self])
+				public final class LiveGadget: Instantiable, Gadget {
+				    public init(tag: Tag, id: Int?) {
+				        self.tag = tag
+				        self.id = id
+				        LiveGadget.alive += 1
+				    }
+
+				    deinit {
+				        LiveGadget.alive -= 1
+				    }
+
+				    @Received public let tag: Tag
+				    @Received(onlyIfAvailable: true) public let id: Int?
+				    nonisolated(unsafe) static var alive = 0
+				}
+				""",
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let outer: Outer"]),
+				"""
+				func liveGadgetsHoldingOnlyScreen() -> Int {
+				    var screen: Screen?
+				    do {
+				        screen = Root().outer.inner.screenBuilder.instantiate(7)
+				    }
+				    return withExtendedLifetime(screen) { LiveGadget.alive }
+				}
+				""",
 			].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
 		],
 		"tangle": [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 				"public protocol Api {}",
-				seamFixtureType(named: "Mark", isFinalClass: true, declarations: []),
-				seamFixtureType(named: "MarkReader", declarations: ["@Received(onlyIfAvailable: true) public let mark: Mark?"]),
+				"""
+				@Instantiable
+				public final class Mark: Instantiable {
+				    public init() {
+				        Mark.alive += 1
+				    }
+
+				    deinit {
+				        Mark.alive -= 1
+				    }
+
+				    nonisolated(unsafe) public static var alive = 0
+				}
+				""",
+				"""
+				@Instantiable
+				public final class MarkReader: Instantiable {
+				    public init(mark: Mark?) {
+				        self.mark = mark
+				        MarkReader.alive += 1
+				    }
+
+				    deinit {
+				        MarkReader.alive -= 1
+				    }
+
+				    @Received(onlyIfAvailable: true) public let mark: Mark?
+				    nonisolated(unsafe) public static var alive = 0
+				}
+				""",
 				seamFixtureType(named: "T", declarations: ["@Instantiated public let reader: MarkReader", "@Instantiated public let cBuilder: Instantiator<C>", "@Instantiated public let api: any Api"]),
 				seamFixtureType(named: "C", declarations: ["@Instantiated public let mark: Mark", "@Instantiated public let tBuilder: Instantiator<T>"]),
 				seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let tBuilder: Instantiator<T>", "@Instantiated public let cBuilder: Instantiator<C>"]),
@@ -1912,6 +2929,27 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
 				fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let mark: Mark?"]),
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let shell: Shell"]),
+				"""
+				func liveMarksAndReaders(holdingOnlyLevelAtDepth depth: Int) -> [Int] {
+				    var held: Any?
+				    do {
+				        var t = Root().shell.hub.tBuilder.instantiate()
+				        held = t
+				        var level = 1
+				        while level < depth {
+				            let c = t.cBuilder.instantiate()
+				            level += 1
+				            held = c
+				            if level < depth {
+				                t = c.tBuilder.instantiate()
+				                level += 1
+				                held = t
+				            }
+				        }
+				    }
+				    return withExtendedLifetime(held) { [Mark.alive, MarkReader.alive] }
+				}
+				""",
 			].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
 		],
 		"builderLabel": featureAndApp(
@@ -2030,11 +3068,165 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 				func secondMonitorsMark() -> String {
 				    let step = Root().home.screenBuilder.instantiate().stepBuilder.instantiate()
 				    let mark = (step.next.instantiate().monitor as? Live)?.mark
-				    return mark.map { $0 === step.mark ? "the first step's mark" : "another mark" } ?? "nil"
+				    return mark.map { $0 === step.mark ? "the mark of the first step" : "another mark" } ?? "nil"
 				}
 				""",
 			],
 		),
+		"repeatedLabel": [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Service: AnyObject {}",
+				seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Tag", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Y", isFinalClass: true, declarations: ["@Instantiated public let service: any Service"]),
+				seamFixtureType(named: "X", isFinalClass: true, declarations: ["@Instantiated public let logger: Logger", "@Instantiated public let child: Instantiator<Y>"]),
+				seamFixtureType(named: "Innermost", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let tag: Tag", "@Instantiated public let child: Instantiator<X>"]),
+				seamFixtureType(named: "Inner", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let innermost: Innermost"]),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				fulfillingType(named: "DefaultService", fulfilling: "Service", declarations: ["@Received public let tag: Tag", "@Received public let logger: Logger"]),
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let inner: Inner"]),
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		],
+		"rawLabel": [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Service: AnyObject {}",
+				seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Innermost", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let logger: Logger", "@Instantiated public let `my leaf`: any Service"]),
+				seamFixtureType(named: "Inner", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let innermost: Innermost"]),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				fulfillingType(named: "DefaultService", fulfilling: "Service", declarations: ["@Received public let logger: Logger"]),
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let inner: Inner"]),
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		],
+		"tangleRawLabel": [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api {}",
+				seamFixtureType(named: "Mark", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "MarkReader", declarations: ["@Received(onlyIfAvailable: true) public let mark: Mark?"]),
+				seamFixtureType(named: "T", declarations: ["@Instantiated public let reader: MarkReader", "@Instantiated public let cBuilder: Instantiator<C>", "@Instantiated public let `my leaf`: any Api"]),
+				seamFixtureType(named: "C", declarations: ["@Instantiated public let mark: Mark", "@Instantiated public let tBuilder: Instantiator<T>"]),
+				seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let tBuilder: Instantiator<T>", "@Instantiated public let cBuilder: Instantiator<C>"]),
+			]),
+			ModuleFixture(name: "Middle", packageName: "Other", swiftFileContent: [
+				seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated public let hub: Hub"]),
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let mark: Mark?"]),
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let shell: Shell"]),
+			].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+		],
+		"isolationInAttributes": [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"""
+				@Instantiable(generateDependencyTree: true, generatedInitializerAttributes: "@MainActor")
+				public final class Inner: Instantiable {
+				    @MainActor public init(token: Token, leaf: Leaf) {
+				        self.token = token
+				        self.leaf = leaf
+				    }
+
+				    @Received let token: Token
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				seamFixtureType(named: "Leaf", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+				seamFixtureType(named: "Token", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+				"""
+				@MainActor
+				func handWritten(token: Token) -> Inner {
+				    Inner(token: token)
+				}
+				""",
+			], swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"""
+				@MainActor
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(token: Token, inner: Inner) {
+				        self.token = token
+				        self.inner = inner
+				    }
+
+				    @Instantiated public let token: Token
+				    @Instantiated public let inner: Inner
+				}
+				""",
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		],
+		"nonisolatedInitializerBesideAttributes": [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"""
+				@MainActor\n				@Instantiable(generateDependencyTree: true, generatedInitializerAttributes: "@MainActor")
+				public final class Inner: Instantiable {
+				    nonisolated public init(token: Token, leaf: Leaf) {
+				        self.token = token
+				        self.leaf = leaf
+				    }
+
+				    @Received let token: Token
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				"""
+				@MainActor
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init() {}
+				}
+				""",
+				seamFixtureType(named: "Token", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+				"""
+				@MainActor
+				func handWritten(token: Token) -> Inner {
+				    Inner(token: token)
+				}
+				""",
+			], swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"""
+				@MainActor
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(token: Token, inner: Inner) {
+				        self.token = token
+				        self.inner = inner
+				    }
+
+				    @Instantiated public let token: Token
+				    @Instantiated public let inner: Inner
+				}
+				""",
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		],
+		"nonisolatedInAttributes": [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"""
+				@MainActor\n				@Instantiable(generateDependencyTree: true, generatedInitializerAttributes: "nonisolated")
+				public final class Inner: Instantiable {
+				    nonisolated public init(token: Token, leaf: Leaf) {
+				        self.token = token
+				        self.leaf = leaf
+				    }
+
+				    @Received let token: Token
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				seamFixtureType(named: "Leaf", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+				seamFixtureType(named: "Token", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+				"""
+				func handWritten(token: Token) -> Inner {
+				    Inner(token: token)
+				}
+				""",
+			], swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let token: Token", "@Instantiated public let inner: Inner"]),
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		],
 	]
 
 	/// `Home`, a seam, builds `Screen`, which instantiates `cache`, a hole `monitor` and `Step`, which binds `mark` before it
@@ -2052,12 +3244,14 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	/// Expects every module of `output` to have compiled, where compile verification is enabled.
+	/// Expects every module of `output` to have compiled, and its generated code to have drawn no warning, where compile
+	/// verification is enabled.
 	private static func expectCompiles(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
 		guard compileVerificationIsEnabled else { return }
 		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
 		for module in compilation.modules {
 			#expect(module.result.exitCode == 0, "\(module.moduleName): \(module.result.stderr)", sourceLocation: sourceLocation)
+			#expect(module.generatedCodeWarnings.isEmpty, "\(module.moduleName): \(module.generatedCodeWarnings)", sourceLocation: sourceLocation)
 		}
 	}
 
