@@ -1228,6 +1228,12 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case holeReadsCallerValue
 	/// `HoleOuter`, a second seam of the seam's module, calls `HoleSeam` and passes its builder up.
 	case holePassedUp
+	/// `HoleOwner` receives `holeLogger` by value, which `HoleOuter` declares before it calls `HoleSeam`, so the place
+	/// `HoleOuter` passes up carries it, and `HoleImpl` reads it, required or only if available, the root declaring a
+	/// `holeLogger` of its own half the time: the fill reads `HoleOuter`'s value, as the inline build does.
+	case holePassedUpPlaceReadsPassingSeamsValue
+	/// That value declared instead by `HoleLoggerTop`, a seam that calls `HoleOuter`, two seams above `HoleSeam`.
+	case holePassedUpPlaceReadsValueTwoSeamsUp
 	/// `HoleImpl` instantiates `HoleSeam` again, so its fill passes itself to the re-entering call.
 	case holeReentersSeam
 	/// `HoleImpl` instantiates `HoleSeam` again through `HoleMiddle`, which declares `holeLogger` above the call while
@@ -1666,6 +1672,12 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// corpus pins (`acceptedDrawFeatureCounts`), at least ten each, and whose judged graphs the long run floors.
 	var isForwardingPlaceShape: Bool {
 		rawValue.hasPrefix("holeForwardingPlace") || rawValue.hasPrefix("holeInstantiatorPlace") || rawValue.hasPrefix("holeNothingForwardedPlace")
+	}
+
+	/// Whether `addingHoleShapes` draws this place a seam passes up whose fill reads a value the passing-up seam declares,
+	/// whose count in accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least ten each.
+	var isPassedUpPlaceReadingPassingSeamsValueShape: Bool {
+		rawValue.hasPrefix("holePassedUpPlaceReads")
 	}
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
@@ -4998,7 +5010,9 @@ enum GraphFuzzerGenerator {
 		/// inside a plain fill, and a hole under a later member of a loop of received instantiators. Three more draw places held
 		/// in instantiators: the forwarding place's labeled pair and second place, a place of an instantiator of a class that
 		/// conforms to `Instantiable` by hand with an erased or a plain place of its builder beside it, and an erased place that
-		/// forwards nothing. The pass records the property that gives the graph its second place of a hole (`secondHolePlace`).
+		/// forwards nothing. One more draws a value `HoleOuter`, or a seam above it, declares, which `HoleOwner` receives and
+		/// `HoleImpl` reads through the place `HoleOuter` passes up. The pass records the property that gives the graph its second
+		/// place of a hole (`secondHolePlace`).
 		private mutating func addingHoleShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.contains(.generateDependencyTree), holeRandom.percentChance(33) else { return declarations }
 			var declarations = declarations
@@ -5116,6 +5130,12 @@ enum GraphFuzzerGenerator {
 			let drawsErasureInsidePlainFill = holeRolls.erasurePlaces.percentChance(45)
 			let drawsErasureInsideSendableFill = holeRolls.erasurePlaces.percentChance(80)
 			let drawsSendableErasureBeneathSeam = holeRolls.erasurePlaces.percentChance(60)
+			// A value the seam that passes the place up declares, which the place's owner receives and `HoleImpl` reads, in every
+			// graph that can hold it, on a generator of its own, made whatever the base draw, declaring `HoleOuter` where the base
+			// draw has none.
+			let passedUpPlaceValueTwoSeamsUp = holeRolls.passedUpPlaceValue.percentChance(50)
+			let passedUpPlaceValueReadOnlyIfAvailable = holeRolls.passedUpPlaceValue.percentChance(50)
+			let rootDeclaresPassedUpPlaceValueLabel = holeRolls.passedUpPlaceValue.percentChance(50)
 			// The fillers and the root that reaches the seam are in another package than the seam's, unless the seam's module
 			// has no package, which this draw keeps apart from a caller in another package, as every other graph's draws were.
 			let fillsFromOtherPackage = drawsCrossPackage && !modulesOmittingPackageName.contains(.seamModule)
@@ -5894,9 +5914,43 @@ enum GraphFuzzerGenerator {
 			} else if secondHolePlace == nil, seam.properties.contains(where: { $0.label == "holeSecondOwner" }) {
 				secondHolePlace = (seamName, "holeSecondOwner")
 			}
+			// `HoleOuter`, which the roll declares where the base draw has none, or `HoleLoggerTop`, a seam that calls it, declares
+			// `holeLogger`, which `HoleOwner` receives by value, so `HoleSeam` takes it as a parameter and the place `HoleOuter`
+			// passes up carries it; `HoleImpl` reads it, so its fill must read the value of the seam that declares it, as the inline
+			// build does, never the root's, which the root declares half the time. Not where a `@Sendable` function builds the
+			// owner, whose fill the tool reports with a remedy instead, nor beside the draws that read the root's `holeLogger` or
+			// build `HoleSeam` again, which the tool rejects.
+			let buildsSeamAgain = impl.properties.contains { $0.label == "holeSeamBuilder" || $0.label == "holeMiddle" } || seam.properties.contains { $0.label == "holeLoopBuilder" }
+			var passedUpPlaceValueTop: TypeDeclaration?
+			let drawsPassedUpPlaceValue = ownerIndex != nil && !ownerIsBuiltInSendableFunction && !readsRootLogger && !buildsSeamAgain && !drawsDiamondOfOuterSeams
+			if drawsPassedUpPlaceValue, outerIndex == nil {
+				var outer = instantiable("HoleOuter", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeSeam", type: seamName)])
+				outer.instantiableArguments = ["generateDependencyTree: true"]
+				takingPackageService(&outer)
+				outerIndex = seamModuleDeclarations.count
+				seamModuleDeclarations.append(outer)
+			}
+			if drawsPassedUpPlaceValue, let outerIndex, let ownerIndex {
+				let loggerProperty = PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: loggerName)
+				seamModuleDeclarations[ownerIndex].properties.insert(PropertyDeclaration(attribute: "@Received", label: "holeLogger", type: loggerName), at: 0)
+				if passedUpPlaceValueTwoSeamsUp {
+					var top = instantiable("HoleLoggerTop", module: .seamModule, properties: [loggerProperty, PropertyDeclaration(attribute: "@Instantiated", label: "holeOuter", type: outerName)])
+					top.instantiableArguments = ["generateDependencyTree: true"]
+					takingPackageService(&top)
+					seamModuleDeclarations.append(top)
+					passedUpPlaceValueTop = top
+				} else {
+					seamModuleDeclarations[outerIndex].properties.insert(loggerProperty, at: 0)
+				}
+				impl.properties.append(passedUpPlaceValueReadOnlyIfAvailable
+					? PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeLogger", type: loggerName + "?")
+					: PropertyDeclaration(attribute: "@Received", label: "holeLogger", type: loggerName))
+			}
 			// The root that reaches the seam: the first, or, with the fillers in another package, `HoleOtherRoot` there.
 			let rootCall = if drawsDiamondOfOuterSeams {
 				PropertyDeclaration(attribute: "@Instantiated", label: "holeTop", type: name("HoleTop"))
+			} else if let passedUpPlaceValueTop {
+				PropertyDeclaration(attribute: "@Instantiated", label: "holeLoggerTop", type: passedUpPlaceValueTop.name)
 			} else if outerIndex != nil {
 				PropertyDeclaration(attribute: "@Instantiated", label: "holeOuter", type: outerName)
 			} else {
@@ -5906,7 +5960,7 @@ enum GraphFuzzerGenerator {
 			if readsRootLogger {
 				impl.properties.append(PropertyDeclaration(attribute: "@Received", label: "holeLogger", type: loggerName))
 			}
-			if readsRootLogger || trackerImpl?.properties.contains(where: { $0.label == "holeLogger" }) == true {
+			if readsRootLogger || trackerImpl?.properties.contains(where: { $0.label == "holeLogger" }) == true || drawsPassedUpPlaceValue && rootDeclaresPassedUpPlaceValueLabel {
 				rootProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: loggerName))
 			}
 			rootProperties.append(rootCall)
@@ -5949,6 +6003,7 @@ enum GraphFuzzerGenerator {
 				forwardingPlaceShapes = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C65466F5368)
 				instantiatorPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6548616E64)
 				nothingForwardedPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654E6F7468)
+				passedUpPlaceValue = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6550557056)
 			}
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
@@ -5989,6 +6044,9 @@ enum GraphFuzzerGenerator {
 			var instantiatorPlace: GraphFuzzerRandomNumberGenerator
 			/// A place of an erased instantiator that forwards nothing (`holeNothingForwardedPlace`).
 			var nothingForwardedPlace: GraphFuzzerRandomNumberGenerator
+			/// A value the seam that passes the place up declares, which `HoleImpl` reads
+			/// (`holePassedUpPlaceReadsPassingSeamsValue`, `holePassedUpPlaceReadsValueTwoSeamsUp`).
+			var passedUpPlaceValue: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -9107,6 +9165,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if declares("HoleOuter") {
 			features.insert(.holePassedUp)
+		}
+		if properties(of: "HoleOwner").contains(where: { $0.label == "holeLogger" }) {
+			features.insert(declares("HoleLoggerTop") ? .holePassedUpPlaceReadsValueTwoSeamsUp : .holePassedUpPlaceReadsPassingSeamsValue)
 		}
 		// A re-entry of `HoleSeam` itself, and one of `HoleRelay`: a fill passed to a seam that passes its site up.
 		let reentryProperties = implProperties + properties(of: "HoleMiddle")
