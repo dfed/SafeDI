@@ -1,0 +1,57 @@
+import Feature
+import Harness
+import SafeDI
+
+@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+public final class LiveApi: Instantiable, Api {
+    public init() {
+        #if SPIKE_TRACE
+        Registry.created(self, [:])
+        #endif
+    }
+
+    #if SPIKE_TRACE
+    public let tracker = Tracker("LiveApi")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension LiveApi: Traced {}
+#endif
+
+@Instantiable(fulfillingAdditionalTypes: [(any Bpi).self])
+public final class LiveBpi: Instantiable, Bpi {
+    public init() {
+        #if SPIKE_TRACE
+        Registry.created(self, [:])
+        #endif
+    }
+
+    #if SPIKE_TRACE
+    public let tracker = Tracker("LiveBpi")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension LiveBpi: Traced {}
+#endif
+
+@Instantiable(isRoot: true)
+public final class Root: Instantiable {
+    public init(hub: Hub) {
+        self.hub = hub
+        #if SPIKE_TRACE
+        Registry.created(self, ["hub": hub])
+        #endif
+    }
+
+    @Instantiated public let hub: Hub
+    #if SPIKE_TRACE
+    public let tracker = Tracker("Root")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension Root: Traced {}
+#endif
+

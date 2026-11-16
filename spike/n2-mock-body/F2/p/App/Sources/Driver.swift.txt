@@ -1,0 +1,30 @@
+import Harness
+import SafeDI
+
+func make() -> Home { Home() }
+
+public func runFixture() {
+	do {
+		let home = make()
+		let step1 = home.screen.stepBuilder.instantiate()
+		let screen2 = step1.screenBuilder.instantiate()
+		let step2 = screen2.stepBuilder.instantiate()
+		let screen3 = step2.screenBuilder.instantiate()
+		let step3 = screen3.stepBuilder.instantiate()
+		print("trace of three levels:")
+		Registry.printTrace()
+		withExtendedLifetime((home, step1, screen2, step2, screen3, step3)) {}
+	}
+	Registry.printAlive("after dropping everything")
+	do {
+		let step2: Step
+		do {
+			step2 = make().screen.stepBuilder.instantiate().screenBuilder.instantiate().stepBuilder.instantiate()
+		}
+		Registry.printTrace()
+		Registry.printAlive("holding only screen 2's step")
+		withExtendedLifetime(step2) {}
+	}
+	Registry.printAlive("after dropping it")
+}
+public let overridesRunner: (@Sendable () -> Void)? = nil

@@ -1,0 +1,863 @@
+{
+ "seam": "Hub",
+ "types": {
+  "Hub": {
+   "properties": [
+    [
+     "t39",
+     "const",
+     "T39"
+    ]
+   ]
+  },
+  "T1": {
+   "properties": [
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ],
+    [
+     "t41Builder",
+     "inst",
+     "T41"
+    ]
+   ]
+  },
+  "T2": {
+   "properties": [
+    [
+     "api",
+     "hole",
+     "Api"
+    ]
+   ]
+  },
+  "T3": {
+   "properties": [
+    [
+     "t11",
+     "const",
+     "T11"
+    ]
+   ]
+  },
+  "T4": {
+   "properties": [
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ]
+   ]
+  },
+  "T5": {
+   "properties": [
+    [
+     "t20",
+     "const",
+     "T20"
+    ],
+    [
+     "t25Builder",
+     "inst",
+     "T25"
+    ],
+    [
+     "t14",
+     "const",
+     "T14"
+    ]
+   ]
+  },
+  "T6": {
+   "properties": [
+    [
+     "t33",
+     "const",
+     "T33"
+    ],
+    [
+     "t8",
+     "const",
+     "T8"
+    ],
+    [
+     "bpi",
+     "hole",
+     "Bpi"
+    ]
+   ]
+  },
+  "T7": {
+   "properties": []
+  },
+  "T8": {
+   "properties": []
+  },
+  "T9": {
+   "properties": [
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ],
+    [
+     "t13Builder",
+     "inst",
+     "T13"
+    ]
+   ]
+  },
+  "T10": {
+   "properties": [
+    [
+     "t2Builder",
+     "inst",
+     "T2"
+    ],
+    [
+     "t5",
+     "const",
+     "T5"
+    ],
+    [
+     "t28Builder",
+     "inst",
+     "T28"
+    ],
+    [
+     "t43Builder",
+     "inst",
+     "T43"
+    ]
+   ]
+  },
+  "T11": {
+   "properties": []
+  },
+  "T12": {
+   "properties": []
+  },
+  "T13": {
+   "properties": [
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ]
+   ]
+  },
+  "T14": {
+   "properties": [
+    [
+     "t33",
+     "const",
+     "T33"
+    ]
+   ]
+  },
+  "T15": {
+   "properties": [
+    [
+     "t21",
+     "const",
+     "T21"
+    ],
+    [
+     "t23Builder",
+     "inst",
+     "T23"
+    ],
+    [
+     "t27",
+     "const",
+     "T27"
+    ],
+    [
+     "t29Builder",
+     "inst",
+     "T29"
+    ],
+    [
+     "t31Builder",
+     "inst",
+     "T31"
+    ],
+    [
+     "t38",
+     "const",
+     "T38"
+    ],
+    [
+     "t45Builder",
+     "inst",
+     "T45"
+    ],
+    [
+     "t47Builder",
+     "inst",
+     "T47"
+    ],
+    [
+     "t59",
+     "const",
+     "T59"
+    ]
+   ]
+  },
+  "T16": {
+   "properties": [
+    [
+     "t30",
+     "const",
+     "T30"
+    ],
+    [
+     "t33",
+     "const",
+     "T33"
+    ]
+   ]
+  },
+  "T17": {
+   "properties": [
+    [
+     "t33",
+     "const",
+     "T33"
+    ]
+   ]
+  },
+  "T18": {
+   "properties": [
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ],
+    [
+     "t14",
+     "const",
+     "T14"
+    ]
+   ]
+  },
+  "T19": {
+   "properties": []
+  },
+  "T20": {
+   "properties": [
+    [
+     "t33",
+     "const",
+     "T33"
+    ]
+   ]
+  },
+  "T21": {
+   "properties": []
+  },
+  "T22": {
+   "properties": []
+  },
+  "T23": {
+   "properties": [
+    [
+     "t36",
+     "const",
+     "T36"
+    ],
+    [
+     "t40",
+     "const",
+     "T40"
+    ]
+   ]
+  },
+  "T24": {
+   "properties": [
+    [
+     "t33",
+     "const",
+     "T33"
+    ],
+    [
+     "api",
+     "hole",
+     "Api"
+    ],
+    [
+     "t40",
+     "const",
+     "T40"
+    ],
+    [
+     "t31",
+     "const",
+     "T31"
+    ]
+   ]
+  },
+  "T25": {
+   "properties": [
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ]
+   ]
+  },
+  "T26": {
+   "properties": [
+    [
+     "api",
+     "hole",
+     "Api"
+    ],
+    [
+     "t54",
+     "const",
+     "T54"
+    ],
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ],
+    [
+     "t12",
+     "const",
+     "T12"
+    ]
+   ]
+  },
+  "T27": {
+   "properties": [
+    [
+     "t40Builder",
+     "inst",
+     "T40"
+    ]
+   ]
+  },
+  "T28": {
+   "properties": []
+  },
+  "T29": {
+   "properties": [
+    [
+     "t48",
+     "const",
+     "T48"
+    ],
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ]
+   ]
+  },
+  "T30": {
+   "properties": [
+    [
+     "t50Builder",
+     "inst",
+     "T50"
+    ],
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ],
+    [
+     "t48Builder",
+     "inst",
+     "T48"
+    ]
+   ]
+  },
+  "T31": {
+   "properties": [
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ]
+   ]
+  },
+  "T32": {
+   "properties": [
+    [
+     "t33",
+     "const",
+     "T33"
+    ],
+    [
+     "bpi",
+     "hole",
+     "Bpi"
+    ]
+   ]
+  },
+  "T33": {
+   "properties": [
+    [
+     "api",
+     "hole",
+     "Api"
+    ],
+    [
+     "bpi",
+     "hole",
+     "Bpi"
+    ]
+   ]
+  },
+  "T34": {
+   "properties": [
+    [
+     "t33",
+     "const",
+     "T33"
+    ]
+   ]
+  },
+  "T35": {
+   "properties": [
+    [
+     "t33",
+     "const",
+     "T33"
+    ],
+    [
+     "bpi",
+     "hole",
+     "Bpi"
+    ],
+    [
+     "t59",
+     "const",
+     "T59"
+    ]
+   ]
+  },
+  "T36": {
+   "properties": [
+    [
+     "t6",
+     "const",
+     "T6"
+    ]
+   ]
+  },
+  "T37": {
+   "properties": [
+    [
+     "t14Builder",
+     "inst",
+     "T14"
+    ]
+   ]
+  },
+  "T38": {
+   "properties": [
+    [
+     "t33",
+     "const",
+     "T33"
+    ],
+    [
+     "t48Builder",
+     "inst",
+     "T48"
+    ]
+   ]
+  },
+  "T39": {
+   "properties": [
+    [
+     "t7Builder",
+     "inst",
+     "T7"
+    ],
+    [
+     "t10",
+     "const",
+     "T10"
+    ],
+    [
+     "t55Builder",
+     "inst",
+     "T55"
+    ],
+    [
+     "t58Builder",
+     "inst",
+     "T58"
+    ]
+   ]
+  },
+  "T40": {
+   "properties": [
+    [
+     "bpi",
+     "hole",
+     "Bpi"
+    ],
+    [
+     "t33",
+     "const",
+     "T33"
+    ]
+   ]
+  },
+  "T41": {
+   "properties": [
+    [
+     "t9",
+     "const",
+     "T9"
+    ],
+    [
+     "t11Builder",
+     "inst",
+     "T11"
+    ],
+    [
+     "t22",
+     "const",
+     "T22"
+    ],
+    [
+     "t34Builder",
+     "inst",
+     "T34"
+    ],
+    [
+     "api",
+     "hole",
+     "Api"
+    ],
+    [
+     "t44Builder",
+     "inst",
+     "T44"
+    ],
+    [
+     "t52Builder",
+     "inst",
+     "T52"
+    ],
+    [
+     "t53Builder",
+     "inst",
+     "T53"
+    ]
+   ]
+  },
+  "T42": {
+   "properties": [
+    [
+     "t4Builder",
+     "inst",
+     "T4"
+    ],
+    [
+     "t13Builder",
+     "inst",
+     "T13"
+    ],
+    [
+     "t18Builder",
+     "inst",
+     "T18"
+    ],
+    [
+     "t19Builder",
+     "inst",
+     "T19"
+    ],
+    [
+     "t46",
+     "const",
+     "T46"
+    ],
+    [
+     "t51Builder",
+     "inst",
+     "T51"
+    ]
+   ]
+  },
+  "T43": {
+   "properties": [
+    [
+     "t26",
+     "const",
+     "T26"
+    ]
+   ]
+  },
+  "T44": {
+   "properties": [
+    [
+     "t31Builder",
+     "inst",
+     "T31"
+    ]
+   ]
+  },
+  "T45": {
+   "properties": [
+    [
+     "t33",
+     "const",
+     "T33"
+    ],
+    [
+     "t40Builder",
+     "inst",
+     "T40"
+    ],
+    [
+     "t31Builder",
+     "inst",
+     "T31"
+    ]
+   ]
+  },
+  "T46": {
+   "properties": [
+    [
+     "t16Builder",
+     "inst",
+     "T16"
+    ],
+    [
+     "t35",
+     "const",
+     "T35"
+    ],
+    [
+     "t57",
+     "const",
+     "T57"
+    ],
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ]
+   ]
+  },
+  "T47": {
+   "properties": []
+  },
+  "T48": {
+   "properties": [
+    [
+     "t3Builder",
+     "inst",
+     "T3"
+    ],
+    [
+     "t33",
+     "const",
+     "T33"
+    ],
+    [
+     "t34Builder",
+     "inst",
+     "T34"
+    ]
+   ]
+  },
+  "T49": {
+   "properties": [
+    [
+     "t32Builder",
+     "inst",
+     "T32"
+    ],
+    [
+     "t31",
+     "const",
+     "T31"
+    ]
+   ]
+  },
+  "T50": {
+   "properties": [
+    [
+     "t6",
+     "const",
+     "T6"
+    ],
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ],
+    [
+     "t11",
+     "const",
+     "T11"
+    ]
+   ]
+  },
+  "T51": {
+   "properties": [
+    [
+     "t8Builder",
+     "inst",
+     "T8"
+    ],
+    [
+     "t15",
+     "const",
+     "T15"
+    ],
+    [
+     "t49",
+     "const",
+     "T49"
+    ],
+    [
+     "t33",
+     "const",
+     "T33"
+    ]
+   ]
+  },
+  "T52": {
+   "properties": [
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ]
+   ]
+  },
+  "T53": {
+   "properties": [
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ],
+    [
+     "api",
+     "hole",
+     "Api"
+    ]
+   ]
+  },
+  "T54": {
+   "properties": [
+    [
+     "t1",
+     "const",
+     "T1"
+    ],
+    [
+     "t17Builder",
+     "inst",
+     "T17"
+    ],
+    [
+     "t24",
+     "const",
+     "T24"
+    ],
+    [
+     "t33",
+     "const",
+     "T33"
+    ],
+    [
+     "bpi",
+     "hole",
+     "Bpi"
+    ]
+   ]
+  },
+  "T55": {
+   "properties": [
+    [
+     "t56Builder",
+     "inst",
+     "T56"
+    ]
+   ]
+  },
+  "T56": {
+   "properties": [
+    [
+     "t14Builder",
+     "inst",
+     "T14"
+    ]
+   ]
+  },
+  "T57": {
+   "properties": [
+    [
+     "t33Builder",
+     "inst",
+     "T33"
+    ],
+    [
+     "t13",
+     "const",
+     "T13"
+    ]
+   ]
+  },
+  "T58": {
+   "properties": [
+    [
+     "t12Builder",
+     "inst",
+     "T12"
+    ],
+    [
+     "t37",
+     "const",
+     "T37"
+    ],
+    [
+     "t42Builder",
+     "inst",
+     "T42"
+    ]
+   ]
+  },
+  "T59": {
+   "properties": [
+    [
+     "t40Builder",
+     "inst",
+     "T40"
+    ],
+    [
+     "t41",
+     "const",
+     "T41"
+    ],
+    [
+     "t33",
+     "const",
+     "T33"
+    ]
+   ]
+  }
+ },
+ "holes": {
+  "Api": "LiveApi",
+  "Bpi": "LiveBpi"
+ },
+ "fill_receives": {},
+ "pass_through": [],
+ "root_declares": []
+}

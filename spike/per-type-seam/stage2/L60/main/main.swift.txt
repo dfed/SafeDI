@@ -1,0 +1,409 @@
+import App
+#if canImport(Feature)
+import Feature
+#endif
+import Harness
+
+nonisolated(unsafe) var nextIdentifier = 0
+nonisolated(unsafe) var built = 0
+
+func identifier() -> Int {
+	nextIdentifier += 1
+	return nextIdentifier
+}
+
+func walk(_ value: Hub) {
+	built += 1
+	walk(value.t39)
+}
+
+func walk(_ value: T1) {
+	built += 1
+	walk(value.t33Builder.instantiate())
+	walk(value.t41Builder.instantiate())
+}
+
+func walk(_ value: T2) {
+	built += 1
+	withExtendedLifetime(value.api) {}
+}
+
+func walk(_ value: T3) {
+	built += 1
+	walk(value.t11)
+}
+
+func walk(_ value: T4) {
+	built += 1
+	walk(value.t33Builder.instantiate())
+}
+
+func walk(_ value: T5) {
+	built += 1
+	walk(value.t20)
+	walk(value.t25Builder.instantiate())
+	walk(value.t14)
+}
+
+func walk(_ value: T6) {
+	built += 1
+	walk(value.t33)
+	walk(value.t8)
+	withExtendedLifetime(value.bpi) {}
+}
+
+func walk(_ value: T7) {
+	built += 1
+}
+
+func walk(_ value: T8) {
+	built += 1
+}
+
+func walk(_ value: T9) {
+	built += 1
+	walk(value.t33Builder.instantiate())
+	walk(value.t13Builder.instantiate())
+}
+
+func walk(_ value: T10) {
+	built += 1
+	walk(value.t2Builder.instantiate())
+	walk(value.t5)
+	walk(value.t28Builder.instantiate())
+	walk(value.t43Builder.instantiate())
+}
+
+func walk(_ value: T11) {
+	built += 1
+}
+
+func walk(_ value: T12) {
+	built += 1
+}
+
+func walk(_ value: T13) {
+	built += 1
+	walk(value.t33Builder.instantiate())
+}
+
+func walk(_ value: T14) {
+	built += 1
+	walk(value.t33)
+}
+
+func walk(_ value: T15) {
+	built += 1
+	walk(value.t21)
+	walk(value.t23Builder.instantiate())
+	walk(value.t27)
+	walk(value.t29Builder.instantiate())
+	walk(value.t31Builder.instantiate())
+	walk(value.t38)
+	walk(value.t45Builder.instantiate())
+	walk(value.t47Builder.instantiate())
+	walk(value.t59)
+}
+
+func walk(_ value: T16) {
+	built += 1
+	walk(value.t30)
+	walk(value.t33)
+}
+
+func walk(_ value: T17) {
+	built += 1
+	walk(value.t33)
+}
+
+func walk(_ value: T18) {
+	built += 1
+	walk(value.t33Builder.instantiate())
+	walk(value.t14)
+}
+
+func walk(_ value: T19) {
+	built += 1
+}
+
+func walk(_ value: T20) {
+	built += 1
+	walk(value.t33)
+}
+
+func walk(_ value: T21) {
+	built += 1
+}
+
+func walk(_ value: T22) {
+	built += 1
+}
+
+func walk(_ value: T23) {
+	built += 1
+	walk(value.t36)
+	walk(value.t40)
+}
+
+func walk(_ value: T24) {
+	built += 1
+	walk(value.t33)
+	withExtendedLifetime(value.api) {}
+	walk(value.t40)
+	walk(value.t31)
+}
+
+func walk(_ value: T25) {
+	built += 1
+	walk(value.t33Builder.instantiate())
+}
+
+func walk(_ value: T26) {
+	built += 1
+	withExtendedLifetime(value.api) {}
+	walk(value.t54)
+	walk(value.t33Builder.instantiate())
+	walk(value.t12)
+}
+
+func walk(_ value: T27) {
+	built += 1
+	walk(value.t40Builder.instantiate())
+}
+
+func walk(_ value: T28) {
+	built += 1
+}
+
+func walk(_ value: T29) {
+	built += 1
+	walk(value.t48)
+	walk(value.t33Builder.instantiate())
+}
+
+func walk(_ value: T30) {
+	built += 1
+	walk(value.t50Builder.instantiate())
+	walk(value.t33Builder.instantiate())
+	walk(value.t48Builder.instantiate())
+}
+
+func walk(_ value: T31) {
+	built += 1
+	walk(value.t33Builder.instantiate())
+}
+
+func walk(_ value: T32) {
+	built += 1
+	walk(value.t33)
+	withExtendedLifetime(value.bpi) {}
+}
+
+func walk(_ value: T33) {
+	built += 1
+	withExtendedLifetime(value.api) {}
+	withExtendedLifetime(value.bpi) {}
+}
+
+func walk(_ value: T34) {
+	built += 1
+	walk(value.t33)
+}
+
+func walk(_ value: T35) {
+	built += 1
+	walk(value.t33)
+	withExtendedLifetime(value.bpi) {}
+	walk(value.t59)
+}
+
+func walk(_ value: T36) {
+	built += 1
+	walk(value.t6)
+}
+
+func walk(_ value: T37) {
+	built += 1
+	walk(value.t14Builder.instantiate())
+}
+
+func walk(_ value: T38) {
+	built += 1
+	walk(value.t33)
+	walk(value.t48Builder.instantiate())
+}
+
+func walk(_ value: T39) {
+	built += 1
+	walk(value.t7Builder.instantiate())
+	walk(value.t10)
+	walk(value.t55Builder.instantiate())
+	walk(value.t58Builder.instantiate())
+}
+
+func walk(_ value: T40) {
+	built += 1
+	withExtendedLifetime(value.bpi) {}
+	walk(value.t33)
+}
+
+func walk(_ value: T41) {
+	built += 1
+	walk(value.t9)
+	walk(value.t11Builder.instantiate())
+	walk(value.t22)
+	walk(value.t34Builder.instantiate())
+	withExtendedLifetime(value.api) {}
+	walk(value.t44Builder.instantiate())
+	walk(value.t52Builder.instantiate())
+	walk(value.t53Builder.instantiate())
+}
+
+func walk(_ value: T42) {
+	built += 1
+	walk(value.t4Builder.instantiate())
+	walk(value.t13Builder.instantiate())
+	walk(value.t18Builder.instantiate())
+	walk(value.t19Builder.instantiate())
+	walk(value.t46)
+	walk(value.t51Builder.instantiate())
+}
+
+func walk(_ value: T43) {
+	built += 1
+	walk(value.t26)
+}
+
+func walk(_ value: T44) {
+	built += 1
+	walk(value.t31Builder.instantiate())
+}
+
+func walk(_ value: T45) {
+	built += 1
+	walk(value.t33)
+	walk(value.t40Builder.instantiate())
+	walk(value.t31Builder.instantiate())
+}
+
+func walk(_ value: T46) {
+	built += 1
+	walk(value.t16Builder.instantiate())
+	walk(value.t35)
+	walk(value.t57)
+	walk(value.t33Builder.instantiate())
+}
+
+func walk(_ value: T47) {
+	built += 1
+}
+
+func walk(_ value: T48) {
+	built += 1
+	walk(value.t3Builder.instantiate())
+	walk(value.t33)
+	walk(value.t34Builder.instantiate())
+}
+
+func walk(_ value: T49) {
+	built += 1
+	walk(value.t32Builder.instantiate())
+	walk(value.t31)
+}
+
+func walk(_ value: T50) {
+	built += 1
+	walk(value.t6)
+	walk(value.t33Builder.instantiate())
+	walk(value.t11)
+}
+
+func walk(_ value: T51) {
+	built += 1
+	walk(value.t8Builder.instantiate())
+	walk(value.t15)
+	walk(value.t49)
+	walk(value.t33)
+}
+
+func walk(_ value: T52) {
+	built += 1
+	walk(value.t33Builder.instantiate())
+}
+
+func walk(_ value: T53) {
+	built += 1
+	walk(value.t33Builder.instantiate())
+	withExtendedLifetime(value.api) {}
+}
+
+func walk(_ value: T54) {
+	built += 1
+	walk(value.t1)
+	walk(value.t17Builder.instantiate())
+	walk(value.t24)
+	walk(value.t33)
+	withExtendedLifetime(value.bpi) {}
+}
+
+func walk(_ value: T55) {
+	built += 1
+	walk(value.t56Builder.instantiate())
+}
+
+func walk(_ value: T56) {
+	built += 1
+	walk(value.t14Builder.instantiate())
+}
+
+func walk(_ value: T57) {
+	built += 1
+	walk(value.t33Builder.instantiate())
+	walk(value.t13)
+}
+
+func walk(_ value: T58) {
+	built += 1
+	walk(value.t12Builder.instantiate())
+	walk(value.t37)
+	walk(value.t42Builder.instantiate())
+}
+
+func walk(_ value: T59) {
+	built += 1
+	walk(value.t40Builder.instantiate())
+	walk(value.t41)
+	walk(value.t33)
+}
+
+func walkEveryPath(_ root: Root) {
+	walk(root.hub)
+}
+
+let arguments = CommandLine.arguments
+if arguments.count > 1, arguments[1] == "bench" {
+	// One round: builds a Root and walks every path, again until the walks last at least 100 ms; prints nanoseconds per
+	// walk, a walk being a Root plus every path, so that a variant's cost per tree build is in the figure.
+	var walks = 0
+	let clock = ContinuousClock()
+	walkEveryPath(Root())
+	let start = clock.now
+	var elapsed = Duration.zero
+	while elapsed < .milliseconds(100) {
+		walkEveryPath(Root())
+		walks += 1
+		elapsed = clock.now - start
+	}
+	let (seconds, attoseconds) = elapsed.components
+	let nanoseconds = Double(seconds) * 1e9 + Double(attoseconds) / 1e9
+	print("\(nanoseconds / Double(walks)) ns per walk, \(walks) walks, \(built / (walks + 1)) values per walk")
+} else {
+	do {
+		let root = Root()
+		walkEveryPath(root)
+		print("trace of every path:")
+		Registry.printTrace()
+		withExtendedLifetime(root) {}
+	}
+	Registry.printAlive("after dropping everything")
+}

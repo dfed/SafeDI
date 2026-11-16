@@ -1,0 +1,41 @@
+import Harness
+import SafeDI
+
+public func runFixture() {
+	do {
+		let user = User()
+		let root = Root.mock(user: user)
+		let c = root.cBuilder.instantiate()
+		print("no overrides:")
+		Registry.printTrace()
+		withExtendedLifetime((root, c)) {}
+	}
+	Registry.printAlive("after dropping everything")
+}
+
+/// Every override field notes its path when read, then builds what the default would.
+func leafConfiguration(_ path: String) -> Leaf.SafeDIMockConfiguration {
+	.init(
+		detail: { service in Registry.note("override \(path).detail"); return Detail(service: service) },
+		{ service, user, detail, badge in Registry.note("override \(path).safeDIBuilder"); return Leaf(service: service, user: user, detail: detail, badge: badge) },
+	)
+}
+
+public func runOverrides() {
+	do {
+		let user = User()
+		let root = Root.mock(user: user, safeDIOverrides: .init(
+			service: { Registry.note("override service"); return Service() },
+			a: .init(leaf: leafConfiguration("a.leaf"), { leaf in Registry.note("override a.safeDIBuilder"); return A(leaf: leaf) }),
+			b: .init(badge: { Registry.note("override b.badge"); return Badge() }, leaf: leafConfiguration("b.leaf"), { badge, leaf in Registry.note("override b.safeDIBuilder"); return B(badge: badge, leaf: leaf) }),
+			cBuilder: .init(leaf: leafConfiguration("cBuilder.leaf"), { leaf in Registry.note("override cBuilder.safeDIBuilder"); return C(leaf: leaf) }),
+			badge: Badge(),
+		))
+		let c = root.cBuilder.instantiate()
+		print("every override set:")
+		Registry.printTrace()
+		withExtendedLifetime((root, c)) {}
+	}
+	Registry.printAlive("after dropping everything")
+}
+public let overridesRunner: (@Sendable () -> Void)? = runOverrides

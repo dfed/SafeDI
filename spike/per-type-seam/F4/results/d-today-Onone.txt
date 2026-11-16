@@ -1,0 +1,23 @@
+trace:
+  LivePayments#1(cart: nil, retryBuilder: builder)
+  Checkout#1(payments: LivePayments#1, cartScreenBuilder: builder)
+  Root#1(checkout: Checkout#1)
+  Cart#1()
+  LivePayments#2(cart: Cart#1, retryBuilder: builder)
+  CartScreen#1(cart: Cart#1, payments: LivePayments#2)
+  LivePayments#3(cart: nil, retryBuilder: builder)
+  Checkout#2(payments: LivePayments#3, cartScreenBuilder: builder)
+  Cart#2()
+  LivePayments#4(cart: Cart#2, retryBuilder: builder)
+  CartScreen#2(cart: Cart#2, payments: LivePayments#4)
+alive after dropping everything: none
+  LivePayments#5(cart: nil, retryBuilder: builder)
+  Checkout#3(payments: LivePayments#5, cartScreenBuilder: builder)
+  Root#2(checkout: Checkout#3)
+  Cart#3()
+  LivePayments#6(cart: Cart#3, retryBuilder: builder)
+  CartScreen#3(cart: Cart#3, payments: LivePayments#6)
+  LivePayments#7(cart: nil, retryBuilder: builder)
+  Checkout#4(payments: LivePayments#7, cartScreenBuilder: builder)
+alive holding only the retried Checkout: Checkout 1, LivePayments 1
+alive after dropping the retried Checkout: none

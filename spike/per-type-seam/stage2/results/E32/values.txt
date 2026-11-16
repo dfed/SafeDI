@@ -1,0 +1,5 @@
+=== E32: values
+a: 34993 lines, sha256 92c9467a78301e81, trace equals (a)
+b: 34993 lines, sha256 92c9467a78301e81, trace equals (a)
+c: 34993 lines, sha256 92c9467a78301e81, trace equals (a)
+d: 34993 lines, sha256 92c9467a78301e81, trace equals (a)

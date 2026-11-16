@@ -1,0 +1,41 @@
+=== L240: runtime
+uptime before round 0:  16:54:36 up  1:38,  0 user,  load average: 1.01, 0.91, 0.95
+round 0 a: 91229.19598906107 ns per walk, 1097 walks, 634 values per walk
+round 0 b: 363339.6884057971 ns per walk, 276 walks, 634 values per walk
+round 0 c: 167403.20568561874 ns per walk, 598 walks, 634 values per walk
+round 0 d: 177025.06548672565 ns per walk, 565 walks, 634 values per walk
+uptime before round 1:  16:54:36 up  1:38,  0 user,  load average: 1.01, 0.91, 0.95
+round 1 a: 91752.47522935779 ns per walk, 1090 walks, 634 values per walk
+round 1 b: 349844.51748251746 ns per walk, 286 walks, 634 values per walk
+round 1 c: 136943.15047879616 ns per walk, 731 walks, 634 values per walk
+round 1 d: 116603.3414918415 ns per walk, 858 walks, 634 values per walk
+uptime before round 2:  16:54:37 up  1:38,  0 user,  load average: 1.01, 0.92, 0.95
+round 2 a: 101160.95045500506 ns per walk, 989 walks, 634 values per walk
+round 2 b: 306135.7889908257 ns per walk, 327 walks, 634 values per walk
+round 2 c: 164934.64909390445 ns per walk, 607 walks, 634 values per walk
+round 2 d: 126594.24652338812 ns per walk, 791 walks, 634 values per walk
+uptime before round 3:  16:54:37 up  1:38,  0 user,  load average: 1.01, 0.92, 0.95
+round 3 a: 89942.28866906474 ns per walk, 1112 walks, 634 values per walk
+round 3 b: 349592.7108013937 ns per walk, 287 walks, 634 values per walk
+round 3 c: 124070.60049627791 ns per walk, 806 walks, 634 values per walk
+round 3 d: 137412.1565934066 ns per walk, 728 walks, 634 values per walk
+uptime before round 4:  16:54:38 up  1:38,  0 user,  load average: 1.01, 0.92, 0.95
+round 4 a: 93394.86461251166 ns per walk, 1071 walks, 634 values per walk
+round 4 b: 325086.8441558442 ns per walk, 308 walks, 634 values per walk
+round 4 c: 145845.38775510204 ns per walk, 686 walks, 634 values per walk
+round 4 d: 128751.9407979408 ns per walk, 777 walks, 634 values per walk
+uptime before round 5:  16:54:38 up  1:38,  0 user,  load average: 1.01, 0.92, 0.95
+round 5 a: 89774.1921005386 ns per walk, 1114 walks, 634 values per walk
+round 5 b: 352867.1549295775 ns per walk, 284 walks, 634 values per walk
+round 5 c: 146501.46852122986 ns per walk, 683 walks, 634 values per walk
+round 5 d: 127525.10955414013 ns per walk, 785 walks, 634 values per walk
+uptime before round 6:  16:54:38 up  1:38,  0 user,  load average: 1.01, 0.92, 0.95
+round 6 a: 86785.12055507372 ns per walk, 1153 walks, 634 values per walk
+round 6 b: 352846.61754385964 ns per walk, 285 walks, 634 values per walk
+round 6 c: 191213.51434034418 ns per walk, 523 walks, 634 values per walk
+round 6 d: 120579.12530120483 ns per walk, 830 walks, 634 values per walk
+uptime before round 7:  16:54:39 up  1:38,  0 user,  load average: 1.01, 0.92, 0.95
+round 7 a: 99376.05759682224 ns per walk, 1007 walks, 634 values per walk
+round 7 b: 336048.91610738257 ns per walk, 298 walks, 634 values per walk
+round 7 c: 146530.09809663252 ns per walk, 683 walks, 634 values per walk
+round 7 d: 125859.10062893081 ns per walk, 795 walks, 634 values per walk

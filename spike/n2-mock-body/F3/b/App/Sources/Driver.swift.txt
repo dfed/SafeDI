@@ -1,0 +1,51 @@
+import Harness
+import SafeDI
+
+func make() -> App { App.mock() }
+
+public func runFixture() {
+	do {
+		let app = make()
+		let preview1 = app.editor.previewBuilder.instantiate()
+		let editor2 = preview1.editor.instance
+		let preview2 = editor2.previewBuilder.instantiate()
+		let editor3 = preview2.editor.instance
+		print("trace of three levels:")
+		Registry.printTrace()
+		withExtendedLifetime((app, preview1, editor2, preview2, editor3)) {}
+	}
+	Registry.printAlive("after dropping everything")
+	do {
+		let editor3: Editor
+		do {
+			editor3 = make().editor.previewBuilder.instantiate().editor.instance.previewBuilder.instantiate().editor.instance
+		}
+		Registry.printTrace()
+		Registry.printAlive("holding only the third editor")
+		withExtendedLifetime(editor3) {}
+	}
+	Registry.printAlive("after dropping it")
+}
+
+/// Every override field notes its path when read, then builds what the default would.
+public func runOverrides() {
+	do {
+		let app = App.mock(safeDIOverrides: .init(
+			theme: { Registry.note("override theme"); return Theme() },
+			editor: .init(
+				previewBuilder: .init(
+					theme: { Registry.note("override editor.previewBuilder.theme"); return Theme() },
+					{ theme, editor in Registry.note("override editor.previewBuilder.safeDIBuilder"); return Preview(theme: theme, editor: editor) },
+				),
+				toolbar: { theme in Registry.note("override editor.toolbar"); return Toolbar(theme: theme) },
+				{ previewBuilder, toolbar in Registry.note("override editor.safeDIBuilder"); return Editor(previewBuilder: previewBuilder, toolbar: toolbar) },
+			),
+		))
+		let editor3 = app.editor.previewBuilder.instantiate().editor.instance.previewBuilder.instantiate().editor.instance
+		print("every override set:")
+		Registry.printTrace()
+		withExtendedLifetime((app, editor3)) {}
+	}
+	Registry.printAlive("after dropping everything")
+}
+public let overridesRunner: (@Sendable () -> Void)? = runOverrides

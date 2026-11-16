@@ -1,0 +1,42 @@
+no overrides:
+  User#1()
+  Service#1()
+  Detail#1(service: Service#1)
+  Leaf#1(service: Service#1, user: User#1, detail: Detail#1, badge: nil)
+  A#1(leaf: Leaf#1)
+  Badge#1()
+  Detail#2(service: Service#1)
+  Leaf#2(service: Service#1, user: User#1, detail: Detail#2, badge: Badge#1)
+  B#1(badge: Badge#1, leaf: Leaf#2)
+  Root#1(service: Service#1, user: User#1, a: A#1, b: B#1, cBuilder: builder)
+  Detail#3(service: Service#1)
+  Leaf#3(service: Service#1, user: User#1, detail: Detail#3, badge: nil)
+  C#1(leaf: Leaf#3)
+alive after dropping everything: none
+every override set:
+  User#2()
+  Badge#2()
+  override service
+  Service#2()
+  override a.leaf.detail
+  Detail#4(service: Service#2)
+  override a.leaf.safeDIBuilder
+  Leaf#4(service: Service#2, user: User#2, detail: Detail#4, badge: Badge#2)
+  override a.safeDIBuilder
+  A#2(leaf: Leaf#4)
+  override b.badge
+  Badge#3()
+  override b.leaf.detail
+  Detail#5(service: Service#2)
+  override b.leaf.safeDIBuilder
+  Leaf#5(service: Service#2, user: User#2, detail: Detail#5, badge: Badge#3)
+  override b.safeDIBuilder
+  B#2(badge: Badge#3, leaf: Leaf#5)
+  Root#2(service: Service#2, user: User#2, a: A#2, b: B#2, cBuilder: builder)
+  override cBuilder.leaf.detail
+  Detail#6(service: Service#2)
+  override cBuilder.leaf.safeDIBuilder
+  Leaf#6(service: Service#2, user: User#2, detail: Detail#6, badge: Badge#2)
+  override cBuilder.safeDIBuilder
+  C#2(leaf: Leaf#6)
+alive after dropping everything: none

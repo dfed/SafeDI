@@ -1,0 +1,15 @@
+import Core
+import Feat
+import Harness
+import SafeDI
+
+#if DEBUG
+/// Every override field notes its path when read, then builds the default.
+public func rootMockWithOverrides() -> Root {
+	Root.mock(safeDIOverrides: .init(home: .init(screen: .init(
+		cache: { Registry.note("override screen.cache"); return Cache() },
+		stepBuilder: .init({ api, screenBuilder in Registry.note("override screen.stepBuilder.safeDIBuilder"); return Step(api: api, screenBuilder: screenBuilder) }),
+		{ cache, stepBuilder in Registry.note("override screen.safeDIBuilder"); return Screen(cache: cache, stepBuilder: stepBuilder) },
+	))))
+}
+#endif

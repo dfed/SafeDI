@@ -1,0 +1,49 @@
+trace of three levels:
+  Cache#1()
+  Screen#1(cache: Cache#1, stepBuilder: builder)
+  Home#1(screen: Screen#1)
+  Model#1(cache: Cache#1)
+  Step#1(model: Model#1, screenBuilder: builder)
+  Cache#2()
+  Screen#2(cache: Cache#2, stepBuilder: builder)
+  Model#2(cache: Cache#2)
+  Step#2(model: Model#2, screenBuilder: builder)
+  Cache#3()
+  Screen#3(cache: Cache#3, stepBuilder: builder)
+  Model#3(cache: Cache#3)
+  Step#3(model: Model#3, screenBuilder: builder)
+alive after dropping everything: none
+  Cache#4()
+  Screen#4(cache: Cache#4, stepBuilder: builder)
+  Home#2(screen: Screen#4)
+  Model#4(cache: Cache#4)
+  Step#4(model: Model#4, screenBuilder: builder)
+  Cache#5()
+  Screen#5(cache: Cache#5, stepBuilder: builder)
+  Model#5(cache: Cache#5)
+  Step#5(model: Model#5, screenBuilder: builder)
+alive holding only screen 2's step: Cache 1, Model 1, Step 1
+alive after dropping it: none
+every override set:
+  override screen.cache
+  Cache#6()
+  override screen.safeDIBuilder
+  Screen#6(cache: Cache#6, stepBuilder: builder)
+  Home#3(screen: Screen#6)
+  override screen.stepBuilder.model
+  Model#6(cache: Cache#6)
+  override screen.stepBuilder.safeDIBuilder
+  Step#6(model: Model#6, screenBuilder: builder)
+  Cache#7()
+  Screen#7(cache: Cache#7, stepBuilder: builder)
+  override screen.stepBuilder.model
+  Model#7(cache: Cache#7)
+  override screen.stepBuilder.safeDIBuilder
+  Step#7(model: Model#7, screenBuilder: builder)
+  Cache#8()
+  Screen#8(cache: Cache#8, stepBuilder: builder)
+  override screen.stepBuilder.model
+  Model#8(cache: Cache#8)
+  override screen.stepBuilder.safeDIBuilder
+  Step#8(model: Model#8, screenBuilder: builder)
+alive after dropping everything: none

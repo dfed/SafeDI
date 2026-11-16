@@ -1,0 +1,5 @@
+=== E8: values
+a: 49 lines, sha256 8477f2f25d26c221, trace equals (a)
+b: 49 lines, sha256 8477f2f25d26c221, trace equals (a)
+c: 49 lines, sha256 8477f2f25d26c221, trace equals (a)
+d: 49 lines, sha256 8477f2f25d26c221, trace equals (a)

@@ -1,0 +1,3002 @@
+import Harness
+import SafeDI
+
+extension Hub {
+    nonisolated public enum SafeDIScope_Api {
+        nonisolated public struct t39_Values {}
+
+        nonisolated public struct __safeDI_Builder<Built> {
+            public let t39: (t39_Values) -> T39_Scope.__safeDI_Builder<Built>
+
+            public init(t39: @escaping (t39_Values) -> T39_Scope.__safeDI_Builder<Built>) {
+                self.t39 = t39
+            }
+
+            public init(__safeDI_noScope builder: @escaping () -> Built) {
+                t39 = { _ in .init(__safeDI_noScope: builder) }
+            }
+        }
+
+        nonisolated public enum T39_Scope {
+            nonisolated public struct t10_Values {
+                public let t7Builder: Instantiator<T7>
+            }
+
+            nonisolated public struct t55Builder_Values {
+                public let t7Builder: Instantiator<T7>
+                public let t10: T10
+            }
+
+            nonisolated public struct t58Builder_Values {
+                public let t7Builder: Instantiator<T7>
+                public let t10: T10
+                public let t55Builder: Instantiator<T55>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t10: (t10_Values) -> T10_Scope.__safeDI_Builder<Built>
+                public let t55Builder: (t55Builder_Values) -> T55_Scope.__safeDI_Builder<Built>
+                public let t58Builder: (t58Builder_Values) -> T58_Scope.__safeDI_Builder<Built>
+
+                public init(t10: @escaping (t10_Values) -> T10_Scope.__safeDI_Builder<Built>, t55Builder: @escaping (t55Builder_Values) -> T55_Scope.__safeDI_Builder<Built>, t58Builder: @escaping (t58Builder_Values) -> T58_Scope.__safeDI_Builder<Built>) {
+                    self.t10 = t10
+                    self.t55Builder = t55Builder
+                    self.t58Builder = t58Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t10 = { _ in .init(__safeDI_noScope: builder) }
+                    t55Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t58Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T10_Scope {
+            nonisolated public struct t2Builder_Values {}
+
+            nonisolated public struct t5_Values {
+                public let t2Builder: Instantiator<T2>
+            }
+
+            nonisolated public struct t43Builder_Values {
+                public let t2Builder: Instantiator<T2>
+                public let t5: T5
+                public let t28Builder: Instantiator<T28>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t2Builder: (t2Builder_Values) -> T2_Scope.__safeDI_Builder<Built>
+                public let t5: (t5_Values) -> T5_Scope.__safeDI_Builder<Built>
+                public let t43Builder: (t43Builder_Values) -> T43_Scope.__safeDI_Builder<Built>
+
+                public init(t2Builder: @escaping (t2Builder_Values) -> T2_Scope.__safeDI_Builder<Built>, t5: @escaping (t5_Values) -> T5_Scope.__safeDI_Builder<Built>, t43Builder: @escaping (t43Builder_Values) -> T43_Scope.__safeDI_Builder<Built>) {
+                    self.t2Builder = t2Builder
+                    self.t5 = t5
+                    self.t43Builder = t43Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t2Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t5 = { _ in .init(__safeDI_noScope: builder) }
+                    t43Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T55_Scope {
+            nonisolated public struct t56Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t56Builder: (t56Builder_Values) -> T56_Scope.__safeDI_Builder<Built>
+
+                public init(t56Builder: @escaping (t56Builder_Values) -> T56_Scope.__safeDI_Builder<Built>) {
+                    self.t56Builder = t56Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t56Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T58_Scope {
+            nonisolated public struct t37_Values {
+                public let t12Builder: Instantiator<T12>
+            }
+
+            nonisolated public struct t42Builder_Values {
+                public let t12Builder: Instantiator<T12>
+                public let t37: T37
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t37: (t37_Values) -> T37_Scope.__safeDI_Builder<Built>
+                public let t42Builder: (t42Builder_Values) -> T42_Scope.__safeDI_Builder<Built>
+
+                public init(t37: @escaping (t37_Values) -> T37_Scope.__safeDI_Builder<Built>, t42Builder: @escaping (t42Builder_Values) -> T42_Scope.__safeDI_Builder<Built>) {
+                    self.t37 = t37
+                    self.t42Builder = t42Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t37 = { _ in .init(__safeDI_noScope: builder) }
+                    t42Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T2_Scope {
+            nonisolated public struct api_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let api: (api_Values) -> Built
+
+                public init(api: @escaping (api_Values) -> Built) {
+                    self.api = api
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    api = { _ in builder() }
+                }
+            }
+        }
+
+        nonisolated public enum T5_Scope {
+            nonisolated public struct t20_Values {}
+
+            nonisolated public struct t25Builder_Values {
+                public let t20: T20
+            }
+
+            nonisolated public struct t14_Values {
+                public let t20: T20
+                public let t25Builder: Instantiator<T25>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t20: (t20_Values) -> T20_Scope.__safeDI_Builder<Built>
+                public let t25Builder: (t25Builder_Values) -> T25_Scope.__safeDI_Builder<Built>
+                public let t14: (t14_Values) -> T14_Scope.__safeDI_Builder<Built>
+
+                public init(t20: @escaping (t20_Values) -> T20_Scope.__safeDI_Builder<Built>, t25Builder: @escaping (t25Builder_Values) -> T25_Scope.__safeDI_Builder<Built>, t14: @escaping (t14_Values) -> T14_Scope.__safeDI_Builder<Built>) {
+                    self.t20 = t20
+                    self.t25Builder = t25Builder
+                    self.t14 = t14
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t20 = { _ in .init(__safeDI_noScope: builder) }
+                    t25Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t14 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T43_Scope {
+            nonisolated public struct t26_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t26: (t26_Values) -> T26_Scope.__safeDI_Builder<Built>
+
+                public init(t26: @escaping (t26_Values) -> T26_Scope.__safeDI_Builder<Built>) {
+                    self.t26 = t26
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t26 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T56_Scope {
+            nonisolated public struct t14Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t14Builder: (t14Builder_Values) -> T14_Scope.__safeDI_Builder<Built>
+
+                public init(t14Builder: @escaping (t14Builder_Values) -> T14_Scope.__safeDI_Builder<Built>) {
+                    self.t14Builder = t14Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t14Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T37_Scope {
+            nonisolated public struct t14Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t14Builder: (t14Builder_Values) -> T14_Scope.__safeDI_Builder<Built>
+
+                public init(t14Builder: @escaping (t14Builder_Values) -> T14_Scope.__safeDI_Builder<Built>) {
+                    self.t14Builder = t14Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t14Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T42_Scope {
+            nonisolated public struct t4Builder_Values {}
+
+            nonisolated public struct t13Builder_Values {
+                public let t4Builder: Instantiator<T4>
+            }
+
+            nonisolated public struct t18Builder_Values {
+                public let t4Builder: Instantiator<T4>
+                public let t13Builder: Instantiator<T13>
+            }
+
+            nonisolated public struct t46_Values {
+                public let t4Builder: Instantiator<T4>
+                public let t13Builder: Instantiator<T13>
+                public let t18Builder: Instantiator<T18>
+                public let t19Builder: Instantiator<T19>
+            }
+
+            nonisolated public struct t51Builder_Values {
+                public let t4Builder: Instantiator<T4>
+                public let t13Builder: Instantiator<T13>
+                public let t18Builder: Instantiator<T18>
+                public let t19Builder: Instantiator<T19>
+                public let t46: T46
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t4Builder: (t4Builder_Values) -> T4_Scope.__safeDI_Builder<Built>
+                public let t13Builder: (t13Builder_Values) -> T13_Scope.__safeDI_Builder<Built>
+                public let t18Builder: (t18Builder_Values) -> T18_Scope.__safeDI_Builder<Built>
+                public let t46: (t46_Values) -> T46_Scope.__safeDI_Builder<Built>
+                public let t51Builder: (t51Builder_Values) -> T51_Scope.__safeDI_Builder<Built>
+
+                public init(t4Builder: @escaping (t4Builder_Values) -> T4_Scope.__safeDI_Builder<Built>, t13Builder: @escaping (t13Builder_Values) -> T13_Scope.__safeDI_Builder<Built>, t18Builder: @escaping (t18Builder_Values) -> T18_Scope.__safeDI_Builder<Built>, t46: @escaping (t46_Values) -> T46_Scope.__safeDI_Builder<Built>, t51Builder: @escaping (t51Builder_Values) -> T51_Scope.__safeDI_Builder<Built>) {
+                    self.t4Builder = t4Builder
+                    self.t13Builder = t13Builder
+                    self.t18Builder = t18Builder
+                    self.t46 = t46
+                    self.t51Builder = t51Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t4Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t13Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t18Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t46 = { _ in .init(__safeDI_noScope: builder) }
+                    t51Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T20_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T25_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T14_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T26_Scope {
+            nonisolated public struct api_Values {}
+
+            nonisolated public struct t54_Values {
+                public let api: any Api
+            }
+
+            nonisolated public struct t33Builder_Values {
+                public let api: any Api
+                public let t54: T54
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let api: (api_Values) -> Built
+                public let t54: (t54_Values) -> T54_Scope.__safeDI_Builder<Built>
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(api: @escaping (api_Values) -> Built, t54: @escaping (t54_Values) -> T54_Scope.__safeDI_Builder<Built>, t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.api = api
+                    self.t54 = t54
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    api = { _ in builder() }
+                    t54 = { _ in .init(__safeDI_noScope: builder) }
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T4_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T13_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T18_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct t14_Values {
+                public let t33Builder: Instantiator<T33>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t14: (t14_Values) -> T14_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>, t14: @escaping (t14_Values) -> T14_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                    self.t14 = t14
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t14 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T46_Scope {
+            nonisolated public struct t16Builder_Values {}
+
+            nonisolated public struct t35_Values {
+                public let t16Builder: Instantiator<T16>
+            }
+
+            nonisolated public struct t57_Values {
+                public let t16Builder: Instantiator<T16>
+                public let t35: T35
+            }
+
+            nonisolated public struct t33Builder_Values {
+                public let t16Builder: Instantiator<T16>
+                public let t35: T35
+                public let t57: T57
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t16Builder: (t16Builder_Values) -> T16_Scope.__safeDI_Builder<Built>
+                public let t35: (t35_Values) -> T35_Scope.__safeDI_Builder<Built>
+                public let t57: (t57_Values) -> T57_Scope.__safeDI_Builder<Built>
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t16Builder: @escaping (t16Builder_Values) -> T16_Scope.__safeDI_Builder<Built>, t35: @escaping (t35_Values) -> T35_Scope.__safeDI_Builder<Built>, t57: @escaping (t57_Values) -> T57_Scope.__safeDI_Builder<Built>, t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t16Builder = t16Builder
+                    self.t35 = t35
+                    self.t57 = t57
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t16Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t35 = { _ in .init(__safeDI_noScope: builder) }
+                    t57 = { _ in .init(__safeDI_noScope: builder) }
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T51_Scope {
+            nonisolated public struct t15_Values {
+                public let t8Builder: Instantiator<T8>
+            }
+
+            nonisolated public struct t49_Values {
+                public let t8Builder: Instantiator<T8>
+                public let t15: T15
+            }
+
+            nonisolated public struct t33_Values {
+                public let t8Builder: Instantiator<T8>
+                public let t15: T15
+                public let t49: T49
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t15: (t15_Values) -> T15_Scope.__safeDI_Builder<Built>
+                public let t49: (t49_Values) -> T49_Scope.__safeDI_Builder<Built>
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t15: @escaping (t15_Values) -> T15_Scope.__safeDI_Builder<Built>, t49: @escaping (t49_Values) -> T49_Scope.__safeDI_Builder<Built>, t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t15 = t15
+                    self.t49 = t49
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t15 = { _ in .init(__safeDI_noScope: builder) }
+                    t49 = { _ in .init(__safeDI_noScope: builder) }
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T33_Scope {
+            nonisolated public struct api_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let api: (api_Values) -> Built
+
+                public init(api: @escaping (api_Values) -> Built) {
+                    self.api = api
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    api = { _ in builder() }
+                }
+            }
+        }
+
+        nonisolated public enum T54_Scope {
+            nonisolated public struct t1_Values {}
+
+            nonisolated public struct t17Builder_Values {
+                public let t1: T1
+            }
+
+            nonisolated public struct t24_Values {
+                public let t1: T1
+                public let t17Builder: Instantiator<T17>
+            }
+
+            nonisolated public struct t33_Values {
+                public let t1: T1
+                public let t17Builder: Instantiator<T17>
+                public let t24: T24
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t1: (t1_Values) -> T1_Scope.__safeDI_Builder<Built>
+                public let t17Builder: (t17Builder_Values) -> T17_Scope.__safeDI_Builder<Built>
+                public let t24: (t24_Values) -> T24_Scope.__safeDI_Builder<Built>
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t1: @escaping (t1_Values) -> T1_Scope.__safeDI_Builder<Built>, t17Builder: @escaping (t17Builder_Values) -> T17_Scope.__safeDI_Builder<Built>, t24: @escaping (t24_Values) -> T24_Scope.__safeDI_Builder<Built>, t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t1 = t1
+                    self.t17Builder = t17Builder
+                    self.t24 = t24
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t1 = { _ in .init(__safeDI_noScope: builder) }
+                    t17Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t24 = { _ in .init(__safeDI_noScope: builder) }
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T16_Scope {
+            nonisolated public struct t30_Values {}
+
+            nonisolated public struct t33_Values {
+                public let t30: T30
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t30: (t30_Values) -> T30_Scope.__safeDI_Builder<Built>
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t30: @escaping (t30_Values) -> T30_Scope.__safeDI_Builder<Built>, t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t30 = t30
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t30 = { _ in .init(__safeDI_noScope: builder) }
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T35_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct t59_Values {
+                public let t33: T33
+                public let bpi: any Bpi
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t59: (t59_Values) -> T59_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>, t59: @escaping (t59_Values) -> T59_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                    self.t59 = t59
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                    t59 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T57_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct t13_Values {
+                public let t33Builder: Instantiator<T33>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t13: (t13_Values) -> T13_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>, t13: @escaping (t13_Values) -> T13_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                    self.t13 = t13
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t13 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T15_Scope {
+            nonisolated public struct t23Builder_Values {
+                public let t21: T21
+            }
+
+            nonisolated public struct t27_Values {
+                public let t21: T21
+                public let t23Builder: Instantiator<T23>
+            }
+
+            nonisolated public struct t29Builder_Values {
+                public let t21: T21
+                public let t23Builder: Instantiator<T23>
+                public let t27: T27
+            }
+
+            nonisolated public struct t31Builder_Values {
+                public let t21: T21
+                public let t23Builder: Instantiator<T23>
+                public let t27: T27
+                public let t29Builder: Instantiator<T29>
+            }
+
+            nonisolated public struct t38_Values {
+                public let t21: T21
+                public let t23Builder: Instantiator<T23>
+                public let t27: T27
+                public let t29Builder: Instantiator<T29>
+                public let t31Builder: Instantiator<T31>
+            }
+
+            nonisolated public struct t45Builder_Values {
+                public let t21: T21
+                public let t23Builder: Instantiator<T23>
+                public let t27: T27
+                public let t29Builder: Instantiator<T29>
+                public let t31Builder: Instantiator<T31>
+                public let t38: T38
+            }
+
+            nonisolated public struct t59_Values {
+                public let t21: T21
+                public let t23Builder: Instantiator<T23>
+                public let t27: T27
+                public let t29Builder: Instantiator<T29>
+                public let t31Builder: Instantiator<T31>
+                public let t38: T38
+                public let t45Builder: Instantiator<T45>
+                public let t47Builder: Instantiator<T47>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t23Builder: (t23Builder_Values) -> T23_Scope.__safeDI_Builder<Built>
+                public let t27: (t27_Values) -> T27_Scope.__safeDI_Builder<Built>
+                public let t29Builder: (t29Builder_Values) -> T29_Scope.__safeDI_Builder<Built>
+                public let t31Builder: (t31Builder_Values) -> T31_Scope.__safeDI_Builder<Built>
+                public let t38: (t38_Values) -> T38_Scope.__safeDI_Builder<Built>
+                public let t45Builder: (t45Builder_Values) -> T45_Scope.__safeDI_Builder<Built>
+                public let t59: (t59_Values) -> T59_Scope.__safeDI_Builder<Built>
+
+                public init(t23Builder: @escaping (t23Builder_Values) -> T23_Scope.__safeDI_Builder<Built>, t27: @escaping (t27_Values) -> T27_Scope.__safeDI_Builder<Built>, t29Builder: @escaping (t29Builder_Values) -> T29_Scope.__safeDI_Builder<Built>, t31Builder: @escaping (t31Builder_Values) -> T31_Scope.__safeDI_Builder<Built>, t38: @escaping (t38_Values) -> T38_Scope.__safeDI_Builder<Built>, t45Builder: @escaping (t45Builder_Values) -> T45_Scope.__safeDI_Builder<Built>, t59: @escaping (t59_Values) -> T59_Scope.__safeDI_Builder<Built>) {
+                    self.t23Builder = t23Builder
+                    self.t27 = t27
+                    self.t29Builder = t29Builder
+                    self.t31Builder = t31Builder
+                    self.t38 = t38
+                    self.t45Builder = t45Builder
+                    self.t59 = t59
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t23Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t27 = { _ in .init(__safeDI_noScope: builder) }
+                    t29Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t31Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t38 = { _ in .init(__safeDI_noScope: builder) }
+                    t45Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t59 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T49_Scope {
+            nonisolated public struct t32Builder_Values {}
+
+            nonisolated public struct t31_Values {
+                public let t32Builder: Instantiator<T32>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t32Builder: (t32Builder_Values) -> T32_Scope.__safeDI_Builder<Built>
+                public let t31: (t31_Values) -> T31_Scope.__safeDI_Builder<Built>
+
+                public init(t32Builder: @escaping (t32Builder_Values) -> T32_Scope.__safeDI_Builder<Built>, t31: @escaping (t31_Values) -> T31_Scope.__safeDI_Builder<Built>) {
+                    self.t32Builder = t32Builder
+                    self.t31 = t31
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t32Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t31 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T1_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct t41Builder_Values {
+                public let t33Builder: Instantiator<T33>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t41Builder: (t41Builder_Values) -> T41_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>, t41Builder: @escaping (t41Builder_Values) -> T41_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                    self.t41Builder = t41Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t41Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T17_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T24_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct api_Values {
+                public let t33: T33
+            }
+
+            nonisolated public struct t40_Values {
+                public let t33: T33
+                public let api: any Api
+            }
+
+            nonisolated public struct t31_Values {
+                public let t33: T33
+                public let api: any Api
+                public let t40: T40
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let api: (api_Values) -> Built
+                public let t40: (t40_Values) -> T40_Scope.__safeDI_Builder<Built>
+                public let t31: (t31_Values) -> T31_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>, api: @escaping (api_Values) -> Built, t40: @escaping (t40_Values) -> T40_Scope.__safeDI_Builder<Built>, t31: @escaping (t31_Values) -> T31_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                    self.api = api
+                    self.t40 = t40
+                    self.t31 = t31
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                    api = { _ in builder() }
+                    t40 = { _ in .init(__safeDI_noScope: builder) }
+                    t31 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T30_Scope {
+            nonisolated public struct t50Builder_Values {}
+
+            nonisolated public struct t33Builder_Values {
+                public let t50Builder: Instantiator<T50>
+            }
+
+            nonisolated public struct t48Builder_Values {
+                public let t50Builder: Instantiator<T50>
+                public let t33Builder: Instantiator<T33>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t50Builder: (t50Builder_Values) -> T50_Scope.__safeDI_Builder<Built>
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t48Builder: (t48Builder_Values) -> T48_Scope.__safeDI_Builder<Built>
+
+                public init(t50Builder: @escaping (t50Builder_Values) -> T50_Scope.__safeDI_Builder<Built>, t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>, t48Builder: @escaping (t48Builder_Values) -> T48_Scope.__safeDI_Builder<Built>) {
+                    self.t50Builder = t50Builder
+                    self.t33Builder = t33Builder
+                    self.t48Builder = t48Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t50Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t48Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T59_Scope {
+            nonisolated public struct t40Builder_Values {}
+
+            nonisolated public struct t41_Values {
+                public let t40Builder: Instantiator<T40>
+            }
+
+            nonisolated public struct t33_Values {
+                public let t40Builder: Instantiator<T40>
+                public let t41: T41
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t40Builder: (t40Builder_Values) -> T40_Scope.__safeDI_Builder<Built>
+                public let t41: (t41_Values) -> T41_Scope.__safeDI_Builder<Built>
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t40Builder: @escaping (t40Builder_Values) -> T40_Scope.__safeDI_Builder<Built>, t41: @escaping (t41_Values) -> T41_Scope.__safeDI_Builder<Built>, t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t40Builder = t40Builder
+                    self.t41 = t41
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t40Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t41 = { _ in .init(__safeDI_noScope: builder) }
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T23_Scope {
+            nonisolated public struct t36_Values {}
+
+            nonisolated public struct t40_Values {
+                public let t36: T36
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t36: (t36_Values) -> T36_Scope.__safeDI_Builder<Built>
+                public let t40: (t40_Values) -> T40_Scope.__safeDI_Builder<Built>
+
+                public init(t36: @escaping (t36_Values) -> T36_Scope.__safeDI_Builder<Built>, t40: @escaping (t40_Values) -> T40_Scope.__safeDI_Builder<Built>) {
+                    self.t36 = t36
+                    self.t40 = t40
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t36 = { _ in .init(__safeDI_noScope: builder) }
+                    t40 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T27_Scope {
+            nonisolated public struct t40Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t40Builder: (t40Builder_Values) -> T40_Scope.__safeDI_Builder<Built>
+
+                public init(t40Builder: @escaping (t40Builder_Values) -> T40_Scope.__safeDI_Builder<Built>) {
+                    self.t40Builder = t40Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t40Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T29_Scope {
+            nonisolated public struct t48_Values {}
+
+            nonisolated public struct t33Builder_Values {
+                public let t48: T48
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t48: (t48_Values) -> T48_Scope.__safeDI_Builder<Built>
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t48: @escaping (t48_Values) -> T48_Scope.__safeDI_Builder<Built>, t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t48 = t48
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t48 = { _ in .init(__safeDI_noScope: builder) }
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T31_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T38_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct t48Builder_Values {
+                public let t33: T33
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t48Builder: (t48Builder_Values) -> T48_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>, t48Builder: @escaping (t48Builder_Values) -> T48_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                    self.t48Builder = t48Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                    t48Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T45_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct t40Builder_Values {
+                public let t33: T33
+            }
+
+            nonisolated public struct t31Builder_Values {
+                public let t33: T33
+                public let t40Builder: Instantiator<T40>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t40Builder: (t40Builder_Values) -> T40_Scope.__safeDI_Builder<Built>
+                public let t31Builder: (t31Builder_Values) -> T31_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>, t40Builder: @escaping (t40Builder_Values) -> T40_Scope.__safeDI_Builder<Built>, t31Builder: @escaping (t31Builder_Values) -> T31_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                    self.t40Builder = t40Builder
+                    self.t31Builder = t31Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                    t40Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t31Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T32_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T41_Scope {
+            nonisolated public struct t9_Values {}
+
+            nonisolated public struct t34Builder_Values {
+                public let t9: T9
+                public let t11Builder: Instantiator<T11>
+                public let t22: T22
+            }
+
+            nonisolated public struct api_Values {
+                public let t9: T9
+                public let t11Builder: Instantiator<T11>
+                public let t22: T22
+                public let t34Builder: Instantiator<T34>
+            }
+
+            nonisolated public struct t44Builder_Values {
+                public let t9: T9
+                public let t11Builder: Instantiator<T11>
+                public let t22: T22
+                public let t34Builder: Instantiator<T34>
+                public let api: any Api
+            }
+
+            nonisolated public struct t52Builder_Values {
+                public let t9: T9
+                public let t11Builder: Instantiator<T11>
+                public let t22: T22
+                public let t34Builder: Instantiator<T34>
+                public let api: any Api
+                public let t44Builder: Instantiator<T44>
+            }
+
+            nonisolated public struct t53Builder_Values {
+                public let t9: T9
+                public let t11Builder: Instantiator<T11>
+                public let t22: T22
+                public let t34Builder: Instantiator<T34>
+                public let api: any Api
+                public let t44Builder: Instantiator<T44>
+                public let t52Builder: Instantiator<T52>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t9: (t9_Values) -> T9_Scope.__safeDI_Builder<Built>
+                public let t34Builder: (t34Builder_Values) -> T34_Scope.__safeDI_Builder<Built>
+                public let api: (api_Values) -> Built
+                public let t44Builder: (t44Builder_Values) -> T44_Scope.__safeDI_Builder<Built>
+                public let t52Builder: (t52Builder_Values) -> T52_Scope.__safeDI_Builder<Built>
+                public let t53Builder: (t53Builder_Values) -> T53_Scope.__safeDI_Builder<Built>
+
+                public init(t9: @escaping (t9_Values) -> T9_Scope.__safeDI_Builder<Built>, t34Builder: @escaping (t34Builder_Values) -> T34_Scope.__safeDI_Builder<Built>, api: @escaping (api_Values) -> Built, t44Builder: @escaping (t44Builder_Values) -> T44_Scope.__safeDI_Builder<Built>, t52Builder: @escaping (t52Builder_Values) -> T52_Scope.__safeDI_Builder<Built>, t53Builder: @escaping (t53Builder_Values) -> T53_Scope.__safeDI_Builder<Built>) {
+                    self.t9 = t9
+                    self.t34Builder = t34Builder
+                    self.api = api
+                    self.t44Builder = t44Builder
+                    self.t52Builder = t52Builder
+                    self.t53Builder = t53Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t9 = { _ in .init(__safeDI_noScope: builder) }
+                    t34Builder = { _ in .init(__safeDI_noScope: builder) }
+                    api = { _ in builder() }
+                    t44Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t52Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t53Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T40_Scope {
+            nonisolated public struct t33_Values {
+                public let bpi: any Bpi
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T50_Scope {
+            nonisolated public struct t6_Values {}
+
+            nonisolated public struct t33Builder_Values {
+                public let t6: T6
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t6: (t6_Values) -> T6_Scope.__safeDI_Builder<Built>
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t6: @escaping (t6_Values) -> T6_Scope.__safeDI_Builder<Built>, t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t6 = t6
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t6 = { _ in .init(__safeDI_noScope: builder) }
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T48_Scope {
+            nonisolated public struct t33_Values {
+                public let t3Builder: Instantiator<T3>
+            }
+
+            nonisolated public struct t34Builder_Values {
+                public let t3Builder: Instantiator<T3>
+                public let t33: T33
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t34Builder: (t34Builder_Values) -> T34_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>, t34Builder: @escaping (t34Builder_Values) -> T34_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                    self.t34Builder = t34Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                    t34Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T36_Scope {
+            nonisolated public struct t6_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t6: (t6_Values) -> T6_Scope.__safeDI_Builder<Built>
+
+                public init(t6: @escaping (t6_Values) -> T6_Scope.__safeDI_Builder<Built>) {
+                    self.t6 = t6
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t6 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T9_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct t13Builder_Values {
+                public let t33Builder: Instantiator<T33>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t13Builder: (t13Builder_Values) -> T13_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>, t13Builder: @escaping (t13Builder_Values) -> T13_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                    self.t13Builder = t13Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t13Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T34_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T44_Scope {
+            nonisolated public struct t31Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t31Builder: (t31Builder_Values) -> T31_Scope.__safeDI_Builder<Built>
+
+                public init(t31Builder: @escaping (t31Builder_Values) -> T31_Scope.__safeDI_Builder<Built>) {
+                    self.t31Builder = t31Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t31Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T52_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T53_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct api_Values {
+                public let t33Builder: Instantiator<T33>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let api: (api_Values) -> Built
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>, api: @escaping (api_Values) -> Built) {
+                    self.t33Builder = t33Builder
+                    self.api = api
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                    api = { _ in builder() }
+                }
+            }
+        }
+
+        nonisolated public enum T6_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+    }
+
+    nonisolated public enum SafeDIScope_Bpi {
+        nonisolated public struct t39_Values {}
+
+        nonisolated public struct __safeDI_Builder<Built> {
+            public let t39: (t39_Values) -> T39_Scope.__safeDI_Builder<Built>
+
+            public init(t39: @escaping (t39_Values) -> T39_Scope.__safeDI_Builder<Built>) {
+                self.t39 = t39
+            }
+
+            public init(__safeDI_noScope builder: @escaping () -> Built) {
+                t39 = { _ in .init(__safeDI_noScope: builder) }
+            }
+        }
+
+        nonisolated public enum T39_Scope {
+            nonisolated public struct t10_Values {
+                public let t7Builder: Instantiator<T7>
+            }
+
+            nonisolated public struct t55Builder_Values {
+                public let t7Builder: Instantiator<T7>
+                public let t10: T10
+            }
+
+            nonisolated public struct t58Builder_Values {
+                public let t7Builder: Instantiator<T7>
+                public let t10: T10
+                public let t55Builder: Instantiator<T55>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t10: (t10_Values) -> T10_Scope.__safeDI_Builder<Built>
+                public let t55Builder: (t55Builder_Values) -> T55_Scope.__safeDI_Builder<Built>
+                public let t58Builder: (t58Builder_Values) -> T58_Scope.__safeDI_Builder<Built>
+
+                public init(t10: @escaping (t10_Values) -> T10_Scope.__safeDI_Builder<Built>, t55Builder: @escaping (t55Builder_Values) -> T55_Scope.__safeDI_Builder<Built>, t58Builder: @escaping (t58Builder_Values) -> T58_Scope.__safeDI_Builder<Built>) {
+                    self.t10 = t10
+                    self.t55Builder = t55Builder
+                    self.t58Builder = t58Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t10 = { _ in .init(__safeDI_noScope: builder) }
+                    t55Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t58Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T10_Scope {
+            nonisolated public struct t5_Values {
+                public let t2Builder: Instantiator<T2>
+            }
+
+            nonisolated public struct t43Builder_Values {
+                public let t2Builder: Instantiator<T2>
+                public let t5: T5
+                public let t28Builder: Instantiator<T28>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t5: (t5_Values) -> T5_Scope.__safeDI_Builder<Built>
+                public let t43Builder: (t43Builder_Values) -> T43_Scope.__safeDI_Builder<Built>
+
+                public init(t5: @escaping (t5_Values) -> T5_Scope.__safeDI_Builder<Built>, t43Builder: @escaping (t43Builder_Values) -> T43_Scope.__safeDI_Builder<Built>) {
+                    self.t5 = t5
+                    self.t43Builder = t43Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t5 = { _ in .init(__safeDI_noScope: builder) }
+                    t43Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T55_Scope {
+            nonisolated public struct t56Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t56Builder: (t56Builder_Values) -> T56_Scope.__safeDI_Builder<Built>
+
+                public init(t56Builder: @escaping (t56Builder_Values) -> T56_Scope.__safeDI_Builder<Built>) {
+                    self.t56Builder = t56Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t56Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T58_Scope {
+            nonisolated public struct t37_Values {
+                public let t12Builder: Instantiator<T12>
+            }
+
+            nonisolated public struct t42Builder_Values {
+                public let t12Builder: Instantiator<T12>
+                public let t37: T37
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t37: (t37_Values) -> T37_Scope.__safeDI_Builder<Built>
+                public let t42Builder: (t42Builder_Values) -> T42_Scope.__safeDI_Builder<Built>
+
+                public init(t37: @escaping (t37_Values) -> T37_Scope.__safeDI_Builder<Built>, t42Builder: @escaping (t42Builder_Values) -> T42_Scope.__safeDI_Builder<Built>) {
+                    self.t37 = t37
+                    self.t42Builder = t42Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t37 = { _ in .init(__safeDI_noScope: builder) }
+                    t42Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T5_Scope {
+            nonisolated public struct t20_Values {}
+
+            nonisolated public struct t25Builder_Values {
+                public let t20: T20
+            }
+
+            nonisolated public struct t14_Values {
+                public let t20: T20
+                public let t25Builder: Instantiator<T25>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t20: (t20_Values) -> T20_Scope.__safeDI_Builder<Built>
+                public let t25Builder: (t25Builder_Values) -> T25_Scope.__safeDI_Builder<Built>
+                public let t14: (t14_Values) -> T14_Scope.__safeDI_Builder<Built>
+
+                public init(t20: @escaping (t20_Values) -> T20_Scope.__safeDI_Builder<Built>, t25Builder: @escaping (t25Builder_Values) -> T25_Scope.__safeDI_Builder<Built>, t14: @escaping (t14_Values) -> T14_Scope.__safeDI_Builder<Built>) {
+                    self.t20 = t20
+                    self.t25Builder = t25Builder
+                    self.t14 = t14
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t20 = { _ in .init(__safeDI_noScope: builder) }
+                    t25Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t14 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T43_Scope {
+            nonisolated public struct t26_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t26: (t26_Values) -> T26_Scope.__safeDI_Builder<Built>
+
+                public init(t26: @escaping (t26_Values) -> T26_Scope.__safeDI_Builder<Built>) {
+                    self.t26 = t26
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t26 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T56_Scope {
+            nonisolated public struct t14Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t14Builder: (t14Builder_Values) -> T14_Scope.__safeDI_Builder<Built>
+
+                public init(t14Builder: @escaping (t14Builder_Values) -> T14_Scope.__safeDI_Builder<Built>) {
+                    self.t14Builder = t14Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t14Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T37_Scope {
+            nonisolated public struct t14Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t14Builder: (t14Builder_Values) -> T14_Scope.__safeDI_Builder<Built>
+
+                public init(t14Builder: @escaping (t14Builder_Values) -> T14_Scope.__safeDI_Builder<Built>) {
+                    self.t14Builder = t14Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t14Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T42_Scope {
+            nonisolated public struct t4Builder_Values {}
+
+            nonisolated public struct t13Builder_Values {
+                public let t4Builder: Instantiator<T4>
+            }
+
+            nonisolated public struct t18Builder_Values {
+                public let t4Builder: Instantiator<T4>
+                public let t13Builder: Instantiator<T13>
+            }
+
+            nonisolated public struct t46_Values {
+                public let t4Builder: Instantiator<T4>
+                public let t13Builder: Instantiator<T13>
+                public let t18Builder: Instantiator<T18>
+                public let t19Builder: Instantiator<T19>
+            }
+
+            nonisolated public struct t51Builder_Values {
+                public let t4Builder: Instantiator<T4>
+                public let t13Builder: Instantiator<T13>
+                public let t18Builder: Instantiator<T18>
+                public let t19Builder: Instantiator<T19>
+                public let t46: T46
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t4Builder: (t4Builder_Values) -> T4_Scope.__safeDI_Builder<Built>
+                public let t13Builder: (t13Builder_Values) -> T13_Scope.__safeDI_Builder<Built>
+                public let t18Builder: (t18Builder_Values) -> T18_Scope.__safeDI_Builder<Built>
+                public let t46: (t46_Values) -> T46_Scope.__safeDI_Builder<Built>
+                public let t51Builder: (t51Builder_Values) -> T51_Scope.__safeDI_Builder<Built>
+
+                public init(t4Builder: @escaping (t4Builder_Values) -> T4_Scope.__safeDI_Builder<Built>, t13Builder: @escaping (t13Builder_Values) -> T13_Scope.__safeDI_Builder<Built>, t18Builder: @escaping (t18Builder_Values) -> T18_Scope.__safeDI_Builder<Built>, t46: @escaping (t46_Values) -> T46_Scope.__safeDI_Builder<Built>, t51Builder: @escaping (t51Builder_Values) -> T51_Scope.__safeDI_Builder<Built>) {
+                    self.t4Builder = t4Builder
+                    self.t13Builder = t13Builder
+                    self.t18Builder = t18Builder
+                    self.t46 = t46
+                    self.t51Builder = t51Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t4Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t13Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t18Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t46 = { _ in .init(__safeDI_noScope: builder) }
+                    t51Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T20_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T25_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T14_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T26_Scope {
+            nonisolated public struct t54_Values {
+                public let api: any Api
+            }
+
+            nonisolated public struct t33Builder_Values {
+                public let api: any Api
+                public let t54: T54
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t54: (t54_Values) -> T54_Scope.__safeDI_Builder<Built>
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t54: @escaping (t54_Values) -> T54_Scope.__safeDI_Builder<Built>, t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t54 = t54
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t54 = { _ in .init(__safeDI_noScope: builder) }
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T4_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T13_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T18_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct t14_Values {
+                public let t33Builder: Instantiator<T33>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t14: (t14_Values) -> T14_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>, t14: @escaping (t14_Values) -> T14_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                    self.t14 = t14
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t14 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T46_Scope {
+            nonisolated public struct t16Builder_Values {}
+
+            nonisolated public struct t35_Values {
+                public let t16Builder: Instantiator<T16>
+            }
+
+            nonisolated public struct t57_Values {
+                public let t16Builder: Instantiator<T16>
+                public let t35: T35
+            }
+
+            nonisolated public struct t33Builder_Values {
+                public let t16Builder: Instantiator<T16>
+                public let t35: T35
+                public let t57: T57
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t16Builder: (t16Builder_Values) -> T16_Scope.__safeDI_Builder<Built>
+                public let t35: (t35_Values) -> T35_Scope.__safeDI_Builder<Built>
+                public let t57: (t57_Values) -> T57_Scope.__safeDI_Builder<Built>
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t16Builder: @escaping (t16Builder_Values) -> T16_Scope.__safeDI_Builder<Built>, t35: @escaping (t35_Values) -> T35_Scope.__safeDI_Builder<Built>, t57: @escaping (t57_Values) -> T57_Scope.__safeDI_Builder<Built>, t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t16Builder = t16Builder
+                    self.t35 = t35
+                    self.t57 = t57
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t16Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t35 = { _ in .init(__safeDI_noScope: builder) }
+                    t57 = { _ in .init(__safeDI_noScope: builder) }
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T51_Scope {
+            nonisolated public struct t15_Values {
+                public let t8Builder: Instantiator<T8>
+            }
+
+            nonisolated public struct t49_Values {
+                public let t8Builder: Instantiator<T8>
+                public let t15: T15
+            }
+
+            nonisolated public struct t33_Values {
+                public let t8Builder: Instantiator<T8>
+                public let t15: T15
+                public let t49: T49
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t15: (t15_Values) -> T15_Scope.__safeDI_Builder<Built>
+                public let t49: (t49_Values) -> T49_Scope.__safeDI_Builder<Built>
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t15: @escaping (t15_Values) -> T15_Scope.__safeDI_Builder<Built>, t49: @escaping (t49_Values) -> T49_Scope.__safeDI_Builder<Built>, t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t15 = t15
+                    self.t49 = t49
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t15 = { _ in .init(__safeDI_noScope: builder) }
+                    t49 = { _ in .init(__safeDI_noScope: builder) }
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T33_Scope {
+            nonisolated public struct bpi_Values {
+                public let api: any Api
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let bpi: (bpi_Values) -> Built
+
+                public init(bpi: @escaping (bpi_Values) -> Built) {
+                    self.bpi = bpi
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    bpi = { _ in builder() }
+                }
+            }
+        }
+
+        nonisolated public enum T54_Scope {
+            nonisolated public struct t1_Values {}
+
+            nonisolated public struct t17Builder_Values {
+                public let t1: T1
+            }
+
+            nonisolated public struct t24_Values {
+                public let t1: T1
+                public let t17Builder: Instantiator<T17>
+            }
+
+            nonisolated public struct t33_Values {
+                public let t1: T1
+                public let t17Builder: Instantiator<T17>
+                public let t24: T24
+            }
+
+            nonisolated public struct bpi_Values {
+                public let t1: T1
+                public let t17Builder: Instantiator<T17>
+                public let t24: T24
+                public let t33: T33
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t1: (t1_Values) -> T1_Scope.__safeDI_Builder<Built>
+                public let t17Builder: (t17Builder_Values) -> T17_Scope.__safeDI_Builder<Built>
+                public let t24: (t24_Values) -> T24_Scope.__safeDI_Builder<Built>
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let bpi: (bpi_Values) -> Built
+
+                public init(t1: @escaping (t1_Values) -> T1_Scope.__safeDI_Builder<Built>, t17Builder: @escaping (t17Builder_Values) -> T17_Scope.__safeDI_Builder<Built>, t24: @escaping (t24_Values) -> T24_Scope.__safeDI_Builder<Built>, t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>, bpi: @escaping (bpi_Values) -> Built) {
+                    self.t1 = t1
+                    self.t17Builder = t17Builder
+                    self.t24 = t24
+                    self.t33 = t33
+                    self.bpi = bpi
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t1 = { _ in .init(__safeDI_noScope: builder) }
+                    t17Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t24 = { _ in .init(__safeDI_noScope: builder) }
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                    bpi = { _ in builder() }
+                }
+            }
+        }
+
+        nonisolated public enum T16_Scope {
+            nonisolated public struct t30_Values {}
+
+            nonisolated public struct t33_Values {
+                public let t30: T30
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t30: (t30_Values) -> T30_Scope.__safeDI_Builder<Built>
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t30: @escaping (t30_Values) -> T30_Scope.__safeDI_Builder<Built>, t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t30 = t30
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t30 = { _ in .init(__safeDI_noScope: builder) }
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T35_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct bpi_Values {
+                public let t33: T33
+            }
+
+            nonisolated public struct t59_Values {
+                public let t33: T33
+                public let bpi: any Bpi
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let bpi: (bpi_Values) -> Built
+                public let t59: (t59_Values) -> T59_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>, bpi: @escaping (bpi_Values) -> Built, t59: @escaping (t59_Values) -> T59_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                    self.bpi = bpi
+                    self.t59 = t59
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                    bpi = { _ in builder() }
+                    t59 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T57_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct t13_Values {
+                public let t33Builder: Instantiator<T33>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t13: (t13_Values) -> T13_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>, t13: @escaping (t13_Values) -> T13_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                    self.t13 = t13
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t13 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T15_Scope {
+            nonisolated public struct t23Builder_Values {
+                public let t21: T21
+            }
+
+            nonisolated public struct t27_Values {
+                public let t21: T21
+                public let t23Builder: Instantiator<T23>
+            }
+
+            nonisolated public struct t29Builder_Values {
+                public let t21: T21
+                public let t23Builder: Instantiator<T23>
+                public let t27: T27
+            }
+
+            nonisolated public struct t31Builder_Values {
+                public let t21: T21
+                public let t23Builder: Instantiator<T23>
+                public let t27: T27
+                public let t29Builder: Instantiator<T29>
+            }
+
+            nonisolated public struct t38_Values {
+                public let t21: T21
+                public let t23Builder: Instantiator<T23>
+                public let t27: T27
+                public let t29Builder: Instantiator<T29>
+                public let t31Builder: Instantiator<T31>
+            }
+
+            nonisolated public struct t45Builder_Values {
+                public let t21: T21
+                public let t23Builder: Instantiator<T23>
+                public let t27: T27
+                public let t29Builder: Instantiator<T29>
+                public let t31Builder: Instantiator<T31>
+                public let t38: T38
+            }
+
+            nonisolated public struct t59_Values {
+                public let t21: T21
+                public let t23Builder: Instantiator<T23>
+                public let t27: T27
+                public let t29Builder: Instantiator<T29>
+                public let t31Builder: Instantiator<T31>
+                public let t38: T38
+                public let t45Builder: Instantiator<T45>
+                public let t47Builder: Instantiator<T47>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t23Builder: (t23Builder_Values) -> T23_Scope.__safeDI_Builder<Built>
+                public let t27: (t27_Values) -> T27_Scope.__safeDI_Builder<Built>
+                public let t29Builder: (t29Builder_Values) -> T29_Scope.__safeDI_Builder<Built>
+                public let t31Builder: (t31Builder_Values) -> T31_Scope.__safeDI_Builder<Built>
+                public let t38: (t38_Values) -> T38_Scope.__safeDI_Builder<Built>
+                public let t45Builder: (t45Builder_Values) -> T45_Scope.__safeDI_Builder<Built>
+                public let t59: (t59_Values) -> T59_Scope.__safeDI_Builder<Built>
+
+                public init(t23Builder: @escaping (t23Builder_Values) -> T23_Scope.__safeDI_Builder<Built>, t27: @escaping (t27_Values) -> T27_Scope.__safeDI_Builder<Built>, t29Builder: @escaping (t29Builder_Values) -> T29_Scope.__safeDI_Builder<Built>, t31Builder: @escaping (t31Builder_Values) -> T31_Scope.__safeDI_Builder<Built>, t38: @escaping (t38_Values) -> T38_Scope.__safeDI_Builder<Built>, t45Builder: @escaping (t45Builder_Values) -> T45_Scope.__safeDI_Builder<Built>, t59: @escaping (t59_Values) -> T59_Scope.__safeDI_Builder<Built>) {
+                    self.t23Builder = t23Builder
+                    self.t27 = t27
+                    self.t29Builder = t29Builder
+                    self.t31Builder = t31Builder
+                    self.t38 = t38
+                    self.t45Builder = t45Builder
+                    self.t59 = t59
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t23Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t27 = { _ in .init(__safeDI_noScope: builder) }
+                    t29Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t31Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t38 = { _ in .init(__safeDI_noScope: builder) }
+                    t45Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t59 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T49_Scope {
+            nonisolated public struct t32Builder_Values {}
+
+            nonisolated public struct t31_Values {
+                public let t32Builder: Instantiator<T32>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t32Builder: (t32Builder_Values) -> T32_Scope.__safeDI_Builder<Built>
+                public let t31: (t31_Values) -> T31_Scope.__safeDI_Builder<Built>
+
+                public init(t32Builder: @escaping (t32Builder_Values) -> T32_Scope.__safeDI_Builder<Built>, t31: @escaping (t31_Values) -> T31_Scope.__safeDI_Builder<Built>) {
+                    self.t32Builder = t32Builder
+                    self.t31 = t31
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t32Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t31 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T1_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct t41Builder_Values {
+                public let t33Builder: Instantiator<T33>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t41Builder: (t41Builder_Values) -> T41_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>, t41Builder: @escaping (t41Builder_Values) -> T41_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                    self.t41Builder = t41Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t41Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T17_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T24_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct t40_Values {
+                public let t33: T33
+                public let api: any Api
+            }
+
+            nonisolated public struct t31_Values {
+                public let t33: T33
+                public let api: any Api
+                public let t40: T40
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t40: (t40_Values) -> T40_Scope.__safeDI_Builder<Built>
+                public let t31: (t31_Values) -> T31_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>, t40: @escaping (t40_Values) -> T40_Scope.__safeDI_Builder<Built>, t31: @escaping (t31_Values) -> T31_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                    self.t40 = t40
+                    self.t31 = t31
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                    t40 = { _ in .init(__safeDI_noScope: builder) }
+                    t31 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T30_Scope {
+            nonisolated public struct t50Builder_Values {}
+
+            nonisolated public struct t33Builder_Values {
+                public let t50Builder: Instantiator<T50>
+            }
+
+            nonisolated public struct t48Builder_Values {
+                public let t50Builder: Instantiator<T50>
+                public let t33Builder: Instantiator<T33>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t50Builder: (t50Builder_Values) -> T50_Scope.__safeDI_Builder<Built>
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t48Builder: (t48Builder_Values) -> T48_Scope.__safeDI_Builder<Built>
+
+                public init(t50Builder: @escaping (t50Builder_Values) -> T50_Scope.__safeDI_Builder<Built>, t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>, t48Builder: @escaping (t48Builder_Values) -> T48_Scope.__safeDI_Builder<Built>) {
+                    self.t50Builder = t50Builder
+                    self.t33Builder = t33Builder
+                    self.t48Builder = t48Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t50Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t48Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T59_Scope {
+            nonisolated public struct t40Builder_Values {}
+
+            nonisolated public struct t41_Values {
+                public let t40Builder: Instantiator<T40>
+            }
+
+            nonisolated public struct t33_Values {
+                public let t40Builder: Instantiator<T40>
+                public let t41: T41
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t40Builder: (t40Builder_Values) -> T40_Scope.__safeDI_Builder<Built>
+                public let t41: (t41_Values) -> T41_Scope.__safeDI_Builder<Built>
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t40Builder: @escaping (t40Builder_Values) -> T40_Scope.__safeDI_Builder<Built>, t41: @escaping (t41_Values) -> T41_Scope.__safeDI_Builder<Built>, t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t40Builder = t40Builder
+                    self.t41 = t41
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t40Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t41 = { _ in .init(__safeDI_noScope: builder) }
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T23_Scope {
+            nonisolated public struct t36_Values {}
+
+            nonisolated public struct t40_Values {
+                public let t36: T36
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t36: (t36_Values) -> T36_Scope.__safeDI_Builder<Built>
+                public let t40: (t40_Values) -> T40_Scope.__safeDI_Builder<Built>
+
+                public init(t36: @escaping (t36_Values) -> T36_Scope.__safeDI_Builder<Built>, t40: @escaping (t40_Values) -> T40_Scope.__safeDI_Builder<Built>) {
+                    self.t36 = t36
+                    self.t40 = t40
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t36 = { _ in .init(__safeDI_noScope: builder) }
+                    t40 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T27_Scope {
+            nonisolated public struct t40Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t40Builder: (t40Builder_Values) -> T40_Scope.__safeDI_Builder<Built>
+
+                public init(t40Builder: @escaping (t40Builder_Values) -> T40_Scope.__safeDI_Builder<Built>) {
+                    self.t40Builder = t40Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t40Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T29_Scope {
+            nonisolated public struct t48_Values {}
+
+            nonisolated public struct t33Builder_Values {
+                public let t48: T48
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t48: (t48_Values) -> T48_Scope.__safeDI_Builder<Built>
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t48: @escaping (t48_Values) -> T48_Scope.__safeDI_Builder<Built>, t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t48 = t48
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t48 = { _ in .init(__safeDI_noScope: builder) }
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T31_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T38_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct t48Builder_Values {
+                public let t33: T33
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t48Builder: (t48Builder_Values) -> T48_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>, t48Builder: @escaping (t48Builder_Values) -> T48_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                    self.t48Builder = t48Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                    t48Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T45_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct t40Builder_Values {
+                public let t33: T33
+            }
+
+            nonisolated public struct t31Builder_Values {
+                public let t33: T33
+                public let t40Builder: Instantiator<T40>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t40Builder: (t40Builder_Values) -> T40_Scope.__safeDI_Builder<Built>
+                public let t31Builder: (t31Builder_Values) -> T31_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>, t40Builder: @escaping (t40Builder_Values) -> T40_Scope.__safeDI_Builder<Built>, t31Builder: @escaping (t31Builder_Values) -> T31_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                    self.t40Builder = t40Builder
+                    self.t31Builder = t31Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                    t40Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t31Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T32_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct bpi_Values {
+                public let t33: T33
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let bpi: (bpi_Values) -> Built
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>, bpi: @escaping (bpi_Values) -> Built) {
+                    self.t33 = t33
+                    self.bpi = bpi
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                    bpi = { _ in builder() }
+                }
+            }
+        }
+
+        nonisolated public enum T41_Scope {
+            nonisolated public struct t9_Values {}
+
+            nonisolated public struct t34Builder_Values {
+                public let t9: T9
+                public let t11Builder: Instantiator<T11>
+                public let t22: T22
+            }
+
+            nonisolated public struct t44Builder_Values {
+                public let t9: T9
+                public let t11Builder: Instantiator<T11>
+                public let t22: T22
+                public let t34Builder: Instantiator<T34>
+                public let api: any Api
+            }
+
+            nonisolated public struct t52Builder_Values {
+                public let t9: T9
+                public let t11Builder: Instantiator<T11>
+                public let t22: T22
+                public let t34Builder: Instantiator<T34>
+                public let api: any Api
+                public let t44Builder: Instantiator<T44>
+            }
+
+            nonisolated public struct t53Builder_Values {
+                public let t9: T9
+                public let t11Builder: Instantiator<T11>
+                public let t22: T22
+                public let t34Builder: Instantiator<T34>
+                public let api: any Api
+                public let t44Builder: Instantiator<T44>
+                public let t52Builder: Instantiator<T52>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t9: (t9_Values) -> T9_Scope.__safeDI_Builder<Built>
+                public let t34Builder: (t34Builder_Values) -> T34_Scope.__safeDI_Builder<Built>
+                public let t44Builder: (t44Builder_Values) -> T44_Scope.__safeDI_Builder<Built>
+                public let t52Builder: (t52Builder_Values) -> T52_Scope.__safeDI_Builder<Built>
+                public let t53Builder: (t53Builder_Values) -> T53_Scope.__safeDI_Builder<Built>
+
+                public init(t9: @escaping (t9_Values) -> T9_Scope.__safeDI_Builder<Built>, t34Builder: @escaping (t34Builder_Values) -> T34_Scope.__safeDI_Builder<Built>, t44Builder: @escaping (t44Builder_Values) -> T44_Scope.__safeDI_Builder<Built>, t52Builder: @escaping (t52Builder_Values) -> T52_Scope.__safeDI_Builder<Built>, t53Builder: @escaping (t53Builder_Values) -> T53_Scope.__safeDI_Builder<Built>) {
+                    self.t9 = t9
+                    self.t34Builder = t34Builder
+                    self.t44Builder = t44Builder
+                    self.t52Builder = t52Builder
+                    self.t53Builder = t53Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t9 = { _ in .init(__safeDI_noScope: builder) }
+                    t34Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t44Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t52Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t53Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T40_Scope {
+            nonisolated public struct bpi_Values {}
+
+            nonisolated public struct t33_Values {
+                public let bpi: any Bpi
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let bpi: (bpi_Values) -> Built
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(bpi: @escaping (bpi_Values) -> Built, t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.bpi = bpi
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    bpi = { _ in builder() }
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T50_Scope {
+            nonisolated public struct t6_Values {}
+
+            nonisolated public struct t33Builder_Values {
+                public let t6: T6
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t6: (t6_Values) -> T6_Scope.__safeDI_Builder<Built>
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t6: @escaping (t6_Values) -> T6_Scope.__safeDI_Builder<Built>, t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t6 = t6
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t6 = { _ in .init(__safeDI_noScope: builder) }
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T48_Scope {
+            nonisolated public struct t33_Values {
+                public let t3Builder: Instantiator<T3>
+            }
+
+            nonisolated public struct t34Builder_Values {
+                public let t3Builder: Instantiator<T3>
+                public let t33: T33
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t34Builder: (t34Builder_Values) -> T34_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>, t34Builder: @escaping (t34Builder_Values) -> T34_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                    self.t34Builder = t34Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                    t34Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T36_Scope {
+            nonisolated public struct t6_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t6: (t6_Values) -> T6_Scope.__safeDI_Builder<Built>
+
+                public init(t6: @escaping (t6_Values) -> T6_Scope.__safeDI_Builder<Built>) {
+                    self.t6 = t6
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t6 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T9_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct t13Builder_Values {
+                public let t33Builder: Instantiator<T33>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let t13Builder: (t13Builder_Values) -> T13_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>, t13Builder: @escaping (t13Builder_Values) -> T13_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                    self.t13Builder = t13Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                    t13Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T34_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33 = t33
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T44_Scope {
+            nonisolated public struct t31Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t31Builder: (t31Builder_Values) -> T31_Scope.__safeDI_Builder<Built>
+
+                public init(t31Builder: @escaping (t31Builder_Values) -> T31_Scope.__safeDI_Builder<Built>) {
+                    self.t31Builder = t31Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t31Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T52_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T53_Scope {
+            nonisolated public struct t33Builder_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33Builder: (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>
+
+                public init(t33Builder: @escaping (t33Builder_Values) -> T33_Scope.__safeDI_Builder<Built>) {
+                    self.t33Builder = t33Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum T6_Scope {
+            nonisolated public struct t33_Values {}
+
+            nonisolated public struct bpi_Values {
+                public let t33: T33
+                public let t8: T8
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let t33: (t33_Values) -> T33_Scope.__safeDI_Builder<Built>
+                public let bpi: (bpi_Values) -> Built
+
+                public init(t33: @escaping (t33_Values) -> T33_Scope.__safeDI_Builder<Built>, bpi: @escaping (bpi_Values) -> Built) {
+                    self.t33 = t33
+                    self.bpi = bpi
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    t33 = { _ in .init(__safeDI_noScope: builder) }
+                    bpi = { _ in builder() }
+                }
+            }
+        }
+    }
+
+    /// For code you write.
+    public convenience init(apiBuilder: @escaping () -> any Api, bpiBuilder: @escaping () -> any Bpi) {
+        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder), __safeDI_bpiBuilder: .init(__safeDI_noScope: bpiBuilder))
+    }
+
+    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+    public convenience init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>, __safeDI_bpiBuilder: SafeDIScope_Bpi.__safeDI_Builder<any Bpi>) {
+        func __safeDI_T2(_ __safeDI_apiBuilder: SafeDIScope_Api.T2_Scope.__safeDI_Builder<any Api>) -> T2 {
+            let api: any Api = __safeDI_apiBuilder.api(.init())
+            return T2(api: api)
+        }
+        func __safeDI_T33(_ __safeDI_apiBuilder: SafeDIScope_Api.T33_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T33_Scope.__safeDI_Builder<any Bpi>) -> T33 {
+            let api: any Api = __safeDI_apiBuilder.api(.init())
+            let bpi: any Bpi = __safeDI_bpiBuilder.bpi(.init(api: api))
+            return T33(api: api, bpi: bpi)
+        }
+        func __safeDI_T20(_ __safeDI_apiBuilder: SafeDIScope_Api.T20_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T20_Scope.__safeDI_Builder<any Bpi>) -> T20 {
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init())
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init())
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            return T20(t33: t33)
+        }
+        func __safeDI_T25(_ __safeDI_apiBuilder: SafeDIScope_Api.T25_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T25_Scope.__safeDI_Builder<any Bpi>) -> T25 {
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init())
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init())
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            return T25(t33Builder: t33Builder)
+        }
+        func __safeDI_T14(_ __safeDI_apiBuilder: SafeDIScope_Api.T14_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T14_Scope.__safeDI_Builder<any Bpi>) -> T14 {
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init())
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init())
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            return T14(t33: t33)
+        }
+        func __safeDI_T5(_ __safeDI_apiBuilder: SafeDIScope_Api.T5_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T5_Scope.__safeDI_Builder<any Bpi>) -> T5 {
+            let __safeDI_apiBuilder_t20 = __safeDI_apiBuilder.t20(.init())
+            let __safeDI_bpiBuilder_t20 = __safeDI_bpiBuilder.t20(.init())
+            let t20: T20 = __safeDI_T20(__safeDI_apiBuilder_t20, __safeDI_bpiBuilder_t20)
+            let __safeDI_apiBuilder_t25Builder = __safeDI_apiBuilder.t25Builder(.init(t20: t20))
+            let __safeDI_bpiBuilder_t25Builder = __safeDI_bpiBuilder.t25Builder(.init(t20: t20))
+            let t25Builder = Instantiator<T25> { __safeDI_T25(__safeDI_apiBuilder_t25Builder, __safeDI_bpiBuilder_t25Builder) }
+            let __safeDI_apiBuilder_t14 = __safeDI_apiBuilder.t14(.init(t20: t20, t25Builder: t25Builder))
+            let __safeDI_bpiBuilder_t14 = __safeDI_bpiBuilder.t14(.init(t20: t20, t25Builder: t25Builder))
+            let t14: T14 = __safeDI_T14(__safeDI_apiBuilder_t14, __safeDI_bpiBuilder_t14)
+            return T5(t20: t20, t25Builder: t25Builder, t14: t14)
+        }
+        func __safeDI_T13(_ __safeDI_apiBuilder: SafeDIScope_Api.T13_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T13_Scope.__safeDI_Builder<any Bpi>) -> T13 {
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init())
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init())
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            return T13(t33Builder: t33Builder)
+        }
+        func __safeDI_T9(_ __safeDI_apiBuilder: SafeDIScope_Api.T9_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T9_Scope.__safeDI_Builder<any Bpi>) -> T9 {
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init())
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init())
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            let __safeDI_apiBuilder_t13Builder = __safeDI_apiBuilder.t13Builder(.init(t33Builder: t33Builder))
+            let __safeDI_bpiBuilder_t13Builder = __safeDI_bpiBuilder.t13Builder(.init(t33Builder: t33Builder))
+            let t13Builder = Instantiator<T13> { __safeDI_T13(__safeDI_apiBuilder_t13Builder, __safeDI_bpiBuilder_t13Builder) }
+            return T9(t33Builder: t33Builder, t13Builder: t13Builder)
+        }
+        func __safeDI_T34(_ __safeDI_apiBuilder: SafeDIScope_Api.T34_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T34_Scope.__safeDI_Builder<any Bpi>) -> T34 {
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init())
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init())
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            return T34(t33: t33)
+        }
+        func __safeDI_T31(_ __safeDI_apiBuilder: SafeDIScope_Api.T31_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T31_Scope.__safeDI_Builder<any Bpi>) -> T31 {
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init())
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init())
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            return T31(t33Builder: t33Builder)
+        }
+        func __safeDI_T44(_ __safeDI_apiBuilder: SafeDIScope_Api.T44_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T44_Scope.__safeDI_Builder<any Bpi>) -> T44 {
+            let __safeDI_apiBuilder_t31Builder = __safeDI_apiBuilder.t31Builder(.init())
+            let __safeDI_bpiBuilder_t31Builder = __safeDI_bpiBuilder.t31Builder(.init())
+            let t31Builder = Instantiator<T31> { __safeDI_T31(__safeDI_apiBuilder_t31Builder, __safeDI_bpiBuilder_t31Builder) }
+            return T44(t31Builder: t31Builder)
+        }
+        func __safeDI_T52(_ __safeDI_apiBuilder: SafeDIScope_Api.T52_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T52_Scope.__safeDI_Builder<any Bpi>) -> T52 {
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init())
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init())
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            return T52(t33Builder: t33Builder)
+        }
+        func __safeDI_T53(_ __safeDI_apiBuilder: SafeDIScope_Api.T53_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T53_Scope.__safeDI_Builder<any Bpi>) -> T53 {
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init())
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init())
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            let api: any Api = __safeDI_apiBuilder.api(.init(t33Builder: t33Builder))
+            return T53(t33Builder: t33Builder, api: api)
+        }
+        func __safeDI_T41(_ __safeDI_apiBuilder: SafeDIScope_Api.T41_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T41_Scope.__safeDI_Builder<any Bpi>) -> T41 {
+            let __safeDI_apiBuilder_t9 = __safeDI_apiBuilder.t9(.init())
+            let __safeDI_bpiBuilder_t9 = __safeDI_bpiBuilder.t9(.init())
+            let t9: T9 = __safeDI_T9(__safeDI_apiBuilder_t9, __safeDI_bpiBuilder_t9)
+            let t11Builder = Instantiator<T11> { T11() }
+            let t22 = T22()
+            let __safeDI_apiBuilder_t34Builder = __safeDI_apiBuilder.t34Builder(.init(t9: t9, t11Builder: t11Builder, t22: t22))
+            let __safeDI_bpiBuilder_t34Builder = __safeDI_bpiBuilder.t34Builder(.init(t9: t9, t11Builder: t11Builder, t22: t22))
+            let t34Builder = Instantiator<T34> { __safeDI_T34(__safeDI_apiBuilder_t34Builder, __safeDI_bpiBuilder_t34Builder) }
+            let api: any Api = __safeDI_apiBuilder.api(.init(t9: t9, t11Builder: t11Builder, t22: t22, t34Builder: t34Builder))
+            let __safeDI_apiBuilder_t44Builder = __safeDI_apiBuilder.t44Builder(.init(t9: t9, t11Builder: t11Builder, t22: t22, t34Builder: t34Builder, api: api))
+            let __safeDI_bpiBuilder_t44Builder = __safeDI_bpiBuilder.t44Builder(.init(t9: t9, t11Builder: t11Builder, t22: t22, t34Builder: t34Builder, api: api))
+            let t44Builder = Instantiator<T44> { __safeDI_T44(__safeDI_apiBuilder_t44Builder, __safeDI_bpiBuilder_t44Builder) }
+            let __safeDI_apiBuilder_t52Builder = __safeDI_apiBuilder.t52Builder(.init(t9: t9, t11Builder: t11Builder, t22: t22, t34Builder: t34Builder, api: api, t44Builder: t44Builder))
+            let __safeDI_bpiBuilder_t52Builder = __safeDI_bpiBuilder.t52Builder(.init(t9: t9, t11Builder: t11Builder, t22: t22, t34Builder: t34Builder, api: api, t44Builder: t44Builder))
+            let t52Builder = Instantiator<T52> { __safeDI_T52(__safeDI_apiBuilder_t52Builder, __safeDI_bpiBuilder_t52Builder) }
+            let __safeDI_apiBuilder_t53Builder = __safeDI_apiBuilder.t53Builder(.init(t9: t9, t11Builder: t11Builder, t22: t22, t34Builder: t34Builder, api: api, t44Builder: t44Builder, t52Builder: t52Builder))
+            let __safeDI_bpiBuilder_t53Builder = __safeDI_bpiBuilder.t53Builder(.init(t9: t9, t11Builder: t11Builder, t22: t22, t34Builder: t34Builder, api: api, t44Builder: t44Builder, t52Builder: t52Builder))
+            let t53Builder = Instantiator<T53> { __safeDI_T53(__safeDI_apiBuilder_t53Builder, __safeDI_bpiBuilder_t53Builder) }
+            return T41(t9: t9, t11Builder: t11Builder, t22: t22, t34Builder: t34Builder, api: api, t44Builder: t44Builder, t52Builder: t52Builder, t53Builder: t53Builder)
+        }
+        func __safeDI_T1(_ __safeDI_apiBuilder: SafeDIScope_Api.T1_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T1_Scope.__safeDI_Builder<any Bpi>) -> T1 {
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init())
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init())
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            let __safeDI_apiBuilder_t41Builder = __safeDI_apiBuilder.t41Builder(.init(t33Builder: t33Builder))
+            let __safeDI_bpiBuilder_t41Builder = __safeDI_bpiBuilder.t41Builder(.init(t33Builder: t33Builder))
+            let t41Builder = Instantiator<T41> { __safeDI_T41(__safeDI_apiBuilder_t41Builder, __safeDI_bpiBuilder_t41Builder) }
+            return T1(t33Builder: t33Builder, t41Builder: t41Builder)
+        }
+        func __safeDI_T17(_ __safeDI_apiBuilder: SafeDIScope_Api.T17_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T17_Scope.__safeDI_Builder<any Bpi>) -> T17 {
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init())
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init())
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            return T17(t33: t33)
+        }
+        func __safeDI_T40(_ __safeDI_apiBuilder: SafeDIScope_Api.T40_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T40_Scope.__safeDI_Builder<any Bpi>) -> T40 {
+            let bpi: any Bpi = __safeDI_bpiBuilder.bpi(.init())
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init(bpi: bpi))
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init(bpi: bpi))
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            return T40(bpi: bpi, t33: t33)
+        }
+        func __safeDI_T24(_ __safeDI_apiBuilder: SafeDIScope_Api.T24_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T24_Scope.__safeDI_Builder<any Bpi>) -> T24 {
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init())
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init())
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            let api: any Api = __safeDI_apiBuilder.api(.init(t33: t33))
+            let __safeDI_apiBuilder_t40 = __safeDI_apiBuilder.t40(.init(t33: t33, api: api))
+            let __safeDI_bpiBuilder_t40 = __safeDI_bpiBuilder.t40(.init(t33: t33, api: api))
+            let t40: T40 = __safeDI_T40(__safeDI_apiBuilder_t40, __safeDI_bpiBuilder_t40)
+            let __safeDI_apiBuilder_t31 = __safeDI_apiBuilder.t31(.init(t33: t33, api: api, t40: t40))
+            let __safeDI_bpiBuilder_t31 = __safeDI_bpiBuilder.t31(.init(t33: t33, api: api, t40: t40))
+            let t31: T31 = __safeDI_T31(__safeDI_apiBuilder_t31, __safeDI_bpiBuilder_t31)
+            return T24(t33: t33, api: api, t40: t40, t31: t31)
+        }
+        func __safeDI_T54(_ __safeDI_apiBuilder: SafeDIScope_Api.T54_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T54_Scope.__safeDI_Builder<any Bpi>) -> T54 {
+            let __safeDI_apiBuilder_t1 = __safeDI_apiBuilder.t1(.init())
+            let __safeDI_bpiBuilder_t1 = __safeDI_bpiBuilder.t1(.init())
+            let t1: T1 = __safeDI_T1(__safeDI_apiBuilder_t1, __safeDI_bpiBuilder_t1)
+            let __safeDI_apiBuilder_t17Builder = __safeDI_apiBuilder.t17Builder(.init(t1: t1))
+            let __safeDI_bpiBuilder_t17Builder = __safeDI_bpiBuilder.t17Builder(.init(t1: t1))
+            let t17Builder = Instantiator<T17> { __safeDI_T17(__safeDI_apiBuilder_t17Builder, __safeDI_bpiBuilder_t17Builder) }
+            let __safeDI_apiBuilder_t24 = __safeDI_apiBuilder.t24(.init(t1: t1, t17Builder: t17Builder))
+            let __safeDI_bpiBuilder_t24 = __safeDI_bpiBuilder.t24(.init(t1: t1, t17Builder: t17Builder))
+            let t24: T24 = __safeDI_T24(__safeDI_apiBuilder_t24, __safeDI_bpiBuilder_t24)
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init(t1: t1, t17Builder: t17Builder, t24: t24))
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init(t1: t1, t17Builder: t17Builder, t24: t24))
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            let bpi: any Bpi = __safeDI_bpiBuilder.bpi(.init(t1: t1, t17Builder: t17Builder, t24: t24, t33: t33))
+            return T54(t1: t1, t17Builder: t17Builder, t24: t24, t33: t33, bpi: bpi)
+        }
+        func __safeDI_T26(_ __safeDI_apiBuilder: SafeDIScope_Api.T26_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T26_Scope.__safeDI_Builder<any Bpi>) -> T26 {
+            let api: any Api = __safeDI_apiBuilder.api(.init())
+            let __safeDI_apiBuilder_t54 = __safeDI_apiBuilder.t54(.init(api: api))
+            let __safeDI_bpiBuilder_t54 = __safeDI_bpiBuilder.t54(.init(api: api))
+            let t54: T54 = __safeDI_T54(__safeDI_apiBuilder_t54, __safeDI_bpiBuilder_t54)
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init(api: api, t54: t54))
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init(api: api, t54: t54))
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            let t12 = T12()
+            return T26(api: api, t54: t54, t33Builder: t33Builder, t12: t12)
+        }
+        func __safeDI_T43(_ __safeDI_apiBuilder: SafeDIScope_Api.T43_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T43_Scope.__safeDI_Builder<any Bpi>) -> T43 {
+            let __safeDI_apiBuilder_t26 = __safeDI_apiBuilder.t26(.init())
+            let __safeDI_bpiBuilder_t26 = __safeDI_bpiBuilder.t26(.init())
+            let t26: T26 = __safeDI_T26(__safeDI_apiBuilder_t26, __safeDI_bpiBuilder_t26)
+            return T43(t26: t26)
+        }
+        func __safeDI_T10(_ __safeDI_apiBuilder: SafeDIScope_Api.T10_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T10_Scope.__safeDI_Builder<any Bpi>) -> T10 {
+            let __safeDI_apiBuilder_t2Builder = __safeDI_apiBuilder.t2Builder(.init())
+            let t2Builder = Instantiator<T2> { __safeDI_T2(__safeDI_apiBuilder_t2Builder) }
+            let __safeDI_apiBuilder_t5 = __safeDI_apiBuilder.t5(.init(t2Builder: t2Builder))
+            let __safeDI_bpiBuilder_t5 = __safeDI_bpiBuilder.t5(.init(t2Builder: t2Builder))
+            let t5: T5 = __safeDI_T5(__safeDI_apiBuilder_t5, __safeDI_bpiBuilder_t5)
+            let t28Builder = Instantiator<T28> { T28() }
+            let __safeDI_apiBuilder_t43Builder = __safeDI_apiBuilder.t43Builder(.init(t2Builder: t2Builder, t5: t5, t28Builder: t28Builder))
+            let __safeDI_bpiBuilder_t43Builder = __safeDI_bpiBuilder.t43Builder(.init(t2Builder: t2Builder, t5: t5, t28Builder: t28Builder))
+            let t43Builder = Instantiator<T43> { __safeDI_T43(__safeDI_apiBuilder_t43Builder, __safeDI_bpiBuilder_t43Builder) }
+            return T10(t2Builder: t2Builder, t5: t5, t28Builder: t28Builder, t43Builder: t43Builder)
+        }
+        func __safeDI_T56(_ __safeDI_apiBuilder: SafeDIScope_Api.T56_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T56_Scope.__safeDI_Builder<any Bpi>) -> T56 {
+            let __safeDI_apiBuilder_t14Builder = __safeDI_apiBuilder.t14Builder(.init())
+            let __safeDI_bpiBuilder_t14Builder = __safeDI_bpiBuilder.t14Builder(.init())
+            let t14Builder = Instantiator<T14> { __safeDI_T14(__safeDI_apiBuilder_t14Builder, __safeDI_bpiBuilder_t14Builder) }
+            return T56(t14Builder: t14Builder)
+        }
+        func __safeDI_T55(_ __safeDI_apiBuilder: SafeDIScope_Api.T55_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T55_Scope.__safeDI_Builder<any Bpi>) -> T55 {
+            let __safeDI_apiBuilder_t56Builder = __safeDI_apiBuilder.t56Builder(.init())
+            let __safeDI_bpiBuilder_t56Builder = __safeDI_bpiBuilder.t56Builder(.init())
+            let t56Builder = Instantiator<T56> { __safeDI_T56(__safeDI_apiBuilder_t56Builder, __safeDI_bpiBuilder_t56Builder) }
+            return T55(t56Builder: t56Builder)
+        }
+        func __safeDI_T37(_ __safeDI_apiBuilder: SafeDIScope_Api.T37_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T37_Scope.__safeDI_Builder<any Bpi>) -> T37 {
+            let __safeDI_apiBuilder_t14Builder = __safeDI_apiBuilder.t14Builder(.init())
+            let __safeDI_bpiBuilder_t14Builder = __safeDI_bpiBuilder.t14Builder(.init())
+            let t14Builder = Instantiator<T14> { __safeDI_T14(__safeDI_apiBuilder_t14Builder, __safeDI_bpiBuilder_t14Builder) }
+            return T37(t14Builder: t14Builder)
+        }
+        func __safeDI_T4(_ __safeDI_apiBuilder: SafeDIScope_Api.T4_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T4_Scope.__safeDI_Builder<any Bpi>) -> T4 {
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init())
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init())
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            return T4(t33Builder: t33Builder)
+        }
+        func __safeDI_T18(_ __safeDI_apiBuilder: SafeDIScope_Api.T18_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T18_Scope.__safeDI_Builder<any Bpi>) -> T18 {
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init())
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init())
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            let __safeDI_apiBuilder_t14 = __safeDI_apiBuilder.t14(.init(t33Builder: t33Builder))
+            let __safeDI_bpiBuilder_t14 = __safeDI_bpiBuilder.t14(.init(t33Builder: t33Builder))
+            let t14: T14 = __safeDI_T14(__safeDI_apiBuilder_t14, __safeDI_bpiBuilder_t14)
+            return T18(t33Builder: t33Builder, t14: t14)
+        }
+        func __safeDI_T6(_ __safeDI_apiBuilder: SafeDIScope_Api.T6_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T6_Scope.__safeDI_Builder<any Bpi>) -> T6 {
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init())
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init())
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            let t8 = T8()
+            let bpi: any Bpi = __safeDI_bpiBuilder.bpi(.init(t33: t33, t8: t8))
+            return T6(t33: t33, t8: t8, bpi: bpi)
+        }
+        func __safeDI_T50(_ __safeDI_apiBuilder: SafeDIScope_Api.T50_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T50_Scope.__safeDI_Builder<any Bpi>) -> T50 {
+            let __safeDI_apiBuilder_t6 = __safeDI_apiBuilder.t6(.init())
+            let __safeDI_bpiBuilder_t6 = __safeDI_bpiBuilder.t6(.init())
+            let t6: T6 = __safeDI_T6(__safeDI_apiBuilder_t6, __safeDI_bpiBuilder_t6)
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init(t6: t6))
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init(t6: t6))
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            let t11 = T11()
+            return T50(t6: t6, t33Builder: t33Builder, t11: t11)
+        }
+        func __safeDI_T3() -> T3 {
+            let t11 = T11()
+            return T3(t11: t11)
+        }
+        func __safeDI_T48(_ __safeDI_apiBuilder: SafeDIScope_Api.T48_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T48_Scope.__safeDI_Builder<any Bpi>) -> T48 {
+            let t3Builder = Instantiator<T3> { __safeDI_T3() }
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init(t3Builder: t3Builder))
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init(t3Builder: t3Builder))
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            let __safeDI_apiBuilder_t34Builder = __safeDI_apiBuilder.t34Builder(.init(t3Builder: t3Builder, t33: t33))
+            let __safeDI_bpiBuilder_t34Builder = __safeDI_bpiBuilder.t34Builder(.init(t3Builder: t3Builder, t33: t33))
+            let t34Builder = Instantiator<T34> { __safeDI_T34(__safeDI_apiBuilder_t34Builder, __safeDI_bpiBuilder_t34Builder) }
+            return T48(t3Builder: t3Builder, t33: t33, t34Builder: t34Builder)
+        }
+        func __safeDI_T30(_ __safeDI_apiBuilder: SafeDIScope_Api.T30_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T30_Scope.__safeDI_Builder<any Bpi>) -> T30 {
+            let __safeDI_apiBuilder_t50Builder = __safeDI_apiBuilder.t50Builder(.init())
+            let __safeDI_bpiBuilder_t50Builder = __safeDI_bpiBuilder.t50Builder(.init())
+            let t50Builder = Instantiator<T50> { __safeDI_T50(__safeDI_apiBuilder_t50Builder, __safeDI_bpiBuilder_t50Builder) }
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init(t50Builder: t50Builder))
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init(t50Builder: t50Builder))
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            let __safeDI_apiBuilder_t48Builder = __safeDI_apiBuilder.t48Builder(.init(t50Builder: t50Builder, t33Builder: t33Builder))
+            let __safeDI_bpiBuilder_t48Builder = __safeDI_bpiBuilder.t48Builder(.init(t50Builder: t50Builder, t33Builder: t33Builder))
+            let t48Builder = Instantiator<T48> { __safeDI_T48(__safeDI_apiBuilder_t48Builder, __safeDI_bpiBuilder_t48Builder) }
+            return T30(t50Builder: t50Builder, t33Builder: t33Builder, t48Builder: t48Builder)
+        }
+        func __safeDI_T16(_ __safeDI_apiBuilder: SafeDIScope_Api.T16_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T16_Scope.__safeDI_Builder<any Bpi>) -> T16 {
+            let __safeDI_apiBuilder_t30 = __safeDI_apiBuilder.t30(.init())
+            let __safeDI_bpiBuilder_t30 = __safeDI_bpiBuilder.t30(.init())
+            let t30: T30 = __safeDI_T30(__safeDI_apiBuilder_t30, __safeDI_bpiBuilder_t30)
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init(t30: t30))
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init(t30: t30))
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            return T16(t30: t30, t33: t33)
+        }
+        func __safeDI_T59(_ __safeDI_apiBuilder: SafeDIScope_Api.T59_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T59_Scope.__safeDI_Builder<any Bpi>) -> T59 {
+            let __safeDI_apiBuilder_t40Builder = __safeDI_apiBuilder.t40Builder(.init())
+            let __safeDI_bpiBuilder_t40Builder = __safeDI_bpiBuilder.t40Builder(.init())
+            let t40Builder = Instantiator<T40> { __safeDI_T40(__safeDI_apiBuilder_t40Builder, __safeDI_bpiBuilder_t40Builder) }
+            let __safeDI_apiBuilder_t41 = __safeDI_apiBuilder.t41(.init(t40Builder: t40Builder))
+            let __safeDI_bpiBuilder_t41 = __safeDI_bpiBuilder.t41(.init(t40Builder: t40Builder))
+            let t41: T41 = __safeDI_T41(__safeDI_apiBuilder_t41, __safeDI_bpiBuilder_t41)
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init(t40Builder: t40Builder, t41: t41))
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init(t40Builder: t40Builder, t41: t41))
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            return T59(t40Builder: t40Builder, t41: t41, t33: t33)
+        }
+        func __safeDI_T35(_ __safeDI_apiBuilder: SafeDIScope_Api.T35_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T35_Scope.__safeDI_Builder<any Bpi>) -> T35 {
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init())
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init())
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            let bpi: any Bpi = __safeDI_bpiBuilder.bpi(.init(t33: t33))
+            let __safeDI_apiBuilder_t59 = __safeDI_apiBuilder.t59(.init(t33: t33, bpi: bpi))
+            let __safeDI_bpiBuilder_t59 = __safeDI_bpiBuilder.t59(.init(t33: t33, bpi: bpi))
+            let t59: T59 = __safeDI_T59(__safeDI_apiBuilder_t59, __safeDI_bpiBuilder_t59)
+            return T35(t33: t33, bpi: bpi, t59: t59)
+        }
+        func __safeDI_T57(_ __safeDI_apiBuilder: SafeDIScope_Api.T57_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T57_Scope.__safeDI_Builder<any Bpi>) -> T57 {
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init())
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init())
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            let __safeDI_apiBuilder_t13 = __safeDI_apiBuilder.t13(.init(t33Builder: t33Builder))
+            let __safeDI_bpiBuilder_t13 = __safeDI_bpiBuilder.t13(.init(t33Builder: t33Builder))
+            let t13: T13 = __safeDI_T13(__safeDI_apiBuilder_t13, __safeDI_bpiBuilder_t13)
+            return T57(t33Builder: t33Builder, t13: t13)
+        }
+        func __safeDI_T46(_ __safeDI_apiBuilder: SafeDIScope_Api.T46_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T46_Scope.__safeDI_Builder<any Bpi>) -> T46 {
+            let __safeDI_apiBuilder_t16Builder = __safeDI_apiBuilder.t16Builder(.init())
+            let __safeDI_bpiBuilder_t16Builder = __safeDI_bpiBuilder.t16Builder(.init())
+            let t16Builder = Instantiator<T16> { __safeDI_T16(__safeDI_apiBuilder_t16Builder, __safeDI_bpiBuilder_t16Builder) }
+            let __safeDI_apiBuilder_t35 = __safeDI_apiBuilder.t35(.init(t16Builder: t16Builder))
+            let __safeDI_bpiBuilder_t35 = __safeDI_bpiBuilder.t35(.init(t16Builder: t16Builder))
+            let t35: T35 = __safeDI_T35(__safeDI_apiBuilder_t35, __safeDI_bpiBuilder_t35)
+            let __safeDI_apiBuilder_t57 = __safeDI_apiBuilder.t57(.init(t16Builder: t16Builder, t35: t35))
+            let __safeDI_bpiBuilder_t57 = __safeDI_bpiBuilder.t57(.init(t16Builder: t16Builder, t35: t35))
+            let t57: T57 = __safeDI_T57(__safeDI_apiBuilder_t57, __safeDI_bpiBuilder_t57)
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init(t16Builder: t16Builder, t35: t35, t57: t57))
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init(t16Builder: t16Builder, t35: t35, t57: t57))
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            return T46(t16Builder: t16Builder, t35: t35, t57: t57, t33Builder: t33Builder)
+        }
+        func __safeDI_T36(_ __safeDI_apiBuilder: SafeDIScope_Api.T36_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T36_Scope.__safeDI_Builder<any Bpi>) -> T36 {
+            let __safeDI_apiBuilder_t6 = __safeDI_apiBuilder.t6(.init())
+            let __safeDI_bpiBuilder_t6 = __safeDI_bpiBuilder.t6(.init())
+            let t6: T6 = __safeDI_T6(__safeDI_apiBuilder_t6, __safeDI_bpiBuilder_t6)
+            return T36(t6: t6)
+        }
+        func __safeDI_T23(_ __safeDI_apiBuilder: SafeDIScope_Api.T23_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T23_Scope.__safeDI_Builder<any Bpi>) -> T23 {
+            let __safeDI_apiBuilder_t36 = __safeDI_apiBuilder.t36(.init())
+            let __safeDI_bpiBuilder_t36 = __safeDI_bpiBuilder.t36(.init())
+            let t36: T36 = __safeDI_T36(__safeDI_apiBuilder_t36, __safeDI_bpiBuilder_t36)
+            let __safeDI_apiBuilder_t40 = __safeDI_apiBuilder.t40(.init(t36: t36))
+            let __safeDI_bpiBuilder_t40 = __safeDI_bpiBuilder.t40(.init(t36: t36))
+            let t40: T40 = __safeDI_T40(__safeDI_apiBuilder_t40, __safeDI_bpiBuilder_t40)
+            return T23(t36: t36, t40: t40)
+        }
+        func __safeDI_T27(_ __safeDI_apiBuilder: SafeDIScope_Api.T27_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T27_Scope.__safeDI_Builder<any Bpi>) -> T27 {
+            let __safeDI_apiBuilder_t40Builder = __safeDI_apiBuilder.t40Builder(.init())
+            let __safeDI_bpiBuilder_t40Builder = __safeDI_bpiBuilder.t40Builder(.init())
+            let t40Builder = Instantiator<T40> { __safeDI_T40(__safeDI_apiBuilder_t40Builder, __safeDI_bpiBuilder_t40Builder) }
+            return T27(t40Builder: t40Builder)
+        }
+        func __safeDI_T29(_ __safeDI_apiBuilder: SafeDIScope_Api.T29_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T29_Scope.__safeDI_Builder<any Bpi>) -> T29 {
+            let __safeDI_apiBuilder_t48 = __safeDI_apiBuilder.t48(.init())
+            let __safeDI_bpiBuilder_t48 = __safeDI_bpiBuilder.t48(.init())
+            let t48: T48 = __safeDI_T48(__safeDI_apiBuilder_t48, __safeDI_bpiBuilder_t48)
+            let __safeDI_apiBuilder_t33Builder = __safeDI_apiBuilder.t33Builder(.init(t48: t48))
+            let __safeDI_bpiBuilder_t33Builder = __safeDI_bpiBuilder.t33Builder(.init(t48: t48))
+            let t33Builder = Instantiator<T33> { __safeDI_T33(__safeDI_apiBuilder_t33Builder, __safeDI_bpiBuilder_t33Builder) }
+            return T29(t48: t48, t33Builder: t33Builder)
+        }
+        func __safeDI_T38(_ __safeDI_apiBuilder: SafeDIScope_Api.T38_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T38_Scope.__safeDI_Builder<any Bpi>) -> T38 {
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init())
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init())
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            let __safeDI_apiBuilder_t48Builder = __safeDI_apiBuilder.t48Builder(.init(t33: t33))
+            let __safeDI_bpiBuilder_t48Builder = __safeDI_bpiBuilder.t48Builder(.init(t33: t33))
+            let t48Builder = Instantiator<T48> { __safeDI_T48(__safeDI_apiBuilder_t48Builder, __safeDI_bpiBuilder_t48Builder) }
+            return T38(t33: t33, t48Builder: t48Builder)
+        }
+        func __safeDI_T45(_ __safeDI_apiBuilder: SafeDIScope_Api.T45_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T45_Scope.__safeDI_Builder<any Bpi>) -> T45 {
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init())
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init())
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            let __safeDI_apiBuilder_t40Builder = __safeDI_apiBuilder.t40Builder(.init(t33: t33))
+            let __safeDI_bpiBuilder_t40Builder = __safeDI_bpiBuilder.t40Builder(.init(t33: t33))
+            let t40Builder = Instantiator<T40> { __safeDI_T40(__safeDI_apiBuilder_t40Builder, __safeDI_bpiBuilder_t40Builder) }
+            let __safeDI_apiBuilder_t31Builder = __safeDI_apiBuilder.t31Builder(.init(t33: t33, t40Builder: t40Builder))
+            let __safeDI_bpiBuilder_t31Builder = __safeDI_bpiBuilder.t31Builder(.init(t33: t33, t40Builder: t40Builder))
+            let t31Builder = Instantiator<T31> { __safeDI_T31(__safeDI_apiBuilder_t31Builder, __safeDI_bpiBuilder_t31Builder) }
+            return T45(t33: t33, t40Builder: t40Builder, t31Builder: t31Builder)
+        }
+        func __safeDI_T15(_ __safeDI_apiBuilder: SafeDIScope_Api.T15_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T15_Scope.__safeDI_Builder<any Bpi>) -> T15 {
+            let t21 = T21()
+            let __safeDI_apiBuilder_t23Builder = __safeDI_apiBuilder.t23Builder(.init(t21: t21))
+            let __safeDI_bpiBuilder_t23Builder = __safeDI_bpiBuilder.t23Builder(.init(t21: t21))
+            let t23Builder = Instantiator<T23> { __safeDI_T23(__safeDI_apiBuilder_t23Builder, __safeDI_bpiBuilder_t23Builder) }
+            let __safeDI_apiBuilder_t27 = __safeDI_apiBuilder.t27(.init(t21: t21, t23Builder: t23Builder))
+            let __safeDI_bpiBuilder_t27 = __safeDI_bpiBuilder.t27(.init(t21: t21, t23Builder: t23Builder))
+            let t27: T27 = __safeDI_T27(__safeDI_apiBuilder_t27, __safeDI_bpiBuilder_t27)
+            let __safeDI_apiBuilder_t29Builder = __safeDI_apiBuilder.t29Builder(.init(t21: t21, t23Builder: t23Builder, t27: t27))
+            let __safeDI_bpiBuilder_t29Builder = __safeDI_bpiBuilder.t29Builder(.init(t21: t21, t23Builder: t23Builder, t27: t27))
+            let t29Builder = Instantiator<T29> { __safeDI_T29(__safeDI_apiBuilder_t29Builder, __safeDI_bpiBuilder_t29Builder) }
+            let __safeDI_apiBuilder_t31Builder = __safeDI_apiBuilder.t31Builder(.init(t21: t21, t23Builder: t23Builder, t27: t27, t29Builder: t29Builder))
+            let __safeDI_bpiBuilder_t31Builder = __safeDI_bpiBuilder.t31Builder(.init(t21: t21, t23Builder: t23Builder, t27: t27, t29Builder: t29Builder))
+            let t31Builder = Instantiator<T31> { __safeDI_T31(__safeDI_apiBuilder_t31Builder, __safeDI_bpiBuilder_t31Builder) }
+            let __safeDI_apiBuilder_t38 = __safeDI_apiBuilder.t38(.init(t21: t21, t23Builder: t23Builder, t27: t27, t29Builder: t29Builder, t31Builder: t31Builder))
+            let __safeDI_bpiBuilder_t38 = __safeDI_bpiBuilder.t38(.init(t21: t21, t23Builder: t23Builder, t27: t27, t29Builder: t29Builder, t31Builder: t31Builder))
+            let t38: T38 = __safeDI_T38(__safeDI_apiBuilder_t38, __safeDI_bpiBuilder_t38)
+            let __safeDI_apiBuilder_t45Builder = __safeDI_apiBuilder.t45Builder(.init(t21: t21, t23Builder: t23Builder, t27: t27, t29Builder: t29Builder, t31Builder: t31Builder, t38: t38))
+            let __safeDI_bpiBuilder_t45Builder = __safeDI_bpiBuilder.t45Builder(.init(t21: t21, t23Builder: t23Builder, t27: t27, t29Builder: t29Builder, t31Builder: t31Builder, t38: t38))
+            let t45Builder = Instantiator<T45> { __safeDI_T45(__safeDI_apiBuilder_t45Builder, __safeDI_bpiBuilder_t45Builder) }
+            let t47Builder = Instantiator<T47> { T47() }
+            let __safeDI_apiBuilder_t59 = __safeDI_apiBuilder.t59(.init(t21: t21, t23Builder: t23Builder, t27: t27, t29Builder: t29Builder, t31Builder: t31Builder, t38: t38, t45Builder: t45Builder, t47Builder: t47Builder))
+            let __safeDI_bpiBuilder_t59 = __safeDI_bpiBuilder.t59(.init(t21: t21, t23Builder: t23Builder, t27: t27, t29Builder: t29Builder, t31Builder: t31Builder, t38: t38, t45Builder: t45Builder, t47Builder: t47Builder))
+            let t59: T59 = __safeDI_T59(__safeDI_apiBuilder_t59, __safeDI_bpiBuilder_t59)
+            return T15(t21: t21, t23Builder: t23Builder, t27: t27, t29Builder: t29Builder, t31Builder: t31Builder, t38: t38, t45Builder: t45Builder, t47Builder: t47Builder, t59: t59)
+        }
+        func __safeDI_T32(_ __safeDI_apiBuilder: SafeDIScope_Api.T32_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T32_Scope.__safeDI_Builder<any Bpi>) -> T32 {
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init())
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init())
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            let bpi: any Bpi = __safeDI_bpiBuilder.bpi(.init(t33: t33))
+            return T32(t33: t33, bpi: bpi)
+        }
+        func __safeDI_T49(_ __safeDI_apiBuilder: SafeDIScope_Api.T49_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T49_Scope.__safeDI_Builder<any Bpi>) -> T49 {
+            let __safeDI_apiBuilder_t32Builder = __safeDI_apiBuilder.t32Builder(.init())
+            let __safeDI_bpiBuilder_t32Builder = __safeDI_bpiBuilder.t32Builder(.init())
+            let t32Builder = Instantiator<T32> { __safeDI_T32(__safeDI_apiBuilder_t32Builder, __safeDI_bpiBuilder_t32Builder) }
+            let __safeDI_apiBuilder_t31 = __safeDI_apiBuilder.t31(.init(t32Builder: t32Builder))
+            let __safeDI_bpiBuilder_t31 = __safeDI_bpiBuilder.t31(.init(t32Builder: t32Builder))
+            let t31: T31 = __safeDI_T31(__safeDI_apiBuilder_t31, __safeDI_bpiBuilder_t31)
+            return T49(t32Builder: t32Builder, t31: t31)
+        }
+        func __safeDI_T51(_ __safeDI_apiBuilder: SafeDIScope_Api.T51_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T51_Scope.__safeDI_Builder<any Bpi>) -> T51 {
+            let t8Builder = Instantiator<T8> { T8() }
+            let __safeDI_apiBuilder_t15 = __safeDI_apiBuilder.t15(.init(t8Builder: t8Builder))
+            let __safeDI_bpiBuilder_t15 = __safeDI_bpiBuilder.t15(.init(t8Builder: t8Builder))
+            let t15: T15 = __safeDI_T15(__safeDI_apiBuilder_t15, __safeDI_bpiBuilder_t15)
+            let __safeDI_apiBuilder_t49 = __safeDI_apiBuilder.t49(.init(t8Builder: t8Builder, t15: t15))
+            let __safeDI_bpiBuilder_t49 = __safeDI_bpiBuilder.t49(.init(t8Builder: t8Builder, t15: t15))
+            let t49: T49 = __safeDI_T49(__safeDI_apiBuilder_t49, __safeDI_bpiBuilder_t49)
+            let __safeDI_apiBuilder_t33 = __safeDI_apiBuilder.t33(.init(t8Builder: t8Builder, t15: t15, t49: t49))
+            let __safeDI_bpiBuilder_t33 = __safeDI_bpiBuilder.t33(.init(t8Builder: t8Builder, t15: t15, t49: t49))
+            let t33: T33 = __safeDI_T33(__safeDI_apiBuilder_t33, __safeDI_bpiBuilder_t33)
+            return T51(t8Builder: t8Builder, t15: t15, t49: t49, t33: t33)
+        }
+        func __safeDI_T42(_ __safeDI_apiBuilder: SafeDIScope_Api.T42_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T42_Scope.__safeDI_Builder<any Bpi>) -> T42 {
+            let __safeDI_apiBuilder_t4Builder = __safeDI_apiBuilder.t4Builder(.init())
+            let __safeDI_bpiBuilder_t4Builder = __safeDI_bpiBuilder.t4Builder(.init())
+            let t4Builder = Instantiator<T4> { __safeDI_T4(__safeDI_apiBuilder_t4Builder, __safeDI_bpiBuilder_t4Builder) }
+            let __safeDI_apiBuilder_t13Builder = __safeDI_apiBuilder.t13Builder(.init(t4Builder: t4Builder))
+            let __safeDI_bpiBuilder_t13Builder = __safeDI_bpiBuilder.t13Builder(.init(t4Builder: t4Builder))
+            let t13Builder = Instantiator<T13> { __safeDI_T13(__safeDI_apiBuilder_t13Builder, __safeDI_bpiBuilder_t13Builder) }
+            let __safeDI_apiBuilder_t18Builder = __safeDI_apiBuilder.t18Builder(.init(t4Builder: t4Builder, t13Builder: t13Builder))
+            let __safeDI_bpiBuilder_t18Builder = __safeDI_bpiBuilder.t18Builder(.init(t4Builder: t4Builder, t13Builder: t13Builder))
+            let t18Builder = Instantiator<T18> { __safeDI_T18(__safeDI_apiBuilder_t18Builder, __safeDI_bpiBuilder_t18Builder) }
+            let t19Builder = Instantiator<T19> { T19() }
+            let __safeDI_apiBuilder_t46 = __safeDI_apiBuilder.t46(.init(t4Builder: t4Builder, t13Builder: t13Builder, t18Builder: t18Builder, t19Builder: t19Builder))
+            let __safeDI_bpiBuilder_t46 = __safeDI_bpiBuilder.t46(.init(t4Builder: t4Builder, t13Builder: t13Builder, t18Builder: t18Builder, t19Builder: t19Builder))
+            let t46: T46 = __safeDI_T46(__safeDI_apiBuilder_t46, __safeDI_bpiBuilder_t46)
+            let __safeDI_apiBuilder_t51Builder = __safeDI_apiBuilder.t51Builder(.init(t4Builder: t4Builder, t13Builder: t13Builder, t18Builder: t18Builder, t19Builder: t19Builder, t46: t46))
+            let __safeDI_bpiBuilder_t51Builder = __safeDI_bpiBuilder.t51Builder(.init(t4Builder: t4Builder, t13Builder: t13Builder, t18Builder: t18Builder, t19Builder: t19Builder, t46: t46))
+            let t51Builder = Instantiator<T51> { __safeDI_T51(__safeDI_apiBuilder_t51Builder, __safeDI_bpiBuilder_t51Builder) }
+            return T42(t4Builder: t4Builder, t13Builder: t13Builder, t18Builder: t18Builder, t19Builder: t19Builder, t46: t46, t51Builder: t51Builder)
+        }
+        func __safeDI_T58(_ __safeDI_apiBuilder: SafeDIScope_Api.T58_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T58_Scope.__safeDI_Builder<any Bpi>) -> T58 {
+            let t12Builder = Instantiator<T12> { T12() }
+            let __safeDI_apiBuilder_t37 = __safeDI_apiBuilder.t37(.init(t12Builder: t12Builder))
+            let __safeDI_bpiBuilder_t37 = __safeDI_bpiBuilder.t37(.init(t12Builder: t12Builder))
+            let t37: T37 = __safeDI_T37(__safeDI_apiBuilder_t37, __safeDI_bpiBuilder_t37)
+            let __safeDI_apiBuilder_t42Builder = __safeDI_apiBuilder.t42Builder(.init(t12Builder: t12Builder, t37: t37))
+            let __safeDI_bpiBuilder_t42Builder = __safeDI_bpiBuilder.t42Builder(.init(t12Builder: t12Builder, t37: t37))
+            let t42Builder = Instantiator<T42> { __safeDI_T42(__safeDI_apiBuilder_t42Builder, __safeDI_bpiBuilder_t42Builder) }
+            return T58(t12Builder: t12Builder, t37: t37, t42Builder: t42Builder)
+        }
+        func __safeDI_T39(_ __safeDI_apiBuilder: SafeDIScope_Api.T39_Scope.__safeDI_Builder<any Api>, _ __safeDI_bpiBuilder: SafeDIScope_Bpi.T39_Scope.__safeDI_Builder<any Bpi>) -> T39 {
+            let t7Builder = Instantiator<T7> { T7() }
+            let __safeDI_apiBuilder_t10 = __safeDI_apiBuilder.t10(.init(t7Builder: t7Builder))
+            let __safeDI_bpiBuilder_t10 = __safeDI_bpiBuilder.t10(.init(t7Builder: t7Builder))
+            let t10: T10 = __safeDI_T10(__safeDI_apiBuilder_t10, __safeDI_bpiBuilder_t10)
+            let __safeDI_apiBuilder_t55Builder = __safeDI_apiBuilder.t55Builder(.init(t7Builder: t7Builder, t10: t10))
+            let __safeDI_bpiBuilder_t55Builder = __safeDI_bpiBuilder.t55Builder(.init(t7Builder: t7Builder, t10: t10))
+            let t55Builder = Instantiator<T55> { __safeDI_T55(__safeDI_apiBuilder_t55Builder, __safeDI_bpiBuilder_t55Builder) }
+            let __safeDI_apiBuilder_t58Builder = __safeDI_apiBuilder.t58Builder(.init(t7Builder: t7Builder, t10: t10, t55Builder: t55Builder))
+            let __safeDI_bpiBuilder_t58Builder = __safeDI_bpiBuilder.t58Builder(.init(t7Builder: t7Builder, t10: t10, t55Builder: t55Builder))
+            let t58Builder = Instantiator<T58> { __safeDI_T58(__safeDI_apiBuilder_t58Builder, __safeDI_bpiBuilder_t58Builder) }
+            return T39(t7Builder: t7Builder, t10: t10, t55Builder: t55Builder, t58Builder: t58Builder)
+        }
+        let __safeDI_apiBuilder_t39 = __safeDI_apiBuilder.t39(.init())
+        let __safeDI_bpiBuilder_t39 = __safeDI_bpiBuilder.t39(.init())
+        let t39: T39 = __safeDI_T39(__safeDI_apiBuilder_t39, __safeDI_bpiBuilder_t39)
+        self.init(t39: t39)
+    }
+}

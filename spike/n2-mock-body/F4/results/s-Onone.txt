@@ -1,0 +1,49 @@
+trace of three levels:
+  Cache#1()
+  Screen#1(cache: Cache#1, stepBuilder: builder)
+  Home#1(screen: Screen#1)
+  Root#1(home: Home#1)
+  Live#1(cache: Cache#1)
+  Step#1(api: Live#1, screenBuilder: builder)
+  Cache#2()
+  Screen#2(cache: Cache#2, stepBuilder: builder)
+  Live#2(cache: Cache#2)
+  Step#2(api: Live#2, screenBuilder: builder)
+  Cache#3()
+  Screen#3(cache: Cache#3, stepBuilder: builder)
+  Live#3(cache: Cache#3)
+  Step#3(api: Live#3, screenBuilder: builder)
+alive after dropping everything: none
+  Cache#4()
+  Screen#4(cache: Cache#4, stepBuilder: builder)
+  Home#2(screen: Screen#4)
+  Root#2(home: Home#2)
+  Live#4(cache: Cache#4)
+  Step#4(api: Live#4, screenBuilder: builder)
+  Cache#5()
+  Screen#5(cache: Cache#5, stepBuilder: builder)
+  Live#5(cache: Cache#5)
+  Step#5(api: Live#5, screenBuilder: builder)
+alive holding only screen 2's step: Cache 1, Live 1, Step 1
+alive after dropping it: none
+every override set:
+  override screen.cache
+  Cache#6()
+  override screen.safeDIBuilder
+  Screen#6(cache: Cache#6, stepBuilder: builder)
+  Home#3(screen: Screen#6)
+  Root#3(home: Home#3)
+  Live#6(cache: Cache#6)
+  override screen.stepBuilder.safeDIBuilder
+  Step#6(api: Live#6, screenBuilder: builder)
+  Cache#7()
+  Screen#7(cache: Cache#7, stepBuilder: builder)
+  Live#7(cache: Cache#7)
+  override screen.stepBuilder.safeDIBuilder
+  Step#7(api: Live#7, screenBuilder: builder)
+  Cache#8()
+  Screen#8(cache: Cache#8, stepBuilder: builder)
+  Live#8(cache: Cache#8)
+  override screen.stepBuilder.safeDIBuilder
+  Step#8(api: Live#8, screenBuilder: builder)
+alive after dropping everything: none

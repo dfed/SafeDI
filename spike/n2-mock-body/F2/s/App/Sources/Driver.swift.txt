@@ -1,0 +1,51 @@
+import Harness
+import SafeDI
+
+func make() -> Home { Home.mock() }
+
+public func runFixture() {
+	do {
+		let home = make()
+		let step1 = home.screen.stepBuilder.instantiate()
+		let screen2 = step1.screenBuilder.instantiate()
+		let step2 = screen2.stepBuilder.instantiate()
+		let screen3 = step2.screenBuilder.instantiate()
+		let step3 = screen3.stepBuilder.instantiate()
+		print("trace of three levels:")
+		Registry.printTrace()
+		withExtendedLifetime((home, step1, screen2, step2, screen3, step3)) {}
+	}
+	Registry.printAlive("after dropping everything")
+	do {
+		let step2: Step
+		do {
+			step2 = make().screen.stepBuilder.instantiate().screenBuilder.instantiate().stepBuilder.instantiate()
+		}
+		Registry.printTrace()
+		Registry.printAlive("holding only screen 2's step")
+		withExtendedLifetime(step2) {}
+	}
+	Registry.printAlive("after dropping it")
+}
+
+/// Every override field notes its path when read, then builds what the default would.
+public func runOverrides() {
+	do {
+		let home = Home.mock(safeDIOverrides: .init(screen: .init(
+			cache: { Registry.note("override screen.cache"); return Cache() },
+			stepBuilder: .init(
+				model: { cache in Registry.note("override screen.stepBuilder.model"); return Model(cache: cache) },
+				{ model, screenBuilder in Registry.note("override screen.stepBuilder.safeDIBuilder"); return Step(model: model, screenBuilder: screenBuilder) },
+			),
+			{ cache, stepBuilder in Registry.note("override screen.safeDIBuilder"); return Screen(cache: cache, stepBuilder: stepBuilder) },
+		)))
+		let step1 = home.screen.stepBuilder.instantiate()
+		let step2 = step1.screenBuilder.instantiate().stepBuilder.instantiate()
+		let step3 = step2.screenBuilder.instantiate().stepBuilder.instantiate()
+		print("every override set:")
+		Registry.printTrace()
+		withExtendedLifetime((home, step1, step2, step3)) {}
+	}
+	Registry.printAlive("after dropping everything")
+}
+public let overridesRunner: (@Sendable () -> Void)? = runOverrides

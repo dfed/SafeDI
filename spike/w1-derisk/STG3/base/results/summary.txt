@@ -1,0 +1,7 @@
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (4 distinct errors)
+b -O: does not compile (4 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies

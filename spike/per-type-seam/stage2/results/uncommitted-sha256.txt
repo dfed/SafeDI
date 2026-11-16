@@ -1,0 +1,21 @@
+# Emitted files not committed (sizes above 16 screens or 60 types). Regenerate with run-e.sh (E) or
+#   python3 -I spec_l.py 240 >spec-L240.json; python3 -I emit.py spec-L240.json L240; ./measure.zsh L240
+# (b) is SafeDITool generate's output (stored/), (c) and (d) emit.py's (Generated/). Full sha256, wc -l:
+17ef1b3089780d4ada39498344568c5f3378d065ce2d4f730822d3505bbf44c8  17126  E24/b/stored/Feature.swift.txt
+91bfc18a6fe1b8c7c203d0d0a088f7d6dab57c89e0ef0b9ed043245c1bca273c  220  E24/b/stored/App.swift.txt
+9eebffac025dd3a2a98ac9bdb281bc0ba9c9c3235ecb3d6ca52819b4f881b5bc  17490  E24/c/Feature/Generated/Feature.swift.txt
+3aba71d56fec5e21cf65eb8422c3afd4e2a5fa1d93bfd8060f176bd4978935d1  205  E24/c/App/Generated/App.swift.txt
+8e25c438d6647ef2dcbd2132681f874254c9587a18770114be0945a1dd899abb  1226  E24/d/Feature/Generated/Feature.swift.txt
+3aba71d56fec5e21cf65eb8422c3afd4e2a5fa1d93bfd8060f176bd4978935d1  205  E24/d/App/Generated/App.swift.txt
+5125cadaab511588dd87dce16700ef88ad34db0d6eaf2ec54075564bf147aa00  149510  E32/b/stored/Feature.swift.txt
+795aa46535f6863cac76948fbb7daa9c04a39c9e48115bc298ab17eb4efc393b  276  E32/b/stored/App.swift.txt
+bd3780762ab816caa7cd227d9f5e91edaeb63a1de4f3b171bc2f2d9cfce7ae2e  149986  E32/c/Feature/Generated/Feature.swift.txt
+b304c0de4e7ad5d2e959563c5eb539abf24a1bc52493639381250bb19a5bf171  261  E32/c/App/Generated/App.swift.txt
+feb99c2903d72a539729f1b8b231a9b91f352cf90da757314301692e7131f1cd  1610  E32/d/Feature/Generated/Feature.swift.txt
+b304c0de4e7ad5d2e959563c5eb539abf24a1bc52493639381250bb19a5bf171  261  E32/d/App/Generated/App.swift.txt
+e58e89b502951f7b56591d121cacbbb58c241d639db21bcb1865c125bed66782  4680  L240/b/stored/Feature.swift.txt
+2609a11d794d01b49b01aa6b1a05601e442d297e49b30b72f25488d741e86908  895  L240/b/stored/App.swift.txt
+db91942f580720a01792d21f4cabc69246f96c2063e70d416a288935ee9e5201  5367  L240/c/Feature/Generated/Feature.swift.txt
+f484feb0c2bde26947cc753ff7d1249121c990309d8e0c0c755f3c03260e9d31  795  L240/c/App/Generated/App.swift.txt
+5d3f4236b7e6d432aa4cfad001b2d09fd792530121458e7b8635e08ccf7a765e  4416  L240/d/Feature/Generated/Feature.swift.txt
+f484feb0c2bde26947cc753ff7d1249121c990309d8e0c0c755f3c03260e9d31  795  L240/d/App/Generated/App.swift.txt

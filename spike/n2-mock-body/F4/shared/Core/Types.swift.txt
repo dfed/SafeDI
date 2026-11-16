@@ -1,0 +1,13 @@
+import Harness
+import SafeDI
+
+public protocol Api: AnyObject {}
+
+@Instantiable
+public final class Cache: Instantiable, Traced {
+    public init() {
+        Registry.created(self, [:])
+    }
+
+    public let tracker = Tracker("Cache")
+}

@@ -1,0 +1,27 @@
+import Inner
+import Harness
+import SafeDI
+
+#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)
+
+@Instantiable
+public final class Db: Instantiable, Traced, Sendable {
+    public init() {
+        Registry.created(self, [:])
+    }
+
+    public let tracker = Tracker("Db")
+}
+
+@Instantiable(generateDependencyTree: true)
+public final class Store: Instantiable, Traced {
+    public init(db: Db, aBuilder: SendableInstantiator<A>) {
+        self.db = db
+        self.aBuilder = aBuilder
+        Registry.created(self, ["db": db, "aBuilder": aBuilder])
+    }
+
+    public let tracker = Tracker("Store")
+    @Instantiated public let db: Db
+    @Instantiated public let aBuilder: SendableInstantiator<A>
+}

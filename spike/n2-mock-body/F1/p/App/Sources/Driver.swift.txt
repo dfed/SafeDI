@@ -1,0 +1,16 @@
+import Harness
+import SafeDI
+
+/// Production reference: Top builds `service`, then `rootBuilder` builds Root with a forwarded `user`.
+public func runFixture() {
+	do {
+		let user = User()
+		let root = Top().rootBuilder.instantiate(user)
+		let c = root.cBuilder.instantiate()
+		print("no overrides:")
+		Registry.printTrace()
+		withExtendedLifetime((root, c)) {}
+	}
+	Registry.printAlive("after dropping everything")
+}
+public let overridesRunner: (@Sendable () -> Void)? = nil

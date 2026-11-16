@@ -1,0 +1,14 @@
+trace Root():
+  Session#1()
+  Analytics#1()
+  Session#2()
+  DefaultUserService#1(analytics: Analytics#1, session: Session#2)
+  Avatar#1(userService: DefaultUserService#1)
+  Home#1(session: Session#2, avatar: Avatar#1)
+  Theme#1()
+  DefaultUserService#2(analytics: Analytics#1, session: Session#1)
+  Avatar#2(userService: DefaultUserService#2)
+  Settings#1(theme: Theme#1, avatar: Avatar#2)
+  Service#1(analytics: Analytics#1, home: Home#1, settings: Settings#1)
+  Root#1(session: Session#1, service: Service#1)
+alive after dropping Root: none

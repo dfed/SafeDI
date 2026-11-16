@@ -1,0 +1,5 @@
+=== E16: values
+a: 433 lines, sha256 9e6d0156f0e642dd, trace equals (a)
+b: 433 lines, sha256 9e6d0156f0e642dd, trace equals (a)
+c: 433 lines, sha256 9e6d0156f0e642dd, trace equals (a)
+d: 433 lines, sha256 9e6d0156f0e642dd, trace equals (a)

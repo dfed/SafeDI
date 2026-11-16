@@ -1,0 +1,622 @@
+import Feature
+import Harness
+import SafeDI
+
+extension Root {
+    public convenience init() {
+        func __safeDI_hub() -> Hub {
+            func __safeDI_liveBpi() -> any Bpi {
+                LiveBpi()
+            }
+            func __safeDI_liveApi() -> any Api {
+                LiveApi()
+            }
+            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIScope_Api.__safeDI_Builder<any Api> {
+                .init(
+                    t39: { _ in __safeDI_apiBuilder_Hub_T39_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T39_Scope() -> Hub.SafeDIScope_Api.T39_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t10: { _ in __safeDI_apiBuilder_Hub_T10_Scope() },
+                    t55Builder: { _ in __safeDI_apiBuilder_Hub_T55_Scope() },
+                    t58Builder: { _ in __safeDI_apiBuilder_Hub_T58_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T10_Scope() -> Hub.SafeDIScope_Api.T10_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t2Builder: { _ in __safeDI_apiBuilder_Hub_T2_Scope() },
+                    t5: { _ in __safeDI_apiBuilder_Hub_T5_Scope() },
+                    t43Builder: { _ in __safeDI_apiBuilder_Hub_T43_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T55_Scope() -> Hub.SafeDIScope_Api.T55_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t56Builder: { _ in __safeDI_apiBuilder_Hub_T56_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T58_Scope() -> Hub.SafeDIScope_Api.T58_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t37: { _ in __safeDI_apiBuilder_Hub_T37_Scope() },
+                    t42Builder: { _ in __safeDI_apiBuilder_Hub_T42_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T2_Scope() -> Hub.SafeDIScope_Api.T2_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    api: { _ in __safeDI_liveApi() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T5_Scope() -> Hub.SafeDIScope_Api.T5_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t20: { _ in __safeDI_apiBuilder_Hub_T20_Scope() },
+                    t25Builder: { _ in __safeDI_apiBuilder_Hub_T25_Scope() },
+                    t14: { _ in __safeDI_apiBuilder_Hub_T14_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T43_Scope() -> Hub.SafeDIScope_Api.T43_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t26: { _ in __safeDI_apiBuilder_Hub_T26_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T56_Scope() -> Hub.SafeDIScope_Api.T56_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t14Builder: { _ in __safeDI_apiBuilder_Hub_T14_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T37_Scope() -> Hub.SafeDIScope_Api.T37_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t14Builder: { _ in __safeDI_apiBuilder_Hub_T14_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T42_Scope() -> Hub.SafeDIScope_Api.T42_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t4Builder: { _ in __safeDI_apiBuilder_Hub_T4_Scope() },
+                    t13Builder: { _ in __safeDI_apiBuilder_Hub_T13_Scope() },
+                    t18Builder: { _ in __safeDI_apiBuilder_Hub_T18_Scope() },
+                    t46: { _ in __safeDI_apiBuilder_Hub_T46_Scope() },
+                    t51Builder: { _ in __safeDI_apiBuilder_Hub_T51_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T20_Scope() -> Hub.SafeDIScope_Api.T20_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T25_Scope() -> Hub.SafeDIScope_Api.T25_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T14_Scope() -> Hub.SafeDIScope_Api.T14_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T26_Scope() -> Hub.SafeDIScope_Api.T26_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    api: { _ in __safeDI_liveApi() },
+                    t54: { _ in __safeDI_apiBuilder_Hub_T54_Scope() },
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T4_Scope() -> Hub.SafeDIScope_Api.T4_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T13_Scope() -> Hub.SafeDIScope_Api.T13_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T18_Scope() -> Hub.SafeDIScope_Api.T18_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() },
+                    t14: { _ in __safeDI_apiBuilder_Hub_T14_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T46_Scope() -> Hub.SafeDIScope_Api.T46_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t16Builder: { _ in __safeDI_apiBuilder_Hub_T16_Scope() },
+                    t35: { _ in __safeDI_apiBuilder_Hub_T35_Scope() },
+                    t57: { _ in __safeDI_apiBuilder_Hub_T57_Scope() },
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T51_Scope() -> Hub.SafeDIScope_Api.T51_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t15: { _ in __safeDI_apiBuilder_Hub_T15_Scope() },
+                    t49: { _ in __safeDI_apiBuilder_Hub_T49_Scope() },
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T33_Scope() -> Hub.SafeDIScope_Api.T33_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    api: { _ in __safeDI_liveApi() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T54_Scope() -> Hub.SafeDIScope_Api.T54_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t1: { _ in __safeDI_apiBuilder_Hub_T1_Scope() },
+                    t17Builder: { _ in __safeDI_apiBuilder_Hub_T17_Scope() },
+                    t24: { _ in __safeDI_apiBuilder_Hub_T24_Scope() },
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T16_Scope() -> Hub.SafeDIScope_Api.T16_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t30: { _ in __safeDI_apiBuilder_Hub_T30_Scope() },
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T35_Scope() -> Hub.SafeDIScope_Api.T35_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() },
+                    t59: { _ in __safeDI_apiBuilder_Hub_T59_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T57_Scope() -> Hub.SafeDIScope_Api.T57_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() },
+                    t13: { _ in __safeDI_apiBuilder_Hub_T13_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T15_Scope() -> Hub.SafeDIScope_Api.T15_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t23Builder: { _ in __safeDI_apiBuilder_Hub_T23_Scope() },
+                    t27: { _ in __safeDI_apiBuilder_Hub_T27_Scope() },
+                    t29Builder: { _ in __safeDI_apiBuilder_Hub_T29_Scope() },
+                    t31Builder: { _ in __safeDI_apiBuilder_Hub_T31_Scope() },
+                    t38: { _ in __safeDI_apiBuilder_Hub_T38_Scope() },
+                    t45Builder: { _ in __safeDI_apiBuilder_Hub_T45_Scope() },
+                    t59: { _ in __safeDI_apiBuilder_Hub_T59_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T49_Scope() -> Hub.SafeDIScope_Api.T49_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t32Builder: { _ in __safeDI_apiBuilder_Hub_T32_Scope() },
+                    t31: { _ in __safeDI_apiBuilder_Hub_T31_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T1_Scope() -> Hub.SafeDIScope_Api.T1_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() },
+                    t41Builder: { _ in __safeDI_apiBuilder_Hub_T41_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T17_Scope() -> Hub.SafeDIScope_Api.T17_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T24_Scope() -> Hub.SafeDIScope_Api.T24_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() },
+                    api: { _ in __safeDI_liveApi() },
+                    t40: { _ in __safeDI_apiBuilder_Hub_T40_Scope() },
+                    t31: { _ in __safeDI_apiBuilder_Hub_T31_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T30_Scope() -> Hub.SafeDIScope_Api.T30_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t50Builder: { _ in __safeDI_apiBuilder_Hub_T50_Scope() },
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() },
+                    t48Builder: { _ in __safeDI_apiBuilder_Hub_T48_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T59_Scope() -> Hub.SafeDIScope_Api.T59_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t40Builder: { _ in __safeDI_apiBuilder_Hub_T40_Scope() },
+                    t41: { _ in __safeDI_apiBuilder_Hub_T41_Scope() },
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T23_Scope() -> Hub.SafeDIScope_Api.T23_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t36: { _ in __safeDI_apiBuilder_Hub_T36_Scope() },
+                    t40: { _ in __safeDI_apiBuilder_Hub_T40_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T27_Scope() -> Hub.SafeDIScope_Api.T27_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t40Builder: { _ in __safeDI_apiBuilder_Hub_T40_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T29_Scope() -> Hub.SafeDIScope_Api.T29_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t48: { _ in __safeDI_apiBuilder_Hub_T48_Scope() },
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T31_Scope() -> Hub.SafeDIScope_Api.T31_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T38_Scope() -> Hub.SafeDIScope_Api.T38_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() },
+                    t48Builder: { _ in __safeDI_apiBuilder_Hub_T48_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T45_Scope() -> Hub.SafeDIScope_Api.T45_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() },
+                    t40Builder: { _ in __safeDI_apiBuilder_Hub_T40_Scope() },
+                    t31Builder: { _ in __safeDI_apiBuilder_Hub_T31_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T32_Scope() -> Hub.SafeDIScope_Api.T32_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T41_Scope() -> Hub.SafeDIScope_Api.T41_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t9: { _ in __safeDI_apiBuilder_Hub_T9_Scope() },
+                    t34Builder: { _ in __safeDI_apiBuilder_Hub_T34_Scope() },
+                    api: { _ in __safeDI_liveApi() },
+                    t44Builder: { _ in __safeDI_apiBuilder_Hub_T44_Scope() },
+                    t52Builder: { _ in __safeDI_apiBuilder_Hub_T52_Scope() },
+                    t53Builder: { _ in __safeDI_apiBuilder_Hub_T53_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T40_Scope() -> Hub.SafeDIScope_Api.T40_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T50_Scope() -> Hub.SafeDIScope_Api.T50_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t6: { _ in __safeDI_apiBuilder_Hub_T6_Scope() },
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T48_Scope() -> Hub.SafeDIScope_Api.T48_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() },
+                    t34Builder: { _ in __safeDI_apiBuilder_Hub_T34_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T36_Scope() -> Hub.SafeDIScope_Api.T36_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t6: { _ in __safeDI_apiBuilder_Hub_T6_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T9_Scope() -> Hub.SafeDIScope_Api.T9_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() },
+                    t13Builder: { _ in __safeDI_apiBuilder_Hub_T13_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T34_Scope() -> Hub.SafeDIScope_Api.T34_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T44_Scope() -> Hub.SafeDIScope_Api.T44_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t31Builder: { _ in __safeDI_apiBuilder_Hub_T31_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T52_Scope() -> Hub.SafeDIScope_Api.T52_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T53_Scope() -> Hub.SafeDIScope_Api.T53_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33Builder: { _ in __safeDI_apiBuilder_Hub_T33_Scope() },
+                    api: { _ in __safeDI_liveApi() }
+                )
+            }
+            func __safeDI_apiBuilder_Hub_T6_Scope() -> Hub.SafeDIScope_Api.T6_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    t33: { _ in __safeDI_apiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub() -> Hub.SafeDIScope_Bpi.__safeDI_Builder<any Bpi> {
+                .init(
+                    t39: { _ in __safeDI_bpiBuilder_Hub_T39_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T39_Scope() -> Hub.SafeDIScope_Bpi.T39_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t10: { _ in __safeDI_bpiBuilder_Hub_T10_Scope() },
+                    t55Builder: { _ in __safeDI_bpiBuilder_Hub_T55_Scope() },
+                    t58Builder: { _ in __safeDI_bpiBuilder_Hub_T58_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T10_Scope() -> Hub.SafeDIScope_Bpi.T10_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t5: { _ in __safeDI_bpiBuilder_Hub_T5_Scope() },
+                    t43Builder: { _ in __safeDI_bpiBuilder_Hub_T43_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T55_Scope() -> Hub.SafeDIScope_Bpi.T55_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t56Builder: { _ in __safeDI_bpiBuilder_Hub_T56_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T58_Scope() -> Hub.SafeDIScope_Bpi.T58_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t37: { _ in __safeDI_bpiBuilder_Hub_T37_Scope() },
+                    t42Builder: { _ in __safeDI_bpiBuilder_Hub_T42_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T5_Scope() -> Hub.SafeDIScope_Bpi.T5_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t20: { _ in __safeDI_bpiBuilder_Hub_T20_Scope() },
+                    t25Builder: { _ in __safeDI_bpiBuilder_Hub_T25_Scope() },
+                    t14: { _ in __safeDI_bpiBuilder_Hub_T14_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T43_Scope() -> Hub.SafeDIScope_Bpi.T43_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t26: { _ in __safeDI_bpiBuilder_Hub_T26_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T56_Scope() -> Hub.SafeDIScope_Bpi.T56_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t14Builder: { _ in __safeDI_bpiBuilder_Hub_T14_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T37_Scope() -> Hub.SafeDIScope_Bpi.T37_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t14Builder: { _ in __safeDI_bpiBuilder_Hub_T14_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T42_Scope() -> Hub.SafeDIScope_Bpi.T42_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t4Builder: { _ in __safeDI_bpiBuilder_Hub_T4_Scope() },
+                    t13Builder: { _ in __safeDI_bpiBuilder_Hub_T13_Scope() },
+                    t18Builder: { _ in __safeDI_bpiBuilder_Hub_T18_Scope() },
+                    t46: { _ in __safeDI_bpiBuilder_Hub_T46_Scope() },
+                    t51Builder: { _ in __safeDI_bpiBuilder_Hub_T51_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T20_Scope() -> Hub.SafeDIScope_Bpi.T20_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T25_Scope() -> Hub.SafeDIScope_Bpi.T25_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T14_Scope() -> Hub.SafeDIScope_Bpi.T14_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T26_Scope() -> Hub.SafeDIScope_Bpi.T26_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t54: { _ in __safeDI_bpiBuilder_Hub_T54_Scope() },
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T4_Scope() -> Hub.SafeDIScope_Bpi.T4_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T13_Scope() -> Hub.SafeDIScope_Bpi.T13_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T18_Scope() -> Hub.SafeDIScope_Bpi.T18_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() },
+                    t14: { _ in __safeDI_bpiBuilder_Hub_T14_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T46_Scope() -> Hub.SafeDIScope_Bpi.T46_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t16Builder: { _ in __safeDI_bpiBuilder_Hub_T16_Scope() },
+                    t35: { _ in __safeDI_bpiBuilder_Hub_T35_Scope() },
+                    t57: { _ in __safeDI_bpiBuilder_Hub_T57_Scope() },
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T51_Scope() -> Hub.SafeDIScope_Bpi.T51_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t15: { _ in __safeDI_bpiBuilder_Hub_T15_Scope() },
+                    t49: { _ in __safeDI_bpiBuilder_Hub_T49_Scope() },
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T33_Scope() -> Hub.SafeDIScope_Bpi.T33_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    bpi: { _ in __safeDI_liveBpi() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T54_Scope() -> Hub.SafeDIScope_Bpi.T54_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t1: { _ in __safeDI_bpiBuilder_Hub_T1_Scope() },
+                    t17Builder: { _ in __safeDI_bpiBuilder_Hub_T17_Scope() },
+                    t24: { _ in __safeDI_bpiBuilder_Hub_T24_Scope() },
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() },
+                    bpi: { _ in __safeDI_liveBpi() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T16_Scope() -> Hub.SafeDIScope_Bpi.T16_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t30: { _ in __safeDI_bpiBuilder_Hub_T30_Scope() },
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T35_Scope() -> Hub.SafeDIScope_Bpi.T35_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() },
+                    bpi: { _ in __safeDI_liveBpi() },
+                    t59: { _ in __safeDI_bpiBuilder_Hub_T59_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T57_Scope() -> Hub.SafeDIScope_Bpi.T57_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() },
+                    t13: { _ in __safeDI_bpiBuilder_Hub_T13_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T15_Scope() -> Hub.SafeDIScope_Bpi.T15_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t23Builder: { _ in __safeDI_bpiBuilder_Hub_T23_Scope() },
+                    t27: { _ in __safeDI_bpiBuilder_Hub_T27_Scope() },
+                    t29Builder: { _ in __safeDI_bpiBuilder_Hub_T29_Scope() },
+                    t31Builder: { _ in __safeDI_bpiBuilder_Hub_T31_Scope() },
+                    t38: { _ in __safeDI_bpiBuilder_Hub_T38_Scope() },
+                    t45Builder: { _ in __safeDI_bpiBuilder_Hub_T45_Scope() },
+                    t59: { _ in __safeDI_bpiBuilder_Hub_T59_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T49_Scope() -> Hub.SafeDIScope_Bpi.T49_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t32Builder: { _ in __safeDI_bpiBuilder_Hub_T32_Scope() },
+                    t31: { _ in __safeDI_bpiBuilder_Hub_T31_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T1_Scope() -> Hub.SafeDIScope_Bpi.T1_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() },
+                    t41Builder: { _ in __safeDI_bpiBuilder_Hub_T41_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T17_Scope() -> Hub.SafeDIScope_Bpi.T17_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T24_Scope() -> Hub.SafeDIScope_Bpi.T24_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() },
+                    t40: { _ in __safeDI_bpiBuilder_Hub_T40_Scope() },
+                    t31: { _ in __safeDI_bpiBuilder_Hub_T31_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T30_Scope() -> Hub.SafeDIScope_Bpi.T30_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t50Builder: { _ in __safeDI_bpiBuilder_Hub_T50_Scope() },
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() },
+                    t48Builder: { _ in __safeDI_bpiBuilder_Hub_T48_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T59_Scope() -> Hub.SafeDIScope_Bpi.T59_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t40Builder: { _ in __safeDI_bpiBuilder_Hub_T40_Scope() },
+                    t41: { _ in __safeDI_bpiBuilder_Hub_T41_Scope() },
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T23_Scope() -> Hub.SafeDIScope_Bpi.T23_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t36: { _ in __safeDI_bpiBuilder_Hub_T36_Scope() },
+                    t40: { _ in __safeDI_bpiBuilder_Hub_T40_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T27_Scope() -> Hub.SafeDIScope_Bpi.T27_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t40Builder: { _ in __safeDI_bpiBuilder_Hub_T40_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T29_Scope() -> Hub.SafeDIScope_Bpi.T29_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t48: { _ in __safeDI_bpiBuilder_Hub_T48_Scope() },
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T31_Scope() -> Hub.SafeDIScope_Bpi.T31_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T38_Scope() -> Hub.SafeDIScope_Bpi.T38_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() },
+                    t48Builder: { _ in __safeDI_bpiBuilder_Hub_T48_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T45_Scope() -> Hub.SafeDIScope_Bpi.T45_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() },
+                    t40Builder: { _ in __safeDI_bpiBuilder_Hub_T40_Scope() },
+                    t31Builder: { _ in __safeDI_bpiBuilder_Hub_T31_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T32_Scope() -> Hub.SafeDIScope_Bpi.T32_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() },
+                    bpi: { _ in __safeDI_liveBpi() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T41_Scope() -> Hub.SafeDIScope_Bpi.T41_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t9: { _ in __safeDI_bpiBuilder_Hub_T9_Scope() },
+                    t34Builder: { _ in __safeDI_bpiBuilder_Hub_T34_Scope() },
+                    t44Builder: { _ in __safeDI_bpiBuilder_Hub_T44_Scope() },
+                    t52Builder: { _ in __safeDI_bpiBuilder_Hub_T52_Scope() },
+                    t53Builder: { _ in __safeDI_bpiBuilder_Hub_T53_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T40_Scope() -> Hub.SafeDIScope_Bpi.T40_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    bpi: { _ in __safeDI_liveBpi() },
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T50_Scope() -> Hub.SafeDIScope_Bpi.T50_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t6: { _ in __safeDI_bpiBuilder_Hub_T6_Scope() },
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T48_Scope() -> Hub.SafeDIScope_Bpi.T48_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() },
+                    t34Builder: { _ in __safeDI_bpiBuilder_Hub_T34_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T36_Scope() -> Hub.SafeDIScope_Bpi.T36_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t6: { _ in __safeDI_bpiBuilder_Hub_T6_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T9_Scope() -> Hub.SafeDIScope_Bpi.T9_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() },
+                    t13Builder: { _ in __safeDI_bpiBuilder_Hub_T13_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T34_Scope() -> Hub.SafeDIScope_Bpi.T34_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T44_Scope() -> Hub.SafeDIScope_Bpi.T44_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t31Builder: { _ in __safeDI_bpiBuilder_Hub_T31_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T52_Scope() -> Hub.SafeDIScope_Bpi.T52_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T53_Scope() -> Hub.SafeDIScope_Bpi.T53_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33Builder: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() }
+                )
+            }
+            func __safeDI_bpiBuilder_Hub_T6_Scope() -> Hub.SafeDIScope_Bpi.T6_Scope.__safeDI_Builder<any Bpi> {
+                .init(
+                    t33: { _ in __safeDI_bpiBuilder_Hub_T33_Scope() },
+                    bpi: { _ in __safeDI_liveBpi() }
+                )
+            }
+            return Hub(__safeDI_apiBuilder: __safeDI_apiBuilder_Hub(), __safeDI_bpiBuilder: __safeDI_bpiBuilder_Hub())
+        }
+        let hub: Hub = __safeDI_hub()
+        self.init(hub: hub)
+    }
+}

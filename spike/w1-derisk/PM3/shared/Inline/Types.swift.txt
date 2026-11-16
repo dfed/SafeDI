@@ -1,0 +1,79 @@
+import Harness
+import SafeDI
+
+public protocol Api: AnyObject {}
+
+#if DEBUG
+/// Main calls Root's internal mock through this.
+public func rootMock() -> Root {
+    Root.mock()
+}
+#endif
+
+@Instantiable
+public final class Cache: Instantiable, Traced {
+    public init() {
+        Registry.created(self, [:])
+    }
+
+    public let tracker = Tracker("Cache")
+}
+
+@Instantiable(generateMock: .public)
+public final class Home: Instantiable, Traced {
+    init(screen: Screen) {
+        self.screen = screen
+        Registry.created(self, ["screen": screen])
+    }
+
+    public let tracker = Tracker("Home")
+    @Instantiated public let screen: Screen
+}
+
+@Instantiable
+public final class Screen: Instantiable, Traced {
+    init(cache: Cache, stepBuilder: Instantiator<Step>) {
+        self.cache = cache
+        self.stepBuilder = stepBuilder
+        Registry.created(self, ["cache": cache, "stepBuilder": stepBuilder])
+    }
+
+    public let tracker = Tracker("Screen")
+    @Instantiated public let cache: Cache
+    @Instantiated public let stepBuilder: Instantiator<Step>
+}
+
+@Instantiable
+public final class Step: Instantiable, Traced {
+    init(api: any Api, screenBuilder: Instantiator<Screen>) {
+        self.api = api
+        self.screenBuilder = screenBuilder
+        Registry.created(self, ["api": api, "screenBuilder": screenBuilder])
+    }
+
+    public let tracker = Tracker("Step")
+    @Instantiated public let api: any Api
+    @Instantiated public let screenBuilder: Instantiator<Screen>
+}
+
+@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+public final class Live: Instantiable, Traced, Api {
+    public init(cache: Cache) {
+        self.cache = cache
+        Registry.created(self, ["cache": cache])
+    }
+
+    public let tracker = Tracker("Live")
+    @Received public let cache: Cache
+}
+
+@Instantiable(generateMock: true)
+public final class Root: Instantiable, Traced {
+    public init(home: Home) {
+        self.home = home
+        Registry.created(self, ["home": home])
+    }
+
+    public let tracker = Tracker("Root")
+    @Instantiated public let home: Home
+}

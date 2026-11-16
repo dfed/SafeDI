@@ -1,0 +1,287 @@
+import Harness
+import SafeDI
+
+@Instantiable(generateMock: true)
+public final class Screen0: Instantiable, Traced {
+    public init(id: Int, service: Service, context: Context, screen5Builder: Instantiator<Screen5>, screen6Builder: Instantiator<Screen6>, screen10Builder: Instantiator<Screen10>) {
+        self.id = id
+        self.service = service
+        self.context = context
+        self.screen5Builder = screen5Builder
+        self.screen6Builder = screen6Builder
+        self.screen10Builder = screen10Builder
+        Registry.created(self, ["id": id, "service": service, "context": context, "screen5Builder": screen5Builder, "screen6Builder": screen6Builder, "screen10Builder": screen10Builder])
+    }
+
+    public let tracker = Tracker("Screen0")
+    @Forwarded public let id: Int
+    @Received public let service: Service
+    @Instantiated public let context: Context
+    @Instantiated public let screen5Builder: Instantiator<Screen5>
+    @Instantiated public let screen6Builder: Instantiator<Screen6>
+    @Instantiated public let screen10Builder: Instantiator<Screen10>
+}
+
+@Instantiable(generateMock: true)
+public final class Screen1: Instantiable, Traced {
+    public init(id: Int, service: Service, context: Context, screen0Builder: Instantiator<Screen0>, screen4Builder: Instantiator<Screen4>, screen8Builder: Instantiator<Screen8>) {
+        self.id = id
+        self.service = service
+        self.context = context
+        self.screen0Builder = screen0Builder
+        self.screen4Builder = screen4Builder
+        self.screen8Builder = screen8Builder
+        Registry.created(self, ["id": id, "service": service, "context": context, "screen0Builder": screen0Builder, "screen4Builder": screen4Builder, "screen8Builder": screen8Builder])
+    }
+
+    public let tracker = Tracker("Screen1")
+    @Forwarded public let id: Int
+    @Received public let service: Service
+    @Received public let context: Context
+    @Instantiated public let screen0Builder: Instantiator<Screen0>
+    @Instantiated public let screen4Builder: Instantiator<Screen4>
+    @Instantiated public let screen8Builder: Instantiator<Screen8>
+}
+
+@Instantiable(generateMock: true)
+public final class Screen2: Instantiable, Traced {
+    public init(id: Int, service: Service, context: Context, screen1Builder: Instantiator<Screen1>, screen6Builder: Instantiator<Screen6>, screen8Builder: Instantiator<Screen8>) {
+        self.id = id
+        self.service = service
+        self.context = context
+        self.screen1Builder = screen1Builder
+        self.screen6Builder = screen6Builder
+        self.screen8Builder = screen8Builder
+        Registry.created(self, ["id": id, "service": service, "context": context, "screen1Builder": screen1Builder, "screen6Builder": screen6Builder, "screen8Builder": screen8Builder])
+    }
+
+    public let tracker = Tracker("Screen2")
+    @Forwarded public let id: Int
+    @Received public let service: Service
+    @Received public let context: Context
+    @Instantiated public let screen1Builder: Instantiator<Screen1>
+    @Instantiated public let screen6Builder: Instantiator<Screen6>
+    @Instantiated public let screen8Builder: Instantiator<Screen8>
+}
+
+@Instantiable(generateMock: true)
+public final class Screen3: Instantiable, Traced {
+    public init(id: Int, service: Service, context: Context, screen1Builder: Instantiator<Screen1>, screen7Builder: Instantiator<Screen7>, screen9Builder: Instantiator<Screen9>) {
+        self.id = id
+        self.service = service
+        self.context = context
+        self.screen1Builder = screen1Builder
+        self.screen7Builder = screen7Builder
+        self.screen9Builder = screen9Builder
+        Registry.created(self, ["id": id, "service": service, "context": context, "screen1Builder": screen1Builder, "screen7Builder": screen7Builder, "screen9Builder": screen9Builder])
+    }
+
+    public let tracker = Tracker("Screen3")
+    @Forwarded public let id: Int
+    @Received public let service: Service
+    @Received public let context: Context
+    @Instantiated public let screen1Builder: Instantiator<Screen1>
+    @Instantiated public let screen7Builder: Instantiator<Screen7>
+    @Instantiated public let screen9Builder: Instantiator<Screen9>
+}
+
+@Instantiable(generateMock: true)
+public final class Screen4: Instantiable, Traced {
+    public init(id: Int, service: Service, context: Context?, screen0Builder: Instantiator<Screen0>, screen3Builder: Instantiator<Screen3>, screen7Builder: Instantiator<Screen7>) {
+        self.id = id
+        self.service = service
+        self.context = context
+        self.screen0Builder = screen0Builder
+        self.screen3Builder = screen3Builder
+        self.screen7Builder = screen7Builder
+        Registry.created(self, ["id": id, "service": service, "context": context, "screen0Builder": screen0Builder, "screen3Builder": screen3Builder, "screen7Builder": screen7Builder])
+    }
+
+    public let tracker = Tracker("Screen4")
+    @Forwarded public let id: Int
+    @Received public let service: Service
+    @Received(onlyIfAvailable: true) public let context: Context?
+    @Instantiated public let screen0Builder: Instantiator<Screen0>
+    @Instantiated public let screen3Builder: Instantiator<Screen3>
+    @Instantiated public let screen7Builder: Instantiator<Screen7>
+}
+
+@Instantiable(generateMock: true)
+public final class Screen5: Instantiable, Traced {
+    public init(id: Int, service: Service, context: Context, screen2Builder: Instantiator<Screen2>, screen7Builder: Instantiator<Screen7>, screen11Builder: Instantiator<Screen11>) {
+        self.id = id
+        self.service = service
+        self.context = context
+        self.screen2Builder = screen2Builder
+        self.screen7Builder = screen7Builder
+        self.screen11Builder = screen11Builder
+        Registry.created(self, ["id": id, "service": service, "context": context, "screen2Builder": screen2Builder, "screen7Builder": screen7Builder, "screen11Builder": screen11Builder])
+    }
+
+    public let tracker = Tracker("Screen5")
+    @Forwarded public let id: Int
+    @Received public let service: Service
+    @Instantiated public let context: Context
+    @Instantiated public let screen2Builder: Instantiator<Screen2>
+    @Instantiated public let screen7Builder: Instantiator<Screen7>
+    @Instantiated public let screen11Builder: Instantiator<Screen11>
+}
+
+@Instantiable(generateMock: true)
+public final class Screen6: Instantiable, Traced {
+    public init(id: Int, service: Service, context: Context, screen2Builder: Instantiator<Screen2>, screen8Builder: Instantiator<Screen8>, screen10Builder: Instantiator<Screen10>) {
+        self.id = id
+        self.service = service
+        self.context = context
+        self.screen2Builder = screen2Builder
+        self.screen8Builder = screen8Builder
+        self.screen10Builder = screen10Builder
+        Registry.created(self, ["id": id, "service": service, "context": context, "screen2Builder": screen2Builder, "screen8Builder": screen8Builder, "screen10Builder": screen10Builder])
+    }
+
+    public let tracker = Tracker("Screen6")
+    @Forwarded public let id: Int
+    @Received public let service: Service
+    @Received public let context: Context
+    @Instantiated public let screen2Builder: Instantiator<Screen2>
+    @Instantiated public let screen8Builder: Instantiator<Screen8>
+    @Instantiated public let screen10Builder: Instantiator<Screen10>
+}
+
+@Instantiable(generateMock: true)
+public final class Screen7: Instantiable, Traced {
+    public init(id: Int, service: Service, context: Context, screen0Builder: Instantiator<Screen0>, screen2Builder: Instantiator<Screen2>, screen10Builder: Instantiator<Screen10>) {
+        self.id = id
+        self.service = service
+        self.context = context
+        self.screen0Builder = screen0Builder
+        self.screen2Builder = screen2Builder
+        self.screen10Builder = screen10Builder
+        Registry.created(self, ["id": id, "service": service, "context": context, "screen0Builder": screen0Builder, "screen2Builder": screen2Builder, "screen10Builder": screen10Builder])
+    }
+
+    public let tracker = Tracker("Screen7")
+    @Forwarded public let id: Int
+    @Received public let service: Service
+    @Received public let context: Context
+    @Instantiated public let screen0Builder: Instantiator<Screen0>
+    @Instantiated public let screen2Builder: Instantiator<Screen2>
+    @Instantiated public let screen10Builder: Instantiator<Screen10>
+}
+
+@Instantiable(generateMock: true)
+public final class Screen8: Instantiable, Traced {
+    public init(id: Int, service: Service, context: Context?, screen2Builder: Instantiator<Screen2>, screen3Builder: Instantiator<Screen3>, screen10Builder: Instantiator<Screen10>) {
+        self.id = id
+        self.service = service
+        self.context = context
+        self.screen2Builder = screen2Builder
+        self.screen3Builder = screen3Builder
+        self.screen10Builder = screen10Builder
+        Registry.created(self, ["id": id, "service": service, "context": context, "screen2Builder": screen2Builder, "screen3Builder": screen3Builder, "screen10Builder": screen10Builder])
+    }
+
+    public let tracker = Tracker("Screen8")
+    @Forwarded public let id: Int
+    @Received public let service: Service
+    @Received(onlyIfAvailable: true) public let context: Context?
+    @Instantiated public let screen2Builder: Instantiator<Screen2>
+    @Instantiated public let screen3Builder: Instantiator<Screen3>
+    @Instantiated public let screen10Builder: Instantiator<Screen10>
+}
+
+@Instantiable(generateMock: true)
+public final class Screen9: Instantiable, Traced {
+    public init(id: Int, service: Service, context: Context, screen3Builder: Instantiator<Screen3>, screen5Builder: Instantiator<Screen5>, screen8Builder: Instantiator<Screen8>) {
+        self.id = id
+        self.service = service
+        self.context = context
+        self.screen3Builder = screen3Builder
+        self.screen5Builder = screen5Builder
+        self.screen8Builder = screen8Builder
+        Registry.created(self, ["id": id, "service": service, "context": context, "screen3Builder": screen3Builder, "screen5Builder": screen5Builder, "screen8Builder": screen8Builder])
+    }
+
+    public let tracker = Tracker("Screen9")
+    @Forwarded public let id: Int
+    @Received public let service: Service
+    @Received public let context: Context
+    @Instantiated public let screen3Builder: Instantiator<Screen3>
+    @Instantiated public let screen5Builder: Instantiator<Screen5>
+    @Instantiated public let screen8Builder: Instantiator<Screen8>
+}
+
+@Instantiable(generateMock: true)
+public final class Screen10: Instantiable, Traced {
+    public init(id: Int, service: Service, context: Context?, screen2Builder: Instantiator<Screen2>, screen3Builder: Instantiator<Screen3>, screen6Builder: Instantiator<Screen6>) {
+        self.id = id
+        self.service = service
+        self.context = context
+        self.screen2Builder = screen2Builder
+        self.screen3Builder = screen3Builder
+        self.screen6Builder = screen6Builder
+        Registry.created(self, ["id": id, "service": service, "context": context, "screen2Builder": screen2Builder, "screen3Builder": screen3Builder, "screen6Builder": screen6Builder])
+    }
+
+    public let tracker = Tracker("Screen10")
+    @Forwarded public let id: Int
+    @Received public let service: Service
+    @Received(onlyIfAvailable: true) public let context: Context?
+    @Instantiated public let screen2Builder: Instantiator<Screen2>
+    @Instantiated public let screen3Builder: Instantiator<Screen3>
+    @Instantiated public let screen6Builder: Instantiator<Screen6>
+}
+
+@Instantiable(generateMock: true)
+public final class Screen11: Instantiable, Traced {
+    public init(id: Int, service: Service, context: Context, screen0Builder: Instantiator<Screen0>, screen5Builder: Instantiator<Screen5>, screen6Builder: Instantiator<Screen6>) {
+        self.id = id
+        self.service = service
+        self.context = context
+        self.screen0Builder = screen0Builder
+        self.screen5Builder = screen5Builder
+        self.screen6Builder = screen6Builder
+        Registry.created(self, ["id": id, "service": service, "context": context, "screen0Builder": screen0Builder, "screen5Builder": screen5Builder, "screen6Builder": screen6Builder])
+    }
+
+    public let tracker = Tracker("Screen11")
+    @Forwarded public let id: Int
+    @Received public let service: Service
+    @Received public let context: Context
+    @Instantiated public let screen0Builder: Instantiator<Screen0>
+    @Instantiated public let screen5Builder: Instantiator<Screen5>
+    @Instantiated public let screen6Builder: Instantiator<Screen6>
+}
+
+@Instantiable(isRoot: true, generateMock: true)
+public final class Root: Instantiable, Traced {
+    public init(service: Service, context: Context, screen0Builder: Instantiator<Screen0>) {
+        self.service = service
+        self.context = context
+        self.screen0Builder = screen0Builder
+        Registry.created(self, ["service": service, "context": context, "screen0Builder": screen0Builder])
+    }
+
+    public let tracker = Tracker("Root")
+    @Instantiated public let service: Service
+    @Instantiated public let context: Context
+    @Instantiated public let screen0Builder: Instantiator<Screen0>
+}
+
+@Instantiable(generateMock: true)
+public final class Service: Instantiable, Traced {
+    public init() {
+        Registry.created(self, [:])
+    }
+
+    public let tracker = Tracker("Service")
+}
+
+@Instantiable(generateMock: true)
+public final class Context: Instantiable, Traced {
+    public init() {
+        Registry.created(self, [:])
+    }
+
+    public let tracker = Tracker("Context")
+}

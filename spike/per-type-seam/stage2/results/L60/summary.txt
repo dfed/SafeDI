@@ -1,0 +1,21 @@
+compile -Onone (whole module): median (min–max) over measured rounds
+  a App: wall 1.95 s (1.94–2.12), user 1.80 s (1.77–1.97), peak memory 0.12 GB (0.12–0.12), rounds 3
+  b App: wall 0.45 s (0.40–0.49), user 0.37 s (0.34–0.41), peak memory 0.12 GB (0.12–0.12), rounds 3
+  b Feature: wall 3.46 s (3.40–3.93), user 3.30 s (3.24–3.71), peak memory 0.16 GB (0.16–0.16), rounds 3
+  c App: wall 0.42 s (0.41–0.54), user 0.36 s (0.30–0.47), peak memory 0.12 GB (0.12–0.12), rounds 3
+  c Feature: wall 3.71 s (3.48–3.89), user 3.52 s (3.26–3.66), peak memory 0.16 GB (0.16–0.16), rounds 3
+  d App: wall 0.44 s (0.41–0.51), user 0.36 s (0.33–0.45), peak memory 0.12 GB (0.12–0.12), rounds 3
+  d Feature: wall 3.45 s (3.20–3.51), user 3.26 s (3.01–3.27), peak memory 0.15 GB (0.15–0.15), rounds 3
+compile -O (whole module): median (min–max) over measured rounds
+  a App: wall 1.48 s (1.48–1.48), user 1.39 s (1.39–1.39), peak memory 0.13 GB (0.13–0.13), rounds 1
+  b App: wall 0.36 s (0.36–0.36), user 0.30 s (0.30–0.30), peak memory 0.12 GB (0.12–0.12), rounds 1
+  b Feature: wall 7.74 s (7.74–7.74), user 7.58 s (7.58–7.58), peak memory 0.17 GB (0.17–0.17), rounds 1
+  c App: wall 0.39 s (0.39–0.39), user 0.34 s (0.34–0.34), peak memory 0.12 GB (0.12–0.12), rounds 1
+  c Feature: wall 6.04 s (6.04–6.04), user 5.94 s (5.94–5.94), peak memory 0.16 GB (0.16–0.16), rounds 1
+  d App: wall 0.48 s (0.48–0.48), user 0.41 s (0.41–0.41), peak memory 0.12 GB (0.12–0.12), rounds 1
+  d Feature: wall 5.76 s (5.76–5.76), user 5.61 s (5.61–5.61), peak memory 0.16 GB (0.16–0.16), rounds 1
+runtime (-O): ns per Root() plus walk of every path, median (min–max) of 7 rounds
+  a: 22.58 µs (21.55–24.09), 173 values per walk
+  b: 191.08 µs (182.50–276.15), 173 values per walk
+  c: 61.64 µs (55.04–78.75), 173 values per walk
+  d: 47.79 µs (41.88–62.02), 173 values per walk

@@ -1,0 +1,842 @@
+import Harness
+import SafeDI
+
+extension Home {
+    nonisolated public enum SafeDIScope_Api {
+        nonisolated public struct screen0Builder_Values {
+            public var service: Service { __safeDI_service.instance }
+            let __safeDI_service: LazilyInstantiated<Service>
+
+            init(service: LazilyInstantiated<Service>) {
+                __safeDI_service = service
+            }
+        }
+
+        nonisolated public struct screen1Builder_Values {
+            public var service: Service { __safeDI_service.instance }
+            public let screen0Builder: Instantiator<Screen0>
+            let __safeDI_service: LazilyInstantiated<Service>
+
+            init(service: LazilyInstantiated<Service>, screen0Builder: Instantiator<Screen0>) {
+                __safeDI_service = service
+                self.screen0Builder = screen0Builder
+            }
+        }
+
+        nonisolated public struct screen2Builder_Values {
+            public var service: Service { __safeDI_service.instance }
+            public let screen0Builder: Instantiator<Screen0>
+            public let screen1Builder: Instantiator<Screen1>
+            let __safeDI_service: LazilyInstantiated<Service>
+
+            init(service: LazilyInstantiated<Service>, screen0Builder: Instantiator<Screen0>, screen1Builder: Instantiator<Screen1>) {
+                __safeDI_service = service
+                self.screen0Builder = screen0Builder
+                self.screen1Builder = screen1Builder
+            }
+        }
+
+        nonisolated public struct screen3Builder_Values {
+            public var service: Service { __safeDI_service.instance }
+            public let screen0Builder: Instantiator<Screen0>
+            public let screen1Builder: Instantiator<Screen1>
+            public let screen2Builder: Instantiator<Screen2>
+            let __safeDI_service: LazilyInstantiated<Service>
+
+            init(service: LazilyInstantiated<Service>, screen0Builder: Instantiator<Screen0>, screen1Builder: Instantiator<Screen1>, screen2Builder: Instantiator<Screen2>) {
+                __safeDI_service = service
+                self.screen0Builder = screen0Builder
+                self.screen1Builder = screen1Builder
+                self.screen2Builder = screen2Builder
+            }
+        }
+
+        nonisolated public struct __safeDI_Builder<Built> {
+            public let screen0Builder: (screen0Builder_Values) -> Screen0_Scope.__safeDI_Builder<Built>
+            public let screen1Builder: (screen1Builder_Values) -> Screen1_Scope.__safeDI_Builder<Built>
+            public let screen2Builder: (screen2Builder_Values) -> Screen2_Scope.__safeDI_Builder<Built>
+            public let screen3Builder: (screen3Builder_Values) -> Screen3_Scope.__safeDI_Builder<Built>
+
+            public init(screen0Builder: @escaping (screen0Builder_Values) -> Screen0_Scope.__safeDI_Builder<Built>, screen1Builder: @escaping (screen1Builder_Values) -> Screen1_Scope.__safeDI_Builder<Built>, screen2Builder: @escaping (screen2Builder_Values) -> Screen2_Scope.__safeDI_Builder<Built>, screen3Builder: @escaping (screen3Builder_Values) -> Screen3_Scope.__safeDI_Builder<Built>) {
+                self.screen0Builder = screen0Builder
+                self.screen1Builder = screen1Builder
+                self.screen2Builder = screen2Builder
+                self.screen3Builder = screen3Builder
+            }
+
+            public init(__safeDI_noScope builder: @escaping () -> Built) {
+                screen0Builder = { _ in .init(__safeDI_noScope: builder) }
+                screen1Builder = { _ in .init(__safeDI_noScope: builder) }
+                screen2Builder = { _ in .init(__safeDI_noScope: builder) }
+                screen3Builder = { _ in .init(__safeDI_noScope: builder) }
+            }
+        }
+
+        nonisolated public enum Screen0_Scope {
+            nonisolated public struct screen5Builder_Values {
+                public let id: Int
+                public let model0: Model0
+            }
+
+            nonisolated public struct screen6Builder_Values {
+                public let id: Int
+                public let model0: Model0
+                public let screen5Builder: Instantiator<Screen5>
+            }
+
+            nonisolated public struct screen7Builder_Values {
+                public let id: Int
+                public let model0: Model0
+                public let screen5Builder: Instantiator<Screen5>
+                public let screen6Builder: Instantiator<Screen6>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let screen5Builder: (screen5Builder_Values) -> Screen5_Scope.__safeDI_Builder<Built>
+                public let screen6Builder: (screen6Builder_Values) -> Screen6_Scope.__safeDI_Builder<Built>
+                public let screen7Builder: (screen7Builder_Values) -> Screen7_Scope.__safeDI_Builder<Built>
+
+                public init(screen5Builder: @escaping (screen5Builder_Values) -> Screen5_Scope.__safeDI_Builder<Built>, screen6Builder: @escaping (screen6Builder_Values) -> Screen6_Scope.__safeDI_Builder<Built>, screen7Builder: @escaping (screen7Builder_Values) -> Screen7_Scope.__safeDI_Builder<Built>) {
+                    self.screen5Builder = screen5Builder
+                    self.screen6Builder = screen6Builder
+                    self.screen7Builder = screen7Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    screen5Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen6Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen7Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen1_Scope {
+            nonisolated public struct screen4Builder_Values {
+                public let id: Int
+                public let model1: Model1
+            }
+
+            nonisolated public struct screen6Builder_Values {
+                public let id: Int
+                public let model1: Model1
+                public let screen4Builder: Instantiator<Screen4>
+            }
+
+            nonisolated public struct screen7Builder_Values {
+                public let id: Int
+                public let model1: Model1
+                public let screen4Builder: Instantiator<Screen4>
+                public let screen6Builder: Instantiator<Screen6>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let screen4Builder: (screen4Builder_Values) -> Screen4_Scope.__safeDI_Builder<Built>
+                public let screen6Builder: (screen6Builder_Values) -> Screen6_Scope.__safeDI_Builder<Built>
+                public let screen7Builder: (screen7Builder_Values) -> Screen7_Scope.__safeDI_Builder<Built>
+
+                public init(screen4Builder: @escaping (screen4Builder_Values) -> Screen4_Scope.__safeDI_Builder<Built>, screen6Builder: @escaping (screen6Builder_Values) -> Screen6_Scope.__safeDI_Builder<Built>, screen7Builder: @escaping (screen7Builder_Values) -> Screen7_Scope.__safeDI_Builder<Built>) {
+                    self.screen4Builder = screen4Builder
+                    self.screen6Builder = screen6Builder
+                    self.screen7Builder = screen7Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    screen4Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen6Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen7Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen2_Scope {
+            nonisolated public struct screen4Builder_Values {
+                public let id: Int
+                public let model2: Model2
+            }
+
+            nonisolated public struct screen5Builder_Values {
+                public let id: Int
+                public let model2: Model2
+                public let screen4Builder: Instantiator<Screen4>
+            }
+
+            nonisolated public struct screen7Builder_Values {
+                public let id: Int
+                public let model2: Model2
+                public let screen4Builder: Instantiator<Screen4>
+                public let screen5Builder: Instantiator<Screen5>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let screen4Builder: (screen4Builder_Values) -> Screen4_Scope.__safeDI_Builder<Built>
+                public let screen5Builder: (screen5Builder_Values) -> Screen5_Scope.__safeDI_Builder<Built>
+                public let screen7Builder: (screen7Builder_Values) -> Screen7_Scope.__safeDI_Builder<Built>
+
+                public init(screen4Builder: @escaping (screen4Builder_Values) -> Screen4_Scope.__safeDI_Builder<Built>, screen5Builder: @escaping (screen5Builder_Values) -> Screen5_Scope.__safeDI_Builder<Built>, screen7Builder: @escaping (screen7Builder_Values) -> Screen7_Scope.__safeDI_Builder<Built>) {
+                    self.screen4Builder = screen4Builder
+                    self.screen5Builder = screen5Builder
+                    self.screen7Builder = screen7Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    screen4Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen5Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen7Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen3_Scope {
+            nonisolated public struct screen4Builder_Values {
+                public let id: Int
+                public let model3: Model3
+            }
+
+            nonisolated public struct screen5Builder_Values {
+                public let id: Int
+                public let model3: Model3
+                public let screen4Builder: Instantiator<Screen4>
+            }
+
+            nonisolated public struct screen6Builder_Values {
+                public let id: Int
+                public let model3: Model3
+                public let screen4Builder: Instantiator<Screen4>
+                public let screen5Builder: Instantiator<Screen5>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let screen4Builder: (screen4Builder_Values) -> Screen4_Scope.__safeDI_Builder<Built>
+                public let screen5Builder: (screen5Builder_Values) -> Screen5_Scope.__safeDI_Builder<Built>
+                public let screen6Builder: (screen6Builder_Values) -> Screen6_Scope.__safeDI_Builder<Built>
+
+                public init(screen4Builder: @escaping (screen4Builder_Values) -> Screen4_Scope.__safeDI_Builder<Built>, screen5Builder: @escaping (screen5Builder_Values) -> Screen5_Scope.__safeDI_Builder<Built>, screen6Builder: @escaping (screen6Builder_Values) -> Screen6_Scope.__safeDI_Builder<Built>) {
+                    self.screen4Builder = screen4Builder
+                    self.screen5Builder = screen5Builder
+                    self.screen6Builder = screen6Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    screen4Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen5Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen6Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen5_Scope {
+            nonisolated public struct screen8Builder_Values {
+                public let id: Int
+                public let model5: Model5
+            }
+
+            nonisolated public struct screen10Builder_Values {
+                public let id: Int
+                public let model5: Model5
+                public let screen8Builder: Instantiator<Screen8>
+            }
+
+            nonisolated public struct screen11Builder_Values {
+                public let id: Int
+                public let model5: Model5
+                public let screen8Builder: Instantiator<Screen8>
+                public let screen10Builder: Instantiator<Screen10>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let screen8Builder: (screen8Builder_Values) -> Screen8_Scope.__safeDI_Builder<Built>
+                public let screen10Builder: (screen10Builder_Values) -> Screen10_Scope.__safeDI_Builder<Built>
+                public let screen11Builder: (screen11Builder_Values) -> Screen11_Scope.__safeDI_Builder<Built>
+
+                public init(screen8Builder: @escaping (screen8Builder_Values) -> Screen8_Scope.__safeDI_Builder<Built>, screen10Builder: @escaping (screen10Builder_Values) -> Screen10_Scope.__safeDI_Builder<Built>, screen11Builder: @escaping (screen11Builder_Values) -> Screen11_Scope.__safeDI_Builder<Built>) {
+                    self.screen8Builder = screen8Builder
+                    self.screen10Builder = screen10Builder
+                    self.screen11Builder = screen11Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    screen8Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen10Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen11Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen6_Scope {
+            nonisolated public struct screen8Builder_Values {
+                public let id: Int
+                public let model6: Model6
+            }
+
+            nonisolated public struct screen9Builder_Values {
+                public let id: Int
+                public let model6: Model6
+                public let screen8Builder: Instantiator<Screen8>
+            }
+
+            nonisolated public struct screen11Builder_Values {
+                public let id: Int
+                public let model6: Model6
+                public let screen8Builder: Instantiator<Screen8>
+                public let screen9Builder: Instantiator<Screen9>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let screen8Builder: (screen8Builder_Values) -> Screen8_Scope.__safeDI_Builder<Built>
+                public let screen9Builder: (screen9Builder_Values) -> Screen9_Scope.__safeDI_Builder<Built>
+                public let screen11Builder: (screen11Builder_Values) -> Screen11_Scope.__safeDI_Builder<Built>
+
+                public init(screen8Builder: @escaping (screen8Builder_Values) -> Screen8_Scope.__safeDI_Builder<Built>, screen9Builder: @escaping (screen9Builder_Values) -> Screen9_Scope.__safeDI_Builder<Built>, screen11Builder: @escaping (screen11Builder_Values) -> Screen11_Scope.__safeDI_Builder<Built>) {
+                    self.screen8Builder = screen8Builder
+                    self.screen9Builder = screen9Builder
+                    self.screen11Builder = screen11Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    screen8Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen9Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen11Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen7_Scope {
+            nonisolated public struct screen8Builder_Values {
+                public let id: Int
+                public let model7: Model7
+            }
+
+            nonisolated public struct screen9Builder_Values {
+                public let id: Int
+                public let model7: Model7
+                public let screen8Builder: Instantiator<Screen8>
+            }
+
+            nonisolated public struct screen10Builder_Values {
+                public let id: Int
+                public let model7: Model7
+                public let screen8Builder: Instantiator<Screen8>
+                public let screen9Builder: Instantiator<Screen9>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let screen8Builder: (screen8Builder_Values) -> Screen8_Scope.__safeDI_Builder<Built>
+                public let screen9Builder: (screen9Builder_Values) -> Screen9_Scope.__safeDI_Builder<Built>
+                public let screen10Builder: (screen10Builder_Values) -> Screen10_Scope.__safeDI_Builder<Built>
+
+                public init(screen8Builder: @escaping (screen8Builder_Values) -> Screen8_Scope.__safeDI_Builder<Built>, screen9Builder: @escaping (screen9Builder_Values) -> Screen9_Scope.__safeDI_Builder<Built>, screen10Builder: @escaping (screen10Builder_Values) -> Screen10_Scope.__safeDI_Builder<Built>) {
+                    self.screen8Builder = screen8Builder
+                    self.screen9Builder = screen9Builder
+                    self.screen10Builder = screen10Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    screen8Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen9Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen10Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen4_Scope {
+            nonisolated public struct screen9Builder_Values {
+                public let id: Int
+                public let model4: Model4
+            }
+
+            nonisolated public struct screen10Builder_Values {
+                public let id: Int
+                public let model4: Model4
+                public let screen9Builder: Instantiator<Screen9>
+            }
+
+            nonisolated public struct screen11Builder_Values {
+                public let id: Int
+                public let model4: Model4
+                public let screen9Builder: Instantiator<Screen9>
+                public let screen10Builder: Instantiator<Screen10>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let screen9Builder: (screen9Builder_Values) -> Screen9_Scope.__safeDI_Builder<Built>
+                public let screen10Builder: (screen10Builder_Values) -> Screen10_Scope.__safeDI_Builder<Built>
+                public let screen11Builder: (screen11Builder_Values) -> Screen11_Scope.__safeDI_Builder<Built>
+
+                public init(screen9Builder: @escaping (screen9Builder_Values) -> Screen9_Scope.__safeDI_Builder<Built>, screen10Builder: @escaping (screen10Builder_Values) -> Screen10_Scope.__safeDI_Builder<Built>, screen11Builder: @escaping (screen11Builder_Values) -> Screen11_Scope.__safeDI_Builder<Built>) {
+                    self.screen9Builder = screen9Builder
+                    self.screen10Builder = screen10Builder
+                    self.screen11Builder = screen11Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    screen9Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen10Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen11Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen8_Scope {
+            nonisolated public struct screen13Builder_Values {
+                public let id: Int
+                public let model8: Model8
+            }
+
+            nonisolated public struct screen14Builder_Values {
+                public let id: Int
+                public let model8: Model8
+                public let screen13Builder: Instantiator<Screen13>
+            }
+
+            nonisolated public struct screen15Builder_Values {
+                public let id: Int
+                public let model8: Model8
+                public let screen13Builder: Instantiator<Screen13>
+                public let screen14Builder: Instantiator<Screen14>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let screen13Builder: (screen13Builder_Values) -> Screen13_Scope.__safeDI_Builder<Built>
+                public let screen14Builder: (screen14Builder_Values) -> Screen14_Scope.__safeDI_Builder<Built>
+                public let screen15Builder: (screen15Builder_Values) -> Screen15_Scope.__safeDI_Builder<Built>
+
+                public init(screen13Builder: @escaping (screen13Builder_Values) -> Screen13_Scope.__safeDI_Builder<Built>, screen14Builder: @escaping (screen14Builder_Values) -> Screen14_Scope.__safeDI_Builder<Built>, screen15Builder: @escaping (screen15Builder_Values) -> Screen15_Scope.__safeDI_Builder<Built>) {
+                    self.screen13Builder = screen13Builder
+                    self.screen14Builder = screen14Builder
+                    self.screen15Builder = screen15Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    screen13Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen14Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen15Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen10_Scope {
+            nonisolated public struct screen12Builder_Values {
+                public let id: Int
+                public let model10: Model10
+            }
+
+            nonisolated public struct screen13Builder_Values {
+                public let id: Int
+                public let model10: Model10
+                public let screen12Builder: Instantiator<Screen12>
+            }
+
+            nonisolated public struct screen15Builder_Values {
+                public let id: Int
+                public let model10: Model10
+                public let screen12Builder: Instantiator<Screen12>
+                public let screen13Builder: Instantiator<Screen13>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let screen12Builder: (screen12Builder_Values) -> Screen12_Scope.__safeDI_Builder<Built>
+                public let screen13Builder: (screen13Builder_Values) -> Screen13_Scope.__safeDI_Builder<Built>
+                public let screen15Builder: (screen15Builder_Values) -> Screen15_Scope.__safeDI_Builder<Built>
+
+                public init(screen12Builder: @escaping (screen12Builder_Values) -> Screen12_Scope.__safeDI_Builder<Built>, screen13Builder: @escaping (screen13Builder_Values) -> Screen13_Scope.__safeDI_Builder<Built>, screen15Builder: @escaping (screen15Builder_Values) -> Screen15_Scope.__safeDI_Builder<Built>) {
+                    self.screen12Builder = screen12Builder
+                    self.screen13Builder = screen13Builder
+                    self.screen15Builder = screen15Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    screen12Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen13Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen15Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen11_Scope {
+            nonisolated public struct screen12Builder_Values {
+                public let id: Int
+                public let model11: Model11
+            }
+
+            nonisolated public struct screen13Builder_Values {
+                public let id: Int
+                public let model11: Model11
+                public let screen12Builder: Instantiator<Screen12>
+            }
+
+            nonisolated public struct screen14Builder_Values {
+                public let id: Int
+                public let model11: Model11
+                public let screen12Builder: Instantiator<Screen12>
+                public let screen13Builder: Instantiator<Screen13>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let screen12Builder: (screen12Builder_Values) -> Screen12_Scope.__safeDI_Builder<Built>
+                public let screen13Builder: (screen13Builder_Values) -> Screen13_Scope.__safeDI_Builder<Built>
+                public let screen14Builder: (screen14Builder_Values) -> Screen14_Scope.__safeDI_Builder<Built>
+
+                public init(screen12Builder: @escaping (screen12Builder_Values) -> Screen12_Scope.__safeDI_Builder<Built>, screen13Builder: @escaping (screen13Builder_Values) -> Screen13_Scope.__safeDI_Builder<Built>, screen14Builder: @escaping (screen14Builder_Values) -> Screen14_Scope.__safeDI_Builder<Built>) {
+                    self.screen12Builder = screen12Builder
+                    self.screen13Builder = screen13Builder
+                    self.screen14Builder = screen14Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    screen12Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen13Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen14Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen9_Scope {
+            nonisolated public struct screen12Builder_Values {
+                public let id: Int
+                public let model9: Model9
+            }
+
+            nonisolated public struct screen14Builder_Values {
+                public let id: Int
+                public let model9: Model9
+                public let screen12Builder: Instantiator<Screen12>
+            }
+
+            nonisolated public struct screen15Builder_Values {
+                public let id: Int
+                public let model9: Model9
+                public let screen12Builder: Instantiator<Screen12>
+                public let screen14Builder: Instantiator<Screen14>
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let screen12Builder: (screen12Builder_Values) -> Screen12_Scope.__safeDI_Builder<Built>
+                public let screen14Builder: (screen14Builder_Values) -> Screen14_Scope.__safeDI_Builder<Built>
+                public let screen15Builder: (screen15Builder_Values) -> Screen15_Scope.__safeDI_Builder<Built>
+
+                public init(screen12Builder: @escaping (screen12Builder_Values) -> Screen12_Scope.__safeDI_Builder<Built>, screen14Builder: @escaping (screen14Builder_Values) -> Screen14_Scope.__safeDI_Builder<Built>, screen15Builder: @escaping (screen15Builder_Values) -> Screen15_Scope.__safeDI_Builder<Built>) {
+                    self.screen12Builder = screen12Builder
+                    self.screen14Builder = screen14Builder
+                    self.screen15Builder = screen15Builder
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    screen12Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen14Builder = { _ in .init(__safeDI_noScope: builder) }
+                    screen15Builder = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen13_Scope {
+            nonisolated public struct model13_Values {
+                public let id: Int
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let model13: (model13_Values) -> Model13_Scope.__safeDI_Builder<Built>
+
+                public init(model13: @escaping (model13_Values) -> Model13_Scope.__safeDI_Builder<Built>) {
+                    self.model13 = model13
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    model13 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen14_Scope {
+            nonisolated public struct model14_Values {
+                public let id: Int
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let model14: (model14_Values) -> Model14_Scope.__safeDI_Builder<Built>
+
+                public init(model14: @escaping (model14_Values) -> Model14_Scope.__safeDI_Builder<Built>) {
+                    self.model14 = model14
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    model14 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen15_Scope {
+            nonisolated public struct model15_Values {
+                public let id: Int
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let model15: (model15_Values) -> Model15_Scope.__safeDI_Builder<Built>
+
+                public init(model15: @escaping (model15_Values) -> Model15_Scope.__safeDI_Builder<Built>) {
+                    self.model15 = model15
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    model15 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Screen12_Scope {
+            nonisolated public struct model12_Values {
+                public let id: Int
+            }
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let model12: (model12_Values) -> Model12_Scope.__safeDI_Builder<Built>
+
+                public init(model12: @escaping (model12_Values) -> Model12_Scope.__safeDI_Builder<Built>) {
+                    self.model12 = model12
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    model12 = { _ in .init(__safeDI_noScope: builder) }
+                }
+            }
+        }
+
+        nonisolated public enum Model13_Scope {
+            nonisolated public struct api_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let api: (api_Values) -> Built
+
+                public init(api: @escaping (api_Values) -> Built) {
+                    self.api = api
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    api = { _ in builder() }
+                }
+            }
+        }
+
+        nonisolated public enum Model14_Scope {
+            nonisolated public struct api_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let api: (api_Values) -> Built
+
+                public init(api: @escaping (api_Values) -> Built) {
+                    self.api = api
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    api = { _ in builder() }
+                }
+            }
+        }
+
+        nonisolated public enum Model15_Scope {
+            nonisolated public struct api_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let api: (api_Values) -> Built
+
+                public init(api: @escaping (api_Values) -> Built) {
+                    self.api = api
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    api = { _ in builder() }
+                }
+            }
+        }
+
+        nonisolated public enum Model12_Scope {
+            nonisolated public struct api_Values {}
+
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let api: (api_Values) -> Built
+
+                public init(api: @escaping (api_Values) -> Built) {
+                    self.api = api
+                }
+
+                public init(__safeDI_noScope builder: @escaping () -> Built) {
+                    api = { _ in builder() }
+                }
+            }
+        }
+    }
+
+    /// For code you write.
+    public convenience init(service: Service, apiBuilder: @escaping () -> any Api) {
+        self.init(__safeDI_service: service, __safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+    }
+
+    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+    public convenience init(__safeDI_service: @autoclosure @escaping () -> Service, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+        let service = LazilyInstantiated<Service>(__safeDI_service)
+        func __safeDI_Model13(_ __safeDI_apiBuilder: SafeDIScope_Api.Model13_Scope.__safeDI_Builder<any Api>, id: Int) -> Model13 {
+            let api: any Api = __safeDI_apiBuilder.api(.init())
+            return Model13(id: id, service: service.instance, api: api)
+        }
+        func __safeDI_Screen13(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen13_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen13 {
+            let __safeDI_apiBuilder_model13 = __safeDI_apiBuilder.model13(.init(id: id))
+            let model13: Model13 = __safeDI_Model13(__safeDI_apiBuilder_model13, id: id)
+            return Screen13(id: id, service: service.instance, model13: model13)
+        }
+        func __safeDI_Model14(_ __safeDI_apiBuilder: SafeDIScope_Api.Model14_Scope.__safeDI_Builder<any Api>, id: Int) -> Model14 {
+            let api: any Api = __safeDI_apiBuilder.api(.init())
+            return Model14(id: id, service: service.instance, api: api)
+        }
+        func __safeDI_Screen14(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen14_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen14 {
+            let __safeDI_apiBuilder_model14 = __safeDI_apiBuilder.model14(.init(id: id))
+            let model14: Model14 = __safeDI_Model14(__safeDI_apiBuilder_model14, id: id)
+            return Screen14(id: id, service: service.instance, model14: model14)
+        }
+        func __safeDI_Model15(_ __safeDI_apiBuilder: SafeDIScope_Api.Model15_Scope.__safeDI_Builder<any Api>, id: Int) -> Model15 {
+            let api: any Api = __safeDI_apiBuilder.api(.init())
+            return Model15(id: id, service: service.instance, api: api)
+        }
+        func __safeDI_Screen15(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen15_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen15 {
+            let __safeDI_apiBuilder_model15 = __safeDI_apiBuilder.model15(.init(id: id))
+            let model15: Model15 = __safeDI_Model15(__safeDI_apiBuilder_model15, id: id)
+            return Screen15(id: id, service: service.instance, model15: model15)
+        }
+        func __safeDI_Screen8(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen8_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen8 {
+            let model8 = Model8(id: id, service: service.instance)
+            let __safeDI_apiBuilder_screen13Builder = __safeDI_apiBuilder.screen13Builder(.init(id: id, model8: model8))
+            let screen13Builder = Instantiator<Screen13> { __safeDI_Screen13(__safeDI_apiBuilder_screen13Builder, id: $0) }
+            let __safeDI_apiBuilder_screen14Builder = __safeDI_apiBuilder.screen14Builder(.init(id: id, model8: model8, screen13Builder: screen13Builder))
+            let screen14Builder = Instantiator<Screen14> { __safeDI_Screen14(__safeDI_apiBuilder_screen14Builder, id: $0) }
+            let __safeDI_apiBuilder_screen15Builder = __safeDI_apiBuilder.screen15Builder(.init(id: id, model8: model8, screen13Builder: screen13Builder, screen14Builder: screen14Builder))
+            let screen15Builder = Instantiator<Screen15> { __safeDI_Screen15(__safeDI_apiBuilder_screen15Builder, id: $0) }
+            return Screen8(id: id, service: service.instance, model8: model8, screen13Builder: screen13Builder, screen14Builder: screen14Builder, screen15Builder: screen15Builder)
+        }
+        func __safeDI_Model12(_ __safeDI_apiBuilder: SafeDIScope_Api.Model12_Scope.__safeDI_Builder<any Api>, id: Int) -> Model12 {
+            let api: any Api = __safeDI_apiBuilder.api(.init())
+            return Model12(id: id, service: service.instance, api: api)
+        }
+        func __safeDI_Screen12(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen12_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen12 {
+            let __safeDI_apiBuilder_model12 = __safeDI_apiBuilder.model12(.init(id: id))
+            let model12: Model12 = __safeDI_Model12(__safeDI_apiBuilder_model12, id: id)
+            return Screen12(id: id, service: service.instance, model12: model12)
+        }
+        func __safeDI_Screen10(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen10_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen10 {
+            let model10 = Model10(id: id, service: service.instance)
+            let __safeDI_apiBuilder_screen12Builder = __safeDI_apiBuilder.screen12Builder(.init(id: id, model10: model10))
+            let screen12Builder = Instantiator<Screen12> { __safeDI_Screen12(__safeDI_apiBuilder_screen12Builder, id: $0) }
+            let __safeDI_apiBuilder_screen13Builder = __safeDI_apiBuilder.screen13Builder(.init(id: id, model10: model10, screen12Builder: screen12Builder))
+            let screen13Builder = Instantiator<Screen13> { __safeDI_Screen13(__safeDI_apiBuilder_screen13Builder, id: $0) }
+            let __safeDI_apiBuilder_screen15Builder = __safeDI_apiBuilder.screen15Builder(.init(id: id, model10: model10, screen12Builder: screen12Builder, screen13Builder: screen13Builder))
+            let screen15Builder = Instantiator<Screen15> { __safeDI_Screen15(__safeDI_apiBuilder_screen15Builder, id: $0) }
+            return Screen10(id: id, service: service.instance, model10: model10, screen12Builder: screen12Builder, screen13Builder: screen13Builder, screen15Builder: screen15Builder)
+        }
+        func __safeDI_Screen11(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen11_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen11 {
+            let model11 = Model11(id: id, service: service.instance)
+            let __safeDI_apiBuilder_screen12Builder = __safeDI_apiBuilder.screen12Builder(.init(id: id, model11: model11))
+            let screen12Builder = Instantiator<Screen12> { __safeDI_Screen12(__safeDI_apiBuilder_screen12Builder, id: $0) }
+            let __safeDI_apiBuilder_screen13Builder = __safeDI_apiBuilder.screen13Builder(.init(id: id, model11: model11, screen12Builder: screen12Builder))
+            let screen13Builder = Instantiator<Screen13> { __safeDI_Screen13(__safeDI_apiBuilder_screen13Builder, id: $0) }
+            let __safeDI_apiBuilder_screen14Builder = __safeDI_apiBuilder.screen14Builder(.init(id: id, model11: model11, screen12Builder: screen12Builder, screen13Builder: screen13Builder))
+            let screen14Builder = Instantiator<Screen14> { __safeDI_Screen14(__safeDI_apiBuilder_screen14Builder, id: $0) }
+            return Screen11(id: id, service: service.instance, model11: model11, screen12Builder: screen12Builder, screen13Builder: screen13Builder, screen14Builder: screen14Builder)
+        }
+        func __safeDI_Screen5(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen5_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen5 {
+            let model5 = Model5(id: id, service: service.instance)
+            let __safeDI_apiBuilder_screen8Builder = __safeDI_apiBuilder.screen8Builder(.init(id: id, model5: model5))
+            let screen8Builder = Instantiator<Screen8> { __safeDI_Screen8(__safeDI_apiBuilder_screen8Builder, id: $0) }
+            let __safeDI_apiBuilder_screen10Builder = __safeDI_apiBuilder.screen10Builder(.init(id: id, model5: model5, screen8Builder: screen8Builder))
+            let screen10Builder = Instantiator<Screen10> { __safeDI_Screen10(__safeDI_apiBuilder_screen10Builder, id: $0) }
+            let __safeDI_apiBuilder_screen11Builder = __safeDI_apiBuilder.screen11Builder(.init(id: id, model5: model5, screen8Builder: screen8Builder, screen10Builder: screen10Builder))
+            let screen11Builder = Instantiator<Screen11> { __safeDI_Screen11(__safeDI_apiBuilder_screen11Builder, id: $0) }
+            return Screen5(id: id, service: service.instance, model5: model5, screen8Builder: screen8Builder, screen10Builder: screen10Builder, screen11Builder: screen11Builder)
+        }
+        func __safeDI_Screen9(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen9_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen9 {
+            let model9 = Model9(id: id, service: service.instance)
+            let __safeDI_apiBuilder_screen12Builder = __safeDI_apiBuilder.screen12Builder(.init(id: id, model9: model9))
+            let screen12Builder = Instantiator<Screen12> { __safeDI_Screen12(__safeDI_apiBuilder_screen12Builder, id: $0) }
+            let __safeDI_apiBuilder_screen14Builder = __safeDI_apiBuilder.screen14Builder(.init(id: id, model9: model9, screen12Builder: screen12Builder))
+            let screen14Builder = Instantiator<Screen14> { __safeDI_Screen14(__safeDI_apiBuilder_screen14Builder, id: $0) }
+            let __safeDI_apiBuilder_screen15Builder = __safeDI_apiBuilder.screen15Builder(.init(id: id, model9: model9, screen12Builder: screen12Builder, screen14Builder: screen14Builder))
+            let screen15Builder = Instantiator<Screen15> { __safeDI_Screen15(__safeDI_apiBuilder_screen15Builder, id: $0) }
+            return Screen9(id: id, service: service.instance, model9: model9, screen12Builder: screen12Builder, screen14Builder: screen14Builder, screen15Builder: screen15Builder)
+        }
+        func __safeDI_Screen6(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen6_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen6 {
+            let model6 = Model6(id: id, service: service.instance)
+            let __safeDI_apiBuilder_screen8Builder = __safeDI_apiBuilder.screen8Builder(.init(id: id, model6: model6))
+            let screen8Builder = Instantiator<Screen8> { __safeDI_Screen8(__safeDI_apiBuilder_screen8Builder, id: $0) }
+            let __safeDI_apiBuilder_screen9Builder = __safeDI_apiBuilder.screen9Builder(.init(id: id, model6: model6, screen8Builder: screen8Builder))
+            let screen9Builder = Instantiator<Screen9> { __safeDI_Screen9(__safeDI_apiBuilder_screen9Builder, id: $0) }
+            let __safeDI_apiBuilder_screen11Builder = __safeDI_apiBuilder.screen11Builder(.init(id: id, model6: model6, screen8Builder: screen8Builder, screen9Builder: screen9Builder))
+            let screen11Builder = Instantiator<Screen11> { __safeDI_Screen11(__safeDI_apiBuilder_screen11Builder, id: $0) }
+            return Screen6(id: id, service: service.instance, model6: model6, screen8Builder: screen8Builder, screen9Builder: screen9Builder, screen11Builder: screen11Builder)
+        }
+        func __safeDI_Screen7(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen7_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen7 {
+            let model7 = Model7(id: id, service: service.instance)
+            let __safeDI_apiBuilder_screen8Builder = __safeDI_apiBuilder.screen8Builder(.init(id: id, model7: model7))
+            let screen8Builder = Instantiator<Screen8> { __safeDI_Screen8(__safeDI_apiBuilder_screen8Builder, id: $0) }
+            let __safeDI_apiBuilder_screen9Builder = __safeDI_apiBuilder.screen9Builder(.init(id: id, model7: model7, screen8Builder: screen8Builder))
+            let screen9Builder = Instantiator<Screen9> { __safeDI_Screen9(__safeDI_apiBuilder_screen9Builder, id: $0) }
+            let __safeDI_apiBuilder_screen10Builder = __safeDI_apiBuilder.screen10Builder(.init(id: id, model7: model7, screen8Builder: screen8Builder, screen9Builder: screen9Builder))
+            let screen10Builder = Instantiator<Screen10> { __safeDI_Screen10(__safeDI_apiBuilder_screen10Builder, id: $0) }
+            return Screen7(id: id, service: service.instance, model7: model7, screen8Builder: screen8Builder, screen9Builder: screen9Builder, screen10Builder: screen10Builder)
+        }
+        func __safeDI_Screen0(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen0_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen0 {
+            let model0 = Model0(id: id, service: service.instance)
+            let __safeDI_apiBuilder_screen5Builder = __safeDI_apiBuilder.screen5Builder(.init(id: id, model0: model0))
+            let screen5Builder = Instantiator<Screen5> { __safeDI_Screen5(__safeDI_apiBuilder_screen5Builder, id: $0) }
+            let __safeDI_apiBuilder_screen6Builder = __safeDI_apiBuilder.screen6Builder(.init(id: id, model0: model0, screen5Builder: screen5Builder))
+            let screen6Builder = Instantiator<Screen6> { __safeDI_Screen6(__safeDI_apiBuilder_screen6Builder, id: $0) }
+            let __safeDI_apiBuilder_screen7Builder = __safeDI_apiBuilder.screen7Builder(.init(id: id, model0: model0, screen5Builder: screen5Builder, screen6Builder: screen6Builder))
+            let screen7Builder = Instantiator<Screen7> { __safeDI_Screen7(__safeDI_apiBuilder_screen7Builder, id: $0) }
+            return Screen0(id: id, service: service.instance, model0: model0, screen5Builder: screen5Builder, screen6Builder: screen6Builder, screen7Builder: screen7Builder)
+        }
+        func __safeDI_Screen4(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen4_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen4 {
+            let model4 = Model4(id: id, service: service.instance)
+            let __safeDI_apiBuilder_screen9Builder = __safeDI_apiBuilder.screen9Builder(.init(id: id, model4: model4))
+            let screen9Builder = Instantiator<Screen9> { __safeDI_Screen9(__safeDI_apiBuilder_screen9Builder, id: $0) }
+            let __safeDI_apiBuilder_screen10Builder = __safeDI_apiBuilder.screen10Builder(.init(id: id, model4: model4, screen9Builder: screen9Builder))
+            let screen10Builder = Instantiator<Screen10> { __safeDI_Screen10(__safeDI_apiBuilder_screen10Builder, id: $0) }
+            let __safeDI_apiBuilder_screen11Builder = __safeDI_apiBuilder.screen11Builder(.init(id: id, model4: model4, screen9Builder: screen9Builder, screen10Builder: screen10Builder))
+            let screen11Builder = Instantiator<Screen11> { __safeDI_Screen11(__safeDI_apiBuilder_screen11Builder, id: $0) }
+            return Screen4(id: id, service: service.instance, model4: model4, screen9Builder: screen9Builder, screen10Builder: screen10Builder, screen11Builder: screen11Builder)
+        }
+        func __safeDI_Screen1(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen1_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen1 {
+            let model1 = Model1(id: id, service: service.instance)
+            let __safeDI_apiBuilder_screen4Builder = __safeDI_apiBuilder.screen4Builder(.init(id: id, model1: model1))
+            let screen4Builder = Instantiator<Screen4> { __safeDI_Screen4(__safeDI_apiBuilder_screen4Builder, id: $0) }
+            let __safeDI_apiBuilder_screen6Builder = __safeDI_apiBuilder.screen6Builder(.init(id: id, model1: model1, screen4Builder: screen4Builder))
+            let screen6Builder = Instantiator<Screen6> { __safeDI_Screen6(__safeDI_apiBuilder_screen6Builder, id: $0) }
+            let __safeDI_apiBuilder_screen7Builder = __safeDI_apiBuilder.screen7Builder(.init(id: id, model1: model1, screen4Builder: screen4Builder, screen6Builder: screen6Builder))
+            let screen7Builder = Instantiator<Screen7> { __safeDI_Screen7(__safeDI_apiBuilder_screen7Builder, id: $0) }
+            return Screen1(id: id, service: service.instance, model1: model1, screen4Builder: screen4Builder, screen6Builder: screen6Builder, screen7Builder: screen7Builder)
+        }
+        func __safeDI_Screen2(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen2_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen2 {
+            let model2 = Model2(id: id, service: service.instance)
+            let __safeDI_apiBuilder_screen4Builder = __safeDI_apiBuilder.screen4Builder(.init(id: id, model2: model2))
+            let screen4Builder = Instantiator<Screen4> { __safeDI_Screen4(__safeDI_apiBuilder_screen4Builder, id: $0) }
+            let __safeDI_apiBuilder_screen5Builder = __safeDI_apiBuilder.screen5Builder(.init(id: id, model2: model2, screen4Builder: screen4Builder))
+            let screen5Builder = Instantiator<Screen5> { __safeDI_Screen5(__safeDI_apiBuilder_screen5Builder, id: $0) }
+            let __safeDI_apiBuilder_screen7Builder = __safeDI_apiBuilder.screen7Builder(.init(id: id, model2: model2, screen4Builder: screen4Builder, screen5Builder: screen5Builder))
+            let screen7Builder = Instantiator<Screen7> { __safeDI_Screen7(__safeDI_apiBuilder_screen7Builder, id: $0) }
+            return Screen2(id: id, service: service.instance, model2: model2, screen4Builder: screen4Builder, screen5Builder: screen5Builder, screen7Builder: screen7Builder)
+        }
+        func __safeDI_Screen3(_ __safeDI_apiBuilder: SafeDIScope_Api.Screen3_Scope.__safeDI_Builder<any Api>, id: Int) -> Screen3 {
+            let model3 = Model3(id: id, service: service.instance)
+            let __safeDI_apiBuilder_screen4Builder = __safeDI_apiBuilder.screen4Builder(.init(id: id, model3: model3))
+            let screen4Builder = Instantiator<Screen4> { __safeDI_Screen4(__safeDI_apiBuilder_screen4Builder, id: $0) }
+            let __safeDI_apiBuilder_screen5Builder = __safeDI_apiBuilder.screen5Builder(.init(id: id, model3: model3, screen4Builder: screen4Builder))
+            let screen5Builder = Instantiator<Screen5> { __safeDI_Screen5(__safeDI_apiBuilder_screen5Builder, id: $0) }
+            let __safeDI_apiBuilder_screen6Builder = __safeDI_apiBuilder.screen6Builder(.init(id: id, model3: model3, screen4Builder: screen4Builder, screen5Builder: screen5Builder))
+            let screen6Builder = Instantiator<Screen6> { __safeDI_Screen6(__safeDI_apiBuilder_screen6Builder, id: $0) }
+            return Screen3(id: id, service: service.instance, model3: model3, screen4Builder: screen4Builder, screen5Builder: screen5Builder, screen6Builder: screen6Builder)
+        }
+        let __safeDI_apiBuilder_screen0Builder = __safeDI_apiBuilder.screen0Builder(.init(service: service))
+        let screen0Builder = Instantiator<Screen0> { __safeDI_Screen0(__safeDI_apiBuilder_screen0Builder, id: $0) }
+        let __safeDI_apiBuilder_screen1Builder = __safeDI_apiBuilder.screen1Builder(.init(service: service, screen0Builder: screen0Builder))
+        let screen1Builder = Instantiator<Screen1> { __safeDI_Screen1(__safeDI_apiBuilder_screen1Builder, id: $0) }
+        let __safeDI_apiBuilder_screen2Builder = __safeDI_apiBuilder.screen2Builder(.init(service: service, screen0Builder: screen0Builder, screen1Builder: screen1Builder))
+        let screen2Builder = Instantiator<Screen2> { __safeDI_Screen2(__safeDI_apiBuilder_screen2Builder, id: $0) }
+        let __safeDI_apiBuilder_screen3Builder = __safeDI_apiBuilder.screen3Builder(.init(service: service, screen0Builder: screen0Builder, screen1Builder: screen1Builder, screen2Builder: screen2Builder))
+        let screen3Builder = Instantiator<Screen3> { __safeDI_Screen3(__safeDI_apiBuilder_screen3Builder, id: $0) }
+        self.init(screen0Builder: screen0Builder, screen1Builder: screen1Builder, screen2Builder: screen2Builder, screen3Builder: screen3Builder)
+    }
+}

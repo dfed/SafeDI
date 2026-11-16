@@ -1,0 +1,307 @@
+{
+ "seam": "Home",
+ "types": {
+  "Home": {
+   "properties": [
+    [
+     "screen0Builder",
+     "inst",
+     "Screen0"
+    ],
+    [
+     "screen1Builder",
+     "inst",
+     "Screen1"
+    ],
+    [
+     "screen2Builder",
+     "inst",
+     "Screen2"
+    ],
+    [
+     "screen3Builder",
+     "inst",
+     "Screen3"
+    ]
+   ]
+  },
+  "Screen0": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model0",
+     "const",
+     "Model0"
+    ],
+    [
+     "screen5Builder",
+     "inst",
+     "Screen5"
+    ],
+    [
+     "screen6Builder",
+     "inst",
+     "Screen6"
+    ],
+    [
+     "screen7Builder",
+     "inst",
+     "Screen7"
+    ]
+   ]
+  },
+  "Model0": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen1": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model1",
+     "const",
+     "Model1"
+    ],
+    [
+     "screen4Builder",
+     "inst",
+     "Screen4"
+    ],
+    [
+     "screen6Builder",
+     "inst",
+     "Screen6"
+    ],
+    [
+     "screen7Builder",
+     "inst",
+     "Screen7"
+    ]
+   ]
+  },
+  "Model1": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen2": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model2",
+     "const",
+     "Model2"
+    ],
+    [
+     "screen4Builder",
+     "inst",
+     "Screen4"
+    ],
+    [
+     "screen5Builder",
+     "inst",
+     "Screen5"
+    ],
+    [
+     "screen7Builder",
+     "inst",
+     "Screen7"
+    ]
+   ]
+  },
+  "Model2": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen3": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model3",
+     "const",
+     "Model3"
+    ],
+    [
+     "screen4Builder",
+     "inst",
+     "Screen4"
+    ],
+    [
+     "screen5Builder",
+     "inst",
+     "Screen5"
+    ],
+    [
+     "screen6Builder",
+     "inst",
+     "Screen6"
+    ]
+   ]
+  },
+  "Model3": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen4": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model4",
+     "const",
+     "Model4"
+    ]
+   ]
+  },
+  "Model4": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": [
+    [
+     "api",
+     "hole",
+     "Api"
+    ]
+   ]
+  },
+  "Screen5": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model5",
+     "const",
+     "Model5"
+    ]
+   ]
+  },
+  "Model5": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": [
+    [
+     "api",
+     "hole",
+     "Api"
+    ]
+   ]
+  },
+  "Screen6": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model6",
+     "const",
+     "Model6"
+    ]
+   ]
+  },
+  "Model6": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": [
+    [
+     "api",
+     "hole",
+     "Api"
+    ]
+   ]
+  },
+  "Screen7": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model7",
+     "const",
+     "Model7"
+    ]
+   ]
+  },
+  "Model7": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": [
+    [
+     "api",
+     "hole",
+     "Api"
+    ]
+   ]
+  }
+ },
+ "holes": {
+  "Api": "LiveApi"
+ },
+ "fill_receives": {
+  "LiveApi": [
+   "id",
+   "service"
+  ]
+ },
+ "pass_through": [
+  "service"
+ ],
+ "root_declares": [
+  [
+   "service",
+   "Service"
+  ]
+ ]
+}

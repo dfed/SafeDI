@@ -1,0 +1,59 @@
+import Harness
+import SafeDI
+
+@Instantiable
+public final class Cache: Instantiable, Traced {
+    public init() {
+        Registry.created(self, [:])
+    }
+
+    public let tracker = Tracker("Cache")
+}
+
+@Instantiable
+public final class Model: Instantiable, Traced {
+    public init(cache: Cache) {
+        self.cache = cache
+        Registry.created(self, ["cache": cache])
+    }
+
+    public let tracker = Tracker("Model")
+    @Received public let cache: Cache
+}
+
+@Instantiable
+public final class Screen: Instantiable, Traced {
+    public init(cache: Cache, stepBuilder: Instantiator<Step>) {
+        self.cache = cache
+        self.stepBuilder = stepBuilder
+        Registry.created(self, ["cache": cache, "stepBuilder": stepBuilder])
+    }
+
+    public let tracker = Tracker("Screen")
+    @Instantiated public let cache: Cache
+    @Instantiated public let stepBuilder: Instantiator<Step>
+}
+
+@Instantiable
+public final class Step: Instantiable, Traced {
+    public init(model: Model, screenBuilder: Instantiator<Screen>) {
+        self.model = model
+        self.screenBuilder = screenBuilder
+        Registry.created(self, ["model": model, "screenBuilder": screenBuilder])
+    }
+
+    public let tracker = Tracker("Step")
+    @Instantiated public let model: Model
+    @Instantiated public let screenBuilder: Instantiator<Screen>
+}
+
+@Instantiable(isRoot: true)
+public final class Home: Instantiable, Traced {
+    public init(screen: Screen) {
+        self.screen = screen
+        Registry.created(self, ["screen": screen])
+    }
+
+    public let tracker = Tracker("Home")
+    @Instantiated public let screen: Screen
+}

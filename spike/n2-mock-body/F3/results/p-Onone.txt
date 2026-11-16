@@ -1,0 +1,28 @@
+trace of three levels:
+  Theme#1()
+  Toolbar#1(theme: Theme#1)
+  Editor#1(previewBuilder: builder, toolbar: Toolbar#1)
+  App#1(theme: Theme#1, editor: Editor#1)
+  Theme#2()
+  Preview#1(theme: Theme#2, editor: builder)
+  Toolbar#2(theme: Theme#2)
+  Editor#2(previewBuilder: builder, toolbar: Toolbar#2)
+  Theme#3()
+  Preview#2(theme: Theme#3, editor: builder)
+  Toolbar#3(theme: Theme#3)
+  Editor#3(previewBuilder: builder, toolbar: Toolbar#3)
+alive after dropping everything: none
+  Theme#4()
+  Toolbar#4(theme: Theme#4)
+  Editor#4(previewBuilder: builder, toolbar: Toolbar#4)
+  App#2(theme: Theme#4, editor: Editor#4)
+  Theme#5()
+  Preview#3(theme: Theme#5, editor: builder)
+  Toolbar#5(theme: Theme#5)
+  Editor#5(previewBuilder: builder, toolbar: Toolbar#5)
+  Theme#6()
+  Preview#4(theme: Theme#6, editor: builder)
+  Toolbar#6(theme: Theme#6)
+  Editor#6(previewBuilder: builder, toolbar: Toolbar#6)
+alive holding only the third editor: Editor 1, Theme 1, Toolbar 1
+alive after dropping it: none

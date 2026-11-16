@@ -1,0 +1,28 @@
+import Harness
+import SafeDI
+
+public protocol Api: AnyObject {}
+
+#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)
+
+@Instantiable
+public final class Screen: Instantiable, Traced {
+    public init(api: any Api) {
+        self.api = api
+        Registry.created(self, ["api": api])
+    }
+
+    public let tracker = Tracker("Screen")
+    @Instantiated public let api: any Api
+}
+
+@Instantiable(generateDependencyTree: true)
+public final class Home: Instantiable, Traced {
+    public init(screenBuilder: Instantiator<Screen>) {
+        self.screenBuilder = screenBuilder
+        Registry.created(self, ["screenBuilder": screenBuilder])
+    }
+
+    public let tracker = Tracker("Home")
+    @Instantiated public let screenBuilder: Instantiator<Screen>
+}

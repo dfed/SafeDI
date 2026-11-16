@@ -1,0 +1,107 @@
+import Harness
+import SafeDI
+
+public final class User: Traced {
+    public init() { Registry.created(self, [:]) }
+    public let tracker = Tracker("User")
+}
+
+@Instantiable
+public final class Service: Instantiable, Traced {
+    public init() {
+        Registry.created(self, [:])
+    }
+
+    public let tracker = Tracker("Service")
+}
+
+@Instantiable
+public final class Badge: Instantiable, Traced {
+    public init() {
+        Registry.created(self, [:])
+    }
+
+    public let tracker = Tracker("Badge")
+}
+
+@Instantiable
+public final class Detail: Instantiable, Traced {
+    public init(service: Service) {
+        self.service = service
+        Registry.created(self, ["service": service])
+    }
+
+    public let tracker = Tracker("Detail")
+    @Received public let service: Service
+}
+
+@Instantiable
+public final class Leaf: Instantiable, Traced {
+    public init(service: Service, user: User, detail: Detail, badge: Badge?) {
+        self.service = service
+        self.user = user
+        self.detail = detail
+        self.badge = badge
+        Registry.created(self, ["service": service, "user": user, "detail": detail, "badge": badge])
+    }
+
+    public let tracker = Tracker("Leaf")
+    @Received public let service: Service
+    @Received public let user: User
+    @Instantiated public let detail: Detail
+    @Received(onlyIfAvailable: true) public let badge: Badge?
+}
+
+@Instantiable
+public final class A: Instantiable, Traced {
+    public init(leaf: Leaf) {
+        self.leaf = leaf
+        Registry.created(self, ["leaf": leaf])
+    }
+
+    public let tracker = Tracker("A")
+    @Instantiated public let leaf: Leaf
+}
+
+@Instantiable
+public final class B: Instantiable, Traced {
+    public init(badge: Badge, leaf: Leaf) {
+        self.badge = badge
+        self.leaf = leaf
+        Registry.created(self, ["badge": badge, "leaf": leaf])
+    }
+
+    public let tracker = Tracker("B")
+    @Instantiated public let badge: Badge
+    @Instantiated public let leaf: Leaf
+}
+
+@Instantiable
+public final class C: Instantiable, Traced {
+    public init(leaf: Leaf) {
+        self.leaf = leaf
+        Registry.created(self, ["leaf": leaf])
+    }
+
+    public let tracker = Tracker("C")
+    @Instantiated public let leaf: Leaf
+}
+
+@Instantiable(generateMock: true)
+public final class Root: Instantiable, Traced {
+    public init(service: Service, user: User, a: A, b: B, cBuilder: Instantiator<C>) {
+        self.service = service
+        self.user = user
+        self.a = a
+        self.b = b
+        self.cBuilder = cBuilder
+        Registry.created(self, ["service": service, "user": user, "a": a, "b": b, "cBuilder": cBuilder])
+    }
+
+    public let tracker = Tracker("Root")
+    @Received public let service: Service
+    @Forwarded public let user: User
+    @Instantiated public let a: A
+    @Instantiated public let b: B
+    @Instantiated public let cBuilder: Instantiator<C>
+}

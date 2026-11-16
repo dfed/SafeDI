@@ -1,0 +1,11 @@
+trace:
+  Db#1()
+  Store#1(db: Db#1, aBuilder: builder)
+  Root#1(store: Store#1)
+  LiveApi#1(db: Db#1)
+  A#1(api: LiveApi#1)
+  LiveApi#2(db: Db#1)
+  A#2(api: LiveApi#2)
+alive holding everything: A 2, Db 1, LiveApi 2, Root 1, Store 1
+alive holding only the last value: A 1, Db 1, LiveApi 1
+alive after dropping everything: none

@@ -1,0 +1,61 @@
+import Harness
+import SafeDI
+
+@Instantiable
+public final class Theme: Instantiable, Traced {
+    public init() {
+        Registry.created(self, [:])
+    }
+
+    public let tracker = Tracker("Theme")
+}
+
+@Instantiable
+public final class Toolbar: Instantiable, Traced {
+    public init(theme: Theme) {
+        self.theme = theme
+        Registry.created(self, ["theme": theme])
+    }
+
+    public let tracker = Tracker("Toolbar")
+    @Received public let theme: Theme
+}
+
+@Instantiable
+public final class Editor: Instantiable, Traced {
+    public init(previewBuilder: Instantiator<Preview>, toolbar: Toolbar) {
+        self.previewBuilder = previewBuilder
+        self.toolbar = toolbar
+        Registry.created(self, ["previewBuilder": previewBuilder, "toolbar": toolbar])
+    }
+
+    public let tracker = Tracker("Editor")
+    @Instantiated public let previewBuilder: Instantiator<Preview>
+    @Instantiated public let toolbar: Toolbar
+}
+
+@Instantiable
+public final class Preview: Instantiable, Traced {
+    public init(theme: Theme, editor: LazilyInstantiated<Editor>) {
+        self.theme = theme
+        self.editor = editor
+        Registry.created(self, ["theme": theme, "editor": editor])
+    }
+
+    public let tracker = Tracker("Preview")
+    @Instantiated public let theme: Theme
+    @Instantiated public let editor: LazilyInstantiated<Editor>
+}
+
+@Instantiable(generateMock: true)
+public final class App: Instantiable, Traced {
+    public init(theme: Theme, editor: Editor) {
+        self.theme = theme
+        self.editor = editor
+        Registry.created(self, ["theme": theme, "editor": editor])
+    }
+
+    public let tracker = Tracker("App")
+    @Instantiated public let theme: Theme
+    @Instantiated public let editor: Editor
+}
