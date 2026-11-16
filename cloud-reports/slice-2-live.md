@@ -10,3 +10,4 @@
 - 2026-11-16T07:01Z pins-and-lists: 69 problems classified (all order-only or leaks; 566 waits on #735); smoke-coverage ruling B; next: migration on top, then rebase on main after #735, one full Verify
 - 2026-11-16T07:20Z pins-and-lists + migration assembled: 592021a1b (fuzzer + seam targets green locally); waits for #735 to land, then rebase onto main, full Verify + pins, PR
 - 2026-11-16T07:42Z final rebase onto main 87e1bc10 started (agent); then PR + full Verify + pins + coverage in the same minute
+- 2026-11-16T07:58Z PR #738 opened (draft) at 8dae4da10 on main 87e1bc10; PR CI running; main CI 43825459050 cancelled (next stack over badge)
