@@ -4992,6 +4992,29 @@ struct SafeDIToolGraphFuzzerTests {
 									knownIssueCount += 1
 									continue
 								}
+								// Each finding on its own, against every entry: a seed whose findings different entries document.
+								if let firstFailure = result.failure {
+									var reasons = [String]()
+									var uncovered = [String]()
+									for failure in [firstFailure] + result.laterFailures {
+										let covering = corpus.knownIssues.first { candidate in
+											!GraphFuzzerFinding.findings(failure: failure, laterFailures: [], knownIssue: candidate, retentionIsJudged: result.isJudgedForRetention).contains(where: { if case .failure = $0 { true } else { false } })
+										}
+										if let covering {
+											reasons.append(String(covering.reason.prefix(80)))
+										} else {
+											uncovered.append(String(failure.kind.rawValue.prefix(160)))
+										}
+									}
+									if uncovered.isEmpty {
+										report.append("shapes \(seed) \(Set(reasons).sorted().joined(separator: " || "))")
+										knownIssueCount += 1
+										continue
+									}
+									for kind in uncovered {
+										report.append("uncovered \(seed) \(kind)")
+									}
+								}
 							}
 							for finding in GraphFuzzerFinding.findings(failure: result.failure, laterFailures: result.laterFailures, knownIssue: knownIssuesBySeed[seed], retentionIsJudged: result.isJudgedForRetention) {
 								if let reportLine = finding.reportLine(seed: seed) {
