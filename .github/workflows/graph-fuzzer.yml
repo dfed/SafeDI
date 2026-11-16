@@ -18,7 +18,7 @@ name: Graph Fuzzer
 # With `coverage`, the run instead lists the generator lines a change adds or
 # modifies that no corpus graph executed, the report ci.yml makes for a pull
 # request, for any commit before it is pushed for review. It builds the
-# commit the run is dispatched on for coverage as "Build and Test on Linux"
+# commit the run is dispatched on for coverage as "Build Tests on Linux"
 # does, runs the unit suite once for its coverage, fuzzes every corpus in the
 # shards of ci.yml's graph-fuzzer job with each shard's profile kept, and
 # reports the lines changed since `base`
@@ -123,7 +123,7 @@ jobs:
           if-no-files-found: ignore
 
   # The jobs below run only with `coverage`. This one builds the test bundle
-  # with "Build and Test on Linux"'s arguments, which are also the arguments
+  # with "Build Tests on Linux"'s arguments, which are also the arguments
   # of verify.yml's release build, so it starts from the build "Warm the
   # Release Verify Build Cache" there saved for the branch the run is
   # dispatched on, or else for main's newest commit: with the sources' times
@@ -177,7 +177,7 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # The arguments are words to split.
           swift build $SWIFT_BUILD_ARGUMENTS --build-tests
-      # What ci.yml's Linux test job packages for the graph fuzzer's shards.
+      # What ci.yml's "Build Tests on Linux" packages for the jobs that run it.
       - name: Package Test Bundle
         run: |
           products=.build/x86_64-unknown-linux-gnu/release
