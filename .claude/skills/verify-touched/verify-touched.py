@@ -99,8 +99,12 @@ def filters_of_changes(changed_paths, read_text):
                 # A deleted test file: its target's other tests are what can still tell.
                 add(f"^{target}\\.", f"{path} was deleted")
             else:
-                for pattern in suites_of_test_file(target, text):
+                patterns = suites_of_test_file(target, text)
+                for pattern in patterns:
                     add(pattern, path)
+                if not patterns:
+                    # A file of helpers: any test of its target may call them.
+                    add(f"^{target}\\.", f"{path} declares no suite, so it is its target's helper")
         elif parts[0] in ("Sources", "Plugins") and path.endswith(".swift"):
             directory = "Plugins" if parts[0] == "Plugins" else "/".join(parts[:2])
             targets = TARGETS_OF_SOURCES.get(directory)
@@ -234,8 +238,8 @@ def self_test():
     )
     expect(
         list(filters_of_changes({"Tests/SafeDIToolSeamTests/Helpers.swift"}, read)),
-        [],
-        "a file that declares no test selects nothing",
+        ["^SafeDIToolSeamTests\\."],
+        "a file that declares no suite selects its target's tests",
     )
     expect(
         list(filters_of_changes({"Tests/SafeDIMacrosTests/MacroTests.swift", "Sources/SafeDIMacros/A.swift"}, read)),
