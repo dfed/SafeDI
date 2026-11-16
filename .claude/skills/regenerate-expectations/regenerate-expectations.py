@@ -759,7 +759,7 @@ def map_spans(old, new, spans):
 
 
 # What a helper that assembles an expected file from fragments puts around them: the generated file header, a block
-# per import, and blank lines. Keep in step with `SafeDIToolSeamBuilderParameterTests.generatedFiles`.
+# per import, and blank lines, as `generatedFileHeader` and the tests' import helpers spell them.
 IMPORT_BLOCKS = r"(?:#if canImport\([^)\n]+\)\nimport [^\n]+\n#endif\n)*\n*"
 FRAGMENTS_AMBIGUOUS = "literals tile the output as fragments in more than one way"
 FRAGMENT_BOUNDARY_CHANGED = "literals tile the output as fragments, but the change touches what lies around them: the header, the imports or the blank lines between"

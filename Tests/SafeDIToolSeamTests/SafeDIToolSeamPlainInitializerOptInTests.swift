@@ -109,35 +109,6 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 	}
 	"""
 
-	/// The file `App` generates for its root, which calls `Screen`'s initializer generated code calls, whatever either
-	/// module's configuration says.
-	private static func appFiles(_ integration: MultiModuleIntegration) -> [String: String] {
-		[
-			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
-			#if canImport(Feature)
-			import Feature
-			#endif
-
-			extension Root {
-			    public init() {
-			        let user = User()
-			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_08AA1A656B91D4BA.self\(integration.seamCallComment(type: "Screen", declaringModule: "Feature"))
-			            return Screen(__safeDI_user: user)
-			        }
-			        let screen: Screen = __safeDI_screen()
-			        self.init(user: user, screen: screen)
-			    }
-			}
-			""",
-		]
-	}
-
-	/// The files `Feature` generates under `integration` when its extension for `Screen` is `screen`.
-	private static func featureFiles(_ integration: MultiModuleIntegration, screen: String) -> [String: String] {
-		[integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + screen]
-	}
-
 	// MARK: Off by default
 
 	@Test(arguments: MultiModuleIntegration.allCases)

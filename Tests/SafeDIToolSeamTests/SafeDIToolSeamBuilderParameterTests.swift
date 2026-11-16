@@ -7195,20 +7195,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		integration.seamCallComment(type: seam, declaringModule: "Feature")
 	}
 
-	/// The files `integration` generates for `module`, whose roots and seams generate `rootFiles`' code, by type, each
-	/// file importing `imports`: one combined file under `.moduleInfo`, one file per type under `.swiftPackagePlugin`.
-	/// `IMPORT_BLOCKS` in `.claude/skills/regenerate-expectations/regenerate-expectations.py` matches the header, the
-	/// import blocks and the blank lines this joins the files with, so change both together.
-	static func generatedFiles(module: String, integration: MultiModuleIntegration, imports: [String], rootFiles: [String: String]) -> [String: String] {
-		let importLines = imports.isEmpty ? "" : imports.map { "#if canImport(\($0))\nimport \($0)\n#endif\n" }.joined() + "\n"
-		switch integration {
-		case .moduleInfo:
-			return ["\(module).swift": generatedFileHeader + importLines + rootFiles.sorted { $0.key < $1.key }.map(\.value).joined(separator: "\n\n")]
-		case .swiftPackagePlugin:
-			return Dictionary(uniqueKeysWithValues: rootFiles.map { ("\($0.key)+SafeDI.swift", generatedFileHeader + importLines + $0.value) })
-		}
-	}
-
 	/// Expects the values `output`, the run of `modules`, builds for each root of `App` to equal those the run of
 	/// `visibleModules` builds, the same graph with every fulfilling declaration in the seam's module.
 	private mutating func expectValuesEqualVisibleBuild(

@@ -1497,14 +1497,4 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 			"If this line does not compile, add the SafeDI plugin to the target that declares \(typeName)."
 		}
 	}
-
-	private static func mockFiles(under integration: MultiModuleIntegration, moduleName: String, imports: [String], mockedTypeName: String, code: String) -> [String: String] {
-		let header = generatedFileHeader + imports.map { "#if canImport(\($0))\nimport \($0)\n#endif" }.joined(separator: "\n") + "\n\n"
-		return switch integration {
-		case .moduleInfo:
-			["\(moduleName).swift": header + code]
-		case .swiftPackagePlugin:
-			["\(mockedTypeName)+SafeDIMock.swift": header + code, "SafeDIMockConfiguration.swift": header]
-		}
-	}
 }

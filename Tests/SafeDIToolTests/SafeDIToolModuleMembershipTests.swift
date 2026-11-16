@@ -814,31 +814,6 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 		)
 	}
 
-	/// What `generateReadingFileThatImportsVerifiedModule` generates when every file's header imports `moduleNames`.
-	private static func generatedFiles(importing moduleNames: [String]) -> [String: String] {
-		let header = generatedFileHeader + moduleNames.map { "#if canImport(\($0))\nimport \($0)\n#endif\n" }.joined() + "\n"
-		return [
-			"Logger+SafeDIMock.swift": header + """
-			#if DEBUG
-			extension Logger {
-			    static func mock() -> Logger {
-			        Logger()
-			    }
-			}
-			#endif
-			""",
-			"Root+SafeDI.swift": header + """
-			extension Root {
-			    public init() {
-			        let logger = Logger()
-			        self.init(logger: logger)
-			    }
-			}
-			""",
-			"SafeDIMockConfiguration.swift": header,
-		]
-	}
-
 	/// The input CSV the SafeDIGenerator plugin wrote for `RootModule` in a build of the Example Package Integration
 	/// (in a directory named `Example`) with SwiftPM's native backend on 2026-10-30, in order. `$STAGE` stands for the
 	/// normalized path of the directory that held the package and, beside it, the SafeDI package it depends on by path.
