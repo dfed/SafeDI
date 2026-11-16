@@ -12992,6 +12992,7 @@ enum GraphFuzzerOracle {
 		// A fill's own errors: what the struct does not carry, what a re-entering call or a passing-up seam hides, or an
 		// instantiator the seam's tree is building where it calls the builder, which inline is a wrapper made again in a loop.
 		"the builder for `",
+		"the builders for `",
 		"but that call passes the builder `",
 	]
 
