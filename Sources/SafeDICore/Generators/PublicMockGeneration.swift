@@ -391,7 +391,7 @@ extension ScopeGenerator {
 	/// The name of the construction function a node's type is built with in a public mock: `__safeDI_mock` when it is
 	/// built with its hand-written mock, else `__safeDI_init`.
 	static func publicConstructionFunctionName(of node: MockParameterNode) -> String {
-		"\(ReservedName.builderFunctionNamePrefix)\(node.useMockInitializer ? "mock" : "init")"
+		node.useMockInitializer ? ReservedName.publicMockFunctionName : "\(ReservedName.builderFunctionNamePrefix)init"
 	}
 
 	/// The extension of `node`'s type that holds the providers of its optional defaults and a function for each of
@@ -1076,7 +1076,7 @@ extension ScopeGenerator {
 
 		var parameters = leadingParameters + optionalReceivedParameters
 		if hasOverrides {
-			let overridesType = TypeDescription.simple(name: "SafeDIOverrides")
+			let overridesType = TypeDescription.simple(name: ReservedName.mockOverridesTypeName)
 			parameters.append(PublicMockParameter(name: ReservedName.mockOverridesParameterName, type: overridesType, typeSource: overridesType.asSource, defaultSource: ".init()", defaultKind: .expression, access: .public, role: .overrides))
 		}
 		let tiers = [AccessLevel.public] + Set(parameters.map(\.access)).filter { $0 < .public }.sorted(by: >)
@@ -1249,7 +1249,7 @@ extension ScopeGenerator {
 		// `nonisolated`, as the module-level configuration is: in a module whose declarations default to the main actor, a
 		// mocked type on the main actor would put it there, where another module's configuration, whose default builds it,
 		// cannot reach it.
-		lines.append("\(indent)nonisolated public struct SafeDIOverrides {")
+		lines.append("\(indent)nonisolated public struct \(ReservedName.mockOverridesTypeName) {")
 		lines.append(contentsOf: publicStructBody(members: members, indent: "\(indent)\(standardIndent)"))
 		lines.append("\(indent)}")
 		return lines.joined(separator: "\n")
