@@ -535,6 +535,28 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_reportsWhatTheFeaturePathKeepsAlive_whenWhatItsInstantiatorBuildsLeaksAnInstanceItHolds() async throws {
+		// The feature path's builder leaks the `Part` it stores at `first`, which only a call of the builder builds. Holding
+		// the builder with what the call built holds the `Part` too, so only the experiment that holds the builder alone once
+		// the call's value is released sees the leak.
+		let leaking = "Instantiator { let first = Part(); _ = Unmanaged.passRetained(first); return Leaf(first: first, second: Part()) }"
+		let freeing = "Instantiator { Leaf(first: Part(), second: Part()) }"
+		let graph = DifferentialValueGraph(
+			name: "retention after a call",
+			feature: Self.holdersPath(initializerBody: "self.init(first: Holder(leafBuilder: \(leaking)), second: Holder(leafBuilder: \(freeing)))"),
+			knownRight: Self.holdersPath(initializerBody: "self.init(first: Holder(leafBuilder: \(freeing)), second: Holder(leafBuilder: \(freeing)))"),
+			probes: [DifferentialValueProbe("Holders()")],
+			judgesRetention: true,
+		)
+		let comparison = try #require(try await DifferentialValueOracle.compare(graphs: [graph], filesToDelete: &filesToDelete)?.first?.result.get())
+		#expect(comparison.differences == [])
+		#expect(comparison.retentionDifferences.map(\.description) == [
+			"probe `Holders()` keeps Part alive holding first.leafBuilder after a call once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func compare_pairsAnExperimentForEachWayToAWrapper_whenOnlyTheFeaturePathSharesTheInstanceHoldingIt() async throws {
 		// The feature path's root holds one `Holder` at `first` and `second`, the known-right path's two: each path names the
 		// holder's instantiator by both ways to it, so every experiment pairs, and the probe is judged.
@@ -549,7 +571,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			judgesRetention: true,
 		)
 		let comparison = try #require(try await DifferentialValueOracle.compare(graphs: [graph], filesToDelete: &filesToDelete)?.first?.result.get())
-		#expect(comparison.retentionJudgments.map(\.judgment) == [DifferentialValueRetention.Judgment(differences: [], pairedWrapperExperimentCount: 2, unpairedExperimentCount: 0)])
+		#expect(comparison.retentionJudgments.map(\.judgment) == [DifferentialValueRetention.Judgment(differences: [], pairedWrapperExperimentCount: 4, unpairedExperimentCount: 0)])
 		#expect(comparison.retentionJudgedProbes == ["Holders()"])
 	}
 

@@ -1259,23 +1259,36 @@ enum DifferentialValueOracle {
 		/// through stored properties, with what one call of it builds or its instance, releases the value, and prints,
 		/// per type, how many of the class instances the value and what is held hold through stored properties are
 		/// still alive though what is held does not reach them through stored properties: `retained holding <path>:
-		/// <Type> (2); …`. The wrappers are taken in the order a walk of the value's stored properties meets them, once
-		/// along each way to them, and named by the labels on that way, so the two paths' experiments pair by that name
-		/// whichever instances either path shares. Instances only a closure holds are not counted.
+		/// <Type> (2); …`. An instantiator is also held alone once what one call of it built is released (`<path> after a
+		/// call`), so that an instance that call keeps alive and what it built holds counts too. The wrappers are taken in
+		/// the order a walk of the value's stored properties meets them, once along each way to them, and named by the
+		/// labels on that way, so the two paths' experiments pair by that name whichever instances either path shares.
+		/// Instances only a closure holds are not counted.
 		private func describeRetention(of make: () -> Any) {
-			emitRetention(holdingWrapperAt: nil, named: "nothing", make: make)
-			for (index, path) in retentionTargetPaths(of: make).enumerated() {
-				emitRetention(holdingWrapperAt: index, named: path, make: make)
+			emitRetention(holdingWrapperAt: nil, releasingWhatItBuilds: false, named: "nothing", make: make)
+			for (index, target) in retentionTargetPaths(of: make).enumerated() {
+				emitRetention(holdingWrapperAt: index, releasingWhatItBuilds: false, named: target.path, make: make)
+				if target.isCalled {
+					emitRetention(holdingWrapperAt: index, releasingWhatItBuilds: true, named: "\(target.path) after a call", make: make)
+				}
 			}
 		}
 
-		private func retentionTargetPaths(of make: () -> Any) -> [String] {
+		/// Each wrapper's path, and whether an experiment calls it, so that it is held alone once what it built is released.
+		private func retentionTargetPaths(of make: () -> Any) -> [(path: String, isCalled: Bool)] {
 			let value = make()
-			return Self.retentionTargets(of: value).map(\.path)
+			return Self.retentionTargets(of: value).map { target in
+				switch target.wrapper.wrapperTraversal(samples: samples) {
+				case .instantiate:
+					(target.path, true)
+				case .readInstanceLast, .notTraversed:
+					(target.path, false)
+				}
+			}
 		}
 
-		private func emitRetention(holdingWrapperAt index: Int?, named name: String, make: () -> Any) {
-			let experiment = retentionExperiment(holdingWrapperAt: index, make: make)
+		private func emitRetention(holdingWrapperAt index: Int?, releasingWhatItBuilds: Bool, named name: String, make: () -> Any) {
+			let experiment = retentionExperiment(holdingWrapperAt: index, releasingWhatItBuilds: releasingWhatItBuilds, make: make)
 			// What the experiment holds stays alive until every instance is counted. An instance that what is held reaches
 			// through stored properties is held, not kept alive, so that a path whose held value holds more instances, which
 			// the description reports, keeps no more alive for it.
@@ -1296,8 +1309,9 @@ enum DifferentialValueOracle {
 		}
 
 		/// Builds the probe's value, notes every class instance it holds through stored properties, and returns what the
-		/// experiment holds, so that the value is released when this function returns.
-		private func retentionExperiment(holdingWrapperAt index: Int?, make: () -> Any) -> (objects: [WeaklyHeldObject], held: [Any]) {
+		/// experiment holds, so that the value is released when this function returns. Where `releasingWhatItBuilds`, the
+		/// experiment calls the wrapper and holds the wrapper alone, so that what the call built is released too.
+		private func retentionExperiment(holdingWrapperAt index: Int?, releasingWhatItBuilds: Bool, make: () -> Any) -> (objects: [WeaklyHeldObject], held: [Any]) {
 			let value = make()
 			var objects = [ObjectIdentifier: WeaklyHeldObject]()
 			collectWeaklyHeldObjects(of: value, into: &objects)
@@ -1310,7 +1324,9 @@ enum DifferentialValueOracle {
 				case let .instantiate(instantiate, _):
 					let built = instantiate()
 					collectWeaklyHeldObjects(of: built, into: &objects)
-					held.append(built)
+					if !releasingWhatItBuilds {
+						held.append(built)
+					}
 				case let .readInstanceLast(read, _):
 					let instance = read()
 					collectWeaklyHeldObjects(of: instance, into: &objects)
