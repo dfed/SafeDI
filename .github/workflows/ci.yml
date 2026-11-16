@@ -755,6 +755,8 @@ jobs:
     runs-on: macos-26
     permissions:
       contents: read
+      # To read the passed compile checks other runs uploaded.
+      actions: read
     env:
       # What the test step passes `swift test`, which the compile check
       # identity below hashes too.
@@ -830,6 +832,9 @@ jobs:
       # can fail the job.
       - name: Restore Shared Passed Compile Checks
         continue-on-error: true
+        # It lists and downloads small artifacts in seconds; the limit is for a
+        # stalled transfer.
+        timeout-minutes: 5
         uses: ./.github/actions/restore-shared-compile-checks
         with:
           identity: ${{ steps.compile-check-identity.outputs.identity }}
@@ -999,6 +1004,8 @@ jobs:
     container: swift:6.2
     permissions:
       contents: read
+      # To read the passed compile checks other runs uploaded.
+      actions: read
     env: *linux-test-environment
     steps:
       - name: Require the Build
@@ -1042,6 +1049,9 @@ jobs:
       # can fail the job.
       - name: Restore Shared Passed Compile Checks
         continue-on-error: true
+        # It lists and downloads small artifacts in seconds; the limit is for a
+        # stalled transfer.
+        timeout-minutes: 5
         uses: ./.github/actions/restore-shared-compile-checks
         with:
           identity: ${{ steps.compile-check-identity.outputs.identity }}
@@ -1452,6 +1462,12 @@ jobs:
       # the script's read-only file case runs here.
       - name: Check the Edit Script Against Its Fixtures
         run: python3 -I .claude/skills/apply-edit/apply-edit.py --self-test "$RUNNER_TEMP/apply-edit-self-test"
+      # .github/actions/restore-shared-compile-checks/restore-from-artifacts.js
+      # decides which other runs' passed compile checks a test job skips, so
+      # it proves on fixtures that it takes no line from a fork, another
+      # workflow, another identity or an archive it cannot read.
+      - name: Check the Passed Compile Checks Script Against Its Fixtures
+        run: node .github/actions/restore-shared-compile-checks/restore-from-artifacts.js --self-test "$RUNNER_TEMP/restore-from-artifacts-self-test"
       # A test job that failed, was cancelled or could not export uploads no
       # report, and the next step names the report that is missing, so a
       # download that finds nothing is not this step's failure.

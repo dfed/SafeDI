@@ -16,8 +16,8 @@
 # What this hash adds is what decides which keys a run writes and shares: the
 # sources of the compile verifier and its cache, the actions the test jobs
 # restore and upload passed checks with, and this script. Runs on every branch
-# add to one list per identity (share-compile-checks.yml), so a branch that
-# changes how passes are written writes to a list of its own.
+# read each other's passes of one identity (restore-shared-compile-checks), so
+# a branch that changes how passes are written or read reads no other's.
 #
 # It also covers the sources of SafeDI's runtime library and macro plugin, the
 # package manifest and its resolved dependencies, the arguments the test step
@@ -131,6 +131,7 @@ fi
 		Tests/SafeDIToolTestSupport/PassedCompileCheckCache.swift \
 		Tests/SafeDIToolTestSupport/TestTemporaryDirectory.swift \
 		.github/actions/restore-shared-compile-checks/action.yml \
+		.github/actions/restore-shared-compile-checks/restore-from-artifacts.js \
 		.github/actions/upload-passed-compile-checks/action.yml \
 		.github/scripts/compile-check-identity.sh \
 		| sha256_of_files

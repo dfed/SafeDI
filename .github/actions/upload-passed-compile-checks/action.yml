@@ -1,5 +1,5 @@
 name: Upload Passed Compile Checks
-description: Uploads the compile checks this run's own tests passed, with their identity, for "Share Passed Compile Checks" to add to the shared list.
+description: Uploads the compile checks this run's own tests passed, with their identity, for other runs to read and for "Share Passed Compile Checks" to add to the shared list.
 
 # Call it after the tests, with `if: always()`: the checks that passed before a
 # failure or a cancellation passed all the same. A run with no file uploads
@@ -38,7 +38,10 @@ runs:
       with:
         name: passed-compile-checks-${{ runner.os }}
         path: passed-compile-checks/
-        retention-days: 1
+        # Other runs read it for as long as it is among the newest
+        # (restore-shared-compile-checks), which a stack needs for the days it
+        # is in review.
+        retention-days: 7
         if-no-files-found: ignore
         # A re-run of the job replaces what an earlier attempt uploaded.
         overwrite: true

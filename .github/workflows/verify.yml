@@ -109,6 +109,8 @@ jobs:
     timeout-minutes: 75
     permissions:
       contents: read
+      # To read the passed compile checks other runs uploaded.
+      actions: read
     outputs:
       identity: ${{ steps.compile-check-identity.outputs.identity }}
       split: ${{ steps.split.outputs.split }}
@@ -258,6 +260,9 @@ jobs:
       - name: Restore Shared Passed Compile Checks
         if: ${{ steps.split.outputs.split == 'false' }}
         continue-on-error: true
+        # It lists and downloads small artifacts in seconds; the limit is for a
+        # stalled transfer.
+        timeout-minutes: 5
         uses: ./.github/actions/restore-shared-compile-checks
         with:
           identity: ${{ steps.compile-check-identity.outputs.identity }}
@@ -313,6 +318,8 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      # To read the passed compile checks other runs uploaded.
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -349,6 +356,9 @@ jobs:
             compile-checks-v1-${{ runner.os }}-${{ needs.verify.outputs.identity }}-
       - name: Restore Shared Passed Compile Checks
         continue-on-error: true
+        # It lists and downloads small artifacts in seconds; the limit is for a
+        # stalled transfer.
+        timeout-minutes: 5
         uses: ./.github/actions/restore-shared-compile-checks
         with:
           identity: ${{ needs.verify.outputs.identity }}
