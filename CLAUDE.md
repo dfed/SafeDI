@@ -31,13 +31,14 @@ Formatting changes from `./CLI/lint.sh` go in a commit of their own, after the c
 - `Scripts/fuzzer-coverage-report.sh RUN [BASE]` lists the changed generator lines no fuzzer corpus graph executed, from a run's `fuzzer-coverage` artifact, against another base; `graph-fuzzer.yml`'s `coverage` input makes the report for a commit before review ("Coverage of a change" in `.claude/rules/fuzzer-corpora.md`).
 - `Scripts/multi-module-repro.sh [--conditions DEBUG,X] ROOT MODULE…` runs `generate` per module as Bazel and Tuist do and compiles the modules in order.
 - `Scripts/unexecuted-lines.py` is "Check Line Coverage on Linux": it needs both test jobs' reports, so it cannot check a local run. To read a CI run's result locally, download the run's reports (`gh run download RUN -p 'line-coverage-*'`) and run it as the job does, from a checkout of the commit their `commit.txt` names (for a pull request, GitHub's merge commit, which `git fetch origin SHA` fetches); `--self-test DIRECTORY` checks the script against fixtures.
+- Tools only agents run are skills under `.claude/skills/`: `verify-touched` runs the suites a branch touches, before any full Verify; `restack-lane` rebases a branch and checks it.
 - `Scripts/check-claude-instruction-files.sh` fails when an instruction file could be truncated or would load at launch by mistake; "Check Markdown links" runs it.
 
 ### CI
 
-- Every CI job runs on a Linux runner unless it genuinely needs macOS: Xcode or `xcodebuild`, an Apple platform SDK, the Xcode project plugin, or the macOS release binaries and their notarization. Linux runners scale; macOS runners are scarce.
+- Every CI job runs on a Linux runner unless it genuinely needs macOS: Xcode or `xcodebuild`, an Apple platform SDK, the Xcode project plugin, or the macOS release binaries and their notarization. Linux runners scale; macOS runners are the scarce resource that pull requests and publishes queue on.
 - Open pull requests as drafts: a draft's CI skips macOS and the coverage gate.
-- A job on a `macos-*` runner states why in a workflow comment. macOS jobs run on arm64 images, never Intel.
+- A job on a `macos-*` runner states why in a comment in the workflow. macOS jobs run on arm64 images, never on an Intel runner.
 - A job that can hang gets a step-level `timeout-minutes` of about twice its measured duration, with the measurements in a comment beside it; never a per-test timeout, which makes CI flaky.
 - No scheduled or unattended check without a path that turns its findings into fix pull requests.
 - New Linux jobs use the container and setup of "Build Tests on Linux" and "Build and Test on Linux" in `ci.yml`, except "Build and Test on Latest Swift" (`swift:latest`), "Lint Swift" (`swift:6.3`, a release build of SwiftFormat), and "Build Release SafeDITool on Linux", which runs `publish.yml`'s Linux build command in `publish.yml`'s container, because publishing 2.3.0-alpha-1 crashed Swift 6.3.3 compiling that release build of code every CI job had passed.
