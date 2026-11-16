@@ -7879,7 +7879,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockParametersSortedByLabelReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
-			seeds: [106, 167, 251, 351, 771],
+			seeds: [103, 106, 167, 251, 351, 562, 771],
 		),
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
 		// cycle through it, in the gating draw of the shape #702 fixed, a `.public` type that builds itself again through
@@ -7889,7 +7889,8 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [3, 99, 186, 213, 289, 301, 387, 468, 542, 549, 561, 566, 583, 598, 616, 618, 649, 653, 677, 697, 701, 717, 832, 833, 840, 884, 907],
+			seeds: [3, 33, 99, 186, 213, 289, 301, 302, 387, 468, 542, 549, 561, 566, 583, 598, 616, 618, 649, 653, 677,
+			        697, 701, 703, 717, 832, 833, 840, 884, 907, 946],
 		),
 		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
 		// before, a consumer held a holder the public tier omitted, which the tool rejected; now `Dock`'s own declaration
@@ -7911,7 +7912,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: passedUpBuildersNamedApartReason,
 			signatures: [.holeNamesChangeWithSecondPlace(containing: "`t6Twin`")],
-			seeds: [230, 406, 486, 692, 743, 748, 845, 960],
+			seeds: [230, 333, 406, 486, 692, 743, 748, 845, 960],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(passedUpBuildersNamedApartReason); and \(publicMockBuilderOrderReason)",
@@ -7924,7 +7925,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockFormsNamedApartOrderReason,
 			signatures: [.renamedGraphDiffers(.mockCode)],
-			seeds: [18, 22, 101, 156, 161, 326, 629, 881, 977],
+			seeds: [18, 22, 101, 156, 161, 326, 629, 881, 970, 977],
 		),
 		// The root-level stream's lazily received `holeSession` (`holeRootLevelHoldsWrapper`): each call of `T6`'s mock wraps
 		// again the instance its consumer passes (M8.32), and its root level holds that wrapper, so the fill beneath a later
@@ -7947,39 +7948,36 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockLeakReason,
 			signatures: publicMockLeakSignatures,
-			seeds: [2, 11, 15, 25, 26, 34, 44, 45, 48, 57, 67, 77, 90, 92, 110, 111, 115, 122, 123, 124, 125, 133, 136, 143,
-			        152, 159, 165, 172, 177, 178, 185, 196, 199, 205, 206, 207, 212, 225, 233, 243, 244, 266, 269, 271, 273, 278,
-			        282, 285, 297, 304, 314, 319, 322, 331, 335, 338, 339, 340, 342, 353, 356, 362, 369, 379, 386, 389, 393, 401,
-			        412, 415, 419, 421, 423, 428, 429, 431, 434, 436, 437, 438, 442, 443, 445, 465, 467, 477, 478, 482, 519, 520,
-			        522, 525, 532, 538, 540, 541, 543, 550, 552, 558, 560, 563, 571, 575, 582, 595, 601, 608, 619, 631, 633,
-			        651, 654, 657, 660, 664, 678, 679, 682, 684, 693, 699, 713, 732, 738, 747, 753, 768, 770, 775, 777, 782, 787,
-			        788, 797, 798, 802, 805, 807, 811, 827, 834, 835, 838, 843, 844, 846, 847, 849, 851, 852, 858, 872, 877, 879,
-			        883, 888, 890, 891, 902, 903, 905, 926, 927, 933, 934, 940, 943, 945, 949, 957, 958, 968, 971, 975, 978, 979,
-			        984, 989, 990, 991, 994, 995],
+			seeds: [15, 44, 57, 77, 111, 136, 165, 177, 185, 196, 199, 205, 207, 212, 243, 244, 273, 278, 297, 304, 314,
+			        319, 335, 339, 340, 342, 353, 356, 369, 379, 401, 412, 421, 423, 429, 431, 434, 438, 442, 443, 445,
+			        467, 477, 482, 519, 522, 525, 532, 540, 541, 543, 550, 558, 563, 571, 575, 601, 608, 619, 651, 664,
+			        678, 679, 682, 693, 699, 713, 747, 753, 770, 775, 787, 827, 834, 838, 843, 844, 846, 847, 849, 851,
+			        872, 877, 879, 883, 888, 890, 891, 902, 903, 926, 933, 934, 940, 943, 958, 971, 975, 979, 989, 991,
+			        995],
 		),
 		// The root-level stream's label in two forms in a graph with a lazy cycle whose back-edge the move across wrapper
 		// names moves: `SelfStep`'s, or the stale-value draw's loop around `T6`'s hole (`HoleHost` and `HoleLoop`).
 		GraphFuzzerKnownIssue(
 			reason: "\(lazyCycleConfigurationFieldReason); and \(publicMockFormsNamedApartOrderReason)",
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence), .renamedGraphDiffers(.mockCode)],
-			seeds: [47, 221, 381, 821, 880, 886],
+			seeds: [47, 221, 242, 381, 821, 880, 886],
 		),
 		// The root-level stream's label in two forms in a graph of a gating draw that shows a public mock's leak.
 		GraphFuzzerKnownIssue(
 			reason: "\(publicMockFormsNamedApartOrderReason); and \(publicMockLeakReason)",
 			signatures: [.renamedGraphDiffers(.mockCode)] + publicMockLeakSignatures,
-			seeds: [327, 474, 970, 983],
+			seeds: [327, 474, 983],
 		),
 		// A graph of a gating draw that shows a public mock's leak, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy cycle through it, or whose `SelfStep` the move across wrapper names puts on either side of `Instantiator`, or the shared-construction draw's `ShareService` and `ShareTicker`.
 		GraphFuzzerKnownIssue(
 			reason: "\(lazyCycleConfigurationFieldReason); and \(publicMockLeakReason)",
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)] + publicMockLeakSignatures,
-			seeds: [33, 171, 265, 302, 539, 572, 612, 659, 669, 703, 730, 825, 897, 909, 944, 946],
+			seeds: [171, 265, 539, 572, 612, 659, 669, 730, 825, 897, 909, 944],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(publicMockParametersSortedByLabelReason); and \(publicMockLeakReason)",
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)] + publicMockLeakSignatures,
-			seeds: [103, 433, 528, 562, 947],
+			seeds: [433, 528, 947],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(publicMockParametersSortedByLabelReason); and \(lazyCycleConfigurationFieldReason)",
@@ -7997,11 +7995,6 @@ struct SafeDIToolGraphFuzzerTests {
 			seeds: [799],
 		),
 		GraphFuzzerKnownIssue(
-			reason: "\(passedUpBuildersNamedApartReason); and \(publicMockLeakReason)",
-			signatures: [.holeNamesChangeWithSecondPlace(containing: "`t6Twin`")] + publicMockLeakSignatures,
-			seeds: [333],
-		),
-		GraphFuzzerKnownIssue(
 			reason: "\(passedUpBuildersNamedApartReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.holeNamesChangeWithSecondPlace(containing: "`t6Twin`"), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [211, 307],
@@ -8015,11 +8008,6 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "\(passedUpBuildersNamedApartReason); and \(publicMockBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.holeNamesChangeWithSecondPlace(containing: "`t6Twin`"), .renamedGraphDiffers(.mockCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [597],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "\(lazyCycleConfigurationFieldReason); and \(publicMockFormsNamedApartOrderReason); and \(publicMockLeakReason)",
-			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence), .renamedGraphDiffers(.mockCode)] + publicMockLeakSignatures,
-			seeds: [242],
 		),
 		// Where `mockConditionalCompilation: nil` puts a mock in its type's dependency tree file, a change to it changes that file too.
 		GraphFuzzerKnownIssue(
@@ -8054,40 +8042,39 @@ struct SafeDIToolGraphFuzzerTests {
 	/// mocks (iv). The planned builder structs empty them, each slice the seeds it fixes.
 	static let publicMockBuilderSurfaceSeeds = BuilderSurfaceSeeds(
 		base: [
-			2, 3, 4, 8, 9, 10, 11, 12, 15, 17, 18, 19, 20, 21, 22, 24, 25, 26, 28, 31,
-			33, 34, 37, 42, 43, 44, 45, 47, 48, 49, 54, 55, 56, 57, 58, 59, 60, 62, 63, 64,
-			65, 66, 67, 69, 70, 73, 77, 79, 82, 84, 87, 88, 89, 90, 92, 93, 95, 96, 97, 98,
-			99, 101, 103, 106, 107, 108, 109, 110, 111, 115, 117, 119, 122, 123, 124, 125, 128, 129, 130, 131,
-			133, 136, 137, 138, 143, 145, 146, 147, 148, 149, 150, 151, 152, 153, 155, 156, 157, 158, 159, 160,
-			161, 162, 165, 166, 167, 168, 171, 172, 176, 177, 178, 180, 181, 182, 183, 185, 186, 189, 190, 192,
-			195, 196, 197, 198, 199, 200, 201, 202, 204, 205, 206, 207, 210, 211, 212, 213, 216, 218, 219, 221,
-			222, 223, 225, 226, 227, 228, 229, 230, 231, 233, 238, 239, 242, 243, 244, 245, 246, 247, 248, 250,
-			251, 252, 256, 257, 259, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 276,
-			278, 280, 281, 282, 283, 284, 285, 287, 289, 290, 293, 295, 296, 297, 299, 300, 301, 302, 304, 306,
-			307, 308, 309, 310, 311, 312, 313, 314, 316, 317, 318, 319, 321, 322, 324, 326, 327, 328, 329, 330,
-			331, 332, 333, 335, 336, 337, 338, 339, 340, 341, 342, 344, 346, 347, 348, 349, 350, 351, 352, 353,
-			354, 356, 359, 360, 361, 362, 366, 368, 369, 370, 371, 372, 374, 376, 379, 380, 381, 383, 386, 387,
-			388, 389, 392, 393, 394, 395, 397, 398, 401, 402, 404, 406, 407, 409, 411, 412, 413, 415, 416, 417,
-			419, 421, 423, 424, 425, 427, 428, 429, 431, 432, 433, 434, 435, 436, 437, 438, 440, 441, 442, 443,
-			445, 448, 449, 453, 455, 456, 459, 463, 465, 467, 468, 469, 472, 474, 477, 478, 479, 481, 482, 484,
-			486, 488, 489, 490, 492, 494, 495, 497, 498, 499, 500, 503, 505, 507, 508, 510, 511, 515, 516, 519,
-			520, 521, 522, 525, 526, 527, 528, 532, 537, 538, 539, 540, 541, 542, 543, 545, 546, 549, 550, 551,
-			552, 554, 556, 558, 559, 560, 561, 562, 563, 564, 565, 567, 568, 571, 572, 575, 576, 577, 580, 581,
-			582, 584, 587, 589, 591, 592, 594, 595, 597, 598, 601, 602, 603, 605, 606, 607, 608, 610, 611, 612,
-			613, 614, 615, 616, 618, 619, 621, 622, 623, 624, 626, 627, 629, 630, 631, 632, 633, 635, 636, 637,
-			638, 639, 642, 643, 644, 645, 646, 647, 648, 649, 651, 652, 653, 654, 655, 657, 658, 659, 660, 663,
-			664, 666, 668, 669, 670, 671, 673, 675, 677, 678, 679, 680, 681, 682, 684, 685, 691, 692, 693, 695,
-			697, 698, 699, 700, 701, 703, 706, 707, 708, 711, 713, 714, 715, 716, 717, 718, 720, 721, 722, 723,
-			724, 725, 726, 727, 728, 730, 732, 733, 734, 735, 736, 737, 738, 739, 740, 741, 743, 744, 746, 747,
-			748, 750, 751, 753, 757, 758, 765, 766, 768, 770, 772, 773, 774, 775, 776, 777, 778, 779, 781, 782,
-			783, 784, 786, 787, 788, 789, 790, 792, 793, 795, 797, 798, 799, 801, 802, 803, 804, 805, 807, 808,
-			811, 812, 814, 817, 818, 819, 820, 821, 822, 823, 824, 825, 827, 828, 830, 832, 833, 834, 835, 836,
-			838, 839, 840, 843, 844, 845, 846, 847, 848, 849, 850, 851, 852, 853, 854, 858, 859, 860, 861, 862,
-			863, 864, 865, 866, 870, 872, 873, 875, 876, 877, 879, 880, 881, 883, 884, 885, 886, 887, 888, 889,
-			890, 891, 892, 895, 896, 897, 898, 899, 901, 902, 903, 904, 905, 906, 907, 909, 910, 911, 912, 913,
-			915, 917, 918, 919, 923, 926, 927, 930, 931, 933, 934, 935, 936, 937, 940, 941, 942, 943, 944, 945,
-			946, 947, 949, 950, 951, 953, 956, 957, 958, 959, 960, 961, 962, 963, 965, 966, 968, 970, 971, 973,
-			974, 975, 977, 978, 979, 981, 983, 984, 985, 987, 988, 989, 990, 991, 992, 993, 994, 995, 996, 998,
+			2, 3, 4, 8, 9, 10, 11, 12, 15, 17, 18, 19, 20, 21, 22, 24, 25, 26, 28, 33,
+			34, 42, 43, 44, 45, 47, 48, 49, 54, 55, 56, 57, 58, 59, 60, 62, 63, 64, 65, 66,
+			67, 69, 73, 77, 79, 82, 84, 87, 88, 89, 90, 92, 95, 96, 97, 99, 101, 103, 106, 107,
+			108, 109, 110, 111, 115, 117, 119, 122, 123, 124, 125, 128, 129, 130, 131, 133, 136, 137, 138, 143,
+			145, 146, 147, 148, 149, 150, 151, 152, 155, 156, 157, 158, 159, 160, 161, 162, 165, 166, 167, 168,
+			171, 172, 176, 177, 178, 180, 181, 182, 183, 185, 186, 189, 190, 192, 195, 196, 197, 198, 199, 200,
+			201, 202, 204, 205, 206, 207, 210, 211, 212, 213, 216, 218, 219, 221, 222, 223, 225, 226, 227, 228,
+			229, 230, 231, 233, 238, 239, 242, 243, 244, 245, 246, 247, 248, 250, 251, 252, 256, 257, 259, 261,
+			262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 278, 280, 281, 282, 283, 284, 285,
+			287, 289, 290, 293, 295, 296, 297, 299, 300, 301, 302, 304, 306, 307, 308, 309, 310, 311, 312, 313,
+			314, 316, 317, 318, 319, 321, 322, 324, 326, 327, 328, 329, 331, 332, 333, 335, 336, 337, 338, 339,
+			340, 342, 344, 346, 347, 348, 349, 350, 351, 352, 353, 356, 360, 361, 362, 366, 368, 369, 370, 371,
+			372, 374, 379, 380, 381, 383, 386, 387, 388, 389, 392, 393, 394, 395, 397, 398, 401, 402, 404, 406,
+			407, 409, 411, 412, 413, 415, 416, 417, 419, 421, 423, 424, 425, 427, 428, 429, 431, 432, 433, 434,
+			435, 436, 437, 438, 440, 441, 442, 443, 445, 448, 449, 453, 455, 456, 459, 463, 465, 467, 468, 469,
+			472, 474, 477, 478, 479, 481, 482, 484, 486, 488, 489, 490, 492, 494, 497, 498, 499, 503, 507, 508,
+			510, 511, 515, 516, 519, 520, 521, 522, 525, 526, 527, 528, 532, 537, 538, 539, 540, 541, 542, 543,
+			545, 549, 550, 551, 552, 556, 558, 559, 560, 561, 562, 563, 564, 565, 567, 568, 571, 572, 575, 576,
+			577, 580, 581, 582, 584, 587, 589, 591, 592, 594, 595, 597, 598, 601, 602, 605, 606, 607, 608, 610,
+			611, 612, 614, 616, 618, 619, 621, 622, 623, 624, 627, 629, 631, 632, 633, 635, 636, 638, 639, 642,
+			643, 644, 645, 646, 647, 648, 649, 651, 652, 653, 654, 655, 657, 658, 659, 660, 663, 664, 666, 668,
+			669, 670, 671, 673, 675, 677, 678, 679, 680, 681, 682, 684, 685, 691, 692, 693, 695, 697, 699, 700,
+			701, 703, 706, 707, 708, 711, 713, 714, 715, 716, 717, 718, 720, 721, 722, 723, 724, 725, 727, 728,
+			730, 732, 733, 734, 735, 737, 738, 739, 740, 741, 743, 746, 747, 748, 751, 753, 757, 758, 765, 766,
+			768, 770, 772, 773, 774, 775, 776, 777, 778, 779, 781, 782, 783, 784, 786, 787, 788, 789, 790, 792,
+			793, 795, 797, 798, 799, 801, 802, 803, 804, 805, 807, 808, 811, 812, 814, 817, 818, 819, 820, 821,
+			823, 824, 825, 827, 828, 832, 833, 834, 835, 836, 838, 839, 840, 843, 844, 845, 846, 847, 848, 849,
+			850, 851, 852, 853, 854, 858, 860, 861, 862, 863, 864, 865, 866, 870, 872, 873, 875, 876, 877, 879,
+			880, 881, 883, 884, 885, 886, 887, 888, 889, 890, 891, 892, 896, 897, 898, 899, 901, 902, 903, 904,
+			905, 906, 907, 909, 910, 911, 912, 913, 915, 917, 918, 919, 923, 926, 927, 930, 931, 933, 934, 935,
+			936, 937, 940, 941, 943, 944, 945, 946, 947, 949, 950, 951, 953, 956, 957, 958, 959, 960, 961, 962,
+			963, 965, 966, 968, 970, 971, 973, 974, 975, 977, 978, 979, 981, 983, 984, 985, 987, 988, 989, 990,
+			991, 992, 993, 994, 995, 996, 998,
 		],
 		labels: [
 			19, 64, 119, 166, 211, 230, 299, 307, 333, 406, 415, 456, 486, 510, 597, 658, 692, 743, 748,
