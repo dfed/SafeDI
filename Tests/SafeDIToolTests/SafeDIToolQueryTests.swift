@@ -3008,7 +3008,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 		// `Feature`'s mock takes a builder for the place, which a caller writes as a closure.
 		#expect(output.result.unfulfilledDependencies == [
-			TypeReport.UnfulfilledDependency(label: "userServiceBuilder", type: "@escaping () -> any UserService", defaultExpression: nil, reasonKind: .noInstantiableFulfillsType, reason: "No @Instantiable declaration fulfills `UserService`."),
+			TypeReport.UnfulfilledDependency(label: "userServiceBuilder", type: "() -> any UserService", defaultExpression: nil, reasonKind: .noInstantiableFulfillsType, reason: "No @Instantiable declaration fulfills `UserService`."),
 		])
 	}
 

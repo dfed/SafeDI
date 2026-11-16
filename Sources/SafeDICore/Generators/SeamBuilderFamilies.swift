@@ -269,11 +269,10 @@ extension DependencyTreeGenerator {
 				)
 				// A public mock's hole type takes a builder struct by a rule of its own (`publicMockTakesBuilderStructs`), which reads
 				// what the mock's caller and its own tree can hand on through the struct. So a type that is a seam and a public mock
-				// keeps the closure over its mock's enum where a place is built in a `@Sendable` function or beside a
-				// `LazilyInstantiated`, though its seam takes the struct: a deliberate difference until the mock's rule takes those
-				// too (`public-mocks.md`). A seam's own internal mock takes a closure that takes nothing whatever this gives the
-				// seam's builder (`ScopeGenerator.seamMockBuilders`), where the seam keeps the closure over its enum for a place that
-				// holds another seam's scope: deliberate too (`mock-generation.md`).
+				// keeps the closure over its mock's enum where a place is built in a `@Sendable` function, beside a
+				// `LazilyInstantiated`, or beneath a case that holds another scope, though its seam takes the struct: a deliberate
+				// difference until the mock's rule takes those too (`public-mock-builders.md`). A seam's own internal mock takes
+				// builders of its own (`ScopeGenerator.seamMockBuilders`), whatever this gives the seam's builder.
 				let takesBuilderStructs = scopeTypeNames.areQualified
 					? Self.publicMockTakesBuilderStructs(of: byType.enums, holesBySite: holesBySite)
 					: Self.declaresBuilderStructs(of: byType.enums)
@@ -614,9 +613,8 @@ extension DependencyTreeGenerator {
 	/// case holds another scope: a call's case, which holds another module's public mock's enum, a case for a builder a call
 	/// fills, or a case that holds the mocked type's own root enum, where its tree builds it again. Every other hole type
 	/// keeps the closure over its enum, in the mock's module and at every call, which computes the mock's signature with
-	/// this rule too. A seam's rule (`declaresBuilderStructs(of:)`) switches the `@Sendable` family and a lazy
-	/// value on a route besides, so one type's seam and public mock can differ there: a deliberate difference
-	/// (`public-mocks.md`).
+	/// this rule too. A seam's rule (`declaresBuilderStructs(of:)`) switches every hole type, so one type's seam and public
+	/// mock differ wherever this keeps one: a deliberate difference (`public-mock-builders.md`).
 	static func publicMockTakesBuilderStructs(of enums: [SeamSignature.ScopeEnum], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) -> Bool {
 		enums.allSatisfy { scopeEnum in
 			!scopeEnum.key.isSendable && scopeEnum.cases.allSatisfy { enumCase in
