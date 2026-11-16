@@ -38,7 +38,7 @@ def main():
         if start < since: continue
         done = run["status"] == "completed"
         end = parse(run["updated_at"]) if done else now
-        rows.append(dict(id=run["id"], name=run["name"], event=run["event"], branch=run["head_branch"], sha=run["head_sha"][:9], start=start, end=end, result=run.get("conclusion") if done else run["status"]))
+        rows.append(dict(id=run["id"], name=run["name"], event=run["event"], branch=run["head_branch"], sha=run["head_sha"][:9], start=start, end=end, result=run.get("conclusion") if done else run["status"], attempt=run.get("run_attempt", 1)))
     rows.sort(key=lambda row: row["start"])
     for row in rows:
         minutes = (row["end"] - row["start"]).total_seconds() / 60
@@ -73,6 +73,10 @@ def main():
     for branch, runs in repeated.items():
         print(f'  {len(runs)} failed Verify runs on {branch}: ' + ", ".join(str(r["id"]) for r in runs))
     if not repeated: print("  held")
+    print("Rule 4, no re-run or dispatch on main without asking the lead:")
+    on_main = [r for r in rows if r["branch"] == "main" and (r["attempt"] > 1 or r["event"] == "workflow_dispatch")]
+    for r in on_main: print(f'  {r["name"]} {r["id"]} on main: attempt {r["attempt"]}, {r["event"]}, started {r["start"]:%H:%M}')
+    if not on_main: print("  held")
 
 
 main()
