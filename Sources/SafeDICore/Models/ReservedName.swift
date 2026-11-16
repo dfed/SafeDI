@@ -110,6 +110,16 @@ public enum ReservedName: Hashable, Sendable {
 	/// instantiator forwards.
 	static let forwardedValueParameterName = "\(builderFunctionNamePrefix)forwarded"
 
+	/// The name of the static function in a type's extension that a public mock builds the type with when it is built with
+	/// its hand-written mock, and of the function of a public mock that only generated code calls, which takes builder
+	/// structs where `mock()` takes plain builders. The two overloads differ by the construction function's required
+	/// `safeDIBuilder:` label.
+	static let publicMockFunctionName = "\(builderFunctionNamePrefix)mock"
+
+	/// The name of the struct a generated mock declares for the overrides of its tree, which its `mock()` takes as
+	/// `mockOverridesParameterName`.
+	static let mockOverridesTypeName = "SafeDIOverrides"
+
 	/// The name of the struct a seam's scope type declares for each of its levels, generic over what the builder returns:
 	/// one stored function per member, each called where the seam binds that level.
 	static let builderStructTypeName = "\(builderFunctionNamePrefix)Builder"
