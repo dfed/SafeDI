@@ -885,7 +885,7 @@ public actor DependencyTreeGenerator {
 				label: builder.label,
 				typeSource: builder.parameterType.strippingEscaping.asSource,
 				defaultExpression: nil,
-				reason: .noInstantiableFulfillsType(builder.holeType.instantiatedType),
+				reason: .noInstantiableFulfillsType(builder.places.first?.instantiatedType ?? builder.holeType.instantiatedType),
 			))
 		}
 

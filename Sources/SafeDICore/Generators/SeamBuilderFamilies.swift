@@ -662,15 +662,20 @@ extension DependencyTreeGenerator {
 	/// value the erased form takes is `()` where a place forwards nothing, and otherwise the most explicit of the places'
 	/// spellings of it (`TypeDescription.mostExplicitSpelling(among:)`): chosen by the spellings' shapes, never by where the
 	/// places are, their names or the order of levels, so renaming a file or a type never respells it. Reads nothing but
-	/// the places, so a mock's builder can take the same type over its own places.
+	/// the places, so a mock's builder can take the same type over its own places (`builderForm(ofPlaceProperties:)`).
 	static func builderForm(ofPlaces places: [SeamSignature.Hole]) -> BuilderForm {
-		guard !places.isEmpty, places.allSatisfy(\.property.propertyType.isAnyInstantiator) else { return .value }
-		let wrapperTypes = places.map(\.property.typeDescription.unwrapped.strippingEscaping)
+		builderForm(ofPlaceProperties: places.map(\.property))
+	}
+
+	/// The form of the builder a person writes for places whose properties are `properties`, as `builderForm(ofPlaces:)`.
+	static func builderForm(ofPlaceProperties properties: [Property]) -> BuilderForm {
+		guard !properties.isEmpty, properties.allSatisfy(\.propertyType.isAnyInstantiator) else { return .value }
+		let wrapperTypes = properties.map(\.typeDescription.unwrapped.strippingEscaping)
 		if Set(wrapperTypes.map(\.asSource)).count == 1 {
 			return .wrapper(wrapperTypes[0])
 		}
-		let forwardedTypes = places.compactMap { $0.forwardedType?.strippingEscaping }
-		guard forwardedTypes.count == places.count, let firstForwardedType = forwardedTypes.first else {
+		let forwardedTypes = properties.compactMap { $0.typeDescription.forwardedTypeOfWrapper?.strippingEscaping }
+		guard forwardedTypes.count == properties.count, let firstForwardedType = forwardedTypes.first else {
 			return .erased(forwarded: .void(.tuple))
 		}
 		return .erased(forwarded: firstForwardedType.mostExplicitSpelling(among: forwardedTypes.dropFirst()))

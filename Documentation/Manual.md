@@ -1059,7 +1059,7 @@ The table below shows where each dependency kind lands in the three buckets abov
 | `@Forwarded` | Flat `mock()` parameter | Required, unless the root provides a default or the type has a hand-written mock (below) |
 | Default-valued initializer parameter that is not a dependency | Flat `mock()` parameter on the mocked type, or a nested `SafeDIMockConfiguration` field on a type beneath it | The parameter’s original default expression |
 
-The `mock()` of a type that [generates its own dependency tree](#generating-a-dependency-tree-per-module) takes, for a dependency its initializer takes a builder for, a builder that takes nothing, `userServiceBuilder: @escaping () -> any UserService`, in place of the flat parameter, and calls it each time its tree builds the dependency. A dependency built in a `Sendable` function, one that forwards a value or is lazily instantiated, and one the tree reaches only through another module’s public mock stay flat parameters.
+The `mock()` of a type that [generates its own dependency tree](#generating-a-dependency-tree-per-module) takes, for a dependency its initializer takes a builder for, the same builder, such as `userServiceBuilder: @escaping () -> any UserService`, in place of the flat parameter, and calls it each time its tree builds the dependency, or builds the dependency’s `LazilyInstantiated` or instantiator around it.
 
 A flat `mock()` parameter defaults to the hand-written mock the tree would build its type with – the type’s own, or a [`mockOnly`](#the-mockonly-parameter) fake’s – when that mock takes no required argument and this module can call it. So a forwarded `service: Service` whose fake is `FakeService` makes `mock(service: Service = FakeService.mock())`.
 
