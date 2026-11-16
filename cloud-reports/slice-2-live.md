@@ -12,3 +12,4 @@
 - 2026-11-16T07:42Z final rebase onto main 87e1bc10 started (agent); then PR + full Verify + pins + coverage in the same minute
 - 2026-11-16T07:58Z PR #738 opened (draft) at 8dae4da10 on main 87e1bc10; PR CI running; main CI 43825459050 cancelled (next stack over badge)
 - 2026-11-16T08:42Z #738 CI: seed 566 diagnostics depend on renaming (slice 2 regression; #735 CI passed it); fix agent started
+- 2026-11-16T09:08Z #738 pushed ae0883f05 (rename oracle reads a fill finding's places in any order; no generator change); new CI 43837045576; old CI cancelled
