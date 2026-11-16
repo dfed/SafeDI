@@ -1,0 +1,247 @@
+{
+ "tools": [
+  "2.2.0",
+  "main"
+ ],
+ "tool_paths": [
+  "/home/user/safedi-2.2.0/.build/x86_64-unknown-linux-gnu/release/SafeDITool",
+  "/home/user/SafeDI/.build/x86_64-unknown-linux-gnu/release/SafeDITool"
+ ],
+ "tool_versions": [
+  "2.2.0",
+  "f8eeeb87"
+ ],
+ "machine": {
+  "platform": "Linux-6.18.44-fc-v470-x86_64-with-glibc2.39",
+  "processor": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpus": 4,
+  "compiler": "Swift version 6.2 (swift-6.2-RELEASE)",
+  "load_at_start": [
+   0.86279296875,
+   1.154296875,
+   1.07080078125
+  ],
+  "load_at_end": [
+   0.97509765625,
+   0.98974609375,
+   1.0
+  ]
+ },
+ "runs": 5,
+ "started": "2026-11-16T13:11:45Z",
+ "shapes": {
+  "layered100": {
+   "description": "layered, generate once per module: 100 modules, 2119 types, 0 seams, 0 public mocks, 668 internal mocks, 5 roots, 7116 values per iteration",
+   "tools": {
+    "2.2.0": {
+     "generated_lines": 307315,
+     "generate_wall": {
+      "median": 12.875044458996854,
+      "min": 12.144188197045878,
+      "max": 12.928244880982675,
+      "samples": [
+       12.882939369032101,
+       12.928244880982675,
+       12.875044458996854,
+       12.144188197045878,
+       12.591232004044286
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 85962752,
+      "min": 85442560,
+      "max": 88240128,
+      "samples": [
+       85962752,
+       85598208,
+       85442560,
+       87183360,
+       88240128
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 364.4707533479814,
+      "min": 343.4310033620641,
+      "max": 374.74728499499906,
+      "samples": [
+       362.3475192889746,
+       364.4707533479814,
+       343.4310033620641,
+       370.0233457460199,
+       374.74728499499906
+      ]
+     },
+     "compile_O": {
+      "median": 256.9816254090256,
+      "min": 249.91716398403514,
+      "max": 267.07505662793847,
+      "samples": [
+       267.07505662793847,
+       261.920393729044,
+       253.58308943898737,
+       249.91716398403514,
+       256.9816254090256
+      ]
+     },
+     "runtime_ns": {
+      "median": 534170.0160142349,
+      "min": 524485.8304195805,
+      "max": 565782.9698681732,
+      "samples": [
+       540157.535971223,
+       531044.7699115045,
+       524485.8304195805,
+       565782.9698681732,
+       534170.0160142349
+      ]
+     },
+     "values_per_iteration": 7116
+    },
+    "main": {
+     "generated_lines": 137194,
+     "generate_wall": {
+      "median": 6.598512167023728,
+      "min": 6.426960451026389,
+      "max": 7.088619432077394,
+      "samples": [
+       6.598512167023728,
+       6.873877054982586,
+       7.088619432077394,
+       6.539895855014038,
+       6.426960451026389
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 225599488,
+      "min": 225452032,
+      "max": 227041280,
+      "samples": [
+       226971648,
+       225497088,
+       227041280,
+       225599488,
+       225452032
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 139.8819998260078,
+      "min": 134.0596757050007,
+      "max": 146.10270855499402,
+      "samples": [
+       146.10270855499402,
+       134.0596757050007,
+       139.7047434200358,
+       139.8819998260078,
+       141.7091861219451
+      ]
+     },
+     "compile_O": {
+      "median": 126.9546367460207,
+      "min": 120.47432491803193,
+      "max": 135.01691596898308,
+      "samples": [
+       135.01691596898308,
+       127.34151975797431,
+       126.9546367460207,
+       121.11678562306042,
+       120.47432491803193
+      ]
+     },
+     "runtime_ns": {
+      "median": 532653.1134751773,
+      "min": 494687.53542009887,
+      "max": 609133.2697768763,
+      "samples": [
+       532653.1134751773,
+       561268.6,
+       518611.3195164076,
+       609133.2697768763,
+       494687.53542009887
+      ]
+     },
+     "values_per_iteration": 7116
+    }
+   }
+  },
+  "layered100-seams": {
+   "description": "layered, generate once per module with seams and public mocks (no 2.2.0 counterpart): 100 modules, 2090 types, 43 seams, 80 public mocks, 676 internal mocks, 5 roots, 18390 values per iteration",
+   "tools": {
+    "2.2.0": {
+     "failure": "L1M0 did not compile at -Onone: /home/user/bench/fixtures-layered/layered100-seams/L1M0/File05.swift:6:30: error: type 'Bool' has no member 'public'\n 4 | import L0M4\n 5 | \n 6 | @Instantiable(generateMock: .public)\n   |                              `- error: type 'Bool' has no member 'public'\n 7 | public final class L1M0T16: Instantiable {\n 8 | \tpublic init(logger: AppLogger, l1M0T11: L1M0T11, l1M0T14: L1M0T14, l0M4T0: L0M4T0, l0M0T13: L0M0T13) {\n\n/home/user/bench/fixtures-layered/layered100-seams/L1M0/File06.swift:25:30: error: type 'Bool' has no member 'public'\n23 | }\n24 | \n25 | @Instantiable(generateMock: .public)\n   |                              `- error: type 'Bool' has no member 'public'\n26 | public final class L1M0T19: Instantiable {\n27 | \tpublic init(logger: AppLogger) {"
+    },
+    "main": {
+     "generated_lines": 259248,
+     "generate_wall": {
+      "median": 14.021654507021594,
+      "min": 13.125804487943242,
+      "max": 14.403458536966355,
+      "samples": [
+       14.368468905013287,
+       13.828107192042808,
+       13.125804487943242,
+       14.403458536966355,
+       14.021654507021594
+      ]
+     },
+     "generate_peak_bytes": {
+      "median": 182341632,
+      "min": 178704384,
+      "max": 186392576,
+      "samples": [
+       178704384,
+       178966528,
+       184852480,
+       186392576,
+       182341632
+      ]
+     },
+     "generate_instructions": null,
+     "compile_Onone": {
+      "median": 172.4970341669905,
+      "min": 167.16945567299263,
+      "max": 177.17494659800286,
+      "samples": [
+       173.50443943296705,
+       172.4970341669905,
+       177.17494659800286,
+       167.16945567299263,
+       169.9329352409768
+      ]
+     },
+     "compile_O": {
+      "median": 146.2223284039792,
+      "min": 144.94873671796086,
+      "max": 149.94735769394902,
+      "samples": [
+       146.2223284039792,
+       144.94873671796086,
+       149.94735769394902,
+       145.96663006905146,
+       148.2146371520139
+      ]
+     },
+     "runtime_ns": {
+      "median": 1519939.7777777778,
+      "min": 1346657.8705357143,
+      "max": 1793152.2023809524,
+      "samples": [
+       1793152.2023809524,
+       1519939.7777777778,
+       1458251.5,
+       1758914.4970760234,
+       1346657.8705357143
+      ]
+     },
+     "values_per_iteration": 18390
+    }
+   }
+  }
+ },
+ "load": {
+  "layered100": 0.86279296875,
+  "layered100-seams": 0.9814453125
+ },
+ "finished": "2026-11-16T15:57:05Z"
+}

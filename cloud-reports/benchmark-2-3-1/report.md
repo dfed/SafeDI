@@ -176,3 +176,23 @@ python3 -I Scripts/benchmark-2-3-1/families.py ~/.cache/safedi-benchmark-2-3-1/<
 ## Time and friction
 
 About 12.5 hours of wall time (01:02–13:30Z), mostly unattended benchmark runs; no CI runs. Friction: the first Swift download was cut off by the proxy (resumed); a compile of the 340,000-line mock file rebooted the VM (now capped); a reused build directory broke the slice 2 build (stale module cache); callgrind crashes on Swift's libdispatch; no hardware counters; VM noise of 5–25% makes the 3% bar unreachable here; each 100-module pass costs about 2 hours.
+
+## Addendum: the 100-module shapes (rerun with the fixed harness, 13:11–15:58Z)
+
+Medians of 5 with the harness at 2775c1ec, load ≤ 0.98. `generate` sums all 100 modules; compile sums every generated module's frontend job; peak memory is the largest single `generate`.
+
+| Shape | Measure | 2.2.0 | main | main / 2.2.0 |
+|---|---|---|---|---|
+| layered100 | generated lines | 307,315 | 137,194 | 0.45 |
+| layered100 | generate wall | 12.9 s (12.1–12.9) | 6.6 s (6.4–7.1) | 0.51 |
+| layered100 | generate peak memory | 86 MB | 226 MB | 2.62 |
+| layered100 | compile -Onone | 365 s (343–375) | 140 s (134–146) | 0.38 |
+| layered100 | compile -O | 257 s (250–267) | 127 s (121–135) | 0.49 |
+| layered100 | runtime per value (5 roots, 7,116 values) | 75.1 ns | 74.9 ns | 1.00 |
+| layered100-seams | generated lines | n/a | 259,248 | |
+| layered100-seams | generate wall | n/a | 14.0 s (13.1–14.4) | |
+| layered100-seams | generate peak memory | n/a | 182 MB | |
+| layered100-seams | compile -Onone / -O | n/a | 173 s / 146 s | |
+| layered100-seams | runtime per value (18,390 values) | n/a | 82.7 ns | |
+
+On the shape closest to a large modular app, main generates less than half 2.2.0's code, in half the time, and that code compiles 2–2.6× faster with equal runtime; only `generate`'s peak memory is higher (2.6×). With 43 seams and 80 public mocks, main's `generate` takes 14 s and the compile 146–173 s.
