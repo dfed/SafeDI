@@ -12,6 +12,7 @@ that ci.yml splits each corpus into. Each shard's long run ends its report with
     gating <corpus> <draw>=<graphs of the draw the oracles judged>,… <floor>
     gating-shapes <corpus> <shape>=<graphs of the shape the oracles judged>,…
     read-twins <graphs the oracle compared with their read twin> <pinned count> <corpus>
+    seam-mock-builders <accepted graphs whose seam's own mock takes a builder that takes nothing> <corpus>
     omitted-values <graphs rejected because a caller holds a value its tier omits> <pinned count> <corpus>
     spellings <corpus> <spellings to draw, comma-separated> <spellings drawn in accepted graphs>
     draws <corpus> <draw>=<accepted graphs showing it>,… <draw>=<pinned count>,…
@@ -67,6 +68,10 @@ gating_by_corpus = {}
 gating_floors_by_corpus = {}
 read_twins_by_corpus = {}
 read_twins_pins_by_corpus = {}
+# The accepted graphs, per corpus, whose seam's own internal mock takes a builder as a closure that takes nothing: at least
+# `SEAM_MOCK_BUILDER_FLOOR`, the only count of that shape the seam corpus draws.
+seam_mock_builders_by_corpus = {}
+SEAM_MOCK_BUILDER_FLOOR = 10
 omitted_values_by_corpus = {}
 # The graphs the builder surface judged per kind, added up across shards, and the kinds each corpus floors.
 builder_surface_counts_by_corpus = {}
@@ -148,6 +153,8 @@ for path in report_paths:
                 read_twin_corpora.add(fields[3])
                 read_twins_by_corpus[fields[3]] = read_twins_by_corpus.get(fields[3], 0) + int(fields[1])
                 read_twins_pins_by_corpus.setdefault(fields[3], set()).add(int(fields[2]))
+            elif fields[0] == "seam-mock-builders" and len(fields) == 3:
+                seam_mock_builders_by_corpus[fields[2]] = seam_mock_builders_by_corpus.get(fields[2], 0) + int(fields[1])
             elif fields[0] == "builder-surface" and len(fields) >= 3:
                 builder_surface_corpora.add(fields[1])
                 counts = builder_surface_counts_by_corpus.setdefault(fields[1], {})
@@ -318,6 +325,11 @@ if not problems:
             problems.append(
                 f"The oracle compared {read_twins_by_corpus.get(corpus, 0)} graphs of the {corpus} corpus with their read twin, "
                 f"but {next(iter(read_twins_pins))} are pinned."
+            )
+        if corpus in seam_mock_builders_by_corpus and seam_mock_builders_by_corpus[corpus] < SEAM_MOCK_BUILDER_FLOOR:
+            problems.append(
+                f"The seam's own mock takes a builder that takes nothing in {seam_mock_builders_by_corpus[corpus]} accepted graphs of "
+                f"the {corpus} corpus, below its floor of {SEAM_MOCK_BUILDER_FLOOR}."
             )
         omitted_values_pins = omitted_values_pins_by_corpus.get(corpus, set())
         if len(omitted_values_pins) > 1:

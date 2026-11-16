@@ -323,6 +323,18 @@ enum GraphFuzzerPublicMockOutputFeature: String, CaseIterable, Comparable {
 	/// The comment naming a type the file's `public` declarations name that SafeDI reads no declaration of, which it counts
 	/// as `public` (`GraphFuzzerPublicMockDrawFeature.unreadParameterType`).
 	case unreadTypeComment
+	/// A public mock's function only generated code calls, `static func __safeDI_mock(`, which takes a builder struct.
+	case generatedOnlyMockFunction
+	/// A consumer's call of a public mock's function only generated code calls passing the struct its level functions
+	/// return, `<label>: __safeDI_<…>()`, and one passing a struct converted from a closure over the enum,
+	/// `<label>: .init(…`.
+	case consumerPassesLevelFunctionsStruct
+	case consumerConvertsClosureOverEnum
+	/// A consumer's conversion over a loop of levels, one function per level a route first opens, which takes the wrap
+	/// of its level's case, `…_wrap: @escaping (…`.
+	case consumerConvertsOverReopenedLevel
+	/// `HoleLoop`'s generated code (`holeLoopBuilder`) in a graph whose `T6` takes the builder struct for its hole type.
+	case holeLoopBuilderOfBuilderStruct
 
 	static func < (lhs: GraphFuzzerPublicMockOutputFeature, rhs: GraphFuzzerPublicMockOutputFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -3036,8 +3048,9 @@ extension GraphFuzzerPublicMockDraw {
 		for (fileName, contents) in generatedFiles where !fileName.hasSuffix(GraphFuzzerOracle.publicMockCallerFileSuffix) {
 			let isConsumerFile = GraphFuzzerModule.allCases.contains { $0.isCaller && fileName.hasPrefix($0.name + "/") }
 			let lines = contents.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-			// A fill that builds the public mock's type again passes the fill around it, so the file passes it twice.
-			if isConsumerFile, lines.filter({ $0.contains(".mock(") && $0.contains("Builder: __safeDI_") }).count >= 2 {
+			// A fill that builds the public mock's type again passes the fill around it, so the file passes it twice: to `mock()`
+			// or to the function only generated code calls.
+			if isConsumerFile, lines.filter({ ($0.contains(".mock(") || $0.contains(".__safeDI_mock(")) && $0.contains("Builder: __safeDI_") }).count >= 2 {
 				features.insert(.consumerFillReentersPublicMock)
 			}
 			var extendedType: String?
@@ -3061,8 +3074,13 @@ extension GraphFuzzerPublicMockDraw {
 				if line == "public init() {" || line == "public init() {}" {
 					features.insert(.allNonPublicConfiguration)
 				}
-				if line.contains("__safeDI_init(") || line.contains("__safeDI_mock(") {
+				// A construction function, which takes `safeDIBuilder:`, and never the function only generated code calls of the same
+				// name, which takes no such parameter.
+				if line.contains("__safeDI_init(") || (line.contains("__safeDI_mock(") && line.contains("safeDIBuilder:")) {
 					features.insert(.constructionFunction)
+				}
+				if line.contains("static func __safeDI_mock("), !line.contains("safeDIBuilder:") {
+					features.insert(.generatedOnlyMockFunction)
 				}
 				if line.contains("@MainActor static func __safeDI_init") {
 					features.insert(.isolatedConstruction)
@@ -3074,8 +3092,9 @@ extension GraphFuzzerPublicMockDraw {
 					features.insert(.forwardedProvider)
 				}
 				// A builder over an enum of the places, `SafeDIMockScope_…`, or a `@Sendable` builder over one,
-				// `SafeDISendableMockScope_…`.
-				if line.contains(": @escaping "), line.contains("MockScope_"), !line.contains("func ") {
+				// `SafeDISendableMockScope_…`; or the builder struct the function only generated code calls takes,
+				// `<label> __safeDI_<…>: <Type>.SafeDIMockScope_….__safeDI_Builder<…>`, beside the closure `mock()` takes.
+				if (line.contains(": @escaping ") && line.contains("MockScope_")) || Self.takesBuilderStruct(parameter: line), !line.contains("func ") {
 					features.insert(isConsumerFile ? .consumerPassesHoleBuilderUp : .holeBuilder)
 					if !isConsumerFile, line.contains(": @escaping @Sendable (") {
 						features.insert(.sendableHoleBuilder)
@@ -3083,20 +3102,35 @@ extension GraphFuzzerPublicMockDraw {
 				}
 				if line.hasPrefix("let holeLoopBuilder = ") {
 					features.insert(.holeLoopBuilder)
+					if Self.takesBuilderStructForHole(in: contents, prefix: prefix) {
+						features.insert(.holeLoopBuilderOfBuilderStruct)
+					}
 				}
 				guard isConsumerFile else { continue }
-				// A fill, handed a place's values, or a dispatcher, which a call declares only with a fill.
-				if line.hasPrefix("func __safeDI_") || line.hasPrefix("@Sendable func __safeDI_"), line.contains("(_ scope: "), line.contains("MockScope_") {
+				// A fill, handed a place's values, or a dispatcher, which a call declares only with a fill; or a level function, which
+				// returns a level's builder struct.
+				if line.hasPrefix("func __safeDI_") || line.hasPrefix("@Sendable func __safeDI_"), line.contains("MockScope_"), line.contains("(_ scope: ") || line.contains(".__safeDI_Builder<") {
 					features.insert(.consumerFillsHole)
+				}
+				if line.contains(".__safeDI_mock(") {
+					if line.range(of: #"\w+: __safeDI_\w+\(\)"#, options: .regularExpression) != nil {
+						features.insert(.consumerPassesLevelFunctionsStruct)
+					}
+					if line.contains(": .init("), !line.contains("__safeDI_noScope:") {
+						features.insert(.consumerConvertsClosureOverEnum)
+					}
+				}
+				if line.hasPrefix("func __safeDI_"), line.contains("_wrap: @escaping (") {
+					features.insert(.consumerConvertsOverReopenedLevel)
 				}
 				for leafIndex in leafIndices {
 					let leafName = "\(prefix)T\(leafIndex)"
-					if line.contains("\(leafName).mock(") {
+					if line.contains("\(leafName).mock(") || line.contains("\(leafName).__safeDI_mock(") {
 						features.insert(.consumerCall)
 						if line.contains(".instance") {
 							features.insert(.consumerPassesInstance)
 						}
-						if line.contains("\(prefix)AnyT\(leafIndex)(\(leafName).mock(") {
+						if line.contains("\(prefix)AnyT\(leafIndex)(\(leafName).mock(") || line.contains("\(prefix)AnyT\(leafIndex)(\(leafName).__safeDI_mock(") {
 							features.insert(.consumerErasedCall)
 						}
 					} else if line.contains("\(leafName)(") || line.contains("\(leafName).customMock(") {
@@ -3122,6 +3156,21 @@ extension GraphFuzzerPublicMockDraw {
 			features.insert(.unreadTypeComment)
 		}
 		return features
+	}
+
+	/// Whether `parameter`, a trimmed line, is a builder struct the function only generated code calls takes:
+	/// `<label> __safeDI_<…>: <Type>.SafeDIMockScope_….__safeDI_Builder<…>`.
+	static func takesBuilderStruct(parameter: String) -> Bool {
+		parameter.range(of: #"^\w+ __safeDI_\w+: [\w.]*\.SafeDIMockScope_\w*\.__safeDI_Builder<"#, options: .regularExpression) != nil
+	}
+
+	/// Whether `contents`, a generated file, declares `T6`'s function only generated code calls taking the builder struct of
+	/// a hole type.
+	static func takesBuilderStructForHole(in contents: String, prefix: String) -> Bool {
+		contents.split(separator: "\n").contains { line in
+			let trimmed = line.trimmingCharacters(in: .whitespaces)
+			return takesBuilderStruct(parameter: trimmed) && trimmed.contains(": \(prefix)T6.SafeDIMockScope_")
+		}
 	}
 
 	/// The `@Instantiable` declarations of a fixture by name, with what the readers above need of each, and the trimmed
@@ -3184,5 +3233,66 @@ extension GraphFuzzerPublicMockDraw {
 				}
 			}
 		}
+	}
+}
+
+/// What a generated public mock takes, read from its generated file by the readers that write or judge a call of it by hand.
+enum GraphFuzzerPublicMockBuilders {
+	/// The labels of the builders the generated `mock()` of `mockedType` in `generatedFiles` takes as a closure that takes
+	/// nothing, `<label>: @escaping () -> T` or `@escaping @Sendable () -> T`, in the order its widest tier declares them.
+	static func labelsTakingNothing(of mockedType: String, in generatedFiles: [String: String]) -> [String] {
+		var labels = [String]()
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where !fileName.hasSuffix("+SafeDIPublicMockCaller.swift") {
+			var extendedType: String?
+			var isInMockParameters = false
+			for line in contents.split(separator: "\n") {
+				let trimmed = line.trimmingCharacters(in: .whitespaces)
+				if trimmed.hasPrefix("extension "), trimmed.hasSuffix(" {") {
+					extendedType = String(trimmed.dropFirst("extension ".count).dropLast(2))
+				}
+				if extendedType == mockedType, trimmed.hasSuffix("static func mock(") {
+					isInMockParameters = true
+				} else if trimmed.hasPrefix(")") {
+					isInMockParameters = false
+				} else if isInMockParameters, let colon = trimmed.firstIndex(of: ":") {
+					let label = String(trimmed[..<colon])
+					let type = trimmed[trimmed.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+					if label.contains("Builder"), type.hasPrefix("@escaping () -> ") || type.hasPrefix("@escaping @Sendable () -> ") {
+						labels.append(label)
+					}
+				}
+			}
+		}
+		return labels
+	}
+
+	/// For each generated `public` `mock()` of `mockedType` in `generatedFiles`, the number of builders it takes: parameters
+	/// labeled as builders whose type is a closure. A hand-written call from a module of another package reaches that tier
+	/// alone; a narrower tier can take more.
+	static func publicTierBuilderCounts(of mockedType: String, in generatedFiles: [String: String]) -> [Int] {
+		var counts = [Int]()
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where !fileName.hasSuffix("+SafeDIPublicMockCaller.swift") {
+			var extendedType: String?
+			var builderCount: Int?
+			for line in contents.split(separator: "\n") {
+				let trimmed = line.trimmingCharacters(in: .whitespaces)
+				if trimmed.hasPrefix("extension "), trimmed.hasSuffix(" {") {
+					extendedType = String(trimmed.dropFirst("extension ".count).dropLast(2))
+				}
+				if extendedType == mockedType, trimmed.hasSuffix("public static func mock(") {
+					builderCount = 0
+				} else if let count = builderCount, trimmed.hasPrefix(")") {
+					counts.append(count)
+					builderCount = nil
+				} else if let count = builderCount, let colon = trimmed.firstIndex(of: ":") {
+					let label = trimmed[..<colon]
+					let type = trimmed[trimmed.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+					if label.contains("Builder"), type.hasPrefix("@escaping ") {
+						builderCount = count + 1
+					}
+				}
+			}
+		}
+		return counts
 	}
 }

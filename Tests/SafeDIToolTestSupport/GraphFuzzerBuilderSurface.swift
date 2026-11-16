@@ -106,14 +106,16 @@ enum GraphFuzzerBuilderSurface {
 		return findings
 	}
 
-	/// Each builder the fixture writes by hand – a public mock caller's (`GraphFuzzerPublicMockDraw.publicMockCallerMarker`)
-	/// – that takes a scope: a closure that names a parameter, `{ _ in … }`, for a place that forwards nothing.
-	static func handWrittenBuilderFindings(in fixture: GraphFuzzerFixture) -> [Finding] {
+	/// Each builder written by hand – in the call a public mock caller makes (`GraphFuzzerOracle.addingPublicMockCallers`),
+	/// which passes a closure that takes nothing where the generated `mock()` takes one – that takes a scope: a closure that
+	/// names a parameter, `{ _ in … }`, for a place that forwards nothing, which the call passes a builder `mock()` keeps over
+	/// its enum.
+	static func handWrittenBuilderFindings(in generatedFiles: [String: String]) -> [Finding] {
 		var findings = [Finding]()
-		for content in fixture.swiftFileContent {
-			for line in content.split(separator: "\n") where line.hasPrefix(GraphFuzzerPublicMockDraw.publicMockCallerMarker) {
-				let call = String(line.dropFirst(GraphFuzzerPublicMockDraw.publicMockCallerMarker.count))
-				guard let range = call.range(of: #"\w+: \{ _ in "#, options: .regularExpression) else { continue }
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(GraphFuzzerOracle.publicMockCallerFileSuffix) {
+			for line in contents.split(separator: "\n") {
+				let call = line.trimmingCharacters(in: .whitespaces)
+				guard call.contains(".mock("), let range = call.range(of: #"\w+: \{ _ in "#, options: .regularExpression) else { continue }
 				findings.append(Finding(
 					declaration: "the hand-written call `\(call)`",
 					parameter: String(call[range]).trimmingCharacters(in: .whitespaces),
@@ -139,7 +141,7 @@ extension GraphFuzzerToolRuns {
 		guard case let .accepted(generatedFiles, _) = firstOutcome else { return nil }
 		let findings = GraphFuzzerBuilderSurface.readableInitializerFindings(in: generatedFiles)
 			+ GraphFuzzerBuilderSurface.mockFindings(in: generatedFiles)
-			+ GraphFuzzerBuilderSurface.handWrittenBuilderFindings(in: fixture)
+			+ GraphFuzzerBuilderSurface.handWrittenBuilderFindings(in: generatedFiles)
 		guard !findings.isEmpty else { return nil }
 		return GraphFuzzerFailure(
 			seed: fixture.seed,
