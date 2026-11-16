@@ -832,7 +832,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		processAttributes(node.attributes, on: macro)
 		processModifiers(on: node)
 		instantiableAccess = node.modifiers.access(introducedBy: node.keyword, sourceLocationConverter: sourceLocationConverter)
-		declarationIsolation = Initializer.spelledIsolation(modifiers: node.modifiers, attributes: node.attributes)
+		declarationIsolation = Initializer.memberIsolation(modifiers: node.modifiers, attributes: node.attributes)
 
 		return .visitChildren
 	}
