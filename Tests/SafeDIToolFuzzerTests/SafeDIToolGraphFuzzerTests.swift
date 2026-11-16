@@ -5655,7 +5655,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// hole type, for a hole read only if available. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x40EA4DDB11F23B31
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x73B426DD3EBA61EB
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -5980,11 +5980,6 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "\(fillReenteringItsSeamLosesValueReason); and \(seamBuilderOrderReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
 			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
 			seeds: [945],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "The error that a fill receives a value its caller builds where it calls the seam, while passing the builder on from its own caller, names one of the builder's places by file order, so reversing file names changes which place it names; fixed in a later PR",
-			signatures: [.renamedGraphDiffers(.diagnostics)],
-			seeds: [590],
 		),
 		// The in-seam leak (rule 3 of the seam contract), which the retention check must fail on until its fix: a seam's
 		// builder functions capture the values of each level on the way to a place, so holding a builder keeps them alive

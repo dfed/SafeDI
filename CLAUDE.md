@@ -171,7 +171,7 @@ If your session started outside the worktree you are editing, scoped rules and n
 | promotion to the mock root, parameter naming | `.claude/rules/mock-root-promotion.md` |
 | `LazilyInstantiated` anywhere | `.claude/rules/lazily-instantiated.md` |
 | `generateMock: .public`, generated attributes | `.claude/rules/public-mocks.md` |
-| `generateDependencyTree: true` (seams) | `.claude/rules/seams.md`, `seam-access-proof.md`, `seam-generation.md`, `seam-holes.md` |
+| `generateDependencyTree: true` (seams) | `.claude/rules/seams.md`, `seam-access-proof.md`, `seam-generation.md`, `seam-holes.md`, `seam-hole-fills.md` |
 | a seam's or public mock's design: the contract, retention, hand-written builders | `.claude/rules/seam-and-mock-contract.md` |
 | a generator's design: type spelling, cost, captures, parallel work, runtime safety | `.claude/rules/generator-design.md` |
 | a source rule, `SourceRuleTests`, a waiver | `.claude/rules/source-rules.md` |

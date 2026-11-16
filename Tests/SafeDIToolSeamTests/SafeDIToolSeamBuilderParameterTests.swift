@@ -2893,6 +2893,286 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: [(profileFileName: "PlaceB.swift", accountFileName: "PlaceA.swift"), (profileFileName: "PlaceA.swift", accountFileName: "PlaceB.swift")])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryNamingEveryPlace_whenOneReaderFillsTwoPlacesDeclaredInTwoFiles(profileFileName: String, accountFileName: String) async {
+		// C8.14 at two places: `DefaultUserService` fills `Profile`'s and `Account`'s `userService`, each a place the call `X`
+		// makes of `Service` passes on unchanged, so the one finding at its receive of `logger` holds for both. The message
+		// names both, in the order of their types and labels, so where each place is declared, which a file's name decides,
+		// never changes it. `Service` declares `profile` before `account`, and the first run's file names sort the other way.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Service`’s tree builds where it instantiates `Service` again, but that call passes the builder `Service` takes for `Account`’s `userService: any UserService` and `Profile`’s `userService: any UserService` on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let logger: Logger` on `Service`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service` fills the builder itself.
+			\(fixtures["Feature"]!["X.swift"]):8:5: note: `X` declares `logger: Logger` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Shop",
+						swiftFileContent: [
+							Self.userServiceProtocol,
+							seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+							seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
+							seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let xBuilder: Instantiator<X>", "@Instantiated let profile: Profile", "@Instantiated let account: Account"]),
+							seamFixtureType(named: "X", declarations: ["@Instantiated let logger: Logger", "@Instantiated let serviceBuilder: Instantiator<Service>"]),
+						],
+						swiftFileContentByFilePath: [
+							profileFileName: seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService", "@Received let analytics: Analytics"]),
+							accountFileName: seamFixtureType(named: "Account", declarations: ["@Instantiated let userService: any UserService", "@Received let analytics: Analytics"]),
+						],
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Other",
+						swiftFileContent: [
+							Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics", "@Received let logger: Logger"]),
+							seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let service: Service"]),
+						].map { "import Feature\n\n" + $0 },
+						dependencies: ["Feature"],
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: [(profileFileName: "PlaceB.swift", accountFileName: "PlaceA.swift"), (profileFileName: "PlaceA.swift", accountFileName: "PlaceB.swift")])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryNamingEveryBuilder_whenOneReaderFillsPlacesOfTwoBuildersDeclaredInTwoFiles(profileFileName: String, accountFileName: String) async {
+		// C8.14 at two places of one instantiated type that the seam takes two builders for, since one returns the erased
+		// `AnyUserService` and the other `any UserService`: the one finding at `DefaultUserService`'s receive of `logger` names
+		// both builders, in the order of their places' types and labels, whichever file declares each place.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Service`’s tree builds where it instantiates `Service` again, but that call passes the builders `Service` takes for `Account`’s `userService: any UserService` and `Profile`’s `userService: AnyUserService` on unchanged, so the caller that fills them cannot hand them those values. Declare `@Received let logger: Logger` on `Service`, so the builders’ scopes carry it, or declare an @Instantiable type that fulfills `DefaultUserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service` fills the builders itself.
+			\(fixtures["Feature"]!["X.swift"]):8:5: note: `X` declares `logger: Logger` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.anyUserServiceDeclarations,
+						seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+						seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let xBuilder: Instantiator<X>", "@Instantiated let profile: Profile", "@Instantiated let account: Account"]),
+						seamFixtureType(named: "X", declarations: ["@Instantiated let logger: Logger", "@Instantiated let serviceBuilder: Instantiator<Service>"]),
+					],
+					app: [
+						seamFixtureType(named: "DefaultUserService", declarations: ["@Received let analytics: Analytics", "@Received let logger: Logger"], conformances: ", UserService"),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let service: Service"]),
+					],
+					featureConfiguration: [
+						profileFileName: seamFixtureType(named: "Profile", declarations: [#"@Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) let userService: AnyUserService"#, "@Received let analytics: Analytics"]),
+						accountFileName: seamFixtureType(named: "Account", declarations: [#"@Instantiated(fulfilledByType: "DefaultUserService") let userService: any UserService"#, "@Received let analytics: Analytics"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: [(profileFileName: "PlaceC.swift", settingsFileName: "PlaceB.swift", accountFileName: "PlaceA.swift"), (profileFileName: "PlaceA.swift", settingsFileName: "PlaceC.swift", accountFileName: "PlaceB.swift")])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryNamingEveryPlace_whenOneReaderOfPackageFieldFillsThreePlacesDeclaredInThreeFiles(profileFileName: String, settingsFileName: String, accountFileName: String) async {
+		// C6.3 at four places: `SessionUserService` fills `Profile`'s, `Settings`'s and `Account`'s `userService`, and
+		// `Account`'s `backupUserService`, each of whose scopes carries `Service`'s `session` at `package` access, so the one
+		// finding at its receive of `session` names the four, in the order of their types, then labels, whichever file
+		// declares each place. `Service` declares `profile`, `settings`, then `account`, and the first run's file names sort
+		// the other way.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which the scope SafeDI hands the builder for `Account`’s `backupUserService: any UserService` (case `Account_Scope.backupUserService` of `userServiceBuilder`), `Account`’s `userService: any UserService` (case `Account_Scope.userService` of `userServiceBuilder`), `Profile`’s `userService: any UserService` (case `Profile_Scope.userService` of `userServiceBuilder`), and `Settings`’s `userService: any UserService` (case `Settings_Scope.userService` of `userServiceBuilder`) carries only at `package` access, and module `App` is not in package `Shop`. `Session`’s own `@Instantiable` declaration is `package`. Declare `Session` `public`, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
+			\(fixtures["Feature"]!["Service.swift"]):10:5: note: `Service` declares `session: Session` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Session", isFinalClass: true, declarations: []).replacingOccurrences(of: "public ", with: "package "),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let session: Session", "@Instantiated let profile: Profile", "@Instantiated let settings: Settings", "@Instantiated let account: Account"]).replacingOccurrences(of: "public init(", with: "package init("),
+					],
+					app: [Self.fulfillingType(named: "SessionUserService", fulfilling: "UserService", declarations: ["@Received let session: Session"]), Self.canonicalRoot],
+					featureConfiguration: [
+						profileFileName: seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+						settingsFileName: seamFixtureType(named: "Settings", declarations: ["@Instantiated let userService: any UserService"]),
+						accountFileName: seamFixtureType(named: "Account", declarations: ["@Instantiated let userService: any UserService", "@Instantiated let backupUserService: any UserService"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: [(profileFileName: "PlaceB.swift", accountFileName: "PlaceA.swift"), (profileFileName: "PlaceA.swift", accountFileName: "PlaceB.swift")])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueBuiltAfterPlacesNamingEveryBuilder_whenOneReaderFillsPlacesOfTwoBuildersDeclaredInTwoFiles(profileFileName: String, accountFileName: String) async {
+		// `DefaultUserService` fills `Profile`'s erased `userService` and `Account`'s, two builders, and reads `badge`, which
+		// `Service` builds only after `holder`, whose tree holds both places, since `Badge` requires `holder`: the one finding
+		// names both builders, in the order of their places' types and labels, whichever file declares each place.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `badge: Badge?`, which `Service`’s tree builds only after it calls the builders for `Account`’s `userService: any UserService` (case `Account_Scope.userService` of `defaultUserService_UserServiceBuilder`) and `Profile`’s `userService: AnyUserService` (case `Profile_Scope.userService` of `defaultUserService_AnyUserServiceBuilder`), so those builders’ scopes do not carry it. Declare an @Instantiable type that fulfills `DefaultUserService` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Service.swift"]):9:5: note: `Service` declares `badge: Badge` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.anyUserServiceDeclarations,
+						seamFixtureType(named: "Holder", declarations: ["@Instantiated let profile: Profile", "@Instantiated let account: Account"]),
+						seamFixtureType(named: "Badge", declarations: ["@Received let holder: Holder"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let holder: Holder", "@Instantiated let badge: Badge"]),
+					],
+					app: [seamFixtureType(named: "DefaultUserService", declarations: ["@Received(onlyIfAvailable: true) let badge: Badge?"], conformances: ", UserService"), Self.canonicalRoot],
+					featureConfiguration: [
+						profileFileName: seamFixtureType(named: "Profile", declarations: [#"@Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) let userService: AnyUserService"#]),
+						accountFileName: seamFixtureType(named: "Account", declarations: [#"@Instantiated(fulfilledByType: "DefaultUserService") let userService: any UserService"#]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: [(profileFileName: "PlaceB.swift", accountFileName: "PlaceA.swift"), (profileFileName: "PlaceA.swift", accountFileName: "PlaceB.swift")])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryNamingEveryBuilder_whenOneReaderOfPackageFieldFillsPlacesOfTwoBuildersDeclaredInTwoFiles(profileFileName: String, accountFileName: String) async {
+		// C6.3 at `Profile`'s erased `userService` and `Account`'s, two builders whose scopes carry `Service`'s `session` at
+		// `package` access: the one finding at `DefaultUserService`'s receive of `session` names both builders and their
+		// scopes, whichever file declares each place.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `session: Session`, which the scopes SafeDI hands the builders for `Account`’s `userService: any UserService` (case `Account_Scope.userService` of `defaultUserService_UserServiceBuilder`) and `Profile`’s `userService: AnyUserService` (case `Profile_Scope.userService` of `defaultUserService_AnyUserServiceBuilder`) carry only at `package` access, and module `App` is not in package `Shop`. `Session`’s own `@Instantiable` declaration is `package`. Declare `Session` `public`, or declare an @Instantiable type that fulfills `DefaultUserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
+			\(fixtures["Feature"]!["Service.swift"]):9:5: note: `Service` declares `session: Session` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.anyUserServiceDeclarations,
+						seamFixtureType(named: "Session", isFinalClass: true, declarations: []).replacingOccurrences(of: "public ", with: "package "),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let session: Session", "@Instantiated let profile: Profile", "@Instantiated let account: Account"]).replacingOccurrences(of: "public init(", with: "package init("),
+					],
+					app: [seamFixtureType(named: "DefaultUserService", declarations: ["@Received let session: Session"], conformances: ", UserService"), Self.canonicalRoot],
+					featureConfiguration: [
+						profileFileName: seamFixtureType(named: "Profile", declarations: [#"@Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) let userService: AnyUserService"#]),
+						accountFileName: seamFixtureType(named: "Account", declarations: [#"@Instantiated(fulfilledByType: "DefaultUserService") let userService: any UserService"#]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: [(profileFileName: "PlaceB.swift", accountFileName: "PlaceA.swift"), (profileFileName: "PlaceA.swift", accountFileName: "PlaceB.swift")])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueBoundOutsideSendableFunctionNamingEveryBuilder_whenOneReaderFillsPlacesOfTwoSendableBuildersDeclaredInTwoFiles(profileFileName: String, accountFileName: String) async {
+		// `Service` builds `Holder`, whose tree holds `Profile`'s erased `userService` and `Account`'s, in a `@Sendable`
+		// function, so both places are cases of the `@Sendable` builders, one per hole type, and `DefaultUserService` reads
+		// `logger`, which `Service` declares outside that function: the one finding names both builders and their caller,
+		// whichever file declares each place.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `logger: Logger`, which `Service` declares outside the `@Sendable` function that builds `holderBuilder: SendableInstantiator<Holder>`, and the scopes SafeDI hands the builders for `Account`’s `userService: any UserService` (case `Account_Scope.userService` of `defaultUserService_UserServiceSendableBuilder`) and `Profile`’s `userService: AnyUserService` (case `Profile_Scope.userService` of `defaultUserService_AnyUserServiceSendableBuilder`) carry only what that function binds. Instantiate `logger` outside `Service` and declare `@Received let logger: Logger` on `Service`, so the builders’ caller reads its own, or declare an @Instantiable type that fulfills `DefaultUserService` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Service.swift"]):8:5: note: `Service` declares `logger: Logger` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.anyUserServiceDeclarations,
+						seamFixtureType(named: "Logger", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+						seamFixtureType(named: "Holder", declarations: ["@Instantiated let profile: Profile", "@Instantiated let account: Account"], conformances: ", Sendable"),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let holderBuilder: SendableInstantiator<Holder>"]),
+					],
+					app: [seamFixtureType(named: "DefaultUserService", declarations: ["@Received let logger: Logger"], conformances: ", UserService"), Self.canonicalRoot],
+					featureConfiguration: [
+						profileFileName: seamFixtureType(named: "Profile", declarations: [#"@Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) let userService: AnyUserService"#], conformances: ", Sendable"),
+						accountFileName: seamFixtureType(named: "Account", declarations: [#"@Instantiated(fulfilledByType: "DefaultUserService") let userService: any UserService"#], conformances: ", Sendable"),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: [(serviceAFileName: "SeamB.swift", serviceBFileName: "SeamA.swift"), (serviceAFileName: "SeamA.swift", serviceBFileName: "SeamB.swift")])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryNamingEachSeamsPlace_whenOneReaderFillsPlacesOfTwoSeamsBuildingOneTypeDeclaredInTwoFiles(serviceAFileName: String, serviceBFileName: String) async {
+		// C2.15 in two seams: `ServiceA` and `ServiceB` each build `Home`, whose `theme` follows `profile` since `Theme`
+		// receives `profile` only if available, and `App` fills each seam's place of `Profile`'s `userService` with
+		// `DefaultUserService`, which reads `theme`. The one finding names both places, each with the seam whose tree holds
+		// it, whichever file declares each seam.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `theme: Theme`, which `Home` builds after `profile`, since `Theme` receives `profile` only if available, so the scopes SafeDI hands the builders for `Profile`’s `userService: any UserService` (case `Profile_Scope.userService` of `userServiceBuilder`) in `ServiceA`’s tree and `Profile`’s `userService: any UserService` (case `Profile_Scope.userService` of `userServiceBuilder`) in `ServiceB`’s tree do not carry it. Receive `profile` on `Theme` some other way, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Home.swift"]):9:5: note: `Home` declares `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Theme", declarations: ["@Received(onlyIfAvailable: true) let profile: Profile?"]),
+						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Home", declarations: ["@Instantiated let profile: Profile", "@Instantiated let theme: Theme"]),
+					],
+					app: [
+						Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let theme: Theme"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let serviceA: ServiceA", "@Instantiated let serviceB: ServiceB"]),
+					],
+					featureConfiguration: [
+						serviceAFileName: seamFixtureType(named: "ServiceA", isSeam: true, declarations: ["@Received let theme: Theme", "@Instantiated let home: Home"]),
+						serviceBFileName: seamFixtureType(named: "ServiceB", isSeam: true, declarations: ["@Received let theme: Theme", "@Instantiated let home: Home"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: [(aFileName: "ParentB.swift", bFileName: "ParentA.swift"), (aFileName: "ParentA.swift", bFileName: "ParentB.swift")])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryNamingPlaceOnce_whenSeamBuildsOwnerOfPlaceUnderTwoParentsDeclaredInTwoFiles(aFileName: String, bFileName: String) async {
+		// C6.3 where `Service` builds `Profile` under `A` and under `B`: two sites of one place, each a fill that gives the one
+		// finding at `SessionUserService`'s receive of `session`, which names the place once, whichever file declares each
+		// parent.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which the scope SafeDI hands the builder for `Profile`’s `userService: any UserService` (case `Profile_Scope.userService` of `userServiceBuilder`) carries only at `package` access, and module `App` is not in package `Shop`. `Session`’s own `@Instantiable` declaration is `package`. Declare `Session` `public`, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
+			\(fixtures["Feature"]!["Service.swift"]):9:5: note: `Service` declares `session: Session` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Session", isFinalClass: true, declarations: []).replacingOccurrences(of: "public ", with: "package "),
+						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let session: Session", "@Instantiated let a: A", "@Instantiated let b: B"]).replacingOccurrences(of: "public init(", with: "package init("),
+					],
+					app: [Self.fulfillingType(named: "SessionUserService", fulfilling: "UserService", declarations: ["@Received let session: Session"]), Self.canonicalRoot],
+					featureConfiguration: [
+						aFileName: seamFixtureType(named: "A", declarations: ["@Instantiated let profile: Profile"]),
+						bFileName: seamFixtureType(named: "B", declarations: ["@Instantiated let profile: Profile"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesBuilderAroundSeamCycle_whenTwoSeamsOfOneModuleReachEachOtherBesideHole() async throws {
@@ -5988,6 +6268,19 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	/// The source of `UserService`, a public protocol.
 	private static let userServiceProtocol = "public protocol UserService {}"
+
+	/// `UserService`, and `AnyUserService`, which erases it, for places some of which a seam builds erased.
+	private static let anyUserServiceDeclarations = """
+	public protocol UserService: Sendable {}
+
+	public struct AnyUserService: UserService {
+	    public init(_ base: any UserService) {
+	        self.base = base
+	    }
+
+	    let base: any UserService
+	}
+	"""
 
 	/// The error at the canonical hole when the run that generates `Service` names no module: one wording for every such
 	/// run, the Xcode project plugin's included.

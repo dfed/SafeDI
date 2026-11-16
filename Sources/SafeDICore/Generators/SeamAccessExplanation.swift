@@ -132,7 +132,7 @@ enum SeamAccessExplanation {
 		case .ownReceived:
 			remedies.append("receive `\(parameter.label)` with `onlyIfAvailable: true` and an optional type")
 		case let .builder(fulfilledType, seamModuleName, isPassedUp):
-			remedies.append(fulfillRemedy(fulfilling: fulfilledType, seamModuleName: seamModuleName, effect: isPassedUp ? .seamFillsBuilder(seam) : .seamTreeBuildsIt(seam)))
+			remedies.append(fulfillRemedy(fulfilling: fulfilledType, seamModuleName: seamModuleName, effect: isPassedUp ? .seamFillsBuilder(seam, isPlural: false) : .seamTreeBuildsIt(seam)))
 		case .passThrough:
 			if let aliasProperty = receivers.first(where: { $0.aliasProperty != nil })?.aliasProperty, receivers.count == 1 {
 				remedies.append("receive `\(aliasProperty.label)` with `onlyIfAvailable: true` and an optional type")
@@ -308,8 +308,8 @@ enum SeamAccessExplanation {
 	enum FulfillRemedyEffect {
 		/// The seam's tree builds the type.
 		case seamTreeBuildsIt(TypeDescription)
-		/// The seam, which passes the builder up, fills it itself.
-		case seamFillsBuilder(TypeDescription)
+		/// The seam, which passes the builder up, fills it itself, or, where `isPlural`, the builders it passes up.
+		case seamFillsBuilder(TypeDescription, isPlural: Bool)
 	}
 
 	/// What a module must declare so that a seam needs no builder for `fulfilledType`: a fulfilling declaration in module
@@ -320,8 +320,8 @@ enum SeamAccessExplanation {
 		let effectClause = switch effect {
 		case let .seamTreeBuildsIt(seam)?:
 			", so \(name(seam))’s tree builds it"
-		case let .seamFillsBuilder(seam)?:
-			", so \(name(seam)) fills the builder itself"
+		case let .seamFillsBuilder(seam, isPlural)?:
+			", so \(name(seam)) fills the builder\(isPlural ? "s" : "") itself"
 		case nil:
 			""
 		}
