@@ -219,6 +219,12 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// `HoleLoop` declaring `holeContext` again, so a fill that reads it gets the nearest level's value inline and the
 	/// public mock rejects the graph (`declarationBoundOnCycleReentry`).
 	case holeLoopDeclaresContextAgain
+	/// On a stream of its own (`publicMockHoleAttributesRandomSeedMask`): `T6` spelling `mockAttributes: "@MainActor"`; and
+	/// `T6` naming a hand-written `customMock` that `T6Deck`, another `.public` type of its module, builds it with, once
+	/// where `T6` instantiates nothing but its hole, so that neither function of its mock takes `safeDIOverrides`.
+	case holeMockIsolatedToMainActor
+	case holeHandWrittenMockBuiltInPublicMock
+	case holeHandWrittenMockTakesNoOverrides
 	/// On a stream of its own (`publicMockSelfBuildRandomSeedMask`), the shape #702 fixed: `SelfNode`, a `.public` type
 	/// with a place of `SelfApi`, builds itself again through an instantiator of itself, through `SelfStep`, which it
 	/// builds, or, in a graph whose types are all `Sendable`, through a `SendableInstantiator`; its place is on it or
@@ -290,11 +296,13 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case keywordLabeledPublicMockBesideInternalConfiguration
 
 	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,
-	/// `retentionPublicMockValueBeforeBuilder…`, `sharedConstructionPublicMock…`, `keywordLabeledPublicMock…`) draws this shape, whose count in accepted
-	/// graphs the public mock corpus pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
+	/// `retentionPublicMockValueBeforeBuilder…`, `sharedConstructionPublicMock…`, `keywordLabeledPublicMock…`, and `T6`'s
+	/// mock isolated to the main actor or built with its hand-written mock in another public mock) draws this shape, whose
+	/// count in accepted graphs the public mock corpus pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
 	var isCountedWhenAccepted: Bool {
 		rawValue.hasPrefix("selfBuildingPublicMock") || rawValue.hasPrefix("placeInsidePublicMockFill") || isRetentionShape
 			|| rawValue.hasPrefix("sharedConstructionPublicMock") || rawValue.hasPrefix("keywordLabeledPublicMock")
+			|| self == .holeMockIsolatedToMainActor || self == .holeHandWrittenMockBuiltInPublicMock
 	}
 
 	/// Whether the retention oracle's gating draw (`retentionPublicMockValueBeforeBuilder…`) draws this shape, whose
@@ -362,11 +370,21 @@ enum GraphFuzzerPublicMockOutputFeature: String, CaseIterable, Comparable {
 	case unreadTypeComment
 	/// A public mock's function only generated code calls, `static func __safeDI_mock(`, which takes a builder struct.
 	case generatedOnlyMockFunction
+	/// That function isolated to the main actor, `@MainActor public static func __safeDI_mock(`
+	/// (`GraphFuzzerPublicMockDrawFeature.holeMockIsolatedToMainActor`).
+	case isolatedGeneratedOnlyMockFunction
+	/// A type whose extensions declare both that function and the construction function of one name, which takes
+	/// `safeDIBuilder:` (`GraphFuzzerPublicMockDrawFeature.holeHandWrittenMockBuiltInPublicMock`).
+	case generatedOnlyMockFunctionBesideConstructionFunction
 	/// A consumer's call of a public mock's function only generated code calls passing the struct its level functions
 	/// return, `<label>: __safeDI_<…>()`, and one passing a struct converted from a closure over the enum,
 	/// `<label>: .init(…`.
 	case consumerPassesLevelFunctionsStruct
 	case consumerConvertsClosureOverEnum
+	/// A consumer's call of a public mock's function only generated code calls that passes a place up without handing any
+	/// written code a scope: a level function's struct over the caller's own as `up`, `.init(__safeDI_noScope: <builder>)`,
+	/// or a member of the caller's own struct.
+	case consumerPassesPlaceUpWithoutScope
 	/// A consumer's conversion over a loop of levels, one function per level a route first opens, which takes the wrap
 	/// of its level's case, `…_wrap: @escaping (…`.
 	case consumerConvertsOverReopenedLevel
@@ -495,7 +513,10 @@ struct GraphFuzzerPublicMockDraw {
 		var rootLevelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockRootLevelRandomSeedMask)
 		var holeLoopRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleLoopRandomSeedMask)
 		var holeForwardingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleForwardingRandomSeedMask)
+		var holeAttributesRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleAttributesRandomSeedMask)
 		drawsHoleForwardingValue = holeForwardingRandom.percentChance(60)
+		drawsHoleMockOnMainActor = holeAttributesRandom.percentChance(25)
+		drawsHoleHandWrittenMock = holeAttributesRandom.percentChance(30)
 		draw(
 			random: &random,
 			spellingRandom: &spellingRandom,
@@ -574,6 +595,10 @@ struct GraphFuzzerPublicMockDraw {
 	private let builderSurfaceEdit: GraphFuzzerBuilderSurfaceEdit?
 	/// Whether an `ErasedInstantiator` hole forwards `holeTicket: Int`, which `HoleFill` forwards.
 	private var drawsHoleForwardingValue = false
+	/// Whether `T6` spells `mockAttributes: "@MainActor"`, and whether it names a hand-written `customMock` that `T6Deck`
+	/// builds it with (`publicMockHoleAttributesRandomSeedMask`).
+	private var drawsHoleMockOnMainActor = false
+	private var drawsHoleHandWrittenMock = false
 	/// Whether the hole is an `ErasedInstantiator` that forwards `holeTicket: Int` (`drawsHoleForwardingValue`).
 	private var holeForwardsValue = false
 	/// Whether the draw made `builderSurfaceEdit`: the graph has the hole spelling the edit changes.
@@ -653,6 +678,12 @@ struct GraphFuzzerPublicMockDraw {
 	/// (`drawKeywordLabeledPublicMock`): rolls added after the rest of the draw was pinned, so that its other shapes are
 	/// drawn as before.
 	static let publicMockKeywordLabelRandomSeedMask: UInt64 = 0x7075626D6B6B6579
+	/// Draws only how `T6` declares its mock beyond its tree: whether it spells `mockAttributes: "@MainActor"`, so that both
+	/// functions of its mock are isolated to the main actor, and whether it names a hand-written `customMock` that
+	/// `T6Deck`, another `.public` type of its module, builds it with, so that its mock declares the function only generated
+	/// code calls beside the construction function of one name: rolls added after the rest of the draw was pinned, so that
+	/// its other shapes are drawn as before.
+	static let publicMockHoleAttributesRandomSeedMask: UInt64 = 0x7075626D6B617472
 	/// What begins the comment in `T6`'s file that holds its hand-written caller's call, after the caller's module:
 	/// `// publicMockCaller in FuzzOther: S1_T6.mock(s1_HoleBuilder: …)`. `GraphFuzzerOracle.addingPublicMockCallers` reads it.
 	static let publicMockCallerMarker = "// publicMockCaller in "
@@ -1226,6 +1257,8 @@ struct GraphFuzzerPublicMockDraw {
 		var holeLeafFileIndex: Int?
 		/// Whether `HoleHost` builds itself again through `HoleLoop`, a loop around `T6`'s hole.
 		var drawsHoleLoop = false
+		/// Whether `T6` spells `mockAttributes: "@MainActor"`, so that each consumer reaching it is isolated to the main actor.
+		var holeMockIsMainActor = false
 		if holeRandom.percentChance(40) {
 			let holeName = name("Hole")
 			let protocolName = name("HoleProtocol")
@@ -1429,12 +1462,31 @@ struct GraphFuzzerPublicMockDraw {
 			} else {
 				"\(declaration.name).mock(\(leadingArguments)\(enumBuilderLabel): { _ in \(value) })"
 			}
+			// On a stream of its own: `T6`'s mock isolated to the main actor through `mockAttributes`, so that each consumer that
+			// reaches it is isolated to the main actor too; and a hand-written `customMock` that `T6Deck`, another `.public`
+			// type of `T6`'s module, builds `T6` with, so that `T6`'s mock declares the function only generated code calls
+			// beside the construction function of one name, which `T6Deck`'s mock calls.
+			holeMockIsMainActor = drawsHoleMockOnMainActor
+			if holeMockIsMainActor {
+				declaration.arguments.append("mockAttributes: \"@MainActor\"")
+			}
+			if drawsHoleHandWrittenMock {
+				declaration.customMockAccess = .public
+			}
 			let holeDeclaration = declaration
 			holeLeafFileIndex = declaringFiles.count
-			declaringFiles.append(File(module: .seamModule, declarations: [
+			var holeFileDeclarations: [(Rendering) -> String] = [
 				Self.renderer(of: holeDeclaration),
 				{ _ in "\(Self.publicMockCallerMarker)\(callerModule.name): \(call)" },
-			]))
+			]
+			if drawsHoleHandWrittenMock {
+				var deck = instantiableClass("T6Deck")
+				deck.mockGeneration = ".public"
+				deck.initializerAccess = .internal
+				deck.properties = [Property(attribute: "@Instantiated", label: "t6", type: holeDeclaration.name)]
+				holeFileDeclarations.append(Self.renderer(of: deck))
+			}
+			declaringFiles.append(File(module: .seamModule, declarations: holeFileDeclarations))
 			holeLeaf = (declaration, spelling, position)
 		}
 
@@ -1554,6 +1606,10 @@ struct GraphFuzzerPublicMockDraw {
 			var rootLevelExtensions = [(Rendering) -> String]()
 			if Self.drawsHoleConsumers, let holeLeaf, holeRandom.percentChance(60) {
 				leafProperties.append(Property(attribute: holeRandom.percentChance(50) ? "@Received" : "@Instantiated", label: "t6", type: holeLeaf.declaration.name))
+				// A consumer calls a mock isolated to the main actor from its own, which is isolated to it as its type is.
+				if holeMockIsMainActor {
+					consumer.isMainActor = true
+				}
 				// On the root-level stream: the consumer's module builds what `T6`'s mock cannot through extensions of its own,
 				// which add no conformance, so that two modules may declare them; the consumer instantiates `holeSession` and
 				// `holeToken`, or, where `T6`'s tree receives `holeSession` in two forms, which no one scope can hold, neither,
@@ -1694,7 +1750,7 @@ struct GraphFuzzerPublicMockDraw {
 				}
 			}
 			var declarations = [(Rendering) -> String]()
-			let canWrap = !reachedLeaves.contains { $0.forwards || $0.receivesNonSendableSpelledValue || $0.declaration.isMainActor }
+			let canWrap = !consumer.isMainActor && !reachedLeaves.contains { $0.forwards || $0.receivesNonSendableSpelledValue || $0.declaration.isMainActor }
 			if wrapperModule == module, canWrap {
 				// A `Sendable` wrapper above the leaf, whose type builds the leaf and what the consumer would provide, and
 				// always the lazily instantiated dependency the leaf receives, which no `@Sendable` builder can capture.
@@ -3115,6 +3171,15 @@ extension GraphFuzzerPublicMockDraw {
 					features.insert(.holeLoopDeclaresContextAgain)
 				}
 			}
+			if holeLeaf.arguments.contains("mockAttributes: \"@MainActor\"") {
+				features.insert(.holeMockIsolatedToMainActor)
+			}
+			if holeLeaf.arguments.contains("customMockName:"), types.declarations["\(prefix)T6Deck"]?.properties.contains(where: { $0.type == holeLeafName }) == true {
+				features.insert(.holeHandWrittenMockBuiltInPublicMock)
+				if let holeProperty, holeLeaf.properties.filter({ $0.attribute.hasPrefix("@Instantiated") }).map(\.label) == [holeProperty.label] {
+					features.insert(.holeHandWrittenMockTakesNoOverrides)
+				}
+			}
 			if let holeProperty {
 				if holeProperty.attribute.contains("erasedToConcreteExistential: true") {
 					features.insert(holeProperty.type.hasPrefix("ErasedInstantiator<") ? .holeDeclaredAsErasedInstantiator : .holeDeclaredAsErasedConstant)
@@ -3309,6 +3374,10 @@ extension GraphFuzzerPublicMockDraw {
 		let leafIndices = [0, 1, 2, 6]
 		var features = Set<GraphFuzzerPublicMockOutputFeature>()
 		var tierAccessesByType = [String: Set<String>]()
+		/// The types an extension of declares the function only generated code calls, and the construction function of one
+		/// name, by the type the extension extends.
+		var typesDeclaringGeneratedOnlyMockFunction = Set<String>()
+		var typesDeclaringConstructionMockFunction = Set<String>()
 		for (fileName, contents) in generatedFiles where !fileName.hasSuffix(GraphFuzzerOracle.publicMockCallerFileSuffix) {
 			let isConsumerFile = GraphFuzzerModule.allCases.contains { $0.isCaller && fileName.hasPrefix($0.name + "/") }
 			let lines = contents.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
@@ -3345,6 +3414,13 @@ extension GraphFuzzerPublicMockDraw {
 				}
 				if line.contains("static func __safeDI_mock("), !line.contains("safeDIBuilder:") {
 					features.insert(.generatedOnlyMockFunction)
+					typesDeclaringGeneratedOnlyMockFunction.insert(extendedType ?? "")
+					if line.hasPrefix("@MainActor ") {
+						features.insert(.isolatedGeneratedOnlyMockFunction)
+					}
+				}
+				if line.contains("static func __safeDI_mock("), line.contains("safeDIBuilder:") {
+					typesDeclaringConstructionMockFunction.insert(extendedType ?? "")
 				}
 				if line.contains("@MainActor static func __safeDI_init") {
 					features.insert(.isolatedConstruction)
@@ -3358,9 +3434,9 @@ extension GraphFuzzerPublicMockDraw {
 				// A builder over an enum of the places, `SafeDIMockScope_…`, or a `@Sendable` builder over one,
 				// `SafeDISendableMockScope_…`; or the builder struct the function only generated code calls takes,
 				// `<label> __safeDI_<…>: <Type>.SafeDIMockScope_….__safeDI_Builder<…>`, beside the closure `mock()` takes.
-				if (line.contains(": @escaping ") && line.contains("MockScope_")) || Self.takesBuilderStruct(parameter: line), !line.contains("func ") {
+				if (line.contains(": @escaping ") && line.contains("MockScope_")) || Self.takesBuilderStruct(parameter: line) || isConsumerFile && Self.takesReadableBuilder(parameter: line), !line.contains("func ") {
 					features.insert(isConsumerFile ? .consumerPassesHoleBuilderUp : .holeBuilder)
-					if !isConsumerFile, line.contains(": @escaping @Sendable (") {
+					if !isConsumerFile, line.contains(": @escaping @Sendable (") || line.contains("SafeDISendableMockScope_") {
 						features.insert(.sendableHoleBuilder)
 					}
 				}
@@ -3373,12 +3449,17 @@ extension GraphFuzzerPublicMockDraw {
 				guard isConsumerFile else { continue }
 				// A fill, handed a place's values, or a dispatcher, which a call declares only with a fill; or a level function, which
 				// returns a level's builder struct.
-				if line.hasPrefix("func __safeDI_") || line.hasPrefix("@Sendable func __safeDI_"), line.contains("MockScope_"), line.contains("(_ scope: ") || line.contains(".__safeDI_Builder<") {
+				if line.hasPrefix("func __safeDI_") || line.hasPrefix("@Sendable func __safeDI_") || line.hasPrefix("@Sendable nonisolated func __safeDI_"), line.contains("MockScope_"), line.contains("(_ scope: ") || line.contains(".__safeDI_Builder<") {
 					features.insert(.consumerFillsHole)
 				}
 				if line.contains(".__safeDI_mock(") {
 					if line.range(of: #"\w+: __safeDI_\w+\(\)"#, options: .regularExpression) != nil {
 						features.insert(.consumerPassesLevelFunctionsStruct)
+					}
+					// A place passed up without a scope: the struct of a level function that takes the caller's struct as `up`, the
+					// builder a person writes, wrapped, or a member of the caller's own struct, handed on as it is.
+					if line.range(of: #"\w+: __safeDI_\w+\(up_*: "#, options: .regularExpression) != nil || line.contains(": .init(__safeDI_noScope: ") || line.range(of: #"\w+: __safeDI_\w+\.\w+\(\w*SafeDI(Sendable)?MockScope_\w+\.\w+_Values\(\)\)"#, options: .regularExpression) != nil {
+						features.insert(.consumerPassesPlaceUpWithoutScope)
 					}
 					if line.contains(": .init("), !line.contains("__safeDI_noScope:") {
 						features.insert(.consumerConvertsClosureOverEnum)
@@ -3419,13 +3500,24 @@ extension GraphFuzzerPublicMockDraw {
 		if generatedFiles.values.contains(where: { $0.contains("// SafeDI counts `") }) {
 			features.insert(.unreadTypeComment)
 		}
+		if !typesDeclaringGeneratedOnlyMockFunction.isDisjoint(with: typesDeclaringConstructionMockFunction) {
+			features.insert(.generatedOnlyMockFunctionBesideConstructionFunction)
+		}
 		return features
 	}
 
 	/// Whether `parameter`, a trimmed line, is a builder struct the function only generated code calls takes:
 	/// `<label> __safeDI_<…>: <Type>.SafeDIMockScope_….__safeDI_Builder<…>`.
 	static func takesBuilderStruct(parameter: String) -> Bool {
-		parameter.range(of: #"^\w+ __safeDI_\w+: [\w.]*\.SafeDIMockScope_\w*\.__safeDI_Builder<"#, options: .regularExpression) != nil
+		parameter.range(of: #"^\w+ __safeDI_\w+: [\w.]*\.SafeDI(Sendable)?MockScope_\w*\.__safeDI_Builder<"#, options: .regularExpression) != nil
+	}
+
+	/// Whether `parameter`, a trimmed line, is a builder a person writes for a hole, which a mock takes where its place
+	/// forwards nothing, `<label>Builder…: @escaping () -> …` (`@escaping @Sendable () -> …` in the `@Sendable` family), or
+	/// where it forwards a value, `<label>Builder…: @escaping <Wrapper><…>.Builder`.
+	static func takesReadableBuilder(parameter: String) -> Bool {
+		parameter.range(of: #"^\w+Builder\w*: @escaping (@Sendable )?\(\) -> "#, options: .regularExpression) != nil
+			|| parameter.range(of: #"^\w+Builder\w*: @escaping \w*Instantiator<.*>\.Builder,?$"#, options: .regularExpression) != nil
 	}
 
 	/// Whether `contents`, a generated file, declares `T6`'s function only generated code calls taking the builder struct of
