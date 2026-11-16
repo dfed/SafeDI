@@ -1,0 +1,145 @@
+     7.03%  SafeDITool-main  libswiftCore.so          [.] swift_release
+     6.83%  SafeDITool-main  libswiftCore.so          [.] swift_retain
+     4.46%  SafeDITool-main  [kernel.kallsyms]        [k] clear_page_erms
+     3.86%  SafeDITool-main  libswiftCore.so          [.] $sSS15_uncheckedIndex5afterSS0B0VAD_tF
+     3.37%  SafeDITool-main  libc.so.6                [.] __memmove_avx512_unaligned_erms
+     3.17%  SafeDITool-main  [kernel.kallsyms]        [k] exc_page_fault
+     2.77%  SafeDITool-main  libswiftCore.so          [.] $sSS18_uncheckedFromUTF8_7isASCIISSSRys5UInt8VG_SbtFZTf4nnd_nTm
+     1.98%  SafeDITool-main  libc.so.6                [.] _int_malloc
+     1.98%  SafeDITool-main  libswiftCore.so          [.] $ss11_StringGutsV22validateCharacterIndexySS0E0VAEF
+     1.78%  SafeDITool-main  libswiftCore.so          [.] $ss9_allASCIIySbSRys5UInt8VGF
+     1.68%  SafeDITool-main  libswiftCore.so          [.] $sSSySJSS5IndexVcig
+     1.58%  SafeDITool-main  SafeDITool-main          [.] $sSlsE5split9maxSplits25omittingEmptySubsequences14whereSeparatorSay11SubSequenceQzGSi_S2b7ElementQzKXEtKFSS_Tg5
+     1.58%  SafeDITool-main  libswiftCore.so          [.] $ss11_StringGutsV19validateScalarIndexySS0E0VAEF
+     1.49%  SafeDITool-main  libswiftCore.so          [.] $sSR8rebasingSRyxGs5SliceVyABG_tcfCs5UInt8V_Tt0g5Tm
+     1.29%  SafeDITool-main  SafeDITool-main          [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_Ss_TG5Tm
+     1.19%  SafeDITool-main  [kernel.kallsyms]        [k] _raw_spin_unlock_irqrestore
+     1.19%  SafeDITool-main  libswiftCore.so          [.] $ss27_stringCompareWithSmolCheck__9expectingSbs11_StringGutsV_ADs01_G16ComparisonResultOtF
+     1.19%  SafeDITool-main  libswiftCore.so          [.] swift_bridgeObjectRelease
+     1.09%  SafeDITool-main  SafeDITool-main          [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_SS_TG5TA
+     1.09%  SafeDITool-main  [kernel.kallsyms]        [k] memcg1_commit_charge
+     0.99%  SafeDITool-main  [kernel.kallsyms]        [k] finish_task_switch.isra.0
+     0.99%  SafeDITool-main  libswiftCore.so          [.] $sSS5index5afterSS5IndexVAD_tF
+     0.89%  SafeDITool-main  [kernel.kallsyms]        [k] get_mem_cgroup_from_mm
+     0.89%  SafeDITool-main  libc.so.6                [.] _int_free
+     0.89%  SafeDITool-main  libswiftCore.so          [.] $ss6HasherV9_finalizeSiyF
+     0.89%  SafeDITool-main  libswiftCore.so          [.] bool swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1> >::doDecrementSlow<(swift::PerformDeinit)1>(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)
+     0.79%  SafeDITool-main  SafeDITool-main          [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_SS_TG5TA.115
+     0.79%  SafeDITool-main  libc.so.6                [.] cfree@GLIBC_2.2.5
+     0.79%  SafeDITool-main  libswiftCore.so          [.] swift_bridgeObjectRetain
+    83.56%     0.30%  SafeDITool-main  libdispatch.so              [.] _dispatch_worker_thread
+    83.56%     0.00%  SafeDITool-main  libc.so.6                   [.] clone3
+    83.56%     0.00%  SafeDITool-main  libc.so.6                   [.] start_thread
+    82.77%     0.20%  SafeDITool-main  libdispatch.so              [.] _dispatch_async_redirect_invoke
+    82.57%     0.10%  SafeDITool-main  libdispatch.so              [.] _dispatch_continuation_pop
+    81.98%     0.10%  SafeDITool-main  libswift_Concurrency.so     [.] swift_job_run
+    81.68%     0.00%  SafeDITool-main  libswift_Concurrency.so     [.] swift::runJobInEstablishedExecutorContext(swift::Job*)
+    35.15%     0.30%  SafeDITool-main  libswift_Concurrency.so     [.] (anonymous namespace)::ProcessOutOfLineJob::process(swift::Job*)
+    28.81%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC18generateProperties33_4696E12A4057878FD177180CA5E027DALL14codeGeneration24propertiesGeneratedLater22enclosingFunctionNames23leadingMemberWhitespaceSaySSGAC04
+    28.02%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC12generateCode33_4696E12A4057878FD177180CA5E027DALL14codeGeneration21unavailableProperties24propertiesGeneratedLater20builderFunctionNames17leadingWhitespaceS
+    24.75%     1.58%  SafeDITool-main  SafeDITool-main             [.] $sSlsE5split9maxSplits25omittingEmptySubsequences14whereSeparatorSay11SubSequenceQzGSi_S2b7ElementQzKXEtKFSS_Tg5
+    24.06%     0.00%  SafeDITool-main  SafeDITool-main             [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSS_Tg5 (inlined)
+    16.53%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC19rootScopeGenerators33_F27AF112D684D6F2B9EC5735F0D46B05LLSayAC04RootG4InfoAELLVGvgAHyKXEfU_Tf4nnd_n
+    16.34%     0.30%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore5ScopeC06createC9Generator3for19nearestDeclarations36lazilyInstantiatedInstanceProperties8seamRoot12mockBuilders27erasedToConcreteExistential0F14MockGeneration010startsCodeV00
+    15.35%     3.17%  SafeDITool-main  [kernel.kallsyms]           [k] exc_page_fault
+    15.35%     0.00%  SafeDITool-main  [kernel.kallsyms]           [k] asm_exc_page_fault
+    14.85%     0.00%  SafeDITool-main  libc.so.6                   [.] __GI___libc_malloc (inlined)
+    14.46%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore5ScopeC06createC9Generator33_AFF64E1CFBB15AF0EEB20AB2ABC2D931LL3for19nearestDeclarations36lazilyInstantiatedInstanceProperties8seamRoot12mockBuilders27erasedToConcreteExistent
+    13.76%     0.20%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC20generatePropertyCode33_4696E12A4057878FD177180CA5E027DALL14codeGeneration21unavailableProperties24propertiesGeneratedLater20builderFunctionNamesSSAC0gO0O_Sh
+    13.66%     1.98%  SafeDITool-main  libc.so.6                   [.] _int_malloc
+    13.56%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC24generatePerRootCodeTreesSayAC09GeneratedH0VGyYaKFTY0_
+    13.56%     0.00%  SafeDITool-main  [unknown]                   [.] 0xffffffffffffffff
+    12.77%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC19rootScopeGenerators33_F27AF112D684D6F2B9EC5735F0D46B05LLSayAC04RootG4InfoAELLVGvg
+    12.77%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC19rootScopeGenerators33_F27AF112D684D6F2B9EC5735F0D46B05LLSayAC04RootG4InfoAELLVGvgAHyKXEfU_ (inlined)
+    12.08%     0.00%  SafeDITool-main  libc.so.6                   [.] sysmalloc (inlined)
+    11.09%     0.00%  SafeDITool-main  [kernel.kallsyms]           [k] handle_mm_fault
+    10.89%     0.30%  SafeDITool-main  [kernel.kallsyms]           [k] __handle_mm_fault
+    10.69%     0.20%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore31ScopeGeneratorUnderConstruction33_AFF64E1CFBB15AF0EEB20AB2ABC2D931LLV05scopeD031collectingGeneratorsToStartIntoAA0cD0CSayAHGSgz_tF
+    10.40%     0.30%  SafeDITool-main  [kernel.kallsyms]           [k] do_anonymous_page
+     9.70%     0.00%  SafeDITool-main  SafeDITool-main             [.] $sSSSlsSly7ElementQz5IndexQzcirTW (inlined)
+     9.41%     0.89%  SafeDITool-main  libswiftCore.so             [.] bool swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1> >::doDecrementSlow<(swift::PerformDeinit)1>(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)
+     9.41%     0.20%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC32validatePropertiesAreFulfillable33_F27AF112D684D6F2B9EC5735F0D46B05LL12onRootScopes014additionalMockuV025typeDescriptionToScopeMap10cyclesOnlyySayA
+     9.41%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC32validatePropertiesAreFulfillable33_F27AF112D684D6F2B9EC5735F0D46B05LL25typeDescriptionToScopeMap24additionalMockRootScopes08receivedG5Cache10cycles
+     8.81%     1.68%  SafeDITool-main  libswiftCore.so             [.] $sSSySJSS5IndexVcig
+     8.81%     0.20%  SafeDITool-main  libswiftCore.so             [.] _swift_release_dealloc
+     8.81%     0.00%  SafeDITool-main  libc.so.6                   [.] __memcpy_avx512_unaligned_erms (inlined)
+     8.61%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC32validatePropertiesAreFulfillable33_F27AF112D684D6F2B9EC5735F0D46B05LL12onRootScopes014additionalMockuV025typeDescriptionToScopeMap10cyclesOnlyySayA
+     8.61%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC32validatePropertiesAreFulfillable33_F27AF112D684D6F2B9EC5735F0D46B05LL12onRootScopes014additionalMockuV025typeDescriptionToScopeMap10cyclesOnlyySayA
+     8.42%     0.40%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC32validatePropertiesAreFulfillable33_F27AF112D684D6F2B9EC5735F0D46B05LL12onRootScopes014additionalMockuV025typeDescriptionToScopeMap10cyclesOnlyySayA
+     8.42%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC12instantiable8property20propertiesToGenerate0gH7Declare29unavailableOptionalProperties026lazilyInstantiatedInstanceM0015forwardedLazilyopM006erasedH19Concret
+     8.42%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC32validatePropertiesAreFulfillable33_F27AF112D684D6F2B9EC5735F0D46B05LL12onRootScopes014additionalMockuV025typeDescriptionToScopeMap10cyclesOnlyySayA
+     7.92%     0.00%  SafeDITool-main  libswift_Concurrency.so     [.] swift::StackAllocator<984ul, &swift::TaskAllocatorSlabMetadata>::getSlabForAllocation(unsigned long)
+     7.23%     0.00%  SafeDITool-main  SafeDITool-main             [.] $sSSSlsSl9formIndex5aftery0B0Qzz_tFTW (inlined)
+     7.13%     0.30%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC12instantiable8property20propertiesToGenerate0gH7Declare29unavailableOptionalProperties026lazilyInstantiatedInstanceM0015forwardedLazilyopM006erasedH19Concret
+     7.03%     7.03%  SafeDITool-main  libswiftCore.so             [.] swift_release
+     7.03%     0.10%  SafeDITool-main  libswift_Concurrency.so     [.] swift_task_alloc
+     6.83%     6.83%  SafeDITool-main  libswiftCore.so             [.] swift_retain
+     6.73%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore15TypeDescriptionOAA5ScopeCAA23DependencyTreeGeneratorC04RootE4Info33_F27AF112D684D6F2B9EC5735F0D46B05LLVs5Error_pIgggozo_AC04typeD0_AE5scopetAJsAK_pIegnrzr_TR (inlined)
+     6.73%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC19rootScopeGenerators33_F27AF112D684D6F2B9EC5735F0D46B05LLSayAC04RootG4InfoAELLVGvgAHyKXEfU_AgA15TypeDescriptionO_AA0G0CtKXEfU3_ (inlined)
+     6.73%     0.00%  SafeDITool-main  SafeDITool-main             [.] $sSlsE3mapySayqd__Gqd__7ElementQzqd_0_YKXEqd_0_YKs5ErrorRd_0_r0_lFSay10SafeDICore15TypeDescriptionO04typeG0_AF5ScopeC5scopetG_AF23DependencyTreeGeneratorC04RootI4Info33_F27AF112D684D6F2B9EC
+     6.63%     0.10%  SafeDITool-main  libswiftCore.so             [.] swift_allocObject
+     6.53%     0.00%  SafeDITool-main  libswiftCore.so             [.] swift_slowAlloc
+     5.84%     0.10%  SafeDITool-main  [kernel.kallsyms]           [k] do_syscall_64
+     5.84%     0.00%  SafeDITool-main  [kernel.kallsyms]           [k] entry_SYSCALL_64_after_hwframe
+     5.74%     0.10%  SafeDITool-main  [kernel.kallsyms]           [k] alloc_pages_mpol
+     5.74%     0.10%  SafeDITool-main  [kernel.kallsyms]           [k] vma_alloc_folio_noprof
+     5.64%     0.30%  SafeDITool-main  [kernel.kallsyms]           [k] __alloc_frozen_pages_noprof
+     5.35%     0.10%  SafeDITool-main  [kernel.kallsyms]           [k] get_page_from_freelist
+     4.95%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC18generateProperties33_4696E12A4057878FD177180CA5E027DALL14codeGeneration24propertiesGeneratedLater22enclosingFunctionNames23leadingMemberWhitespaceSaySSGAC04
+     4.75%     0.20%  SafeDITool-main  libswiftCore.so             [.] swift_arrayDestroy
+     4.65%     0.79%  SafeDITool-main  SafeDITool-main             [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_SS_TG5TA.115
+     4.65%     0.20%  SafeDITool-main  [kernel.kallsyms]           [k] prep_new_page
+     4.55%     0.00%  SafeDITool-main  libc.so.6                   [.] __GI_mprotect (inlined)
+     4.55%     0.00%  SafeDITool-main  libc.so.6                   [.] grow_heap (inlined)
+     4.55%     0.00%  SafeDITool-main  libswiftCore.so             [.] $ss23_ContiguousArrayStorageCfD
+     4.46%     4.46%  SafeDITool-main  [kernel.kallsyms]           [k] clear_page_erms
+     4.36%     0.30%  SafeDITool-main  [kernel.kallsyms]           [k] do_mprotect_pkey
+     4.36%     0.00%  SafeDITool-main  [kernel.kallsyms]           [k] __x64_sys_mprotect
+     4.06%     3.86%  SafeDITool-main  libswiftCore.so             [.] $sSS15_uncheckedIndex5afterSS0B0VAD_tF
+     3.86%     1.09%  SafeDITool-main  SafeDITool-main             [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_SS_TG5TA
+     3.76%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore31ScopeGeneratorUnderConstruction33_AFF64E1CFBB15AF0EEB20AB2ABC2D931LLV05childeF05scope8property27erasedToConcreteExistentialAdA0C0C_AA8PropertyVSbtKF
+     3.76%     0.00%  SafeDITool-main  libc.so.6                   [.] __GI___libc_free (inlined)
+     3.66%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC15orderedChildren33_4696E12A4057878FD177180CA5E027DALL24propertiesGeneratedLaterSayAC12OrderedChildVGShyAA8PropertyVG_tF (inlined)
+     3.56%     0.79%  SafeDITool-main  libswiftCore.so             [.] swift_bridgeObjectRetain
+     3.56%     0.10%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore15DeferredReleaseO7releaseyyxnSlRzlFZSayAA5ScopeC18PropertyToGenerateOG_Tt0g5Tm
+     3.37%     3.37%  SafeDITool-main  libc.so.6                   [.] __memmove_avx512_unaligned_erms
+     3.27%     0.40%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC12siblingGraph33_4696E12A4057878FD177180CA5E027DALL2of38requiredOnlyIfAvailableAliasPropertiesAC07SiblingF0VSayACG_ShyAA8PropertyVGtFZTf4nnd_n
+     3.27%     0.10%  SafeDITool-main  [kernel.kallsyms]           [k] mprotect_fixup
+     3.17%     0.10%  SafeDITool-main  libswiftCore.so             [.] $sSKsSS7ElementRtzrlE6joined9separatorS2S_tF
+     3.17%     0.10%  SafeDITool-main  libswiftCore.so             [.] swift::OpaqueValue* tuple_initializeWithCopy<false, false>(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
+     3.07%     0.50%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore12InstantiableVwcp
+     3.07%     0.00%  SafeDITool-main  SafeDITool-main             [.] $sypSgWOhTm
+     2.97%     0.99%  SafeDITool-main  libswiftCore.so             [.] $sSS5index5afterSS5IndexVAD_tF
+     2.97%     0.20%  SafeDITool-main  libswiftCore.so             [.] $sSKsSS7ElementRtzrlE6joined9separatorS2S_tFSaySSG_Tg5
+     2.97%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore12InstantiableV12instantiable_AA8PropertyV8propertyShyAFG19forwardedPropertiesSb27erasedToConcreteExistentialSb02isE5CycleAA8SeamCallVSg04seamP0tWOcTm
+     2.87%     0.20%  SafeDITool-main  SafeDITool-main             [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_SS_TG5
+     2.87%     0.10%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC39computeOrderedPropertyToGenerateIndicesSaySiGyF
+     2.87%     0.10%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorCfd
+     2.87%     0.10%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore31ScopeGeneratorUnderConstruction33_AFF64E1CFBB15AF0EEB20AB2ABC2D931LLV5scope8property0P5Stack012concreteTypeQ008fillPathQ5Count19nearestDeclarations36lazilyInstantiatedInstan
+     2.87%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC32orderedPropertyToGenerateIndices33_4696E12A4057878FD177180CA5E027DALLSaySiGvg
+     2.87%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorCfD
+     2.87%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC24generatePerRootCodeTreesSayAC09GeneratedH0VGyYaKFTQ4_
+     2.87%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore31ScopeGeneratorUnderConstruction33_AFF64E1CFBB15AF0EEB20AB2ABC2D931LLV5scope8property0P5Stack012concreteTypeQ008fillPathQ5Count19nearestDeclarations36lazilyInstantiatedInstan
+     2.77%     2.77%  SafeDITool-main  libswiftCore.so             [.] $sSS18_uncheckedFromUTF8_7isASCIISSSRys5UInt8VG_SbtFZTf4nnd_nTm
+     2.77%     0.40%  SafeDITool-main  SafeDITool-main             [.] $sSh8_VariantV6insertySb8inserted_x17memberAfterInserttxnF10SafeDICore8PropertyV_Tg5
+     2.67%     0.89%  SafeDITool-main  libc.so.6                   [.] _int_free
+     2.67%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC12generateCode33_4696E12A4057878FD177180CA5E027DALL14codeGeneration21unavailableProperties24propertiesGeneratedLater20builderFunctionNames17leadingWhitespaceS
+     2.57%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC20generatePropertyCode33_4696E12A4057878FD177180CA5E027DALL14codeGeneration21unavailableProperties24propertiesGeneratedLater20builderFunctionNamesSSAC0gO0O_Sh
+     2.48%     0.40%  SafeDITool-main  libswift_Concurrency.so     [.] swift_task_create_common
+     2.48%     0.20%  SafeDITool-main  libswiftCore.so             [.] $ss22_allocateStringStorage33_A317BBF16F3432B4D1DDED3E0452DA4DLL16codeUnitCapacitys02__bC0C_s01_N8AndFlagsABLLVtSi_tF
+     2.48%     0.00%  SafeDITool-main  [kernel.kallsyms]           [k] __mem_cgroup_charge
+     2.38%     1.29%  SafeDITool-main  SafeDITool-main             [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_Ss_TG5Tm
+     2.38%     0.00%  SafeDITool-main  SafeDITool-main             [.] 0x0000555e28e95cd8
+     2.28%     0.10%  SafeDITool-main  libswiftCore.so             [.] $ss11_StringGutsV23prepareForAppendInPlace33_408A76AB043BD3EFBAB6FAAAAA9B4914LL10totalCount09otherUTF8O0ySi_SitF
+     2.28%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC12siblingGraph33_4696E12A4057878FD177180CA5E027DALL2of38requiredOnlyIfAvailableAliasPropertiesAC07SiblingF0VSayACG_ShyAA8PropertyVGtFZ (inlined)
+     2.28%     0.00%  SafeDITool-main  libswiftCore.so             [.] $ss18_DictionaryStorageCfD
+     2.18%     0.20%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore11InitializerV06createC12ArgumentList5given21unavailableProperties026lazilyInstantiatedInstanceI0SSSayAA10DependencyVG_ShyAA8PropertyVGSgAMtAC15GenerationErrorOYKF
+     2.18%     0.10%  SafeDITool-main  SafeDITool-main             [.] $sSlsE3mapySayqd__Gqd__7ElementQzqd_0_YKXEqd_0_YKs5ErrorRd_0_r0_lFSaySsG_SSs5NeverOTg5251$s10SafeDICore14ScopeGeneratorC12generateCode33_4696E12A4057878FD177180CA5E027DALL14codeGeneration21
+     2.18%     0.10%  SafeDITool-main  libswift_Concurrency.so     [.] swift::AsyncTask::flagAsAndEnqueueOnExecutor(swift::SerialExecutorRef)
+     2.18%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore12InstantiableV20generateArgumentList33_4696E12A4057878FD177180CA5E027DALL21unavailableProperties026lazilyInstantiatedInstanceN017forMockGeneration03useS11InitializerSSShyAA8P
+     2.18%     0.00%  SafeDITool-main  SafeDITool-main             [.] $sSlsE3mapySayqd__Gqd__7ElementQzqd_0_YKXEqd_0_YKs5ErrorRd_0_r0_lFSaySsG_SSs5NeverOTg5251$s10SafeDICore14ScopeGeneratorC12generateCode33_4696E12A4057878FD177180CA5E027DALL14codeGeneration21
+     2.18%     0.00%  SafeDITool-main  libswiftCore.so             [.] $ss18_DictionaryStorageCfd
+     2.08%     0.10%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC20generatePropertyCode33_4696E12A4057878FD177180CA5E027DALL14codeGeneration21unavailableProperties24propertiesGeneratedLater20builderFunctionNamesSSAC0gO0O_Sh
+     2.08%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC12generateCode33_4696E12A4057878FD177180CA5E027DALL14codeGeneration21unavailableProperties24propertiesGeneratedLater20builderFunctionNames17leadingWhitespaceS
+     2.08%     0.00%  SafeDITool-main  SafeDITool-main             [.] $sSSSmsSm6append10contentsOfyqd__n_tSTRd__7ElementQyd__ACRtzlFTWSs_Tg5 (inlined)
+     2.08%     0.00%  SafeDITool-main  SafeDITool-main             [.] $sSmsE1poiyxx_qd__tSmRd__7ElementQyd__ABRtzlFZSS_SsTt2g5 (inlined)

@@ -1,0 +1,83 @@
+diff --git a/Sources/SafeDICore/Generators/ScopeGenerator.swift b/Sources/SafeDICore/Generators/ScopeGenerator.swift
+index 26ac136..eed6fd3 100644
+--- a/Sources/SafeDICore/Generators/ScopeGenerator.swift
++++ b/Sources/SafeDICore/Generators/ScopeGenerator.swift
+@@ -2135,11 +2135,52 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
+ 		if leadingWhitespace.isEmpty {
+ 			return generatedCode
+ 		} else {
+-			return generatedCode
+-				.split(separator: "\n")
+-				.map { leadingWhitespace + $0 }
+-				.joined(separator: "\n")
++			return Self.indenting(generatedCode, by: leadingWhitespace)
++		}
++	}
++
++	/// AUDIT PROTOTYPE: `code.split(separator: "\n").map { whitespace + $0 }.joined(separator: "\n")`, in one pass over UTF-8.
++	static func indenting(_ code: String, by whitespace: String) -> String {
++		var result = [UInt8]()
++		let indent = Array(whitespace.utf8)
++		var utf8 = code.utf8
++		result.reserveCapacity(utf8.count + utf8.count / 8)
++		var atLineStart = true
++		var wroteLine = false
++		for byte in utf8 {
++			if byte == 10 {
++				atLineStart = true
++			} else {
++				if atLineStart {
++					if wroteLine { result.append(10) }
++					result.append(contentsOf: indent)
++					atLineStart = false
++					wroteLine = true
++				}
++				result.append(byte)
++			}
++		}
++		_ = utf8
++		return String(decoding: result, as: UTF8.self)
++	}
++
++	/// AUDIT PROTOTYPE: `path.replacingOccurrences(of: "safeDIOverrides.", with: "").replacingOccurrences(of: ".", with: "_")`.
++	static func overrideRelativePath(_ path: String) -> String {
++		var bytes = Array(path.utf8)
++		let prefix = Array("\(ReservedName.mockOverridesParameterName).".utf8)
++		var output = [UInt8]()
++		output.reserveCapacity(bytes.count)
++		var index = 0
++		while index < bytes.count {
++			if bytes[index] == prefix[0], index + prefix.count <= bytes.count, bytes[index..<(index + prefix.count)].elementsEqual(prefix) {
++				index += prefix.count
++			} else {
++				output.append(bytes[index] == 46 ? 95 : bytes[index])
++				index += 1
++			}
+ 		}
++		bytes = []
++		return String(decoding: output, as: UTF8.self)
+ 	}
+ 
+ 	func generateDOT() async throws -> String {
+@@ -9328,9 +9369,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
+ 				// A cycle-closing node declares no function: it refers to the enclosing one of the declaration it repeats.
+ 				let functionName = functionName(ofNodeAt: propertyNodeIndex - 1, node, bindingName: disambiguated)
+ 
+-				let relativePath = nodePath
+-					.replacingOccurrences(of: "\(ReservedName.mockOverridesParameterName).", with: "")
+-					.replacingOccurrences(of: ".", with: "_")
++				let relativePath = Self.overrideRelativePath(nodePath)
+ 
+ 				// The optional override closure to consult, or `nil` when there is
+ 				// none to consult: a cycle node constructs itself directly, and a
+@@ -9750,9 +9789,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
+ 	) -> [String] {
+ 		// Each label names one dependency: `validateDependencyLabelsAreDistinct` rejects a declaration in a generated tree that repeats one.
+ 		let dependenciesByLabel = Dictionary(grouping: node.dependencies, by: \.property.label).compactMapValues(\.first)
+-		let relativePath = nodePath
+-			.replacingOccurrences(of: "\(ReservedName.mockOverridesParameterName).", with: "")
+-			.replacingOccurrences(of: ".", with: "_")
++		let relativePath = Self.overrideRelativePath(nodePath)
+ 		let argumentsToSurface = node.surfacedCallSiteArguments(
+ 			overrideReachable: overrideReachable,
+ 			handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,

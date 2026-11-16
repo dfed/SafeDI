@@ -1,0 +1,116 @@
+    12.06%  SafeDITool-main  libswiftCore.so             [.] swift_retain
+    11.12%  SafeDITool-main  libswiftCore.so             [.] swift_release
+     3.73%  SafeDITool-main  libc.so.6                   [.] __memmove_avx512_unaligned_erms
+     3.56%  SafeDITool-main  libFoundation.so            [.] CFStringFindWithOptionsAndLocale
+     2.91%  SafeDITool-main  libFoundation.so            [.] $s10Foundation8NSStringC13getCharacters_5rangeySpys6UInt16VG_AA8_NSRangeVtF
+     1.97%  SafeDITool-main  libc.so.6                   [.] malloc
+     1.72%  SafeDITool-main  libswiftCore.so             [.] bool swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1> >::doDecrementSlow<(swift::PerformDeinit)1>(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)
+     1.72%  SafeDITool-main  libswiftCore.so             [.] swift_bridgeObjectRetain
+     1.47%  SafeDITool-main  libswiftCore.so             [.] swift_getEnumCaseMultiPayload
+     1.43%  SafeDITool-main  [kernel.kallsyms]           [k] clear_page_erms
+     1.35%  SafeDITool-main  libswiftCore.so             [.] $ss6HasherV9_finalizeSiyF
+     1.34%  SafeDITool-main  libswiftCore.so             [.] swift_bridgeObjectRelease
+     1.26%  SafeDITool-main  libc.so.6                   [.] _int_malloc
+     1.23%  SafeDITool-main  libswiftCore.so             [.] $ss6HasherV5_seedABSi_tcfC
+     1.09%  SafeDITool-main  libc.so.6                   [.] _int_free
+     1.07%  SafeDITool-main  libswiftCore.so             [.] $ss13_decodeScalar_10startingAts7UnicodeO0B0V_Si12scalarLengthtSRys5UInt8VG_SitF
+     1.01%  SafeDITool-main  libswiftCore.so             [.] $ss6HasherV7combine5bytesySW_tF
+     0.87%  SafeDITool-main  [kernel.kallsyms]           [k] exc_page_fault
+     0.78%  SafeDITool-main  libswiftCore.so             [.] $sSS18_slowFromCodeUnits33_7FF00B9A6F2F6297245D04D183248ECBLL_8encoding6repairSS_Sb11repairsMadetSgx_q_mSbtSlRzs16_UnicodeEncodingR_0C4UnitQy_7ElementRtzr0_lFZ
+     0.76%  SafeDITool-main  libc.so.6                   [.] cfree@GLIBC_2.2.5
+    81.08%     0.00%  SafeDITool-main  libc.so.6                   [.] clone3
+    81.08%     0.00%  SafeDITool-main  libc.so.6                   [.] start_thread
+    81.08%     0.00%  SafeDITool-main  libdispatch.so              [.] _dispatch_async_redirect_invoke
+    81.08%     0.00%  SafeDITool-main  libdispatch.so              [.] _dispatch_continuation_pop
+    81.08%     0.00%  SafeDITool-main  libdispatch.so              [.] _dispatch_worker_thread
+    81.08%     0.00%  SafeDITool-main  libswift_Concurrency.so     [.] swift::runJobInEstablishedExecutorContext(swift::Job*)
+    81.08%     0.00%  SafeDITool-main  libswift_Concurrency.so     [.] swift_job_run
+    25.82%     0.05%  SafeDITool-main  libFoundation.so            [.] $sSy10FoundationE20replacingOccurrences2of4with7options5rangeSSqd___qd_0_SS0A10EssentialsE14CompareOptionsVSnySS5IndexVGSgtSyRd__SyRd_0_r0_lF
+    25.48%     0.03%  SafeDITool-main  libFoundation.so            [.] $s10Foundation8NSStringC20replacingOccurrences2of4withS2S_SStF
+    25.29%     0.40%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC24generateMockBodyBindings33_4696E12A4057878FD177180CA5E027DALL5items20propertyNodeLabelMap10parentPath6indent13ancestorTypes25sendableOverrideExtractor027fla
+    18.54%     0.06%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore5ScopeC06createC9Generator3for19nearestDeclarations36lazilyInstantiatedInstanceProperties8seamRoot12mockBuilders27erasedToConcreteExistential0F14MockGeneration010startsCodeV00
+    18.45%     0.22%  SafeDITool-main  libFoundation.so            [.] $s10Foundation15NSMutableStringC18replaceOccurrences2of4with7options5rangeSiSS_S2S0A10EssentialsE14CompareOptionsVAA8_NSRangeVtF
+    16.84%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore5ScopeC06createC9Generator33_AFF64E1CFBB15AF0EEB20AB2ABC2D931LL3for19nearestDeclarations36lazilyInstantiatedInstanceProperties8seamRoot12mockBuilders27erasedToConcreteExistent
+    16.34%     0.20%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC23resolveBuilderArguments33_4696E12A4057878FD177180CA5E027DALL3for8nodePath30lazilyInstantiatedBindingNames019uncoveredDependencyT025sendableOverrideExtractor
+    16.15%     0.00%  SafeDITool-main  [unknown]                   [.] 0xffffffffffffffff
+    13.12%     0.00%  SafeDITool-main  libswift_Concurrency.so     [.] (anonymous namespace)::ProcessOutOfLineJob::process(swift::Job*)
+    12.67%     0.17%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC24generateMockBodyBindings33_4696E12A4057878FD177180CA5E027DALL5items20propertyNodeLabelMap10parentPath6indent13ancestorTypes25sendableOverrideExtractor027fla
+    12.24%     0.07%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore31ScopeGeneratorUnderConstruction33_AFF64E1CFBB15AF0EEB20AB2ABC2D931LLV05scopeD031collectingGeneratorsToStartIntoAA0cD0CSayAHGSgz_tF
+    12.11%    12.06%  SafeDITool-main  libswiftCore.so             [.] swift_retain
+    11.55%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC12instantiable8property20propertiesToGenerate0gH7Declare29unavailableOptionalProperties026lazilyInstantiatedInstanceM0015forwardedLazilyopM006erasedH19Concret
+    11.18%     0.18%  SafeDITool-main  libFoundation.so            [.] CFStringCreateArrayWithFindResults
+    11.14%    11.12%  SafeDITool-main  libswiftCore.so             [.] swift_release
+    10.76%     1.72%  SafeDITool-main  libswiftCore.so             [.] bool swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1> >::doDecrementSlow<(swift::PerformDeinit)1>(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)
+    10.65%     3.56%  SafeDITool-main  libFoundation.so            [.] CFStringFindWithOptionsAndLocale
+    10.64%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC10mockScopes33_F27AF112D684D6F2B9EC5735F0D46B05LL25additionalMocksToGenerate0F14EmittingModule23receivedPropertiesCacheAC04MockG0AELLVShySSG_AC0vW0VS
+    10.64%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC32validatePropertiesAreFulfillable33_F27AF112D684D6F2B9EC5735F0D46B05LL25typeDescriptionToScopeMap24additionalMockRootScopes08receivedG5Cache10cycles
+    10.63%     0.02%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC32validatePropertiesAreFulfillable33_F27AF112D684D6F2B9EC5735F0D46B05LL12onRootScopes014additionalMockuV025typeDescriptionToScopeMap10cyclesOnlyySayA
+    10.34%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC20mockBuilderArguments33_4696E12A4057878FD177180CA5E027DALL3for8nodePath30lazilyInstantiatedBindingNames019uncoveredDependencyT025sendableOverrideExtractor17o
+    10.33%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC23resolveBuilderArguments33_4696E12A4057878FD177180CA5E027DALL3for8nodePath30lazilyInstantiatedBindingNames019uncoveredDependencyT025sendableOverrideExtractor
+     9.99%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC32validatePropertiesAreFulfillable33_F27AF112D684D6F2B9EC5735F0D46B05LL12onRootScopes014additionalMockuV025typeDescriptionToScopeMap10cyclesOnlyySayA
+     9.99%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC32validatePropertiesAreFulfillable33_F27AF112D684D6F2B9EC5735F0D46B05LL12onRootScopes014additionalMockuV025typeDescriptionToScopeMap10cyclesOnlyySayA
+     9.98%     0.39%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC32validatePropertiesAreFulfillable33_F27AF112D684D6F2B9EC5735F0D46B05LL12onRootScopes014additionalMockuV025typeDescriptionToScopeMap10cyclesOnlyySayA
+     9.98%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC32validatePropertiesAreFulfillable33_F27AF112D684D6F2B9EC5735F0D46B05LL12onRootScopes014additionalMockuV025typeDescriptionToScopeMap10cyclesOnlyySayA
+     9.41%     0.58%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC12instantiable8property20propertiesToGenerate0gH7Declare29unavailableOptionalProperties026lazilyInstantiatedInstanceM0015forwardedLazilyopM006erasedH19Concret
+     9.09%     0.18%  SafeDITool-main  libswiftCore.so             [.] _swift_release_dealloc
+     8.43%     0.32%  SafeDITool-main  libswiftCore.so             [.] swift_allocObject
+     8.22%     0.33%  SafeDITool-main  libswiftCore.so             [.] swift_slowAlloc
+     7.91%     0.00%  SafeDITool-main  libc.so.6                   [.] __GI___libc_malloc (inlined)
+     7.77%     0.01%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC019createMockRootScopeE033_F27AF112D684D6F2B9EC5735F0D46B05LL3for5scope017typeDescriptionToI3Map013flatParameterG8Defaults06erasedx12ConcreteTypeY014
+     6.47%     0.03%  SafeDITool-main  libFoundation.so            [.] $s10Foundation8NSStringC11mutableCopy4withypAA6NSZoneVSg_tF
+     6.35%     1.72%  SafeDITool-main  libswiftCore.so             [.] swift_bridgeObjectRetain
+     6.23%     0.22%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC24collectMockParameterTree33_4696E12A4057878FD177180CA5E027DALL014insideSendableC024propertiesGeneratedLaterSayAC0fH4ItemOGSb_ShyAA8PropertyVGtYaFTY2_
+     6.13%     1.26%  SafeDITool-main  libc.so.6                   [.] _int_malloc
+     5.71%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC019createMockRootScopeE033_F27AF112D684D6F2B9EC5735F0D46B05LL3for5scope017typeDescriptionToI3Map013flatParameterG8Defaults06erasedx12ConcreteTypeY014
+     5.08%     0.16%  SafeDITool-main  libFoundation.so            [.] $s10Foundation27_CFSwiftStringGetCharacters_5range6bufferyyXl_So7CFRangeaSpys6UInt16VGtFTo
+     5.02%     2.91%  SafeDITool-main  libFoundation.so            [.] $s10Foundation8NSStringC13getCharacters_5rangeySpys6UInt16VG_AA8_NSRangeVtF
+     4.88%     0.00%  SafeDITool-main  libc.so.6                   [.] sysmalloc (inlined)
+     4.87%     0.02%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC24collectMockParameterTree33_4696E12A4057878FD177180CA5E027DALL014insideSendableC024propertiesGeneratedLaterSayAC0fH4ItemOGSb_ShyAA8PropertyVGtYaFTY0_
+     4.85%     0.08%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC24generateMockBodyBindings33_4696E12A4057878FD177180CA5E027DALL5items20propertyNodeLabelMap10parentPath6indent13ancestorTypes25sendableOverrideExtractor027fla
+     4.78%     0.05%  SafeDITool-main  libswiftCore.so             [.] $sSS14_fromCodeUnits_8encoding6repairSS_Sb11repairsMadetSgx_q_mSbtSlRzs16_UnicodeEncodingR_0B4UnitQy_7ElementRtzr0_lFZ
+     4.69%     0.11%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore31ScopeGeneratorUnderConstruction33_AFF64E1CFBB15AF0EEB20AB2ABC2D931LLV05childeF05scope8property27erasedToConcreteExistentialAdA0C0C_AA8PropertyVSbtKF
+     4.59%     0.00%  SafeDITool-main  libc.so.6                   [.] __memcpy_avx512_unaligned_erms (inlined)
+     4.57%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC15orderedChildren33_4696E12A4057878FD177180CA5E027DALL24propertiesGeneratedLaterSayAC12OrderedChildVGShyAA8PropertyVG_tF (inlined)
+     4.38%     0.78%  SafeDITool-main  libswiftCore.so             [.] $sSS18_slowFromCodeUnits33_7FF00B9A6F2F6297245D04D183248ECBLL_8encoding6repairSS_Sb11repairsMadetSgx_q_mSbtSlRzs16_UnicodeEncodingR_0C4UnitQy_7ElementRtzr0_lFZ
+     4.35%     0.38%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC12siblingGraph33_4696E12A4057878FD177180CA5E027DALL2of38requiredOnlyIfAvailableAliasPropertiesAC07SiblingF0VSayACG_ShyAA8PropertyVGtFZTf4nnd_n
+     4.22%     0.19%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC30validateMockRootScopeForCycles33_F27AF112D684D6F2B9EC5735F0D46B05LLyyAA0I0CKF
+     4.01%     0.30%  SafeDITool-main  libswiftCore.so             [.] $ss23_ContiguousArrayStorageCfD
+     4.01%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC20mockBuilderArguments33_4696E12A4057878FD177180CA5E027DALL3for8nodePath30lazilyInstantiatedBindingNames019uncoveredDependencyT025sendableOverrideExtractor17o
+     4.00%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC23resolveBuilderArguments33_4696E12A4057878FD177180CA5E027DALL3for8nodePath30lazilyInstantiatedBindingNames019uncoveredDependencyT025sendableOverrideExtractor
+     3.98%     0.00%  SafeDITool-main  [kernel.kallsyms]           [k] asm_exc_page_fault
+     3.97%     0.87%  SafeDITool-main  [kernel.kallsyms]           [k] exc_page_fault
+     3.96%     0.15%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore31ScopeGeneratorUnderConstruction33_AFF64E1CFBB15AF0EEB20AB2ABC2D931LLV5scope8property0P5Stack012concreteTypeQ008fillPathQ5Count19nearestDeclarations36lazilyInstantiatedInstan
+     3.92%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore31ScopeGeneratorUnderConstruction33_AFF64E1CFBB15AF0EEB20AB2ABC2D931LLV5scope8property0P5Stack012concreteTypeQ008fillPathQ5Count19nearestDeclarations36lazilyInstantiatedInstan
+     3.88%     0.16%  SafeDITool-main  libswiftCore.so             [.] swift_arrayDestroy
+     3.73%     3.73%  SafeDITool-main  libc.so.6                   [.] __memmove_avx512_unaligned_erms
+     3.46%     0.01%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC32orderedPropertyToGenerateIndices33_4696E12A4057878FD177180CA5E027DALLSaySiGvg
+     3.42%     0.07%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC39computeOrderedPropertyToGenerateIndicesSaySiGyF
+     3.00%     0.04%  SafeDITool-main  [kernel.kallsyms]           [k] handle_mm_fault
+     2.94%     0.06%  SafeDITool-main  [kernel.kallsyms]           [k] __handle_mm_fault
+     2.93%     0.30%  SafeDITool-main  SafeDITool-main             [.] $sSh8_VariantV6insertySb8inserted_x17memberAfterInserttxnF10SafeDICore8PropertyV_Tg5
+     2.90%     0.01%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC17MockParameterNodeC22constructionExpression08overrideI09arguments0J9Reachable011handWrittenE17DefaultParametersS2SSg_SaySSGSbSayAE0oF0VGtF
+     2.86%     0.03%  SafeDITool-main  [kernel.kallsyms]           [k] do_anonymous_page
+     2.65%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC27generateInstantiatorBinding33_4696E12A4057878FD177180CA5E027DALL3for05outerG4Name08functionP022enclosingFunctionNames8nodePath18overrideExpression9arguments
+     2.59%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC12siblingGraph33_4696E12A4057878FD177180CA5E027DALL2of38requiredOnlyIfAvailableAliasPropertiesAC07SiblingF0VSayACG_ShyAA8PropertyVGtFZ (inlined)
+     2.53%     0.05%  SafeDITool-main  libc.so.6                   [.] __posix_memalign
+     2.48%     0.00%  SafeDITool-main  libc.so.6                   [.] __GI___libc_free (inlined)
+     2.42%     0.37%  SafeDITool-main  libswiftCore.so             [.] $ss11_StringGutsV6appendyys01_aB5SliceVF
+     2.40%     0.07%  SafeDITool-main  libswiftCore.so             [.] void tuple_destroy<false, false>(swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
+     2.38%     0.06%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore15DeferredReleaseO7releaseyyxnSlRzlFZSayAA5ScopeC18PropertyToGenerateOG_Tt0g5Tm
+     2.35%     0.24%  SafeDITool-main  SafeDITool-main             [.] $sSh8_VariantV6insertySb8inserted_x17memberAfterInserttxnFSS_Tg5
+     2.35%     0.05%  SafeDITool-main  libFoundation.so            [.] $sSy10FoundationE5range2of7optionsAB6localeSnySS5IndexVGSgqd___SS0A10EssentialsE14CompareOptionsVAiJ6LocaleVSgtSyRd__lF
+     2.26%     0.02%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC16generateMockCode26mockConditionalCompilation28currentModuleSourceFilePaths25additionalMocksToGenerateAC0G16GenerationResultVSSSg_ShySSGSgAKtYaKFTY2
+     2.23%     0.13%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC32validatePropertiesAreFulfillable33_F27AF112D684D6F2B9EC5735F0D46B05LL12onRootScopes014additionalMockuV025typeDescriptionToScopeMap10cyclesOnlyySayA
+     2.22%     0.24%  SafeDITool-main  libswiftCore.so             [.] $sSS5IndexV11utf16Offset2inABSi_xtcSyRzlufC
+     2.21%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore23DependencyTreeGeneratorC32validatePropertiesAreFulfillable33_F27AF112D684D6F2B9EC5735F0D46B05LL12onRootScopes014additionalMockuV025typeDescriptionToScopeMap10cyclesOnlyySayA
+     2.16%     0.02%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC20receivedBuilderLoops33_4696E12A4057878FD177180CA5E027DALL2of38requiredOnlyIfAvailableAliasPropertiesAC08ReceivedfG0VSayACG_ShyAA8PropertyVGtFZTf4nnd_n
+     2.15%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC20receivedBuilderLoops33_4696E12A4057878FD177180CA5E027DALL2of38requiredOnlyIfAvailableAliasPropertiesAC08ReceivedfG0VSayACG_ShyAA8PropertyVGtFZ (inlined)
+     2.12%     0.15%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorCfd
+     2.10%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorCfD
+     2.09%     0.11%  SafeDITool-main  [kernel.kallsyms]           [k] do_syscall_64
+     2.09%     0.00%  SafeDITool-main  [kernel.kallsyms]           [k] entry_SYSCALL_64_after_hwframe
+     2.06%     0.44%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore10DependencyVwcp
+     2.06%     0.01%  SafeDITool-main  SafeDITool-main             [.] $sypSgWOhTm
+     2.05%     0.05%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore10DependencyVWOc
+     2.02%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC20mockBuilderArguments33_4696E12A4057878FD177180CA5E027DALL3for8nodePath30lazilyInstantiatedBindingNames019uncoveredDependencyT025sendableOverrideExtractor17o
+     2.01%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC23resolveBuilderArguments33_4696E12A4057878FD177180CA5E027DALL3for8nodePath30lazilyInstantiatedBindingNames019uncoveredDependencyT025sendableOverrideExtractor

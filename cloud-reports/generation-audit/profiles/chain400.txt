@@ -1,0 +1,68 @@
+    14.33%  SafeDITool-main  libswiftCore.so          [.] $sSS15_uncheckedIndex5afterSS0B0VAD_tF
+    11.34%  SafeDITool-main  libswiftCore.so          [.] $sSS18_uncheckedFromUTF8_7isASCIISSSRys5UInt8VG_SbtFZTf4nnd_nTm
+     8.44%  SafeDITool-main  libswiftCore.so          [.] $sSSySJSS5IndexVcig
+     6.18%  SafeDITool-main  SafeDITool-main          [.] $sSlsE5split9maxSplits25omittingEmptySubsequences14whereSeparatorSay11SubSequenceQzGSi_S2b7ElementQzKXEtKFSS_Tg5
+     6.02%  SafeDITool-main  SafeDITool-main          [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_Ss_TG5Tm
+     5.71%  SafeDITool-main  libswiftCore.so          [.] $ss11_StringGutsV19validateScalarIndexySS0E0VAEF
+     5.60%  SafeDITool-main  libswiftCore.so          [.] $ss11_StringGutsV22validateCharacterIndexySS0E0VAEF
+     4.47%  SafeDITool-main  libswiftCore.so          [.] $sSR8rebasingSRyxGs5SliceVyABG_tcfCs5UInt8V_Tt0g5Tm
+     4.45%  SafeDITool-main  libswiftCore.so          [.] swift_bridgeObjectRelease
+     4.19%  SafeDITool-main  libswiftCore.so          [.] $ss9_allASCIIySbSRys5UInt8VGF
+     2.72%  SafeDITool-main  SafeDITool-main          [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_SS_TG5TA
+     2.66%  SafeDITool-main  libswiftCore.so          [.] $sSS5index5afterSS5IndexVAD_tF
+     2.66%  SafeDITool-main  libswiftCore.so          [.] $ss27_stringCompareWithSmolCheck__9expectingSbs11_StringGutsV_ADs01_G16ComparisonResultOtF
+     2.08%  SafeDITool-main  libswiftCore.so          [.] swift_release
+     1.84%  SafeDITool-main  SafeDITool-main          [.] swift_bridgeObjectRelease@plt
+     1.64%  SafeDITool-main  SafeDITool-main          [.] $sSS5index5afterSS5IndexVAD_tF@plt
+     1.64%  SafeDITool-main  SafeDITool-main          [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_SS_TG5TA.115
+     1.31%  SafeDITool-main  libc.so.6                [.] __memmove_avx512_unaligned_erms
+     1.28%  SafeDITool-main  [kernel.kallsyms]        [k] exc_page_fault
+     1.22%  SafeDITool-main  SafeDITool-main          [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_SS_TG5
+     1.02%  SafeDITool-main  SafeDITool-main          [.] $sSSySJSS5IndexVcig@plt
+     1.00%  SafeDITool-main  SafeDITool-main          [.] $ss27_stringCompareWithSmolCheck__9expectingSbs11_StringGutsV_ADs01_G16ComparisonResultOtF@plt
+     0.95%  SafeDITool-main  SafeDITool-main          [.] 0x00000000001bacd0
+     0.89%  SafeDITool-main  [kernel.kallsyms]        [k] clear_page_erms
+    93.24%     0.02%  SafeDITool-main  libdispatch.so              [.] _dispatch_worker_thread
+    93.24%     0.00%  SafeDITool-main  libc.so.6                   [.] clone3
+    93.24%     0.00%  SafeDITool-main  libc.so.6                   [.] start_thread
+    92.98%     0.00%  SafeDITool-main  libdispatch.so              [.] _dispatch_async_redirect_invoke
+    92.98%     0.00%  SafeDITool-main  libdispatch.so              [.] _dispatch_continuation_pop
+    92.96%     0.00%  SafeDITool-main  libswift_Concurrency.so     [.] swift_job_run
+    92.93%     0.00%  SafeDITool-main  libswift_Concurrency.so     [.] swift::runJobInEstablishedExecutorContext(swift::Job*)
+    88.57%     6.18%  SafeDITool-main  SafeDITool-main             [.] $sSlsE5split9maxSplits25omittingEmptySubsequences14whereSeparatorSay11SubSequenceQzGSi_S2b7ElementQzKXEtKFSS_Tg5
+    87.66%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC18generateProperties33_4696E12A4057878FD177180CA5E027DALL14codeGeneration24propertiesGeneratedLater22enclosingFunctionNames23leadingMemberWhitespaceSaySSGAC04
+    87.29%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC12generateCode33_4696E12A4057878FD177180CA5E027DALL14codeGeneration21unavailableProperties24propertiesGeneratedLater20builderFunctionNames17leadingWhitespaceS
+    83.83%     0.00%  SafeDITool-main  SafeDITool-main             [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSS_Tg5 (inlined)
+    35.99%     0.00%  SafeDITool-main  SafeDITool-main             [.] $sSSSlsSly7ElementQz5IndexQzcirTW (inlined)
+    32.34%     8.44%  SafeDITool-main  libswiftCore.so             [.] $sSSySJSS5IndexVcig
+    24.23%     0.00%  SafeDITool-main  SafeDITool-main             [.] $sSSSlsSl9formIndex5aftery0B0Qzz_tFTW (inlined)
+    16.15%     1.64%  SafeDITool-main  SafeDITool-main             [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_SS_TG5TA.115
+    14.62%     2.72%  SafeDITool-main  SafeDITool-main             [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_SS_TG5TA
+    14.33%    14.33%  SafeDITool-main  libswiftCore.so             [.] $sSS15_uncheckedIndex5afterSS0B0VAD_tF
+    11.98%     1.22%  SafeDITool-main  SafeDITool-main             [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_SS_TG5
+    11.38%    11.34%  SafeDITool-main  libswiftCore.so             [.] $sSS18_uncheckedFromUTF8_7isASCIISSSRys5UInt8VG_SbtFZTf4nnd_nTm
+     9.59%     6.02%  SafeDITool-main  SafeDITool-main             [.] $sSlsSQ7ElementRpzrlE5split9separator9maxSplits25omittingEmptySubsequencesSay11SubSequenceQzGAB_SiSbtFSbABXEfU_Ss_TG5Tm
+     9.55%     0.00%  SafeDITool-main  SafeDITool-main             [.] 0x0000558615822cd8
+     8.31%     2.66%  SafeDITool-main  libswiftCore.so             [.] $sSS5index5afterSS5IndexVAD_tF
+     5.71%     5.71%  SafeDITool-main  libswiftCore.so             [.] $ss11_StringGutsV19validateScalarIndexySS0E0VAEF
+     5.63%     5.60%  SafeDITool-main  libswiftCore.so             [.] $ss11_StringGutsV22validateCharacterIndexySS0E0VAEF
+     4.47%     4.47%  SafeDITool-main  libswiftCore.so             [.] $sSR8rebasingSRyxGs5SliceVyABG_tcfCs5UInt8V_Tt0g5Tm
+     4.47%     0.00%  SafeDITool-main  libc.so.6                   [.] __memcpy_avx512_unaligned_erms (inlined)
+     4.45%     4.45%  SafeDITool-main  libswiftCore.so             [.] swift_bridgeObjectRelease
+     4.19%     4.19%  SafeDITool-main  libswiftCore.so             [.] $ss9_allASCIIySbSRys5UInt8VGF
+     3.37%     1.28%  SafeDITool-main  [kernel.kallsyms]           [k] exc_page_fault
+     3.37%     0.00%  SafeDITool-main  [kernel.kallsyms]           [k] asm_exc_page_fault
+     2.86%     0.00%  SafeDITool-main  libswiftCore.so             [.] $sSKsSS7ElementRtzrlE6joined9separatorS2S_tF
+     2.83%     0.00%  SafeDITool-main  libswiftCore.so             [.] $sSKsSS7ElementRtzrlE6joined9separatorS2S_tFSaySSG_Tg5
+     2.66%     2.66%  SafeDITool-main  libswiftCore.so             [.] $ss27_stringCompareWithSmolCheck__9expectingSbs11_StringGutsV_ADs01_G16ComparisonResultOtF
+     2.59%     0.00%  SafeDITool-main  SafeDITool-main             [.] $s10SafeDICore14ScopeGeneratorC20generatePropertyCode33_4696E12A4057878FD177180CA5E027DALL14codeGeneration21unavailableProperties24propertiesGeneratedLater20builderFunctionNamesSSAC0gO0O_Sh
+     2.50%     0.04%  SafeDITool-main  libswiftCore.so             [.] $ss11_StringGutsV23prepareForAppendInPlace33_408A76AB043BD3EFBAB6FAAAAA9B4914LL10totalCount09otherUTF8O0ySi_SitF
+     2.37%     0.00%  SafeDITool-main  libswiftCore.so             [.] $ss15__StringStorageC6create16initializingFrom16codeUnitCapacity7isASCIIABSRys5UInt8VG_SiSbtFZTf4nnnd_n
+     2.10%     0.00%  SafeDITool-main  libswiftCore.so             [.] $ss11_StringGutsV6appendyys01_aB5SliceVF
+     2.08%     2.08%  SafeDITool-main  libswiftCore.so             [.] swift_release
+     2.06%     0.00%  SafeDITool-main  SafeDITool-main             [.] $sSS5write2toyxz_ts16TextOutputStreamRzlFs26DefaultStringInterpolationV_Tg5 (inlined)
+     2.06%     0.00%  SafeDITool-main  SafeDITool-main             [.] $sSSs20TextOutputStreamablessAAP5write2toyqd__z_ts0aB6StreamRd__lFTWs26DefaultStringInterpolationV_Tg5 (inlined)
+     2.06%     0.00%  SafeDITool-main  SafeDITool-main             [.] $ss26DefaultStringInterpolationV06appendC0yyxs06CustomB11ConvertibleRzs20TextOutputStreamableRzlFSS_Tg5 (inlined)
+     2.06%     0.00%  SafeDITool-main  SafeDITool-main             [.] $ss26DefaultStringInterpolationVs16TextOutputStreamssACP5writeyySSFTW (inlined)
+     2.04%     0.04%  SafeDITool-main  [kernel.kallsyms]           [k] __handle_mm_fault
+     2.04%     0.00%  SafeDITool-main  [kernel.kallsyms]           [k] handle_mm_fault
