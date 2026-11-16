@@ -1207,29 +1207,46 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#endif
 
 		"""
-		let mockCode = """
-		#if DEBUG
-		extension User {
-		    static func mock(
-		        service: AnyService
-		    ) -> User {
-		        return User(service: service)
-		    }
-		}
-		#endif
-		"""
 		let expectedGeneratedFiles: [String: [String: String]] = switch integration {
 		case .moduleInfo:
 			[
 				"Services": ["Services.swift": header],
-				"Users": ["Users.swift": header + importBlock + "\n" + mockCode],
+				"Users": ["Users.swift": generatedFileHeader + """
+				#if canImport(Services)
+				import Services
+				#endif
+
+				#if DEBUG
+				extension User {
+				    static func mock(
+				        service: AnyService
+				    ) -> User {
+				        return User(service: service)
+				    }
+				}
+				#endif
+				"""],
 			]
 		case .swiftPackagePlugin:
 			[
 				"Services": [:],
 				"Users": [
 					"SafeDIMockConfiguration.swift": header + importBlock + "\n",
-					"User+SafeDIMock.swift": header + importBlock + "\n" + mockCode,
+					"User+SafeDIMock.swift": generatedFileHeader + """
+					#if canImport(Services)
+					import Services
+					#endif
+
+					#if DEBUG
+					extension User {
+					    static func mock(
+					        service: AnyService
+					    ) -> User {
+					        return User(service: service)
+					    }
+					}
+					#endif
+					""",
 				],
 			]
 		}
@@ -5477,42 +5494,72 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		// ExternalEngine is constructible from the dependency's declarations — the generated mock
 		// imports the module, so ExternalEngine.instantiate() is available. The parameter
 		// is optional with a default construction.
-		let mockCode = """
-		#if DEBUG
-		extension Service {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            externalEngine: (() -> ExternalEngine)? = nil
-		        ) {
-		            self.externalEngine = externalEngine
-		        }
-
-		        let externalEngine: (() -> ExternalEngine)?
-		    }
-
-		    static func mock(
-		        name: String,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Service {
-		        let externalEngine = if let safeDIBuilder = safeDIOverrides.externalEngine { safeDIBuilder() } else { ExternalEngine.instantiate() }
-		        return Service(externalEngine: externalEngine, name: name)
-		    }
-		}
-		#endif
-		"""
 		let expectedGeneratedFiles: [String: [String: String]] = switch integration {
 		case .moduleInfo:
 			[
 				"Engines": ["Engines.swift": header],
-				"Services": ["Services.swift": header + importBlock + "\n" + mockCode],
+				"Services": ["Services.swift": generatedFileHeader + """
+				#if canImport(Engines)
+				import Engines
+				#endif
+
+				#if DEBUG
+				extension Service {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            externalEngine: (() -> ExternalEngine)? = nil
+				        ) {
+				            self.externalEngine = externalEngine
+				        }
+
+				        let externalEngine: (() -> ExternalEngine)?
+				    }
+
+				    static func mock(
+				        name: String,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Service {
+				        let externalEngine = if let safeDIBuilder = safeDIOverrides.externalEngine { safeDIBuilder() } else { ExternalEngine.instantiate() }
+				        return Service(externalEngine: externalEngine, name: name)
+				    }
+				}
+				#endif
+				"""],
 			]
 		case .swiftPackagePlugin:
 			[
 				"Engines": [:],
 				"Services": [
 					"SafeDIMockConfiguration.swift": header + importBlock + "\n",
-					"Service+SafeDIMock.swift": header + importBlock + "\n" + mockCode,
+					"Service+SafeDIMock.swift": generatedFileHeader + """
+					#if canImport(Engines)
+					import Engines
+					#endif
+
+					#if DEBUG
+					extension Service {
+					    /// Overrides for the mock dependency tree.
+					    struct SafeDIOverrides {
+					        init(
+					            externalEngine: (() -> ExternalEngine)? = nil
+					        ) {
+					            self.externalEngine = externalEngine
+					        }
+
+					        let externalEngine: (() -> ExternalEngine)?
+					    }
+
+					    static func mock(
+					        name: String,
+					        safeDIOverrides: SafeDIOverrides = .init()
+					    ) -> Service {
+					        let externalEngine = if let safeDIBuilder = safeDIOverrides.externalEngine { safeDIBuilder() } else { ExternalEngine.instantiate() }
+					        return Service(externalEngine: externalEngine, name: name)
+					    }
+					}
+					#endif
+					""",
 				],
 			]
 		}
