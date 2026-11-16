@@ -24,8 +24,15 @@ name: Graph Fuzzer
 # reports the lines changed since `base`
 # (.github/scripts/report-graph-fuzzer-coverage.sh). The report is in the
 # report job's summary and its `fuzzer-coverage` artifact; see "Coverage of a
-# change" in .claude/rules/fuzzer-corpora.md. Inputs reach the shell through
-# environment variables, never interpolated into a script.
+# change" in .claude/rules/fuzzer-corpora.md. It also checks the corpora's
+# pins across the shards, as ci.yml's "Check Graph Fuzzer Corpus on Linux"
+# does, so the run says which pins a change moved before a pull request's
+# checks do. Inputs reach the shell through environment variables, never
+# interpolated into a script.
+#
+# verify.yml calls this workflow with `coverage` and the name of the bundle
+# its own build uploaded (`-f pins=true` there), so one run of one build
+# tests a commit and fuzzes it; the build job below is then skipped.
 #
 # A dispatched run caches under the ref it is dispatched on, which "Use
 # workflow from" limits to a branch or tag of this repository, and every job
@@ -62,8 +69,30 @@ on:
         description: With `coverage`, the commit or branch to list changes since, or empty for the merge base with main of the commit the run is dispatched on.
         required: false
         default: ''
+  # From verify.yml, in whose run the jobs below then run: they read the
+  # bundle that run's build uploaded and build nothing.
+  workflow_call:
+    inputs:
+      coverage:
+        description: Always true from a caller, which has the `coverage` jobs run.
+        type: boolean
+        required: true
+      base:
+        description: The commit or branch to list changes since, or empty for the merge base with main.
+        type: string
+        required: false
+        default: ''
+      bundle:
+        description: The artifact of the caller's run that holds the test bundle, a `<name>.tar.gz` of what "Build for Coverage on Linux" packages.
+        type: string
+        required: true
 
 permissions: {}
+
+env:
+  # The artifact that holds the test bundle, and the archive in it less its
+  # extension: this workflow's own, or the one a calling workflow names.
+  TEST_BUNDLE: ${{ inputs.bundle || 'graph-fuzzer-test-bundle' }}
 
 jobs:
   fuzz:
@@ -133,7 +162,7 @@ jobs:
   # never saves it. Keep the key and the arguments in step with verify.yml.
   coverage-build:
     name: Build for Coverage on Linux
-    if: ${{ inputs.coverage }}
+    if: ${{ inputs.coverage && !inputs.bundle }}
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 60
@@ -168,12 +197,13 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: swift package resolve
-      # From nothing the build has taken 10 to 17 minutes, which is also what
+      # From nothing the build has taken 23 to 26 minutes (runs 43772841709,
+      # 43774444496, 43774447047), which is also what
       # a change to SafeDICore costs; from a saved build of the same commit it
       # took 15 seconds (run 43762600658, 13.2 minutes in all). The limit is
       # twice the slowest.
       - name: Build
-        timeout-minutes: 35
+        timeout-minutes: 50
         run: |
           # shellcheck disable=SC2086 # The arguments are words to split.
           swift build $SWIFT_BUILD_ARGUMENTS --build-tests
@@ -192,6 +222,8 @@ jobs:
           name: graph-fuzzer-test-bundle
           path: graph-fuzzer-test-bundle.tar.gz
           retention-days: 1
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
 
   # Runs the unit suite once, beside the shards, for the report's split
   # between lines a unit test reaches and lines nothing reaches. Compile checks
@@ -202,7 +234,7 @@ jobs:
   coverage-unit-suite:
     name: Run the Unit Suite for Coverage on Linux
     needs: coverage-build
-    if: ${{ !cancelled() && needs.coverage-build.result == 'success' }}
+    if: ${{ !cancelled() && inputs.coverage && (needs.coverage-build.result == 'success' || inputs.bundle) }}
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 30
@@ -219,10 +251,10 @@ jobs:
       - name: Download Test Bundle
         uses: actions/download-artifact@v8
         with:
-          name: graph-fuzzer-test-bundle
+          name: ${{ env.TEST_BUNDLE }}
       - name: Unpack Test Bundle
         run: |
-          tar -xzf graph-fuzzer-test-bundle.tar.gz
+          tar -xzf "$TEST_BUNDLE.tar.gz"
           mkdir -p "$RUNNER_TEMP/unit-suite-profiles" unit-suite
       - name: Run Unit Suite
         id: suite
@@ -253,6 +285,8 @@ jobs:
           name: unit-suite-profile
           path: unit-suite/
           retention-days: 1
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
 
   # ci.yml's graph-fuzzer shards; keep the matrix in step with that job's, and
   # coverage-report's EXPECTED_SHARDS with this matrix.
@@ -260,10 +294,10 @@ jobs:
   coverage-fuzz:
     name: Fuzz for Coverage on Linux (${{ matrix.corpus }} seeds ${{ matrix.starting-seed }}+${{ matrix.iterations }})
     needs: coverage-build
-    if: ${{ !cancelled() && needs.coverage-build.result == 'success' }}
+    if: ${{ !cancelled() && inputs.coverage && (needs.coverage-build.result == 'success' || inputs.bundle) }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    timeout-minutes: 25
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:
@@ -294,18 +328,18 @@ jobs:
       - name: Download Test Bundle
         uses: actions/download-artifact@v8
         with:
-          name: graph-fuzzer-test-bundle
+          name: ${{ env.TEST_BUNDLE }}
       - name: Unpack Test Bundle
         run: |
-          tar -xzf graph-fuzzer-test-bundle.tar.gz
+          tar -xzf "$TEST_BUNDLE.tar.gz"
           mkdir -p graph-fuzzer "$RUNNER_TEMP/graph-fuzzer-profiles"
       # Only the fuzzer's own process writes to the profile folder: every
       # process it starts gets an LLVM_PROFILE_FILE of its own in the test's
-      # temporary directory. A shard's fuzzer has taken 4.4 to 7.7 minutes
-      # (run 43762600658); the step's limit is twice that and under the
+      # temporary directory. A shard's fuzzer has taken 4.4 to 10.1 minutes
+      # (runs 43762600658, 43774447047); the step's limit is twice that and under the
       # job's, so a shard that runs out of time still uploads what it has.
       - name: Run Graph Fuzzer
-        timeout-minutes: 16
+        timeout-minutes: 20
         env:
           SAFEDI_GRAPH_FUZZER_ITERATIONS: ${{ matrix.iterations }}
           SAFEDI_GRAPH_FUZZER_STARTING_SEED: ${{ matrix.starting-seed }}
@@ -333,13 +367,15 @@ jobs:
           name: graph-fuzzer-report-${{ matrix.corpus }}-${{ matrix.starting-seed }}
           path: graph-fuzzer/
           if-no-files-found: ignore
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
 
   # Advisory: it fails only when it cannot report. It names a shard that left
   # no profile or no report; EXPECTED_SHARDS names coverage-fuzz's matrix.
   coverage-report:
     name: Report Changed Lines No Fuzzer Graph Executed on Linux
     needs: [coverage-build, coverage-unit-suite, coverage-fuzz]
-    if: ${{ !cancelled() && needs.coverage-build.result == 'success' }}
+    if: ${{ !cancelled() && inputs.coverage && (needs.coverage-build.result == 'success' || inputs.bundle) }}
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 15
@@ -358,7 +394,7 @@ jobs:
       - name: Download Test Bundle
         uses: actions/download-artifact@v8
         with:
-          name: graph-fuzzer-test-bundle
+          name: ${{ env.TEST_BUNDLE }}
       - name: Download Unit Suite Profile
         uses: actions/download-artifact@v8
         with:
@@ -381,7 +417,7 @@ jobs:
           EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-250 generateDependencyTree-500 generateDependencyTree-750 generateMockPublic-0 generateMockPublic-500
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          tar -xzf graph-fuzzer-test-bundle.tar.gz
+          tar -xzf "$TEST_BUNDLE.tar.gz"
           if [ -z "$BASE" ]; then
             base=$(git merge-base origin/main HEAD)
           elif ! base=$(git rev-parse --verify --quiet "$BASE^{commit}" || git rev-parse --verify --quiet "origin/$BASE^{commit}"); then
@@ -399,3 +435,33 @@ jobs:
           path: ${{ runner.temp }}/fuzzer-coverage/
           if-no-files-found: ignore
           retention-days: 3
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
+
+  # ci.yml's "Check Graph Fuzzer Corpus on Linux", over the coverage shards'
+  # reports: it fails when a corpus's shards do not add up to its pins and
+  # names each count beside its pin, so a change's new pins can be read here
+  # before its pull request's checks run. It only reads reports with Python,
+  # so it needs no container.
+  coverage-corpus:
+    name: Check Graph Fuzzer Corpus for Coverage on Linux
+    needs: [coverage-build, coverage-fuzz]
+    if: ${{ !cancelled() && inputs.coverage && (needs.coverage-build.result == 'success' || inputs.bundle) }}
+    runs-on: ubuntu-latest
+    # The job took 8 and 14 seconds (runs 43774444496, 43774447047); the
+    # limit only bounds a stuck download.
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Download Shard Reports
+        uses: actions/download-artifact@v8
+        with:
+          pattern: graph-fuzzer-report-*
+          path: reports
+      - name: Combine Shard Reports
+        run: python3 .github/scripts/combine-graph-fuzzer-reports.py "$RUNNER_TEMP/graph-fuzzer-corpus.md" reports/*/report.txt

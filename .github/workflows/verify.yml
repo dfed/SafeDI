@@ -36,7 +36,9 @@ name: Verify
 # saves, and "Check Every Verify Test Ran Once" fails unless all seven
 # reported and their test counts sum to the bundle's. Such a run took 9.0
 # minutes from start to end with every compile check compiling (run
-# 43766692766). A run with a filter, and every `fast` run, tests in the job
+# 43766692766). With `pins`, graph-fuzzer.yml's `coverage` jobs fuzz every
+# corpus from the same bundle and check the pins (job "Fuzz", below), and the
+# test jobs can start later than a plain run's. A run with a filter, and every `fast` run, tests in the job
 # that builds, since handing the bundle to another job costs about two
 # minutes.
 #
@@ -65,6 +67,15 @@ on:
           - fast
           - warm
         default: release
+      pins:
+        description: With `release` and an empty filter, also fuzz every corpus from the same build, check the corpora's pins and report the changed lines no corpus graph executed (graph-fuzzer.yml's `coverage` jobs).
+        required: false
+        type: boolean
+        default: false
+      base:
+        description: With `pins`, the commit or branch the coverage report lists changes since, or empty for the merge base with main.
+        required: false
+        default: ''
   # Only to warm the two modes' build caches, which a dispatched run on any
   # branch can restore because main saved them. Markdown cannot change what
   # they build.
@@ -107,10 +118,17 @@ jobs:
         env:
           FILTER: ${{ inputs.filter }}
           MODE: ${{ inputs.mode }}
+          PINS: ${{ inputs.pins }}
         run: |
           if [ "$MODE" = release ] && [ -z "$FILTER" ]; then
             echo "split=true" >> "$GITHUB_OUTPUT"
           else
+            # The fuzzer's jobs read the bundle only a split run uploads, so
+            # a run that cannot fuzz fails rather than pass without pins.
+            if [ "$PINS" = true ]; then
+              echo "::error::pins needs mode=release and an empty filter."
+              exit 1
+            fi
             echo "split=false" >> "$GITHUB_OUTPUT"
           fi
       # Before anything reads a source's modification time. The checkout is
@@ -166,11 +184,12 @@ jobs:
           echo "identity=$identity" >> "$GITHUB_OUTPUT"
       # From a stamped build of the same commit the step took about 10
       # seconds (run 43762598351), after a change to one test file about 2
-      # minutes (43763818802), and from nothing 10 to 17 minutes, 12 in
-      # 43761135608. The limit is twice the slowest cold build.
+      # minutes (43763818802), and from nothing 23 to 26 minutes (runs
+      # 43772841709, 43774444496, 43774447047). The limit is twice the
+      # slowest cold build.
       - name: Build Tests
         if: ${{ steps.split.outputs.split == 'true' }}
-        timeout-minutes: 35
+        timeout-minutes: 50
         run: |
           # shellcheck disable=SC2086 # The arguments are words to split.
           swift build --build-tests $SWIFT_TEST_ARGUMENTS
@@ -361,6 +380,28 @@ jobs:
           # A re-run of the job replaces what an earlier attempt uploaded.
           overwrite: true
 
+  # With `pins`, graph-fuzzer.yml's `coverage` jobs, in this run and from the
+  # bundle "Verify on Linux" built: the corpora's shards beside the test
+  # jobs, then the pins check and the coverage report. A separate dispatch of
+  # that workflow builds the same commit again, 23 to 26 minutes after a
+  # change to SafeDICore, with these arguments and from this cache. They are
+  # 13 jobs (the unit suite, ten shards, the pins check and the report)
+  # beside the seven test jobs, so when each starts depends on free runners:
+  # the one such run took 46.9 minutes from a cold build (43774444496), 25.5
+  # of them the build and about 10 the shards waiting for runners while
+  # another run held some.
+  fuzz:
+    name: Fuzz
+    needs: verify
+    if: ${{ inputs.pins && needs.verify.outputs.split == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/graph-fuzzer.yml
+    with:
+      coverage: true
+      base: ${{ inputs.base }}
+      bundle: verify-test-bundle
+
   # Fails unless all seven groups reported and their test counts sum to the
   # bundle's, which any selection that drops or repeats tests breaks. It only
   # reads counts, so it needs no container.
@@ -459,16 +500,16 @@ jobs:
   # least recently read once a repository holds 10 GB, which are the older
   # commits' builds. It runs on Linux beside CI and slows none of CI's jobs,
   # reads the repository and nothing else, and saving a cache takes no token
-  # permission. The step took 12 minutes from nothing (run 43761135608),
+  # permission. The step took 23.9 minutes from nothing (run 43772841709),
   # and the job above about 10 seconds from the same commit's build and 2
-  # minutes after a change to one test file; its limit is twice the 17
-  # minutes of the slowest full release build.
+  # minutes after a change to one test file; its limit is twice the 25.5
+  # minutes of the slowest full release build (43774444496).
   warm-release-cache:
     name: Warm the Release Verify Build Cache
     if: ${{ github.event_name == 'push' || inputs.mode == 'warm' }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    timeout-minutes: 45
+    timeout-minutes: 60
     # A run that skips this job gets a group of its own, so that a
     # dispatched `release` or `fast` run never cancels a build being saved.
     concurrency:
@@ -497,7 +538,7 @@ jobs:
         with:
           command: swift package resolve
       - name: Build Tests
-        timeout-minutes: 35
+        timeout-minutes: 50
         run: |
           # shellcheck disable=SC2086 # The arguments are words to split.
           swift build --build-tests $RELEASE_SWIFT_TEST_ARGUMENTS

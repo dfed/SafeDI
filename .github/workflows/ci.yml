@@ -1276,7 +1276,7 @@ jobs:
       # corpus runs in four and the public mock corpus in two, because their graphs cost the most and a shard's
       # time is what a run waits for after its build: in run 43751741235 the base shards fuzzed for 5.3 to 7.7
       # minutes, the seam corpus's two shards of 500 seeds for 14.0 and 9.9, and the public mock corpus's one of
-      # 1000 for 16.5; split as below, the ten shards fuzzed for 4.4 to 7.7 minutes (run 43762600658). Each
+      # 1000 for 16.5; split as below, the ten shards fuzzed for 4.4 to 10.1 minutes (runs 43762600658, 43774447047). Each
       # report's `cpu` line says what each phase of a shard cost, which the combine job adds up per corpus.
       # No required check is a shard's: "Check Graph Fuzzer Corpus on Linux" is, so a change to this matrix needs no
       # stand-in for a Markdown-only change. A change to it changes graph-fuzzer-coverage's EXPECTED_SHARDS too.
@@ -1346,9 +1346,9 @@ jobs:
       # (TestTemporaryDirectory.environment). The step's limit is under the
       # job's, so a shard that runs out of time still summarizes and uploads
       # its report; the job's limit would cancel those steps too. A shard's
-      # fuzzer has taken 4.4 to 7.7 minutes (run 43762600658).
+      # fuzzer has taken 4.4 to 10.1 minutes (runs 43762600658, 43774447047).
       - name: Run Graph Fuzzer
-        timeout-minutes: 16
+        timeout-minutes: 20
         env:
           SAFEDI_GRAPH_FUZZER_ITERATIONS: ${{ matrix.iterations }}
           SAFEDI_GRAPH_FUZZER_STARTING_SEED: ${{ matrix.starting-seed }}
