@@ -531,6 +531,239 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsUsersTypeNamedBuilt_whenPlaceForwardsIt() async throws {
+		// `Leaf`'s place `apiBuilder` forwards `Feature`'s own type `Built`, which each builder struct's member and no-scope
+		// initializer spell beside the struct's generic parameter, named `__safeDI_Built` so that `Built` names the person's
+		// type inside the struct.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(featureTypes: [Self.built], leafDeclarations: [#"@Instantiated(fulfilledByType: "LiveApi") public let apiBuilder: ErasedInstantiator<Built, any Api>"#], liveApiDeclarations: ["@Forwarded public let built: Built"]), integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		extension Home {
+		    nonisolated public enum SafeDIScope_LiveApi_Api {
+		        nonisolated public struct detailBuilder_Values {}
+
+		        nonisolated public enum Detail_Scope {
+		            nonisolated public struct leafBuilder_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let leafBuilder: (leafBuilder_Values) -> SafeDIScope_LiveApi_Api.Leaf_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(leafBuilder: @escaping (leafBuilder_Values) -> SafeDIScope_LiveApi_Api.Leaf_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.leafBuilder = leafBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Built, __safeDI_Built>.Builder) {
+		                    self.leafBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        nonisolated public enum Leaf_Scope {
+		            nonisolated public struct apiBuilder_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let apiBuilder: (apiBuilder_Values) -> ErasedInstantiator<Built, __safeDI_Built>.Builder
+
+		                public init(apiBuilder: @escaping (apiBuilder_Values) -> ErasedInstantiator<Built, __safeDI_Built>.Builder) {
+		                    self.apiBuilder = apiBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Built, __safeDI_Built>.Builder) {
+		                    self.apiBuilder = { _ in __safeDI_builder }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let detailBuilder: (detailBuilder_Values) -> SafeDIScope_LiveApi_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(detailBuilder: @escaping (detailBuilder_Values) -> SafeDIScope_LiveApi_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.detailBuilder = detailBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Built, __safeDI_Built>.Builder) {
+		                self.detailBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_liveApi_ApiBuilder: SafeDIScope_LiveApi_Api.__safeDI_Builder<any Api>) {
+		        let __safeDI_liveApi_ApiBuilder_detailBuilder = __safeDI_liveApi_ApiBuilder.detailBuilder(SafeDIScope_LiveApi_Api.detailBuilder_Values())
+		        func __safeDI_detailBuilder() -> Detail {
+		            let __safeDI_liveApi_ApiBuilder_leafBuilder = __safeDI_liveApi_ApiBuilder_detailBuilder.leafBuilder(SafeDIScope_LiveApi_Api.Detail_Scope.leafBuilder_Values())
+		            func __safeDI_leafBuilder() -> Leaf {
+		                let apiBuilder = ErasedInstantiator<Built, any Api>(__safeDI_liveApi_ApiBuilder_leafBuilder.apiBuilder(SafeDIScope_LiveApi_Api.Leaf_Scope.apiBuilder_Values()))
+		                return Leaf(apiBuilder: apiBuilder)
+		            }
+		            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
+		            return Detail(leafBuilder: leafBuilder)
+		        }
+		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+		        self.init(detailBuilder: detailBuilder)
+		    }
+		}
+
+		extension Home {
+		    public enum __safeDI_Home_94688D453810825C {}
+		}
+		""")
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_home() -> Home {
+		            _ = Home.__safeDI_Home_94688D453810825C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope_apiBuilder() -> ErasedInstantiator<Built, any Api>.Builder {
+		                func __safeDI_apiBuilder(built: Built) -> LiveApi {
+		                    LiveApi(built: built)
+		                }
+		                return { forwarded in __safeDI_apiBuilder(built: forwarded) }
+		            }
+		            func __safeDI_liveApi_ApiBuilder_Home() -> Home.SafeDIScope_LiveApi_Api.__safeDI_Builder<any Api> {
+		                .init(detailBuilder: { _ in __safeDI_liveApi_ApiBuilder_Home_Detail_Scope() })
+		            }
+		            func __safeDI_liveApi_ApiBuilder_Home_Detail_Scope() -> Home.SafeDIScope_LiveApi_Api.Detail_Scope.__safeDI_Builder<any Api> {
+		                .init(leafBuilder: { _ in __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope() })
+		            }
+		            func __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope() -> Home.SafeDIScope_LiveApi_Api.Leaf_Scope.__safeDI_Builder<any Api> {
+		                .init(apiBuilder: { _ in __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope_apiBuilder() })
+		            }
+		            return Home(__safeDI_liveApi_ApiBuilder: __safeDI_liveApi_ApiBuilder_Home())
+		        }
+		        let home: Home = __safeDI_home()
+		        self.init(home: home)
+		    }
+		}
+		""")
+		try Self.expectCompiles(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsUsersTypeNamedBuilt_whenPlaceForwardsItInTuple() async throws {
+		// As `generate_spellsUsersTypeNamedBuilt_whenPlaceForwardsIt`, with `Built` an element of the tuple `apiBuilder`
+		// forwards.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(featureTypes: [Self.built], leafDeclarations: [#"@Instantiated(fulfilledByType: "LiveApi") public let apiBuilder: ErasedInstantiator<(built: Built, id: Int), any Api>"#], liveApiDeclarations: ["@Forwarded public let built: Built", "@Forwarded public let id: Int"]), integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
+		extension Home {
+		    nonisolated public enum SafeDIScope_LiveApi_Api {
+		        nonisolated public struct detailBuilder_Values {}
+
+		        nonisolated public enum Detail_Scope {
+		            nonisolated public struct leafBuilder_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let leafBuilder: (leafBuilder_Values) -> SafeDIScope_LiveApi_Api.Leaf_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(leafBuilder: @escaping (leafBuilder_Values) -> SafeDIScope_LiveApi_Api.Leaf_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.leafBuilder = leafBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder) {
+		                    self.leafBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        nonisolated public enum Leaf_Scope {
+		            nonisolated public struct apiBuilder_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let apiBuilder: (apiBuilder_Values) -> ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder
+
+		                public init(apiBuilder: @escaping (apiBuilder_Values) -> ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder) {
+		                    self.apiBuilder = apiBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder) {
+		                    self.apiBuilder = { _ in __safeDI_builder }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let detailBuilder: (detailBuilder_Values) -> SafeDIScope_LiveApi_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(detailBuilder: @escaping (detailBuilder_Values) -> SafeDIScope_LiveApi_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.detailBuilder = detailBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder) {
+		                self.detailBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_liveApi_ApiBuilder: SafeDIScope_LiveApi_Api.__safeDI_Builder<any Api>) {
+		        let __safeDI_liveApi_ApiBuilder_detailBuilder = __safeDI_liveApi_ApiBuilder.detailBuilder(SafeDIScope_LiveApi_Api.detailBuilder_Values())
+		        func __safeDI_detailBuilder() -> Detail {
+		            let __safeDI_liveApi_ApiBuilder_leafBuilder = __safeDI_liveApi_ApiBuilder_detailBuilder.leafBuilder(SafeDIScope_LiveApi_Api.Detail_Scope.leafBuilder_Values())
+		            func __safeDI_leafBuilder() -> Leaf {
+		                let apiBuilder = ErasedInstantiator<(built: Built, id: Int), any Api>(__safeDI_liveApi_ApiBuilder_leafBuilder.apiBuilder(SafeDIScope_LiveApi_Api.Leaf_Scope.apiBuilder_Values()))
+		                return Leaf(apiBuilder: apiBuilder)
+		            }
+		            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
+		            return Detail(leafBuilder: leafBuilder)
+		        }
+		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+		        self.init(detailBuilder: detailBuilder)
+		    }
+		}
+
+		extension Home {
+		    public enum __safeDI_Home_3C85E3CBE973D6EF {}
+		}
+		""")
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_home() -> Home {
+		            _ = Home.__safeDI_Home_3C85E3CBE973D6EF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope_apiBuilder() -> ErasedInstantiator<(built: Built, id: Int), any Api>.Builder {
+		                func __safeDI_apiBuilder(built: Built, id: Int) -> LiveApi {
+		                    LiveApi(built: built, id: id)
+		                }
+		                return { forwarded in __safeDI_apiBuilder(built: forwarded.built, id: forwarded.id) }
+		            }
+		            func __safeDI_liveApi_ApiBuilder_Home() -> Home.SafeDIScope_LiveApi_Api.__safeDI_Builder<any Api> {
+		                .init(detailBuilder: { _ in __safeDI_liveApi_ApiBuilder_Home_Detail_Scope() })
+		            }
+		            func __safeDI_liveApi_ApiBuilder_Home_Detail_Scope() -> Home.SafeDIScope_LiveApi_Api.Detail_Scope.__safeDI_Builder<any Api> {
+		                .init(leafBuilder: { _ in __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope() })
+		            }
+		            func __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope() -> Home.SafeDIScope_LiveApi_Api.Leaf_Scope.__safeDI_Builder<any Api> {
+		                .init(apiBuilder: { _ in __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope_apiBuilder() })
+		            }
+		            return Home(__safeDI_liveApi_ApiBuilder: __safeDI_liveApi_ApiBuilder_Home())
+		        }
+		        let home: Home = __safeDI_home()
+		        self.init(home: home)
+		    }
+		}
+		""")
+		try Self.expectCompiles(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsDuplicateName_whenCallingModuleDeclaresInstantiableNamedLikeSeam() async {
 		// `App` declares an @Instantiable `Home` beside `Feature`'s seam `Home`, which it can name too: the duplicate-name
 		// error, whose remedy is to rename one.
@@ -556,18 +789,23 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 
 	private static let detailBuilder = "@Instantiated public let detailBuilder: Instantiator<Detail>"
 
-	/// `Feature`, declaring `Home` with `homeDeclarations`, `Detail` with `detailDeclarations`, `Leaf`, `Api` and
-	/// `featureTypes`, and `App`, declaring `LiveApi` with `liveApiDeclarations`, `Root` and `appTypes`.
+	/// `Built`, a type of `Feature`'s named like the builder struct's generic parameter without its prefix.
+	private static let built = "public final class Built {\n    public init() {}\n}"
+
+	/// `Feature`, declaring `Home` with `homeDeclarations`, `Detail` with `detailDeclarations`, `Leaf` with
+	/// `leafDeclarations`, `Api` and `featureTypes`, and `App`, declaring `LiveApi` with `liveApiDeclarations`, `Root` and
+	/// `appTypes`.
 	private static func modules(
 		homeDeclarations: [String] = [detailBuilder],
 		featureTypes: [String] = [],
 		detailDeclarations: [String] = ["@Instantiated public let leafBuilder: Instantiator<Leaf>"],
+		leafDeclarations: [String] = ["@Instantiated public let api: any Api"],
 		liveApiDeclarations: [String] = [],
 		appTypes: [String] = [],
 	) -> [ModuleFixture] {
 		let feature = [
 			"public protocol Api: AnyObject {}",
-			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: leafDeclarations),
 			seamFixtureType(named: "Detail", isFinalClass: true, declarations: detailDeclarations),
 			seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: homeDeclarations),
 		] + featureTypes
