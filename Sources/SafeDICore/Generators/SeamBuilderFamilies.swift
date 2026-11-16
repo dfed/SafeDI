@@ -159,7 +159,7 @@ extension DependencyTreeGenerator {
 		// The places and calls of a seam's or a public mock's tree, by hole type, whose enums are nested by type
 		// (`scopeEnumsByType`), a place inside a fill included.
 		var reachedByHoleType = [SeamSignature.HoleType: [ReachedPlace]]()
-		for reached in placesAndCalls(in: generator) {
+		for reached in placesAndCalls(in: generator, keysTheCalledSeam: !scopeTypeNames.areQualified) {
 			switch reached {
 			case let .place(sitePath, steps):
 				guard let hole = holesBySite[SeamSignature.Hole.Site(seamType: seamType, path: sitePath)] else { continue }
@@ -323,6 +323,15 @@ extension DependencyTreeGenerator {
 				}
 				let enumType: TypeDescription = scopeTypeNames.areQualified ? .nested(name: typeName, parentType: seamType, generics: []) : .simple(name: typeName, generics: [])
 				let takesBuilderStruct = holeTypesDeclaringBuilderStructs.contains(holeType)
+				// The type of the builder a person writes is the one every place the builder reaches takes, its own and those it
+				// hands up from the seams it calls, as the struct's no-scope initializer is handed it.
+				var enumsReachedByKey = calledSeamsEnums
+				for reachedEnum in [rootEnum] + nestedByTypeEnums {
+					enumsReachedByKey[reachedEnum.key] = reachedEnum
+				}
+				let placesOfReadableType = takesBuilderStruct
+					? SeamSignature.ScopeEnum.sitesReached(from: key, in: enumsReachedByKey).sorted { $0.sortKey < $1.sortKey }.compactMap { holesBySite[$0] }
+					: reachedPlaces
 				let parameterType = takesBuilderStruct
 					? .nested(name: ReservedName.builderStructTypeName, parentType: enumType, generics: [builtType])
 					: Self.builderParameterType(takingEnum: enumType, returning: builtType, isSendable: isSendable)
@@ -332,7 +341,7 @@ extension DependencyTreeGenerator {
 					internalName: internalName,
 					parameterType: parameterType,
 					parameterTypeWithoutAny: parameterType.withoutAny,
-					readableParameterType: takesBuilderStruct ? Self.readableBuilderType(of: Self.builderForm(ofPlaces: reachedPlaces), returning: builtType, isSendable: isSendable) : parameterType,
+					readableParameterType: takesBuilderStruct ? Self.readableBuilderType(of: Self.builderForm(ofPlaces: placesOfReadableType), returning: builtType, isSendable: isSendable) : parameterType,
 					takesBuilderStruct: takesBuilderStruct,
 					tierAccess: narrowest.level,
 					accessCause: narrowest.cause,
@@ -424,6 +433,7 @@ extension DependencyTreeGenerator {
 				rootKey: callRoute.rootKey,
 				route: namedRoute(callRoute.route, ofHoleType: callRoute.rootKey.holeType, isSendable: callRoute.rootKey.isSendable),
 				caseName: callRoute.caseName,
+				memberValuesType: holeTypesDeclaringBuilderStructs.contains(callRoute.rootKey.holeType) ? callRoute.memberValuesType : nil,
 			)
 		}
 
@@ -549,10 +559,8 @@ extension DependencyTreeGenerator {
 		enums.allSatisfy { scopeEnum in
 			scopeEnum.cases.allSatisfy { enumCase in
 				switch enumCase.kind {
-				case .place, .nested:
+				case .place, .nested, .inner, .fill:
 					true
-				case .inner, .fill:
-					false
 				}
 			}
 		}
@@ -823,7 +831,9 @@ extension DependencyTreeGenerator {
 	/// Every place and every call that passes a builder up in the tree `generator` roots, in the order the generated code
 	/// reaches them: a seam call's fills are declared before the call. A fill's `@Sendable` function counts as one on the
 	/// call's step, whose case for the builder filled leads to what the fill builds.
-	private static func placesAndCalls(in generator: ScopeGenerator) -> [PlaceOrCall] {
+	/// - Parameter keysTheCalledSeam: Whether a fill's case carries the called seam's root enum, as a seam's builder struct
+	///   does (`filledRootKey(of:in:keysTheCalledSeam:)`), rather than that of the seam whose tree holds the place.
+	private static func placesAndCalls(in generator: ScopeGenerator, keysTheCalledSeam: Bool) -> [PlaceOrCall] {
 		struct Frame {
 			let generator: ScopeGenerator
 			let orderedChildren: [ScopeGenerator.OrderedChild]
@@ -868,7 +878,7 @@ extension DependencyTreeGenerator {
 				if child.generator.fillHole != nil {
 					// A fill of the call this frame is: the call's step becomes its case for the builder filled, on which the fill's
 					// `@Sendable` function counts. The filled place's path in the inner seam's tree has no case of this seam's.
-					guard let callStep = frame.steps.last, let innerKey = filledRootKey(of: child.generator) else { continue }
+					guard let callStep = frame.steps.last, let innerKey = filledRootKey(of: child.generator, in: frame.generator, keysTheCalledSeam: keysTheCalledSeam) else { continue }
 					// A place inside a fill that builds its type in a `@Sendable` builder function of the type's own carries no inner
 					// scope, a value bound outside that function.
 					let fulfillerBuildsInSendableFunction = child.generator.children.first?.buildsInSendableFunction ?? false
