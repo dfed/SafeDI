@@ -25,12 +25,14 @@ name: Verify
 # because the parser and macros come from a debug build of swift-syntax, and
 # they run in the job that builds, as one process. So it pays off for a narrow
 # filter, and a `fast` run needs one: the whole suite took 37 minutes in
-# `fast` (run 43793266801, all of them the tests) against 20 in `release`,
-# which splits it, so a `fast` run with an empty filter fails at once and says
-# so. For a whole test target that compiles generated code the two modes take
-# about as long, and `release` builds as CI does. Each mode keeps its passed
-# compile checks under its own identity, since the identity hashes the test
-# arguments.
+# `fast`, 29 of them the tests (run 43793266801; 31 and 23 in run
+# 43792894511), against about 20 from start to end in `release` (runs
+# 43795430677 and 43793555016, whose build job took 11 and 13 minutes and
+# whose seven test jobs 6 and 8), which splits it, so a `fast` run with an
+# empty filter fails at once and says so. For a whole test target that
+# compiles generated code the two modes take about as long, and `release`
+# builds as CI does. Each mode keeps its passed compile checks under its own
+# identity, since the identity hashes the test arguments.
 #
 # A `release` run of the whole suite (an empty filter) builds once and then
 # runs the tests in seven jobs at the same time, four for the largest test
@@ -39,12 +41,12 @@ name: Verify
 # Verify" joins the checks the seven passed into the one list an unsplit run
 # saves, and "Check Every Verify Test Ran Once" fails unless all seven
 # reported and their test counts sum to the bundle's. Such a run took 9.0
-# minutes from start to end with every compile check compiling (run
-# 43766692766). With `pins`, graph-fuzzer.yml's `coverage` jobs fuzz every
-# corpus from the same bundle and check the pins (job "Fuzz", below), and the
-# test jobs can start later than a plain run's. A run with a filter tests in the job
-# that builds, since handing the bundle to another job costs about two
-# minutes.
+# minutes from start to end where the build job took under 3 (run
+# 43766692766), with every compile check compiling. With `pins`,
+# graph-fuzzer.yml's `coverage` jobs fuzz every corpus from the same bundle
+# and check the pins (job "Fuzz", below), and the test jobs can start later
+# than a plain run's. A run with a filter tests in the job that builds, since
+# handing the bundle to another job costs about two minutes.
 #
 # A dispatched run checks out and caches under the ref it is dispatched on, so
 # its caches are scoped to that branch and never become main's. The one thing
@@ -63,7 +65,7 @@ on:
         required: false
         default: ''
       mode:
-        description: '`release` builds as "Build Tests on Linux" does; `fast` builds in debug without coverage; `warm` saves this branch a release build for its later `release` runs and tests nothing.'
+        description: '`release` builds as "Build Tests on Linux" does; `fast` builds in debug without coverage and needs a filter; `warm` saves this branch a release build for its later `release` runs and tests nothing.'
         required: false
         type: choice
         options:
@@ -128,7 +130,8 @@ jobs:
             echo "split=true" >> "$GITHUB_OUTPUT"
           elif [ "$MODE" = fast ] && [ -z "$FILTER" ]; then
             # The whole suite in one debug process took 37 minutes (run
-            # 43793266801); release mode's seven jobs take about 20.
+            # 43793266801); a release run takes about 20 from start to end
+            # (run 43795430677).
             echo "::error::mode=fast needs a filter. For the whole suite dispatch mode=release, which runs the tests in seven jobs and ends sooner."
             exit 1
           else
