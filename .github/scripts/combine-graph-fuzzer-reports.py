@@ -94,6 +94,16 @@ feature_counts_by_corpus = {}
 feature_pins_by_corpus = {}
 output_counts_by_corpus = {}
 output_minimums_by_corpus = {}
+# The output features of a public mock that takes a builder taking nothing, each the only count of its shape in the public
+# mock corpus: at least `NEW_BUILDER_OUTPUT_FLOOR` accepted graphs show each, whatever its share.
+NEW_BUILDER_OUTPUT_FEATURES = [
+    "generatedOnlyMockFunction",
+    "consumerPassesLevelFunctionsStruct",
+    "consumerConvertsClosureOverEnum",
+    "consumerConvertsOverReopenedLevel",
+    "holeLoopBuilderOfBuilderStruct",
+]
+NEW_BUILDER_OUTPUT_FLOOR = 10
 error_counts_by_corpus = {}
 error_pins_by_corpus = {}
 draw_counts_by_corpus = {}
@@ -440,6 +450,12 @@ if not problems:
             problems.append(f"The shards of the {corpus} corpus disagree about its output features' minimum shares: {sorted(output_minimums)}.")
         elif output_minimums:
             output_counts = output_counts_by_corpus.get(corpus, {})
+            for feature in NEW_BUILDER_OUTPUT_FEATURES:
+                if output_counts.get(feature, 0) < NEW_BUILDER_OUTPUT_FLOOR:
+                    problems.append(
+                        f"The generated code of {output_counts.get(feature, 0)} accepted graphs of the {corpus} corpus shows {feature}, "
+                        f"below its floor of {NEW_BUILDER_OUTPUT_FLOOR}."
+                    )
             for item in filter(None, next(iter(output_minimums)).split(",")):
                 feature, minimum = item.split("=")
                 if output_counts.get(feature, 0) * 100 < int(minimum) * accepted_count:

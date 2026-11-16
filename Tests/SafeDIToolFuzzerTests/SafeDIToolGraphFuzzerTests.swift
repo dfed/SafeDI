@@ -778,7 +778,8 @@ struct SafeDIToolGraphFuzzerTests {
 	func retentionCounts_holdAtLeastTenGraphs_whereTheRetentionOracleGates() {
 		// The retention check gates generator changes only while it judges at least ten graphs of each kind it gates on: in
 		// the seam corpus, graphs with a hole, graphs of its own draw, and graphs whose hand-written builder it judged; in
-		// the public mock corpus, graphs with a hole and graphs of its own draw. The corpus runs pin each count exactly.
+		// the public mock corpus, graphs with a hole, graphs of its own draw, and graphs whose hand-written call of a mock that
+		// takes a builder taking nothing it judged. The corpus runs pin each count exactly.
 		#expect(Self.seamCorpusRetentionCounts.judged >= Self.gatingDrawJudgedGraphFloor)
 		#expect(Self.seamCorpusRetentionCounts.judgedDrawingRetentionShape >= Self.gatingDrawJudgedGraphFloor)
 		#expect(Self.seamCorpusRetentionCounts.judgedThroughHandWrittenBuilder >= Self.gatingDrawJudgedGraphFloor)
@@ -787,15 +788,18 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Self.seamCorpusRetentionCounts.judgedHoldingForwardingWrapper["ErasedInstantiator", default: 0] >= Self.gatingDrawJudgedGraphFloor)
 		#expect(Self.publicMockCorpusRetentionCounts.judged >= Self.gatingDrawJudgedGraphFloor)
 		#expect(Self.publicMockCorpusRetentionCounts.judgedDrawingRetentionShape >= Self.gatingDrawJudgedGraphFloor)
+		#expect(Self.publicMockCorpusRetentionCounts.judgedThroughHandWrittenBuilder >= Self.gatingDrawJudgedGraphFloor)
 	}
 
 	@Test
 	func levelFunctionCaptureCounts_holdAtLeastTenGraphs_whereTheCheckJudges() {
 		// The level function capture check is the first signal of a kept level's values only while it judges at least ten
-		// graphs of the seam corpus with a level function, and ten with a member closure that names its parameter. The
-		// corpus runs pin each count exactly.
+		// graphs of the seam corpus with a level function, and ten with a member closure that names its parameter, and ten
+		// graphs of the public mock corpus with a level function, which a generated call writes where it fills every place of
+		// a builder that takes nothing. The corpus runs pin each count exactly.
 		#expect(Self.seamCorpusLevelFunctionCaptureCounts.judged >= Self.gatingDrawJudgedGraphFloor)
 		#expect(Self.seamCorpusLevelFunctionCaptureCounts.judgedWithNamed >= Self.gatingDrawJudgedGraphFloor)
+		#expect(Self.publicMockCorpusLevelFunctionCaptureCounts.judged >= Self.gatingDrawJudgedGraphFloor)
 	}
 
 	@Test
@@ -6060,6 +6064,10 @@ struct SafeDIToolGraphFuzzerTests {
 	/// derived on CI.
 	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 0, judgedWithNamed: 0, named: 0, conversions: 0, fills: 0)
 
+	/// What the level function capture check judges over the public mock corpus (`Corpus.levelFunctionCaptureCounts`).
+	/// Pins: derived on CI.
+	static let publicMockCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 0, judgedWithNamed: 0, named: 0, conversions: 0, fills: 0)
+
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 553, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 
@@ -7300,6 +7308,7 @@ struct SafeDIToolGraphFuzzerTests {
 		acceptedPublicMockDrawFeatureCounts: publicMockCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: publicMockCorpusReadTwinGraphCount,
 		retentionCounts: publicMockCorpusRetentionCounts,
+		levelFunctionCaptureCounts: publicMockCorpusLevelFunctionCaptureCounts,
 		gatingPublicMockDrawFeatures: Set(GraphFuzzerPublicMockDrawFeature.allCases.filter(\.isCountedWhenAccepted)),
 		builderSurfaceFlooredKinds: [
 			"base-plain",
@@ -7353,6 +7362,10 @@ struct SafeDIToolGraphFuzzerTests {
 		.configurationStruct: 34,
 		.constructionFunction: 84,
 		.consumerCall: 82,
+		// pins: derive on CI
+		.consumerConvertsClosureOverEnum: 0,
+		// pins: derive on CI
+		.consumerConvertsOverReopenedLevel: 0,
 		.consumerErasedCall: 19,
 		.consumerErasedInline: 3,
 		.consumerFillReentersPublicMock: 2,
@@ -7360,12 +7373,18 @@ struct SafeDIToolGraphFuzzerTests {
 		.consumerInline: 37,
 		.consumerPassesHoleBuilderUp: 14,
 		.consumerPassesInstance: 46,
+		// pins: derive on CI
+		.consumerPassesLevelFunctionsStruct: 0,
 		.consumerSendableFactory: 17,
 		.defaultRewritten: 88,
 		.forwardedProvider: 3,
+		// pins: derive on CI
+		.generatedOnlyMockFunction: 0,
 		.holeBuilder: 39,
 		// pins: derive on CI
 		.holeLoopBuilder: 0,
+		// pins: derive on CI
+		.holeLoopBuilderOfBuilderStruct: 0,
 		.isolatedConstruction: 3,
 		.moduleConfiguration: 84,
 		.publicTier: 100,
