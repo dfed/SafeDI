@@ -1362,15 +1362,15 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		)
 	}
 
-	// MARK: Each tier names its builders apart from its own parameters and wider ones only
+	// MARK: Each tier labels its builders apart from its own parameters and wider ones only
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsPublicTiersBuilderLabelAndEnum_whenPackageParameterTakesBuildersLabel() async throws {
 		// `Badge`, a `package` type in `Host`'s tree, receives `serviceBuilder` only if available, so only `Host`'s `package`
-		// tier takes it. The `public` tier names its builder `serviceBuilder` over `SafeDIScope_Service`, as it would without
-		// `Badge`; the `package` tier names the same builder apart from its parameter. `Mid`, in `Host`'s package, calls the
-		// `package` tier, and `App`, in another package, the `public` one.
+		// tier takes it. The `public` tier labels its builder `serviceBuilder` over `SafeDIScope_Service`, as it would without
+		// `Badge`; the `package` tier appends `_` to the same builder's label, `serviceBuilder_`, over the same enum. `Mid`, in
+		// `Host`'s package, calls the `package` tier, and `App`, in another package, the `public` one.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.hostWithBadgeReceivingServiceBuilder, swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration),
@@ -1405,17 +1405,17 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_serviceBuilder __safeDI_serviceBuilder_: @escaping (SafeDIScope_Service) -> any Service) {
-		        self.init(__safeDI_serviceBuilder: nil, __safeDI_service_ServiceBuilder: __safeDI_serviceBuilder_)
+		        self.init(__safeDI_serviceBuilder: nil, __safeDI_serviceBuilder_: __safeDI_serviceBuilder_)
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    package init(serviceBuilder: Thing?, service_ServiceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-		        self.init(__safeDI_serviceBuilder: serviceBuilder, __safeDI_service_ServiceBuilder: service_ServiceBuilder)
+		    package init(serviceBuilder: Thing?, serviceBuilder_: @escaping (SafeDIScope_Service) -> any Service) {
+		        self.init(__safeDI_serviceBuilder: serviceBuilder, __safeDI_serviceBuilder_: serviceBuilder_)
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    package init(__safeDI_serviceBuilder: @autoclosure @escaping () -> Thing?, __safeDI_service_ServiceBuilder __safeDI_serviceBuilder_: @escaping (SafeDIScope_Service) -> any Service) {
+		    package init(__safeDI_serviceBuilder: @autoclosure @escaping () -> Thing?, __safeDI_serviceBuilder_: @escaping (SafeDIScope_Service) -> any Service) {
 		        let serviceBuilder = LazilyInstantiated<Thing?>(__safeDI_serviceBuilder)
 		        let badge = Badge(serviceBuilder: serviceBuilder.instance)
 		        let service: any Service = __safeDI_serviceBuilder_(.service(SafeDIScope_Service.service_Values(serviceBuilder: serviceBuilder, badge: badge)))
@@ -1424,7 +1424,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_9A2A50BC23AE675A {}
+		    public enum __safeDI_Host_8E6968A3D8DF45E3 {}
 		}
 		"""])
 		#expect(try #require(output.modules["Mid"]).generatedFiles == ["Mid.swift": generatedFileHeader + """
@@ -1435,7 +1435,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		extension MidRoot {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_9A2A50BC23AE675A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Host.__safeDI_Host_8E6968A3D8DF45E3.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_serviceBuilder_Host(_ scope: Host.SafeDIScope_Service) -> any Service {
 		                switch scope {
 		                case .service:
@@ -1443,7 +1443,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		                    return service
 		                }
 		            }
-		            return Host(__safeDI_serviceBuilder: nil, __safeDI_service_ServiceBuilder: __safeDI_serviceBuilder_Host)
+		            return Host(__safeDI_serviceBuilder: nil, __safeDI_serviceBuilder_: __safeDI_serviceBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1458,7 +1458,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		extension AppRoot {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_9A2A50BC23AE675A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Host.__safeDI_Host_8E6968A3D8DF45E3.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_serviceBuilder_Host(_ scope: Host.SafeDIScope_Service) -> any Service {
 		                switch scope {
 		                case .service:
@@ -1477,12 +1477,11 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsPublicTiersSendableBuilderLabel_whenPackageParameterTakesBuildersLabel() async throws {
+	mutating func generate_keepsSendableBuilderLabelOnEveryTier_whenPackageParameterTakesPlainBuildersLabel() async throws {
 		// As above, but `Host` holds `service` in a `SendableLazilyInstantiated`, so the place is a case of the `@Sendable`
-		// enum, which the `@Sendable` builder is handed. The `public` tier names it `serviceSendableBuilder`, as it would
-		// without `Badge`; the `package` tier, whose `serviceBuilder` parameter renames the hole type's stem, names it
-		// `service_ServiceSendableBuilder`. `Mid`, in `Host`'s package, passes its fill under the `package` tier's label, and
-		// `App`, in another package, under the `public` one's.
+		// enum, which the `@Sendable` builder is handed. The `package` tier's `serviceBuilder` parameter equals the label of
+		// the plain family, which has no builder, so both tiers label the `@Sendable` builder `serviceSendableBuilder`. `Mid`,
+		// in `Host`'s package, passes its fill to the `package` tier, and `App`, in another package, to the `public` one.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.hostWithBadgeReceivingServiceBuilderAndSendableService, swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration),
@@ -1506,17 +1505,17 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_serviceSendableBuilder: @escaping @Sendable (SafeDISendableScope_Service) -> any Service) {
-		        self.init(__safeDI_serviceBuilder: nil, __safeDI_service_ServiceSendableBuilder: __safeDI_serviceSendableBuilder)
+		        self.init(__safeDI_serviceBuilder: nil, __safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder)
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    package init(serviceBuilder: Thing?, service_ServiceSendableBuilder: @escaping @Sendable (SafeDISendableScope_Service) -> any Service) {
-		        self.init(__safeDI_serviceBuilder: serviceBuilder, __safeDI_service_ServiceSendableBuilder: service_ServiceSendableBuilder)
+		    package init(serviceBuilder: Thing?, serviceSendableBuilder: @escaping @Sendable (SafeDISendableScope_Service) -> any Service) {
+		        self.init(__safeDI_serviceBuilder: serviceBuilder, __safeDI_serviceSendableBuilder: serviceSendableBuilder)
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    package init(__safeDI_serviceBuilder: @autoclosure @escaping () -> Thing?, __safeDI_service_ServiceSendableBuilder __safeDI_serviceSendableBuilder: @escaping @Sendable (SafeDISendableScope_Service) -> any Service) {
+		    package init(__safeDI_serviceBuilder: @autoclosure @escaping () -> Thing?, __safeDI_serviceSendableBuilder: @escaping @Sendable (SafeDISendableScope_Service) -> any Service) {
 		        let serviceBuilder = LazilyInstantiated<Thing?>(__safeDI_serviceBuilder)
 		        let badge = Badge(serviceBuilder: serviceBuilder.instance)
 		        @Sendable func __safeDI_service() -> any Service {
@@ -1528,7 +1527,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_5212018DCB3FF273 {}
+		    public enum __safeDI_Host_D4A540B97EA52408 {}
 		}
 		"""])
 		#expect(try #require(output.modules["Mid"]).generatedFiles == ["Mid.swift": generatedFileHeader + """
@@ -1539,7 +1538,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		extension MidRoot {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_5212018DCB3FF273.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Host.__safeDI_Host_D4A540B97EA52408.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            @Sendable func __safeDI_serviceSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Service) -> any Service {
 		                switch scope {
 		                case .service:
@@ -1549,7 +1548,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		                    return __safeDI_service()
 		                }
 		            }
-		            return Host(__safeDI_serviceBuilder: nil, __safeDI_service_ServiceSendableBuilder: __safeDI_serviceSendableBuilder_Host)
+		            return Host(__safeDI_serviceBuilder: nil, __safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1564,7 +1563,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		extension AppRoot {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_5212018DCB3FF273.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Host.__safeDI_Host_D4A540B97EA52408.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            @Sendable func __safeDI_serviceSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Service) -> any Service {
 		                switch scope {
 		                case .service:

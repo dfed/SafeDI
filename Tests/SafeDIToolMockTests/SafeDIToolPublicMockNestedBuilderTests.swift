@@ -1230,7 +1230,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_renamesTheBuildersStem_whenPublicMockTakesAParameterUnderTheBuildersLabel() async throws {
+	mutating func generate_appendsUnderscoreToBuildersLabel_whenPublicMockTakesAParameterUnderTheBuildersLabel() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: [
 			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
 				"""
@@ -1271,8 +1271,8 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen public enum SafeDIMockScope_Service_Service {
-		        case row(row_Values, SafeDIMockScope_Service_Service.Row_Scope)
+		    @frozen public enum SafeDIMockScope_Service {
+		        case row(row_Values, SafeDIMockScope_Service.Row_Scope)
 
 		        public struct row_Values {
 		            public let serviceBuilder: ServiceBuilder
@@ -1298,13 +1298,13 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		    public static func mock(
 		        serviceBuilder: ServiceBuilder,
-		        service_ServiceBuilder: @escaping (Panel.SafeDIMockScope_Service_Service) -> any Service,
+		        serviceBuilder_: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Panel {
-		        let __safeDI_service_ServiceBuilder = service_ServiceBuilder
-		        let __safeDI_service_ServiceValues_row = SafeDIMockScope_Service_Service.row_Values(serviceBuilder: serviceBuilder)
+		        let __safeDI_serviceBuilder_ = serviceBuilder_
+		        let __safeDI_serviceValues_row = SafeDIMockScope_Service.row_Values(serviceBuilder: serviceBuilder)
 		        func __safeDI_row() -> Row {
-		            let service: any Service = __safeDI_service_ServiceBuilder(.row(__safeDI_service_ServiceValues_row, .service(SafeDIMockScope_Service_Service.Row_Scope.service_Values())))
+		            let service: any Service = __safeDI_serviceBuilder_(.row(__safeDI_serviceValues_row, .service(SafeDIMockScope_Service.Row_Scope.service_Values())))
 		            return if let safeDIBuilder = safeDIOverrides.row { safeDIBuilder(serviceBuilder, service) } else { Row(serviceBuilder: serviceBuilder, service: service) }
 		        }
 		        let row: Row = __safeDI_row()
@@ -1313,7 +1313,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 
 		extension Panel {
-		    public enum __safeDI_Panel_mock_1938B7BE2221A1B0 {}
+		    public enum __safeDI_Panel_mock_A2052997CAD7A4AD {}
 		}
 		#endif
 		"""])
@@ -1972,34 +1972,34 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Host {
-		    @frozen public enum SafeDIMockScope_TapService {
+		    @frozen public enum SafeDIMockScope_TapService_AnyService {
 		        case maker(maker_Values, OnTap)
 
 		        public struct maker_Values {}
 		    }
 
-		    @frozen public enum SafeDISendableMockScope_TapService {
+		    @frozen public enum SafeDISendableMockScope_TapService_AnyService {
 		        case sendableMaker(OnTap)
 		    }
 
 		    public static func mock(
-		        tapServiceBuilder: @escaping (Host.SafeDIMockScope_TapService) -> AnyService,
-		        tapServiceSendableBuilder: @escaping @Sendable (Host.SafeDISendableMockScope_TapService) -> AnyService
+		        tapService_AnyServiceBuilder: @escaping (Host.SafeDIMockScope_TapService_AnyService) -> AnyService,
+		        tapService_AnyServiceSendableBuilder: @escaping @Sendable (Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService
 		    ) -> Host {
-		        let __safeDI_tapServiceBuilder = tapServiceBuilder
-		        let __safeDI_tapServiceSendableBuilder = tapServiceSendableBuilder
+		        let __safeDI_tapService_AnyServiceBuilder = tapService_AnyServiceBuilder
+		        let __safeDI_tapService_AnyServiceSendableBuilder = tapService_AnyServiceSendableBuilder
 		        let maker = ErasedInstantiator<OnTap, AnyService> {
-		            __safeDI_tapServiceBuilder(.maker(SafeDIMockScope_TapService.maker_Values(), $0))
+		            __safeDI_tapService_AnyServiceBuilder(.maker(SafeDIMockScope_TapService_AnyService.maker_Values(), $0))
 		        }
 		        let sendableMaker = SendableErasedInstantiator<OnTap, AnyService> {
-		            __safeDI_tapServiceSendableBuilder(.sendableMaker($0))
+		            __safeDI_tapService_AnyServiceSendableBuilder(.sendableMaker($0))
 		        }
 		        return Host(maker: maker, sendableMaker: sendableMaker)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_mock_E4A02EAD8060AC6E {}
+		    public enum __safeDI_Host_mock_9A0ECB97490E4B0C {}
 		}
 		#endif
 		"""])
@@ -2016,19 +2016,19 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            host: ((@escaping (Host.SafeDIMockScope_TapService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService) -> AnyService) -> Host)? = nil
+		            host: ((@escaping (Host.SafeDIMockScope_TapService_AnyService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService) -> Host)? = nil
 		        ) {
 		            self.host = host
 		        }
 
-		        let host: ((@escaping (Host.SafeDIMockScope_TapService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService) -> AnyService) -> Host)?
+		        let host: ((@escaping (Host.SafeDIMockScope_TapService_AnyService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService) -> Host)?
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> HostScreen {
 		        func __safeDI_host() -> Host {
-		            func __safeDI_tapServiceBuilder_Host(_ scope: Host.SafeDIMockScope_TapService) -> AnyService {
+		            func __safeDI_tapService_AnyServiceBuilder_Host(_ scope: Host.SafeDIMockScope_TapService_AnyService) -> AnyService {
 		                switch scope {
 		                case let .maker(_, __safeDI_forwarded):
 		                    func __safeDI_maker(onTap: @escaping OnTap) -> TapService {
@@ -2037,7 +2037,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                    return AnyService(__safeDI_maker(onTap: __safeDI_forwarded))
 		                }
 		            }
-		            @Sendable func __safeDI_tapServiceSendableBuilder_Host(_ scope: Host.SafeDISendableMockScope_TapService) -> AnyService {
+		            @Sendable func __safeDI_tapService_AnyServiceSendableBuilder_Host(_ scope: Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService {
 		                switch scope {
 		                case let .sendableMaker(__safeDI_forwarded):
 		                    @Sendable func __safeDI_sendableMaker(onTap: @escaping OnTap) -> TapService {
@@ -2046,8 +2046,8 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                    return AnyService(__safeDI_sendableMaker(onTap: __safeDI_forwarded))
 		                }
 		            }
-		            _ = Host.__safeDI_Host_mock_E4A02EAD8060AC6E.self\(Self.comment("Core"))
-		            return if let safeDIBuilder = safeDIOverrides.host { safeDIBuilder(__safeDI_tapServiceBuilder_Host, __safeDI_tapServiceSendableBuilder_Host) } else { Host.mock(tapServiceBuilder: __safeDI_tapServiceBuilder_Host, tapServiceSendableBuilder: __safeDI_tapServiceSendableBuilder_Host) }
+		            _ = Host.__safeDI_Host_mock_9A0ECB97490E4B0C.self\(Self.comment("Core"))
+		            return if let safeDIBuilder = safeDIOverrides.host { safeDIBuilder(__safeDI_tapService_AnyServiceBuilder_Host, __safeDI_tapService_AnyServiceSendableBuilder_Host) } else { Host.mock(tapService_AnyServiceBuilder: __safeDI_tapService_AnyServiceBuilder_Host, tapService_AnyServiceSendableBuilder: __safeDI_tapService_AnyServiceSendableBuilder_Host) }
 		        }
 		        let host: Host = __safeDI_host()
 		        return HostScreen(host: host)
@@ -3581,9 +3581,9 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Hub {
-		    @frozen public enum SafeDIMockScope_DefaultPart {
-		        case page(page_Values, SafeDIMockScope_DefaultPart.Page_Scope)
-		        case model(model_Values, SafeDIMockScope_DefaultPart.Model_Scope)
+		    @frozen public enum SafeDIMockScope_DefaultPart_Part {
+		        case page(page_Values, SafeDIMockScope_DefaultPart_Part.Page_Scope)
+		        case model(model_Values, SafeDIMockScope_DefaultPart_Part.Model_Scope)
 
 		        public struct page_Values {}
 
@@ -3592,7 +3592,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        }
 
 		        @frozen public enum Page_Scope {
-		            case model(model_Values, SafeDIMockScope_DefaultPart.Model_Scope)
+		            case model(model_Values, SafeDIMockScope_DefaultPart_Part.Model_Scope)
 
 		            public struct model_Values {
 		                public let token: Token
@@ -3621,17 +3621,17 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        defaultPartBuilder: @escaping (Hub.SafeDIMockScope_DefaultPart) -> any Part,
+		        defaultPart_PartBuilder: @escaping (Hub.SafeDIMockScope_DefaultPart_Part) -> any Part,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Hub {
-		        let __safeDI_defaultPartBuilder = defaultPartBuilder
-		        let __safeDI_defaultPartValues_page = SafeDIMockScope_DefaultPart.page_Values()
+		        let __safeDI_defaultPart_PartBuilder = defaultPart_PartBuilder
+		        let __safeDI_defaultPart_PartValues_page = SafeDIMockScope_DefaultPart_Part.page_Values()
 		        func __safeDI_page() -> Page {
 		            let token = if let safeDIBuilder = safeDIOverrides.page.token { safeDIBuilder() } else { Token() }
-		            let __safeDI_defaultPartValues_model = SafeDIMockScope_DefaultPart.Page_Scope.model_Values(token: token)
+		            let __safeDI_defaultPart_PartValues_model = SafeDIMockScope_DefaultPart_Part.Page_Scope.model_Values(token: token)
 		            func __safeDI_model() -> Model {
 		                let part = ErasedInstantiator<String, any Part> {
-		                    __safeDI_defaultPartBuilder(.page(__safeDI_defaultPartValues_page, .model(__safeDI_defaultPartValues_model, .part(SafeDIMockScope_DefaultPart.Model_Scope.part_Values(), $0))))
+		                    __safeDI_defaultPart_PartBuilder(.page(__safeDI_defaultPart_PartValues_page, .model(__safeDI_defaultPart_PartValues_model, .part(SafeDIMockScope_DefaultPart_Part.Model_Scope.part_Values(), $0))))
 		                }
 		                return if let safeDIBuilder = safeDIOverrides.page.model { safeDIBuilder(part) } else { Model(part: part) }
 		            }
@@ -3639,10 +3639,10 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            return Page.__safeDI_init(token: token, model: model, safeDIBuilder: safeDIOverrides.page.safeDIBuilder)
 		        }
 		        let page: Page = __safeDI_page()
-		        let __safeDI_defaultPartValues_model = SafeDIMockScope_DefaultPart.model_Values(page: page)
+		        let __safeDI_defaultPart_PartValues_model = SafeDIMockScope_DefaultPart_Part.model_Values(page: page)
 		        func __safeDI_model() -> Model {
 		            let part = ErasedInstantiator<String, any Part> {
-		                __safeDI_defaultPartBuilder(.model(__safeDI_defaultPartValues_model, .part(SafeDIMockScope_DefaultPart.Model_Scope.part_Values(), $0)))
+		                __safeDI_defaultPart_PartBuilder(.model(__safeDI_defaultPart_PartValues_model, .part(SafeDIMockScope_DefaultPart_Part.Model_Scope.part_Values(), $0)))
 		            }
 		            return if let safeDIBuilder = safeDIOverrides.model { safeDIBuilder(part) } else { Model(part: part) }
 		        }
@@ -3652,7 +3652,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 
 		extension Hub {
-		    public enum __safeDI_Hub_mock_5DD81ADBD4D879C1 {}
+		    public enum __safeDI_Hub_mock_A208715AB7923E3F {}
 		}
 		#endif
 
@@ -3780,34 +3780,34 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        defaultPartBuilder: @escaping (Hub.SafeDIMockScope_DefaultPart) -> any Part,
+		        defaultPart_PartBuilder: @escaping (Hub.SafeDIMockScope_DefaultPart_Part) -> any Part,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> HubScreen {
 		        func __safeDI_hub() -> Hub {
-		            func __safeDI_defaultPartBuilder_Hub_Model_Scope_part(_ scope: Hub.SafeDIMockScope_DefaultPart.Model_Scope.part_Values, _ __safeDI_forwarded: String, token: Token) -> any Part {
+		            func __safeDI_defaultPart_PartBuilder_Hub_Model_Scope_part(_ scope: Hub.SafeDIMockScope_DefaultPart_Part.Model_Scope.part_Values, _ __safeDI_forwarded: String, token: Token) -> any Part {
 		                func __safeDI_part(name: String) -> DefaultPart {
 		                    DefaultPart(name: name, token: token)
 		                }
 		                return __safeDI_part(name: __safeDI_forwarded)
 		            }
-		            func __safeDI_defaultPartBuilder_Hub(_ scope: Hub.SafeDIMockScope_DefaultPart, passUp: () -> any Part) -> any Part {
+		            func __safeDI_defaultPart_PartBuilder_Hub(_ scope: Hub.SafeDIMockScope_DefaultPart_Part, passUp: () -> any Part) -> any Part {
 		                switch scope {
-		                case let .page(_, scope): return __safeDI_defaultPartBuilder_Hub_Page_Scope(scope, passUp: passUp)
-		                case let .model(_, scope): return __safeDI_defaultPartBuilder_Hub_Model_Scope(scope, token: nil, passUp: passUp)
+		                case let .page(_, scope): return __safeDI_defaultPart_PartBuilder_Hub_Page_Scope(scope, passUp: passUp)
+		                case let .model(_, scope): return __safeDI_defaultPart_PartBuilder_Hub_Model_Scope(scope, token: nil, passUp: passUp)
 		                }
 		            }
-		            func __safeDI_defaultPartBuilder_Hub_Page_Scope(_ scope: Hub.SafeDIMockScope_DefaultPart.Page_Scope, passUp: () -> any Part) -> any Part {
+		            func __safeDI_defaultPart_PartBuilder_Hub_Page_Scope(_ scope: Hub.SafeDIMockScope_DefaultPart_Part.Page_Scope, passUp: () -> any Part) -> any Part {
 		                switch scope {
-		                case let .model(values, scope): return __safeDI_defaultPartBuilder_Hub_Model_Scope(scope, token: values.token, passUp: passUp)
+		                case let .model(values, scope): return __safeDI_defaultPart_PartBuilder_Hub_Model_Scope(scope, token: values.token, passUp: passUp)
 		                }
 		            }
-		            func __safeDI_defaultPartBuilder_Hub_Model_Scope(_ scope: Hub.SafeDIMockScope_DefaultPart.Model_Scope, token: Token?, passUp: () -> any Part) -> any Part {
+		            func __safeDI_defaultPart_PartBuilder_Hub_Model_Scope(_ scope: Hub.SafeDIMockScope_DefaultPart_Part.Model_Scope, token: Token?, passUp: () -> any Part) -> any Part {
 		                switch scope {
-		                case let .part(scope, __safeDI_forwarded): if let token { return __safeDI_defaultPartBuilder_Hub_Model_Scope_part(scope, __safeDI_forwarded, token: token) } else { return passUp() }
+		                case let .part(scope, __safeDI_forwarded): if let token { return __safeDI_defaultPart_PartBuilder_Hub_Model_Scope_part(scope, __safeDI_forwarded, token: token) } else { return passUp() }
 		                }
 		            }
-		            _ = Hub.__safeDI_Hub_mock_5DD81ADBD4D879C1.self\(Self.comment("Core"))
-		            return Hub.mock(defaultPartBuilder: { scope in __safeDI_defaultPartBuilder_Hub(scope, passUp: { defaultPartBuilder(scope) }) }, safeDIOverrides: safeDIOverrides.hub)
+		            _ = Hub.__safeDI_Hub_mock_A208715AB7923E3F.self\(Self.comment("Core"))
+		            return Hub.mock(defaultPart_PartBuilder: { scope in __safeDI_defaultPart_PartBuilder_Hub(scope, passUp: { defaultPart_PartBuilder(scope) }) }, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return HubScreen(hub: hub)
@@ -4729,15 +4729,15 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Panel {
-		        Panel.mock(service_ServiceBuilder: serviceBuilder, serviceBuilder: nil, safeDIOverrides: safeDIOverrides)
+		        Panel.mock(serviceBuilder_: serviceBuilder, serviceBuilder: nil, safeDIOverrides: safeDIOverrides)
 		    }
 
 		    package static func mock(
-		        service_ServiceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder_: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
 		        serviceBuilder: Thing? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Panel {
-		        let __safeDI_serviceBuilder = service_ServiceBuilder
+		        let __safeDI_serviceBuilder = serviceBuilder_
 		        let badge = if let safeDIBuilder = safeDIOverrides.badge { safeDIBuilder(serviceBuilder) } else { Badge(serviceBuilder: serviceBuilder) }
 		        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIMockScope_Service.service_Values(serviceBuilder: serviceBuilder, badge: badge)))
 		        return Panel(service: service, badge: badge)
@@ -4745,7 +4745,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 
 		extension Panel {
-		    public enum __safeDI_Panel_mock_58A93E5BA8F96315 {}
+		    public enum __safeDI_Panel_mock_10989C98C980ABB2 {}
 		}
 		#endif
 		"""])
@@ -4771,11 +4771,11 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        service_ServiceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder_: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        _ = Panel.__safeDI_Panel_mock_58A93E5BA8F96315.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let panel = Panel.mock(service_ServiceBuilder: service_ServiceBuilder, serviceBuilder: nil, safeDIOverrides: safeDIOverrides.panel)
+		        _ = Panel.__safeDI_Panel_mock_10989C98C980ABB2.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let panel = Panel.mock(serviceBuilder_: serviceBuilder_, serviceBuilder: nil, safeDIOverrides: safeDIOverrides.panel)
 		        return Screen(panel: panel)
 		    }
 		}
@@ -4806,7 +4806,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        _ = Panel.__safeDI_Panel_mock_58A93E5BA8F96315.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        _ = Panel.__safeDI_Panel_mock_10989C98C980ABB2.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let panel = Panel.mock(serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides.panel)
 		        return Screen(panel: panel)
 		    }

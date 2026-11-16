@@ -200,8 +200,8 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    @frozen public enum SafeDISendableScope_DefaultWidget {
-			        case shell_Sendable(SafeDISendableScope_DefaultWidget.Shell_Scope)
+			    @frozen public enum SafeDISendableScope_DefaultWidget_Widget {
+			        case shell_Sendable(SafeDISendableScope_DefaultWidget_Widget.Shell_Scope)
 
 			        @frozen public enum Shell_Scope {
 			            case widgetBuilder(Int)
@@ -210,10 +210,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_defaultWidgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_DefaultWidget) -> any Widget) {
+			    public init(__safeDI_defaultWidget_WidgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_DefaultWidget_Widget) -> any Widget) {
 			        func __safeDI_shell() -> Shell {
 			            let widgetBuilder = SendableErasedInstantiator<Int, any Widget> {
-			                __safeDI_defaultWidgetSendableBuilder(.shell_Sendable(.widgetBuilder($0)))
+			                __safeDI_defaultWidget_WidgetSendableBuilder(.shell_Sendable(.widgetBuilder($0)))
 			            }
 			            return Shell(widgetBuilder: widgetBuilder)
 			        }
@@ -223,7 +223,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_8099453269670052 {}
+			    public enum __safeDI_Host_2D5CBF1F19DFF7CF {}
 			}
 			""",
 			expectedApp: """
@@ -234,13 +234,13 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_8099453269670052.self // \(Self.moduleInfoComment)
-			            @Sendable func __safeDI_defaultWidgetSendableBuilder_Host(_ scope: Host.SafeDISendableScope_DefaultWidget) -> any Widget {
+			            _ = Host.__safeDI_Host_2D5CBF1F19DFF7CF.self // \(Self.moduleInfoComment)
+			            @Sendable func __safeDI_defaultWidget_WidgetSendableBuilder_Host(_ scope: Host.SafeDISendableScope_DefaultWidget_Widget) -> any Widget {
 			                switch scope {
-			                case let .shell_Sendable(scope): return __safeDI_defaultWidgetSendableBuilder_Host_Shell_Scope(scope)
+			                case let .shell_Sendable(scope): return __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope(scope)
 			                }
 			            }
-			            @Sendable func __safeDI_defaultWidgetSendableBuilder_Host_Shell_Scope(_ scope: Host.SafeDISendableScope_DefaultWidget.Shell_Scope) -> any Widget {
+			            @Sendable func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope(_ scope: Host.SafeDISendableScope_DefaultWidget_Widget.Shell_Scope) -> any Widget {
 			                switch scope {
 			                case let .widgetBuilder(__safeDI_forwarded):
 			                    @Sendable func __safeDI_widgetBuilder(id: Int) -> DefaultWidget {
@@ -249,7 +249,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			                    return __safeDI_widgetBuilder(id: __safeDI_forwarded)
 			                }
 			            }
-			            return Host(__safeDI_defaultWidgetSendableBuilder: __safeDI_defaultWidgetSendableBuilder_Host)
+			            return Host(__safeDI_defaultWidget_WidgetSendableBuilder: __safeDI_defaultWidget_WidgetSendableBuilder_Host)
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
@@ -944,7 +944,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// nothing, so no forwarded property can carry `tag` into it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultWidget.swift"]):11:5: error: `DefaultWidget` receives `tag: Tag?`, which `A`’s builder function takes as a parameter outside the `@Sendable` function that builds `widgetBuilder: SendableErasedInstantiator<Int, any Widget>`, because a cycle inside `A`’s tree passes it (`B` forwards `tag: Tag`), and the scope SafeDI hands the builder for `A`’s `widgetBuilder: SendableErasedInstantiator<Int, any Widget>` (case `A_Scope.widgetBuilder` of `defaultWidgetSendableBuilder`) carries only what that function binds. Declare an @Instantiable type that fulfills `DefaultWidget` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultWidget.swift"]):11:5: error: `DefaultWidget` receives `tag: Tag?`, which `A`’s builder function takes as a parameter outside the `@Sendable` function that builds `widgetBuilder: SendableErasedInstantiator<Int, any Widget>`, because a cycle inside `A`’s tree passes it (`B` forwards `tag: Tag`), and the scope SafeDI hands the builder for `A`’s `widgetBuilder: SendableErasedInstantiator<Int, any Widget>` (case `A_Scope.widgetBuilder` of `defaultWidget_WidgetSendableBuilder`) carries only what that function binds. Declare an @Instantiable type that fulfills `DefaultWidget` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` forwards `tag: Tag` here.
 			"""
 		}) {
@@ -1109,7 +1109,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// property can carry `title` into it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultWidget.swift"]):11:5: error: `DefaultWidget` receives `title: String?`, which `Shell` forwards outside the `@Sendable` function that builds `widgetBuilder: SendableErasedInstantiator<Int, any Widget>`, and the scope SafeDI hands the builder for `Shell`’s `widgetBuilder: SendableErasedInstantiator<Int, any Widget>` (case `Shell_Scope.widgetBuilder` of `defaultWidgetSendableBuilder`) carries only what that function binds. Declare an @Instantiable type that fulfills `DefaultWidget` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultWidget.swift"]):11:5: error: `DefaultWidget` receives `title: String?`, which `Shell` forwards outside the `@Sendable` function that builds `widgetBuilder: SendableErasedInstantiator<Int, any Widget>`, and the scope SafeDI hands the builder for `Shell`’s `widgetBuilder: SendableErasedInstantiator<Int, any Widget>` (case `Shell_Scope.widgetBuilder` of `defaultWidget_WidgetSendableBuilder`) carries only what that function binds. Declare an @Instantiable type that fulfills `DefaultWidget` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Shell.swift"]):8:5: note: `Shell` declares `title: String` here.
 			"""
 		}) {
@@ -1128,7 +1128,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// `Host` receives it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultWidget.swift"]):11:5: error: `DefaultWidget` receives `part: Part`, which `Shell` declares outside the `@Sendable` function that builds `widgetBuilder: SendableErasedInstantiator<Int, any Widget>`, and the scope SafeDI hands the builder for `Shell`’s `widgetBuilder: SendableErasedInstantiator<Int, any Widget>` (case `Shell_Scope.widgetBuilder` of `defaultWidgetSendableBuilder`) carries only what that function binds. Instantiate `part` outside `Host` and declare `@Received let part: Part` on `Host`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `DefaultWidget` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultWidget.swift"]):11:5: error: `DefaultWidget` receives `part: Part`, which `Shell` declares outside the `@Sendable` function that builds `widgetBuilder: SendableErasedInstantiator<Int, any Widget>`, and the scope SafeDI hands the builder for `Shell`’s `widgetBuilder: SendableErasedInstantiator<Int, any Widget>` (case `Shell_Scope.widgetBuilder` of `defaultWidget_WidgetSendableBuilder`) carries only what that function binds. Instantiate `part` outside `Host` and declare `@Received let part: Part` on `Host`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `DefaultWidget` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Shell.swift"]):8:5: note: `Shell` declares `part: Part` here.
 			"""
 		}) {
@@ -1191,8 +1191,8 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    @frozen public enum SafeDISendableScope_DefaultWidget {
-			        case shell_Sendable(SafeDISendableScope_DefaultWidget.Shell_Scope_)
+			    @frozen public enum SafeDISendableScope_DefaultWidget_Widget {
+			        case shell_Sendable(SafeDISendableScope_DefaultWidget_Widget.Shell_Scope_)
 
 			        @frozen public enum Shell_Scope_ {
 			            case widgetBuilder(Shell_Scope)
@@ -1201,10 +1201,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_defaultWidgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_DefaultWidget) -> any Widget) {
+			    public init(__safeDI_defaultWidget_WidgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_DefaultWidget_Widget) -> any Widget) {
 			        func __safeDI_shell() -> Shell {
 			            let widgetBuilder = SendableErasedInstantiator<Shell_Scope, any Widget> {
-			                __safeDI_defaultWidgetSendableBuilder(.shell_Sendable(.widgetBuilder($0)))
+			                __safeDI_defaultWidget_WidgetSendableBuilder(.shell_Sendable(.widgetBuilder($0)))
 			            }
 			            return Shell(widgetBuilder: widgetBuilder)
 			        }
@@ -1214,7 +1214,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_7209700C34D575D7 {}
+			    public enum __safeDI_Host_614936FB61DAF0C0 {}
 			}
 			""",
 			expectedApp: """
@@ -1225,13 +1225,13 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_7209700C34D575D7.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable func __safeDI_defaultWidgetSendableBuilder_Host(_ scope: Host.SafeDISendableScope_DefaultWidget) -> any Widget {
+			            _ = Host.__safeDI_Host_614936FB61DAF0C0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            @Sendable func __safeDI_defaultWidget_WidgetSendableBuilder_Host(_ scope: Host.SafeDISendableScope_DefaultWidget_Widget) -> any Widget {
 			                switch scope {
-			                case let .shell_Sendable(scope): return __safeDI_defaultWidgetSendableBuilder_Host_Shell_Scope_(scope)
+			                case let .shell_Sendable(scope): return __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_(scope)
 			                }
 			            }
-			            @Sendable func __safeDI_defaultWidgetSendableBuilder_Host_Shell_Scope_(_ scope: Host.SafeDISendableScope_DefaultWidget.Shell_Scope_) -> any Widget {
+			            @Sendable func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_(_ scope: Host.SafeDISendableScope_DefaultWidget_Widget.Shell_Scope_) -> any Widget {
 			                switch scope {
 			                case let .widgetBuilder(__safeDI_forwarded):
 			                    @Sendable func __safeDI_widgetBuilder(scope: Shell_Scope) -> DefaultWidget {
@@ -1240,7 +1240,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			                    return __safeDI_widgetBuilder(scope: __safeDI_forwarded)
 			                }
 			            }
-			            return Host(__safeDI_defaultWidgetSendableBuilder: __safeDI_defaultWidgetSendableBuilder_Host)
+			            return Host(__safeDI_defaultWidget_WidgetSendableBuilder: __safeDI_defaultWidget_WidgetSendableBuilder_Host)
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
