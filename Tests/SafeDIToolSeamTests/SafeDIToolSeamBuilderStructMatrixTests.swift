@@ -834,6 +834,52 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_compilesInModulesDefaultingToMainActor_whenMainActorSeamsOwnInitializerIsNonisolated() async throws {
+		// `Inner` is explicitly `@MainActor` and its own initializer `nonisolated`, which stores `Sendable` values; every caller,
+		// `Root` and the hand-written one, is on the main actor, as every declaration of these modules but the stored values'
+		// types is. The generated initializers take `Inner`'s isolation, which their callers share.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["mainActorNonisolatedInitializer"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Inner {
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
+		    public convenience init(token: Token) {
+		        self.init(__safeDI_token: token)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public convenience init(__safeDI_token token: Token) {
+		        let leaf = Leaf()
+		        self.init(token: token, leaf: leaf)
+		    }
+		}
+
+		extension Inner {
+		    public enum __safeDI_Inner_1EB503BFA23A82BA {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        let token = Token()
+		        func __safeDI_inner() -> Inner {
+		            _ = Inner.__safeDI_Inner_1EB503BFA23A82BA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Inner(__safeDI_token: token)
+		        }
+		        let inner: Inner = __safeDI_inner()
+		        self.init(token: token, inner: inner)
+		    }
+		}
+		"""])
+		try await expectCompiles(output, inlineControl: Self.fixtures["mainActorNonisolatedInitializerInline"] ?? [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_compilesInModulesDefaultingToMainActor_whenMainActorSeamsFillBuildsItsOwnTree() async throws {
 		// The fill declares a function, which the level function calls by name: declared inside the struct's closure, it would
 		// not take the main actor's isolation.
@@ -2403,7 +2449,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		}
 		"""])
 		try Self.expectCompiles(output)
-		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().shell.home.screenBuilder.instantiate(1).next.instantiate(2).next.instantiate(3)")])
+		try await expectValuesEqualInlineBuild(modules: modules, probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().shell.home.screenBuilder.instantiate(1).next.instantiate(2).next.instantiate(3)"), DifferentialValueProbe("liveCountHoldingOnlyScreen(atDepth: 4)"), DifferentialValueProbe("liveCountHoldingOnlyScreen(atDepth: 8)")])
 		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(output: output, modules: modules),
 			probes: [DifferentialValueProbe("liveCountHoldingOnlyScreen(atDepth: 4)"), DifferentialValueProbe("liveCountHoldingOnlyScreen(atDepth: 8)")],
@@ -2422,9 +2468,10 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_convertsThroughSendableFunctions_whenKeptSeamPassesUpScreenThatOpensItselfInSendableInstantiator() async throws {
-		// `Screen` builds another in a `SendableInstantiator`, so the level its `again` reopens is the `@Sendable` family's:
-		// `Shell`'s conversion functions are `@Sendable nonisolated`, and their wraps `@Sendable`.
+	mutating func generate_convertsInOneExpression_whenKeptSeamPassesUpScreenThatOpensItselfInSendableInstantiator() async throws {
+		// `Screen` builds another in a `SendableInstantiator`, which reopens the level in a `@Sendable` function: that function
+		// calls its family's member on each entry, so the `@Sendable` root's struct holds no loop, and `Shell` converts each
+		// root in one expression, the `@Sendable` one's members rebuilding its case without values.
 		let modules = Self.fixtures["sendableLoopUnderKeptShell"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
@@ -2629,9 +2676,11 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_convertsThroughSendableFunctions_whenKeptSeamPassesUpCycleClosingOnFunctionBuiltByValue() async throws {
+	mutating func generate_convertsInOneExpression_whenKeptSeamPassesUpCycleClosingOnFunctionBuiltByValue() async throws {
 		// `Hub` builds `A` by value, and `B`, built in `A`'s `SendableInstantiator`, builds `A` again, which calls the function
-		// `Hub`'s tree builds `A` with from a `@Sendable` closure; `Shell` passes `Hub`'s place up.
+		// `Hub`'s tree builds `A` with from a `@Sendable` closure; `Shell` passes `Hub`'s place up. The cycle closes on a
+		// `@Sendable` function, which calls its family's member on each entry, so the struct holds no loop, and `Shell`
+		// converts it in one expression.
 		let modules = Self.fixtures["byValueLoopUnderKeptShell"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
@@ -3834,6 +3883,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		],
 		// An explicitly `@MainActor` seam in modules whose declarations default to the main actor; `App` fills its place with
 		// a type that builds a `Client` of its own.
+		// `Inner`, explicitly `@MainActor`, whose own initializer is `nonisolated`, built by `Root` and by a hand-written caller.
+		"mainActorNonisolatedInitializer": mainActorModules(feature: mainActorNonisolatedInitializerFeature + [mainActorNonisolatedInitializerHandWrittenCaller], app: mainActorNonisolatedInitializerApp),
+		"mainActorNonisolatedInitializerInline": [ModuleFixture(name: "App", packageName: "Other", swiftFileContent: inlineFixture(mainActorNonisolatedInitializerFeature + mainActorNonisolatedInitializerApp), compilerSettings: mainActorByDefault)],
 		"mainActorPlain": mainActorModules(feature: mainActorPlainFeature, app: mainActorPlainApp),
 		"mainActorPlainInline": [ModuleFixture(name: "App", packageName: "Other", swiftFileContent: inlineFixture(mainActorPlainFeature + mainActorPlainApp), compilerSettings: mainActorByDefault)],
 		// The seam is `@MainActor`; `Worker`, `Detail` and the fill, built inside the `@Sendable` function, are `nonisolated`.
@@ -4072,6 +4124,48 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	/// The compiler settings of a module whose declarations default to the main actor.
 	static let mainActorByDefault = VerificationCompilerSettings(defaultIsolation: "MainActor")
+
+	private static let mainActorNonisolatedInitializerFeature = [
+		"""
+		@MainActor
+		@Instantiable(generateDependencyTree: true)
+		public final class Inner: Instantiable {
+		    nonisolated public init(token: Token, leaf: Leaf) {
+		        self.token = token
+		        self.leaf = leaf
+		    }
+
+		    @Received let token: Token
+		    @Instantiated let leaf: Leaf
+		}
+		""",
+		seamFixtureType(named: "Leaf", isFinalClass: true, declarations: [], conformances: ", Sendable").replacingOccurrences(of: "public final class", with: "nonisolated public final class"),
+		seamFixtureType(named: "Token", isFinalClass: true, declarations: [], conformances: ", Sendable").replacingOccurrences(of: "public final class", with: "nonisolated public final class"),
+	]
+
+	/// A caller written by hand, which calls `Inner`'s readable initializer, so it is no part of the inline control.
+	private static let mainActorNonisolatedInitializerHandWrittenCaller = """
+	func handWritten(token: Token) -> Inner {
+	    Inner(token: token)
+	}
+	"""
+
+	/// `Root`, explicitly `@MainActor`: a type that conforms only to `Instantiable` is inferred `nonisolated`.
+	private static let mainActorNonisolatedInitializerApp = [
+		"""
+		@MainActor
+		@Instantiable(isRoot: true)
+		public final class Root: Instantiable {
+		    public init(token: Token, inner: Inner) {
+		        self.token = token
+		        self.inner = inner
+		    }
+
+		    @Instantiated public let token: Token
+		    @Instantiated public let inner: Inner
+		}
+		""",
+	]
 
 	private static let mainActorPlainFeature = [
 		"nonisolated public protocol Api: AnyObject {}",
