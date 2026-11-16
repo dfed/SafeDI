@@ -1986,32 +1986,55 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	mutating func generate_callsPackageTierPassingValue_whenCallerInSamePackageHoldsValue(integration: MultiModuleIntegration) async throws {
 		// B4.7, B3.22: the same package reaches the `package` tier, which takes `theme`.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.providedValueModules(appPackage: "Shop"), integration: integration, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.generatedFiles(of: "Feature", sourceFile: "Service", Self.twoTierService, under: integration))
-		#expect(output.modules["App"]?.generatedFiles == Self.generatedFiles(of: "App", sourceFile: "Shell", """
-		#if canImport(Feature)
-		import Feature
-		#endif
-		#if canImport(SafeDI)
-		import SafeDI
-		#endif
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + """
+			extension Service {
+			    /// Code you write and code SafeDI generates can both call this initializer.
+			    public init() {
+			        self.init(__safeDI_theme: nil)
+			    }
 
-		extension Root {
-		    public init() {
-		        func __safeDI_shellBuilder(theme: Theme) -> Shell {
-		            func __safeDI_service() -> Service {
-		                _ = Service.__safeDI_Service_5CF188DE6A83E906.self
-		                return Service(__safeDI_theme: theme)
-		            }
-		            let service: Service = __safeDI_service()
-		            return Shell(theme: theme, service: service)
-		        }
-		        let shellBuilder = Instantiator<Shell> {
-		            __safeDI_shellBuilder(theme: $0)
-		        }
-		        self.init(shellBuilder: shellBuilder)
-		    }
-		}
-		""", under: integration))
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    package init(__safeDI_theme: @autoclosure @escaping () -> Theme?) {
+			        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
+			        let badge = Badge(theme: theme.instance)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_5CF188DE6A83E906 {}
+			}
+			""",
+		])
+		#expect(output.modules["App"]?.generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Shell+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_shellBuilder(theme: Theme) -> Shell {
+			            func __safeDI_service() -> Service {
+			                _ = Service.__safeDI_Service_5CF188DE6A83E906.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
+			                return Service(__safeDI_theme: theme)
+			            }
+			            let service: Service = __safeDI_service()
+			            return Shell(theme: theme, service: service)
+			        }
+			        let shellBuilder = Instantiator<Shell> {
+			            __safeDI_shellBuilder(theme: $0)
+			        }
+			        self.init(shellBuilder: shellBuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	/// Where `App`'s tree holds `theme` for `Service`'s own only-if-available receive.
@@ -2078,31 +2101,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	/// SafeDI supports, so only fixtures whose run is an error use it.
 	private static let unreadableThemeType = "[3 of Int]"
 
-	/// `Service`'s generated initializers for `ownReceiveModules`, without the file header.
-	private static let ownReceiveService = """
-	#if canImport(Hubs)
-	import Hubs
-	#endif
-
-	extension Service {
-	    /// Code you write and code SafeDI generates can both call this initializer.
-	    public init() {
-	        self.init(__safeDI_theme: nil)
-	    }
-
-	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-	    package init(__safeDI_theme theme: Hub.Theme?) {
-	        let badge = Badge()
-	        self.init(theme: theme, badge: badge)
-	    }
-	}
-
-	extension Service {
-	    public enum __safeDI_Service_9D6698F9EB89E77B {}
-	}
-	"""
-
 	/// The generated files of `module` under `integration`: its one combined file, or, under the SwiftPM plugin, the file
 	/// generated beside `sourceFile`, the file that declares the root, whose calls of `Feature`'s seam carry the comment
 	/// `integration` adds.
@@ -2157,35 +2155,61 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// B3.16, B4.31: `Service`'s own only-if-available `theme` is a parameter of its `package` tier, which the `public`
 		// tier calls passing `nil`; `App`, in the same package, calls the `package` tier passing `theme`.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.ownReceiveModules(appPackage: "Shop", provider: .forwardedByCaller), integration: integration, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.generatedFiles(of: "Feature", sourceFile: "Service", Self.ownReceiveService, under: integration))
-		#expect(output.modules["App"]?.generatedFiles == Self.generatedFiles(of: "App", sourceFile: "Root", """
-		#if canImport(Feature)
-		import Feature
-		#endif
-		#if canImport(Hubs)
-		import Hubs
-		#endif
-		#if canImport(SafeDI)
-		import SafeDI
-		#endif
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Hubs)
+			import Hubs
+			#endif
 
-		extension Root {
-		    public init() {
-		        func __safeDI_shellBuilder(theme: Hub.Theme) -> Shell {
-		            func __safeDI_service() -> Service {
-		                _ = Service.__safeDI_Service_9D6698F9EB89E77B.self
-		                return Service(__safeDI_theme: theme)
-		            }
-		            let service: Service = __safeDI_service()
-		            return Shell(theme: theme, service: service)
-		        }
-		        let shellBuilder = Instantiator<Shell> {
-		            __safeDI_shellBuilder(theme: $0)
-		        }
-		        self.init(shellBuilder: shellBuilder)
-		    }
-		}
-		""", under: integration))
+			extension Service {
+			    /// Code you write and code SafeDI generates can both call this initializer.
+			    public init() {
+			        self.init(__safeDI_theme: nil)
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    package init(__safeDI_theme theme: Hub.Theme?) {
+			        let badge = Badge()
+			        self.init(theme: theme, badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_9D6698F9EB89E77B {}
+			}
+			""",
+		])
+		#expect(output.modules["App"]?.generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(Hubs)
+			import Hubs
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_shellBuilder(theme: Hub.Theme) -> Shell {
+			            func __safeDI_service() -> Service {
+			                _ = Service.__safeDI_Service_9D6698F9EB89E77B.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
+			                return Service(__safeDI_theme: theme)
+			            }
+			            let service: Service = __safeDI_service()
+			            return Shell(theme: theme, service: service)
+			        }
+			        let shellBuilder = Instantiator<Shell> {
+			            __safeDI_shellBuilder(theme: $0)
+			        }
+			        self.init(shellBuilder: shellBuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -2193,28 +2217,30 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	mutating func generate_callsPublicTierPassingNothing_whenCallerInAnotherPackageHoldsNothingForSeamsOwnReceive(integration: MultiModuleIntegration) async throws {
 		// B4.31: `App` holds no `theme`, so the `public` tier's `nil` is what `Service` would get built inline.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.ownReceiveModules(appPackage: "Other", provider: .none), integration: integration, filesToDelete: &filesToDelete)
-		#expect(output.modules["App"]?.generatedFiles == Self.generatedFiles(of: "App", sourceFile: "Root", """
-		#if canImport(Feature)
-		import Feature
-		#endif
-		#if canImport(Hubs)
-		import Hubs
-		#endif
-		#if canImport(SafeDI)
-		import SafeDI
-		#endif
+		#expect(output.modules["App"]?.generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(Hubs)
+			import Hubs
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
 
-		extension Root {
-		    public init() {
-		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_9D6698F9EB89E77B.self
-		            return Service()
-		        }
-		        let service: Service = __safeDI_service()
-		        self.init(service: service)
-		    }
-		}
-		""", under: integration))
+			extension Root {
+			    public init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_9D6698F9EB89E77B.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
+			            return Service()
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -2223,29 +2249,31 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// B4.31's dropped edge: `Hub.Theme` requires `service`, so `Service` is built first and passed `nil`, as built
 		// inline: no value is dropped.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.ownReceiveModules(appPackage: "Other", provider: .instantiatedRequiringSeam), integration: integration, filesToDelete: &filesToDelete)
-		#expect(output.modules["App"]?.generatedFiles == Self.generatedFiles(of: "App", sourceFile: "Root", """
-		#if canImport(Feature)
-		import Feature
-		#endif
-		#if canImport(Hubs)
-		import Hubs
-		#endif
-		#if canImport(SafeDI)
-		import SafeDI
-		#endif
+		#expect(output.modules["App"]?.generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(Hubs)
+			import Hubs
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
 
-		extension Root {
-		    public init() {
-		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_9D6698F9EB89E77B.self
-		            return Service()
-		        }
-		        let service: Service = __safeDI_service()
-		        let theme = Hub.Theme(service: service)
-		        self.init(service: service, theme: theme)
-		    }
-		}
-		""", under: integration))
+			extension Root {
+			    public init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_9D6698F9EB89E77B.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
+			            return Service()
+			        }
+			        let service: Service = __safeDI_service()
+			        let theme = Hub.Theme(service: service)
+			        self.init(service: service, theme: theme)
+			    }
+			}
+			""",
+		])
 	}
 
 	/// `Feature`'s public seam `Service`, whose `Badge` receives `theme: Hub.Theme?` only if available on a `package`
@@ -3627,21 +3655,54 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + Self.importLines("Core") + """
-		extension Service {
-		\(Self.unreadTypeComment(["Theme"], integration))    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_theme: @autoclosure @escaping () -> any Theme) {
-		        let theme = LazilyInstantiated<any Theme>(__safeDI_theme)
-		        let badge = Badge(theme: theme.instance)
-		        self.init(badge: badge)
-		    }
-		}
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"Feature.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
 
-		extension Service {
-		    public enum __safeDI_Service_BC9F4F791E8F6B4E {}
+				extension Service {
+				    // SafeDI counts `Theme` as `public`: no module it reads declares it narrower. If `Theme` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public init(__safeDI_theme: @autoclosure @escaping () -> any Theme) {
+				        let theme = LazilyInstantiated<any Theme>(__safeDI_theme)
+				        let badge = Badge(theme: theme.instance)
+				        self.init(badge: badge)
+				    }
+				}
+
+				extension Service {
+				    public enum __safeDI_Service_BC9F4F791E8F6B4E {}
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Service+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+
+				extension Service {
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public init(__safeDI_theme: @autoclosure @escaping () -> any Theme) {
+				        let theme = LazilyInstantiated<any Theme>(__safeDI_theme)
+				        let badge = Badge(theme: theme.instance)
+				        self.init(badge: badge)
+				    }
+				}
+
+				extension Service {
+				    public enum __safeDI_Service_BC9F4F791E8F6B4E {}
+				}
+				""",
+			]
 		}
-		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == expectedFiles)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3676,7 +3737,14 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.themeInTwoModules(mention: "Other.Theme"), integration: integration, filesToDelete: &filesToDelete)
 		// Split for Swift 6.2 on Linux, which times out type-checking chains like this one.
 		let expectedFeatureFileName = integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift"
-		let expectedFeatureFile: String = [generatedFileHeader, String(Self.importLines("Core").dropLast()), Self.importLines("Other"), """
+		#expect(output.modules["Feature"]?.generatedFiles == [expectedFeatureFileName: generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Other)
+		import Other
+		#endif
+
 		extension Service {
 		\(Self.unreadTypeComment(["Other.Theme"], integration))    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
@@ -3690,8 +3758,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		extension Service {
 		    public enum __safeDI_Service_C026E16A44F7FB2E {}
 		}
-		"""].joined()
-		#expect(output.modules["Feature"]?.generatedFiles == [expectedFeatureFileName: expectedFeatureFile])
+		"""])
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3710,21 +3777,54 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + Self.importLines("Core") + """
-		extension Service {
-		\(Self.unreadTypeComment(["Theme"], integration))    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_theme: @autoclosure @escaping () -> any Theme) {
-		        let theme = LazilyInstantiated<any Theme>(__safeDI_theme)
-		        let badge = Badge(theme: theme.instance)
-		        self.init(badge: badge)
-		    }
-		}
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"Feature.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
 
-		extension Service {
-		    public enum __safeDI_Service_BC9F4F791E8F6B4E {}
+				extension Service {
+				    // SafeDI counts `Theme` as `public`: no module it reads declares it narrower. If `Theme` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public init(__safeDI_theme: @autoclosure @escaping () -> any Theme) {
+				        let theme = LazilyInstantiated<any Theme>(__safeDI_theme)
+				        let badge = Badge(theme: theme.instance)
+				        self.init(badge: badge)
+				    }
+				}
+
+				extension Service {
+				    public enum __safeDI_Service_BC9F4F791E8F6B4E {}
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Service+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Core)
+				import Core
+				#endif
+
+				extension Service {
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public init(__safeDI_theme: @autoclosure @escaping () -> any Theme) {
+				        let theme = LazilyInstantiated<any Theme>(__safeDI_theme)
+				        let badge = Badge(theme: theme.instance)
+				        self.init(badge: badge)
+				    }
+				}
+
+				extension Service {
+				    public enum __safeDI_Service_BC9F4F791E8F6B4E {}
+				}
+				""",
+			]
 		}
-		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == expectedFiles)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3778,8 +3878,14 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// A run that writes a `.safedi` without a target graph cannot tell what its dependents will mention, so it keeps
 		// every declaration another module can name, and `Feature`'s `package` seam proves `Theme` from it.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.themeBesideInstantiableModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		// Split for Swift 6.2 on Linux, which times out type-checking chains like this one.
-		let expectedFeatureFile: String = [generatedFileHeader, String(Self.importLines("Core").dropLast()), Self.importLines("SafeDI"), """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
 		extension Screen {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
@@ -3792,10 +3898,18 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		extension Screen {
 		    public enum __safeDI_Screen_FE0EC2F5EC57A9C9 {}
 		}
-		"""].joined()
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": expectedFeatureFile])
-		// Split for Swift 6.2 on Linux, which times out type-checking the single expression.
-		let expectedAppFile: String = [generatedFileHeader, String(Self.importLines("Core").dropLast()), String(Self.importLines("Feature").dropLast()), Self.importLines("SafeDI"), """
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
 		extension Root {
 		    public init() {
 		        let theme: Theme = ThemeProvider()
@@ -3807,8 +3921,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		        self.init(theme: theme, screen: screen)
 		    }
 		}
-		"""].joined()
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": expectedAppFile])
+		"""])
 	}
 
 	@Test
@@ -3900,8 +4013,14 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			""",
 		])
 		let subprojectOutput = try await executeSafeDIToolMultiModuleTest(modules: [subproject], integration: .moduleInfo, filesToDelete: &filesToDelete)
-		// Split for Swift 6.2 on Linux, which times out type-checking chains like this one.
-		let expectedSubprojectFile: String = [generatedFileHeader, String(Self.importLines("Foundation").dropLast()), Self.importLines("SafeDI"), """
+		#expect(subprojectOutput.modules["Subproject"]?.generatedFiles == ["Subproject.swift": generatedFileHeader + """
+		#if canImport(Foundation)
+		import Foundation
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
 		extension ProfileScreen {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
@@ -3914,8 +4033,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		extension ProfileScreen {
 		    public enum __safeDI_ProfileScreen_EFFD1BCD9A5EF54D {}
 		}
-		"""].joined()
-		#expect(subprojectOutput.modules["Subproject"]?.generatedFiles == ["Subproject.swift": expectedSubprojectFile])
+		"""])
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let noteStoragePath = fixtures["Subproject"]!["NoteStorage.swift"]
 			return """

@@ -308,18 +308,32 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Storage"]?.generatedFiles == [
-			"Shelf+SafeDI.swift": Self.file(importing: Self.importBlock([
-				"""
-				#if canImport(Foundation)
-				#if hasFeature(InternalImportsByDefault)
-				package import Foundation
-				#else
-				import Foundation
-				#endif
-				#endif
-				""",
-				Self.importLine(module: "SafeDI", spelled: "import SafeDI"),
-			]), bodies: [Self.shelfTree]),
+			"Shelf+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			#if hasFeature(InternalImportsByDefault)
+			package import Foundation
+			#else
+			import Foundation
+			#endif
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Shelf {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    package init(__safeDI_directory: @autoclosure @escaping () -> URL) {
+			        let directory = LazilyInstantiated<URL>(__safeDI_directory)
+			        let cache = Cache(directory: directory.instance)
+			        self.init(cache: cache)
+			    }
+			}
+
+			extension Shelf {
+			    public enum __safeDI_Shelf_3AB86B822A19F0A5 {}
+			}
+			""",
 		])
 	}
 
@@ -364,40 +378,52 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == [
-			"SafeDIMockConfiguration.swift": Self.file(importing: Self.importBlock([Self.importLine(module: "SafeDI", spelled: "import SafeDI")]), bodies: [""]),
-			"Service+SafeDIMock.swift": Self.file(importing: Self.importBlock([Self.importLine(module: "SafeDI", spelled: "public import SafeDI", where: "DEBUG", otherwise: "import SafeDI")]), bodies: [
-				"""
-				#if DEBUG
-				extension Service {
-				    /// Overrides for the mock dependency tree.
-				    nonisolated public struct SafeDIOverrides {
-				        public init(
-				            gaugeBuilder: (() -> Gauge)? = nil
-				        ) {
-				            self.gaugeBuilder = gaugeBuilder
-				        }
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
 
-				        public let gaugeBuilder: (() -> Gauge)?
-				    }
 
-				    public static func mock(
-				        gaugeBuilder: Instantiator<Gauge>? = nil,
-				        safeDIOverrides: SafeDIOverrides = .init()
-				    ) -> Service {
-				        func __safeDI_gaugeBuilder() -> Gauge {
-				            if let safeDIBuilder = safeDIOverrides.gaugeBuilder { safeDIBuilder() } else { Gauge() }
-				        }
-				        let gaugeBuilder = if let gaugeBuilder { gaugeBuilder } else { Instantiator<Gauge>(__safeDI_gaugeBuilder) }
-				        return Service(gaugeBuilder: gaugeBuilder)
-				    }
-				}
+			""",
+			"Service+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			#if DEBUG
+			public import SafeDI
+			#else
+			import SafeDI
+			#endif
+			#endif
 
-				extension Service {
-				    public enum __safeDI_Service_mock_0063D5E24694C830 {}
-				}
-				#endif
-				""",
-			]),
+			#if DEBUG
+			extension Service {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            gaugeBuilder: (() -> Gauge)? = nil
+			        ) {
+			            self.gaugeBuilder = gaugeBuilder
+			        }
+
+			        public let gaugeBuilder: (() -> Gauge)?
+			    }
+
+			    public static func mock(
+			        gaugeBuilder: Instantiator<Gauge>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Service {
+			        func __safeDI_gaugeBuilder() -> Gauge {
+			            if let safeDIBuilder = safeDIOverrides.gaugeBuilder { safeDIBuilder() } else { Gauge() }
+			        }
+			        let gaugeBuilder = if let gaugeBuilder { gaugeBuilder } else { Instantiator<Gauge>(__safeDI_gaugeBuilder) }
+			        return Service(gaugeBuilder: gaugeBuilder)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_mock_0063D5E24694C830 {}
+			}
+			#endif
+			""",
 		])
 	}
 
@@ -442,41 +468,57 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == [
-			"SafeDIMockConfiguration.swift": Self.file(importing: Self.importBlock([
-				Self.importLine(module: "Dispatch", spelled: "import Dispatch"),
-				Self.importLine(module: "Foundation", spelled: "internal import Foundation"),
-				Self.importLine(module: "SafeDI", spelled: "import SafeDI"),
-			]), bodies: [""]),
-			"Worker+SafeDIMock.swift": Self.file(importing: Self.importBlock([
-				Self.importLine(module: "Dispatch", spelled: "public import Dispatch", where: "DEBUG", otherwise: "import Dispatch"),
-				Self.importLine(module: "Foundation", spelled: "internal import Foundation"),
-				Self.importLine(module: "SafeDI", spelled: "import SafeDI"),
-			]), bodies: [
-				"""
-				#if DEBUG
-				extension Worker {
-				    // These providers evaluate `Worker`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-				    // reads the state of an actor `Worker` takes from a conformance or a superclass and does not compile, give its
-				    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-				    @usableFromInline nonisolated static func __safeDI_publicMockDefault_qosClass() -> DispatchQoS.QoSClass? { .utility }
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(Dispatch)
+			import Dispatch
+			#endif
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
 
-				    public static func mock(
-				        qos: Dispatch.DispatchQoS? = nil,
-				        qosClass: DispatchQoS.QoSClass? = Worker.__safeDI_publicMockDefault_qosClass(),
-				        label: String? = nil
-				    ) -> Worker {
-				        let qos = qos ?? (.default)
-				        let label = label ?? ("worker")
-				        return Worker(qos: qos, qosClass: qosClass, label: label)
-				    }
-				}
 
-				extension Worker {
-				    public enum __safeDI_Worker_mock_1966B654AF5BFCA0 {}
-				}
-				#endif
-				""",
-			]),
+			""",
+			"Worker+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Dispatch)
+			#if DEBUG
+			public import Dispatch
+			#else
+			import Dispatch
+			#endif
+			#endif
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Worker {
+			    // These providers evaluate `Worker`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
+			    // reads the state of an actor `Worker` takes from a conformance or a superclass and does not compile, give its
+			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
+			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_qosClass() -> DispatchQoS.QoSClass? { .utility }
+
+			    public static func mock(
+			        qos: Dispatch.DispatchQoS? = nil,
+			        qosClass: DispatchQoS.QoSClass? = Worker.__safeDI_publicMockDefault_qosClass(),
+			        label: String? = nil
+			    ) -> Worker {
+			        let qos = qos ?? (.default)
+			        let label = label ?? ("worker")
+			        return Worker(qos: qos, qosClass: qosClass, label: label)
+			    }
+			}
+
+			extension Worker {
+			    public enum __safeDI_Worker_mock_1966B654AF5BFCA0 {}
+			}
+			#endif
+			""",
 		])
 	}
 
@@ -1133,14 +1175,50 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 			verificationCompilerSettings: compileMode.settings,
 		)
-		let imports = Self.importBlock([
-			Self.importLine(module: "Foundation", spelled: "internal import Foundation"),
-			Self.importLine(module: "SafeDI", spelled: "@testable internal import SafeDI"),
-		])
 		#expect(output.generatedFiles == [
-			"Clock+SafeDIMock.swift": Self.file(importing: imports, bodies: [Self.clockMock]),
-			"Root+SafeDI.swift": Self.file(importing: imports, bodies: [Self.clockRootTree]),
-			"SafeDIMockConfiguration.swift": Self.file(importing: imports, bodies: [""]),
+			"Clock+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			@testable internal import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Clock {
+			    static func mock(
+			        start: Date = Date()
+			    ) -> Clock {
+			        return Clock(start: start)
+			    }
+			}
+			#endif
+			""",
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			@testable internal import SafeDI
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let clock = Clock()
+			        self.init(clock: clock)
+			    }
+			}
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			@testable internal import SafeDI
+			#endif
+
+
+			""",
 		])
 	}
 
@@ -1215,11 +1293,51 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 			verificationCompilerSettings: compileMode.settings,
 		)
-		let imports = Self.importBlock([
-			Self.importLine(module: "Foundation", spelled: "internal import Foundation"),
-			Self.importLine(module: "SafeDI", spelled: "import SafeDI"),
+		#expect(output.generatedFiles == [
+			"Clock+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Clock {
+			    static func mock(
+			        start: Date = Date()
+			    ) -> Clock {
+			        return Clock(start: start)
+			    }
+			}
+			#endif
+			""",
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let clock = Clock()
+			        self.init(clock: clock)
+			    }
+			}
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+
+			""",
 		])
-		#expect(output.generatedFiles == Self.clockFiles(importing: imports))
 	}
 
 	@Test
@@ -1231,11 +1349,51 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 			verificationCompilerSettings: ImportCompileMode.swift6WithInternalImportsByDefault.settings,
 		)
-		let imports = Self.importBlock([
-			Self.importLine(module: "Foundation", spelled: "import Foundation"),
-			Self.importLine(module: "SafeDI", spelled: "import SafeDI"),
+		#expect(output.generatedFiles == [
+			"Clock+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Clock {
+			    static func mock(
+			        start: Date = Date()
+			    ) -> Clock {
+			        return Clock(start: start)
+			    }
+			}
+			#endif
+			""",
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let clock = Clock()
+			        self.init(clock: clock)
+			    }
+			}
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+
+			""",
 		])
-		#expect(output.generatedFiles == Self.clockFiles(importing: imports))
 	}
 
 	@Test
@@ -1247,11 +1405,51 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 			verificationCompilerSettings: ImportCompileMode.swift6WithInternalImportsByDefault.settings,
 		)
-		let imports = Self.importBlock([
-			Self.importLine(module: "Foundation", spelled: "internal import Foundation"),
-			Self.importLine(module: "SafeDI", spelled: "import SafeDI"),
+		#expect(output.generatedFiles == [
+			"Clock+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Clock {
+			    static func mock(
+			        start: Date = Date()
+			    ) -> Clock {
+			        return Clock(start: start)
+			    }
+			}
+			#endif
+			""",
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let clock = Clock()
+			        self.init(clock: clock)
+			    }
+			}
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+
+			""",
 		])
-		#expect(output.generatedFiles == Self.clockFiles(importing: imports))
 	}
 
 	// MARK: Imports inside `#if`
@@ -1274,11 +1472,51 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			verificationCompilationConditions: ["FEATURE"],
 			verificationCompilerSettings: compileMode.settings,
 		)
-		let imports = Self.importBlock([
-			Self.importLine(module: "Foundation", spelled: "internal import Foundation"),
-			Self.importLine(module: "SafeDI", spelled: "import SafeDI"),
+		#expect(output.generatedFiles == [
+			"Clock+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Clock {
+			    static func mock(
+			        start: Date = Date()
+			    ) -> Clock {
+			        return Clock(start: start)
+			    }
+			}
+			#endif
+			""",
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let clock = Clock()
+			        self.init(clock: clock)
+			    }
+			}
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+
+			""",
 		])
-		#expect(output.generatedFiles == Self.clockFiles(importing: imports))
 	}
 
 	@Test(arguments: ImportCompileMode.allCases)
@@ -1296,19 +1534,62 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			activeCompilationConditions: ["FEATURE"],
 			verificationCompilerSettings: compileMode.settings,
 		)
-		let imports = Self.importBlock([
-			Self.importLine(module: "Foundation", spelled: "internal import Foundation"),
-			Self.importLine(module: "SafeDI", spelled: "import SafeDI"),
-		])
-		let assertion = """
-		#if !(FEATURE)
-		#error("SafeDI scanned this module assuming `#if FEATURE` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
-		#endif
-		"""
 		#expect(output.generatedFiles == [
-			"Clock+SafeDIMock.swift": Self.file(importing: imports, bodies: [assertion, Self.clockMock]),
-			"Root+SafeDI.swift": Self.file(importing: imports, bodies: [assertion, Self.clockRootTree]),
-			"SafeDIMockConfiguration.swift": Self.file(importing: imports, bodies: [assertion, ""]),
+			"Clock+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if !(FEATURE)
+			#error("SafeDI scanned this module assuming `#if FEATURE` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			#if DEBUG
+			extension Clock {
+			    static func mock(
+			        start: Date = Date()
+			    ) -> Clock {
+			        return Clock(start: start)
+			    }
+			}
+			#endif
+			""",
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if !(FEATURE)
+			#error("SafeDI scanned this module assuming `#if FEATURE` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let clock = Clock()
+			        self.init(clock: clock)
+			    }
+			}
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			internal import Foundation
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if !(FEATURE)
+			#error("SafeDI scanned this module assuming `#if FEATURE` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+
+			""",
 		])
 	}
 
@@ -1372,20 +1653,24 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles == [
-			"Root+SafeDI.swift": Self.file(importing: Self.importBlock([
-				Self.importLine(module: "Core", spelled: "import Core"),
-				Self.importLine(module: "Foundation", spelled: "import Foundation"),
-				Self.importLine(module: "SafeDI", spelled: "internal import SafeDI"),
-			]), bodies: [
-				"""
-				extension Root {
-				    public convenience init() {
-				        let clock = Clock()
-				        self.init(clock: clock)
-				    }
-				}
-				""",
-			]),
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(Foundation)
+			import Foundation
+			#endif
+			#if canImport(SafeDI)
+			internal import SafeDI
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let clock = Clock()
+			        self.init(clock: clock)
+			    }
+			}
+			""",
 		])
 	}
 
