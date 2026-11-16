@@ -5791,6 +5791,8 @@ struct SafeDIToolGraphFuzzerTests {
 		var acceptedSpellingDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
 		var omittedValueGraphCount = 0
 		var publicMockOutputFeatureCounts = [GraphFuzzerPublicMockOutputFeature: Int]()
+		// The accepted graphs whose seam's own internal mock takes a builder as a closure that takes nothing.
+		var seamOwnMockBuilderGraphCount = 0
 		var errorGraphCounts = [String: Int]()
 		var acceptedDrawFeatureCounts = [GraphFuzzerSeamDrawFeature: Int]()
 		var acceptedPublicMockDrawFeatureCounts = [GraphFuzzerPublicMockDrawFeature: Int]()
@@ -5882,6 +5884,11 @@ struct SafeDIToolGraphFuzzerTests {
 									for feature in GraphFuzzerPublicMockDraw.outputFeatures(of: result.fixture, generatedFiles: generatedFiles) {
 										publicMockOutputFeatureCounts[feature, default: 0] += 1
 									}
+								}
+								if corpus.features.contains(.generateDependencyTree), case let .accepted(generatedFiles, _) = result.outcome,
+								   GraphFuzzerFeature.seamOutputFeatures(of: result.fixture, generatedFiles: generatedFiles).contains(.seamOwnMockBuilder)
+								{
+									seamOwnMockBuilderGraphCount += 1
 								}
 								if !corpus.drawFeaturesCountedWhenAccepted.isEmpty {
 									for feature in GraphFuzzerFeature.seamDrawFeatures(of: result.fixture).intersection(corpus.drawFeaturesCountedWhenAccepted) {
@@ -6005,6 +6012,11 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs the oracle compared with their read twin, with the pin, which ci.yml's combine job adds up: an oracle
 		// that stops running the twins fails it.
 		report.append("read-twins \(readTwinGraphCount) \(corpus.readTwinGraphCount) \(corpus.name)")
+		// The accepted graphs whose seam's own internal mock takes a builder as a closure that takes nothing, which ci.yml's
+		// combine job adds up and checks against a floor of ten: the only count of that shape the corpus draws.
+		if corpus.features.contains(.generateDependencyTree) {
+			report.append("seam-mock-builders \(seamOwnMockBuilderGraphCount) \(corpus.name)")
+		}
 		// The graphs the builder surface judges, by kind, with the kinds whose floor the corpus must reach, which ci.yml's
 		// combine job adds up and checks: a draw or an edit that stops landing in accepted graphs fails it.
 		// Every corpus writes it, the base corpus, which has no holes, with no floored kind.
