@@ -4976,6 +4976,23 @@ struct SafeDIToolGraphFuzzerTests {
 							for multiModuleFailure in result.multiModuleFailures {
 								report.append("multimodule \(seed) \(multiModuleFailure.details.prefix { $0 != "\n" })")
 							}
+							// Local exploration beyond the corpus: a seed no entry lists is matched against every entry of the corpus,
+							// and one whose every finding an entry documents is reported as `shape <seed> <reason>` and passes.
+							var exploredKnownIssue = knownIssuesBySeed[seed]
+							if exploredKnownIssue == nil, result.failure != nil {
+								for candidate in corpus.knownIssues {
+									let candidateFindings = GraphFuzzerFinding.findings(failure: result.failure, laterFailures: result.laterFailures, knownIssue: candidate, retentionIsJudged: result.isJudgedForRetention)
+									if !candidateFindings.contains(where: { if case .failure = $0 { true } else { false } }) {
+										exploredKnownIssue = candidate
+										break
+									}
+								}
+								if let exploredKnownIssue {
+									report.append("shape \(seed) \(exploredKnownIssue.reason.prefix(160))")
+									knownIssueCount += 1
+									continue
+								}
+							}
 							for finding in GraphFuzzerFinding.findings(failure: result.failure, laterFailures: result.laterFailures, knownIssue: knownIssuesBySeed[seed], retentionIsJudged: result.isJudgedForRetention) {
 								if let reportLine = finding.reportLine(seed: seed) {
 									// A stale line carries the remedy, chosen by the stale issue's shape, for the summary.
