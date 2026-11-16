@@ -6375,7 +6375,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`seamBuilderOrderShape(listedBy:)`). Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x5CB94D96B3B77ADE
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x1AB69420C3986376
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -6686,7 +6686,15 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
-			seeds: [78, 93, 108, 121, 164, 273, 298, 304, 308, 326, 347, 362, 365, 391, 407, 481, 494, 527, 568, 594, 670, 699, 701, 750, 794, 797, 832, 850, 858, 876, 929, 931, 947],
+			seeds: [78, 93, 108, 121, 164, 273, 298, 304, 308, 326, 347, 362, 365, 407, 481, 494, 527, 568, 594, 670, 699, 701, 750, 794, 797, 832, 850, 858, 876, 929, 931, 947],
+		),
+		// Seed 391's chain of hole draws that re-enter one another holds more wrappers than a graph compared on its own may
+		// traverse (`DifferentialValueLimits.isolatedFuzzerGraph`), so the comparator describes none of its values beneath
+		// the point where its traversals run out.
+		GraphFuzzerKnownIssue(
+			reason: "\(seamTraversalLimitReason); and \(seamBuilderOrderReason)",
+			signatures: [.valueComparatorCouldNotDescribeGraph(containing: "spent its 200000 traversals"), .renamedGraphDiffers(.dependencyTreeListOrder)],
+			seeds: [391],
 		),
 		// The forwarding place's hole type is a second hole type beside `HoleService`, so its builders reorder too; and the
 		// erasures of `HoleGadgetImpl` in graphs whose mock shows the inherited shape of a mock's API, which the base corpus
@@ -7358,6 +7366,8 @@ struct SafeDIToolGraphFuzzerTests {
 		guard let knownIssue, knownIssue.reason.components(separatedBy: "; and ").contains(seamBuilderOrderReason) else { return nil }
 		return GraphFuzzerKnownIssue(reason: seamBuilderOrderReason, signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)], seeds: knownIssue.seeds)
 	}
+
+	private static let seamTraversalLimitReason = "A graph whose probes traverse more wrappers than a graph compared on its own may traverse, so the comparator describes none of its values beneath the point where its traversals run out"
 
 	private static let seamBuilderOrderReason = "A seam's builders are ordered by label, which its hole type's names spell, so moving type names across wrapper names reorders the builders of a seam with two hole types, its generated initializers and the calls of them"
 
