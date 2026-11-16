@@ -63,32 +63,43 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Toolbar {
-		    @frozen public enum SafeDIScope_LivePanel_Panel {
+		    @frozen nonisolated public enum SafeDIScope_LivePanel_Panel {
 		        case panelBuilder(panelBuilder_Values, String)
 
-		        public struct panelBuilder_Values {
+		        nonisolated public struct panelBuilder_Values {
 		            public let theme: Theme
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let panelBuilder: (panelBuilder_Values) -> ErasedInstantiator<String, __safeDI_Built>.Builder
+
+		            public init(panelBuilder: @escaping (panelBuilder_Values) -> ErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                self.panelBuilder = panelBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                self.panelBuilder = { _ in __safeDI_builder }
+		            }
 		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public convenience init(livePanel_PanelBuilder: @escaping (SafeDIScope_LivePanel_Panel) -> any Panel) {
-		        self.init(__safeDI_livePanel_PanelBuilder: livePanel_PanelBuilder)
+		    public convenience init(livePanel_PanelBuilder: @escaping ErasedInstantiator<String, any Panel>.Builder) {
+		        self.init(__safeDI_livePanel_PanelBuilder: .init(__safeDI_noScope: livePanel_PanelBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public convenience init(__safeDI_livePanel_PanelBuilder: @escaping (SafeDIScope_LivePanel_Panel) -> any Panel) {
+		    public convenience init(__safeDI_livePanel_PanelBuilder: SafeDIScope_LivePanel_Panel.__safeDI_Builder<any Panel>) {
 		        let theme = Theme()
-		        let panelBuilder = ErasedInstantiator<String, any Panel> {
-		            __safeDI_livePanel_PanelBuilder(.panelBuilder(SafeDIScope_LivePanel_Panel.panelBuilder_Values(theme: theme), $0))
-		        }
+		        let panelBuilder = ErasedInstantiator<String, any Panel>(__safeDI_livePanel_PanelBuilder.panelBuilder(SafeDIScope_LivePanel_Panel.panelBuilder_Values(theme: theme)))
 		        self.init(theme: theme, panelBuilder: panelBuilder)
 		    }
 		}
 
 		extension Toolbar {
-		    public enum __safeDI_Toolbar_9B92DC5514F1FF1B {}
+		    public enum __safeDI_Toolbar_68B213ED6238308D {}
 		}
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
@@ -99,18 +110,17 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_toolbar() -> Toolbar {
-		            _ = Toolbar.__safeDI_Toolbar_9B92DC5514F1FF1B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_livePanel_PanelBuilder_Toolbar(_ scope: Toolbar.SafeDIScope_LivePanel_Panel) -> any Panel {
-		                switch scope {
-		                case let .panelBuilder(scope, __safeDI_forwarded):
-		                    let theme = scope.theme
-		                    func __safeDI_panelBuilder(title: String) -> LivePanel {
-		                        LivePanel(title: title, theme: theme)
-		                    }
-		                    return __safeDI_panelBuilder(title: __safeDI_forwarded)
+		            _ = Toolbar.__safeDI_Toolbar_68B213ED6238308D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_livePanel_PanelBuilder_Toolbar_panelBuilder(theme: Theme) -> ErasedInstantiator<String, any Panel>.Builder {
+		                func __safeDI_panelBuilder(title: String) -> LivePanel {
+		                    LivePanel(title: title, theme: theme)
 		                }
+		                return { forwarded in __safeDI_panelBuilder(title: forwarded) }
 		            }
-		            return Toolbar(__safeDI_livePanel_PanelBuilder: __safeDI_livePanel_PanelBuilder_Toolbar)
+		            func __safeDI_livePanel_PanelBuilder_Toolbar() -> Toolbar.SafeDIScope_LivePanel_Panel.__safeDI_Builder<any Panel> {
+		                .init(panelBuilder: { values in __safeDI_livePanel_PanelBuilder_Toolbar_panelBuilder(theme: values.theme) })
+		            }
+		            return Toolbar(__safeDI_livePanel_PanelBuilder: __safeDI_livePanel_PanelBuilder_Toolbar())
 		        }
 		        let toolbar: Toolbar = __safeDI_toolbar()
 		        self.init(toolbar: toolbar)
@@ -139,28 +149,41 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Toolbar {
-		    @frozen public enum SafeDISendableScope_LivePanel_Panel {
+		    @frozen nonisolated public enum SafeDISendableScope_LivePanel_Panel {
 		        case panelBuilder(String)
+
+		        nonisolated public struct panelBuilder_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let panelBuilder: @Sendable (panelBuilder_Values) -> SendableErasedInstantiator<String, __safeDI_Built>.Builder
+
+		            public init(panelBuilder: @escaping @Sendable (panelBuilder_Values) -> SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                self.panelBuilder = panelBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                self.panelBuilder = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public convenience init(livePanel_PanelSendableBuilder: @escaping @Sendable (SafeDISendableScope_LivePanel_Panel) -> any Panel) {
-		        self.init(__safeDI_livePanel_PanelSendableBuilder: livePanel_PanelSendableBuilder)
+		    public convenience init(livePanel_PanelSendableBuilder: @escaping SendableErasedInstantiator<String, any Panel>.Builder) {
+		        self.init(__safeDI_livePanel_PanelSendableBuilder: .init(__safeDI_noScope: livePanel_PanelSendableBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public convenience init(__safeDI_livePanel_PanelSendableBuilder: @escaping @Sendable (SafeDISendableScope_LivePanel_Panel) -> any Panel) {
+		    public convenience init(__safeDI_livePanel_PanelSendableBuilder: SafeDISendableScope_LivePanel_Panel.__safeDI_Builder<any Panel>) {
 		        let theme = Theme()
-		        let panelBuilder = SendableErasedInstantiator<String, any Panel> {
-		            __safeDI_livePanel_PanelSendableBuilder(.panelBuilder($0))
-		        }
+		        let panelBuilder = SendableErasedInstantiator<String, any Panel>(__safeDI_livePanel_PanelSendableBuilder.panelBuilder(SafeDISendableScope_LivePanel_Panel.panelBuilder_Values()))
 		        self.init(theme: theme, panelBuilder: panelBuilder)
 		    }
 		}
 
 		extension Toolbar {
-		    public enum __safeDI_Toolbar_71F12209FD47157A {}
+		    public enum __safeDI_Toolbar_E3E8B410ACB4A99E {}
 		}
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
@@ -171,17 +194,17 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_toolbar() -> Toolbar {
-		            _ = Toolbar.__safeDI_Toolbar_71F12209FD47157A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable func __safeDI_livePanel_PanelSendableBuilder_Toolbar(_ scope: Toolbar.SafeDISendableScope_LivePanel_Panel) -> any Panel {
-		                switch scope {
-		                case let .panelBuilder(__safeDI_forwarded):
-		                    @Sendable func __safeDI_panelBuilder(title: String) -> LivePanel {
-		                        LivePanel(title: title)
-		                    }
-		                    return __safeDI_panelBuilder(title: __safeDI_forwarded)
+		            _ = Toolbar.__safeDI_Toolbar_E3E8B410ACB4A99E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            @Sendable nonisolated func __safeDI_livePanel_PanelSendableBuilder_Toolbar_panelBuilder() -> SendableErasedInstantiator<String, any Panel>.Builder {
+		                @Sendable nonisolated func __safeDI_panelBuilder(title: String) -> LivePanel {
+		                    LivePanel(title: title)
 		                }
+		                return { forwarded in __safeDI_panelBuilder(title: forwarded) }
 		            }
-		            return Toolbar(__safeDI_livePanel_PanelSendableBuilder: __safeDI_livePanel_PanelSendableBuilder_Toolbar)
+		            @Sendable nonisolated func __safeDI_livePanel_PanelSendableBuilder_Toolbar() -> Toolbar.SafeDISendableScope_LivePanel_Panel.__safeDI_Builder<any Panel> {
+		                .init(panelBuilder: { _ in __safeDI_livePanel_PanelSendableBuilder_Toolbar_panelBuilder() })
+		            }
+		            return Toolbar(__safeDI_livePanel_PanelSendableBuilder: __safeDI_livePanel_PanelSendableBuilder_Toolbar())
 		        }
 		        let toolbar: Toolbar = __safeDI_toolbar()
 		        self.init(toolbar: toolbar)
@@ -201,29 +224,40 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		let besideChild = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [Self.protocols, Self.f(holdingChild: true), Self.child], swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration)])
 		#expect(alone.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension F {
-		    @frozen public enum SafeDIScope_Impl_Api {
+		    @frozen nonisolated public enum SafeDIScope_Impl_Api {
 		        case a(a_Values, Int)
 
-		        public struct a_Values {}
+		        nonisolated public struct a_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let a: (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+
+		            public init(a: @escaping (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a = a
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public init(impl_ApiBuilder: @escaping (SafeDIScope_Impl_Api) -> any Api) {
-		        self.init(__safeDI_impl_ApiBuilder: impl_ApiBuilder)
+		    public init(impl_ApiBuilder: @escaping ErasedInstantiator<Int, any Api>.Builder) {
+		        self.init(__safeDI_impl_ApiBuilder: .init(__safeDI_noScope: impl_ApiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public init(__safeDI_impl_ApiBuilder: @escaping (SafeDIScope_Impl_Api) -> any Api) {
-		        let a = ErasedInstantiator<Int, any Api> {
-		            __safeDI_impl_ApiBuilder(.a(SafeDIScope_Impl_Api.a_Values(), $0))
-		        }
+		    public init(__safeDI_impl_ApiBuilder: SafeDIScope_Impl_Api.__safeDI_Builder<any Api>) {
+		        let a = ErasedInstantiator<Int, any Api>(__safeDI_impl_ApiBuilder.a(SafeDIScope_Impl_Api.a_Values()))
 		        self.init(a: a)
 		    }
 		}
 
 		extension F {
-		    public enum __safeDI_F_5C05CFEC8F333325 {}
+		    public enum __safeDI_F_02663ED14330F6EF {}
 		}
 
 		#if DEBUG
@@ -252,42 +286,77 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		"""])
 		#expect(besideChild.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension F {
-		    @frozen public enum SafeDIScope_Impl_Api {
+		    @frozen nonisolated public enum SafeDIScope_Impl_Api {
 		        case a(a_Values, Int)
 
-		        public struct a_Values {}
+		        nonisolated public struct a_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let a: (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+
+		            public init(a: @escaping (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a = a
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
-		    @frozen public enum SafeDIScope_Impl_Other {
+		    @frozen nonisolated public enum SafeDIScope_Impl_Other {
 		        case child(child_Values, SafeDIScope_Impl_Other.Child_Scope)
 
-		        public struct child_Values {
+		        nonisolated public struct child_Values {
 		            public let a: ErasedInstantiator<Int, any Api>
 		        }
 
-		        @frozen public enum Child_Scope {
+		        @frozen nonisolated public enum Child_Scope {
 		            case o(o_Values, Int)
 
-		            public struct o_Values {}
+		            nonisolated public struct o_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let o: (o_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+
+		                public init(o: @escaping (o_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                    self.o = o
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                    self.o = { _ in __safeDI_builder }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let child: (child_Values) -> SafeDIScope_Impl_Other.Child_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(child: @escaping (child_Values) -> SafeDIScope_Impl_Other.Child_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.child = child
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.child = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
 		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public init(impl_ApiBuilder: @escaping (SafeDIScope_Impl_Api) -> any Api, impl_OtherBuilder: @escaping (SafeDIScope_Impl_Other) -> any Other) {
-		        self.init(__safeDI_impl_ApiBuilder: impl_ApiBuilder, __safeDI_impl_OtherBuilder: impl_OtherBuilder)
+		    public init(impl_ApiBuilder: @escaping ErasedInstantiator<Int, any Api>.Builder, impl_OtherBuilder: @escaping ErasedInstantiator<Int, any Other>.Builder) {
+		        self.init(__safeDI_impl_ApiBuilder: .init(__safeDI_noScope: impl_ApiBuilder), __safeDI_impl_OtherBuilder: .init(__safeDI_noScope: impl_OtherBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public init(__safeDI_impl_ApiBuilder: @escaping (SafeDIScope_Impl_Api) -> any Api, __safeDI_impl_OtherBuilder: @escaping (SafeDIScope_Impl_Other) -> any Other) {
-		        let a = ErasedInstantiator<Int, any Api> {
-		            __safeDI_impl_ApiBuilder(.a(SafeDIScope_Impl_Api.a_Values(), $0))
-		        }
-		        let __safeDI_impl_OtherValues_child = SafeDIScope_Impl_Other.child_Values(a: a)
+		    public init(__safeDI_impl_ApiBuilder: SafeDIScope_Impl_Api.__safeDI_Builder<any Api>, __safeDI_impl_OtherBuilder: SafeDIScope_Impl_Other.__safeDI_Builder<any Other>) {
+		        let a = ErasedInstantiator<Int, any Api>(__safeDI_impl_ApiBuilder.a(SafeDIScope_Impl_Api.a_Values()))
+		        let __safeDI_impl_OtherBuilder_child = __safeDI_impl_OtherBuilder.child(SafeDIScope_Impl_Other.child_Values(a: a))
 		        func __safeDI_child() -> Child {
-		            let o = ErasedInstantiator<Int, any Other> {
-		                __safeDI_impl_OtherBuilder(.child(__safeDI_impl_OtherValues_child, .o(SafeDIScope_Impl_Other.Child_Scope.o_Values(), $0)))
-		            }
+		            let o = ErasedInstantiator<Int, any Other>(__safeDI_impl_OtherBuilder_child.o(SafeDIScope_Impl_Other.Child_Scope.o_Values()))
 		            return Child(o: o)
 		        }
 		        let child: Child = __safeDI_child()
@@ -296,7 +365,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		}
 
 		extension F {
-		    public enum __safeDI_F_BBA8BEF26640D73C {}
+		    public enum __safeDI_F_B8AF3D18CB8F0564 {}
 		}
 
 		#if DEBUG
@@ -372,29 +441,40 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		])
 		#expect(output.modules["Lib"]?.generatedFiles == ["Lib.swift": generatedFileHeader + """
 		extension Inner {
-		    @frozen public enum SafeDIScope_Impl_Other {
+		    @frozen nonisolated public enum SafeDIScope_Impl_Other {
 		        case a2(a2_Values, Int)
 
-		        public struct a2_Values {}
+		        nonisolated public struct a2_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let a2: (a2_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+
+		            public init(a2: @escaping (a2_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a2 = a2
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a2 = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public init(impl_OtherBuilder: @escaping (SafeDIScope_Impl_Other) -> any Other) {
-		        self.init(__safeDI_impl_OtherBuilder: impl_OtherBuilder)
+		    public init(impl_OtherBuilder: @escaping ErasedInstantiator<Int, any Other>.Builder) {
+		        self.init(__safeDI_impl_OtherBuilder: .init(__safeDI_noScope: impl_OtherBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public init(__safeDI_impl_OtherBuilder: @escaping (SafeDIScope_Impl_Other) -> any Other) {
-		        let a2 = ErasedInstantiator<Int, any Other> {
-		            __safeDI_impl_OtherBuilder(.a2(SafeDIScope_Impl_Other.a2_Values(), $0))
-		        }
+		    public init(__safeDI_impl_OtherBuilder: SafeDIScope_Impl_Other.__safeDI_Builder<any Other>) {
+		        let a2 = ErasedInstantiator<Int, any Other>(__safeDI_impl_OtherBuilder.a2(SafeDIScope_Impl_Other.a2_Values()))
 		        self.init(a2: a2)
 		    }
 		}
 
 		extension Inner {
-		    public enum __safeDI_Inner_B9E61269C2E1EF8D {}
+		    public enum __safeDI_Inner_BF35686520210643 {}
 		}
 
 		#if DEBUG
@@ -427,11 +507,24 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		#endif
 
 		extension F {
-		    @frozen public enum SafeDIScope_Impl_Api {
+		    @frozen nonisolated public enum SafeDIScope_Impl_Api {
 		        case a(a_Values, Int)
 
-		        public struct a_Values {
+		        nonisolated public struct a_Values {
 		            public let inner: Inner
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let a: (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+
+		            public init(a: @escaping (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a = a
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a = { _ in __safeDI_builder }
+		            }
 		        }
 		    }
 
@@ -441,27 +534,25 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public init(impl_ApiBuilder: @escaping (SafeDIScope_Impl_Api) -> any Api, impl_OtherBuilder: @escaping (SafeDIScope_Impl_Other) -> any Other) {
-		        self.init(__safeDI_impl_ApiBuilder: impl_ApiBuilder, __safeDI_impl_OtherBuilder: impl_OtherBuilder)
+		    public init(impl_ApiBuilder: @escaping ErasedInstantiator<Int, any Api>.Builder, impl_OtherBuilder: @escaping (SafeDIScope_Impl_Other) -> any Other) {
+		        self.init(__safeDI_impl_ApiBuilder: .init(__safeDI_noScope: impl_ApiBuilder), __safeDI_impl_OtherBuilder: impl_OtherBuilder)
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public init(__safeDI_impl_ApiBuilder: @escaping (SafeDIScope_Impl_Api) -> any Api, __safeDI_impl_OtherBuilder: @escaping (SafeDIScope_Impl_Other) -> any Other) {
+		    public init(__safeDI_impl_ApiBuilder: SafeDIScope_Impl_Api.__safeDI_Builder<any Api>, __safeDI_impl_OtherBuilder: @escaping (SafeDIScope_Impl_Other) -> any Other) {
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_B9E61269C2E1EF8D.self // If this line does not compile, compile the code SafeDI generates for module Lib into Lib: under Bazel, add Lib’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Inner(__safeDI_impl_OtherBuilder: { __safeDI_impl_OtherBuilder(.inner($0)) })
+		            _ = Inner.__safeDI_Inner_BF35686520210643.self // If this line does not compile, compile the code SafeDI generates for module Lib into Lib: under Bazel, add Lib’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Inner(__safeDI_impl_OtherBuilder: .init(a2: { __safeDI_a2Values in { forwarded in __safeDI_impl_OtherBuilder(.inner(.a2(__safeDI_a2Values, forwarded))) } }))
 		        }
 		        let inner: Inner = __safeDI_inner()
-		        let a = ErasedInstantiator<Int, any Api> {
-		            __safeDI_impl_ApiBuilder(.a(SafeDIScope_Impl_Api.a_Values(inner: inner), $0))
-		        }
+		        let a = ErasedInstantiator<Int, any Api>(__safeDI_impl_ApiBuilder.a(SafeDIScope_Impl_Api.a_Values(inner: inner)))
 		        self.init(a: a, inner: inner)
 		    }
 		}
 
 		extension F {
-		    public enum __safeDI_F_38D49BB4C08F3E96 {}
+		    public enum __safeDI_F_29555442510693A4 {}
 		}
 
 		#if DEBUG
@@ -1101,8 +1192,23 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Host {
-			    @frozen public enum SafeDISendableScope_ServiceSendable_Service {
+			    @frozen nonisolated public enum SafeDISendableScope_ServiceSendable_Service {
 			        case serviceSendableService(ServiceSendable_Service.ForwardedProperties)
+
+			        nonisolated public struct serviceSendableService_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let serviceSendableService: @Sendable (serviceSendableService_Values) -> SendableErasedInstantiator<ServiceSendable_Service.ForwardedProperties, __safeDI_Built>.Builder
+
+			            public init(serviceSendableService: @escaping @Sendable (serviceSendableService_Values) -> SendableErasedInstantiator<ServiceSendable_Service.ForwardedProperties, __safeDI_Built>.Builder) {
+			                self.serviceSendableService = serviceSendableService
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<ServiceSendable_Service.ForwardedProperties, __safeDI_Built>.Builder) {
+			                self.serviceSendableService = { _ in __safeDI_builder }
+			            }
+			        }
 			    }
 
 			    @frozen nonisolated public enum SafeDIScope_ServiceSendable_ServiceSendable_ {
@@ -1124,26 +1230,37 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen public enum SafeDISendableScope_Service_Service {
+			    @frozen nonisolated public enum SafeDISendableScope_Service_Service {
 			        case service(Service.ForwardedProperties)
+
+			        nonisolated public struct service_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let service: @Sendable (service_Values) -> SendableErasedInstantiator<Service.ForwardedProperties, __safeDI_Built>.Builder
+
+			            public init(service: @escaping @Sendable (service_Values) -> SendableErasedInstantiator<Service.ForwardedProperties, __safeDI_Built>.Builder) {
+			                self.service = service
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Service.ForwardedProperties, __safeDI_Built>.Builder) {
+			                self.service = { _ in __safeDI_builder }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_serviceSendable_ServiceSendableBuilder: @escaping @Sendable (SafeDISendableScope_ServiceSendable_Service) -> ServiceSendable_Service, __safeDI_serviceSendable_ServiceSendable_Builder: SafeDIScope_ServiceSendable_ServiceSendable_.__safeDI_Builder<ServiceSendable>, __safeDI_service_ServiceSendableBuilder: @escaping @Sendable (SafeDISendableScope_Service_Service) -> Service) {
+			    public init(__safeDI_serviceSendable_ServiceSendableBuilder: SafeDISendableScope_ServiceSendable_Service.__safeDI_Builder<ServiceSendable_Service>, __safeDI_serviceSendable_ServiceSendable_Builder: SafeDIScope_ServiceSendable_ServiceSendable_.__safeDI_Builder<ServiceSendable>, __safeDI_service_ServiceSendableBuilder: SafeDISendableScope_Service_Service.__safeDI_Builder<Service>) {
 			        let serviceSendable: ServiceSendable = __safeDI_serviceSendable_ServiceSendable_Builder.serviceSendable(SafeDIScope_ServiceSendable_ServiceSendable_.serviceSendable_Values())
-			        let service = SendableInstantiator<Service> {
-			            __safeDI_service_ServiceSendableBuilder(.service($0))
-			        }
-			        let serviceSendableService = SendableInstantiator<ServiceSendable_Service> {
-			            __safeDI_serviceSendable_ServiceSendableBuilder(.serviceSendableService($0))
-			        }
+			        let service = SendableInstantiator<Service>(__safeDI_service_ServiceSendableBuilder.service(SafeDISendableScope_Service_Service.service_Values()))
+			        let serviceSendableService = SendableInstantiator<ServiceSendable_Service>(__safeDI_serviceSendable_ServiceSendableBuilder.serviceSendableService(SafeDISendableScope_ServiceSendable_Service.serviceSendableService_Values()))
 			        self.init(serviceSendable: serviceSendable, service: service, serviceSendableService: serviceSendableService)
 			    }
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_C91043073B054FD1 {}
+			    public enum __safeDI_Host_800310EB38858505 {}
 			}
 			""",
 		])

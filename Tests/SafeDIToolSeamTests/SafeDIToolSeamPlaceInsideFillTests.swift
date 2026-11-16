@@ -2038,7 +2038,7 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			                screenBuilder: { _ in
 			                    .init(service: { __safeDI_serviceValues in __safeDI_defaultService_AnyServiceSendableBuilder_Inner(.screenBuilder(.service(__safeDI_serviceValues))) })
 			                },
-			                makeService: { _ in __safeDI_defaultService_AnyServiceSendableBuilder_Inner(.makeService) }
+			                makeService: { _ in { _ in __safeDI_defaultService_AnyServiceSendableBuilder_Inner(.makeService) } }
 			            ))
 			        }
 			        let inner: Inner = __safeDI_inner()
@@ -2140,7 +2140,7 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			        let tag = Tag()
 			        let __safeDI_gadgetValues_inner_defaultService_ServiceBuilder = SafeDIScope_Gadget.inner_defaultService_ServiceBuilder_Values(tag: tag)
 			        func __safeDI_inner() -> Inner {
-			            _ = Inner.__safeDI_Inner_0B4678CD9268E573.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Inner.__safeDI_Inner_33E151922C29F271.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            func __safeDI_defaultService_ServiceBuilder_Inner(_ __safeDI_inner_defaultService_ServiceBuilder: Inner.SafeDIScope_DefaultService_Service) -> any Service {
 			                switch __safeDI_inner_defaultService_ServiceBuilder {
 			                case let .screenBuilder(_, scope): return __safeDI_defaultService_ServiceBuilder_Inner_Screen_Scope(scope, __safeDI_inner_defaultService_ServiceBuilder: __safeDI_inner_defaultService_ServiceBuilder)
@@ -2156,7 +2156,11 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			                    return __safeDI_serviceBuilder(name: __safeDI_forwarded)
 			                }
 			            }
-			            return Inner(__safeDI_defaultService_ServiceBuilder: __safeDI_defaultService_ServiceBuilder_Inner)
+			            return Inner(__safeDI_defaultService_ServiceBuilder: .init(
+			                screenBuilder: { __safeDI_screenBuilderValues in
+			                    .init(serviceBuilder: { __safeDI_serviceBuilderValues in { forwarded in __safeDI_defaultService_ServiceBuilder_Inner(.screenBuilder(__safeDI_screenBuilderValues, .serviceBuilder(__safeDI_serviceBuilderValues, forwarded))) } })
+			                }
+			            ))
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        self.init(tag: tag, inner: inner)
@@ -2258,7 +2262,7 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			        let tag = Tag()
 			        let __safeDI_gadgetValues_inner_defaultService_ServiceBuilder = SafeDIScope_Gadget.inner_defaultService_ServiceBuilder_Values(tag: tag)
 			        func __safeDI_inner() -> Inner {
-			            _ = Inner.__safeDI_Inner_3D6A4B553123AC0D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Inner.__safeDI_Inner_17E074F131AC85AF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            func __safeDI_defaultService_ServiceBuilder_Inner(_ __safeDI_inner_defaultService_ServiceBuilder: Inner.SafeDIScope_DefaultService_Service) -> any Service {
 			                switch __safeDI_inner_defaultService_ServiceBuilder {
 			                case let .screenBuilder(_, scope): return __safeDI_defaultService_ServiceBuilder_Inner_Screen_Scope(scope, __safeDI_inner_defaultService_ServiceBuilder: __safeDI_inner_defaultService_ServiceBuilder)
@@ -2280,7 +2284,12 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			                    return __safeDI_serviceBuilder(name: __safeDI_forwarded)
 			                }
 			            }
-			            return Inner(__safeDI_defaultService_ServiceBuilder: __safeDI_defaultService_ServiceBuilder_Inner)
+			            return Inner(__safeDI_defaultService_ServiceBuilder: .init(
+			                screenBuilder: { __safeDI_screenBuilderValues in
+			                    .init(serviceBuilder: { __safeDI_serviceBuilderValues in { forwarded in __safeDI_defaultService_ServiceBuilder_Inner(.screenBuilder(__safeDI_screenBuilderValues, .serviceBuilder(__safeDI_serviceBuilderValues, forwarded))) } })
+			                },
+			                serviceBuilder: { __safeDI_serviceBuilderValues in { forwarded in __safeDI_defaultService_ServiceBuilder_Inner(.serviceBuilder(__safeDI_serviceBuilderValues, forwarded)) } }
+			            ))
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        self.init(tag: tag, inner: inner)
