@@ -1622,11 +1622,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		classSource.replacingOccurrences(of: "{\n    public init(", with: "{\n    \(DifferentialValueCreationStamp.property(counterNamed: "Stamp"))\n\n    public init(")
 	}
 
-	/// The files `integration` generates for `module` (see `SafeDIToolSeamBuilderParameterTests.generatedFiles`).
-	private static func generatedFiles(module: String, integration: MultiModuleIntegration, imports: [String], rootFiles: [String: String]) -> [String: String] {
-		SafeDIToolSeamBuilderParameterTests.generatedFiles(module: module, integration: integration, imports: imports, rootFiles: rootFiles)
-	}
-
 	/// The path of `fileName` in `moduleName` as a diagnostic reports it under `integration`: the plugin reports paths as
 	/// the parse normalized them.
 	private static func path(of fileName: String, inModule moduleName: String, fixtures: [String: FixturePaths], integration: MultiModuleIntegration) -> String {

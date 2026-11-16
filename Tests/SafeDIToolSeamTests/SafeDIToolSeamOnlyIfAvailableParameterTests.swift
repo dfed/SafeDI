@@ -162,8 +162,76 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(onlyIfAvailableOutput.dependencyTreeFiles == Self.sessionPassThroughOutput(guardName: "__safeDI_Screen_23887EC7D88CECA7"))
-		#expect(requiredOutput.dependencyTreeFiles == Self.sessionPassThroughOutput(guardName: "__safeDI_Screen_A7948F0FC398BA9B"))
+		#expect(onlyIfAvailableOutput.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_featureBuilder(session: Session?) -> Feature {
+			            func __safeDI_screen() -> Screen {
+			                _ = Screen.__safeDI_Screen_23887EC7D88CECA7.self
+			                return Screen(__safeDI_session: session)
+			            }
+			            let screen: Screen = __safeDI_screen()
+			            return Feature(session: session, screen: screen)
+			        }
+			        let featureBuilder = Instantiator<Feature> {
+			            __safeDI_featureBuilder(session: $0)
+			        }
+			        self.init(featureBuilder: featureBuilder)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_session: @autoclosure @escaping () -> Session?) {
+			        let session = LazilyInstantiated<Session?>(__safeDI_session)
+			        let detail = Detail(session: session.instance)
+			        self.init(detail: detail)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_23887EC7D88CECA7 {}
+			}
+			""",
+		])
+		#expect(requiredOutput.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_featureBuilder(session: Session?) -> Feature {
+			            func __safeDI_screen() -> Screen {
+			                _ = Screen.__safeDI_Screen_A7948F0FC398BA9B.self
+			                return Screen(__safeDI_session: session)
+			            }
+			            let screen: Screen = __safeDI_screen()
+			            return Feature(session: session, screen: screen)
+			        }
+			        let featureBuilder = Instantiator<Feature> {
+			            __safeDI_featureBuilder(session: $0)
+			        }
+			        self.init(featureBuilder: featureBuilder)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_session: @autoclosure @escaping () -> Session?) {
+			        let session = LazilyInstantiated<Session?>(__safeDI_session)
+			        let detail = Detail(session: session.instance)
+			        self.init(detail: detail)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_A7948F0FC398BA9B {}
+			}
+			""",
+		])
 	}
 
 	// MARK: Tests – The public mock of a seam
@@ -519,45 +587,6 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			"""
 			public struct Session {
 			    public init() {}
-			}
-			""",
-		]
-	}
-
-	/// What `sessionPassThroughFixture` generates, with the seam's guard named `guardName`.
-	private static func sessionPassThroughOutput(guardName: String) -> [String: String] {
-		[
-			"Root+SafeDI.swift": generatedFileHeader + """
-			extension Root {
-			    public init() {
-			        func __safeDI_featureBuilder(session: Session?) -> Feature {
-			            func __safeDI_screen() -> Screen {
-			                _ = Screen.\(guardName).self
-			                return Screen(__safeDI_session: session)
-			            }
-			            let screen: Screen = __safeDI_screen()
-			            return Feature(session: session, screen: screen)
-			        }
-			        let featureBuilder = Instantiator<Feature> {
-			            __safeDI_featureBuilder(session: $0)
-			        }
-			        self.init(featureBuilder: featureBuilder)
-			    }
-			}
-			""",
-			"Screen+SafeDI.swift": generatedFileHeader + """
-			extension Screen {
-			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_session: @autoclosure @escaping () -> Session?) {
-			        let session = LazilyInstantiated<Session?>(__safeDI_session)
-			        let detail = Detail(session: session.instance)
-			        self.init(detail: detail)
-			    }
-			}
-
-			extension Screen {
-			    public enum \(guardName) {}
 			}
 			""",
 		]

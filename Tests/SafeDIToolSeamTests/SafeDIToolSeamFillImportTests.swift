@@ -231,8 +231,4 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 	    public init() {}
 	}
 	"""], dependencies: ["Core"])
-
-	private static func generatedFile(importing moduleNames: [String], _ body: String) -> String {
-		generatedFileHeader + moduleNames.map { "#if canImport(\($0))\nimport \($0)\n#endif" }.joined(separator: "\n") + "\n\n" + body
-	}
 }
