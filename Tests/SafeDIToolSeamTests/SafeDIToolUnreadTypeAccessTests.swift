@@ -3470,42 +3470,98 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		let expected: [String: String] = switch conditions {
 		case ["A", "B"]:
-			Self.screenFiles(.moduleInfo, comment: [], assertions: Self.activeAssertion("A"), tiers: """
-			    /// Code you write and code SafeDI generates can both call this initializer.
-			    public init() {
-			        self.init(__safeDI_theme: nil)
-			    }
+			[
+				"Feature.swift": generatedFileHeader + """
+				#if canImport(Kit)
+				import Kit
+				#endif
 
-			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    internal init(__safeDI_theme theme: Theme?) {
-			        let cache = Cache()
-			        self.init(theme: theme, cache: cache)
-			    }
-			""", guardHash: "2163FBB3C02B31CD")
+				#if !(A)
+				#error("SafeDI scanned this module assuming `#if A` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+				#endif
+
+				extension Screen {
+				    /// Code you write and code SafeDI generates can both call this initializer.
+				    public init() {
+				        self.init(__safeDI_theme: nil)
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    internal init(__safeDI_theme theme: Theme?) {
+				        let cache = Cache()
+				        self.init(theme: theme, cache: cache)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_2163FBB3C02B31CD {}
+				}
+				""",
+			]
 		case ["B"]:
-			Self.screenFiles(.moduleInfo, comment: [], assertions: Self.inactiveAssertion("A") + Self.activeAssertion("B"), tiers: """
-			    /// Code you write and code SafeDI generates can both call this initializer.
-			    public init() {
-			        self.init(__safeDI_theme: nil)
-			    }
+			[
+				"Feature.swift": generatedFileHeader + """
+				#if canImport(Kit)
+				import Kit
+				#endif
 
-			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    package init(__safeDI_theme theme: Theme?) {
-			        let cache = Cache()
-			        self.init(theme: theme, cache: cache)
-			    }
-			""", guardHash: "27F6F01DC5D0EF8E")
+				#if A
+				#error("SafeDI scanned this module assuming `#if A` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+				#endif
+
+				#if !(B)
+				#error("SafeDI scanned this module assuming `#if B` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+				#endif
+
+				extension Screen {
+				    /// Code you write and code SafeDI generates can both call this initializer.
+				    public init() {
+				        self.init(__safeDI_theme: nil)
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    package init(__safeDI_theme theme: Theme?) {
+				        let cache = Cache()
+				        self.init(theme: theme, cache: cache)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_27F6F01DC5D0EF8E {}
+				}
+				""",
+			]
 		default:
-			Self.screenFiles(.moduleInfo, comment: [], assertions: Self.inactiveAssertion("A") + Self.inactiveAssertion("B"), tiers: """
-			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_theme theme: Theme?) {
-			        let cache = Cache()
-			        self.init(theme: theme, cache: cache)
-			    }
-			""", guardHash: "717280493A095F31")
+			[
+				"Feature.swift": generatedFileHeader + """
+				#if canImport(Kit)
+				import Kit
+				#endif
+
+				#if A
+				#error("SafeDI scanned this module assuming `#if A` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+				#endif
+
+				#if B
+				#error("SafeDI scanned this module assuming `#if B` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+				#endif
+
+				extension Screen {
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public init(__safeDI_theme theme: Theme?) {
+				        let cache = Cache()
+				        self.init(theme: theme, cache: cache)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_717280493A095F31 {}
+				}
+				""",
+			]
 		}
 		#expect(output.modules["Feature"]?.generatedFiles == expected)
 	}
@@ -3573,28 +3629,61 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		let expected = if isFlagReported {
-			Self.screenFiles(.moduleInfo, comment: [], assertions: Self.activeAssertion("FLAG"), tiers: """
-			    /// Code you write and code SafeDI generates can both call this initializer.
-			    public init() {
-			        self.init(__safeDI_theme: nil)
-			    }
+			[
+				"Feature.swift": generatedFileHeader + """
+				#if canImport(Kit)
+				import Kit
+				#endif
 
-			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    package init(__safeDI_theme theme: Theme?) {
-			        let cache = Cache()
-			        self.init(theme: theme, cache: cache)
-			    }
-			""", guardHash: "27F6F01DC5D0EF8E")
+				#if !(FLAG)
+				#error("SafeDI scanned this module assuming `#if FLAG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+				#endif
+
+				extension Screen {
+				    /// Code you write and code SafeDI generates can both call this initializer.
+				    public init() {
+				        self.init(__safeDI_theme: nil)
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    package init(__safeDI_theme theme: Theme?) {
+				        let cache = Cache()
+				        self.init(theme: theme, cache: cache)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_27F6F01DC5D0EF8E {}
+				}
+				""",
+			]
 		} else {
-			Self.screenFiles(.moduleInfo, comment: ["Theme"], assertions: Self.inactiveAssertion("FLAG"), tiers: """
-			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_theme theme: Theme?) {
-			        let cache = Cache()
-			        self.init(theme: theme, cache: cache)
-			    }
-			""", guardHash: "717280493A095F31")
+			[
+				"Feature.swift": generatedFileHeader + """
+				#if canImport(Kit)
+				import Kit
+				#endif
+
+				#if FLAG
+				#error("SafeDI scanned this module assuming `#if FLAG` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+				#endif
+
+				extension Screen {
+				    // SafeDI counts `Theme` as `public`: no module it reads declares it narrower. If `Theme` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public init(__safeDI_theme theme: Theme?) {
+				        let cache = Cache()
+				        self.init(theme: theme, cache: cache)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_717280493A095F31 {}
+				}
+				""",
+			]
 		}
 		#expect(output.modules["Feature"]?.generatedFiles == expected)
 	}
@@ -4208,16 +4297,102 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 					integration: integration,
 					filesToDelete: &filesToDelete,
 				)
-				// The plugin reads `Core`'s file and asserts the decision a mention of `Theme` resolves by.
-				let assertions = integration == .swiftPackagePlugin ? (conditions.isEmpty ? Self.inactiveAssertion("FLAG") : Self.activeAssertion("FLAG")) : ""
-				let expectedFiles = conditions.isEmpty ? Self.packageThemeTiers(integration, assertions: assertions) : Self.screenFiles(integration, comment: ["Theme"], imports: ["Core"], assertions: assertions, tiers: """
-				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public init(__safeDI_theme theme: Theme?) {
-				        let cache = Cache()
-				        self.init(theme: theme, cache: cache)
-				    }
-				""", guardHash: "717280493A095F31")
+				let expectedFiles = conditions.isEmpty ? (integration == .moduleInfo ? [
+					"Feature.swift": generatedFileHeader + """
+					#if canImport(Core)
+					import Core
+					#endif
+
+					extension Screen {
+					    /// Code you write and code SafeDI generates can both call this initializer.
+					    public init() {
+					        self.init(__safeDI_theme: nil)
+					    }
+
+					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+					    package init(__safeDI_theme theme: Theme?) {
+					        let cache = Cache()
+					        self.init(theme: theme, cache: cache)
+					    }
+					}
+
+					extension Screen {
+					    public enum __safeDI_Screen_27F6F01DC5D0EF8E {}
+					}
+					""",
+				] : [
+					"Screen+SafeDI.swift": generatedFileHeader + """
+					#if canImport(Core)
+					import Core
+					#endif
+
+					#if FLAG
+					#error("SafeDI scanned this module assuming `#if FLAG` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+					#endif
+
+					extension Screen {
+					    /// Code you write and code SafeDI generates can both call this initializer.
+					    public init() {
+					        self.init(__safeDI_theme: nil)
+					    }
+
+					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+					    package init(__safeDI_theme theme: Theme?) {
+					        let cache = Cache()
+					        self.init(theme: theme, cache: cache)
+					    }
+					}
+
+					extension Screen {
+					    public enum __safeDI_Screen_27F6F01DC5D0EF8E {}
+					}
+					""",
+				]) : (integration == .moduleInfo ? [
+					"Feature.swift": generatedFileHeader + """
+					#if canImport(Core)
+					import Core
+					#endif
+
+					extension Screen {
+					    // SafeDI counts `Theme` as `public`: no module it reads declares it narrower. If `Theme` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+					    public init(__safeDI_theme theme: Theme?) {
+					        let cache = Cache()
+					        self.init(theme: theme, cache: cache)
+					    }
+					}
+
+					extension Screen {
+					    public enum __safeDI_Screen_717280493A095F31 {}
+					}
+					""",
+				] : [
+					"Screen+SafeDI.swift": generatedFileHeader + """
+					#if canImport(Core)
+					import Core
+					#endif
+
+					#if !(FLAG)
+					#error("SafeDI scanned this module assuming `#if FLAG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+					#endif
+
+					extension Screen {
+					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+					    public init(__safeDI_theme theme: Theme?) {
+					        let cache = Cache()
+					        self.init(theme: theme, cache: cache)
+					    }
+					}
+
+					extension Screen {
+					    public enum __safeDI_Screen_717280493A095F31 {}
+					}
+					""",
+				])
 				#expect(output.modules["Feature"]?.generatedFiles == expectedFiles)
 			}
 		}
@@ -4504,29 +4679,62 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				#endif
 				"""])
 			case .swiftPackagePlugin:
-				#expect(output.modules["Feature"]?.generatedFiles == ["Screen+SafeDIMock.swift": generatedFileHeader + """
-				#if canImport(Core)
-				import Core
-				#endif
+				#expect(output.modules["Feature"]?.generatedFiles == (integration == .moduleInfo ? [
+					"Feature.swift": generatedFileHeader + """
+					#if canImport(Core)
+					import Core
+					#endif
 
-				#if DEBUG
-				extension Screen {
-				    public static func mock() -> Screen {
-				        Screen.mock(theme: nil)
-				    }
+					#if DEBUG
+					extension Screen {
+					    public static func mock() -> Screen {
+					        Screen.mock(theme: nil)
+					    }
 
-				    package static func mock(
-				        theme: Theme? = nil
-				    ) -> Screen {
-				        return Screen(theme: theme)
-				    }
-				}
+					    package static func mock(
+					        theme: Theme? = nil
+					    ) -> Screen {
+					        return Screen(theme: theme)
+					    }
+					}
 
-				extension Screen {
-				    public enum __safeDI_Screen_mock_68FAB8E0F700DD87 {}
-				}
-				#endif
-				""", "SafeDIMockConfiguration.swift": generatedFileHeader + Self.importLines(["Core"])])
+					extension Screen {
+					    public enum __safeDI_Screen_mock_68FAB8E0F700DD87 {}
+					}
+					#endif
+					""",
+				] : [
+					"SafeDIMockConfiguration.swift": generatedFileHeader + """
+					#if canImport(Core)
+					import Core
+					#endif
+
+
+					""",
+					"Screen+SafeDIMock.swift": generatedFileHeader + """
+					#if canImport(Core)
+					import Core
+					#endif
+
+					#if DEBUG
+					extension Screen {
+					    public static func mock() -> Screen {
+					        Screen.mock(theme: nil)
+					    }
+
+					    package static func mock(
+					        theme: Theme? = nil
+					    ) -> Screen {
+					        return Screen(theme: theme)
+					    }
+					}
+
+					extension Screen {
+					    public enum __safeDI_Screen_mock_68FAB8E0F700DD87 {}
+					}
+					#endif
+					""",
+				]))
 			}
 		}
 	}
@@ -5878,23 +6086,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	/// A file that declares `Endpoint` `public` where `DEBUG` is inactive.
 	private static let releaseEndpoint = "#if !DEBUG\npublic struct Endpoint {}\n#endif"
 
-	/// `Feature`'s generated files under `integration` for a seam that takes `theme: Theme?` on its `package` tier only.
-	private static func packageThemeTiers(_ integration: MultiModuleIntegration, assertions: String = "") -> [String: String] {
-		screenFiles(integration, comment: [], imports: ["Core"], assertions: assertions, tiers: """
-		    /// Code you write and code SafeDI generates can both call this initializer.
-		    public init() {
-		        self.init(__safeDI_theme: nil)
-		    }
-
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    package init(__safeDI_theme theme: Theme?) {
-		        let cache = Cache()
-		        self.init(theme: theme, cache: cache)
-		    }
-		""", guardHash: "27F6F01DC5D0EF8E")
-	}
-
 	/// `Core`, in `Feature`'s package, whose `Theme.swift` is `coreTheme`, and `Feature`, whose seam `Screen` receives
 	/// `receives`, both run with `conditions`.
 	private static func coreAndFeatureModules(coreTheme: String, receives: [String], conditions: [String], featureImports: [String] = ["Core"]) -> [ModuleFixture] {
@@ -5946,28 +6137,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				compilerSettings: module.compilerSettings,
 			)
 		}
-	}
-
-	/// The compile-time assertion a generated file carries for a `#if <condition>` the tool evaluated as active, ending
-	/// with the blank line that precedes what follows.
-	private static func activeAssertion(_ condition: String) -> String {
-		"""
-		#if !(\(condition))
-		#error("SafeDI scanned this module assuming `#if \(condition)` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
-		#endif
-
-		""" + "\n"
-	}
-
-	/// The compile-time assertion a generated file carries for a `#if <condition>` the tool evaluated as inactive, ending
-	/// with the blank line that precedes what follows.
-	private static func inactiveAssertion(_ condition: String) -> String {
-		"""
-		#if \(condition)
-		#error("SafeDI scanned this module assuming `#if \(condition)` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
-		#endif
-
-		""" + "\n"
 	}
 
 	/// The source of `Feature`'s seam `Screen`, declared `access`, whose `internal` initializer takes `receives` – each a
@@ -6126,40 +6295,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		])
 	}
 
-	/// The comment the generated file carries above its first `public` declaration that names a type of `names`.
-	private static func comment(_ names: [String]) -> String {
-		let list = names.map { "`\($0)`" }.joinedAsTestList
-		return names.count == 1
-			? "// SafeDI counts \(list) as `public`: no module it reads declares it narrower. If \(list) is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies."
-			: "// SafeDI counts \(list) as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies."
-	}
-
-	/// `Feature`'s generated files under `integration` for the seam `Screen`, whose extension holds `tiers`, with the
-	/// comment naming `comment` above the first tier under `.moduleInfo`, which runs without a target graph, and
-	/// `assertions` after the imports.
-	private static func screenFiles(_ integration: MultiModuleIntegration, comment names: [String], imports: [String] = ["Kit"], assertions: String = "", tiers: String, guardHash: String) -> [String: String] {
-		let commentLine = integration == .moduleInfo && !names.isEmpty ? "    \(comment(names))\n" : ""
-		// The comment is above the first `public` declaration that names one of `names`: the first tier, or where `tiers`
-		// marks it.
-		let commentedTiers = tiers.contains("    {COMMENT}\n") ? tiers.replacingOccurrences(of: "    {COMMENT}\n", with: commentLine) : commentLine + tiers
-		let code = generatedFileHeader + importLines(imports) + assertions + """
-		extension Screen {
-		\(commentedTiers)
-		}
-
-		extension Screen {
-		    public enum __safeDI_Screen_\(guardHash) {}
-		}
-		"""
-		return [integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": code]
-	}
-
-	/// The lines a generated file repeats for a fixture's imports of `moduleNames`, with the blank line after them when
-	/// there are any.
-	private static func importLines(_ moduleNames: [String]) -> String {
-		moduleNames.isEmpty ? "" : moduleNames.map { "#if canImport(\($0))\nimport \($0)\n#endif\n" }.joined() + "\n"
-	}
-
 	/// The path a diagnostic names `file` of `module` by under `integration`.
 	private static func path(of file: String, in module: String, _ fixtures: [String: FixturePaths], _ integration: MultiModuleIntegration) -> String {
 		guard let moduleFixtures = fixtures[module] else { return "<\(module) did not run>/\(file)" }
@@ -6214,9 +6349,4 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	}
 }
 
-extension [String] {
-	/// The strings as a list: two joined by "and", more with commas and a final "and", as the tool joins them.
-	fileprivate var joinedAsTestList: String {
-		count > 2 ? "\(dropLast().joined(separator: ", ")), and \(self[count - 1])" : joined(separator: " and ")
-	}
-}
+extension [String] {}

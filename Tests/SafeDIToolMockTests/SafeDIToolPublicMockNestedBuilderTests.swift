@@ -201,7 +201,40 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesTheCalledMocksBuilderAsAFlatParameter_whenInternalCallerSeesNoTypeThatFulfillsTheHole() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(app: [Self.screen]), integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.screenTakingTheBuilder])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            panel: Panel.SafeDIOverrides = .init()
+			        ) {
+			            self.panel = panel
+			        }
+
+			        let panel: Panel.SafeDIOverrides
+			    }
+
+			    static func mock(
+			        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        _ = Panel.__safeDI_Panel_mock_7621FED1AAE85D9A.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			        let panel = Panel.mock(serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides.panel)
+			        return Screen(panel: panel)
+			    }
+			}
+			#endif
+			""",
+		])
 	}
 
 	@Test
@@ -679,7 +712,40 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			""",
 		]), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		// The fill of either place would call `Gadget`'s mock, whose `gizmo` `App` cannot fill, so both pass up.
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.screenTakingTheBuilder])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            panel: Panel.SafeDIOverrides = .init()
+			        ) {
+			            self.panel = panel
+			        }
+
+			        let panel: Panel.SafeDIOverrides
+			    }
+
+			    static func mock(
+			        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        _ = Panel.__safeDI_Panel_mock_7621FED1AAE85D9A.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			        let panel = Panel.mock(serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides.panel)
+			        return Screen(panel: panel)
+			    }
+			}
+			#endif
+			""",
+		])
 	}
 
 	// MARK: Tests – a public caller
@@ -1142,7 +1208,40 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesThePlaceUp_whenInternalCallersFulfillerInstantiatesATypeNothingFulfills() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(app: [Self.screen, Self.defaultServiceInstantiatingGizmo]), integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.screenTakingTheBuilder])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            panel: Panel.SafeDIOverrides = .init()
+			        ) {
+			            self.panel = panel
+			        }
+
+			        let panel: Panel.SafeDIOverrides
+			    }
+
+			    static func mock(
+			        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        _ = Panel.__safeDI_Panel_mock_7621FED1AAE85D9A.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			        let panel = Panel.mock(serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides.panel)
+			        return Screen(panel: panel)
+			    }
+			}
+			#endif
+			""",
+		])
 	}
 
 	@Test
@@ -4891,21 +4990,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	        let panel: Panel.SafeDIOverrides
 	    }
 
-	"""
-
-	/// `App`'s file when `Screen`'s mock fills no place of `Panel`'s.
-	private static let screenTakingTheBuilder = """
-	\(screenPrelude)
-	    static func mock(
-	        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
-	        safeDIOverrides: SafeDIOverrides = .init()
-	    ) -> Screen {
-	        _ = Panel.\(panelGuard).self\(comment("Core"))
-	        let panel = Panel.mock(serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides.panel)
-	        return Screen(panel: panel)
-	    }
-	}
-	#endif
 	"""
 
 	/// `Mid`'s file up to `Board`'s `mock()`.

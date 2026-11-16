@@ -91,23 +91,18 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				#"Root().host.part.instantiate("name")"#
 			}
 		}
+	}
 
-		/// The name of the guard enum `Host` generates.
-		var guardName: String {
-			switch self {
-			case .lazilyInstantiated: "__safeDI_Host_83C5CBCFBDB0EF71"
-			case .sendableLazilyInstantiated: "__safeDI_Host_AEDE6D5B3DE5CA38"
-			case .instantiator: "__safeDI_Host_C853E827EA721EA0"
-			case .sendableInstantiator: "__safeDI_Host_0830438FF9BAA4FD"
-			case .erasedInstantiator: "__safeDI_Host_9F014CF6FCE98CA7"
-			case .sendableErasedInstantiator: "__safeDI_Host_D22716F6D1E4AD70"
-			}
-		}
-
-		var seamBody: String {
-			switch self {
-			case .lazilyInstantiated:
-				"""
+	@Test(arguments: WrapperKind.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsWrapperAroundBuilderThatReturnsPlainValue_whenHoleIsHeldInWrapper(wrapper: WrapperKind) async throws {
+		let feature = Self.featureFiles(hostDeclarations: ["@Received let analytics: Analytics", wrapper.declaration])
+		let modules = SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: Self.fulfillers + [Self.rootInstantiatingAnalytics])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		switch wrapper {
+		case .lazilyInstantiated:
+			expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+				"Feature.swift": generatedFileHeader + """
 				extension Host {
 				    @frozen nonisolated public enum SafeDIScope_Gadget {
 				        case part(part_Values)
@@ -140,9 +135,15 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        self.init(analytics: analytics, part: part)
 				    }
 				}
-				"""
-			case .sendableLazilyInstantiated:
-				"""
+
+				extension Host {
+				    public enum __safeDI_Host_83C5CBCFBDB0EF71 {}
+				}
+				""",
+			])
+		case .sendableLazilyInstantiated:
+			expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+				"Feature.swift": generatedFileHeader + """
 				extension Host {
 				    @frozen nonisolated public enum SafeDISendableScope_Gadget {
 				        case part
@@ -173,9 +174,15 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        self.init(analytics: analytics, part: part)
 				    }
 				}
-				"""
-			case .instantiator:
-				"""
+
+				extension Host {
+				    public enum __safeDI_Host_AEDE6D5B3DE5CA38 {}
+				}
+				""",
+			])
+		case .instantiator:
+			expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+				"Feature.swift": generatedFileHeader + """
 				extension Host {
 				    @frozen public enum SafeDIScope_Panel {
 				        case part(part_Values, Panel.ForwardedProperties)
@@ -194,9 +201,15 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        self.init(analytics: analytics, part: part)
 				    }
 				}
-				"""
-			case .sendableInstantiator:
-				"""
+
+				extension Host {
+				    public enum __safeDI_Host_C853E827EA721EA0 {}
+				}
+				""",
+			])
+		case .sendableInstantiator:
+			expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+				"Feature.swift": generatedFileHeader + """
 				extension Host {
 				    @frozen public enum SafeDISendableScope_Panel {
 				        case part(Panel.ForwardedProperties)
@@ -211,9 +224,15 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        self.init(analytics: analytics, part: part)
 				    }
 				}
-				"""
-			case .erasedInstantiator:
-				"""
+
+				extension Host {
+				    public enum __safeDI_Host_0830438FF9BAA4FD {}
+				}
+				""",
+			])
+		case .erasedInstantiator:
+			expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+				"Feature.swift": generatedFileHeader + """
 				extension Host {
 				    @frozen public enum SafeDIScope_NamedGadget_AnyGadget {
 				        case part(part_Values, String)
@@ -232,9 +251,15 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        self.init(analytics: analytics, part: part)
 				    }
 				}
-				"""
-			case .sendableErasedInstantiator:
-				"""
+
+				extension Host {
+				    public enum __safeDI_Host_9F014CF6FCE98CA7 {}
+				}
+				""",
+			])
+		case .sendableErasedInstantiator:
+			expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+				"Feature.swift": generatedFileHeader + """
 				extension Host {
 				    @frozen public enum SafeDISendableScope_NamedGadget_AnyGadget {
 				        case part(String)
@@ -249,14 +274,26 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        self.init(analytics: analytics, part: part)
 				    }
 				}
-				"""
-			}
-		}
 
-		var fillCode: String {
-			switch self {
-			case .lazilyInstantiated:
-				"""
+				extension Host {
+				    public enum __safeDI_Host_D22716F6D1E4AD70 {}
+				}
+				""",
+			])
+		}
+		switch wrapper {
+		case .lazilyInstantiated:
+			expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        let analytics = Analytics()
+				        func __safeDI_host() -> Host {
+				            _ = Host.__safeDI_Host_83C5CBCFBDB0EF71.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				            func __safeDI_gadgetBuilder_Host_part(_ scope: Host.SafeDIScope_Gadget.part_Values) -> any Gadget {
 				                let analytics = scope.analytics
 				                func __safeDI_part() -> DefaultGadget {
@@ -268,9 +305,25 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				                .init(part: { scope in __safeDI_gadgetBuilder_Host_part(scope) })
 				            }
 				            return Host(__safeDI_analytics: analytics, __safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host())
-				"""
-			case .sendableLazilyInstantiated:
-				"""
+				        }
+				        let host: Host = __safeDI_host()
+				        self.init(analytics: analytics, host: host)
+				    }
+				}
+				""",
+			])
+		case .sendableLazilyInstantiated:
+			expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        let analytics = Analytics()
+				        func __safeDI_host() -> Host {
+				            _ = Host.__safeDI_Host_AEDE6D5B3DE5CA38.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				            @Sendable func __safeDI_gadgetSendableBuilder_Host_part() -> any Gadget {
 				                @Sendable func __safeDI_part() -> DefaultGadget {
 				                    DefaultGadget(analytics: analytics)
@@ -281,9 +334,25 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				                .init(part: { _ in __safeDI_gadgetSendableBuilder_Host_part() })
 				            }
 				            return Host(__safeDI_analytics: analytics, __safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_Host())
-				"""
-			case .instantiator:
-				"""
+				        }
+				        let host: Host = __safeDI_host()
+				        self.init(analytics: analytics, host: host)
+				    }
+				}
+				""",
+			])
+		case .instantiator:
+			expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        let analytics = Analytics()
+				        func __safeDI_host() -> Host {
+				            _ = Host.__safeDI_Host_C853E827EA721EA0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				            func __safeDI_panelBuilder_Host(_ scope: Host.SafeDIScope_Panel) -> Panel {
 				                switch scope {
 				                case let .part(scope, __safeDI_forwarded):
@@ -295,9 +364,25 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				                }
 				            }
 				            return Host(__safeDI_analytics: analytics, __safeDI_panelBuilder: __safeDI_panelBuilder_Host)
-				"""
-			case .sendableInstantiator:
-				"""
+				        }
+				        let host: Host = __safeDI_host()
+				        self.init(analytics: analytics, host: host)
+				    }
+				}
+				""",
+			])
+		case .sendableInstantiator:
+			expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        let analytics = Analytics()
+				        func __safeDI_host() -> Host {
+				            _ = Host.__safeDI_Host_0830438FF9BAA4FD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				            @Sendable func __safeDI_panelSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Panel) -> Panel {
 				                switch scope {
 				                case let .part(__safeDI_forwarded):
@@ -308,9 +393,25 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				                }
 				            }
 				            return Host(__safeDI_analytics: analytics, __safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder_Host)
-				"""
-			case .erasedInstantiator:
-				"""
+				        }
+				        let host: Host = __safeDI_host()
+				        self.init(analytics: analytics, host: host)
+				    }
+				}
+				""",
+			])
+		case .erasedInstantiator:
+			expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        let analytics = Analytics()
+				        func __safeDI_host() -> Host {
+				            _ = Host.__safeDI_Host_9F014CF6FCE98CA7.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				            func __safeDI_namedGadget_AnyGadgetBuilder_Host(_ scope: Host.SafeDIScope_NamedGadget_AnyGadget) -> AnyGadget {
 				                switch scope {
 				                case let .part(scope, __safeDI_forwarded):
@@ -322,9 +423,25 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				                }
 				            }
 				            return Host(__safeDI_analytics: analytics, __safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host)
-				"""
-			case .sendableErasedInstantiator:
-				"""
+				        }
+				        let host: Host = __safeDI_host()
+				        self.init(analytics: analytics, host: host)
+				    }
+				}
+				""",
+			])
+		case .sendableErasedInstantiator:
+			expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        let analytics = Analytics()
+				        func __safeDI_host() -> Host {
+				            _ = Host.__safeDI_Host_D22716F6D1E4AD70.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				            @Sendable func __safeDI_namedGadget_AnyGadgetSendableBuilder_Host(_ scope: Host.SafeDISendableScope_NamedGadget_AnyGadget) -> AnyGadget {
 				                switch scope {
 				                case let .part(__safeDI_forwarded):
@@ -335,41 +452,14 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				                }
 				            }
 				            return Host(__safeDI_analytics: analytics, __safeDI_namedGadget_AnyGadgetSendableBuilder: __safeDI_namedGadget_AnyGadgetSendableBuilder_Host)
-				"""
-			}
+				        }
+				        let host: Host = __safeDI_host()
+				        self.init(analytics: analytics, host: host)
+				    }
+				}
+				""",
+			])
 		}
-	}
-
-	@Test(arguments: WrapperKind.allCases)
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsWrapperAroundBuilderThatReturnsPlainValue_whenHoleIsHeldInWrapper(wrapper: WrapperKind) async throws {
-		let feature = Self.featureFiles(hostDeclarations: ["@Received let analytics: Analytics", wrapper.declaration])
-		let modules = SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: Self.fulfillers + [Self.rootInstantiatingAnalytics])
-		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
-		\(wrapper.seamBody)
-
-		extension Host {
-		    public enum \(wrapper.guardName) {}
-		}
-		"""])
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
-		#if canImport(Feature)
-		import Feature
-		#endif
-
-		extension Root {
-		    public init() {
-		        let analytics = Analytics()
-		        func __safeDI_host() -> Host {
-		            _ = Host.\(wrapper.guardName).self\(seamCallComment(seam: "Host"))
-		\(wrapper.fillCode)
-		        }
-		        let host: Host = __safeDI_host()
-		        self.init(analytics: analytics, host: host)
-		    }
-		}
-		"""])
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,

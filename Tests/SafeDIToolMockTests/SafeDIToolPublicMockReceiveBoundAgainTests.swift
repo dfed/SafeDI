@@ -51,7 +51,120 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		// beneath `Hub`'s `user: User`. `LiveApi`, reading `user: User`, would be handed `Hub`'s, which inline rejects as hidden.
 		let modules = Self.modules(feature: Self.feature(wrapper: .sendable, closesCycle: true), liveApiReads: "User")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.sendableCycleFeature])
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Hub {
+			    @frozen public enum SafeDIMockScope_Api {
+			        @frozen public enum B_Scope {
+			            case api(api_Values)
+
+			            public struct api_Values {
+			                public let user: Draft
+			                public let x: X
+			            }
+			        }
+			    }
+
+			    @frozen public enum SafeDISendableMockScope_Api {
+			        case x_Sendable(SafeDISendableMockScope_Api.X_Scope)
+
+			        @frozen public enum X_Scope {
+			            case bBuilder(SafeDIMockScope_Api.B_Scope)
+			        }
+			    }
+
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            user: (() -> User)? = nil,
+			            x: __safeDI_Feature_X_MockConfiguration = .init()
+			        ) {
+			            self.user = user
+			            self.x = x
+			        }
+
+			        public let user: (() -> User)?
+			        public let x: __safeDI_Feature_X_MockConfiguration
+			    }
+
+			    public static func mock(
+			        user_Draft: Draft,
+			        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
+			        user: User? = nil,
+			        x: X? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Hub {
+			        let __safeDI_apiSendableBuilder = apiSendableBuilder
+			        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+			        let __safeDI_x__safeDIBuilder = safeDIOverrides.x.safeDIBuilder
+			        @Sendable func __safeDI_x() -> X {
+			            @Sendable func __safeDI_bBuilder() -> B {
+			                let user: Draft = user_Draft
+			                let x: X = __safeDI_x()
+			                let api: any Api = __safeDI_apiSendableBuilder(.x_Sendable(.bBuilder(.api(SafeDIMockScope_Api.B_Scope.api_Values(user: user, x: x)))))
+			                return B.__safeDI_init(api: api, x: x, user: user, safeDIBuilder: nil)
+			            }
+			            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
+			            return X.__safeDI_init(bBuilder: bBuilder, safeDIBuilder: __safeDI_x__safeDIBuilder)
+			        }
+			        let x: X = if let x { x } else { __safeDI_x() }
+			        return Hub(user: user, x: x)
+			    }
+			}
+
+			extension Hub {
+			    public enum __safeDI_Hub_mock_2D6711958996C05D {}
+			}
+			#endif
+
+			#if DEBUG
+			/// Configuration for how `B` is constructed within the public mock trees of module `Feature`.
+			nonisolated public struct __safeDI_Feature_B_MockConfiguration {
+			    public init(
+			        x: __safeDI_Feature_X_MockConfiguration = .init(),
+			        _ safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)? = nil
+			    ) {
+			        self.x = x
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    public let x: __safeDI_Feature_X_MockConfiguration
+			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)?
+			}
+
+			extension B {
+			    static func __safeDI_init(api: any Api, x: X, user: Draft, safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)?) -> B {
+			        if let safeDIBuilder { safeDIBuilder(api, x, user) } else { B(api: api, x: x, user: user) }
+			    }
+			}
+
+			/// Configuration for how `X` is constructed within the public mock trees of module `Feature`.
+			nonisolated public struct __safeDI_Feature_X_MockConfiguration {
+			    public init(
+			        _ safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)? = nil
+			    ) {
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    /// Overrides how `X` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)?
+			}
+
+			extension X {
+			    static func __safeDI_init(bBuilder: SendableInstantiator<B>, safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)?) -> X {
+			        if let safeDIBuilder { safeDIBuilder(bBuilder) } else { X(bBuilder: bBuilder) }
+			    }
+			}
+			#endif
+
+			""",
+		])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
@@ -164,7 +277,120 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		// `LiveApi` reads `user: User?` only if available: `B`'s `user: Draft` hides `Hub`'s `user: User`, so the fill is not handed it.
 		let modules = Self.modules(feature: Self.feature(wrapper: .sendable, closesCycle: true), liveApiReads: "User?")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.sendableCycleFeature])
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Hub {
+			    @frozen public enum SafeDIMockScope_Api {
+			        @frozen public enum B_Scope {
+			            case api(api_Values)
+
+			            public struct api_Values {
+			                public let user: Draft
+			                public let x: X
+			            }
+			        }
+			    }
+
+			    @frozen public enum SafeDISendableMockScope_Api {
+			        case x_Sendable(SafeDISendableMockScope_Api.X_Scope)
+
+			        @frozen public enum X_Scope {
+			            case bBuilder(SafeDIMockScope_Api.B_Scope)
+			        }
+			    }
+
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            user: (() -> User)? = nil,
+			            x: __safeDI_Feature_X_MockConfiguration = .init()
+			        ) {
+			            self.user = user
+			            self.x = x
+			        }
+
+			        public let user: (() -> User)?
+			        public let x: __safeDI_Feature_X_MockConfiguration
+			    }
+
+			    public static func mock(
+			        user_Draft: Draft,
+			        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
+			        user: User? = nil,
+			        x: X? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Hub {
+			        let __safeDI_apiSendableBuilder = apiSendableBuilder
+			        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+			        let __safeDI_x__safeDIBuilder = safeDIOverrides.x.safeDIBuilder
+			        @Sendable func __safeDI_x() -> X {
+			            @Sendable func __safeDI_bBuilder() -> B {
+			                let user: Draft = user_Draft
+			                let x: X = __safeDI_x()
+			                let api: any Api = __safeDI_apiSendableBuilder(.x_Sendable(.bBuilder(.api(SafeDIMockScope_Api.B_Scope.api_Values(user: user, x: x)))))
+			                return B.__safeDI_init(api: api, x: x, user: user, safeDIBuilder: nil)
+			            }
+			            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
+			            return X.__safeDI_init(bBuilder: bBuilder, safeDIBuilder: __safeDI_x__safeDIBuilder)
+			        }
+			        let x: X = if let x { x } else { __safeDI_x() }
+			        return Hub(user: user, x: x)
+			    }
+			}
+
+			extension Hub {
+			    public enum __safeDI_Hub_mock_2D6711958996C05D {}
+			}
+			#endif
+
+			#if DEBUG
+			/// Configuration for how `B` is constructed within the public mock trees of module `Feature`.
+			nonisolated public struct __safeDI_Feature_B_MockConfiguration {
+			    public init(
+			        x: __safeDI_Feature_X_MockConfiguration = .init(),
+			        _ safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)? = nil
+			    ) {
+			        self.x = x
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    public let x: __safeDI_Feature_X_MockConfiguration
+			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)?
+			}
+
+			extension B {
+			    static func __safeDI_init(api: any Api, x: X, user: Draft, safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)?) -> B {
+			        if let safeDIBuilder { safeDIBuilder(api, x, user) } else { B(api: api, x: x, user: user) }
+			    }
+			}
+
+			/// Configuration for how `X` is constructed within the public mock trees of module `Feature`.
+			nonisolated public struct __safeDI_Feature_X_MockConfiguration {
+			    public init(
+			        _ safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)? = nil
+			    ) {
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    /// Overrides how `X` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)?
+			}
+
+			extension X {
+			    static func __safeDI_init(bBuilder: SendableInstantiator<B>, safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)?) -> X {
+			        if let safeDIBuilder { safeDIBuilder(bBuilder) } else { X(bBuilder: bBuilder) }
+			    }
+			}
+			#endif
+
+			""",
+		])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
@@ -277,7 +503,68 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		// No cycle: `Hub` receives `SendableInstantiator<B>` itself, and `B` receives `user: Draft` beneath `Hub`'s `user: User`.
 		let modules = Self.modules(feature: Self.feature(wrapper: .sendable, closesCycle: false), liveApiReads: "User")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.sendableNoCycleFeature])
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Hub {
+			    @frozen public enum SafeDIMockScope_Api {
+			        @frozen public enum B_Scope {
+			            case api(api_Values)
+
+			            public struct api_Values {
+			                public let user: Draft
+			            }
+			        }
+			    }
+
+			    @frozen public enum SafeDISendableMockScope_Api {
+			        case bBuilder(SafeDIMockScope_Api.B_Scope)
+			    }
+
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            user: (() -> User)? = nil,
+			            bBuilder: (@Sendable (any Api, Draft) -> B)? = nil
+			        ) {
+			            self.user = user
+			            self.bBuilder = bBuilder
+			        }
+
+			        public let user: (() -> User)?
+			        public let bBuilder: (@Sendable (any Api, Draft) -> B)?
+			    }
+
+			    public static func mock(
+			        user_Draft: Draft,
+			        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
+			        bBuilder: SendableInstantiator<B>? = nil,
+			        user: User? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Hub {
+			        let __safeDI_apiSendableBuilder = apiSendableBuilder
+			        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+			        let __safeDI_bBuilder__safeDIBuilder = safeDIOverrides.bBuilder
+			        @Sendable func __safeDI_bBuilder() -> B {
+			            let user: Draft = user_Draft
+			            let api: any Api = __safeDI_apiSendableBuilder(.bBuilder(.api(SafeDIMockScope_Api.B_Scope.api_Values(user: user))))
+			            return if let safeDIBuilder = __safeDI_bBuilder__safeDIBuilder { safeDIBuilder(api, user) } else { B(api: api, user: user) }
+			        }
+			        let bBuilder = if let bBuilder { bBuilder } else { SendableInstantiator<B>(__safeDI_bBuilder) }
+			        return Hub(user: user, bBuilder: bBuilder)
+			    }
+			}
+
+			extension Hub {
+			    public enum __safeDI_Hub_mock_AF3A489729B5F092 {}
+			}
+			#endif
+			""",
+		])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
@@ -324,7 +611,125 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		// `user: User` is passed up rather than handed `Hub`'s, which inline rejects as hidden.
 		let modules = Self.modules(feature: Self.feature(wrapper: .plain, closesCycle: true), liveApiReads: "User")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.plainCycleFeature])
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Hub {
+			    @frozen public enum SafeDIMockScope_Api {
+			        case x(x_Values, SafeDIMockScope_Api.X_Scope)
+
+			        public struct x_Values {
+			            public let user: User
+			        }
+
+			        @frozen public enum X_Scope {
+			            case bBuilder(bBuilder_Values, SafeDIMockScope_Api.B_Scope)
+
+			            public struct bBuilder_Values {}
+			        }
+
+			        @frozen public enum B_Scope {
+			            case api(api_Values)
+
+			            public struct api_Values {
+			                public let user: Draft
+			                public let x: X
+			            }
+			        }
+			    }
+
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            user: (() -> User)? = nil,
+			            x: __safeDI_Feature_X_MockConfiguration = .init()
+			        ) {
+			            self.user = user
+			            self.x = x
+			        }
+
+			        public let user: (() -> User)?
+			        public let x: __safeDI_Feature_X_MockConfiguration
+			    }
+
+			    public static func mock(
+			        user_Draft: Draft,
+			        apiBuilder: @escaping (Hub.SafeDIMockScope_Api) -> any Api,
+			        user: User? = nil,
+			        x: X? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Hub {
+			        let __safeDI_apiBuilder = apiBuilder
+			        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+			        let __safeDI_apiValues_x = SafeDIMockScope_Api.x_Values(user: user)
+			        func __safeDI_x() -> X {
+			            let __safeDI_apiValues_bBuilder = SafeDIMockScope_Api.X_Scope.bBuilder_Values()
+			            func __safeDI_bBuilder() -> B {
+			                let user: Draft = user_Draft
+			                let x: X = __safeDI_x()
+			                let api: any Api = __safeDI_apiBuilder(.x(__safeDI_apiValues_x, .bBuilder(__safeDI_apiValues_bBuilder, .api(SafeDIMockScope_Api.B_Scope.api_Values(user: user, x: x)))))
+			                return B.__safeDI_init(api: api, x: x, user: user, safeDIBuilder: nil)
+			            }
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return X.__safeDI_init(bBuilder: bBuilder, safeDIBuilder: safeDIOverrides.x.safeDIBuilder)
+			        }
+			        let x: X = if let x { x } else { __safeDI_x() }
+			        return Hub(user: user, x: x)
+			    }
+			}
+
+			extension Hub {
+			    public enum __safeDI_Hub_mock_09EA5B6C21F15CC7 {}
+			}
+			#endif
+
+			#if DEBUG
+			/// Configuration for how `B` is constructed within the public mock trees of module `Feature`.
+			nonisolated public struct __safeDI_Feature_B_MockConfiguration {
+			    public init(
+			        x: __safeDI_Feature_X_MockConfiguration = .init(),
+			        _ safeDIBuilder: ((any Api, X, Draft) -> B)? = nil
+			    ) {
+			        self.x = x
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    public let x: __safeDI_Feature_X_MockConfiguration
+			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((any Api, X, Draft) -> B)?
+			}
+
+			extension B {
+			    static func __safeDI_init(api: any Api, x: X, user: Draft, safeDIBuilder: ((any Api, X, Draft) -> B)?) -> B {
+			        if let safeDIBuilder { safeDIBuilder(api, x, user) } else { B(api: api, x: x, user: user) }
+			    }
+			}
+
+			/// Configuration for how `X` is constructed within the public mock trees of module `Feature`.
+			nonisolated public struct __safeDI_Feature_X_MockConfiguration {
+			    public init(
+			        _ safeDIBuilder: ((Instantiator<B>) -> X)? = nil
+			    ) {
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    /// Overrides how `X` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Instantiator<B>) -> X)?
+			}
+
+			extension X {
+			    static func __safeDI_init(bBuilder: Instantiator<B>, safeDIBuilder: ((Instantiator<B>) -> X)?) -> X {
+			        if let safeDIBuilder { safeDIBuilder(bBuilder) } else { X(bBuilder: bBuilder) }
+			    }
+			}
+			#endif
+
+			""",
+		])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
@@ -437,7 +842,70 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		// No cycle: `Hub` receives `Instantiator<B>` itself, and `B` receives `user: Draft` beneath `Hub`'s `user: User`.
 		let modules = Self.modules(feature: Self.feature(wrapper: .plain, closesCycle: false), liveApiReads: "User")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.plainNoCycleFeature])
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Hub {
+			    @frozen public enum SafeDIMockScope_Api {
+			        case bBuilder(bBuilder_Values, SafeDIMockScope_Api.B_Scope)
+
+			        public struct bBuilder_Values {
+			            public let user: User
+			        }
+
+			        @frozen public enum B_Scope {
+			            case api(api_Values)
+
+			            public struct api_Values {
+			                public let user: Draft
+			            }
+			        }
+			    }
+
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            user: (() -> User)? = nil,
+			            bBuilder: ((any Api, Draft) -> B)? = nil
+			        ) {
+			            self.user = user
+			            self.bBuilder = bBuilder
+			        }
+
+			        public let user: (() -> User)?
+			        public let bBuilder: ((any Api, Draft) -> B)?
+			    }
+
+			    public static func mock(
+			        user_Draft: Draft,
+			        apiBuilder: @escaping (Hub.SafeDIMockScope_Api) -> any Api,
+			        bBuilder: Instantiator<B>? = nil,
+			        user: User? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Hub {
+			        let __safeDI_apiBuilder = apiBuilder
+			        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+			        let __safeDI_apiValues_bBuilder = SafeDIMockScope_Api.bBuilder_Values(user: user)
+			        func __safeDI_bBuilder() -> B {
+			            let user: Draft = user_Draft
+			            let api: any Api = __safeDI_apiBuilder(.bBuilder(__safeDI_apiValues_bBuilder, .api(SafeDIMockScope_Api.B_Scope.api_Values(user: user))))
+			            return if let safeDIBuilder = safeDIOverrides.bBuilder { safeDIBuilder(api, user) } else { B(api: api, user: user) }
+			        }
+			        let bBuilder = if let bBuilder { bBuilder } else { Instantiator<B>(__safeDI_bBuilder) }
+			        return Hub(user: user, bBuilder: bBuilder)
+			    }
+			}
+
+			extension Hub {
+			    public enum __safeDI_Hub_mock_9034726A3AAA829C {}
+			}
+			#endif
+			""",
+		])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
@@ -860,68 +1328,6 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 	/// The guard enum of `Hub`'s public mock in `sendableNoCycle`'s tree.
 	private static let sendableNoCycleGuard = "__safeDI_Hub_mock_AF3A489729B5F092"
-
-	/// `Feature`'s file for the tree `feature(…)` makes sendableNoCycle.
-	private static let sendableNoCycleFeature = """
-	#if canImport(SafeDI)
-	import SafeDI
-	#endif
-
-	#if DEBUG
-	extension Hub {
-	    @frozen public enum SafeDIMockScope_Api {
-	        @frozen public enum B_Scope {
-	            case api(api_Values)
-
-	            public struct api_Values {
-	                public let user: Draft
-	            }
-	        }
-	    }
-
-	    @frozen public enum SafeDISendableMockScope_Api {
-	        case bBuilder(SafeDIMockScope_Api.B_Scope)
-	    }
-
-	    /// Overrides for the mock dependency tree.
-	    nonisolated public struct SafeDIOverrides {
-	        public init(
-	            user: (() -> User)? = nil,
-	            bBuilder: (@Sendable (any Api, Draft) -> B)? = nil
-	        ) {
-	            self.user = user
-	            self.bBuilder = bBuilder
-	        }
-
-	        public let user: (() -> User)?
-	        public let bBuilder: (@Sendable (any Api, Draft) -> B)?
-	    }
-
-	    public static func mock(
-	        user_Draft: Draft,
-	        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
-	        bBuilder: SendableInstantiator<B>? = nil,
-	        user: User? = nil,
-	        safeDIOverrides: SafeDIOverrides = .init()
-	    ) -> Hub {
-	        let __safeDI_apiSendableBuilder = apiSendableBuilder
-	        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
-	        let __safeDI_bBuilder__safeDIBuilder = safeDIOverrides.bBuilder
-	        @Sendable func __safeDI_bBuilder() -> B {
-	            let user: Draft = user_Draft
-	            let api: any Api = __safeDI_apiSendableBuilder(.bBuilder(.api(SafeDIMockScope_Api.B_Scope.api_Values(user: user))))
-	            return if let safeDIBuilder = __safeDI_bBuilder__safeDIBuilder { safeDIBuilder(api, user) } else { B(api: api, user: user) }
-	        }
-	        let bBuilder = if let bBuilder { bBuilder } else { SendableInstantiator<B>(__safeDI_bBuilder) }
-	        return Hub(user: user, bBuilder: bBuilder)
-	    }
-	}
-
-	extension Hub {
-	    public enum \(Self.sendableNoCycleGuard) {}
-	}
-	#endif
-	"""
 
 	/// The guard enum of `Hub`'s public mock in `plainCycle`'s tree.
 	private static let plainCycleGuard = "__safeDI_Hub_mock_09EA5B6C21F15CC7"

@@ -109,21 +109,16 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let code = """
-		extension Root {
-		    public convenience init() {
-		        let service = Service()
-		        self.init(service: service)
-		    }
-		}
-		"""
-		let expectedGeneratedFiles = switch integration {
-		case .moduleInfo:
-			["App.swift": generatedFileHeader + code]
-		case .swiftPackagePlugin:
-			["Root+SafeDI.swift": generatedFileHeader + code]
-		}
-		#expect(try #require(output.modules["App"]).generatedFiles == expectedGeneratedFiles)
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        let service = Service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -256,69 +251,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		// Every construction of a type of another module relies on `package` access: in a builder function, an
 		// instantiator's, and a lazily instantiated dependency's; in a mock's tree, with an initializer and with a
 		// hand-written mock; and the construction of a listed mock's root. No line says so.
-		let header = generatedFileHeader + Self.importBlock("Feature") + "\n" + Self.importBlock("TestSupport") + "\n\n"
 		#expect(try #require(output.modules["App"]).generatedFiles == [
-			"Root+SafeDI.swift": generatedFileHeader + """
-			#if canImport(Feature)
-			import Feature
-			#endif
-			#if canImport(TestSupport)
-			import TestSupport
-			#endif
-
-			extension Root {
-			    public convenience init() {
-			        func __safeDI_engine() -> Engine {
-			            let service = Service()
-			            return Engine(service: service)
-			        }
-			        let engine: Engine = __safeDI_engine()
-			        func __safeDI_serviceBuilder() -> Service {
-			            Service()
-			        }
-			        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
-			        func __safeDI_lazyService() -> Service {
-			            Service()
-			        }
-			        let lazyService = LazilyInstantiated<Service>(__safeDI_lazyService)
-			        self.init(engine: engine, serviceBuilder: serviceBuilder, lazyService: lazyService)
-			    }
-			}
-			""",
-			"Screen+SafeDIMock.swift": generatedFileHeader + """
-			#if canImport(Feature)
-			import Feature
-			#endif
-			#if canImport(TestSupport)
-			import TestSupport
-			#endif
-
-			#if DEBUG
-			extension Screen {
-			    /// Overrides for the mock dependency tree.
-			    struct SafeDIOverrides {
-			        init(
-			            engine: Engine.SafeDIMockConfiguration = .init()
-			        ) {
-			            self.engine = engine
-			        }
-
-			        let engine: Engine.SafeDIMockConfiguration
-			    }
-
-			    static func mock(
-			        safeDIOverrides: SafeDIOverrides = .init()
-			    ) -> Screen {
-			        func __safeDI_engine() -> Engine {
-			            let service = if let safeDIBuilder = safeDIOverrides.engine.service { safeDIBuilder() } else { Service.mock() }
-			            return if let safeDIBuilder = safeDIOverrides.engine.safeDIBuilder { safeDIBuilder(service) } else { Engine(service: service) }
-			        }
-			        let engine: Engine = __safeDI_engine()
-			        return Screen(engine: engine)
-			    }
-			}
-			#endif
-			""",
 			"Engine+SafeDIMock.swift": generatedFileHeader + """
 			#if canImport(Feature)
 			import Feature
@@ -368,7 +301,77 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			}
 			#endif
 			""",
-			"SafeDIMockConfiguration.swift": header,
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(TestSupport)
+			import TestSupport
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_engine() -> Engine {
+			            let service = Service()
+			            return Engine(service: service)
+			        }
+			        let engine: Engine = __safeDI_engine()
+			        func __safeDI_serviceBuilder() -> Service {
+			            Service()
+			        }
+			        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
+			        func __safeDI_lazyService() -> Service {
+			            Service()
+			        }
+			        let lazyService = LazilyInstantiated<Service>(__safeDI_lazyService)
+			        self.init(engine: engine, serviceBuilder: serviceBuilder, lazyService: lazyService)
+			    }
+			}
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(TestSupport)
+			import TestSupport
+			#endif
+
+
+			""",
+			"Screen+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(TestSupport)
+			import TestSupport
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            engine: Engine.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.engine = engine
+			        }
+
+			        let engine: Engine.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_engine() -> Engine {
+			            let service = if let safeDIBuilder = safeDIOverrides.engine.service { safeDIBuilder() } else { Service.mock() }
+			            return if let safeDIBuilder = safeDIOverrides.engine.safeDIBuilder { safeDIBuilder(service) } else { Engine(service: service) }
+			        }
+			        let engine: Engine = __safeDI_engine()
+			        return Screen(engine: engine)
+			    }
+			}
+			#endif
+			""",
 		])
 	}
 
@@ -397,7 +400,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let header = generatedFileHeader + Self.importBlock("Feature") + "\n\n"
 		#expect(try #require(output.modules["App"]).generatedFiles == [
 			"Profile+SafeDIMock.swift": generatedFileHeader + """
 			#if canImport(Feature)
@@ -415,7 +417,13 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			}
 			#endif
 			""",
-			"SafeDIMockConfiguration.swift": header,
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+
+			""",
 		])
 	}
 
@@ -657,24 +665,25 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		let seamCode = """
-		extension Service {
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_analytics analytics: LazilyInstantiated<Analytics>, __safeDI_session session: Session) {
-		        let tokenCache = TokenCache()
-		        self.init(analytics: analytics, session: session, tokenCache: tokenCache)
-		    }
-		}
-
-		extension Service {
-		    public enum __safeDI_Service_EEBD82F55D1C7D4A {}
-		}
-		"""
 		let pluginComment = integration.seamCallComment(type: "Service", declaringModule: "Core")
 		switch integration {
 		case .moduleInfo:
-			#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + seamCode])
+			#expect(output.modules["Core"]?.generatedFiles == [
+				integration == .moduleInfo ? "Core.swift" : "Service+SafeDI.swift": generatedFileHeader + """
+				extension Service {
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public init(__safeDI_analytics analytics: LazilyInstantiated<Analytics>, __safeDI_session session: Session) {
+				        let tokenCache = TokenCache()
+				        self.init(analytics: analytics, session: session, tokenCache: tokenCache)
+				    }
+				}
+
+				extension Service {
+				    public enum __safeDI_Service_EEBD82F55D1C7D4A {}
+				}
+				""",
+			])
 			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 			#if canImport(Core)
 			import Core
@@ -701,7 +710,22 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			}
 			"""])
 		case .swiftPackagePlugin:
-			#expect(output.modules["Core"]?.generatedFiles == ["Service+SafeDI.swift": generatedFileHeader + seamCode])
+			#expect(output.modules["Core"]?.generatedFiles == [
+				integration == .moduleInfo ? "Core.swift" : "Service+SafeDI.swift": generatedFileHeader + """
+				extension Service {
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public init(__safeDI_analytics analytics: LazilyInstantiated<Analytics>, __safeDI_session session: Session) {
+				        let tokenCache = TokenCache()
+				        self.init(analytics: analytics, session: session, tokenCache: tokenCache)
+				    }
+				}
+
+				extension Service {
+				    public enum __safeDI_Service_EEBD82F55D1C7D4A {}
+				}
+				""",
+			])
 			#expect(output.modules["App"]?.generatedFiles == ["AppRoot+SafeDI.swift": generatedFileHeader + """
 			#if canImport(Core)
 			import Core
@@ -1127,42 +1151,43 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		let featureCode = """
-		extension Service {
-		    @frozen nonisolated public enum SafeDIScope_UserService {
-		        case userService(userService_Values)
-
-		        nonisolated public struct userService_Values {}
-
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let userService: (userService_Values) -> __safeDI_Built
-
-		            public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
-		                self.userService = userService
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.userService = { _ in __safeDI_builder() }
-		            }
-		        }
-		    }
-
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
-		        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.userService_Values())
-		        self.init(userService: userService)
-		    }
-		}
-
-		extension Service {
-		    public enum __safeDI_Service_DE15AB8B7FF442DE {}
-		}
-		"""
 		switch integration {
 		case .moduleInfo:
-			#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + featureCode])
+			#expect(output.modules["Feature"]?.generatedFiles == [
+				integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + """
+				extension Service {
+				    @frozen nonisolated public enum SafeDIScope_UserService {
+				        case userService(userService_Values)
+
+				        nonisolated public struct userService_Values {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let userService: (userService_Values) -> __safeDI_Built
+
+				            public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+				                self.userService = userService
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.userService = { _ in __safeDI_builder() }
+				            }
+				        }
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
+				        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.userService_Values())
+				        self.init(userService: userService)
+				    }
+				}
+
+				extension Service {
+				    public enum __safeDI_Service_DE15AB8B7FF442DE {}
+				}
+				""",
+			])
 			#expect(output.modules["FeatureImpl"]?.generatedFiles == ["FeatureImpl.swift": generatedFileHeader + """
 			#if canImport(Feature)
 			import Feature
@@ -1211,7 +1236,41 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			}
 			"""])
 		case .swiftPackagePlugin:
-			#expect(output.modules["Feature"]?.generatedFiles == ["Service+SafeDI.swift": generatedFileHeader + featureCode])
+			#expect(output.modules["Feature"]?.generatedFiles == [
+				integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + """
+				extension Service {
+				    @frozen nonisolated public enum SafeDIScope_UserService {
+				        case userService(userService_Values)
+
+				        nonisolated public struct userService_Values {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let userService: (userService_Values) -> __safeDI_Built
+
+				            public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+				                self.userService = userService
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.userService = { _ in __safeDI_builder() }
+				            }
+				        }
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
+				        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.userService_Values())
+				        self.init(userService: userService)
+				    }
+				}
+
+				extension Service {
+				    public enum __safeDI_Service_DE15AB8B7FF442DE {}
+				}
+				""",
+			])
 			#expect(output.modules["FeatureImpl"]?.generatedFiles == ["DefaultUserService+SafeDI.swift": generatedFileHeader + """
 			#if canImport(Feature)
 			import Feature
@@ -3422,10 +3481,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let header = generatedFileHeader + Self.importBlock("Feature") + "\n" + Self.importBlock("TestSupport") + "\n\n"
-		let expectedGeneratedFiles = switch integration {
-		case .moduleInfo:
-			["App.swift": generatedFileHeader + """
+		#expect(try #require(output.modules["App"]).generatedFiles == (integration == .moduleInfo ? [
+			"App.swift": generatedFileHeader + """
 			#if canImport(Feature)
 			import Feature
 			#endif
@@ -3454,9 +3511,19 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			    }
 			}
 			#endif
-			"""]
-		case .swiftPackagePlugin:
-			["Screen+SafeDIMock.swift": generatedFileHeader + """
+			""",
+		] : [
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(TestSupport)
+			import TestSupport
+			#endif
+
+
+			""",
+			"Screen+SafeDIMock.swift": generatedFileHeader + """
 			#if canImport(Feature)
 			import Feature
 			#endif
@@ -3485,9 +3552,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			    }
 			}
 			#endif
-			""", "SafeDIMockConfiguration.swift": header]
-		}
-		#expect(try #require(output.modules["App"]).generatedFiles == expectedGeneratedFiles)
+			""",
+		]))
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3718,19 +3784,27 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let code = generatedFileHeader + Self.importBlock("Feature") + "\n" + Self.importBlock("Kit") + "\n\n" + """
-		extension Root {
-		    public convenience init() {
-		        func __safeDI_service() -> Screen {
-		            let shelf: any Shelving = Space.Shelf()
-		            return Screen(shelf: shelf)
-		        }
-		        let service: Screen = __safeDI_service()
-		        self.init(service: service)
-		    }
-		}
-		"""
-		#expect(try #require(output.modules["App"]).generatedFiles == [integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": code])
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(Kit)
+			import Kit
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_service() -> Screen {
+			            let shelf: any Shelving = Space.Shelf()
+			            return Screen(shelf: shelf)
+			        }
+			        let service: Screen = __safeDI_service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -4147,8 +4221,23 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			compileVerification: .returningOutcomeOnly,
 			filesToDelete: &filesToDelete,
 		)
-		let code = generatedFileHeader + Self.importBlock("Base") + "\n" + Self.importBlock("Core") + "\n\n" + Self.rootCode(constructing: "Outer.Namespace.Helper")
-		#expect(output.modules["App"]?.generatedFiles == [integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": code])
+		#expect(output.modules["App"]?.generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Base)
+			import Base
+			#endif
+			#if canImport(Core)
+			import Core
+			#endif
+
+			extension Root {
+			    public init() {
+			        let helping: any Helping = Outer.Namespace.Helper()
+			        self.init(helping: helping)
+			    }
+			}
+			""",
+		])
 		try expectModuleCompilationFails(output, module: "App", containing: "'Namespace' is inaccessible due to 'package' protection level")
 	}
 
@@ -4964,18 +5053,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	    @Instantiated let helping: any Helping
 	}
 	"""
-
-	/// The code `App` generates for `rootInstantiatingHelping` when `Helping` is fulfilled by `helperType`.
-	private static func rootCode(constructing helperType: String) -> String {
-		"""
-		extension Root {
-		    public init() {
-		        let helping: any Helping = \(helperType)()
-		        self.init(helping: helping)
-		    }
-		}
-		"""
-	}
 
 	/// Expects every module before `module` to compile, and `module`'s generated code to fail to compile alongside its
 	/// inputs with an error containing `text`.
