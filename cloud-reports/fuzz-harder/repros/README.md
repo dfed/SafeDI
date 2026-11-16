@@ -14,3 +14,9 @@ Run each with `Scripts/multi-module-repro.sh cloud-reports/fuzz-harder/repros/<d
 
 Inner's `detail_Values` already carries the memo (`values.logger`); the generated fill reads the caller's
 declaration, which for a passed-up place is the root's, not the passing-up seam's.
+
+## F3: a hole fill passes `nil` where inline passes the value (seeds 1815, 4668)
+- `f3`: Seam (Feature) builds `Reader`, which receives `tag: LazilyInstantiated<Tag>?` only if available, and `service: any Service`. The hole `Impl` (App) receives `tag: Tag?` only if available. Root (App) declares `tag: LazilyInstantiated<Tag>`. Generated fill: `Impl(tag: nil)`.
+- `f3i`: the same without `generateDependencyTree`, built inline. Generated: `Impl(tag: tag.instance)`.
+- `f3b`: `f3` without `Reader`. Generated: `Impl(tag: tag.instance)`. So the second form of the label inside the seam's tree is what makes the fill pass `nil`. Moving `Impl` into Feature (the visible build) rejects the graph: "receives `tag` in two forms".
+Run: `zsh Scripts/repro-release.sh <dir> Feature App` (or `Scripts/multi-module-repro.sh`) on main 58cbc93.
