@@ -1283,9 +1283,9 @@ jobs:
       # report's `cpu` line says what each phase of a shard cost, which the combine job adds up per corpus.
       # The combination corpora (features `generateDependencyTree,combinationDraws` and
       # `generateMockPublic,combinationDraws`) draw one combination cell per seed (`GraphFuzzerCombinationDraw`): the
-      # seam combination corpus in five shards of 264 (1.42 seconds a seed on four cores locally, about 6.3 minutes a
-      # shard), and the public mock combination corpus's 330 seeds in one (130 seconds locally), until CI's first run
-      # measures them. So six corpora run in sixteen shards.
+      # seam combination corpus in five shards of 264, which fuzzed for 4.1 to 6.2 minutes, and the public mock
+      # combination corpus's 330 seeds in one, which fuzzed for 1.5 (run 43780496301, a coverage build). So five
+      # corpora run in sixteen shards.
       # No required check is a shard's: "Check Graph Fuzzer Corpus on Linux" is, so a change to this matrix needs no
       # stand-in for a Markdown-only change. A change to it changes graph-fuzzer-coverage's EXPECTED_SHARDS too.
       matrix:
@@ -1378,7 +1378,9 @@ jobs:
       # (TestTemporaryDirectory.environment). The step's limit is under the
       # job's, so a shard that runs out of time still summarizes and uploads
       # its report; the job's limit would cancel those steps too. A shard's
-      # fuzzer has taken 4.4 to 7.7 minutes (run 43762600658).
+      # fuzzer has taken 4.4 to 7.7 minutes (run 43762600658), a combination
+      # shard's 1.5 to 6.2 (run 43780496301, a coverage build); the limit is
+      # about twice the slowest.
       - name: Run Graph Fuzzer
         timeout-minutes: 16
         env:

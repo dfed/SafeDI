@@ -10036,7 +10036,7 @@ extension GraphFuzzerFailure {
 	/// The kinds of failure that, documented by a known issue, mask no later failure of the oracle's chain the issue does
 	/// not document (`GraphFuzzerFinding`), besides the builder surface's known kinds: a value or retention difference, the
 	/// value oracle's own fixture failures, and a scope case's, each judged after every oracle that could hide another.
-	/// `GraphFuzzerKnownIssue.masksNoLaterFailure` reads the same set through its signatures.
+	/// `GraphFuzzerKnownIssue.masksNoLaterFailure` lists the same kinds by signature; keep the two in step.
 	static let kindsMaskingNoLaterFailure: Set<Kind> = [
 		.seamBuildsOtherValuesThanInline,
 		.holeBuildsOtherValuesThanVisibleBuild,

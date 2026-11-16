@@ -116,9 +116,10 @@ struct GraphFuzzerCombinationCell: Hashable {
 /// The combination corpora's graphs (`GraphFuzzerGeneratorFeature.combinationDraws`): each seed draws one cell, the seed's
 /// remainder by the number of cells, alone, so that nearly every graph is accepted and judged and a cell gets ten judged
 /// graphs in few seeds. The seed's index among its cell's seeds (`indexInCell`) chooses the cell's variants and the
-/// graph's sendability, so that each variant is drawn in a fixed share of the cell's graphs, every one in each fifteen;
-/// one roll in two, from a stream seeded from the seed and the cell's name, puts the column's tree beneath `ComboParent`,
-/// a type of the roots' module that only builds it, so that the boundary type is not always the root's child. The root's
+/// graph's sendability, so that each variant is drawn in a fixed share of the cell's graphs, every one in each fifteen.
+/// Two rolls from a stream seeded from the seed and the cell's name follow: one in two puts the column's tree beneath
+/// `ComboParent`, a type of the roots' module that only builds it, so that the boundary type is not always the root's
+/// child, and one in two makes a mixed graph's wrappers `Sendable`, so that their kind follows no variant. The root's
 /// file names the cell on a line of its own (`marker`), from which `cell(drawnIn:)` reads it.
 struct GraphFuzzerCombinationDraw {
 	typealias TypeDeclaration = GraphFuzzerGenerator.TypeDeclaration
@@ -434,9 +435,10 @@ struct GraphFuzzerCombinationDraw {
 		case .fulfillerSeam:
 			// One graph in five makes the host a seam, which, where the host holds a place, is D3's shape (a fulfiller that is
 			// a seam with a place it cannot fill generates code that does not compile), so that twelve of each cell's fifteen
-			// judge. The graphs are the cell's 1st, 7th and 13th, whose index's remainder by five equals its quotient: one
-			// `Sendable`, one mixed and one plain, since sendability follows the remainder alone.
-			if indexInCell % 5 == indexInCell / 5 {
+			// judge. The graphs are the 1st, 7th and 13th of each fifteen, whose index in the fifteen has equal remainder and
+			// quotient by five: one `Sendable`, one mixed and one plain, since sendability follows the remainder alone.
+			let indexInPeriod = indexInCell % 15
+			if indexInPeriod % 5 == indexInPeriod / 5 {
 				declarations[hostIndex].instantiableArguments = Self.inserting("generateDependencyTree: true", into: host.instantiableArguments)
 			} else {
 				addToHost(PropertyDeclaration(attribute: "@Instantiated", label: "comboOwnSeamBuilder", type: "\(instantiator)<\(nameOfFilledSeam(hostName: hostName, in: column))>"))

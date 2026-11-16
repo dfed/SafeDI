@@ -51,7 +51,7 @@ on:
         required: false
         default: 'corpus'
       shards:
-        description: The number of jobs to split the graphs across, or `auto` for two with the seam feature (`generateDependencyTree`), whose graphs cost the most, and one otherwise.
+        description: The number of jobs to split the graphs across, or `auto` for two with the seam feature (`generateDependencyTree`), whose graphs cost the most, four with the seam combination corpus (`generateDependencyTree,combinationDraws`), and one otherwise.
         type: choice
         options: ['auto', '1', '2', '3', '4']
         default: 'auto'
@@ -81,7 +81,7 @@ jobs:
       fail-fast: false
       # One matrix entry per shard; each job reads its index and the count from `strategy`.
       matrix:
-        shard: ${{ fromJSON('{"1":[0],"2":[0,1],"3":[0,1,2],"4":[0,1,2,3]}')[(inputs.shards || 'auto') == 'auto' && (inputs.features == 'generateDependencyTree' && '2' || '1') || inputs.shards] }}
+        shard: ${{ fromJSON('{"1":[0],"2":[0,1],"3":[0,1,2],"4":[0,1,2,3]}')[(inputs.shards || 'auto') == 'auto' && (inputs.features == 'generateDependencyTree' && '2' || inputs.features == 'generateDependencyTree,combinationDraws' && '4' || '1') || inputs.shards] }}
     defaults:
       run:
         shell: bash
@@ -309,10 +309,10 @@ jobs:
       # Only the fuzzer's own process writes to the profile folder: every
       # process it starts gets an LLVM_PROFILE_FILE of its own in the test's
       # temporary directory. A shard's fuzzer has taken 4.4 to 7.7 minutes
-      # (run 43762600658), and a combination shard about 6.3 minutes measured
-      # locally until CI's first run measures it; the step's limit is about
-      # twice the slowest and under the job's, so a shard that runs out of
-      # time still uploads what it has.
+      # (run 43762600658), and a combination shard 1.5 to 6.2 minutes (run
+      # 43780496301); the step's limit is about twice the slowest and under
+      # the job's, so a shard that runs out of time still uploads what it
+      # has.
       - name: Run Graph Fuzzer
         timeout-minutes: 16
         env:
