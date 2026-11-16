@@ -5521,9 +5521,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							return routePlan.parameters(handing: channels, from: dispatcher).allSatisfy { !$0.isOptional }
 						} else {
 							return (routePlan.parametersByKey[target.key] ?? []).allSatisfy { parameter in
-								// A candidate's every place is filled on every route, so no case finds a value nowhere (`.none`): the
-								// place would be passed up on that route. Were one found, the payload lacks the field in its own form, so
-								// it is judged as a payload that does.
+								// A case finds a value nowhere (`.none`) where its payload holds the label in a form that does not provide
+								// the one read, where its type binds the label later, or where its dispatcher takes no parameter of it. It
+								// is judged as a payload: the payload has no field of the label in the read form, so the call converts.
 								switch routePlan.source(of: parameter.channel, in: dispatcherCase, of: dispatcher, valuesName: "") {
 								case .payload, .none:
 									dispatcherCase.values?.contains { $0.property == Property(label: parameter.channel.label, typeDescription: parameter.channel.type) } == true
