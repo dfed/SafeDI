@@ -1500,8 +1500,9 @@ extension DependencyTreeGenerator {
 		var calledCopyDeclarations = [String: SeamSignature.Hole.UncarriedDeclaration]()
 	}
 
-	/// What the calls inside the fills of `leaf`'s seam call hide from each of those fills, by the fill's key: each fill's
-	/// tree, from the scope of its fulfiller, is walked depth first in declaration order, and at each call inside it that
+	/// What the calls inside the fills of `leaf`'s seam call hide from each of those fills, by the fill's key: the fills in
+	/// the order their sites are declared, each fill's tree, from the scope of its fulfiller, is walked depth first in
+	/// declaration order, and at each call inside it that
 	/// passes on a fill of `leaf`'s call (a call of a seam that holds the fill's site or passes its builder up), whichever
 	/// fill's tree holds the call, that fill is hidden the declarations of the scopes on the path to the call – the fill's
 	/// root and the calling scope included, the called seam excluded – and the declarations the called seam's copy of
@@ -1515,7 +1516,10 @@ extension DependencyTreeGenerator {
 	/// those fills, by the fill's key (see `hiddenByReenteringCalls(ofFillsOf:)`).
 	static func hiddenByReenteringCalls(ofFills children: [ScopeGenerator]) -> [String: FillReentryHidings] {
 		var hiddenByFillKey = [String: FillReentryHidings]()
-		for case let (pathHole?, fulfiller?) in children.map({ ($0.fillHole, $0.children.first) }) {
+		// Each seam call's fills in the order their places are declared, here and at every seam call inside a fill, not
+		// the order of their builders' labels, so the first path met for a label, which a diagnostic names, never depends
+		// on names.
+		for case let (pathHole?, fulfiller?) in children.withFillsSortedByDeclarationLocations.map({ ($0.fillHole, $0.children.first) }) {
 			var generatorsToVisit = [(generator: fulfiller, callingType: TypeDescription?.none, pathDeclarations: [SeamSignature.Hole.UncarriedDeclaration]())]
 			while let (generator, callingType, pathDeclarations) = generatorsToVisit.popLast() {
 				guard !generator.closesPropertyCycle else { continue }
@@ -1534,10 +1538,40 @@ extension DependencyTreeGenerator {
 				}
 				let childPathDeclarations = pathDeclarations + declarationsBound(by: generator, includingForwardedProperties: true, reason: .other)
 				let childCallingType = generator.builtInstantiable?.concreteInstantiable ?? callingType
-				generatorsToVisit.append(contentsOf: generator.children.reversed().map { ($0, childCallingType, childPathDeclarations) })
+				generatorsToVisit.append(contentsOf: generator.children.withFillsSortedByDeclarationLocations.reversed().map { ($0, childCallingType, childPathDeclarations) })
 			}
 		}
 		return hiddenByFillKey
+	}
+}
+
+extension [ScopeGenerator] {
+	/// These generators with the fills among them, the generators of a seam call that fill its places, sorted by their
+	/// places' `declarationLocations` into the positions fills hold, and every other generator where it is. Two places
+	/// passed up through one property share their `forwardingLocation`, so the places' own declarations, and their
+	/// routes', order them, never their builders' labels.
+	fileprivate var withFillsSortedByDeclarationLocations: [ScopeGenerator] {
+		let fills = indices.compactMap { index in self[index].fillHole.map { (index: index, locations: $0.declarationLocations) } }
+		let sortedFills = fills.sorted { first, second in
+			for (firstLocation, secondLocation) in zip(first.locations, second.locations) where firstLocation != secondLocation {
+				return Dependency.DeclarationLocation.precedesInSourceOrder(firstLocation, secondLocation)
+			}
+			// One place reached the same way: the same location everywhere, which no name decides.
+			return first.locations.count == second.locations.count ? first.index < second.index : first.locations.count < second.locations.count
+		}
+		var ordered = self
+		for (fill, sortedFill) in zip(fills, sortedFills) {
+			ordered[fill.index] = self[sortedFill.index]
+		}
+		return ordered
+	}
+}
+
+extension SeamSignature.Hole {
+	/// Where the place is reached (`forwardingLocation`), where it is declared, and where each property of its route up
+	/// and of its site's path is declared, in that order: what orders fills of one seam call, which no label decides.
+	fileprivate var declarationLocations: [Dependency.DeclarationLocation?] {
+		[forwardingLocation, declarationLocation] + passedUpRoute.map(\.declarationLocation) + declaredSitePath.map(\.declarationLocation)
 	}
 }
 
