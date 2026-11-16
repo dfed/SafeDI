@@ -1,0 +1,23 @@
+trace:
+  Meter#1()
+  Meter#2()
+  Live#1(meter: Meter#2, badge: nil)
+  Sub#1(api: Live#1)
+  Badge#1(a: Sub#1)
+  Live#2(meter: Meter#1, badge: Badge#1)
+  Sub#2(api: Live#2)
+  Home#1(a: Sub#1, meter: Meter#1, badge: Badge#1, b: Sub#2)
+  Root#1(home: Home#1)
+alive holding the root: Badge 1, Home 1, Live 2, Meter 2, Root 1, Sub 2
+alive after dropping it: none
+trace with the meter overridden:
+  Meter#3()
+  Meter#4()
+  Live#3(meter: Meter#4, badge: nil)
+  Sub#3(api: Live#3)
+  Badge#2(a: Sub#3)
+  Live#4(meter: Meter#3, badge: Badge#2)
+  Sub#4(api: Live#4)
+  Home#2(a: Sub#3, meter: Meter#3, badge: Badge#2, b: Sub#4)
+  Root#2(home: Home#2)
+alive after dropping it: none

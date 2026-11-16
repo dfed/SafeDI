@@ -1,0 +1,39 @@
+import Core
+import Harness
+import SafeDI
+
+// Gap 2's loop: `aBuilder`'s call reads `sideBuilder`, and `Side` receives `aBuilder`.
+@Instantiable(generateMock: .public)
+public final class Store: Instantiable, Traced {
+    init(aBuilder: Instantiator<A>, sideBuilder: Instantiator<Side>) {
+        self.aBuilder = aBuilder
+        self.sideBuilder = sideBuilder
+        Registry.created(self, ["aBuilder": aBuilder, "sideBuilder": sideBuilder])
+    }
+
+    public let tracker = Tracker("Store")
+    @Instantiated public let aBuilder: Instantiator<A>
+    @Instantiated public let sideBuilder: Instantiator<Side>
+}
+
+@Instantiable
+public final class A: Instantiable, Traced {
+    init(api: any Api) {
+        self.api = api
+        Registry.created(self, ["api": api])
+    }
+
+    public let tracker = Tracker("A")
+    @Instantiated public let api: any Api
+}
+
+@Instantiable
+public final class Side: Instantiable, Traced {
+    init(aBuilder: Instantiator<A>) {
+        self.aBuilder = aBuilder
+        Registry.created(self, ["aBuilder": aBuilder])
+    }
+
+    public let tracker = Tracker("Side")
+    @Received public let aBuilder: Instantiator<A>
+}

@@ -1,0 +1,44 @@
+import Core
+import Harness
+import SafeDI
+
+// Gap 1: `a`'s call reads `meter`, which Home declares after `a`, so the call must start after `meter` is built.
+// Gap 2: `badge` receives `a`, so it cannot move before `a`'s call; `b`'s call reads `badge`, so `b` needs stage 1.
+@Instantiable(generateMock: .public)
+public final class Home: Instantiable, Traced {
+    init(a: Sub, meter: Meter, badge: Badge, b: Sub) {
+        self.a = a
+        self.meter = meter
+        self.badge = badge
+        self.b = b
+        Registry.created(self, ["a": a, "meter": meter, "badge": badge, "b": b])
+    }
+
+    public let tracker = Tracker("Home")
+    @Instantiated public let a: Sub
+    @Instantiated public let meter: Meter
+    @Instantiated public let badge: Badge
+    @Instantiated public let b: Sub
+}
+
+@Instantiable
+public final class Sub: Instantiable, Traced {
+    init(api: any Api) {
+        self.api = api
+        Registry.created(self, ["api": api])
+    }
+
+    public let tracker = Tracker("Sub")
+    @Instantiated public let api: any Api
+}
+
+@Instantiable
+public final class Badge: Instantiable, Traced {
+    init(a: Sub) {
+        self.a = a
+        Registry.created(self, ["a": a])
+    }
+
+    public let tracker = Tracker("Badge")
+    @Received public let a: Sub
+}

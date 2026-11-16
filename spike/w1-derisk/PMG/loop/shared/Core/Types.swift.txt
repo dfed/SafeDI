@@ -1,0 +1,4 @@
+import Harness
+import SafeDI
+
+public protocol Api: AnyObject {}

@@ -1,0 +1,2 @@
+   |               `- error: missing argument for parameter 'apiBuilder' in call
+/root/.cache/per-type-seam-spikeb/out-O/src/App/Types.swift:9:15: error: missing argument for parameter 'apiBuilder' in call

@@ -127,3 +127,21 @@ a -Onone: trace equals a-Onone.txt
 a -O: trace equals a-Onone.txt
 b -Onone: does not compile (2 distinct errors)
 b -O: does not compile (2 distinct errors)
+== PMG/order
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (3 distinct errors)
+b -O: does not compile (3 distinct errors)
+b2 -Onone: trace DIFFERS from a-Onone.txt
+b2 -O: trace DIFFERS from a-Onone.txt
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== PMG/loop
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (2 distinct errors)
+b -O: does not compile (2 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies

@@ -14,3 +14,6 @@ echo "== W1/base"; run W1/base a b
 echo "== PM/acc"; run PM/acc a b
 echo "== PM/w1"; run PM/w1 a b
 echo "== PMRE/base"; run PMRE/base a b
+# Gaps 1 and 2 inside a public-mock body (b2: today's split mock, called with the parameter it asks for).
+echo "== PMG/order"; run PMG/order a b b2 d
+echo "== PMG/loop"; run PMG/loop a b d

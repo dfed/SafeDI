@@ -11,6 +11,9 @@
 set -euo pipefail
 variant=${1:A}; optimization=$2; shift 2
 extra=("$@")
+# macOS: swiftc defaults to an old deployment target, below the harness's `Mutex` (macOS 15), so name one.
+platform=()
+[[ $(uname) == Darwin ]] && platform=(-target "$(uname -m)-apple-macosx15.0")
 spike=${0:A:h:h}
 repository=$(git -C "$spike" rev-parse --show-toplevel)
 bin=$(cd "$repository" && swift build --traits sourceBuild --show-bin-path)
@@ -25,7 +28,7 @@ if (( ${extra[(I)-enable-library-evolution]} )); then
 	# -warnings-as-errors) says it was not.
 	swiftc -emit-object -whole-module-optimization -parse-as-library -$optimization -o "$output/SafeDI.o" -module-name SafeDI \
 		-emit-module -emit-module-path "$output/SafeDI.swiftmodule" -load-plugin-executable "$macros#SafeDIMacros" \
-		-swift-version 6 -I "$module_search_path" "${extra[@]}" "$repository"/Sources/SafeDI/**/*.swift
+		-swift-version 6 -I "$module_search_path" "${platform[@]}" "${extra[@]}" "$repository"/Sources/SafeDI/**/*.swift
 	safedi_objects=("$output/SafeDI.o")
 	module_search_path="$output"
 fi
@@ -85,8 +88,8 @@ for module in "${module_list[@]}"; do
 		-o "$output/$module.o" -module-name "$module" -package-name "$(package_of $module)" \
 		-emit-module -emit-module-path "$output/$module.swiftmodule" \
 		-I "$module_search_path" -I "$output" \
-		-load-plugin-executable "$macros#SafeDIMacros" -swift-version 6 -warnings-as-errors -D DEBUG \
+		-load-plugin-executable "$macros#SafeDIMacros" -swift-version 6 -warnings-as-errors -D DEBUG "${platform[@]}" \
 		"${flags[@]}" "${sources[@]}"
 	objects+=("$output/$module.o")
 done
-swiftc -o "$output/main" "${objects[@]}" "${safedi_objects[@]}"
+swiftc "${platform[@]}" -o "$output/main" "${objects[@]}" "${safedi_objects[@]}"

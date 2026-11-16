@@ -1,0 +1,39 @@
+import Core
+import Feat
+import Harness
+import SafeDI
+
+#if DEBUG
+/// Main calls Root's internal mock through these.
+public func rootMock() -> Root {
+    Root.mock(apiBuilder: { _ in Live(meter: Meter(), badge: nil) })
+}
+
+public func rootMockOverridingMeter() -> Root {
+    Root.mock(apiBuilder: { _ in Live(meter: Meter(), badge: nil) }, safeDIOverrides: .init(home: .init(meter: { Meter() })))
+}
+#endif
+
+@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+public final class Live: Instantiable, Traced, Api {
+    public init(meter: Meter, badge: Badge?) {
+        self.meter = meter
+        self.badge = badge
+        Registry.created(self, ["meter": meter, "badge": badge])
+    }
+
+    public let tracker = Tracker("Live")
+    @Received public let meter: Meter
+    @Received(onlyIfAvailable: true) public let badge: Badge?
+}
+
+@Instantiable(generateMock: true)
+public final class Root: Instantiable, Traced {
+    public init(home: Home) {
+        self.home = home
+        Registry.created(self, ["home": home])
+    }
+
+    public let tracker = Tracker("Root")
+    @Instantiated public let home: Home
+}
