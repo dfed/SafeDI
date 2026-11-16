@@ -5058,10 +5058,11 @@ enum GraphFuzzerGenerator {
 				["ErasedInstantiator", "SendableErasedInstantiator"]
 			}
 			// The forwarding place's rolls, the instantiator place's, and the place that forwards nothing, each on a generator
-			// of its own, made whatever the base draw.
-			let forwardsTicketPair = holeRolls.forwardingPlaceShapes.percentChance(50)
-			let drawsSecondTicketPlace = holeRolls.forwardingPlaceShapes.percentChance(60)
-			let secondTicketPlaceSpelledOtherwise = holeRolls.forwardingPlaceShapes.percentChance(70)
+			// of its own, made whatever the base draw. The labeled pair, the second place and its other spelling are drawn
+			// often enough that ten graphs of each are judged after acceptance, as is the place beside the plain place.
+			let forwardsTicketPair = holeRolls.forwardingPlaceShapes.percentChance(75)
+			let drawsSecondTicketPlace = holeRolls.forwardingPlaceShapes.percentChance(90)
+			let secondTicketPlaceSpelledOtherwise = holeRolls.forwardingPlaceShapes.percentChance(95)
 			// Where the base draw passes nothing up, `HoleOuter` passes the forwarding place up now and then, so that a kept seam
 			// rebuilds its case around the value it forwards (`holeForwardingPlacePassedUp`).
 			let passesUpForwardingPlace = holeRolls.forwardingPlaceShapes.percentChance(40)
@@ -5072,8 +5073,8 @@ enum GraphFuzzerGenerator {
 			let drawsErasedBesideInstantiator = holeRolls.instantiatorPlace.percentChance(50)
 			let handedErasedWrapper = holeRolls.instantiatorPlace.element(of: erasedInstantiators)
 			let drawsPlainBesideInstantiator = holeRolls.instantiatorPlace.percentChance(90)
-			let drawsNothingForwardedPlace = holeRolls.nothingForwardedPlace.percentChance(80)
-			let nothingForwardedPlacement = holeRolls.nothingForwardedPlace.integer(in: 0...6)
+			let drawsNothingForwardedPlace = holeRolls.nothingForwardedPlace.percentChance(95)
+			let nothingForwardedPlacement = holeRolls.nothingForwardedPlace.integer(in: 0...9)
 			let nothingForwardedSpelling = holeRolls.nothingForwardedPlace.element(of: ["()", "Void"])
 			let nothingForwardedWrapper = holeRolls.nothingForwardedPlace.element(of: erasedInstantiators)
 			// Six in ten, so that the second erasure lands in enough accepted graphs for the builder surface's floor of its pair
@@ -5518,12 +5519,14 @@ enum GraphFuzzerGenerator {
 			// placements). A `@Sendable` place of `any HoleService` could read nothing `HoleImpl` reads, so a graph whose types
 			// are all `Sendable` places it alone.
 			if drawsNothingForwardedPlace {
-				if nothingForwardedPlacement >= 3, let handedName, handedForwardedType == nil {
+				if nothingForwardedPlacement >= 5, let handedName, handedForwardedType == nil {
 					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(handedName)\")", label: "holeHandedLater", type: "\(nothingForwardedWrapper)<\(nothingForwardedSpelling), \(handedName)>"))
-				} else if nothingForwardedPlacement == 1 || nothingForwardedPlacement == 2, sendability != .sendable {
+				} else if nothingForwardedPlacement != 0, sendability != .sendable {
 					// Beside the plain place, on `HoleOwner` where it holds it, so `HoleImpl` reads there what it reads at the plain
-					// place: a value the owner aliases, or `holeAnalytics` where the owner instantiates it.
-					let property = PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(impl.name)\")", label: "holeServiceLater", type: "ErasedInstantiator<\(nothingForwardedSpelling), any \(serviceName)>")
+					// place: a value the owner aliases, or `holeAnalytics` where the owner instantiates it. It names `HoleImpl` as
+					// its declaration spells it, inside `HoleNamespace` where the namespace draw declares it there.
+					let implSpelling = drawsNamespace ? "\(name("HoleNamespace")).\(impl.name)" : impl.name
+					let property = PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(implSpelling)\")", label: "holeServiceLater", type: "ErasedInstantiator<\(nothingForwardedSpelling), any \(serviceName)>")
 					if let ownerIndex {
 						seamModuleDeclarations[ownerIndex].properties.append(property)
 					} else {
