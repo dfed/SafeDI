@@ -3965,6 +3965,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		valuesBindings.map { MockParameterNode.ValuesBinding(binding: $0, lazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties) }
 	}
 
+	/// See `MockParameterNode.memberCallsInsideBuilderFunction`: each field read as the scope's parent reads its label.
+	nonisolated var memberCallsInsideBuilderFunction: [MockParameterNode.ValuesBinding] {
+		memberCallsInsideFunction.map { MockParameterNode.ValuesBinding(binding: $0, lazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties) }
+	}
+
 	/// Whether this scope's generated subtree holds a site of a hole of the seam whose tree is generated, on this scope's
 	/// path. A child starts after its siblings that hold no place by `startsAsCarrier(_:)`, which reads this only where
 	/// `placeHoldingProperties` is `nil` (see `orderedPropertyToGenerateIndices`).
@@ -8529,6 +8534,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// In a public mock's tree, the payloads of the cases on the routes to the places beneath this node, bound before its
 		/// builder function is declared (`SeamHoles.valuesBindings(at:)`), inside the builder function of the node above.
 		let valuesBindings: [ValuesBinding]
+		/// In a public mock's tree, the member calls of its builder structs at the top of this node's `@Sendable` builder
+		/// function, whose results the function could not capture from outside it (`SeamHoles.memberCallsInsideFunction(at:)`).
+		let memberCallsInsideBuilderFunction: [ValuesBinding]
 		/// For a node that calls another module's public mock and fills some of its builders, the generator of the call,
 		/// which holds the fills' code (`ScopeGenerator.fillCode(propertiesGeneratedLater:)`), and what the call passes
 		/// each builder it fills, by label.
@@ -8621,6 +8629,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			mockDeclarationLocation: Dependency.DeclarationLocation?,
 			publicMockCall: PublicMockCall?,
 			valuesBindings: [ValuesBinding],
+			memberCallsInsideBuilderFunction: [ValuesBinding] = [],
 			fillingGenerator: ScopeGenerator?,
 			holeArgumentValuesByLabel: [String: String],
 			publicMockBuilderStructValuesByLabel: [String: String] = [:],
@@ -8661,6 +8670,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			self.mockDeclarationLocation = mockDeclarationLocation
 			self.publicMockCall = publicMockCall
 			self.valuesBindings = valuesBindings
+			self.memberCallsInsideBuilderFunction = memberCallsInsideBuilderFunction
 			self.fillingGenerator = fillingGenerator
 			self.holeArgumentValuesByLabel = holeArgumentValuesByLabel
 			self.publicMockBuilderStructValuesByLabel = publicMockBuilderStructValuesByLabel
@@ -9490,6 +9500,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					mockDeclarationLocation: childInstantiable.mockDeclarationLocation,
 					publicMockCall: childGenerator.publicMockCall,
 					valuesBindings: childGenerator.valuesBindingsBeforeBuilderFunction,
+					memberCallsInsideBuilderFunction: childGenerator.memberCallsInsideBuilderFunction,
 					fillingGenerator: childGenerator.fillsABuilder ? childGenerator : nil,
 					holeArgumentValuesByLabel: childGenerator.holeArgumentValuesByLabel,
 					publicMockBuilderStructValuesByLabel: childGenerator.publicMockBuilderStructValuesByLabel,
@@ -10774,6 +10785,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// The function's return type gives both branches of the `if`
 					// expression a contextual type, so no annotation is needed.
 					lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(propertyTypeName) {")
+					// A `@Sendable` function calls the members its places' routes need at its top (`memberCallsInsideBuilderFunction`).
+					for valuesBinding in node.memberCallsInsideBuilderFunction {
+						lines.append("\(innerIndent)\(valuesBinding.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames))")
+					}
 					await lines.append(contentsOf: callPreamble(of: node, indent: innerIndent))
 					lines.append(contentsOf: receiverBindings)
 					lines.append(contentsOf: sendableAutoclosureBindings)
@@ -11529,6 +11544,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.function.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
 			// A member of a loop of builders first wraps again the functions of the members its tree receives inside the
 			// loop, so each receiver beneath reads a wrapper this call made.
+			// A `@Sendable` function calls the members its places' routes need at its top: their results are plain structs it
+			// could not capture.
+			let memberCallLines = node.memberCallsInsideBuilderFunction.map { valuesBinding in
+				"\(innerIndent)\(valuesBinding.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames))"
+			}
+			lines.function.append(contentsOf: memberCallLines)
 			let rebindingLines = loopMemberEmission?.rebindingLines ?? []
 			lines.function.append(contentsOf: rebindingLines)
 			let preamble = await callPreamble(of: node, indent: innerIndent)
@@ -11542,7 +11563,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// bindings, and child bindings all add extra statements, so any
 			// one forces an explicit `return`. The function's return type
 			// gives both branches of an `if` expression a contextual type.
-			let returnKeyword = rebindingLines.isEmpty && preamble.isEmpty && childBindings.isEmpty && receiverBindings.isEmpty && sendableAutoclosureBindings.isEmpty ? "" : "return "
+			let returnKeyword = memberCallLines.isEmpty && rebindingLines.isEmpty && preamble.isEmpty && childBindings.isEmpty && receiverBindings.isEmpty && sendableAutoclosureBindings.isEmpty ? "" : "return "
 			let builtConstructionExpression = mockConstructionExpression(
 				for: node,
 				overrideExpression: functionOverrideExpression,
