@@ -8,6 +8,9 @@ on:
     # Runs at 00:00 UTC every Monday to ensure that CI does not bitrot.
     - cron: '0 0 * * 1'
   pull_request:
+    # `ready_for_review` beside the default three, so that marking a draft
+    # ready runs the macOS jobs its draft runs skipped (see `changes`).
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -38,6 +41,7 @@ jobs:
     outputs:
       source: ${{ steps.classify.outputs.source }}
       docc: ${{ steps.classify.outputs.docc }}
+      macos: ${{ steps.classify.outputs.macos }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -51,6 +55,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DRAFT: ${{ github.event.pull_request.draft }}
         run: |
           source=false
           docc=false
@@ -86,7 +91,18 @@ jobs:
           fi
           echo "source=$source" >> "$GITHUB_OUTPUT"
           echo "docc=$docc" >> "$GITHUB_OUTPUT"
-          echo "source=$source docc=$docc"
+          # A draft pull request skips the jobs on macOS runners, the scarce
+          # resource every pull request and landing queues on (13 jobs a
+          # run), and "Check Line Coverage on Linux", which needs the macOS
+          # test job's report. Marking the pull request ready starts a run
+          # with all of them, so nothing merges without them: a draft
+          # cannot merge.
+          macos=true
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$DRAFT" = "true" ]; then
+            macos=false
+          fi
+          echo "macos=$macos" >> "$GITHUB_OUTPUT"
+          echo "source=$source docc=$docc macos=$macos"
 
   version-consistency-check:
     name: Version Consistency Check
@@ -276,7 +292,7 @@ jobs:
     # names when a Markdown-only pull request skips this job.
     name: &xcodebuild-name Build with xcodebuild on Xcode 26 (${{ matrix.platforms }})
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' && needs.changes.outputs.source != 'false' }}
     runs-on: macos-26
     strategy:
       matrix: &xcodebuild-matrix
@@ -409,7 +425,7 @@ jobs:
     needs: changes
     # DocC articles under `*.docc/` are Markdown, so this job also runs
     # when only those changed.
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || needs.changes.outputs.docc == 'true') }}
+    if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' && (needs.changes.outputs.source != 'false' || needs.changes.outputs.docc == 'true') }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -454,7 +470,7 @@ jobs:
   spm-package-integration:
     name: Build Package Integration on Xcode 26
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' && needs.changes.outputs.source != 'false' }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -630,7 +646,7 @@ jobs:
   spm-project-integration:
     name: Build Project Integration on Xcode 26
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' && needs.changes.outputs.source != 'false' }}
     # Pinned to 26.4 — project file declares package traits.
     runs-on: macos-26
     permissions:
@@ -668,7 +684,7 @@ jobs:
   spm-multi-project-integration:
     name: Build Multi Project Integration on Xcode 26
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' && needs.changes.outputs.source != 'false' }}
     # Pinned to 26.4 — project file declares package traits.
     runs-on: macos-26
     permissions:
@@ -688,7 +704,7 @@ jobs:
   spm-tuist-integration:
     name: Build Tuist Integration on Xcode 26
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' && needs.changes.outputs.source != 'false' }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -746,7 +762,7 @@ jobs:
     # Also runs on every push to main, Markdown-only or not, so the
     # Codecov report behind the README badge always comes from a real
     # test run.
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     # Runs on macOS because it builds and tests SafeDI with Xcode's Swift,
     # the compiler adopters use, and compiles every test's generated code
     # with it: Xcode's Swift 6.2 and Linux's have disagreed about the same
@@ -1423,7 +1439,7 @@ jobs:
   line-coverage:
     name: Check Line Coverage on Linux
     needs: [changes, spm, linux]
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1622,7 +1638,7 @@ jobs:
   bazel:
     name: Bazel Build on macOS
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' && needs.changes.outputs.source != 'false' }}
     # General bazel sanity check on every PR. We can't perfectly
     # mirror BCR's presubmit (https://registry.bazel.build/modules/safedi):
     # BazelCI's BuildKite infrastructure is closed to non-`bazelbuild`

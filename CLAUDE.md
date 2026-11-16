@@ -35,8 +35,9 @@ Formatting changes from `./CLI/lint.sh` go in a commit of their own, after the c
 
 ### CI
 
-- Every CI job runs on a Linux runner unless it genuinely needs macOS: Xcode or `xcodebuild`, an Apple platform SDK, the Xcode project plugin, or the macOS release binaries and their notarization. Linux runners scale; macOS runners are the scarce resource that pull requests and publishes queue on.
-- A job on a `macos-*` runner states why in a comment in the workflow. macOS jobs run on arm64 images, never on an Intel runner.
+- Every CI job runs on a Linux runner unless it genuinely needs macOS: Xcode or `xcodebuild`, an Apple platform SDK, the Xcode project plugin, or the macOS release binaries and their notarization. Linux runners scale; macOS runners are scarce.
+- Open pull requests as drafts: a draft's CI skips macOS and the coverage gate.
+- A job on a `macos-*` runner states why in a workflow comment. macOS jobs run on arm64 images, never Intel.
 - A job that can hang gets a step-level `timeout-minutes` of about twice its measured duration, with the measurements in a comment beside it; never a per-test timeout, which makes CI flaky.
 - No scheduled or unattended check without a path that turns its findings into fix pull requests.
 - New Linux jobs use the container and setup of "Build Tests on Linux" and "Build and Test on Linux" in `ci.yml`, except "Build and Test on Latest Swift" (`swift:latest`), "Lint Swift" (`swift:6.3`, a release build of SwiftFormat), and "Build Release SafeDITool on Linux", which runs `publish.yml`'s Linux build command in `publish.yml`'s container, because publishing 2.3.0-alpha-1 crashed Swift 6.3.3 compiling that release build of code every CI job had passed.
