@@ -37,6 +37,7 @@ Formatting changes from `./CLI/lint.sh` go in a commit of their own, after the c
 ### CI
 
 - Every CI job runs on a Linux runner unless it genuinely needs macOS: Xcode or `xcodebuild`, an Apple platform SDK, the Xcode project plugin, or the macOS release binaries and their notarization. Linux runners scale; macOS runners are the scarce resource that pull requests and publishes queue on.
+- Open a pull request as a draft until it is reviewed: a draft's CI takes no macOS runner, because each job that needs macOS fails at once on a Linux runner, and marking the pull request ready starts the run on macOS.
 - A job on a `macos-*` runner states why in a comment in the workflow. macOS jobs run on arm64 images, never on an Intel runner.
 - A job that can hang gets a step-level `timeout-minutes` of about twice its measured duration, with the measurements in a comment beside it; never a per-test timeout, which makes CI flaky.
 - No scheduled or unattended check without a path that turns its findings into fix pull requests.
