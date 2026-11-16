@@ -1400,7 +1400,7 @@ struct PublicMockFinding: Hashable, Sendable {
 		case let .builder(hole):
 			// A public mock's builder takes a place of its shaped signature, which has its case nested by type (`enumPlace`). The
 			// case is named alone, never qualified by its enum, since a diagnostic names no generated type.
-			"whose case `\(hole.enumPlace?.caseName ?? hole.property.label)` builds `\(hole.builtType.asSource)` for the hole `\(hole.property.label)`"
+			"whose member `\(hole.enumPlace?.caseName ?? hole.property.label)` builds `\(hole.builtType.asSource)` for the hole `\(hole.property.label)`"
 		}
 		let parameterName = if case let .builder(hole) = parameter.kind {
 			hole.builderLabel
