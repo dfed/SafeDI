@@ -5655,7 +5655,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// hole type, for a hole read only if available. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x73B426DD3EBA61EB
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xEC606089C97AAFE0
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -5990,7 +5990,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: inSeamLeakReason,
 			signatures: inSeamLeakSignatures,
-			seeds: [68, 151, 309, 418, 430, 699, 883, 990],
+			seeds: [68, 151, 418, 430, 699, 883, 990],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason)",
@@ -6000,7 +6000,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
 			signatures: inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
-			seeds: [15, 94, 227, 283, 321, 403, 454, 663, 867, 924],
+			seeds: [15, 94, 283, 321, 403, 454, 663, 867, 924],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
@@ -6126,7 +6126,7 @@ struct SafeDIToolGraphFuzzerTests {
 			283, 298, 300, 304, 306, 308, 309, 311, 321, 326, 330, 334, 338, 347, 348, 362, 365, 370, 383, 384,
 			390, 391, 403, 407, 418, 430, 448, 454, 468, 471, 478, 481, 494, 500, 517, 527, 532, 548, 550, 556,
 			567, 568, 593, 594, 595, 600, 605, 609, 617, 618, 623, 627, 663, 669, 670, 699, 701, 705, 709, 718,
-			732, 743, 750, 751, 760, 769, 787, 788, 791, 794, 797, 809, 819, 832, 834, 835, 836, 850, 851, 854,
+			732, 743, 750, 751, 760, 769, 787, 788, 791, 794, 797, 809, 819, 832, 834, 835, 836, 851, 854,
 			858, 866, 867, 876, 883, 886, 892, 905, 912, 920, 923, 924, 929, 930, 931, 934, 940, 942, 945, 947,
 			948, 950, 969, 990,
 		],
