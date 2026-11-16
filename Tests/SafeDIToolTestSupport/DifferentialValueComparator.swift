@@ -95,8 +95,9 @@ struct DifferentialValueModule {
 /// keys or values hold class instances, is compared by kind and count only: a fixture that needs its elements judged
 /// stores them in an array.
 struct DifferentialValuePath {
-	init(modules: [DifferentialValueModule]) {
+	init(modules: [DifferentialValueModule], runtimeSource: DifferentialValueRuntimeSource? = nil) {
 		self.modules = modules
+		self.runtimeSource = runtimeSource
 	}
 
 	/// A path of one module, named as the standalone verifier names the module it compiles.
@@ -118,6 +119,9 @@ struct DifferentialValuePath {
 	}
 
 	let modules: [DifferentialValueModule]
+
+	/// The SafeDI release whose runtime and macros the path compiles against, or `nil` for this checkout's.
+	let runtimeSource: DifferentialValueRuntimeSource?
 
 	/// The names of the path's modules `module` depends on, directly or through another, in the path's order: the
 	/// modules a compile of it searches, since a module's compiled interface names the modules it imports.
@@ -667,6 +671,8 @@ enum DifferentialValueOracle {
 	private struct GraphLayout: Hashable {
 		let feature: [DifferentialValueModule.Layout]
 		let knownRight: [DifferentialValueModule.Layout]
+		let featureRuntimeSource: DifferentialValueRuntimeSource?
+		let knownRightRuntimeSource: DifferentialValueRuntimeSource?
 		let isPaired: Bool
 	}
 
@@ -677,10 +683,53 @@ enum DifferentialValueOracle {
 	/// exits. The SafeDI runtime is compiled from `Sources/SafeDI` because no build layout provides its object file in
 	/// one place: SwiftPM's build systems put the module's objects in different places, and the test bundle the graph
 	/// fuzzer's CI shards run carries only the `.swiftmodule`.
-	private static let runtime = SharedTestWork { try await compileRuntime() }
+	private static let runtime = SharedTestWork { try await compileRuntime(source: nil) }
 
-	private static func compileRuntime() async throws -> Runtime {
-		guard let artifacts = SafeDIBuildArtifactLocator.locate() else {
+	/// The runtimes of other SafeDI releases, each compiled once per process, into a directory under
+	/// `TestTemporaryDirectory.root`, which is removed when the process exits.
+	private static let releaseRuntimes = ReleaseRuntimes()
+
+	/// The work that compiles each release's runtime, one per release, so that the graphs of one release share it.
+	private actor ReleaseRuntimes {
+		func work(for source: DifferentialValueRuntimeSource) -> SharedTestWork<Runtime> {
+			if let work = workBySource[source] {
+				return work
+			} else {
+				let work = SharedTestWork { try await DifferentialValueOracle.compileRuntime(source: source) }
+				workBySource[source] = work
+				return work
+			}
+		}
+
+		private var workBySource = [DifferentialValueRuntimeSource: SharedTestWork<Runtime>]()
+	}
+
+	/// The runtime a path compiles against: this checkout's, or the release's its runtime source names.
+	private static func runtime(for source: DifferentialValueRuntimeSource?) async throws -> Runtime {
+		if let source {
+			try await releaseRuntimes.work(for: source).value
+		} else {
+			try await runtime.value
+		}
+	}
+
+	/// The artifacts a compile of generated code uses to build against a path's runtime: the directory holding the
+	/// runtime's `SafeDI.swiftmodule`, which the comparator compiles once per process and release, and its macros tool.
+	static func runtimeArtifacts(for source: DifferentialValueRuntimeSource?) async throws -> SafeDIBuildArtifacts {
+		let runtime = try await runtime(for: source)
+		return SafeDIBuildArtifacts(swiftModuleSearchPath: runtime.directory, safeDIMacrosToolPath: runtime.macrosToolPath)
+	}
+
+	private static func compileRuntime(source: DifferentialValueRuntimeSource?) async throws -> Runtime {
+		let macrosToolPath: URL
+		let runtimeDirectory: URL
+		if let source {
+			macrosToolPath = source.macrosToolPath
+			runtimeDirectory = source.runtimeSourcesDirectory
+		} else if let artifacts = SafeDIBuildArtifactLocator.locate() {
+			macrosToolPath = artifacts.safeDIMacrosToolPath
+			runtimeDirectory = checkoutRuntimeSourcesDirectory
+		} else {
 			throw DifferentialValueOracleError(
 				path: nil,
 				stage: .locatingBuildArtifacts,
@@ -689,19 +738,21 @@ enum DifferentialValueOracle {
 		}
 		let directory = TestTemporaryDirectory.root.appendingPathComponent("safedi-differential-runtime-\(UUID().uuidString)")
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-		runtimeDirectoryToRemoveAtExit = directory
-		atexit {
-			if let directory = runtimeDirectoryToRemoveAtExit {
-				try? FileManager.default.removeItem(at: directory)
+		if source == nil {
+			runtimeDirectoryToRemoveAtExit = directory
+			atexit {
+				if let directory = runtimeDirectoryToRemoveAtExit {
+					try? FileManager.default.removeItem(at: directory)
+				}
 			}
 		}
 		let describerFile = directory.appendingPathComponent("\(describerModuleName).swift")
 		try describerSource.write(to: describerFile, atomically: true, encoding: .utf8)
-		for (moduleName, sources) in [("SafeDI", try runtimeSources()), (describerModuleName, [describerFile])] {
+		for (moduleName, sources) in [("SafeDI", try runtimeSources(in: runtimeDirectory)), (describerModuleName, [describerFile])] {
 			let result = try await compileSwift(
 				sources: sources,
 				outputDirectory: directory,
-				artifacts: SafeDIBuildArtifacts(swiftModuleSearchPath: directory, safeDIMacrosToolPath: artifacts.safeDIMacrosToolPath),
+				artifacts: SafeDIBuildArtifacts(swiftModuleSearchPath: directory, safeDIMacrosToolPath: macrosToolPath),
 				moduleName: moduleName,
 				emitsModule: true,
 				parsesAsLibrary: true,
@@ -714,17 +765,22 @@ enum DifferentialValueOracle {
 				)
 			}
 		}
-		return Runtime(directory: directory, macrosToolPath: artifacts.safeDIMacrosToolPath)
+		return Runtime(directory: directory, macrosToolPath: macrosToolPath)
 	}
 
-	/// The Swift files of the `SafeDI` target, found from this file's location in the package.
-	private static func runtimeSources() throws -> [URL] {
-		let packageRoot = URL(fileURLWithPath: #filePath)
+	/// The directory of this checkout's `SafeDI` target, found from this file's location in the package.
+	private static var checkoutRuntimeSourcesDirectory: URL {
+		URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent()
 			.deletingLastPathComponent()
 			.deletingLastPathComponent()
-		let runtimeDirectory = packageRoot.appendingPathComponent("Sources").appendingPathComponent("SafeDI")
-		return try FileManager.default
+			.appendingPathComponent("Sources")
+			.appendingPathComponent("SafeDI")
+	}
+
+	/// The Swift files of a `SafeDI` target's directory.
+	private static func runtimeSources(in runtimeDirectory: URL) throws -> [URL] {
+		try FileManager.default
 			.subpathsOfDirectory(atPath: runtimeDirectory.path)
 			.filter { $0.hasSuffix(".swift") }
 			.sorted()
@@ -737,7 +793,13 @@ enum DifferentialValueOracle {
 		var batches = [[Int]]()
 		var batchIndexByLayout = [GraphLayout: Int]()
 		for (index, graph) in graphs.enumerated() {
-			let layout = GraphLayout(feature: graph.feature.modules.map(\.layout), knownRight: graph.knownRight.modules.map(\.layout), isPaired: graph.isPaired)
+			let layout = GraphLayout(
+				feature: graph.feature.modules.map(\.layout),
+				knownRight: graph.knownRight.modules.map(\.layout),
+				featureRuntimeSource: graph.feature.runtimeSource,
+				knownRightRuntimeSource: graph.knownRight.runtimeSource,
+				isPaired: graph.isPaired,
+			)
 			if let batchIndex = batchIndexByLayout[layout] {
 				batches[batchIndex].append(index)
 			} else {
@@ -828,7 +890,7 @@ enum DifferentialValueOracle {
 				}
 			}
 			return module
-		})
+		}, runtimeSource: paths[0].runtimeSource)
 	}
 
 	/// The error of a graph whose probe spent its traversals at a node no exemption accepts, the first in probe order and
@@ -948,7 +1010,7 @@ enum DifferentialValueOracle {
 		executableModuleName: String,
 		filesToDelete: inout [URL],
 	) async throws -> SwiftCompileResult {
-		let runtime = try await runtime.value
+		let runtime = try await runtime(for: path.runtimeSource)
 		let directory = TestTemporaryDirectory.root.appendingPathComponent("safedi-differential-\(role?.rawValue ?? "path")-\(UUID().uuidString)")
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		filesToDelete.append(directory)
@@ -1831,6 +1893,13 @@ enum DifferentialValueOracle {
 
 /// The directory `DifferentialValueOracle` compiled the SafeDI runtime into, removed when the process exits.
 nonisolated(unsafe) private var runtimeDirectoryToRemoveAtExit: URL?
+
+/// Another SafeDI release's runtime, which a `DifferentialValuePath` compiles against in place of this checkout's: the
+/// directory of that release's `SafeDI` target's sources, and its built macros tool.
+struct DifferentialValueRuntimeSource: Hashable, Sendable {
+	let runtimeSourcesDirectory: URL
+	let macrosToolPath: URL
+}
 
 // MARK: - Comparing descriptions
 
