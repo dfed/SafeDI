@@ -136,7 +136,7 @@ def run(arguments):
     print(f"None in the {len(lane_paths | base_paths)} files the branch or the base's move touched.")
 
     environment = dict(os.environ)
-    temporary_directory = verify_touched.swiftpm_temporary_directory()
+    temporary_directory = verify_touched.caches_directory() / "swiftpm"
     temporary_directory.mkdir(parents=True, exist_ok=True)
     environment["TMPDIR"] = str(temporary_directory)
 
@@ -162,8 +162,7 @@ def run(arguments):
         else:
             command.append("--skip-compile-checks")
     tested = subprocess.run(command, env=environment)
-    # 3 from verify-touched: neither side touched a test, which is no failure.
-    if tested.returncode not in (0, 3) or (command[0] == "swift" and tested.returncode != 0):
+    if tested.returncode != 0:
         return 1
 
     step("Lint")
@@ -195,8 +194,8 @@ def self_test():
     expect(files_with_conflict_markers(set(files) | {"Gone.swift"}, files.get), ["A.swift"], "only a file with an opening and a closing marker line is reported, and a deleted file is skipped")
     verify_touched, _ = load_verify_touched()
     expect(
-        list(verify_touched.filters_of_changes({"Sources/SafeDIMacros/A.swift"}, files.get)),
-        ["^SafeDIMacrosTests\\."],
+        list(verify_touched.filters_of_changes({"Plugins/A.swift"}, files.get)),
+        ["^SafeDIGeneratorPluginTests\\."],
         "the verify-touched script beside this skill loads and selects suites",
     )
     print("restack-lane: self-test passed")
