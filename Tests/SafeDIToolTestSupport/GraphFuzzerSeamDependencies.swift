@@ -175,6 +175,11 @@ enum GraphFuzzerSeamDependencyDraw {
 			self.pinnedNames = pinnedNames
 			self.inlineNames = inlineNames
 			namesMocksReach = namesReached(fromMocksIn: { _ in true })
+			var namesMocksReachByModule = [GraphFuzzerModule: Set<String>]()
+			for module in Set(units.map(\.module)) {
+				namesMocksReachByModule[module] = namesReached(fromMocksIn: { $0 == module })
+			}
+			self.namesMocksReachByModule = namesMocksReachByModule
 		}
 
 		/// The type names each file declares.
@@ -196,6 +201,37 @@ enum GraphFuzzerSeamDependencyDraw {
 		/// The types any mock builds itself: those its tree names, through seams, which a mock builds, and not through a
 		/// public mock it calls (`inlineNames` counts those of callers' mocks).
 		let namesMocksReach: Set<String>
+		/// The types the mocks of each module build themselves, as `namesMocksReach` reads them, by the module that declares
+		/// the mocks.
+		let namesMocksReachByModule: [GraphFuzzerModule: Set<String>]
+	}
+
+	/// The modules each module of `fixture`, a graph split across `modules`, lists under the module-info flow: the modules
+	/// it imports (`GraphFuzzerModule.dependencies`) and each module beneath it that declares a type one of its generated
+	/// mocks builds (`Analysis.namesMocksReachByModule`), in dependency order. The Manual's "Which modules to list" tells
+	/// an adopter to list such a module: a mock builds only the types of the modules its run reads and takes any other as
+	/// a `mock()` parameter, with no diagnostic, while the SwiftPM plugin flow reads every module beneath. A mock of the
+	/// seam's module that builds a seam beneath it builds that seam's tree, which can reach a module two down
+	/// (`chainPercent`'s chain beneath a seam that declares a mock). The analysis reads the fixture's names with
+	/// `GraphFuzzerRenaming`'s move across wrapper names undone, so that every renaming of a graph lists the same modules.
+	static func moduleInfoDependencies(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule]) -> [GraphFuzzerModule: [GraphFuzzerModule]] {
+		let prefix = fixture.typeNamePrefix
+		let movedNamesRestored = GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: false, movesTypeNamesAcrossWrapperNames: true)
+		let units = zip(modules, fixture.swiftFileContent).map { module, content in
+			Unit(module: module, source: movedNamesRestored.restore(content, typeNamePrefix: prefix), mayMove: false)
+		}
+		let analysis = Analysis(units: units, typeNamePrefix: prefix)
+		let presentModules = Set(modules)
+		var dependencies = [GraphFuzzerModule: [GraphFuzzerModule]]()
+		for module in presentModules {
+			let reachedModules = Set((analysis.namesMocksReachByModule[module] ?? []).flatMap { name in
+				(analysis.declaringUnitIndices[name] ?? []).map { units[$0].module }
+			})
+			dependencies[module] = module.transitiveDependencies.filter { dependency in
+				presentModules.contains(dependency) && (module.dependencies.contains(dependency) || reachedModules.contains(dependency))
+			}
+		}
+		return dependencies
 	}
 
 	/// The module each of `units` moves to, in the order given, or `nil` for one that stays. Empty when the draw

@@ -323,10 +323,18 @@ extension GraphFuzzerBuilderSurface {
 
 	/// Whether `parameter` takes a hole's builder: on main, a closure handed a scope enum; once builders take no scope, a
 	/// parameter whose label ends with `Builder` (or a `Builder_<Type>` a calling mock names apart) and whose type is a
-	/// closure or a wrapper's `Builder`. The builder-struct work replaces this with what its generated code spells.
+	/// closure or a wrapper's `Builder`. An `@autoclosure` is no builder: a mock takes an instantiator its tree receives and
+	/// it cannot build as one, and passes it on unread, whatever its label (`holeTicketBuilder`, seam corpus seed 3855).
+	/// That holds because SafeDI spells no builder `@autoclosure`: each is an `@escaping` closure, which can take no
+	/// argument (`() -> B`), a wrapper's `Builder`, or a builder struct, all of which a caller passes as a function or a
+	/// value rather than an expression; revisit this exemption if SafeDI ever spells a builder `@autoclosure`.
+	/// The builder-struct work replaces this with what its generated code spells.
 	static func isBuilder(_ parameter: Parameter) -> Bool {
 		if generatedTypeNamed(by: parameter.description) != nil {
 			return true
+		}
+		guard !parameter.type.split(separator: " ").prefix(while: { $0.hasPrefix("@") }).contains("@autoclosure") else {
+			return false
 		}
 		let labelNamesBuilder = parameter.label.hasSuffix("Builder") || parameter.label.contains("Builder_")
 		return labelNamesBuilder && (isFunctionType(parameter.type) || parameter.type.hasSuffix(".Builder"))

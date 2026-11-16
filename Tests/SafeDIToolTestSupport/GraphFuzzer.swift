@@ -7527,8 +7527,10 @@ enum GraphFuzzerGenerator {
 					GraphFuzzerSeamDependencyDraw.Unit(module: declarations.first { $0.name == file.ownerName }?.module ?? .samePackageCaller, source: file.declaration, mayMove: false)
 				} + [extensionSource].compactMap(\.self).map { GraphFuzzerSeamDependencyDraw.Unit(module: .samePackageCaller, source: $0, mayMove: false) }
 			}
-			// A chain of seams beneath a seam of the seam's module that a caller calls and no mock builds:
-			// `GraphFuzzerSeamDependencyDraw.chainPercent` describes it.
+			// A chain of seams beneath a seam of the seam's module that a caller calls and no other type's mock builds:
+			// `GraphFuzzerSeamDependencyDraw.chainPercent` describes it. The seam's own mock, where it declares one, builds
+			// the chain, two modules beneath what its module imports, which the module-info flow then lists
+			// (`GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of:modules:)`).
 			if seamDependencyRandom.percentChance(GraphFuzzerSeamDependencyDraw.chainPercent) {
 				let graphUnits = units(of: declarations)
 				let analysis = GraphFuzzerSeamDependencyDraw.Analysis(units: graphUnits, typeNamePrefix: prefix)
@@ -12362,7 +12364,8 @@ enum GraphFuzzerOracle {
 	///     declares, as `executeSafeDIToolTest` does.
 	///   - integration: How the tool runs over a graph split across modules.
 	///   - listsTransitiveDependencies: Whether each module of a graph split across modules lists every module it depends
-	///     on rather than the modules it imports, for a build that constructs in a caller what a seam or public mock would.
+	///     on rather than the modules it imports and those its mocks reach, for a build that constructs in a caller what a
+	///     seam or public mock would.
 	static func toolOutcome(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false) async throws -> GraphFuzzerToolOutcome {
 		try await toolRun(of: fixture, fileNames: fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies).outcome
 	}
@@ -12411,8 +12414,10 @@ enum GraphFuzzerOracle {
 	/// (`.moduleInfo`), one `generate` per module, in dependency order, each reading the `.safedi` files of the modules it
 	/// depends on and naming its module and package, writes one combined output, which is decomposed into the files one
 	/// module writes; as the SwiftPM plugin runs it (`.swiftPackagePlugin`), `scan` and `generate` per module read the
-	/// module's own files and its dependencies' and write those files. Each module lists the modules it imports, or, with
-	/// `listsTransitiveDependencies`, every module it depends on, as 2.2.0 asked. Each generated file is keyed by its
+	/// module's own files and its dependencies' and write those files. Each module lists the modules it imports and, under
+	/// `.moduleInfo`, each module beneath whose types its mocks build
+	/// (`GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of:modules:)`), or, with `listsTransitiveDependencies`, every
+	/// module it depends on, as 2.2.0 asked. Each generated file is keyed by its
 	/// module's name and its own (`FuzzFeature/Type+SafeDI.swift`), and the outcome is the first module's error, if any,
 	/// with that module's name.
 	private static func splitToolRun(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], fileNames: [String], integration: MultiModuleIntegration, listsTransitiveDependencies: Bool) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
@@ -12423,12 +12428,17 @@ enum GraphFuzzerOracle {
 			}
 		}
 		let presentModules = Set(modules)
+		// Under the module-info flow, a module also lists each module beneath it whose types its mocks build, as the Manual
+		// tells an adopter to; the SwiftPM plugin flow reads every module beneath a module itself.
+		let moduleInfoDependencies = integration == .moduleInfo && !listsTransitiveDependencies
+			? GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: fixture, modules: modules)
+			: [:]
 		let moduleFixtures = GraphFuzzerModule.allCases.filter(presentModules.contains).map { module in
 			ModuleFixture(
 				name: module.name,
 				packageName: module.packageName,
 				swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: modules.indices.filter { modules[$0] == module }.map { (fileNames[$0], fixture.swiftFileContent[$0]) }),
-				dependencies: (listsTransitiveDependencies ? module.transitiveDependencies : module.dependencies).filter(presentModules.contains).map(\.name),
+				dependencies: (listsTransitiveDependencies ? module.transitiveDependencies : moduleInfoDependencies[module] ?? module.dependencies).filter(presentModules.contains).map(\.name),
 				omitsPackageName: fixture.modulesOmittingPackageName.contains(module),
 			)
 		}

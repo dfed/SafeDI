@@ -528,6 +528,123 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Set(modules).isSuperset(of: drawn.drawsChain ? [.seamDependency, .seamDependencyBase, .seamDependencyLeaf] : [.seamDependency]))
 	}
 
+	/// A file of `module` declaring `S7_<name>` with `arguments`, whose property `label: type` has `attribute`, written as
+	/// the fuzzer writes a type; `initializerModifier` spells its initializer's access, `nil` for none.
+	private static func chainFile(module: GraphFuzzerModule, name: String, arguments: String, label: String, type: String, attribute: String = "@Instantiated", initializerModifier: String? = "public") -> String {
+		let header = ([GraphFuzzerModule.marker + module.name] + module.dependencies.map { "import \($0.name)" }).joined(separator: "\n") + "\n\n"
+		let attributeArguments = arguments.isEmpty ? "" : "(\(arguments))"
+		let initializer = "\(initializerModifier.map { $0 + " " } ?? "")init(\(label): \(type)) {\n\t\tself.\(label) = \(label)\n\t}"
+		return header + "@Instantiable\(attributeArguments)\npublic final class S7_\(name): Instantiable {\n\t\(initializer)\n\n\t\(attribute) let \(label): \(type)\n}\n"
+	}
+
+	/// The chain `GraphFuzzerSeamDependencyDraw.chainPercent` draws, beneath `S7_Screen` of the seam's module, declared with
+	/// `screenArguments`: `S7_ChainLink` and `S7_ChainBase`, seams unless `chainIsPublicMocks` makes each a public mock with
+	/// an `internal` initializer, as the public mock corpus draws them, and `S7_ChainLeaf`, each in the module beneath the
+	/// one above, where the leaf receives `S7_ChainToken` only if available. `S7_Screen` instantiates `S7_ChainLink`, or with
+	/// `screenReceivesBase` receives `S7_ChainBase`. `callerArguments`, when given, declares `S7_Caller` in the
+	/// same-package caller's module, which instantiates `S7_Screen`.
+	private static func chainFixture(screenArguments: String, screenReceivesBase: Bool = false, chainIsPublicMocks: Bool = false, callerArguments: String? = nil) -> GraphFuzzerFixture {
+		let chainArguments = chainIsPublicMocks ? "generateMock: .public" : "generateDependencyTree: true"
+		let chainInitializerModifier: String? = chainIsPublicMocks ? nil : "public"
+		var files = [
+			chainFile(module: .seamDependencyLeaf, name: "ChainLeaf", arguments: "", label: "chainToken", type: "S7_ChainToken?", attribute: "@Received(onlyIfAvailable: true)")
+				+ "\npublic final class S7_ChainToken: Sendable {\n\tpublic init() {}\n}\n",
+			chainFile(module: .seamDependencyBase, name: "ChainBase", arguments: chainArguments, label: "chainLeaf", type: "S7_ChainLeaf", initializerModifier: chainInitializerModifier),
+			chainFile(module: .seamDependency, name: "ChainLink", arguments: chainArguments, label: "chainBase", type: "S7_ChainBase", initializerModifier: chainInitializerModifier),
+			screenReceivesBase
+				? chainFile(module: .seamModule, name: "Screen", arguments: screenArguments, label: "chainBase", type: "S7_ChainBase", attribute: "@Received")
+				: chainFile(module: .seamModule, name: "Screen", arguments: screenArguments, label: "chainLink", type: "S7_ChainLink"),
+		]
+		if let callerArguments {
+			files.append(chainFile(module: .samePackageCaller, name: "Caller", arguments: callerArguments, label: "screen", type: "S7_Screen"))
+		}
+		return GraphFuzzerFixture(seed: 7, swiftFileContent: files)
+	}
+
+	/// What each module of the chain lists under the module-info flow when no mock reaches beneath what it imports.
+	private static let chainModulesImported: [GraphFuzzerModule: [GraphFuzzerModule]] = [
+		.seamDependencyLeaf: [],
+		.seamDependencyBase: [.seamDependencyLeaf],
+		.seamDependency: [.seamDependencyBase],
+		.seamModule: [.seamDependency],
+	]
+
+	@Test
+	func moduleInfoDependencies_listModulesBeneathImportedOne_whenSeamModulesMockBuildsChainOfSeams() throws {
+		// A mock builds a seam's tree itself, so `S7_Screen`'s mock builds `S7_ChainBase` and `S7_ChainLeaf`, which its
+		// module imports nothing of: listed, as the Manual tells an adopter, as the SwiftPM plugin flow reads them.
+		let fixture = Self.chainFixture(screenArguments: "generateMock: true")
+		var expected = Self.chainModulesImported
+		expected[.seamModule] = [.seamDependencyLeaf, .seamDependencyBase, .seamDependency]
+		#expect(try GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: fixture, modules: #require(fixture.modules)) == expected)
+	}
+
+	@Test
+	func moduleInfoDependencies_listModulesBeneathImportedOne_whenSeamWithMockBuildsChain() throws {
+		// Seam corpus seed 4867's shape: the chain hangs beneath a seam that declares a mock of its own.
+		let fixture = Self.chainFixture(screenArguments: "generateDependencyTree: true, generateMock: true")
+		var expected = Self.chainModulesImported
+		expected[.seamModule] = [.seamDependencyLeaf, .seamDependencyBase, .seamDependency]
+		#expect(try GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: fixture, modules: #require(fixture.modules)) == expected)
+	}
+
+	@Test
+	func moduleInfoDependencies_listModulesBeneathImportedOne_whenMockPromotesReceiveOfTypeTwoModulesDown() throws {
+		// A mock builds what its tree receives where it can, so it builds `S7_ChainBase` and, through it, `S7_ChainLeaf`.
+		let fixture = Self.chainFixture(screenArguments: "generateMock: true", screenReceivesBase: true)
+		var expected = Self.chainModulesImported
+		expected[.seamModule] = [.seamDependencyLeaf, .seamDependencyBase, .seamDependency]
+		#expect(try GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: fixture, modules: #require(fixture.modules)) == expected)
+	}
+
+	@Test
+	func moduleInfoDependencies_listModulesBeneathImportedOne_whenCallersMockBuildsSeamModulesTypeAboveChain() throws {
+		// The mock of a caller's type builds `S7_Screen`'s tree, and so the chain beneath it.
+		let fixture = Self.chainFixture(screenArguments: "", callerArguments: "generateMock: true")
+		var expected = Self.chainModulesImported
+		expected[.samePackageCaller] = [.seamDependencyLeaf, .seamDependencyBase, .seamDependency, .seamModule]
+		#expect(try GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: fixture, modules: #require(fixture.modules)) == expected)
+	}
+
+	@Test
+	func moduleInfoDependencies_listOnlyImportedModules_whenNoMockReachesChain() throws {
+		let fixture = Self.chainFixture(screenArguments: "", callerArguments: "")
+		var expected = Self.chainModulesImported
+		expected[.samePackageCaller] = [.seamModule]
+		#expect(try GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: fixture, modules: #require(fixture.modules)) == expected)
+	}
+
+	@Test
+	func moduleInfoDependencies_listOnlyImportedModules_whenMockCallsPublicMockOfChainLink() throws {
+		// The public mock corpus's chain: `S7_ChainLink`'s initializer is `internal`, so `S7_Screen`'s mock calls its public
+		// mock rather than build its tree, and reads only the module that declares it.
+		let fixture = Self.chainFixture(screenArguments: "generateMock: true", chainIsPublicMocks: true)
+		#expect(try GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: fixture, modules: #require(fixture.modules)) == Self.chainModulesImported)
+	}
+
+	@Test
+	func moduleInfoDependencies_listSameModules_whenTypeNamesMoveAcrossWrapperNames() throws {
+		let fixture = Self.chainFixture(screenArguments: "generateMock: true")
+		let renaming = GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: false, movesTypeNamesAcrossWrapperNames: true)
+		let renamed = GraphFuzzerFixture(seed: 7, swiftFileContent: fixture.swiftFileContent.map { renaming.rename($0, typeNamePrefix: fixture.typeNamePrefix) })
+		#expect(renamed.swiftFileContent != fixture.swiftFileContent)
+		let modules = try #require(fixture.modules)
+		#expect(GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: renamed, modules: modules) == GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: fixture, modules: modules))
+	}
+
+	@Test(arguments: [UInt64(4_749), 4_867])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func integrationsDisagreeFailure_returnsNil_whenSeamCorpusMockBuildsChainBeneathItsModulesImport(seed: UInt64) async throws {
+		// Seam corpus seeds 4749 and 4867 draw the chain beneath a seam that declares a mock, which builds the chain's tree
+		// and so reads a module its module does not import: the module-info flow lists it, as the Manual tells an adopter,
+		// and the two flows generate the same mock.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		#expect(GraphFuzzerSeamDependencyDraw.drawn(in: fixture).drawsChain)
+		let moduleInfoOutcome = try await GraphFuzzerOracle.toolOutcome(of: fixture)
+		let runs = try await GraphFuzzerToolRuns(fixture: fixture, firstOutcome: moduleInfoOutcome, secondOutcome: moduleInfoOutcome, pluginOutcome: GraphFuzzerOracle.toolOutcome(of: fixture, integration: .swiftPackagePlugin))
+		#expect(runs.integrationsDisagreeFailure == nil)
+	}
+
 	@Test
 	func seamCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool() throws {
 		// Each shape `addingSeam` draws lands in exactly the pinned number of the seam corpus's graphs, read from
@@ -6762,7 +6879,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x6BC3F16EC34E7536
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xCD6CA3904FDC435E
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -6981,7 +7098,7 @@ struct SafeDIToolGraphFuzzerTests {
 			974, 975, 977, 978, 979, 981, 983, 984, 985, 987, 988, 989, 990, 991, 992, 993, 994, 995, 996, 998,
 		],
 		labels: [
-			19, 64, 119, 166, 211, 230, 299, 307, 333, 406, 415, 456, 486, 510, 597, 631, 658, 692, 743, 748,
+			19, 64, 119, 166, 211, 230, 299, 307, 333, 406, 415, 456, 486, 510, 597, 658, 692, 743, 748,
 			845, 960,
 		],
 		sameSupply: [
