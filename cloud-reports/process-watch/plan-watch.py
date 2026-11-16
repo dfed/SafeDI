@@ -13,7 +13,10 @@ state is one of:
               minutes), or the row is questioned. since is when the row was last confirmed true,
               so a lane that pushes nothing is kept alive by whoever updates its row.
     waiting   nobody works on it; detail says on what ("on #752", "on slice 6", "on Dan"). A wait on a
-              pull request that is no longer open, or on an item that is done, is questioned.
+              pull request that is no longer open, or on an item that is done, is questioned. So is
+              a wait older than the quiet limit, since the item could be rehearsed on the current
+              head of what it waits on, unless detail starts "on Dan" or holds "no rehearsal:" and
+              why.
     done      landed or dropped.
 A row with any other state, or a waiting row without a detail, is questioned. So is a plan nobody
 has edited within the quiet limit while it has a lane row.
@@ -104,6 +107,16 @@ def main():
             if not detail:
                 questions.append(f"{item}: it waits, but on what? Give the reason or a lane.")
                 continue
+            # A wait on another item is a chance to rehearse on that item's current head: slice 5 waited
+            # on slice 4 for four hours on 2026-11-16 with a reason that was true the whole time.
+            if not re.match(r"on Dan\b", detail) and "no rehearsal:" not in detail:
+                try:
+                    waited = (now - datetime.strptime(since, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)).total_seconds() / 60
+                except ValueError:
+                    waited = None
+                    questions.append(f"{item}: 'since' is not a time like 2026-11-16 22:25. Since when does it wait?")
+                if waited is not None and waited > quiet_minutes:
+                    questions.append(f"{item}: it has waited {detail} for {waited:.0f} minutes. Can a lane rehearse it on the current head of what it waits on?")
             for number in re.findall(r"#(\d+)", detail):
                 if int(number) not in open_pull_requests:
                     questions.append(f"{item}: it waits {detail}, and #{number} is no longer open. Is the wait over?")
