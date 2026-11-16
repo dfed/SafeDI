@@ -13,9 +13,10 @@ name: Share Passed Compile Checks
 # and it requires the run's workflow file to be one of those two. A list that
 # names a check that did not pass would let that check be skipped, so a branch
 # that changes how passes are written must not write into the list other
-# branches read: the identity hashes both workflows, the two actions their
-# test jobs restore and upload with, and compile-check-identity.sh, so such a
-# branch has an identity, and a list, of its own. Nothing here stops a branch
+# branches read: the identity hashes the lines of both workflows that name the
+# cache, the two actions their test jobs restore and upload with, and
+# compile-check-identity.sh, so such a branch has an identity, and a list, of
+# its own. Nothing here stops a branch
 # from uploading a list under an identity it did not compute; the list is as
 # trustworthy as the people and agents who can push branches here. This
 # workflow checks out nothing and runs nothing from the run it reads: the
