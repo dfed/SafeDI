@@ -338,10 +338,8 @@ private struct FileJudgment {
 				if conditionsBind(whileStatement.conditions, name) {
 					return nil
 				}
-			} else if let forStatement = parent.as(ForStmtSyntax.self), child.id == forStatement.body.id {
-				if patternBinds(forStatement.pattern, name) {
-					return nil
-				}
+			} else if let forStatement = parent.as(ForStmtSyntax.self), child.id == forStatement.body.id, patternBinds(forStatement.pattern, name) {
+				return nil
 			}
 			child = parent
 		}
@@ -447,7 +445,7 @@ private final class FunctionCollector: SyntaxVisitor {
 private final class MemberClosureCollector: SyntaxVisitor {
 	private(set) var memberClosures = [(label: String, closure: ClosureExprSyntax)]()
 
-	override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+	override func visit(_: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
 		// A function declared inside a level function is judged on its own.
 		.skipChildren
 	}
