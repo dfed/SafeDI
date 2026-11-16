@@ -5956,18 +5956,18 @@ struct SafeDIToolGraphFuzzerTests {
 	static let gatingDrawJudgedGraphFloor = 10
 
 	/// What the retention oracle judges over the seam corpus (`Corpus.retentionCounts`). Pins: derived on CI.
-	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 58, judgedDrawingRetentionShape: 42, judgedThroughHandWrittenBuilder: 32, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 28, "SendableErasedInstantiator": 15, "Instantiator": 27, "SendableInstantiator": 11])
+	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 61, judgedDrawingRetentionShape: 44, judgedThroughHandWrittenBuilder: 33, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 30, "SendableErasedInstantiator": 16, "Instantiator": 29, "SendableInstantiator": 11])
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 553, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0xC81CC1328325230A
-	static let seamCorpusAcceptedSeedCount = 284
-	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xE499C1A06E55BF98
+	static let seamCorpusFixtureHash: UInt64 = 0x65FA1A56E5E514C9
+	static let seamCorpusAcceptedSeedCount = 289
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 202
+	static let seamCorpusValueOracleInspectedGraphCount = 205
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
 	static let seamCorpusOmittedValueGraphCount = 0
 	/// The errors of a cycle's label in a seam's tree whose rejections the seam corpus pins, which
@@ -6029,38 +6029,38 @@ struct SafeDIToolGraphFuzzerTests {
 		.cycleParameterTwoLevelsDeep: 31,
 		.cycleParameterUndeclaredAbove: 3,
 		.cycleParameterWithoutReader: 10,
-		.forwardedLabelAcrossSeamCall: 102,
-		.forwardedLabelAcrossSeamCallCallerInsideSeam: 34,
-		.forwardedLabelAcrossSeamCallFillReadsLabel: 43,
-		.forwardedLabelAcrossSeamCallInnerOptional: 16,
-		.forwardedLabelAcrossSeamCallOtherTypes: 24,
+		.forwardedLabelAcrossSeamCall: 107,
+		.forwardedLabelAcrossSeamCallCallerInsideSeam: 35,
+		.forwardedLabelAcrossSeamCallFillReadsLabel: 45,
+		.forwardedLabelAcrossSeamCallInnerOptional: 17,
+		.forwardedLabelAcrossSeamCallOtherTypes: 25,
 		.forwardedLabelAcrossSeamCallOuterDefers: 21,
-		.forwardedLabelAcrossSeamCallPlaceBeneath: 29,
+		.forwardedLabelAcrossSeamCallPlaceBeneath: 31,
 		.forwardedLabelAcrossSeamCallSameClassType: 18,
-		.forwardedLabelAcrossSeamCallSameValueType: 23,
+		.forwardedLabelAcrossSeamCallSameValueType: 26,
 		.forwardedLabelAcrossSeamCallSendable: 29,
-		.retentionSeamValueBeforeBuilder: 101,
-		.retentionSeamValueBeforeBuilderFillReadsValue: 14,
+		.retentionSeamValueBeforeBuilder: 104,
+		.retentionSeamValueBeforeBuilderFillReadsValue: 15,
 		.retentionSeamValueBeforeBuilderInnerSeam: 31,
-		.retentionSeamValueBeforeBuilderLeafThroughInstantiator: 58,
+		.retentionSeamValueBeforeBuilderLeafThroughInstantiator: 60,
 		.retentionSeamValueBeforeBuilderSendable: 30,
 		.holeErasureBeneathSeamInSendableFamily: 27,
-		.holeErasureInsidePlainFill: 17,
+		.holeErasureInsidePlainFill: 21,
 		.holeErasureInsideSendableFill: 18,
-		.holeForwardingPlace: 29,
-		.holeForwardingPlaceLabeledPair: 18,
-		.holeForwardingPlacePassedUp: 16,
-		.holeForwardingPlaceSecondPlace: 17,
-		.holeForwardingPlaceSecondPlaceSpelledOtherwise: 13,
-		.holeInstantiatorPlace: 73,
-		.holeInstantiatorPlaceBesideErased: 34,
-		.holeInstantiatorPlaceBesidePlain: 42,
+		.holeForwardingPlace: 31,
+		.holeForwardingPlaceLabeledPair: 28,
+		.holeForwardingPlacePassedUp: 18,
+		.holeForwardingPlaceSecondPlace: 26,
+		.holeForwardingPlaceSecondPlaceSpelledOtherwise: 23,
+		.holeInstantiatorPlace: 77,
+		.holeInstantiatorPlaceBesideErased: 36,
+		.holeInstantiatorPlaceBesidePlain: 44,
 		.holeInstantiatorPlaceBesidePlainAcrossFamilies: 13,
-		.holeNothingForwardedPlace: 71,
-		.holeNothingForwardedPlaceBesideInstantiator: 20,
-		.holeNothingForwardedPlaceBesidePlain: 18,
-		.holeNothingForwardedPlacePassedUp: 26,
-		.retentionSeamValueBeforeBuilderForwardingPlace: 43,
+		.holeNothingForwardedPlace: 90,
+		.holeNothingForwardedPlaceBesideInstantiator: 25,
+		.holeNothingForwardedPlaceBesidePlain: 42,
+		.holeNothingForwardedPlacePassedUp: 34,
+		.retentionSeamValueBeforeBuilderForwardingPlace: 45,
 	]
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
@@ -6119,7 +6119,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`seamBuilderOrderShape(listedBy:)`). Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x1AB69420C3986376
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xF131FB39F771B818
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -6428,7 +6428,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
-			seeds: [78, 93, 108, 121, 164, 273, 298, 304, 308, 326, 347, 362, 365, 407, 481, 494, 527, 568, 594, 670, 699, 701, 750, 794, 797, 832, 850, 858, 876, 929, 931, 947],
+			seeds: [78, 93, 94, 108, 121, 164, 273, 283, 298, 304, 308, 326, 347, 348, 362, 365, 407, 481, 494, 527, 568, 594, 605, 623, 670, 699, 701, 750, 797, 832, 850, 858, 876, 929, 931],
 		),
 		// Seed 391's chain of hole draws that re-enter one another holds more wrappers than a graph compared on its own may
 		// traverse (`DifferentialValueLimits.isolatedFuzzerGraph`), so the comparator describes none of its values beneath
@@ -6444,7 +6444,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [19, 116, 311, 338, 567, 595, 836, 948],
+			seeds: [19, 116, 311, 338, 383, 567, 595, 836, 948],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason); and \(inSeamLeakReason)",
@@ -6483,12 +6483,12 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: inSeamLeakReason,
 			signatures: inSeamLeakSignatures,
-			seeds: [68, 69, 151, 418, 430],
+			seeds: [69, 151, 418, 430, 990],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures,
-			seeds: [15, 83, 98, 227, 309, 663, 787, 883, 892],
+			seeds: [15, 68, 83, 98, 227, 309, 556, 663, 787, 883, 892],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
@@ -6511,6 +6511,11 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "\(lazyCycleConfigurationFieldReason); and \(inSeamLeakReason)",
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)] + inSeamLeakSignatures,
 			seeds: [751],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(mockParameterAndFieldOrderReason); and \(inSeamLeakReason)",
+			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)] + inSeamLeakSignatures,
+			seeds: [300],
 		),
 	]
 
@@ -6600,16 +6605,16 @@ struct SafeDIToolGraphFuzzerTests {
 	static let seamBuilderSurfaceSeeds = BuilderSurfaceSeeds(
 		base: [
 			15, 18, 19, 24, 25, 30, 56, 59, 68, 69, 78, 80, 83, 84, 93, 94, 98, 108, 116, 121,
-			135, 151, 153, 162, 163, 164, 187, 209, 215, 227, 240, 241, 247, 252, 273, 277, 279, 281, 304, 306,
-			308, 309, 311, 321, 326, 330, 334, 338, 347, 348, 362, 365, 370, 383, 384, 391, 403, 407, 418, 430,
-			448, 454, 468, 471, 478, 481, 494, 517, 527, 532, 548, 550, 567, 568, 594, 595, 600, 609, 617, 627,
-			663, 669, 670, 701, 705, 709, 718, 732, 750, 751, 760, 769, 787, 788, 791, 794, 797, 809, 819, 832,
-			834, 835, 836, 851, 854, 858, 866, 867, 876, 883, 886, 892, 912, 920, 923, 930, 931, 934, 940, 942,
-			945, 947, 948, 950, 969,
+			135, 151, 153, 162, 163, 164, 187, 209, 215, 227, 240, 241, 247, 252, 273, 277, 279, 281, 300, 304,
+			306, 308, 309, 311, 321, 326, 330, 334, 338, 347, 348, 362, 365, 370, 383, 384, 391, 403, 407, 418,
+			430, 448, 454, 468, 471, 478, 481, 494, 517, 527, 532, 548, 550, 556, 567, 568, 594, 595, 600, 605,
+			609, 617, 623, 627, 663, 669, 670, 701, 705, 709, 718, 732, 750, 751, 760, 769, 787, 788, 791, 794,
+			797, 809, 819, 832, 834, 835, 836, 851, 854, 858, 866, 867, 876, 883, 886, 892, 912, 920, 923, 930,
+			931, 934, 940, 942, 945, 947, 948, 950, 969, 990,
 		],
 		labels: [],
 		sameSupply: [
-			19, 83, 98, 108, 135, 151, 273, 326, 797, 854, 858, 929, 942,
+			19, 83, 98, 108, 135, 151, 273, 300, 326, 797, 854, 858, 929, 942, 990,
 		],
 		sameSupplyReason: seamMockTakesHoleValueReason,
 		sameSupplyBuilderKindFlips: [69, 78, 403, 527],
@@ -6631,8 +6636,8 @@ struct SafeDIToolGraphFuzzerTests {
 			seeds: [1_010, 1_020],
 		),
 		GraphFuzzerKnownIssue(
-			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
+			reason: inSeamLeakReason,
+			signatures: inSeamLeakSignatures,
 			seeds: [1_450],
 		),
 		GraphFuzzerKnownIssue(
@@ -6713,6 +6718,8 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleGadgetImpl alive holding holeOuter.holeSeam.holeHandedLater once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleGadgetImpl alive holding holeOuter.holeSeam.holeLaterBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleGadgetImpl alive holding holeOuter.holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
+		"_HoleGadgetImpl alive holding holeOuter.holeSeam.holeServiceLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleGadgetImpl alive holding holeOuter.holeSeam.holeServiceLater once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleGadgetImpl alive holding holeOuter.holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleGadgetImpl alive holding holeOuter.holeSeam.holeTicketBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleGadgetImpl alive holding holeOuter.holeSeam.holeTicketHolder.holeTicketOther once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6728,6 +6735,7 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleGadgetOwner alive holding holeOuter.holeSeam.holeHandedLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleGadgetOwner alive holding holeOuter.holeSeam.holeLaterBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleGadgetOwner alive holding holeOuter.holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleGadgetOwner alive holding holeOuter.holeSeam.holeServiceLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleGadgetOwner alive holding holeOuter.holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleGadgetOwner alive holding holeOuter.holeSeam.holeTicketHolder.holeTicketOther once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleGadgetOwner alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6739,13 +6747,16 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleHanded> alive holding holeBoth.holeSeamPlain.holeServiceLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHanded> alive holding holeOuter.holeSeam.holeHandedErased once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHanded> alive holding holeOuter.holeSeam.holeHandedLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleHanded> alive holding holeOuter.holeSeam.holeLaterBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHanded> alive holding holeOuter.holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleHanded> alive holding holeOuter.holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleHanded> alive holding holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHanded> alive holding holeOuter.holeSeam.holeRingABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHanded> alive holding holeOuter.holeSeam.holeRingBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHanded> alive holding holeOuter.holeSeam.holeServiceLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHanded> alive holding holeOuter.holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHanded> alive holding holeOuter.holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleHanded> alive holding holeOuter.holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHanded> alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHanded> alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHanded> alive holding holeSeam.holeNestBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
@@ -6766,6 +6777,7 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleHandedHolder alive holding holeBoth.holeSeamPlain.holeServiceLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedHolder alive holding holeOuter.holeSeam.holeHandedErased once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedHolder alive holding holeOuter.holeSeam.holeHandedLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleHandedHolder alive holding holeOuter.holeSeam.holeLaterBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedHolder alive holding holeOuter.holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedHolder alive holding holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedHolder alive holding holeOuter.holeSeam.holeRingABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6773,6 +6785,7 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleHandedHolder alive holding holeOuter.holeSeam.holeServiceLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedHolder alive holding holeOuter.holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedHolder alive holding holeOuter.holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleHandedHolder alive holding holeOuter.holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedHolder alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedHolder alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedHolder alive holding holeSeam.holeRingABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6794,8 +6807,10 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleHandedHolder> alive holding holeTop.holeOuter.holeSeam.holeLaterBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedHolder> alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedImpl alive holding holeOuter.holeSeam.holeHandedLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleHandedImpl alive holding holeOuter.holeSeam.holeLaterBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedImpl alive holding holeOuter.holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedImpl alive holding holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleHandedImpl alive holding holeOuter.holeSeam.holeServiceLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedImpl alive holding holeOuter.holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedImpl alive holding holeOuter.holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleHandedImpl alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6815,6 +6830,7 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleImpl alive holding holeOuter.holeSeam.holeHandedLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleImpl alive holding holeOuter.holeSeam.holeHandedLater once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleImpl alive holding holeOuter.holeSeam.holeLaterBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleImpl alive holding holeOuter.holeSeam.holeLaterBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleImpl alive holding holeOuter.holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleImpl alive holding holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleImpl alive holding holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
@@ -6846,6 +6862,9 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleImpl alive holding holeSeam.holeTangleTValue.holeTangleService.holeTangleC once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleImpl alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleLaterService> alive holding holeOuter.holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleLaterService> alive holding holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleLaterService> alive holding holeOuter.holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleLaterService> alive holding holeOuter.holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleLaterService> alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleLaterService> alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleLogger alive holding holeBothTop.holeBoth.holeSeamPlain.holeHandedHolder.holeHandedBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6893,6 +6912,7 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleOwner alive holding holeOuter.holeSeam.holeHandedHolder.holeHandedBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner alive holding holeOuter.holeSeam.holeHandedHolder.holeHandedBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleOwner alive holding holeOuter.holeSeam.holeHandedLater once the probe's value is released: 2 on the feature path, 0 on the known-right path",
+		"_HoleOwner alive holding holeOuter.holeSeam.holeLaterBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleOwner alive holding holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleOwner alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6962,6 +6982,7 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleScreenB alive holding holeSeam.holeRingBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleService> alive holding holeOuter.holeSeam.holeHandedErased once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleService> alive holding holeOuter.holeSeam.holeHandedHolder.holeHandedBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleService> alive holding holeOuter.holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleService> alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleService> alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleService> alive holding holeSeam.holeNestBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
@@ -7016,17 +7037,28 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleTangleT> alive holding holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTangleT> alive holding holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTangleT> alive holding holeSeam.holeTangleTValue.holeTangleService.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketHolder alive holding holeBoth.holeSeamPlain.holeHandedErased once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketHolder alive holding holeBoth.holeSeamPlain.holeHandedHolder.holeHandedBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketHolder alive holding holeBoth.holeSeamPlain.holeServiceLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketHolder alive holding holeBothTop.holeBoth.holeSeamPlain.holeHandedHolder.holeHandedBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketHolder alive holding holeOuter.holeSeam.holeHandedErased once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketHolder alive holding holeOuter.holeSeam.holeHandedHolder.holeHandedBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketHolder alive holding holeOuter.holeSeam.holeHandedLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketHolder alive holding holeOuter.holeSeam.holeLaterBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketHolder alive holding holeOuter.holeSeam.holeServiceLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketHolder alive holding holeOuter.holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketHolder alive holding holeOuter.holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketHolder alive holding holeOuter.holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketHolder alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketHolder alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketHolder alive holding holeTop.holeOuter.holeSeam.holeHandedErased once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketHolder alive holding holeTop.holeOuter.holeSeam.holeLaterBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeBoth.holeSeamPlain.holeHandedErased once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeBoth.holeSeamPlain.holeHandedErased once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeBoth.holeSeamPlain.holeHandedHolder.holeHandedBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeBoth.holeSeamPlain.holeHandedHolder.holeHandedBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeBoth.holeSeamPlain.holeServiceLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeBoth.holeSeamPlain.holeServiceLater once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeBothTop.holeBoth.holeSeamPlain.holeHandedHolder.holeHandedBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeBothTop.holeBoth.holeSeamPlain.holeTicketHolder.holeTicketOther once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeOuter.holeSeam.holeHandedErased once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -7034,12 +7066,17 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleTicketService> alive holding holeOuter.holeSeam.holeHandedHolder.holeHandedBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeOuter.holeSeam.holeHandedHolder.holeHandedBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeOuter.holeSeam.holeHandedLater once the probe's value is released: 2 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeOuter.holeSeam.holeLaterBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeOuter.holeSeam.holeRingABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeOuter.holeSeam.holeRingBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeOuter.holeSeam.holeServiceLater once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeOuter.holeSeam.holeServiceLater once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeOuter.holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeOuter.holeSeam.holeTangleC once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeOuter.holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeOuter.holeSeam.holeTangleT once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeOuter.holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeOuter.holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 2 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeOuter.holeSeam.holeTicketHolder.holeTicketOther once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTicketService> alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 2 on the feature path, 0 on the known-right path",
@@ -7108,7 +7145,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// derived: a seed here that a run finds failing its inherited shape again is a new failure, and goes back. Seeds
 	/// 311 and 886, which the in-seam leak or the builder order once listed beside it, fail their inherited shape alone;
 	/// 300, 751 and 940 fail it beside the in-seam leak, and are listed with it.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 116, 154, 157, 281, 300, 309, 311, 338, 364, 371, 381, 431, 434, 476, 525, 527, 545, 548, 567, 595, 632, 657, 714, 728, 735, 751, 768, 774, 786, 808, 836, 840, 847, 903, 940, 948]
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 116, 154, 157, 281, 300, 309, 311, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 548, 567, 595, 632, 657, 714, 728, 735, 751, 768, 774, 786, 808, 836, 840, 847, 903, 940, 948]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
