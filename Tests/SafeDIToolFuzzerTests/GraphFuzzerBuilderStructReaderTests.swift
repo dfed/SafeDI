@@ -87,15 +87,10 @@ struct GraphFuzzerBuilderStructReaderTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func seamOutputFeatures_countsNoBuilderAsPassThrough_whenSeamTakesBuilderStruct() {
-		// `onTap` is the only pass-through, a required one: neither the struct's builder, which the plain initializer takes as
-		// a closure that takes nothing, nor the kept one is, so no parameter is `@escaping` without an attribute.
-		let file = Self.switchedAndKeptHome
-			.replacingOccurrences(of: "public init(apiBuilder: ", with: "public init(onTap: @escaping @Sendable () -> Void, apiBuilder: ")
-			.replacingOccurrences(of: "public init(__safeDI_apiBuilder: ", with: "public init(__safeDI_onTap onTap: @escaping @Sendable () -> Void, __safeDI_apiBuilder: ")
-
-		#expect(file.components(separatedBy: "onTap").count == 4)
-		#expect(GraphFuzzerFeature.seamOutputFeatures(of: GraphFuzzerFixture(seed: 1, swiftFileContent: []), generatedFiles: ["FuzzFeature/Home+SafeDI.swift": file]) == [.requiredPassThrough, .escapingAttributedSeamParameter])
+	func seamOutputFeatures_countsOnlyPassThrough_whenSeamTakesBuilderStruct() {
+		// `token` is the only pass-through: the struct's builder, which the plain initializer takes as a closure that takes
+		// nothing, `@escaping`, is not one.
+		#expect(GraphFuzzerFeature.seamOutputFeatures(of: GraphFuzzerFixture(seed: 1, swiftFileContent: []), generatedFiles: ["FuzzFeature/Home+SafeDI.swift": Self.switchedHomeWithPassThrough]) == [.requiredPassThrough])
 	}
 
 	@Test
@@ -211,17 +206,23 @@ struct GraphFuzzerBuilderStructReaderTests {
 		])
 	}
 
-	@Test(arguments: [
-		[
+	@Test
+	func seamCorpusFixture_leavesModuleAsItIs_whenModuleSetsArgument() {
+		let contents = [
 			"// module: FuzzFeature\n@Instantiable(generateDependencyTree: true)\npublic struct S1_Home: Instantiable {}",
 			"// module: FuzzFeature\n#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)",
-		],
-		[
+		]
+
+		#expect(GraphFuzzerFixture.seamCorpusFixture(seed: 1, swiftFileContent: contents).swiftFileContent == contents)
+	}
+
+	@Test
+	func seamCorpusFixture_leavesModulesAsTheyAre_whenNoModuleDeclaresSeam() {
+		let contents = [
 			"// module: FuzzFeature\n@Instantiable\npublic struct S1_Home: Instantiable {}",
 			"// module: FuzzApp\n@Instantiable(isRoot: true)\npublic struct S1_Root: Instantiable {}",
-		],
-	])
-	func seamCorpusFixture_leavesModulesAsTheyAre_whenModuleSetsArgumentOrDeclaresNoSeam(contents: [String]) {
+		]
+
 		#expect(GraphFuzzerFixture.seamCorpusFixture(seed: 1, swiftFileContent: contents).swiftFileContent == contents)
 	}
 
@@ -265,6 +266,50 @@ struct GraphFuzzerBuilderStructReaderTests {
 
 	extension Home {
 	    public enum __safeDI_Home_74DEAFE93792C3B0 {}
+	}
+
+	"""
+
+	/// `Home`, which takes `token` and whose place `api` is at its boundary: a seam that takes a builder struct, in a module
+	/// that generates readable initializers.
+	private static let switchedHomeWithPassThrough = """
+	extension Home {
+	    @frozen nonisolated public enum SafeDIScope_Api {
+	        case api(api_Values)
+
+	        nonisolated public struct api_Values {
+	            public let token: Token
+	        }
+
+	        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+	            public let api: (api_Values) -> __safeDI_Built
+
+	            public init(api: @escaping (api_Values) -> __safeDI_Built) {
+	                self.api = api
+	            }
+
+	            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+	                self.api = { _ in __safeDI_builder() }
+	            }
+	        }
+	    }
+
+	    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+	    public init(token: Token, apiBuilder: @escaping () -> any Api) {
+	        self.init(__safeDI_token: token, __safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+	    }
+
+	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+	    /// From code you write, call the initializer above instead.
+	    public init(__safeDI_token token: Token, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+	        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(token: token))
+	        self.init(token: token, api: api)
+	    }
+	}
+
+	extension Home {
+	    public enum __safeDI_Home_4F69E85EF363C970 {}
 	}
 
 	"""
