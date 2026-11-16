@@ -1521,8 +1521,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		func makeHost() -> Host {
 		    Host(
 		        gadgetBuilder: { PlainGadget() },
-		        panelBuilder: { scope in switch scope { case let .held(_, title): Panel(title: title) } },
-		        panelSendableBuilder: { scope in switch scope { case let .sendableHeld(title): Panel(title: title) } }
+		        panelBuilder: { title in Panel(title: title) },
+		        panelSendableBuilder: { title in Panel(title: title) }
 		    )
 		}
 		"""
@@ -2251,8 +2251,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_compilesHandWrittenClosuresThatKeepForwardedTypealiasOfFunction_whenCallerFillsEachInstantiatorKind() async throws {
-		// A person's closures store the forwarded value, which compiles only where it escapes: in the payloads of the plain
-		// enum and of the `@Sendable` one.
+		// A person's closures store the forwarded value, which compiles only where it escapes: as the value each builder
+		// takes, of the plain family and of the `@Sendable` one.
 		let feature = Self.featureFiles(hostDeclarations: [
 			"@Instantiated let held: Instantiator<ActionPanel>",
 			"@Instantiated let sendableHeld: SendableInstantiator<ActionPanel>",
@@ -2274,10 +2274,10 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		func makeHost() -> Host {
 		    Host(
-		        actionPanelBuilder: { scope in switch scope { case let .held(_, action): ActionPanel(action: action) } },
-		        actionPanelSendableBuilder: { scope in switch scope { case let .sendableHeld(action): ActionPanel(action: action) } },
-		        sendableTapGadget_AnyGadgetSendableBuilder: { scope in switch scope { case let .sendableErased(onTap): AnyGadget(SendableStoringGadget(onTap: onTap)) } },
-		        tapGadget_AnyGadgetBuilder: { scope in switch scope { case let .erased(_, onTap): AnyGadget(StoringGadget(onTap: onTap)) } }
+		        actionPanelBuilder: { action in ActionPanel(action: action) },
+		        actionPanelSendableBuilder: { action in ActionPanel(action: action) },
+		        sendableTapGadget_AnyGadgetSendableBuilder: { onTap in AnyGadget(SendableStoringGadget(onTap: onTap)) },
+		        tapGadget_AnyGadgetBuilder: { onTap in AnyGadget(StoringGadget(onTap: onTap)) }
 		    )
 		}
 		"""
@@ -2303,8 +2303,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		func makeHost() -> Host {
 		    Host(
-		        actionPanelBuilder: { scope in switch scope { case let .held(_, action): ActionPanel(action: action) } },
-		        actionPanelSendableBuilder: { scope in switch scope { case let .sendableHeld(action): ActionPanel(action: action) } }
+		        actionPanelBuilder: { action in ActionPanel(action: action) },
+		        actionPanelSendableBuilder: { action in ActionPanel(action: action) }
 		    )
 		}
 		"""

@@ -3569,12 +3569,9 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		struct CallingService: Service {}
 
 		func host() -> Host {
-		    Host(impl_ServiceBuilder: { scope in
-		        switch scope {
-		        case let .maker(_, callback):
-		            callback()
-		            return CallingService()
-		        }
+		    Host(impl_ServiceBuilder: { callback in
+		        callback()
+		        return CallingService()
 		    })
 		}
 		""")], featureConfiguration: plainDependencyTreeInitializersConfiguration))
