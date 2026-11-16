@@ -55,18 +55,23 @@ pins again.
 Measured: verify 43795430677 (green, 20.5 minutes): 10.2 minutes building, 6 minutes of tests across seven groups, the
 rest set-up and queueing. With 55 dispatches, the build is about 9 hours of the day's waiting.
 
-Plug, to measure before promising: save the build directory per branch after a verify, so the second and later
-dispatches on a branch compile only what changed since the last one. Most of the 55 dispatches were repeats on a
-handful of branches. Risk: the 10 GB cache limit evicting main's caches, so the per-branch cache needs a short life
-or a size check.
+Correction after reading `verify.yml`: a per-branch build already exists. `-f mode=warm` saves the branch a release
+build that its later `release` runs start from (10 seconds of building from the same commit, about 2 minutes after a
+change to one test file, 23 to 26 minutes from nothing). A plain `release` run saves no build, so a branch that was
+never warmed starts every run from main's build, and for a branch that changes SafeDICore that is nearly a cold build
+each time.
+
+Plug: a `release` run of the whole suite saves its own build for its branch, so nobody has to remember `warm`. To
+measure first: the minutes the save adds, and the cache space against the 10 GB limit (an old branch build must not
+evict main's). Until then, a rule for lanes: dispatch `mode=warm` once on a branch that changes `Sources/` before its
+first verify.
 
 ### 5. `mode=fast` with an empty filter is slower than release
 
 Measured: verify 43793266801, fast mode, whole suite in one job: 37 minutes, against 20 for release, which splits the
 suite across seven jobs.
 
-Plug: make `verify.yml` split the tests in fast mode too, or refuse an empty filter with `mode=fast` and say why.
-Small workflow change.
+Plug: a `fast` run with an empty filter fails at once and names `release` (#736).
 
 ### 6. The coverage gate reports last
 
