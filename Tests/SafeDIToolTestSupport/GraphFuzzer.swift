@@ -11943,6 +11943,10 @@ struct GraphFuzzerFailure: Equatable {
 		/// another configuration by value (`GraphFuzzerToolRuns.configurationStorageFailure`), which every builder function
 		/// that captures it copies whole.
 		case configurationStoresAnotherByValue = "a generated configuration stores another configuration by value"
+		/// A closure a caller's level function returns, or a fill function such a closure hands its values to, keeps a
+		/// level's values struct alive, or a level function takes one (`GraphFuzzerLevelFunctionCaptures`): what the
+		/// closure builds would keep alive values its fill does not read.
+		case levelFunctionKeepsValues = "a closure a level function returns keeps a level's values struct alive"
 	}
 
 	let seed: UInt64
@@ -12063,8 +12067,10 @@ struct GraphFuzzerResult {
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 		remedyRuns: [GraphFuzzerRemedyRun] = [],
 		builderSurfaceFloorKinds: [String] = [],
+		levelFunctionCaptures: GraphFuzzerLevelFunctionCaptures? = nil,
 	) {
 		self.retentionCounts = retentionCounts
+		self.levelFunctionCaptures = levelFunctionCaptures
 		self.builderSurfaceFloorKinds = builderSurfaceFloorKinds
 		self.isComparedWithoutSecondHolePlace = isComparedWithoutSecondHolePlace
 		self.isComparedWithoutSecondPath = isComparedWithoutSecondPath
@@ -12153,6 +12159,13 @@ struct GraphFuzzerResult {
 	let remedyRuns: [GraphFuzzerRemedyRun]
 	/// The kinds the graph counts toward the builder surface's floors (`GraphFuzzerToolRuns.builderSurfaceFloorKinds`).
 	let builderSurfaceFloorKinds: [String]
+	/// What the level function capture check found in the graph's generated code, or `nil` when the tool rejected it.
+	let levelFunctionCaptures: GraphFuzzerLevelFunctionCaptures?
+
+	/// What the level function capture check judged of the graph, which the long run adds up per corpus.
+	var levelFunctionCaptureCounts: GraphFuzzerLevelFunctionCaptureCounts {
+		levelFunctionCaptures.map(GraphFuzzerLevelFunctionCaptureCounts.init) ?? GraphFuzzerLevelFunctionCaptureCounts()
+	}
 
 	/// How each partitioned run that gives other results under the two multi-module integrations differs, whether or
 	/// not the graph also fails another way.
@@ -12518,8 +12531,8 @@ enum GraphFuzzerFinding: Equatable {
 	///   every later failure is independent: the value comparison does not run, and the wrapper, multi-module and
 	///   rename oracles judge the drawn graph. Nor does a known failure of the builder surface, which judges only the
 	///   surface a person writes against, of which every later oracle is independent. No known failure masks a renamed
-	///   graph's difference, which judges only what the tool generates, nor what the retention oracle finds, since what a
-	///   graph keeps alive does not depend on how else it fails, so a known failure never hides a leak, nor a failure of
+	///   graph's difference, which judges only what the tool generates, nor what the retention oracle or the level function
+	///   capture check finds, since what a graph keeps alive does not depend on how else it fails, so a known failure never hides a leak, nor a failure of
 	///   the builder surface (`GraphFuzzerFailure.builderSurfaceKindsNeverMasked`), which judges only the tool's output
 	///   for the graph and its edits, so a known failure of an earlier oracle, such as a hole name that changes with a
 	///   second place, never hides a part of the builder surface its seed's entry does not list – the compile of the call
@@ -12540,7 +12553,7 @@ enum GraphFuzzerFinding: Equatable {
 			// difference of a renamed graph masks none either, whatever order the chain judges in.
 			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderCallDoesNotCompile, .renamedGraphDiffers].contains(failure.kind)
 				|| GraphFuzzerFailure.knownBuilderSurfaceKinds.contains(failure.kind)
-			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers || $0.kind == .seamRetainsWhatInlineFrees || $0.kind == .publicMockRetainsWhatKnownRightFrees || GraphFuzzerFailure.builderSurfaceKindsNeverMasked.contains($0.kind)) && !knownIssue.matches($0) }) {
+			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers || $0.kind == .seamRetainsWhatInlineFrees || $0.kind == .publicMockRetainsWhatKnownRightFrees || $0.kind == .levelFunctionKeepsValues || GraphFuzzerFailure.builderSurfaceKindsNeverMasked.contains($0.kind)) && !knownIssue.matches($0) }) {
 				self = .failure(unmasked)
 			} else {
 				self = .knownIssue(knownIssue, failure)
@@ -13509,6 +13522,20 @@ enum GraphFuzzerOracle {
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
 			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
+			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
+			// with compiles and without.
+			let levelFunctionCaptures: GraphFuzzerLevelFunctionCaptures? = if case let .accepted(generatedFiles, _) = runs.firstOutcome {
+				GraphFuzzerLevelFunctionCaptures(generatedFiles: generatedFiles)
+			} else {
+				nil
+			}
+			if let levelFunctionCaptures, !levelFunctionCaptures.findings.isEmpty {
+				failures.append(GraphFuzzerFailure(
+					seed: runs.fixture.seed,
+					kind: .levelFunctionKeepsValues,
+					details: "\(levelFunctionCaptures.findings.map(\.description).joined(separator: "\n"))\nThis graph:\n\(runs.firstOutcome.description)",
+				))
+			}
 			failures.append(contentsOf: renamedGraphFailures)
 			// The retention oracle judges last. No known failure masks what it finds, as none masks a renamed graph's
 			// difference (`GraphFuzzerFinding`).
@@ -13532,6 +13559,7 @@ enum GraphFuzzerOracle {
 				valueOracle: runs.valueOracle,
 				remedyRuns: runs.remedyRuns,
 				builderSurfaceFloorKinds: runs.builderSurfaceFloorKinds + Self.builderCallFloorKinds(of: runs, isCompiled: compileVerificationIsEnabled && runs.runsDifferFailure == nil && codeCompilationFailures[runs.fixture.seed] == nil),
+				levelFunctionCaptures: levelFunctionCaptures,
 			)
 		}
 	}

@@ -317,6 +317,46 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func seamSmokeSeeds_judgeLevelFunctionCaptures_withSameCountsWithAndWithoutCompiles() async throws {
+		// The level function capture check reads the generated text, so the call in `GraphFuzzerOracle.results(of:)` puts the
+		// same findings and counts on each accepted graph's result whether or not the run compiles: these literals hold in
+		// both modes.
+		let captures = try await seamSmokeResults.value.reduce(into: [UInt64: GraphFuzzerLevelFunctionCaptures]()) { captures, result in
+			captures[result.fixture.seed] = result.levelFunctionCaptures
+		}
+
+		#expect(captures == [
+			1: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
+			16: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
+			24: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 5, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 0),
+			68: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 17, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 2),
+			78: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 19, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
+			84: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 5, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
+			92: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
+			151: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 11, namedMemberClosureCount: 7, conversionFunctionCount: 0, fillFunctionCount: 3),
+			153: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 9, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
+			164: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 13, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 0),
+			215: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 12, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 0),
+			227: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 15, namedMemberClosureCount: 7, conversionFunctionCount: 0, fillFunctionCount: 1),
+			277: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 27, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 3),
+			304: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 55, namedMemberClosureCount: 9, conversionFunctionCount: 0, fillFunctionCount: 1),
+			309: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 17, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 2),
+			347: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 17, namedMemberClosureCount: 7, conversionFunctionCount: 0, fillFunctionCount: 1),
+			594: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 20, namedMemberClosureCount: 14, conversionFunctionCount: 0, fillFunctionCount: 6),
+			605: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 36, namedMemberClosureCount: 13, conversionFunctionCount: 0, fillFunctionCount: 3),
+			609: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 9, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
+			705: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 7, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
+			850: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 15, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 0),
+			1_010: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 38, namedMemberClosureCount: 10, conversionFunctionCount: 0, fillFunctionCount: 2),
+			1_020: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 29, namedMemberClosureCount: 13, conversionFunctionCount: 0, fillFunctionCount: 2),
+			1_450: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 20, namedMemberClosureCount: 8, conversionFunctionCount: 0, fillFunctionCount: 2),
+			1_814: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 6, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
+			1_890: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 51, namedMemberClosureCount: 3, conversionFunctionCount: 0, fillFunctionCount: 3),
+		])
+	}
+
+	@Test
 	func seamSmokeKnownIssuesBeyondTheCorpus_listOnlySmokeSeedsBeyondTheCorpusOnce() {
 		let seeds = Self.seamSmokeKnownIssuesBeyondTheCorpus.flatMap(\.seeds)
 		#expect(seeds == seeds.sorted() && Set(seeds).count == seeds.count)
@@ -1104,6 +1144,15 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Self.seamCorpusRetentionCounts.judgedHoldingForwardingWrapper["ErasedInstantiator", default: 0] >= Self.gatingDrawJudgedGraphFloor)
 		#expect(Self.publicMockCorpusRetentionCounts.judged >= Self.gatingDrawJudgedGraphFloor)
 		#expect(Self.publicMockCorpusRetentionCounts.judgedDrawingRetentionShape >= Self.gatingDrawJudgedGraphFloor)
+	}
+
+	@Test
+	func levelFunctionCaptureCounts_holdAtLeastTenGraphs_whereTheCheckJudges() {
+		// The level function capture check is the first signal of a kept level's values only while it judges at least ten
+		// graphs of the seam corpus with a level function, and ten with a member closure that names its parameter. The
+		// corpus runs pin each count exactly.
+		#expect(Self.seamCorpusLevelFunctionCaptureCounts.judged >= Self.gatingDrawJudgedGraphFloor)
+		#expect(Self.seamCorpusLevelFunctionCaptureCounts.judgedWithNamed >= Self.gatingDrawJudgedGraphFloor)
 	}
 
 	@Test
@@ -2267,6 +2316,17 @@ struct SafeDIToolGraphFuzzerTests {
 		let retention = GraphFuzzerFailure(seed: knownIssue.seeds[0], kind: kind, details: "probe `S84_Root()` keeps S84_Navigator alive holding detailBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path")
 
 		#expect(GraphFuzzerFinding(failure: compilerError, laterFailures: [retention], knownIssue: knownIssue) == .failure(retention))
+	}
+
+	@Test
+	func finding_reportsLevelFunctionKeepsValues_whenEarlierKnownFailureListsTheSeed() {
+		// No known failure hides a level's values a kept closure holds: what a graph keeps alive does not depend on how its
+		// generated code fails to compile, and no known issue documents this check's findings.
+		let knownIssue = Self.compilerErrorKnownIssue
+		let compilerError = GraphFuzzerFailure(seed: knownIssue.seeds[0], kind: .generatedCodeDoesNotCompile, details: "Root+SafeDI.swift:3:5: error: invalid redeclaration of 'value'")
+		let captures = GraphFuzzerFailure(seed: knownIssue.seeds[0], kind: .levelFunctionKeepsValues, details: "App.swift:2: a closure or local function inside member `detailBuilder` of level function `__safeDI_apiBuilder_Home` refers to `values`, which holds a level's values, so what it builds keeps them alive")
+
+		#expect(GraphFuzzerFinding(failure: compilerError, laterFailures: [captures], knownIssue: knownIssue) == .failure(captures))
 	}
 
 	@Test
@@ -5917,6 +5977,7 @@ struct SafeDIToolGraphFuzzerTests {
 		var valueOracleInspectedCount = 0
 		var valueOracleComparedCount = 0
 		var retentionCounts = GraphFuzzerRetentionCounts()
+		var levelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts()
 		// The graphs of each gating draw that the oracles after acceptance judged, by the draw's name.
 		var gatingDrawJudgedCounts = [String: Int]()
 		var readTwinGraphCount = 0
@@ -5981,6 +6042,7 @@ struct SafeDIToolGraphFuzzerTests {
 								valueOracle: results[index].valueOracle,
 								remedyRuns: results[index].remedyRuns,
 								builderSurfaceFloorKinds: results[index].builderSurfaceFloorKinds,
+								levelFunctionCaptures: results[index].levelFunctionCaptures,
 							)
 						}
 						for result in results {
@@ -6048,6 +6110,7 @@ struct SafeDIToolGraphFuzzerTests {
 								valueOracleComparedCount += 1
 							}
 							retentionCounts.add(result.retentionCounts)
+							levelFunctionCaptureCounts.add(result.levelFunctionCaptureCounts)
 							for draw in corpus.gatingDrawsJudged(by: result, knownIssue: knownIssuesBySeed[seed]) {
 								gatingDrawJudgedCounts[draw, default: 0] += 1
 							}
@@ -6123,6 +6186,9 @@ struct SafeDIToolGraphFuzzerTests {
 		// What the retention oracle judged, with the corpus's pins, which ci.yml's combine job adds up: a change that judges
 		// fewer graphs, or pairs fewer experiments, fails them.
 		report.append("retention \(corpus.name) \(retentionCounts.reportField) \(corpus.retentionCounts.reportField)")
+		// What the level function capture check judged, with the corpus's pins, which ci.yml's combine job adds up: a change
+		// that judges fewer graphs, or stops reaching fill functions, fails them.
+		report.append("level-captures \(corpus.name) \(levelFunctionCaptureCounts.reportField) \(corpus.levelFunctionCaptureCounts.reportField)")
 		// The graphs of each gating draw that the oracles after acceptance judged, with the floor, which ci.yml's combine
 		// job adds up: a draw gates nothing while fewer of its graphs are judged. The shapes each draw rolls are reported
 		// too, against no floor: a shape the draw rolls in few graphs shows how thinly the oracles judge it.
@@ -6206,6 +6272,9 @@ struct SafeDIToolGraphFuzzerTests {
 			}
 			if retentionCounts != corpus.retentionCounts {
 				reportProblem("The retention oracle judged, over the \(corpus.name) corpus, \(retentionCounts.reportField), but \(corpus.retentionCounts.reportField) is pinned (`retentionCounts`).")
+			}
+			if levelFunctionCaptureCounts != corpus.levelFunctionCaptureCounts {
+				reportProblem("The level function capture oracle judged, over the \(corpus.name) corpus, \(levelFunctionCaptureCounts.reportField), but \(corpus.levelFunctionCaptureCounts.reportField) is pinned (`levelFunctionCaptureCounts`).")
 			}
 			let thinGatingDraws = corpus.flooredGatingDrawNames.filter { gatingDrawJudgedCounts[$0, default: 0] < Self.gatingDrawJudgedGraphFloor }
 			if !thinGatingDraws.isEmpty {
@@ -6443,6 +6512,10 @@ struct SafeDIToolGraphFuzzerTests {
 		/// judged, those of them that draw its own shape, those whose hand-written builder's probe it judged, and the
 		/// experiments only one path ran.
 		var retentionCounts = GraphFuzzerRetentionCounts()
+		/// What the level function capture check judges over the whole corpus (`level-captures` in the report), pinned: the
+		/// graphs with a level function, those of them with a member closure that names its parameter, those member
+		/// closures, the conversion functions and the fill functions.
+		var levelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts()
 		/// The gating draws of the seam corpus (`isForwardedLabelAcrossSeamCallShape`, `isRetentionShape`), whose judged
 		/// graphs must reach `gatingDrawJudgedGraphFloor`.
 		var gatingSeamDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
@@ -6596,6 +6669,7 @@ struct SafeDIToolGraphFuzzerTests {
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
+		levelFunctionCaptureCounts: seamCorpusLevelFunctionCaptureCounts,
 		gatingSeamDrawFeatures: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape }),
 		builderSurfaceFlooredKinds: [
 			"base-plain",
@@ -6635,6 +6709,10 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the retention oracle judges over the seam corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 37, judgedDrawingRetentionShape: 31, judgedThroughHandWrittenBuilder: 23, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 21, "SendableErasedInstantiator": 9, "Instantiator": 16, "SendableInstantiator": 5])
+
+	/// What the level function capture check judges over the seam corpus (`Corpus.levelFunctionCaptureCounts`). Pins:
+	/// derived on CI.
+	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 0, judgedWithNamed: 0, named: 0, conversions: 0, fills: 0)
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 567, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)

@@ -9,6 +9,7 @@ that ci.yml splits each corpus into. Each shard's long run ends its report with
     inspected <graphs the value oracle inspected> <pinned count> <corpus>
     compared <graphs the value comparator compared> <corpus>
     retention <corpus> <key>=<count>,… <key>=<pinned count>,…
+    level-captures <corpus> <key>=<count>,… <key>=<pinned count>,…
     gating <corpus> <draw>=<graphs of the draw the oracles judged>,… <floor>
     gating-shapes <corpus> <shape>=<graphs of the shape the oracles judged>,…
     read-twins <graphs the oracle compared with their read twin> <pinned count> <corpus>
@@ -31,7 +32,10 @@ pins, every spelling the corpus draws must be
 drawn in some accepted graph of some shard, each output feature with a pinned minimum must show in at least that
 percentage of the corpus's accepted graphs (the public mock corpus reports `outputs`), what the retention oracle judged
 must add up to its pins (`retention`: the graphs with a hole it judged, those that draw its own shape, those whose
-hand-written builder it judged, and the experiments only one path ran), the graphs of each gating draw that the
+hand-written builder it judged, and the experiments only one path ran), what the level function capture check
+judged must add up to its pins (`level-captures`: the graphs with a level function, those with a member closure that
+names its parameter, those member closures, the conversion functions and the fill functions; the seam corpus's first
+two must reach ten graphs each), the graphs of each gating draw that the
 oracles after acceptance judged must reach the floor (`gating`, a floor rather than a pin, since a draw gates only
 while that many of its graphs are judged; `gating-shapes`, the shapes each draw rolls, checks nothing), the accepted
 graphs that show
@@ -40,8 +44,8 @@ add up to their pins (`errors`: a public mock's own errors, or a cycle's in a se
 surface judges as each kind a corpus floors must add up to at least ten (`builder-surface`), what the base corpus's value oracle compares and
 skips must add up to its pins (`value-oracle`: counts, and set sums whose keys end in `Sum`, which add up wrapping
 like the accepted seed-set sum), and no shard may report a failure,
-a stale known issue, a misfiled seed, or a problem. Every long run writes `features`, `inspected`, `retention`, `gating`, `read-twins`, `draws`, `errors` and `builder-surface` for its corpus, and
-`value-oracle` for the base corpus, so a complete report that names a corpus without one of them is a problem: a
+a stale known issue, a misfiled seed, or a problem. Every long run writes `features`, `inspected`, `retention`, `gating`, `read-twins`, `draws`, `errors` and `builder-surface` for its corpus,
+`value-oracle` for the base corpus, and `level-captures` for the seam corpus, so a complete report that names a corpus without one of them is a problem: a
 run that stopped writing the line would otherwise skip that line's check silently. The `cpu` lines check nothing:
 the summary adds them up per corpus into a table of what each phase of the oracle cost, a phase's busy seconds being
 the seconds the batches of the corpus's shards spent in it. Writes a Markdown summary to
@@ -63,6 +67,12 @@ inspected_pins_by_corpus = {}
 compared_by_corpus = {}
 retention_by_corpus = {}
 retention_pins_by_corpus = {}
+level_captures_by_corpus = {}
+level_captures_pins_by_corpus = {}
+# The counts of the level function capture check that must reach ten graphs in the seam corpus.
+LEVEL_CAPTURES_FLOOR = 10
+LEVEL_CAPTURES_FLOORED_KEYS = ("judged", "judgedWithNamed")
+SEAM_CORPUS = "generateDependencyTree"
 gating_by_corpus = {}
 gating_floors_by_corpus = {}
 read_twins_by_corpus = {}
@@ -107,6 +117,7 @@ for path in report_paths:
     featured_corpora = set()
     inspected_corpora = set()
     retention_corpora = set()
+    level_captures_corpora = set()
     gating_corpora = set()
     read_twin_corpora = set()
     builder_surface_corpora = set()
@@ -137,6 +148,12 @@ for path in report_paths:
                 for key, value in value_oracle_fields(fields[2]).items():
                     totals[key] = totals.get(key, 0) + value
                 retention_pins_by_corpus.setdefault(fields[1], set()).add(fields[3])
+            elif fields[0] == "level-captures" and len(fields) == 4:
+                level_captures_corpora.add(fields[1])
+                totals = level_captures_by_corpus.setdefault(fields[1], {})
+                for key, value in value_oracle_fields(fields[2]).items():
+                    totals[key] = totals.get(key, 0) + value
+                level_captures_pins_by_corpus.setdefault(fields[1], set()).add(fields[3])
             elif fields[0] == "gating" and len(fields) in (3, 4):
                 # A corpus with no gating draw reports an empty list, an absent field.
                 gating_corpora.add(fields[1])
@@ -237,6 +254,9 @@ for path in report_paths:
         # Only the base corpus has a value oracle of its own, which every long run of it reports.
         if "base" in reported_corpora and "base" not in value_oracle_corpora:
             problems.append(f"The base corpus reported nothing its value oracle compared in {path}.")
+        # Only the seam corpus's level functions are floored, so only its long runs must report what the check judged.
+        if SEAM_CORPUS in reported_corpora and SEAM_CORPUS not in level_captures_corpora:
+            problems.append(f"The {SEAM_CORPUS} corpus reported no count of what the level function capture check judged in {path}.")
     for corpus, starting_seed, count, accepted_count, accepted_sum in shard_lines:
         shards_by_corpus.setdefault(corpus, []).append((starting_seed, count, accepted_count, accepted_sum))
 
@@ -288,6 +308,30 @@ if not problems:
                 problems.append(
                     f"The retention oracle judged, over the {corpus} corpus, other numbers than pinned (`retentionCounts`): "
                     f"{', '.join(mismatches)}."
+                )
+        level_captures_pins = level_captures_pins_by_corpus.get(corpus, set())
+        if len(level_captures_pins) > 1:
+            problems.append(f"The shards of the {corpus} corpus disagree about the level function capture check's pins: {sorted(level_captures_pins)}.")
+        elif level_captures_pins:
+            pinned_level_captures = value_oracle_fields(next(iter(level_captures_pins)))
+            level_captures = level_captures_by_corpus.get(corpus, {})
+            mismatches = [
+                f"{key} {level_captures.get(key, 0)} (pinned {pinned})"
+                for key, pinned in sorted(pinned_level_captures.items())
+                if level_captures.get(key, 0) != pinned
+            ]
+            if mismatches:
+                problems.append(
+                    f"The level function capture check judged, over the {corpus} corpus, other numbers than pinned "
+                    f"(`levelFunctionCaptureCounts`): {', '.join(mismatches)}."
+                )
+        if corpus == SEAM_CORPUS:
+            level_captures = level_captures_by_corpus.get(corpus, {})
+            thin = [f"{key} {level_captures.get(key, 0)}" for key in LEVEL_CAPTURES_FLOORED_KEYS if level_captures.get(key, 0) < LEVEL_CAPTURES_FLOOR]
+            if thin:
+                problems.append(
+                    f"The level function capture check judged fewer than {LEVEL_CAPTURES_FLOOR} graphs of the {corpus} corpus: "
+                    f"{', '.join(thin)}. It gates nothing until that many are judged."
                 )
         gating_floors = gating_floors_by_corpus.get(corpus, set())
         if len(gating_floors) > 1:
@@ -432,6 +476,14 @@ with open(summary_path, "w") as summary:
                 )
             if retention_by_corpus.get(corpus, {}).get("judged", 0) > 0:
                 summary.write(f"The retention oracle judged {retention_by_corpus[corpus]['judged']} graphs with a hole of the {corpus} corpus.\n")
+            if level_captures_by_corpus.get(corpus, {}).get("judged", 0) > 0:
+                level_captures = level_captures_by_corpus[corpus]
+                summary.write(
+                    f"The level function capture check judged {level_captures['judged']} graphs of the {corpus} corpus with a level "
+                    f"function ({level_captures.get('judgedWithNamed', 0)} with a member closure that names its parameter): "
+                    f"{level_captures.get('named', 0)} such member closures, {level_captures.get('fills', 0)} fill functions, and "
+                    f"{level_captures.get('conversions', 0)} conversion functions it does not judge.\n"
+                )
             if read_twins_by_corpus.get(corpus, 0) > 0:
                 summary.write(f"The oracle compared {read_twins_by_corpus[corpus]} graphs of the {corpus} corpus with their read twin.\n")
     for corpus, cost in sorted(cost_by_corpus.items()):
