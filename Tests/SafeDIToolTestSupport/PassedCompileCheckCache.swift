@@ -32,10 +32,13 @@ import Foundation
 /// whose key the file holds compiles nothing. A check that fails or draws a warning is never written, so it compiles,
 /// and fails, on every run.
 ///
-/// The key covers everything about a check that the test process decides (`key(of:fixtureRoots:)`), and nothing
-/// about what compiles it: the SafeDI module, the macro plugin, the compiler and the SDK. So a file is valid only for
-/// one build of those. CI keys its cache of the file on a hash of them (`.github/scripts/compile-check-identity.sh`)
-/// and the sources of this verifier, and starts from an empty file whenever any of them changes.
+/// The key covers everything about a check that the test process decides (`key(of:fixtureRoots:toolchain:)`),
+/// and the compiler and SDK that process compiles it with (`CompileCheckToolchain`), asked of the compiler in the
+/// process's own environment, so a pass recorded under one Xcode, toolchain, container or SDK is never read under
+/// another, however a job came to run it. It leaves out the SafeDI module and the macro plugin the check compiles
+/// against, so a file is valid only for one build of those. CI keys its cache of the file on a hash of their sources
+/// and the sources of this verifier (`.github/scripts/compile-check-identity.sh`), and starts from an empty file
+/// whenever any of them changes.
 ///
 /// The `SAFEDI_COMPILE_CHECK_PASSED_CACHE` environment variable names the file. When it is unset, as it is by default
 /// and in "Build and Test on Latest Swift", every check compiles.
@@ -94,8 +97,8 @@ struct PassedCompileCheckCache: Sendable {
 		}
 	}
 
-	/// The key of the check that compiles `modules` in order: the SHA-256 of a canonical description of each module's
-	/// name, package, dependencies, whether it emits a module, its conditions, language mode and upcoming features,
+	/// The key of the check that compiles `modules` in order with `toolchain`: the SHA-256 of a canonical description
+	/// of the toolchain (`CompileCheckToolchain.description`, or any text that names one) and of each module's name, package, dependencies, whether it emits a module, its conditions, language mode and upcoming features,
 	/// and the name and contents of each staged file, inputs in order and generated files in name order.
 	///
 	/// A file's contents spell paths under the test process's directory, as `#sourceLocation` directives and
@@ -105,7 +108,7 @@ struct PassedCompileCheckCache: Sendable {
 	/// keeps every path's length, distinctness and which paths are the same. Whether a check compiles does not depend
 	/// on what those paths spell beyond that, so the key is the same in every run of the same check. Text that differs
 	/// between runs in another way only costs the check its cache hit.
-	static func key(of modules: [CompileCheckModule], fixtureRoots: [String] = currentFixtureRoots) throws -> String {
+	static func key(of modules: [CompileCheckModule], fixtureRoots: [String] = currentFixtureRoots, toolchain: String) throws -> String {
 		var normalization = CompileCheckTextNormalization(fixtureRoots: fixtureRoots)
 		func files(_ urls: [URL]) throws -> [CompileCheckDescription.File] {
 			try urls.map { url in
@@ -133,7 +136,7 @@ struct PassedCompileCheckCache: Sendable {
 		}
 		let encoder = JSONEncoder()
 		encoder.outputFormatting = [.sortedKeys]
-		return try sha256HexDigest(of: encoder.encode(CompileCheckDescription(formatVersion: 1, modules: describedModules)))
+		return try sha256HexDigest(of: encoder.encode(CompileCheckDescription(formatVersion: 2, toolchain: toolchain, modules: describedModules)))
 	}
 
 	/// The test process's directory, as spelled and with symbolic links resolved, under which every fixture and
@@ -168,6 +171,54 @@ struct PassedCompileCheckCacheError: Error, CustomStringConvertible {
 	let description: String
 }
 
+/// The compiler and SDK this process compiles its checks with, as the compiler itself reports them, which every
+/// check's key includes.
+///
+/// It is asked of `swiftCompilerCommand` in this process's environment, as each check's compile is, so it names
+/// the compiler a check would run under whatever chose it: the selected Xcode, `DEVELOPER_DIR`, `TOOLCHAINS`,
+/// `SDKROOT`, a container's image or the runner's. Nothing a workflow says about its toolchain is hashed in its
+/// place, so a workflow edit that changes none of this keeps every passed check, and one that changes it compiles
+/// every check again without anyone listing which lines count.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+enum CompileCheckToolchain {
+	/// This process's toolchain, asked once: what `describe()` returns.
+	static var description: String {
+		get async throws {
+			try await shared.value
+		}
+	}
+
+	/// What the compiler reports of itself in `environment`: its version, its target information, which names its
+	/// default target, its runtime's compatibility version and the paths it compiles against, and on Apple platforms
+	/// the version and build of the SDK `xcrun` compiles with.
+	static func describe(environment: [String: String] = ProcessInfo.processInfo.environment) async throws -> String {
+		var commands = [
+			(swiftCompilerCommand.executable, swiftCompilerCommand.arguments + ["--version"]),
+			(swiftCompilerCommand.executable, swiftCompilerCommand.arguments + ["-print-target-info"]),
+		]
+		#if !os(Linux)
+			commands.append((URL(fileURLWithPath: "/usr/bin/xcrun"), ["--show-sdk-version"]))
+			commands.append((URL(fileURLWithPath: "/usr/bin/xcrun"), ["--show-sdk-build-version"]))
+		#endif
+		var description = ""
+		for (executable, arguments) in commands {
+			let result = try await runProcess(executable, arguments: arguments, environment: environment)
+			guard result.exitCode == 0 else {
+				throw PassedCompileCheckCacheError(description: """
+				Could not describe the toolchain that compiles the checks: \(executable.path) \(arguments.joined(separator: " ")) \
+				exited with \(result.exitCode).
+				\(result.stderr)
+				""")
+			}
+			description += result.stdout
+			description += result.stderr
+		}
+		return description
+	}
+
+	private static let shared = SharedTestWork { try await describe() }
+}
+
 /// What a compile check's key is the hash of. `JSONEncoder` with sorted keys gives it one spelling.
 private struct CompileCheckDescription: Encodable {
 	struct File: Encodable {
@@ -191,6 +242,7 @@ private struct CompileCheckDescription: Encodable {
 	}
 
 	let formatVersion: Int
+	let toolchain: String
 	let modules: [Module]
 }
 

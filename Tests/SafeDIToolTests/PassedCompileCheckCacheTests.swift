@@ -70,7 +70,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 			    }
 			}
 			""")
-			keys.insert(try PassedCompileCheckCache.key(of: [module], fixtureRoots: Array(roots.map(\.path).rotated(by: index))))
+			keys.insert(try PassedCompileCheckCache.key(of: [module], fixtureRoots: Array(roots.map(\.path).rotated(by: index)), toolchain: "Swift 6.2"))
 		}
 
 		#expect(keys.count == 1)
@@ -82,7 +82,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 		let first = try stagedModule(in: root, generatedCode: "extension Fixture { func generated() { _ = 1 } }\n")
 		let second = try stagedModule(in: root, generatedCode: "extension Fixture { func generated() { _ = 2 } }\n")
 
-		#expect(try PassedCompileCheckCache.key(of: [first], fixtureRoots: [root.path]) != PassedCompileCheckCache.key(of: [second], fixtureRoots: [root.path]))
+		#expect(try PassedCompileCheckCache.key(of: [first], fixtureRoots: [root.path], toolchain: "Swift 6.2") != PassedCompileCheckCache.key(of: [second], fixtureRoots: [root.path], toolchain: "Swift 6.2"))
 	}
 
 	@Test
@@ -94,7 +94,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 		let same = try stagedModule(in: root, generatedCode: "// \(uuid)\n// \(uuid)\nextension Fixture {}\n")
 		let different = try stagedModule(in: root, generatedCode: "// \(uuid)\n// \(UUID().uuidString)\nextension Fixture {}\n")
 
-		#expect(try PassedCompileCheckCache.key(of: [same], fixtureRoots: [root.path]) != PassedCompileCheckCache.key(of: [different], fixtureRoots: [root.path]))
+		#expect(try PassedCompileCheckCache.key(of: [same], fixtureRoots: [root.path], toolchain: "Swift 6.2") != PassedCompileCheckCache.key(of: [different], fixtureRoots: [root.path], toolchain: "Swift 6.2"))
 	}
 
 	@Test
@@ -115,7 +115,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 			emitsModule: false,
 		)
 
-		#expect(try PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path]) != PassedCompileCheckCache.key(of: [staging], fixtureRoots: [root.path]))
+		#expect(try PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path], toolchain: "Swift 6.2") != PassedCompileCheckCache.key(of: [staging], fixtureRoots: [root.path], toolchain: "Swift 6.2"))
 	}
 
 	@Test
@@ -137,7 +137,36 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 			emitsModule: false,
 		)
 
-		#expect(try PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path]) != PassedCompileCheckCache.key(of: [mainActorByDefault], fixtureRoots: [root.path]))
+		#expect(try PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path], toolchain: "Swift 6.2") != PassedCompileCheckCache.key(of: [mainActorByDefault], fixtureRoots: [root.path], toolchain: "Swift 6.2"))
+	}
+
+	@Test
+	func key_differs_whenAnotherToolchainCompilesTheCheck() throws {
+		// A pass under one compiler or SDK says nothing about another, so the cache must not hold the check for it.
+		let root = try makeRoot(named: "root")
+		let module = try stagedModule(in: root, generatedCode: "extension Fixture { func generated() {} }\n")
+
+		#expect(try PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path], toolchain: "Swift 6.2 SDK 26.0") != PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path], toolchain: "Swift 6.2 SDK 26.4"))
+	}
+
+	// MARK: Tests – Describing the toolchain
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func describe_namesTheCompilersVersionAndTarget_inThisProcessesEnvironment() async throws {
+		let description = try await CompileCheckToolchain.describe()
+
+		#expect(description.contains("Swift version"))
+		#expect(description.contains("\"triple\""))
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Runs the compiler only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func describe_throws_whenTheEnvironmentNamesNoCompiler() async throws {
+		// A key made from a compiler's error text would stand for no toolchain, so no description is better than one.
+		await #expect(throws: PassedCompileCheckCacheError.self) {
+			try await CompileCheckToolchain.describe(environment: ["PATH": "/safedi-no-compiler", "DEVELOPER_DIR": "/safedi-no-compiler"])
+		}
 	}
 
 	// MARK: Tests – Skipping and recording checks

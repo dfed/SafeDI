@@ -83,7 +83,10 @@ func verifyGeneratedCodeCompiles(
 		compilerSettings: compilerSettings,
 	)
 	let check = try CompileCheckModule(sources: module, staged: stageCompileSources(of: module, filesToDelete: &filesToDelete), emitsModule: false)
-	let passedCheckKey = try passedCheckCache.map { _ in try PassedCompileCheckCache.key(of: [check]) }
+	var passedCheckKey: String?
+	if passedCheckCache != nil {
+		passedCheckKey = try await PassedCompileCheckCache.key(of: [check], toolchain: CompileCheckToolchain.description)
+	}
 	if let passedCheckCache, let passedCheckKey, passedCheckCache.holds(passedCheckKey) {
 		return
 	}
@@ -130,7 +133,10 @@ func verifyModulesCompile(
 		try checks.append(CompileCheckModule(sources: module, staged: stageCompileSources(of: module, filesToDelete: &filesToDelete), emitsModule: true))
 	}
 	let passedCheckCache = recordsIssues ? passedCheckCache : nil
-	let passedCheckKey = try passedCheckCache.map { _ in try PassedCompileCheckCache.key(of: checks) }
+	var passedCheckKey: String?
+	if passedCheckCache != nil {
+		passedCheckKey = try await PassedCompileCheckCache.key(of: checks, toolchain: CompileCheckToolchain.description)
+	}
 	if let passedCheckCache, let passedCheckKey, passedCheckCache.holds(passedCheckKey) {
 		return nil
 	}

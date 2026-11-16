@@ -11,11 +11,17 @@
 # compile checks on this hash, so a change to any of these starts from an empty
 # cache and compiles every check.
 #
+# No workflow file is hashed. Each check's key carries the compiler and SDK the
+# test process itself found (CompileCheckToolchain in
+# PassedCompileCheckCache.swift), so a workflow edit that changes what compiles
+# the checks changes their keys, and one that does not keeps every passed
+# check. The compiler's version below only keeps one toolchain's list from
+# growing with another's keys.
+#
 # It also covers what decides which passed checks a run writes and shares: the
-# workflows whose test jobs record them (ci.yml, verify.yml), the actions those
-# jobs restore and upload them with, and this script. Runs on every branch add
-# to one list per identity (share-compile-checks.yml), so a branch that changes
-# how passes are written must write to a list of its own.
+# actions the test jobs restore and upload them with, and this script. Runs on
+# every branch add to one list per identity (share-compile-checks.yml), so a
+# branch that changes how passes are written must write to a list of its own.
 #
 # The macro plugin compiles SafeDICore through a symbolic link, leaving out the
 # files and directories its target's `exclude` in Package.swift lists: the
@@ -120,8 +126,6 @@ fi
 		Tests/SafeDIToolTestSupport/SafeDICompileVerifier.swift \
 		Tests/SafeDIToolTestSupport/PassedCompileCheckCache.swift \
 		Tests/SafeDIToolTestSupport/TestTemporaryDirectory.swift \
-		.github/workflows/ci.yml \
-		.github/workflows/verify.yml \
 		.github/actions/restore-shared-compile-checks/action.yml \
 		.github/actions/upload-passed-compile-checks/action.yml \
 		.github/scripts/compile-check-identity.sh \
