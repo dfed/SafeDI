@@ -452,7 +452,14 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		// `Token` spelled `internal` keeps `CoreScreen`'s `public` tier from taking it; unspelled, it is `public`.
 		let callComment = MultiModuleIntegration.moduleInfo.seamCallComment(type: "FeedScreen", declaringModule: "Feed")
 		let call = spelling == "" ? "FeedScreen.__safeDI_FeedScreen_DD887236DB7407AA.self\(callComment)\n            return FeedScreen(__safeDI_token: nil)" : "FeedScreen.__safeDI_FeedScreen_CBF29CE484222325.self\(callComment)\n            return FeedScreen()"
-		#expect(viewOutput.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n\n" + """
+		#expect(viewOutput.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feed)
+		import Feed
+		#endif
+
 		extension Root {
 		    public init() {
 		        func __safeDI_feedScreen() -> FeedScreen {
@@ -784,21 +791,31 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		let viewOutput = try await executeSafeDIToolMultiModuleTest(modules: modules(["Mid"]), integration: integration, filesToDelete: &filesToDelete)
 		let directOutput = try await executeSafeDIToolMultiModuleTest(modules: modules(["Feed", "Mid", "Session"]), integration: integration, filesToDelete: &filesToDelete)
 		#expect(viewOutput.modules["App"]?.generatedFiles == directOutput.modules["App"]?.generatedFiles)
-		let fileName = integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"
-		let pluginComment = integration.seamCallComment(type: "MidScreen", declaringModule: "Mid")
 		// `token` passes through `MidScreen` and `FeedScreen` to `FeedScreen.Settings`, which receives it only if available.
-		#expect(viewOutput.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + Self.importBlock("Feed") + "\n" + Self.importBlock("Mid") + "\n" + Self.importBlock("Session") + "\n\n" + """
-		extension Root {
-		    public init() {
-		        func __safeDI_midScreen() -> MidScreen {
-		            _ = MidScreen.__safeDI_MidScreen_1AE937BC12D77A01.self\(pluginComment)
-		            return MidScreen(__safeDI_token: nil)
-		        }
-		        let midScreen: MidScreen = __safeDI_midScreen()
-		        self.init(midScreen: midScreen)
-		    }
-		}
-		"""])
+		#expect(viewOutput.modules["App"]?.generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feed)
+			import Feed
+			#endif
+			#if canImport(Mid)
+			import Mid
+			#endif
+			#if canImport(Session)
+			import Session
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_midScreen() -> MidScreen {
+			            _ = MidScreen.__safeDI_MidScreen_1AE937BC12D77A01.self\(integration.seamCallComment(type: "MidScreen", declaringModule: "Mid"))
+			            return MidScreen(__safeDI_token: nil)
+			        }
+			        let midScreen: MidScreen = __safeDI_midScreen()
+			        self.init(midScreen: midScreen)
+			    }
+			}
+			""",
+		])
 	}
 
 	// MARK: Tests – Names
