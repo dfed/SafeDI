@@ -1688,7 +1688,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		// first screen called, which carries no `mark`, so the fill would read `nil`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Live.swift"]):10:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: Instantiator<Step>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but the scope SafeDI hands the builder for `Step`’s `api: any Api` (case `Step_Scope.api` of `apiBuilder`) holds the same values at every level of that cycle. Give `cache` on `Screen` another label, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["Live.swift"]):10:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: Instantiator<Step>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but the values struct SafeDI hands the builder for `Step`’s `api: any Api` (member `Step_Scope.api` of `apiBuilder`) holds the same values at every level of that cycle. Give `cache` on `Screen` another label, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Screen.swift"]):9:5: note: `Screen` declares `cache: Cache` here.
 			"""
 		}) {
