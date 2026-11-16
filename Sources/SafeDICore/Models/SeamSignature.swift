@@ -797,6 +797,15 @@ public struct SeamSignature: Sendable {
 	/// the inner enum, the cases that lead from the root enum to the call's case, and the values the call's owner binds
 	/// before it, which the closure the call passes builds.
 	public struct CallRoute: Sendable {
+		init(sitePath: [Property], innerKey: ScopeEnum.Key, rootKey: ScopeEnum.Key, route: [Hole.RouteStep], caseName: String, memberValuesType: TypeDescription? = nil) {
+			self.sitePath = sitePath
+			self.innerKey = innerKey
+			self.rootKey = rootKey
+			self.route = route
+			self.caseName = caseName
+			self.memberValuesType = memberValuesType
+		}
+
 		/// The properties from the seam's root to the call's property.
 		public let sitePath: [Property]
 		public let innerKey: ScopeEnum.Key
@@ -805,6 +814,10 @@ public struct SeamSignature: Sendable {
 		public let route: [Hole.RouteStep]
 		/// The call's own case, which holds the inner enum and nothing else.
 		public let caseName: String
+		/// Where the call's enum declares a builder struct, the type of the empty struct the call's own member takes, as the
+		/// seam's extension spells it: the call passes the inner seam the struct that member returns. `nil` where the enum
+		/// declares none.
+		public let memberValuesType: TypeDescription?
 	}
 
 	/// How the seam's tree hands each inner seam's enum up from a call whose case is in an enum nested by type. Read by the
