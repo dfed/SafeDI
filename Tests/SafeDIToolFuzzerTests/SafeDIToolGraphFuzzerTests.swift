@@ -5990,7 +5990,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: inSeamLeakReason,
 			signatures: inSeamLeakSignatures,
-			seeds: [68, 151, 418, 430, 699, 883, 990],
+			seeds: [68, 151, 430, 699, 883, 990],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason)",
@@ -6000,7 +6000,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
 			signatures: inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
-			seeds: [15, 94, 283, 321, 403, 454, 663, 867, 924],
+			seeds: [94, 283, 321, 454, 663, 867],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
@@ -6013,11 +6013,6 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "\(labelSortedPassThroughReason); and \(inSeamLeakReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures,
 			seeds: [330],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "\(labelSortedPassThroughReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
-			seeds: [809],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(lazyCycleConfigurationFieldReason); and \(inSeamLeakReason)",
@@ -6106,7 +6101,7 @@ struct SafeDIToolGraphFuzzerTests {
 	private static let sameSupplyBuilderKindFlipReason = "A transitional builder-kind flip: a seam takes builder structs only while its builders reach no place that forwards a value and hold no scope of another seam, so an edit that adds a place opening another seam's scope (an `.inner` case) flips a builder from a struct to a closure over a scope enum, and a call of the readable initializer stops compiling, until every seam takes builder structs"
 
 	/// Transitional: owned by the change that hands every seam builder structs, which empties these seeds.
-	private static let remedyBuilderKindFlipReason = "A transitional builder-kind flip: a seam takes builder structs only while its builders reach no place that forwards a value and hold no scope of another seam, so the remedy of places that forward other values, whose places forward the same values, flips a builder from a closure over a scope enum to a struct, until every seam takes builder structs"
+	private static let remedyBuilderKindFlipReason = "A transitional builder-kind flip: a seam takes builder structs only while its builders reach no place that forwards a value and hold no scope of another seam, so the remedy of places that forward other values, whose places forward the same values, flips a builder between a struct and a closure over a scope enum, keeping its label, until every seam takes builder structs"
 
 	private static let addedSupplyReason = "A builder takes `<fillingType>_<ReturnedType>Builder` only once a second returned type of its filling type appears, so adding a place of a new builder of an existing filling type renames the existing builder"
 
@@ -6124,11 +6119,10 @@ struct SafeDIToolGraphFuzzerTests {
 			15, 18, 19, 24, 25, 30, 56, 59, 68, 69, 78, 80, 83, 84, 88, 93, 94, 98, 108, 116,
 			121, 135, 144, 151, 153, 162, 163, 164, 187, 209, 215, 227, 240, 241, 247, 252, 273, 277, 279, 281,
 			283, 298, 300, 304, 306, 308, 309, 311, 321, 326, 330, 334, 338, 347, 348, 362, 365, 370, 383, 384,
-			390, 391, 403, 407, 418, 430, 448, 454, 468, 471, 478, 481, 494, 500, 517, 527, 532, 548, 550, 556,
-			567, 568, 593, 594, 595, 600, 605, 609, 617, 618, 623, 627, 663, 669, 670, 699, 701, 705, 709, 718,
-			732, 743, 750, 751, 760, 769, 787, 788, 791, 794, 797, 809, 819, 832, 834, 835, 836, 851, 854,
-			858, 866, 867, 876, 883, 886, 892, 905, 912, 920, 923, 924, 929, 930, 931, 934, 940, 942, 945, 947,
-			948, 950, 969, 990,
+			391, 403, 407, 418, 430, 448, 454, 468, 471, 478, 481, 494, 500, 517, 527, 532, 548, 550, 556, 567,
+			568, 594, 595, 600, 605, 609, 617, 618, 623, 627, 663, 669, 670, 699, 701, 705, 709, 718, 732, 743,
+			750, 751, 760, 769, 787, 788, 791, 794, 797, 819, 832, 834, 835, 836, 851, 854, 858, 866, 867,
+			876, 883, 886, 892, 905, 912, 920, 923, 929, 930, 931, 934, 940, 942, 945, 947, 948, 950, 969, 990,
 		],
 		labels: [],
 		sameSupply: [
@@ -6136,7 +6130,7 @@ struct SafeDIToolGraphFuzzerTests {
 		],
 		sameSupplyReason: seamMockTakesHoleValueReason,
 		sameSupplyBuilderKindFlips: [15, 69, 78, 277, 403, 418, 527, 809, 940, 950],
-		remedyBuilderKindFlips: [78, 277],
+		remedyBuilderKindFlips: [15, 69, 78, 277, 403, 418, 809, 940, 950],
 		addedSupply: [],
 		forwardingOtherValues: [
 			15, 19, 59, 68, 69, 78, 83, 93, 94, 98, 108, 116, 121, 135, 151, 153, 163, 164, 215, 227, 252, 273,
@@ -6384,7 +6378,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// that follows label order is how mocks and initializers already work – so the oracle's label reversal
 	/// reorders them, which is expected, not a defect, as the mock's label-sorted parameters are in `knownIssues`. Seeds
 	/// 330 and 809 of this shape also leak, and are listed apart.
-	private static let labelSortedPassThroughSeeds: [UInt64] = [604, 788, 816, 834, 928, 950]
+	private static let labelSortedPassThroughSeeds: [UInt64] = [604, 788, 809, 816, 834, 928, 950]
 
 	/// Seeds of the same shape whose generated mock also lists label-sorted parameters, so that it changes too.
 	private static let labelSortedPassThroughSeedsWhoseMockParametersAlsoChange: [UInt64] = [371, 381]
