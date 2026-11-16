@@ -418,7 +418,10 @@ extension ScopeGenerator {
 		} else {
 			"\(concreteType.asSource)(\(constructionArguments.joined(separator: ", ")))"
 		}
-		let returnType = node.useMockInitializer ? node.instantiatedTypeDescription.asSource : concreteType.asSource
+		// What the construction returns, whatever property the node builds: every node of the type shares this function, and
+		// each converts its result to its own property's type, an erased one by wrapping it in its eraser
+		// (`publicConstructionExpression`).
+		let returnType = node.constructionReturnType.asSource
 		let builderName = ReservedName.configurationBuilderPropertyName
 		let optionalDefaultParameters = defaultParameters.filter { $0.valueTypeDescription.isOptional && $0.defaultExpression != "nil" }
 		var lines = [String]()

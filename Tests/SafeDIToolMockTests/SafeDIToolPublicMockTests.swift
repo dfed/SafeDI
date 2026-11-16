@@ -3950,7 +3950,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 
 			extension FakeLogger {
-			    static func __safeDI_mock(verbose: Bool?, safeDIBuilder: ((Bool) -> FakeLogger)?) -> Logger {
+			    static func __safeDI_mock(verbose: Bool?, safeDIBuilder: ((Bool) -> FakeLogger)?) -> FakeLogger {
 			        let verbose = verbose ?? (false)
 			        return if let safeDIBuilder { safeDIBuilder(verbose) } else { FakeLogger.mock(verbose: verbose) }
 			    }

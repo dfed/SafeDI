@@ -337,6 +337,15 @@ public struct Instantiable: Codable, Hashable, Sendable {
 			|| mockReturnType == .simple(name: "Self", generics: [])
 	}
 
+	/// The type a call of the user-defined mock method returns, as code outside the declaration spells it: the concrete
+	/// type where the method returns it or `Self`, else the additional type it returns. The same whatever property the call
+	/// builds, so code that every build of the type shares (the `mock()` it calls through to, a public mock's construction
+	/// function) returns it, and each build converts it to its property's type. `nil` when there is no mock method.
+	public var mockCallReturnType: TypeDescription? {
+		guard let mockReturnType else { return nil }
+		return mockReturnTypeIsCompatible(withPropertyType: concreteInstantiable) ? concreteInstantiable : mockReturnType
+	}
+
 	/// Whether an `#if` block whose condition names something only the compiler decides – a platform condition such as
 	/// `os(iOS)` or `canImport(UIKit)`, or a feature flag such as `$Macros` – encloses the declaration. SafeDI reads
 	/// every clause of such a block, so a type declared once in each clause is declared more than once in what SafeDI

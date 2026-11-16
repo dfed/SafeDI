@@ -31,8 +31,8 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func publicMockSmokeSeeds_produceNoUnknownFailures_whenRunThroughToolAndCompiler() async throws {
 		// Today's tool generates `.public` as `true`, so most of the corpus is a known issue: the smoke batch holds a seed
-		// of each shape it shows, which must fail exactly as listed, and graphs that must pass.
-		let knownIssuesBySeed = Dictionary(uniqueKeysWithValues: SafeDIToolGraphFuzzerTests.publicMockKnownIssues.flatMap { knownIssue in knownIssue.seeds.map { ($0, knownIssue) } })
+		// of each shape it shows, which must fail exactly as listed (`publicMockSmokeKnownIssues`), and graphs that must pass.
+		let knownIssuesBySeed = Dictionary(uniqueKeysWithValues: SafeDIToolGraphFuzzerTests.publicMockSmokeKnownIssues.flatMap { knownIssue in knownIssue.seeds.map { ($0, knownIssue) } })
 		for result in try await publicMockSmokeResults.value {
 			for finding in GraphFuzzerFinding.findings(failure: result.failure, laterFailures: result.laterFailures, knownIssue: knownIssuesBySeed[result.fixture.seed], retentionIsJudged: result.isJudgedForRetention) {
 				switch finding {
