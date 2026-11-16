@@ -1793,6 +1793,136 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		"""])
 	}
 
+	// MARK: Tests – a builder per hole type for every kind of place
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsLazilyHeldPlaceWhenReadAsSeamDoes_whenSeamThatGeneratesMockHoldsPlaceLazily() async throws {
+		// The mock takes the hole type's builder, as the seam's readable initializer does, and builds the value when the
+		// wrapper is read, not before.
+		let modules = Self.serviceModule(serviceDeclarations: ["@Instantiated public let userService: LazilyInstantiated<any UserService>"], probes: [
+			"""
+			func referenceLazyRead() -> String {
+			    let aliveBefore = LiveUserService.alive
+			    let service = Service(userServiceBuilder: { LiveUserService() })
+			    return lazyRead(service, aliveBefore: aliveBefore)
+			}
+
+			func mockLazyRead() -> String {
+			    let aliveBefore = LiveUserService.alive
+			    let service = Service.mock(userServiceBuilder: { LiveUserService() })
+			    return lazyRead(service, aliveBefore: aliveBefore)
+			}
+			""",
+			"""
+			func lazyRead(_ service: Service, aliveBefore: Int) -> String {
+			    let builtBeforeTheRead = LiveUserService.alive - aliveBefore
+			    let userService = service.userService.instance
+			    return withExtendedLifetime(userService) { "built before the read \\(builtBeforeTheRead), after it \\(LiveUserService.alive - aliveBefore)" }
+			}
+			""",
+		])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("referenceLazyRead()"), DifferentialValueProbe("mockLazyRead()")], filesToDelete: &filesToDelete)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe referenceLazyRead()
+			String "built before the read 0, after it 1"
+			probe mockLazyRead()
+			String "built before the read 0, after it 1"
+
+			""")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsSendableBuilderOncePerBuildOfHolder_whenSeamThatGeneratesMockHoldsPlaceInSendableInstantiator() async throws {
+		// The mock takes the hole type's `@Sendable` builder, as the seam's readable initializer does, and each holder the
+		// `SendableInstantiator` builds calls it.
+		let body = """
+		var profiles: [SendableProfile]? = [service.profileBuilder.instantiate(), service.profileBuilder.instantiate()]
+		let whileHeld = LiveUserService.alive - aliveBefore
+		let distinct = profiles?[0].userService !== profiles?[1].userService
+		profiles = nil
+		return withExtendedLifetime(service) { "while held \\(whileHeld), distinct \\(distinct), after \\(LiveUserService.alive - aliveBefore)" }
+		"""
+		let modules = Self.serviceModule(serviceDeclarations: ["@Instantiated public let profileBuilder: SendableInstantiator<SendableProfile>"], extraDeclarations: [Self.sendableProfile], probes: [
+			"""
+			func referenceSendableProfiles() -> String {
+			    let aliveBefore = LiveUserService.alive
+			    let service = Service(userServiceSendableBuilder: { LiveUserService() })
+			\(body.split(separator: "\n").map { "    \($0)" }.joined(separator: "\n"))
+			}
+
+			func mockSendableProfiles() -> String {
+			    let aliveBefore = LiveUserService.alive
+			    let service = Service.mock(userServiceSendableBuilder: { LiveUserService() })
+			\(body.split(separator: "\n").map { "    \($0)" }.joined(separator: "\n"))
+			}
+			""",
+		])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("referenceSendableProfiles()"), DifferentialValueProbe("mockSendableProfiles()")], filesToDelete: &filesToDelete)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe referenceSendableProfiles()
+			String "while held 2, distinct true, after 0"
+			probe mockSendableProfiles()
+			String "while held 2, distinct true, after 0"
+
+			""")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsForwardedValueToBuilderAsSeamDoes_whenSeamThatGeneratesMockHoldsForwardingPlace() async throws {
+		// The mock takes the place's own wrapper's builder, which takes what the place forwards, as the seam's readable
+		// initializer does, and each build calls it with the forwarded value.
+		let body = """
+		var users: [any UserService]? = [service.userServiceBuilder.instantiate("first"), service.userServiceBuilder.instantiate("second")]
+		let whileHeld = LiveUserService.alive - aliveBefore
+		let distinct = users?[0] !== users?[1]
+		users = nil
+		return withExtendedLifetime(service) { "while held \\(whileHeld), distinct \\(distinct), handed \\(names), after \\(LiveUserService.alive - aliveBefore)" }
+		"""
+		let modules = Self.serviceModule(serviceDeclarations: ["@Instantiated(fulfilledByType: \"DefaultUserService\") public let userServiceBuilder: ErasedInstantiator<String, any UserService>"], probes: [
+			"""
+			func referenceForwardedNames() -> String {
+			    let aliveBefore = LiveUserService.alive
+			    var names = [String]()
+			    let service = Service(defaultUserService_UserServiceBuilder: { name in
+			        names.append(name)
+			        return LiveUserService()
+			    })
+			\(body.split(separator: "\n").map { "    \($0)" }.joined(separator: "\n"))
+			}
+
+			func mockForwardedNames() -> String {
+			    let aliveBefore = LiveUserService.alive
+			    var names = [String]()
+			    let service = Service.mock(defaultUserService_UserServiceBuilder: { name in
+			        names.append(name)
+			        return LiveUserService()
+			    })
+			\(body.split(separator: "\n").map { "    \($0)" }.joined(separator: "\n"))
+			}
+			""",
+		])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("referenceForwardedNames()"), DifferentialValueProbe("mockForwardedNames()")], filesToDelete: &filesToDelete)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe referenceForwardedNames()
+			String "while held 2, distinct true, handed [\\"first\\", \\"second\\"], after 0"
+			probe mockForwardedNames()
+			String "while held 2, distinct true, handed [\\"first\\", \\"second\\"], after 0"
+
+			""")
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
