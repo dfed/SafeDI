@@ -29,19 +29,18 @@ Sources: slice-2-live.md and slice-3-live.md on this branch, the Actions run lis
 Work 102 minutes, CI and pins waits 118, a wait on #735's landing 22, waits on Dan 299 (55% of the window).
 
 Two avoidable costs inside the first 244 minutes:
-- **Seed 566, 70 minutes** (run 1 plus the fix). Slice 2's head had passed a full Verify and a pins run before the pull request opened, and CI's shard still caught it. Asked at 08:51Z whether the pre-PR runs cover the same shards as CI; no answer recorded.
+- **Seed 566, 70 minutes** (run 1 plus the fix). The lead's answer (15:46Z): the pre-PR pins run did reproduce it, but it was classified "stays red until #735 lands" and never re-run on the head rebased onto #735, so CI caught it again. Shard coverage was fine; the classification was wrong. Rule now in use: a finding marked as fixed by another change is re-run on a head that contains that change before the pull request opens.
 - **The wait on #735, 22 minutes or more.** Slice 2's pins commit was held for #735 to land so that seed 566's pin could be written once. This is the one place a slice waited on a landing outright.
 
 ## Slice 3
 
 - 06:01 to 06:46: final restack onto slice 2's 7e94f056b, conflicts resolved (45 min of work).
 - 07:12: head 45c851447 green on a filtered run, "waits for slice 2's final head".
-- 07:12 to 13:01: no timeline entry for 349 minutes. The next line says stops 1a, 2, 3 and 4 are done and stop 1b was ruled. Slice 2's final head existed from 07:58Z (8dae4da10) and again from 09:08Z (ae0883f05).
-- 12:30: a full Verify on 5275bda68 fails while a pins run for the same head is still running.
+- 07:12 to 13:01: no timeline entry for 349 minutes, but the lane was working throughout (the lead, 15:46Z): 07:58 to 08:15 final rebase onto slice 2 and pins; about 09 to 10 pins applied by hand (the apply script refused a stale line), a label reader fix, leak signatures, and four stops (file-name reversal changing generated code on 12 seeds, floors below 10, seed 566's diagnostic order, seed 391's traversal limit); 10:01 full Verify and coverage; 10:42 rebased onto ae0883f05; 11:17 pins amended; 11:36 hand-back with the stops open; 11:45 ruling; 12:03 to 12:09 stop fixes; 12:31 five smoke seeds failing under normalization; 13:01 hand-back 4. The lead's split: about 45% runs and waits, 35% fixes, 20% stops and rulings.
 - 15:44: on its last pins and coverage runs, re-parented onto main.
-- Never opened as a pull request on top of #738.
+- Never opened as a pull request on top of #738: it was not green until after #738 landed.
 
-Unknown: how the 349 minutes split between waiting for rulings, fixing, and waiting on runs. The lead's journal has it.
+So slice 3 was not idle; it was slow, and nearly half of that was runs and waits. Two rebases with pins each (07:58 and 10:42) are the cost the "pins once, on the top commit" rule removes. The timeline gap itself is a process miss: the slice lane appends its own entries from now on.
 
 ## Slices 4 to 7a
 
@@ -72,7 +71,7 @@ Each item names its home.
 2. **Pins once per stack.** The pins run is what makes an interim replay cost an hour. Interim heads carry stale pins; one pins run happens on the top of the stack when it is about to land. Needs the lead's confirmation that no gate between slices reads the pins. Home: the lead's handbook.
 3. **Open the pull request when Linux is green.** A slice becomes a draft PR on top of the one below as soon as its Verify passes, CI on the top only, so a wait on Dan is always spent on the next slice's Mac run. Home: the lead's handbook.
 4. **One ask per stack before Dan leaves.** The coordinator lists every gate that needs Dan in the next eight hours and asks for all of them at once, including a sentence that covers the stack ("land #A to #F as each goes green"). Whether the merge block accepts a sentence written before the PRs exist is untested; this lane will test it on the next stack. Home: project memory.
-5. **The pre-PR check runs CI's fuzzer shards.** So a seed fails on Linux before a pull request spends Mac runners on it. A code change to verify.yml, this lane's, after the cache work. Home: the repo.
+5. **Re-run a finding on the head that is said to fix it.** Seed 566 was known before the pull request opened and filed as fixed by #735; it was not, for slice 2. Home: the lead's handbook (in use since 08:51Z). A parity check between `verify -f pins=true` and CI's fuzzer shards would not have caught this; this lane compares the two shard sets and builds the check only if they differ.
 6. **A slice's lane lasts until the slice lands.** Hand-back is not the end: the lane that wrote a slice answers its rulings and does its replays. Home: the lane briefs.
 
 One ROI line for the lookahead ledger: the rehearsal restacks of slices 3, 5 and 6 at 04:15Z to 04:33Z cost about 20 minutes each and none was replayed again for ten hours, so their realized value so far is slice 3's 45-minute final restack; slices 5 and 6 are on a base three heads old.
