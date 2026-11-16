@@ -107,6 +107,44 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func receivedBuilderLoopFeatures_readBuilderLeftNilBesideOwnBuilder_whenTypeReceivesItsOwnBuilderOnlyIfAvailable() {
+		// `T4`'s builder function wraps its own function again, and passes `nil` for `t2Builder`, which a sibling builder
+		// function is named for. Only where `T4` receives `t4Builder` only if available is that the feature: a required
+		// receive was always given.
+		let code = """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_t4Builder() -> T4 {
+		            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+		            return T4(t4Builder: t4Builder, t2Builder: nil)
+		        }
+		        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+		        let t3 = T3(t4Builder: t4Builder)
+		        func __safeDI_t2Builder() -> T2 {
+		            T2(t3: t3)
+		        }
+		        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+		        self.init(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+		    }
+		}
+		"""
+		let features = { (onlyIfAvailableLabels: [String: Set<String>]) in
+			GraphFuzzerFeature.receivedBuilderLoopFeatures(of: code, instantiatedLabelsByTypeName: [:], onlyIfAvailableReceivedLabelsByTypeName: onlyIfAvailableLabels).sorted()
+		}
+		#expect(features(["T4": ["t4Builder", "t2Builder"]]) == [.builderReceivedInsideItsTree, .builderReceivedInsideItsTreeBesideBuilderLeftNil])
+		#expect(features(["T4": ["t2Builder"]]) == [.builderReceivedInsideItsTree])
+		// The labels are read from the fixture's `@Received(onlyIfAvailable: true)` properties, by type.
+		let fixture = GraphFuzzerFixture(seed: 0, swiftFileContent: ["""
+		@Instantiable
+		public final class T4: Instantiable {
+		\t@Received(onlyIfAvailable: true) let t4Builder: Instantiator<T4>?
+		\t@Received let t3: T3
+		}
+		"""])
+		#expect(GraphFuzzerFeature.onlyIfAvailableReceivedLabelsByTypeName(of: fixture) == ["T4": ["t4Builder"]])
+	}
+
+	@Test
 	func receivedBuilderLoopFeatures_areReadFromBindings_thatWrapBuilderFunctionsOfTheirFunctionsScopeFirst() {
 		// A loop member's builder function begins by wrapping again a function its scope declares: its own, or the function
 		// that wraps its own with cycle arguments, for an instantiator received inside its tree, and another member's
@@ -5274,14 +5312,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// received inside the tree it builds, with each kind of wrapper (212). Seeds 5889 and 6388, beyond the corpus, have
 	/// a builder whose own type receives it beside a receive only if available that the order leaves `nil` because the
 	/// builder it receives waits on the first through a value: its builder function must still wrap itself again, and
-	/// without that the generated code does not compile. Seeds 4, 5, 7 and 70, which the tool rejects, keep the rejected
-	/// share at that quarter.
+	/// without that the generated code does not compile. Seed 94's type receives that builder only if available, and gets it
+	/// (`builderReceivedInsideItsTreeBesideBuilderLeftNil`). Seeds 4, 5, 7 and 70, which the tool rejects, keep the
+	/// rejected share at that quarter.
 	/// It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on
 	/// every pull request. Compiling the batch is one `swiftc` invocation when nothing fails, and comparing its values
 	/// one compile and one link.
-	static let smokeSeeds: [UInt64] = [4, 5, 7, 12, 14, 18, 25, 30, 40, 59, 62, 70, 97, 99, 133, 161, 212, 267, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516, 5_889, 6_388]
+	static let smokeSeeds: [UInt64] = [4, 5, 7, 12, 14, 18, 25, 30, 40, 59, 62, 70, 94, 97, 99, 133, 161, 212, 267, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x2F8BA9EA742416B3
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x502FD69AC8CFC66C
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -5291,15 +5330,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xB49E3CC6C8E30F83
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x8C28C1DA43D13B7B
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0xF824D3AC90F7F987
+	static let corpusFixtureHash: UInt64 = 0xF01F2FDBA98B36E8
 
-	static let corpusPartitionHash: UInt64 = 0x413E7B7093C30620
+	static let corpusPartitionHash: UInt64 = 0x1D96500A28618FE5
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -5311,9 +5350,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// corpus, so a generator change that stops drawing a feature, or a tool change that stops accepting the graphs that
 	/// draw it, changes these and must update them deliberately, with the hashes and the accepted-seed pins.
 	static let corpusAcceptedFeatureCounts: [GraphFuzzerFeature: Int] = [
-		.constantProperty: 2_281,
+		.constantProperty: 2_285,
 		.erasedConstantProperty: 395,
-		.instantiatorProperty: 1_921,
+		.instantiatorProperty: 1_922,
 		.sendableInstantiatorProperty: 810,
 		.erasedInstantiatorProperty: 1_210,
 		.sendableErasedInstantiatorProperty: 429,
@@ -5324,11 +5363,11 @@ struct SafeDIToolGraphFuzzerTests {
 		.receivedLazilyInstantiatedInstance: 224,
 		.forwardedProperty: 1_493,
 		.optionalForwardedProperty: 786,
-		.requiredReceive: 2_182,
+		.requiredReceive: 2_188,
 		.requiredOptionalReceive: 491,
-		.onlyIfAvailableReceive: 1_750,
+		.onlyIfAvailableReceive: 1_764,
 		.requiredAlias: 981,
-		.onlyIfAvailableAlias: 807,
+		.onlyIfAvailableAlias: 819,
 		.aliasOfOnlyIfAvailableAlias: 66,
 		.aliasOfOptionalFormOfProperty: 12,
 		.erasedAlias: 195,
@@ -5358,8 +5397,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.generateMock: 2_107,
 		.lazyCycle: 1_088,
 		.constantCycleCloser: 29,
-		.builderReceivedInsideItsTree: 116,
-		.sendableBuilderReceivedInsideItsTree: 44,
+		.builderReceivedInsideItsTree: 154,
+		.sendableBuilderReceivedInsideItsTree: 52,
+		.builderReceivedInsideItsTreeBesideBuilderLeftNil: 34,
 		.buildersReceivingEachOther: 112,
 		.sendableBuildersReceivingEachOther: 51,
 		.receivedLoopMemberWithCycleParameters: 13,
@@ -5526,7 +5566,7 @@ struct SafeDIToolGraphFuzzerTests {
 			.requiredReceiveOfUncreatedAlias: 20,
 		],
 		shapeCounts: [
-			.rootTreePropertyReceivedByTwoOrMoreTypes: 1_398,
+			.rootTreePropertyReceivedByTwoOrMoreTypes: 1_427,
 			.rootTreeLabelDeclaredAtTwoDepthsAboveReceiver: 149,
 			.promotedDependencyReceivedByTwoOrMoreTypes: 404,
 			.onlyIfAvailableAliasOfPromotedDependency: 95,
@@ -5538,11 +5578,11 @@ struct SafeDIToolGraphFuzzerTests {
 		drawnMocksMatchingOnlyAfterNormalizationCount: 663,
 		mirroredPairsTakingSamplesCount: 872,
 		forwardedPropertiesSampleCount: 2_396,
-		overridePairCount: 4_712,
-		overridePairsSum: GraphFuzzerSeedSetSum(value: 0xFC8EB67754ABA86C),
+		overridePairCount: 4_721,
+		overridePairsSum: GraphFuzzerSeedSetSum(value: 0xBCB07EB8BEA97799),
 		overrideFieldKindCounts: [
-			.builder: 3_496,
-			.configuration: 1_216,
+			.builder: 3_509,
+			.configuration: 1_212,
 		],
 	)
 
@@ -5627,7 +5667,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 561, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x492C07E7CB265EE7
+	static let seamCorpusFixtureHash: UInt64 = 0x64C62256B4F98306
 	static let seamCorpusAcceptedSeedCount = 289
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -5765,7 +5805,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`seamBuilderOrderShape(listedBy:)`). Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x439616D2AB75E50C
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x50B8EC16C7E69FDF
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
