@@ -13,7 +13,7 @@ set -euo pipefail
 # A command that fails ends the script (`set -e`), and not every command prints why, so say which step it was. A
 # subshell that fails stays quiet, so that the step is named once, by the line that started it.
 step="reading the arguments"
-trap '(( ZSH_SUBSHELL )) || print -ru2 -- "${0:t}: failed with status $? at line $LINENO, while $step"' ZERR
+trap 'failure_status=$?; (( ZSH_SUBSHELL )) || print -ru2 -- "${0:t}: failed with status $failure_status at line $LINENO, while $step"' ZERR
 conditions=DEBUG
 if [[ "${1:-}" == "--conditions" ]]; then conditions=$2; shift 2; fi
 (( $# >= 2 )) || { echo "usage: $0 [--conditions DEBUG,X] ROOT MODULE..." >&2; exit 2; }
