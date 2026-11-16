@@ -53,16 +53,12 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 
 		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
 		extension Home {
-		    @frozen nonisolated public enum SafeDIScope_Api {
-		        case detailBuilder(detailBuilder_Values_, SafeDIScope_Api.Detail_Scope)
-
+		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct detailBuilder_Values_ {
 		            public let detailValues: detailBuilder_Values
 		        }
 
-		        @frozen nonisolated public enum Detail_Scope {
-		            case leafBuilder(leafBuilder_Values, SafeDIScope_Api.Leaf_Scope)
-
+		        nonisolated public enum Detail_Scope {
 		            nonisolated public struct leafBuilder_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -79,9 +75,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Leaf_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Leaf_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -175,14 +169,10 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 
 		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
 		extension Home {
-		    @frozen nonisolated public enum SafeDIScope_Api {
-		        case detailBuilder(detailBuilder_Values, SafeDIScope_Api.Detail_Scope)
-
+		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct detailBuilder_Values {}
 
-		        @frozen nonisolated public enum Detail_Scope {
-		            case scopeBuilder(scopeBuilder_Values, SafeDIScope_Api.Detail_Scope_Scope)
-
+		        nonisolated public enum Detail_Scope {
 		            nonisolated public struct scopeBuilder_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -199,9 +189,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Detail_Scope_Scope {
-		            case leafBuilder(leafBuilder_Values, SafeDIScope_Api.Leaf_Scope)
-
+		        nonisolated public enum Detail_Scope_Scope {
 		            nonisolated public struct leafBuilder_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -218,9 +206,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Leaf_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Leaf_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -321,14 +307,10 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 
 		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
 		extension Home {
-		    @frozen nonisolated public enum SafeDIScope_Api {
-		        case detailBuilder(detailBuilder_Values, SafeDIScope_Api.Detail_Scope)
-
+		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct detailBuilder_Values {}
 
-		        @frozen nonisolated public enum Detail_Scope {
-		            case leafBuilder(leafBuilder_Values, SafeDIScope_Api.Leaf_Scope)
-
+		        nonisolated public enum Detail_Scope {
 		            nonisolated public struct leafBuilder_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -345,9 +327,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Leaf_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Leaf_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -445,14 +425,10 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 
 		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
 		extension Home {
-		    @frozen nonisolated public enum SafeDIScope_Api {
-		        case detailBuilder(detailBuilder_Values, SafeDIScope_Api.Detail_Scope)
-
+		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct detailBuilder_Values {}
 
-		        @frozen nonisolated public enum Detail_Scope {
-		            case leafBuilder(leafBuilder_Values, SafeDIScope_Api.Leaf_Scope)
-
+		        nonisolated public enum Detail_Scope {
 		            nonisolated public struct leafBuilder_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -469,9 +445,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Leaf_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Leaf_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
