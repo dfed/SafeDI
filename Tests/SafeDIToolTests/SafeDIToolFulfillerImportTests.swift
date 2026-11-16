@@ -84,7 +84,13 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(integration: integration, importing: property.expectedImports, property.expectedBody))
+		#expect(output.modules["App"]?.generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+			\(property.expectedImports.map { "#if canImport(\($0))\nimport \($0)\n#endif" }.joined(separator: "\n"))
+
+			\(property.expectedBody)
+			""",
+		])
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -350,18 +356,27 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			}
 			""",
 		])
-		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(integration: integration, importing: ["Contracts", "Feature"], """
-		extension Root {
-		    public init() {
-		        func __safeDI_featureScreen() -> FeatureScreen {
-		            _ = FeatureScreen.__safeDI_FeatureScreen_CBF29CE484222325.self\(integration.seamCallComment(type: "FeatureScreen", declaringModule: "Feature"))
-		            return FeatureScreen()
-		        }
-		        let featureScreen: FeatureScreen = __safeDI_featureScreen()
-		        self.init(featureScreen: featureScreen)
-		    }
-		}
-		"""))
+		#expect(output.modules["App"]?.generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Contracts)
+			import Contracts
+			#endif
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_featureScreen() -> FeatureScreen {
+			            _ = FeatureScreen.__safeDI_FeatureScreen_CBF29CE484222325.self\(integration.seamCallComment(type: "FeatureScreen", declaringModule: "Feature"))
+			            return FeatureScreen()
+			        }
+			        let featureScreen: FeatureScreen = __safeDI_featureScreen()
+			        self.init(featureScreen: featureScreen)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -398,6 +413,18 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			    }
 			}
 			""",
+			"FourthRoot+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Contracts)
+			import Contracts
+			#endif
+
+			extension FourthRoot {
+			    public init() {
+			        let local = Local()
+			        self.init(local: local)
+			    }
+			}
+			""",
 			"SecondRoot+SafeDI.swift": generatedFileHeader + """
 			#if canImport(Contracts)
 			import Contracts
@@ -413,18 +440,12 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			    }
 			}
 			""",
-			"ThirdRoot+SafeDI.swift": Self.generatedFile(importing: ["Contracts"], ""),
-			"FourthRoot+SafeDI.swift": generatedFileHeader + """
+			"ThirdRoot+SafeDI.swift": generatedFileHeader + """
 			#if canImport(Contracts)
 			import Contracts
 			#endif
 
-			extension FourthRoot {
-			    public init() {
-			        let local = Local()
-			        self.init(local: local)
-			    }
-			}
+
 			""",
 		])
 	}
@@ -834,7 +855,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		let facadeHeader = importsReExportingModule ? "#if canImport(Facade)\nimport Facade\n#endif\n" : ""
-		#expect(output.modules["App"]?.generatedFiles == Self.files(integration: integration, moduleName: "App", rootFileName: "Root", header: """
+		#expect(output.modules["App"]?.generatedFiles == [integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
 		#if canImport(Contracts)
 		import Contracts
 		#endif
@@ -844,7 +865,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		#if canImport(Impl)
 		import Impl
 		#endif
-		""", body: """
+
 		extension Root {
 		    public init() {
 		        let thing = AnyThing(DefaultThing())
@@ -857,7 +878,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		        self.init(thing: thing, childBuilder: childBuilder)
 		    }
 		}
-		"""))
+		"""])
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1017,14 +1038,16 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(integration: integration, importing: ["Contracts", moduleNames[fulfillerModuleIndex]].sorted(), """
+		#expect(output.modules["App"]?.generatedFiles == [integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
+		\(["Contracts", moduleNames[fulfillerModuleIndex]].sorted().map { "#if canImport(\($0))\nimport \($0)\n#endif" }.joined(separator: "\n"))
+
 		extension Root {
 		    public init() {
 		        let thing = AnyThing(DefaultThing())
 		        self.init(thing: thing)
 		    }
 		}
-		"""))
+		"""])
 	}
 
 	@Test(arguments: [["Alpha", "Zulu"], ["Zulu", "Alpha"]])
@@ -1136,7 +1159,16 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			}
 			#endif
 			""",
-			"SafeDIMockConfiguration.swift": Self.generatedFile(importing: ["Contracts", "Other"], ""),
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(Contracts)
+			import Contracts
+			#endif
+			#if canImport(Other)
+			import Other
+			#endif
+
+
+			""",
 		])
 	}
 
@@ -1227,7 +1259,13 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			}
 			#endif
 			""",
-			"SafeDIMockConfiguration.swift": Self.generatedFile(importing: ["Contracts"], ""),
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(Contracts)
+			import Contracts
+			#endif
+
+
+			""",
 		])
 	}
 
@@ -1389,14 +1427,21 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == Self.files(integration: integration, moduleName: "App", rootFileName: "Root", header: """
+		#expect(output.modules["App"]?.generatedFiles == [integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
 		#if canImport(Contracts)
 		import Contracts
 		#endif
 		#if canImport(Impl)
 		\(unreadFileImport.expectedGeneratedImport)
 		#endif
-		""", body: Self.rootBody))
+
+		extension Root {
+		    public init() {
+		        let thing = AnyThing(DefaultThing())
+		        self.init(thing: thing)
+		    }
+		}
+		"""])
 	}
 
 	@Test
@@ -1886,13 +1931,113 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == Self.rootAndMockFiles(
-			integration: integration,
-			rootImporting: ["Contracts", "Impl"],
-			mockImporting: ["Contracts", "Fakes", "Impl"],
-			rootBody: Self.rootBody,
-			mockBody: Self.mockedRootMock(propertyType: "AnyThing", defaultConstruction: "AnyThing(DefaultThing.fake())"),
-		))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Contracts)
+				import Contracts
+				#endif
+				#if canImport(Fakes)
+				import Fakes
+				#endif
+				#if canImport(Impl)
+				import Impl
+				#endif
+
+				extension Root {
+				    public init() {
+				        let thing = AnyThing(DefaultThing())
+				        self.init(thing: thing)
+				    }
+				}
+
+				#if DEBUG
+				extension Root {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            thing: (() -> AnyThing)? = nil
+				        ) {
+				            self.thing = thing
+				        }
+
+				        let thing: (() -> AnyThing)?
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        let thing = if let safeDIBuilder = safeDIOverrides.thing { safeDIBuilder() } else { AnyThing(DefaultThing.fake()) }
+				        return Root(thing: thing)
+				    }
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Contracts)
+				import Contracts
+				#endif
+				#if canImport(Impl)
+				import Impl
+				#endif
+
+				extension Root {
+				    public init() {
+				        let thing = AnyThing(DefaultThing())
+				        self.init(thing: thing)
+				    }
+				}
+				""",
+				"Root+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Contracts)
+				import Contracts
+				#endif
+				#if canImport(Fakes)
+				import Fakes
+				#endif
+				#if canImport(Impl)
+				import Impl
+				#endif
+
+				#if DEBUG
+				extension Root {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            thing: (() -> AnyThing)? = nil
+				        ) {
+				            self.thing = thing
+				        }
+
+				        let thing: (() -> AnyThing)?
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        let thing = if let safeDIBuilder = safeDIOverrides.thing { safeDIBuilder() } else { AnyThing(DefaultThing.fake()) }
+				        return Root(thing: thing)
+				    }
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Contracts)
+				import Contracts
+				#endif
+				#if canImport(Impl)
+				import Impl
+				#endif
+
+
+				""",
+			]
+		}
+		#expect(output.modules["App"]?.generatedFiles == expectedFiles)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1908,20 +2053,113 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == Self.rootAndMockFiles(
-			integration: integration,
-			rootImporting: ["Contracts", "Impl"],
-			mockImporting: ["Contracts", "Fakes", "Impl"],
-			rootBody: """
-			extension Root {
-			    public init() {
-			        let thing = DefaultThing()
-			        self.init(thing: thing)
-			    }
-			}
-			""",
-			mockBody: Self.mockedRootMock(propertyType: "DefaultThing", defaultConstruction: "DefaultThing.fake()"),
-		))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Contracts)
+				import Contracts
+				#endif
+				#if canImport(Fakes)
+				import Fakes
+				#endif
+				#if canImport(Impl)
+				import Impl
+				#endif
+
+				extension Root {
+				    public init() {
+				        let thing = DefaultThing()
+				        self.init(thing: thing)
+				    }
+				}
+
+				#if DEBUG
+				extension Root {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            thing: (() -> DefaultThing)? = nil
+				        ) {
+				            self.thing = thing
+				        }
+
+				        let thing: (() -> DefaultThing)?
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        let thing = if let safeDIBuilder = safeDIOverrides.thing { safeDIBuilder() } else { DefaultThing.fake() }
+				        return Root(thing: thing)
+				    }
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Contracts)
+				import Contracts
+				#endif
+				#if canImport(Impl)
+				import Impl
+				#endif
+
+				extension Root {
+				    public init() {
+				        let thing = DefaultThing()
+				        self.init(thing: thing)
+				    }
+				}
+				""",
+				"Root+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Contracts)
+				import Contracts
+				#endif
+				#if canImport(Fakes)
+				import Fakes
+				#endif
+				#if canImport(Impl)
+				import Impl
+				#endif
+
+				#if DEBUG
+				extension Root {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            thing: (() -> DefaultThing)? = nil
+				        ) {
+				            self.thing = thing
+				        }
+
+				        let thing: (() -> DefaultThing)?
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        let thing = if let safeDIBuilder = safeDIOverrides.thing { safeDIBuilder() } else { DefaultThing.fake() }
+				        return Root(thing: thing)
+				    }
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Contracts)
+				import Contracts
+				#endif
+				#if canImport(Impl)
+				import Impl
+				#endif
+
+
+				""",
+			]
+		}
+		#expect(output.modules["App"]?.generatedFiles == expectedFiles)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1937,20 +2175,113 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == Self.rootAndMockFiles(
-			integration: integration,
-			rootImporting: ["Contracts", "Impl"],
-			mockImporting: ["Contracts", "Fakes", "Impl"],
-			rootBody: """
-			extension Root {
-			    public init() {
-			        let thing = DefaultThing()
-			        self.init(thing: thing)
-			    }
-			}
-			""",
-			mockBody: Self.mockedRootMock(propertyType: "DefaultThing", defaultConstruction: "DefaultThing.fake()"),
-		))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Contracts)
+				import Contracts
+				#endif
+				#if canImport(Fakes)
+				import Fakes
+				#endif
+				#if canImport(Impl)
+				import Impl
+				#endif
+
+				extension Root {
+				    public init() {
+				        let thing = DefaultThing()
+				        self.init(thing: thing)
+				    }
+				}
+
+				#if DEBUG
+				extension Root {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            thing: (() -> DefaultThing)? = nil
+				        ) {
+				            self.thing = thing
+				        }
+
+				        let thing: (() -> DefaultThing)?
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        let thing = if let safeDIBuilder = safeDIOverrides.thing { safeDIBuilder() } else { DefaultThing.fake() }
+				        return Root(thing: thing)
+				    }
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Contracts)
+				import Contracts
+				#endif
+				#if canImport(Impl)
+				import Impl
+				#endif
+
+				extension Root {
+				    public init() {
+				        let thing = DefaultThing()
+				        self.init(thing: thing)
+				    }
+				}
+				""",
+				"Root+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Contracts)
+				import Contracts
+				#endif
+				#if canImport(Fakes)
+				import Fakes
+				#endif
+				#if canImport(Impl)
+				import Impl
+				#endif
+
+				#if DEBUG
+				extension Root {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            thing: (() -> DefaultThing)? = nil
+				        ) {
+				            self.thing = thing
+				        }
+
+				        let thing: (() -> DefaultThing)?
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        let thing = if let safeDIBuilder = safeDIOverrides.thing { safeDIBuilder() } else { DefaultThing.fake() }
+				        return Root(thing: thing)
+				    }
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Contracts)
+				import Contracts
+				#endif
+				#if canImport(Impl)
+				import Impl
+				#endif
+
+
+				""",
+			]
+		}
+		#expect(output.modules["App"]?.generatedFiles == expectedFiles)
 	}
 
 	@Test
@@ -2111,27 +2442,122 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["TestSupport"]?.generatedFiles == Self.testSupportFiles(integration: integration, mockBody: Self.sideFeatureMock(declaringPanel: true), configuration: """
-		#if DEBUG
-		extension Panel {
-		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
-		        init(
-		            clock: (() -> Clock)? = nil,
-		            _ safeDIBuilder: ((Clock) -> Panel)? = nil
-		        ) {
-		            self.clock = clock
-		            self.safeDIBuilder = safeDIBuilder
-		        }
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"TestSupport.swift": generatedFileHeader + """
+				#if canImport(SideKit)
+				import SideKit
+				#endif
 
-		        let clock: (() -> Clock)?
-		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Clock) -> Panel)?
-		    }
+				#if DEBUG
+				extension SideFeature {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            panel: Panel.SafeDIMockConfiguration = .init()
+				        ) {
+				            self.panel = panel
+				        }
+
+				        let panel: Panel.SafeDIMockConfiguration
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> SideFeature {
+				        func __safeDI_panel() -> Panel {
+				            let clock = if let safeDIBuilder = safeDIOverrides.panel.clock { safeDIBuilder() } else { Clock() }
+				            return if let safeDIBuilder = safeDIOverrides.panel.safeDIBuilder { safeDIBuilder(clock) } else { Panel(clock: clock) }
+				        }
+				        let panel: Panel = __safeDI_panel()
+				        return SideFeature(panel: panel)
+				    }
+				}
+				#endif
+
+				#if DEBUG
+				extension Panel {
+				    /// Configuration for how this type is constructed within a mock tree.
+				    struct SafeDIMockConfiguration {
+				        init(
+				            clock: (() -> Clock)? = nil,
+				            _ safeDIBuilder: ((Clock) -> Panel)? = nil
+				        ) {
+				            self.clock = clock
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let clock: (() -> Clock)?
+				        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+				        let safeDIBuilder: ((Clock) -> Panel)?
+				    }
+				}
+				#endif
+
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(SideKit)
+				import SideKit
+				#endif
+
+				#if DEBUG
+				extension Panel {
+				    /// Configuration for how this type is constructed within a mock tree.
+				    struct SafeDIMockConfiguration {
+				        init(
+				            clock: (() -> Clock)? = nil,
+				            _ safeDIBuilder: ((Clock) -> Panel)? = nil
+				        ) {
+				            self.clock = clock
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let clock: (() -> Clock)?
+				        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+				        let safeDIBuilder: ((Clock) -> Panel)?
+				    }
+				}
+				#endif
+
+				""",
+				"SideFeature+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(SideKit)
+				import SideKit
+				#endif
+
+				#if DEBUG
+				extension SideFeature {
+				    /// Overrides for the mock dependency tree.
+				    struct SafeDIOverrides {
+				        init(
+				            panel: Panel.SafeDIMockConfiguration = .init()
+				        ) {
+				            self.panel = panel
+				        }
+
+				        let panel: Panel.SafeDIMockConfiguration
+				    }
+
+				    static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> SideFeature {
+				        func __safeDI_panel() -> Panel {
+				            let clock = if let safeDIBuilder = safeDIOverrides.panel.clock { safeDIBuilder() } else { Clock() }
+				            return if let safeDIBuilder = safeDIOverrides.panel.safeDIBuilder { safeDIBuilder(clock) } else { Panel(clock: clock) }
+				        }
+				        let panel: Panel = __safeDI_panel()
+				        return SideFeature(panel: panel)
+				    }
+				}
+				#endif
+				""",
+			]
 		}
-		#endif
-
-		"""))
+		#expect(output.modules["TestSupport"]?.generatedFiles == expectedFiles)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -2293,15 +2719,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	private static let rootBody = """
-	extension Root {
-	    public init() {
-	        let thing = AnyThing(DefaultThing())
-	        self.init(thing: thing)
-	    }
-	}
-	"""
-
 	/// Re-exports the module that declares the fulfiller, so a file that imports it reaches the fulfiller.
 	private static let reexport = ModuleFixture(name: "Reexport", packageName: "App", swiftFileContent: ["@_exported import Impl\n"], dependencies: ["Impl"])
 
@@ -2332,32 +2749,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		"""
 	}
 
-	private static func mockedRootMock(propertyType: String, defaultConstruction: String) -> String {
-		"""
-		#if DEBUG
-		extension Root {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            thing: (() -> \(propertyType))? = nil
-		        ) {
-		            self.thing = thing
-		        }
-
-		        let thing: (() -> \(propertyType))?
-		    }
-
-		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Root {
-		        let thing = if let safeDIBuilder = safeDIOverrides.thing { safeDIBuilder() } else { \(defaultConstruction) }
-		        return Root(thing: thing)
-		    }
-		}
-		#endif
-		"""
-	}
-
 	private static let publicMockedFeature = """
 	import Contracts
 
@@ -2380,19 +2771,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			[
 				"\(mockedTypeName)+SafeDIMock.swift": file,
 				"SafeDIMockConfiguration.swift": generatedFile(importing: ["Contracts"], ""),
-			]
-		}
-	}
-
-	private static func rootAndMockFiles(integration: MultiModuleIntegration, rootImporting rootModuleNames: [String], mockImporting mockModuleNames: [String], rootBody: String, mockBody: String) -> [String: String] {
-		switch integration {
-		case .moduleInfo:
-			["App.swift": generatedFile(importing: mockModuleNames, rootBody + "\n\n" + mockBody)]
-		case .swiftPackagePlugin:
-			[
-				"Root+SafeDI.swift": generatedFile(importing: rootModuleNames, rootBody),
-				"Root+SafeDIMock.swift": generatedFile(importing: mockModuleNames, mockBody),
-				"SafeDIMockConfiguration.swift": generatedFile(importing: rootModuleNames, ""),
 			]
 		}
 	}
@@ -2449,70 +2827,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		swiftFileContentByFilePath: ["SafeDIConfiguration.swift": #"#SafeDIConfiguration(additionalMocksToGenerate: ["SideFeature"])"#],
 		dependencies: ["SideKit"],
 	)
-
-	private static func sideFeatureMock(declaringPanel: Bool) -> String {
-		declaringPanel ? """
-		#if DEBUG
-		extension SideFeature {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            panel: Panel.SafeDIMockConfiguration = .init()
-		        ) {
-		            self.panel = panel
-		        }
-
-		        let panel: Panel.SafeDIMockConfiguration
-		    }
-
-		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> SideFeature {
-		        func __safeDI_panel() -> Panel {
-		            let clock = if let safeDIBuilder = safeDIOverrides.panel.clock { safeDIBuilder() } else { Clock() }
-		            return if let safeDIBuilder = safeDIOverrides.panel.safeDIBuilder { safeDIBuilder(clock) } else { Panel(clock: clock) }
-		        }
-		        let panel: Panel = __safeDI_panel()
-		        return SideFeature(panel: panel)
-		    }
-		}
-		#endif
-		""" : """
-		#if DEBUG
-		extension SideFeature {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            clock: (() -> Clock)? = nil
-		        ) {
-		            self.clock = clock
-		        }
-
-		        let clock: (() -> Clock)?
-		    }
-
-		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> SideFeature {
-		        let clock = if let safeDIBuilder = safeDIOverrides.clock { safeDIBuilder() } else { Clock() }
-		        return SideFeature(clock: clock)
-		    }
-		}
-		#endif
-		"""
-	}
-
-	private static func testSupportFiles(integration: MultiModuleIntegration, mockBody: String, configuration: String?) -> [String: String] {
-		switch integration {
-		case .moduleInfo:
-			["TestSupport.swift": generatedFile(importing: ["SideKit"], [mockBody, configuration].compactMap(\.self).joined(separator: "\n\n"))]
-		case .swiftPackagePlugin:
-			[
-				"SideFeature+SafeDIMock.swift": generatedFile(importing: ["SideKit"], mockBody),
-				"SafeDIMockConfiguration.swift": configuration.map { generatedFile(importing: ["SideKit"], $0) } ?? emptyMockConfigurationFileOutput,
-			]
-		}
-	}
 
 	private static let clock = seamFixtureType(named: "Clock", declarations: [])
 
