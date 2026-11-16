@@ -593,7 +593,7 @@ extension DependencyTreeGenerator {
 		guard let firstPlace = orderedPlaces.first,
 		      orderedPlaces.allSatisfy(\.property.propertyType.isAnyInstantiator)
 		else { return .value }
-		let wrapperTypes = orderedPlaces.map { $0.property.typeDescription.unwrapped.strippingEscaping }
+		let wrapperTypes = orderedPlaces.map(\.property.typeDescription.unwrapped.strippingEscaping)
 		if Set(wrapperTypes.map(\.asSource)).count == 1 {
 			return .wrapper(wrapperTypes[0])
 		}
