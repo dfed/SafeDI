@@ -4044,7 +4044,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// A receive only if available is decided in two passes. The first is the order's (see `siblingGraph(of:)`), in sibling
 	/// order. The second takes every receive the first left `nil` whose receiver and received sibling are both builders, adds
 	/// them all to the graph at once, and gives each one exactly when its strongly connected component holds only builders,
-	/// so it reads no order: renaming or reordering cannot change it.
+	/// so it reads no order: renaming or reordering cannot change it. The loops are then found in the graph of the arrows
+	/// the order keeps and the receives the second pass gives, never with a receive it leaves `nil`, which reads nothing: a
+	/// loop of builders, one member included, beside a receive left `nil` that closes a circle through a value is still a loop.
 	struct ReceivedBuilderLoops: Equatable, Sendable {
 		/// For each child on a loop, by its index among the children, the loop it is on, named by the index of its first
 		/// member.
@@ -4119,45 +4121,44 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		guard !candidates.isEmpty || !siblingGraph.childrenRequiringThemselves.isEmpty || siblingGraph.dependencies.indices.contains(where: { index in
 			isBuilder[index] && siblingGraph.dependencies[index].contains { isBuilder[$0] }
 		}) else { return ReceivedBuilderLoops() }
-		var arrows = siblingGraph.dependencies
-		var selfArrows = siblingGraph.childrenRequiringThemselves
-		for candidate in candidates {
-			if candidate.receiver == candidate.sibling {
-				selfArrows.insert(candidate.receiver)
-			} else {
-				arrows[candidate.receiver].insert(candidate.sibling)
+		/// The strongly connected component of each child in the graph `arrows` describes, and whether each child's component
+		/// holds only builders.
+		func components(of arrows: [Set<Int>]) -> (componentByIndex: [Int], holdsOnlyBuilders: (Int) -> Bool) {
+			let componentByIndex = stronglyConnectedComponents(of: arrows)
+			var componentHoldsOnlyBuilders = [Int: Bool]()
+			for index in children.indices {
+				componentHoldsOnlyBuilders[componentByIndex[index], default: true] = componentHoldsOnlyBuilders[componentByIndex[index], default: true] && isBuilder[index]
 			}
+			let holdsOnlyBuilders = componentHoldsOnlyBuilders
+			return (componentByIndex, { holdsOnlyBuilders[componentByIndex[$0]] == true })
 		}
-		let componentByIndex = stronglyConnectedComponents(of: arrows)
-		var componentHoldsOnlyBuilders = [Int: Bool]()
-		for index in children.indices {
-			componentHoldsOnlyBuilders[componentByIndex[index], default: true] = componentHoldsOnlyBuilders[componentByIndex[index], default: true] && isBuilder[index]
+		var arrowsWithEveryCandidate = siblingGraph.dependencies
+		for candidate in candidates where candidate.receiver != candidate.sibling {
+			arrowsWithEveryCandidate[candidate.receiver].insert(candidate.sibling)
 		}
-		func isOnLoop(_ index: Int) -> Bool {
-			componentHoldsOnlyBuilders[componentByIndex[index]] == true
-		}
+		let candidateComponents = components(of: arrowsWithEveryCandidate)
 		// A candidate is given when its component holds only builders; every other one stays `nil`.
-		var givenCandidates = Set<Int>()
+		var givenArrows = siblingGraph.dependencies
 		var givenSelfArrows = siblingGraph.childrenRequiringThemselves
-		for candidate in candidates where componentByIndex[candidate.receiver] == componentByIndex[candidate.sibling] && isOnLoop(candidate.receiver) {
+		for candidate in candidates
+			where candidateComponents.componentByIndex[candidate.receiver] == candidateComponents.componentByIndex[candidate.sibling]
+			&& candidateComponents.holdsOnlyBuilders(candidate.receiver)
+		{
 			if candidate.receiver == candidate.sibling {
 				givenSelfArrows.insert(candidate.receiver)
 			} else {
-				givenCandidates.insert(candidate.receiver * children.count + candidate.sibling)
+				givenArrows[candidate.receiver].insert(candidate.sibling)
 			}
 		}
+		// The loops are the components of what is received: the arrows the order keeps and the candidates given. A candidate
+		// left `nil` receives nothing, so it never joins a loop of builders, one member included, to a component with a value on
+		// it, which would leave its members without the rebindings their functions read.
+		let (componentByIndex, isOnLoop) = components(of: givenArrows)
 		var loops = ReceivedBuilderLoops()
 		for index in children.indices where isOnLoop(index) {
 			var reboundProperties = Set<Property>()
-			for siblingIndex in siblingGraph.dependencies[index] where componentByIndex[siblingIndex] == componentByIndex[index] {
+			for siblingIndex in givenArrows[index] where componentByIndex[siblingIndex] == componentByIndex[index] {
 				if let property = children[siblingIndex].property {
-					reboundProperties.insert(property)
-				}
-			}
-			for candidate in candidates
-				where candidate.receiver == index && candidate.sibling != index && givenCandidates.contains(candidate.receiver * children.count + candidate.sibling)
-			{
-				if let property = children[candidate.sibling].property {
 					reboundProperties.insert(property)
 				}
 			}

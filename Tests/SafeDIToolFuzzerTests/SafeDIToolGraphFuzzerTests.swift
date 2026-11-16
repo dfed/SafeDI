@@ -5271,14 +5271,17 @@ struct SafeDIToolGraphFuzzerTests {
 	/// elements a forwarded tuple spells. Seeds 30, 97, 212 and 267 show the loops through received instantiators:
 	/// `Sendable` instantiators that receive one another (97), a `Sendable` loop with a member whose builder function
 	/// takes cycle parameters (30), the same member with wrappers that are not `Sendable` (267), and an instantiator
-	/// received inside the tree it builds, with each kind of wrapper (212). Seeds 4, 5 and 70, which the tool rejects,
-	/// keep the rejected share at that quarter.
+	/// received inside the tree it builds, with each kind of wrapper (212). Seeds 5889 and 6388, beyond the corpus, have
+	/// a builder whose own type receives it beside a receive only if available that the order leaves `nil` because the
+	/// builder it receives waits on the first through a value: its builder function must still wrap itself again, and
+	/// without that the generated code does not compile. Seeds 4, 5, 7 and 70, which the tool rejects, keep the rejected
+	/// share at that quarter.
 	/// It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on
 	/// every pull request. Compiling the batch is one `swiftc` invocation when nothing fails, and comparing its values
 	/// one compile and one link.
-	static let smokeSeeds: [UInt64] = [4, 5, 12, 14, 18, 25, 30, 40, 59, 62, 70, 97, 99, 133, 161, 212, 267, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
+	static let smokeSeeds: [UInt64] = [4, 5, 7, 12, 14, 18, 25, 30, 40, 59, 62, 70, 97, 99, 133, 161, 212, 267, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x9219996BA2BD0A1A
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x2F8BA9EA742416B3
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -5288,7 +5291,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xB211B1F9E0A1B180
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xB49E3CC6C8E30F83
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.

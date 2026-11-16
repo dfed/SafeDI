@@ -401,6 +401,81 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_rebindsBuilderInsideItsOwnFunction_whenItsTypeRenamesItBesideAnOnlyIfAvailableReceiveOfABuilderWaitingOnItThroughAValue() async throws {
+		let output = try await executeSafeDIToolTest(swiftFileContent: Self.builderRenamedByItsTypeBesideBuilderWaitingOnItThroughValueFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.mockFiles == [
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            t4Builder: ((Instantiator<T4>, Instantiator<T2>?) -> T4)? = nil,
+			            t3: T3.SafeDIMockConfiguration = .init(),
+			            t2Builder: ((T3?) -> T2)? = nil
+			        ) {
+			            self.t4Builder = t4Builder
+			            self.t3 = t3
+			            self.t2Builder = t2Builder
+			        }
+
+			        let t4Builder: ((Instantiator<T4>, Instantiator<T2>?) -> T4)?
+			        let t3: T3.SafeDIMockConfiguration
+			        let t2Builder: ((T3?) -> T2)?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_t4Builder() -> T4 {
+			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
+			            let t4BuilderAlias: Instantiator<T4> = t4Builder
+			            #sourceLocation()
+			            return if let safeDIBuilder = safeDIOverrides.t4Builder { safeDIBuilder(t4BuilderAlias, nil) } else { T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil) }
+			        }
+			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			        func __safeDI_t3() -> T3 {
+			            func __safeDI_t4() -> T4 {
+			                #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
+			                let t4BuilderAlias: Instantiator<T4> = t4Builder
+			                #sourceLocation()
+			                return if let safeDIBuilder = safeDIOverrides.t3.t4 { safeDIBuilder(t4BuilderAlias, nil) } else { T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil) }
+			            }
+			            let t4: T4 = __safeDI_t4()
+			            return if let safeDIBuilder = safeDIOverrides.t3.safeDIBuilder { safeDIBuilder(t4) } else { T3(t4: t4) }
+			        }
+			        let t3: T3 = __safeDI_t3()
+			        func __safeDI_t2Builder() -> T2 {
+			            if let safeDIBuilder = safeDIOverrides.t2Builder { safeDIBuilder(t3) } else { T2(t3: t3) }
+			        }
+			        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+			        return Root(t2Builder: t2Builder, t4Builder: t4Builder, t3: t3)
+			    }
+			}
+			#endif
+			""",
+		], "Unexpected output \(output.mockFiles)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWhatProductionBuilds_whenBuildersTypeRenamesItBesideAnOnlyIfAvailableReceiveOfABuilderWaitingOnItThroughAValue() async throws {
+		let fixture = Self.builderRenamedByItsTypeBesideBuilderWaitingOnItThroughValueFixture
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWhatProductionBuilds_whenOneMemberOfTwoBuilderLoopReceivesOnlyIfAvailableABuilderWaitingOnTheLoopThroughAValue() async throws {
+		let fixture = Self.twoBuilderLoopBesideReceiveWaitingOnItThroughValueFixture
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output)
+	}
+
 	// MARK: Tests – Promotion
 
 	@Test
@@ -3192,6 +3267,25 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 		type("Detail", "@Received let screenBuilder: Instantiator<Screen>"),
 		type("Step", "@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"),
 		type("Root", attributes: "(isRoot: true, generateMock: true)", "@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"),
+	]
+
+	/// `T4` receives `t4Builder`, which builds it, through a rename, and `t2Builder` only if available, which waits on `t3`,
+	/// which waits on `t4Builder`: that receive is left `nil`, and `t4Builder` still receives itself.
+	private static let builderRenamedByItsTypeBesideBuilderWaitingOnItThroughValueFixture = [
+		type("Root", attributes: "(isRoot: true, generateMock: true)", "@Instantiated let t2Builder: Instantiator<T2>", "@Instantiated let t4Builder: Instantiator<T4>", "@Instantiated let t3: T3"),
+		type("T2", "@Received(onlyIfAvailable: true) let t3: T3?"),
+		type("T3", "@Instantiated let t4: T4"),
+		type("T4", "@Received(fulfilledByDependencyNamed: \"t4Builder\", ofType: Instantiator<T4>.self) let t4BuilderAlias: Instantiator<T4>", "@Received(onlyIfAvailable: true) let t2Builder: Instantiator<T2>?"),
+	]
+
+	/// `aBuilder` and `bBuilder` receive each other, and `A` receives `cBuilder` only if available; `cBuilder` waits on `v`,
+	/// which waits on `aBuilder`: that receive is left `nil`, and the two builders are still a loop.
+	private static let twoBuilderLoopBesideReceiveWaitingOnItThroughValueFixture = [
+		type("Root", attributes: "(isRoot: true, generateMock: true)", "@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let cBuilder: Instantiator<C>", "@Instantiated let v: V"),
+		type("A", "@Received let bBuilder: Instantiator<B>", "@Received(onlyIfAvailable: true) let cBuilder: Instantiator<C>?"),
+		type("B", "@Received let aBuilder: Instantiator<A>"),
+		type("C", "@Received let v: V"),
+		type("V", "@Received let aBuilder: Instantiator<A>"),
 	]
 
 	/// A mocked root that instantiates a builder of each of `count` children, each of which receives `peerBuilder`, whose
