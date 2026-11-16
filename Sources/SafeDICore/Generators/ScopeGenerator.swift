@@ -215,7 +215,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A dispatcher passed by name is referred to as a fill is, and is `@Sendable` where its argument is.
 		for builderCallArgument in builderCallArguments {
 			if let enclosingFillKey = builderCallArgument.enclosingFillKey {
-				referencedFillNamesByKey[enclosingFillKey] = builderCallArgument.value
+				referencedFillNamesByKey[enclosingFillKey] = builderCallArgument.referencedName ?? builderCallArgument.value
 				if builderCallArgument.isSendable {
 					fillKeysReferencedFromSendableFunction.insert(enclosingFillKey)
 				}
@@ -1012,11 +1012,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// What a seam call passes one builder: the label it takes it under and the expression passed.
 	struct BuilderCallArgument: Sendable {
-		init(label: String, value: String, declarations: [String] = [], enclosingFillKey: String? = nil, isSendable: Bool = false) {
+		init(label: String, value: String, declarations: [String] = [], enclosingFillKey: String? = nil, referencedName: String? = nil, isSendable: Bool = false) {
 			self.label = label
 			self.value = value
 			self.declarations = declarations
 			self.enclosingFillKey = enclosingFillKey
+			self.referencedName = referencedName
 			self.isSendable = isSendable
 		}
 
@@ -1028,6 +1029,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let declarations: [String]
 		/// The key of the enclosing fill or dispatcher passed by name, or `nil` when the call declares it or passes a builder up.
 		let enclosingFillKey: String?
+		/// The name of the enclosing dispatcher `value` refers to, where `enclosingFillKey` is set.
+		let referencedName: String?
 		/// Whether the seam takes the builder `@Sendable`.
 		let isSendable: Bool
 	}
@@ -4902,7 +4905,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// Where no enum the root reaches holds itself again, the struct is one expression, spelled from the line it starts on,
 	/// each further line indented from that line's indentation by `ScopeGenerator.standardIndent`, each member's closure
-	/// naming the values it is handed `__safeDI_<case>Values`, apart from `reservedNames` and the closures that enclose it.
+	/// naming the values it is handed `__safeDI_<case>Values`, claimed from a copy of `names` apart from `reservedNames` and
+	/// the closures that enclose it: a sibling's closure, which it cannot see, can bind the same name.
 	///
 	/// Where one does, a loop of levels, each level a route first opens is the struct a function returns
 	/// (`declarations`, one per such opening, named by `names`), which takes what wraps its level's case into the root's,
@@ -4917,14 +4921,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		names: inout GeneratedNameAllocator,
 		handing handingCase: (String) -> String,
 	) -> (value: String, declarations: [String]) {
-		/// The name of the values a member of `enumCase` is handed, apart from `taken`.
-		func valuesName(of enumCase: SeamSignature.ScopeEnum.Case, apartFrom taken: Set<String>) -> String {
-			var name = functionName(toBuildPropertyNamed: "\(enumCase.name.spelledWithoutBackticks)Values")
-			while taken.contains(name) {
-				name = "\(name)_"
-			}
-			return name
+		/// The name of the values a member of `enumCase` is handed, claimed from `memberNames`, the names its closure must not
+		/// shadow. Joined unspelled, then spelled once: a case's name can be a raw identifier.
+		func valuesName(of enumCase: SeamSignature.ScopeEnum.Case, claimingFrom memberNames: inout GeneratedNameAllocator) -> String {
+			memberNames.claim(functionName(toBuildPropertyNamed: "\(enumCase.name.spelledWithoutBackticks)Values".spelledAsIdentifier))
 		}
+		// The names a member's closure must not shadow: the call's, and the builders' its fills read.
+		var closureNames = names
+		closureNames.reserve(reservedNames)
 		/// `members`, each a member's lines, as the lines of a call of a builder struct's memberwise initializer.
 		func initializerLines(of members: [[String]]) -> [String] {
 			guard members.contains(where: { $0.count > 1 }) else {
@@ -4956,14 +4960,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		guard reachesLoop(from: enumKey, open: [enumKey]) else {
 			/// The lines of the struct of the enum of `key`, the first unindented and each further one indented relative to it,
-			/// whose places hand `handingCase` their case wrapped by `wrap`, the names in `taken` bound by enclosing closures.
-			func structLines(of key: SeamSignature.ScopeEnum.Key, wrap: (String) -> String, taken: Set<String>) -> [String] {
+			/// whose places hand `handingCase` their case wrapped by `wrap`, `enclosingNames` holding the names bound by enclosing
+			/// closures.
+			func structLines(of key: SeamSignature.ScopeEnum.Key, wrap: (String) -> String, enclosingNames: GeneratedNameAllocator) -> [String] {
 				var members = [[String]]()
 				for enumCase in enumsByKey[key]?.cases ?? [] {
-					let valuesName = valuesName(of: enumCase, apartFrom: taken)
+					var memberNames = enclosingNames
+					let valuesName = valuesName(of: enumCase, claimingFrom: &memberNames)
 					let parameter = enumCase.values == nil ? "_" : valuesName
 					if let heldKey = SeamSignature.ScopeEnum.heldKey(of: enumCase) {
-						let heldLines = structLines(of: heldKey, wrap: { wrap(rebuiltCase(enumCase, valuesName: valuesName, holding: $0)) }, taken: taken.union([valuesName]))
+						let heldLines = structLines(of: heldKey, wrap: { wrap(rebuiltCase(enumCase, valuesName: valuesName, holding: $0)) }, enclosingNames: memberNames)
 						// A member that hands on a nested struct opens it on a line of its own.
 						members.append(["\(enumCase.name.spelledAsArgumentLabel): { \(parameter) in"] + heldLines.map { standardIndent + $0 } + ["}"])
 					} else {
@@ -4972,7 +4978,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				return initializerLines(of: members)
 			}
-			return (structLines(of: enumKey, wrap: { $0 }, taken: reservedNames).joined(separator: "\n\(standardIndent)"), [])
+			return (structLines(of: enumKey, wrap: { $0 }, enclosingNames: closureNames).joined(separator: "\n\(standardIndent)"), [])
 		}
 		// Each level a route first opens, the route's open levels above it, and what each of its members does.
 		enum Member {
@@ -4996,7 +5002,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let base = functionName(toBuildPropertyNamed: "\(scopeEnum?.builderLabel.spelledWithoutBackticks ?? "")_\(DependencyTreeGenerator.seamStem(of: key.seamType))\(enumName)".spelledAsIdentifier)
 			let functionName = names.claim(base)
 			let index = openings.count
-			openings.append(Opening(key: key, functionName: functionName, wrapName: names.claim("\(functionName)_wrap")))
+			openings.append(Opening(key: key, functionName: functionName, wrapName: names.claim("\(functionName)_wrap".spelledAsJoinedIdentifier)))
 			for enumCase in scopeEnum?.cases ?? [] {
 				guard let heldKey = SeamSignature.ScopeEnum.heldKey(of: enumCase) else {
 					openings[index].members.append(.place(enumCase))
@@ -5047,16 +5053,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let wraps = openings[opening].takenWraps.sorted().map { "\(openings[$0].wrapName): \(openings[$0].wrapName)" }
 			return "\(openings[opening].functionName)(\(([wrap] + wraps).joined(separator: ", ")))"
 		}
+		// Each member's closure binds its values apart from every function and wrap the openings named.
+		closureNames.reserve(names.taken)
 		var declarations = [String]()
 		for opening in openings {
 			let wrapName = opening.wrapName
 			let members = opening.members.map { member -> [String] in
 				switch member {
 				case let .place(enumCase):
-					let valuesName = valuesName(of: enumCase, apartFrom: reservedNames)
+					var memberNames = closureNames
+					let valuesName = valuesName(of: enumCase, claimingFrom: &memberNames)
 					return ["\(enumCase.name.spelledAsArgumentLabel): { \(enumCase.values == nil ? "_" : valuesName) in \(handingCase("\(wrapName)(\(rebuiltCase(enumCase, valuesName: valuesName, holding: nil)))")) }"]
 				case let .opens(enumCase, opening):
-					let valuesName = valuesName(of: enumCase, apartFrom: reservedNames)
+					var memberNames = closureNames
+					let valuesName = valuesName(of: enumCase, claimingFrom: &memberNames)
 					return ["\(enumCase.name.spelledAsArgumentLabel): { \(enumCase.values == nil ? "_" : valuesName) in \(call(of: opening, handing: "{ \(wrapName)(\(rebuiltCase(enumCase, valuesName: valuesName, holding: "$0"))) }")) }"]
 				case let .reopens(enumCase, opening):
 					return ["\(enumCase.name.spelledAsArgumentLabel): { _ in \(call(of: opening, handing: openings[opening].wrapName)) }"]
@@ -6170,14 +6180,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let attributesPrefix = instantiable.generatedInitializerAttributes.isEmpty ? "" : "\(instantiable.generatedInitializerAttributes) "
 		// Every initializer carries the isolation of the one it forwards to, which it spells (`Initializer.spelledIsolation`):
 		// declared in an extension of an isolated type, it would take the type's isolation, and a caller the seam's own
-		// initializer lets in, outside that isolation, could not call it.
-		let isolationPrefix = switch instantiable.initializer?.spelledIsolation {
-		case let isolation? where attributesPrefix.split(separator: " ").contains(Substring(isolation)):
+		// initializer lets in, outside that isolation, could not call it. An isolation `generatedInitializerAttributes` spells
+		// is the one the initializers carry instead: Swift takes one isolation per declaration.
+		let attributesSpellIsolation = Initializer.globalActorAttribute(in: instantiable.generatedInitializerAttributes) != nil
+			|| instantiable.generatedInitializerAttributes.split(separator: " ").contains("nonisolated")
+		let isolationPrefix = if attributesSpellIsolation {
 			""
-		case let isolation?:
-			"\(isolation) "
-		case nil:
-			""
+		} else {
+			instantiable.initializer?.spelledIsolation.map { "\($0) " } ?? ""
 		}
 		// Every tier takes every builder, after its parameters: a hole is required. Each tier takes a builder under its own
 		// label (`SeamSignature.Builder.narrowerTierLabels`). An initializer people call declares no underscored name, which
