@@ -67,3 +67,18 @@ extension TypeDescription {
 		"\(asSource)(\(expression))"
 	}
 }
+
+extension TypeDescription {
+	/// The pattern that a `let` uses to bind, as `name`, a SafeDI wrapper of this type that generated code builds with
+	/// `unwrapped.spelledForConstruction`. It is the bare name when that construction spells this type. Otherwise it is
+	/// the name annotated with this type: an optional wrapper, or one constructed by annotation, whose generic arguments
+	/// only the annotation spells. `isAlwaysAnnotated` annotates it regardless, for production's instantiator of an
+	/// extension-based type.
+	func wrapperBindingPattern(named name: String, isAlwaysAnnotated: Bool = false) -> String {
+		if !isAlwaysAnnotated, asSource == unwrapped.spelledForConstruction {
+			name
+		} else {
+			"\(name): \(asSource)"
+		}
+	}
+}
