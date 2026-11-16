@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Runs, on this machine, the test suites a branch touches, and prints only what failed.
 
-    verify-touched.py [BASE] [--list] [--skip-compile-checks] [--also FILTER]... [--log FILE] [--runner COMMAND]
+    verify-touched.py [BASE] [--list] [--skip-compile-checks] [--also FILTER]... [--whole-suite] [--log FILE]
+                      [--runner COMMAND]
     verify-touched.py --self-test
 
 BASE is the commit or branch the change is measured from (default `origin/main`); the changed files are those that
@@ -22,7 +23,7 @@ Every changed path matches one rule, in this order, or runs the whole suite; no 
 
 `--list` prints the `swift test` filters and runs nothing. `--skip-compile-checks` sets `SAFEDI_SKIP_COMPILE_CHECK`,
 for a first pass; without it each test's generated code is compiled, in a debug build, and an inherited
-`SAFEDI_SKIP_COMPILE_CHECK` is dropped. `--also` adds a filter. `--runner` (or
+`SAFEDI_SKIP_COMPILE_CHECK` is dropped. `--also` adds a filter, and `--whole-suite` runs every test whatever changed. `--runner` (or
 `SAFEDI_VERIFY_RUNNER`) is a command the `swift test` command is appended to, for a machine that queues heavy work.
 
 The build is a debug build, not CI's release build, so it finds what tests assert and not what only the release
@@ -271,6 +272,8 @@ def run(arguments):
         filters = filters_of_changes(changed, read_text_in_checkout, unselected)
     except WholeSuite as reason:
         whole_suite_reason = str(reason)
+    if arguments.whole_suite and whole_suite_reason is None:
+        whole_suite_reason = "--whole-suite"
     for pattern in arguments.also:
         filters.setdefault(pattern, "--also")
 
@@ -470,6 +473,7 @@ def main():
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--skip-compile-checks", action="store_true")
     parser.add_argument("--also", action="append", default=[], metavar="FILTER")
+    parser.add_argument("--whole-suite", action="store_true")
     parser.add_argument("--log", metavar="FILE")
     parser.add_argument("--runner", metavar="COMMAND", default=os.environ.get("SAFEDI_VERIFY_RUNNER", ""))
     parser.add_argument("--self-test", action="store_true")
