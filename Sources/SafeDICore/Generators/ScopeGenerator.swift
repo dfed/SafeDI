@@ -4194,23 +4194,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// A builder function a production scope declares for its property.
 	enum DeclaredBuilderFunction {
-		/// The function that builds the property, `__safeDI_<label>`.
+		/// The function that builds the property.
 		case building
-		/// The `__safeDI_<label>_received` function of a member of a loop of builders, which its wrapper and every
-		/// rebinding of it wrap.
-		case receivedByLoopMember
+		/// The `__safeDI_<label>_received` function of a member of a loop of builders whose property is `property`, which
+		/// its wrapper and every rebinding of it wrap.
+		case receivedByLoopMember(property: Property)
 	}
 
 	/// How this scope spells the attributes of a builder function it declares: `@Sendable` exactly where
-	/// `buildsInSendableFunction` holds, with one named difference. A cycle-closing scope never builds in a `@Sendable`
-	/// function of its own, since it declares none, but where it is a loop member held in a `Sendable` wrapper, the
-	/// wrapper's closure calls its `_received` function, which must then be `@Sendable` too.
+	/// `buildsInSendableFunction` holds, with one named difference. A scope whose property is a `Sendable` wrapper builds
+	/// in a `@Sendable` function, except one that closes a cycle, which declares no function of its own; where such a
+	/// scope is a loop member, the wrapper's closure calls its `_received` function, which must then be `@Sendable` too.
 	nonisolated private func decorator(of function: DeclaredBuilderFunction) -> String {
 		let isSendable = switch function {
 		case .building:
 			buildsInSendableFunction
-		case .receivedByLoopMember:
-			buildsInSendableFunction || property?.propertyType.isSendable == true
+		case let .receivedByLoopMember(property):
+			buildsInSendableFunction || property.propertyType.isSendable
 		}
 		return isSendable ? sendableFunctionDecorator : ""
 	}
@@ -5148,7 +5148,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// closure that calls it. Empty for a scope that builds no instantiator, which no caller asks.
 	nonisolated private func instantiatorDeclaration(handing functionName: String, forwardedArguments: String) -> String {
 		guard case let .property(instantiable, property, _, _, _, _) = scopeData else { return "" }
-		let pattern = property.typeDescription.wrapperBindingPattern(named: property.label, isAlwaysAnnotated: instantiable.declarationType.isExtension)
+		let pattern = property.typeDescription.wrapperBindingPattern(named: property.label, constructedAs: property.typeDescription.unwrapped, isAlwaysAnnotated: instantiable.declarationType.isExtension)
 		return "let \(pattern) = \(instantiatorExpression(handing: functionName, forwardedArguments: forwardedArguments))"
 	}
 
@@ -5622,7 +5622,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						? ""
 						: forwardedProperties.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
 					let callArguments = (forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments).joined(separator: ", ")
-					let receivedFunctionDecorator = decorator(of: .receivedByLoopMember)
+					let receivedFunctionDecorator = decorator(of: .receivedByLoopMember(property: property))
 					let receivedFunctionDeclaration = """
 					\(receivedFunctionDecorator)func \(receivedFunctionName)(\(receivedFunctionParameters)) -> \(concreteTypeName) {
 					\((memberLines + ["\(Self.standardIndent)\(memberLines.isEmpty ? "" : "return ")\(functionName)(\(callArguments))"]).joined(separator: "\n"))
@@ -6038,7 +6038,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return "let \(property.asSource) = \(buildExpression(forwarding: nil))"
 		}
 		let unwrappedType = property.typeDescription.unwrapped
-		let declaration = "let \(property.typeDescription.wrapperBindingPattern(named: property.label))"
+		let declaration = "let \(property.typeDescription.wrapperBindingPattern(named: property.label, constructedAs: unwrappedType))"
 		guard !propertyType.forwardsPropertiesOfBuiltType, site.forwardedType == nil else {
 			// The wrapper's closure takes the forwarded value – `T.ForwardedProperties`, or an erased instantiator's first
 			// generic argument – escaping when it is a function type, as no parameter of a function declared here could, since
@@ -7442,7 +7442,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.removeSubrange(bodyStartIndex...)
 			lines.append(contentsOf: Self.publicMockTiers(
 				of: publicMockPlan,
-				typeName: typeName,
+				mockedType: instantiable.concreteInstantiable,
 				returnType: mockMethodReturnType,
 				attributesPrefix: mockAttributesPrefix,
 				narrowestBody: body,
@@ -10526,7 +10526,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 	) -> String {
 		let unwrappedType = node.typeDescription.unwrapped
-		let binding = unwrappedType.wrapperBindingPattern(named: bindingName)
+		let binding = unwrappedType.wrapperBindingPattern(named: bindingName, constructedAs: unwrappedType)
 		let construction = mockInstantiatorConstruction(
 			of: node.typeDescription,
 			handing: functionName,
@@ -10793,7 +10793,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Emit the Instantiator/ErasedInstantiator construction.
 		let unwrappedType = node.typeDescription.unwrapped
 		let unwrappedTypeDescription = unwrappedType.spelledForConstruction
-		let outerBinding = unwrappedType.wrapperBindingPattern(named: outerBindingName)
+		let outerBinding = unwrappedType.wrapperBindingPattern(named: outerBindingName, constructedAs: unwrappedType)
 
 		// The builder function now returns the property type directly (including
 		// wrapping for erasedToConcreteExistential), so no outer wrapping needed.
