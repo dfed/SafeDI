@@ -50,7 +50,27 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			modulesBeneath: { $0 },
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.appBuildingFeedScreen])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Deep)
+			import Deep
+			#endif
+			#if canImport(Middle)
+			import Middle
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_feedScreen() -> FeedScreen {
+			            let clock = Clock()
+			            return FeedScreen(clock: clock)
+			        }
+			        let feedScreen: FeedScreen = __safeDI_feedScreen()
+			        self.init(feedScreen: feedScreen)
+			    }
+			}
+			""",
+		])
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Deep", "Middle"])
 	}
 
@@ -285,7 +305,27 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			modulesBeneath: passesSet ? { $0 } : nil,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.appBuildingFeedScreen])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Deep)
+			import Deep
+			#endif
+			#if canImport(Middle)
+			import Middle
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_feedScreen() -> FeedScreen {
+			            let clock = Clock()
+			            return FeedScreen(clock: clock)
+			        }
+			        let feedScreen: FeedScreen = __safeDI_feedScreen()
+			        self.init(feedScreen: feedScreen)
+			    }
+			}
+			""",
+		])
 		#expect(Self.withoutFixtureRoot(output, module: "App") == Self.withoutFixtureRoot(reference, module: "App"))
 	}
 
@@ -2115,19 +2155,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			ModuleFixture(name: "App", packageName: "App", swiftFileContent: ["import Middle\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let feedScreen: FeedScreen"])], dependencies: appDependencies),
 		]
 	}
-
-	private static let appBuildingFeedScreen = generatedFile(importing: ["Deep", "Middle"], """
-	extension Root {
-	    public init() {
-	        func __safeDI_feedScreen() -> FeedScreen {
-	            let clock = Clock()
-	            return FeedScreen(clock: clock)
-	        }
-	        let feedScreen: FeedScreen = __safeDI_feedScreen()
-	        self.init(feedScreen: feedScreen)
-	    }
-	}
-	""")
 
 	private static func generatedFile(importing moduleNames: [String], _ body: String) -> String {
 		generatedFileHeader + moduleNames.map { "#if canImport(\($0))\nimport \($0)\n#endif" }.joined(separator: "\n") + "\n\n" + body

@@ -56,7 +56,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			verificationCompilationConditions: ["STAGING"],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.stagingRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if !(STAGING)
+			#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = StagingLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -74,7 +87,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			verificationCompilationConditions: [],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.productionRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if STAGING
+			#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = ProductionLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -105,7 +131,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			),
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.stagingRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if !(STAGING)
+			#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = StagingLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -122,7 +161,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			),
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.stagingRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if !(STAGING)
+			#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = StagingLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -136,7 +188,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			buildSettingArguments: Self.buildSettingArguments(otherSwiftFlags: "${OTHER_SWIFT_FLAGS}"),
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.stagingRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if !(STAGING)
+			#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = StagingLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -150,7 +215,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			buildSettingArguments: ["--build-setting-active-compilation-conditions=[]"],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.stagingRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if !(STAGING)
+			#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = StagingLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -180,7 +258,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			verificationCompilationConditions: [],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.productionRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if STAGING
+			#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = ProductionLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	// MARK: Tests – Reading OTHER_SWIFT_FLAGS
@@ -196,7 +287,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			verificationCompilationConditions: ["STAGING"],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.stagingRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if !(STAGING)
+			#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = StagingLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -210,7 +314,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			verificationCompilationConditions: ["STAGING"],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.stagingRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if !(STAGING)
+			#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = StagingLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -225,7 +342,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			verificationCompilationConditions: ["STAGING"],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.stagingRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if !(STAGING)
+			#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = StagingLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -239,7 +369,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			verificationCompilationConditions: [],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.productionRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if STAGING
+			#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = ProductionLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -254,7 +397,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			verificationCompilationConditions: [],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.productionRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if STAGING
+			#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = ProductionLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test(arguments: ["-Xcc", "-Xclang-linker", "-Xfrontend", "-Xlinker", "-Xllvm"])
@@ -268,7 +424,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			verificationCompilationConditions: [],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.productionRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if STAGING
+			#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = ProductionLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -285,7 +454,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			verificationCompilationConditions: ["STAGING"],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.stagingRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if !(STAGING)
+			#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = StagingLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -353,7 +535,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			swiftFileContentAfterScan: [Self.rootContent, Self.renamedLoggerContent],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.productionRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if STAGING
+			#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = ProductionLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -369,7 +564,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			swiftFileContentAfterScan: [Self.rootContent, Self.renamedLoggerContent],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.stagingRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if !(STAGING)
+			#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = StagingLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -402,7 +610,16 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			swiftFileContentAfterScan: [rootContent, Self.renamedLoggerContent],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.unconditionalRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        let logger: Logger = ProductionLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -431,7 +648,16 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			swiftFileContentAfterScan: [Self.rootContent, Self.renamedLoggerContent],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.unconditionalRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        let logger: Logger = ProductionLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -446,7 +672,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			swiftFileContentAfterScan: [Self.rootContent, Self.renamedLoggerContent],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.renamedStagingRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if !(STAGING)
+			#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = RenamedStagingLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -461,7 +700,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			swiftFileContentAfterScan: [Self.renamedRootContent, Self.loggerContent],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.stagingRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if !(STAGING)
+			#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = StagingLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -534,7 +786,16 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			swiftFileContentAfterScan: [Self.rootContent, Self.renamedUnconditionalLoggerContent],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.renamedUnconditionalRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        let logger: Logger = RenamedLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -950,7 +1211,20 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			swiftFileContentAfterScan: [Self.rootContent, configurationContent],
 		)
 
-		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": Self.stagingRootOutput])
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if !(STAGING)
+			#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger: Logger = StagingLogger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -1038,7 +1312,15 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			verificationCompilationConditions: [],
 		)
 
-		#expect(output.dependencyTreeFiles == ["StagingRoot+SafeDI.swift": Self.inactiveStagingOutput])
+		#expect(output.dependencyTreeFiles == [
+			"StagingRoot+SafeDI.swift": generatedFileHeader + """
+			#if STAGING
+			#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+
+			""",
+		])
 	}
 
 	@Test
@@ -1084,7 +1366,15 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			verificationCompilationConditions: ["DEBUG"],
 		)
 
-		#expect(output.mockFiles == ["StagingLogger+SafeDIMock.swift": Self.inactiveStagingOutput])
+		#expect(output.mockFiles == [
+			"StagingLogger+SafeDIMock.swift": generatedFileHeader + """
+			#if STAGING
+			#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+
+			""",
+		])
 		#expect(output.mockConfigurationFile == Self.inactiveStagingOutput)
 	}
 
@@ -1200,7 +1490,15 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			verificationCompilationConditions: ["DEBUG"],
 		)
 
-		#expect(output.mockFiles == ["ProductionLogger+SafeDIMock.swift": Self.inactiveStagingOutput])
+		#expect(output.mockFiles == [
+			"ProductionLogger+SafeDIMock.swift": generatedFileHeader + """
+			#if STAGING
+			#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+
+			""",
+		])
 		#expect(output.mockConfigurationFile == Self.inactiveStagingOutput)
 	}
 
@@ -1465,70 +1763,6 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 	}
 	"""
 
-	private static let stagingRootOutput = """
-	// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-	// Any modifications made to this file will be overwritten on subsequent builds.
-	// Please refrain from editing this file directly.
-
-	#if !(STAGING)
-	#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
-	#endif
-
-	extension Root {
-	    public init() {
-	        let logger: Logger = StagingLogger()
-	        self.init(logger: logger)
-	    }
-	}
-	"""
-
-	private static let renamedStagingRootOutput = """
-	// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-	// Any modifications made to this file will be overwritten on subsequent builds.
-	// Please refrain from editing this file directly.
-
-	#if !(STAGING)
-	#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
-	#endif
-
-	extension Root {
-	    public init() {
-	        let logger: Logger = RenamedStagingLogger()
-	        self.init(logger: logger)
-	    }
-	}
-	"""
-
-	private static let productionRootOutput = """
-	// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-	// Any modifications made to this file will be overwritten on subsequent builds.
-	// Please refrain from editing this file directly.
-
-	#if STAGING
-	#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
-	#endif
-
-	extension Root {
-	    public init() {
-	        let logger: Logger = ProductionLogger()
-	        self.init(logger: logger)
-	    }
-	}
-	"""
-
-	private static let unconditionalRootOutput = """
-	// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-	// Any modifications made to this file will be overwritten on subsequent builds.
-	// Please refrain from editing this file directly.
-
-	extension Root {
-	    public init() {
-	        let logger: Logger = ProductionLogger()
-	        self.init(logger: logger)
-	    }
-	}
-	"""
-
 	/// The generated mock of `Root` when `ProductionLogger` fulfills its `Logger`, without the file header.
 	private static let rootMockBody = """
 	#if DEBUG
@@ -1552,18 +1786,5 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 	    }
 	}
 	#endif
-	"""
-
-	private static let renamedUnconditionalRootOutput = """
-	// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-	// Any modifications made to this file will be overwritten on subsequent builds.
-	// Please refrain from editing this file directly.
-
-	extension Root {
-	    public init() {
-	        let logger: Logger = RenamedLogger()
-	        self.init(logger: logger)
-	    }
-	}
 	"""
 }

@@ -255,7 +255,20 @@ struct SafeDIToolDeprecationTests: ~Copyable {
 		)
 
 		#expect(output.warnings == [])
-		#expect(output.dependencyTreeFiles == Self.expectedOutput)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public init() {
+			        let dependency = Dependency()
+			        self.init(dependency: dependency)
+			    }
+			}
+			""",
+		])
 	}
 
 	// MARK: Tests – order

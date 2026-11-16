@@ -59,7 +59,19 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 		switch integration {
 		case .moduleInfo:
 			#expect(output.modules["Feature"]?.generatedFiles == [
-				"Feature.swift": generatedFileHeader + Self.featureRootInitializer,
+				integration == .moduleInfo ? "Feature.swift" : "FeatureRoot+SafeDI.swift": generatedFileHeader + """
+				extension FeatureRoot {
+				    public init() {
+				        let logger = Logger()
+				        func __safeDI_screen() -> Screen {
+				            let detail = Detail(logger: logger)
+				            return Screen(detail: detail)
+				        }
+				        let screen: Screen = __safeDI_screen()
+				        self.init(logger: logger, screen: screen)
+				    }
+				}
+				""",
 			])
 			#expect(output.modules["App"]?.generatedFiles == [
 				"App.swift": generatedFileHeader + """
@@ -72,9 +84,29 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 			])
 		case .swiftPackagePlugin:
 			#expect(output.modules["Feature"]?.generatedFiles == [
-				"FeatureRoot+SafeDI.swift": generatedFileHeader + Self.featureRootInitializer,
+				integration == .moduleInfo ? "Feature.swift" : "FeatureRoot+SafeDI.swift": generatedFileHeader + """
+				extension FeatureRoot {
+				    public init() {
+				        let logger = Logger()
+				        func __safeDI_screen() -> Screen {
+				            let detail = Detail(logger: logger)
+				            return Screen(detail: detail)
+				        }
+				        let screen: Screen = __safeDI_screen()
+				        self.init(logger: logger, screen: screen)
+				    }
+				}
+				""",
 			])
-			#expect(output.modules["App"]?.generatedFiles == [
+			#expect(output.modules["App"]?.generatedFiles == (integration == .moduleInfo ? [
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+
+				""",
+			] : [
 				"FeatureRoot+SafeDI.swift": generatedFileHeader + """
 				#if canImport(Feature)
 				import Feature
@@ -82,8 +114,14 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 
 				// SafeDI generates FeatureRoot’s init() only in Feature, the module that declares FeatureRoot. If FeatureRoot() does not compile, add the SafeDI plugin to the target that declares FeatureRoot.
 				""",
-				"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n",
-			])
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+
+				""",
+			]))
 		}
 	}
 
@@ -129,7 +167,13 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 
 			// SafeDI generates FeatureRoot’s init() only in Feature, the module that declares FeatureRoot. If FeatureRoot() does not compile, add the SafeDI plugin to the target that declares FeatureRoot.
 			""",
-			"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n",
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+
+			""",
 		])
 	}
 
@@ -244,28 +288,5 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 			seamFixtureType(named: "Screen", isSeam: screenIsSeam, declarations: ["@Instantiated let detail: Detail"]),
 			seamFixtureType(named: "FeatureRoot", isRoot: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let screen: Screen"]),
 		]
-	}
-
-	/// The `init()` `Feature` generates for `FeatureRoot`, building the tree inline.
-	private static let featureRootInitializer = """
-	extension FeatureRoot {
-	    public init() {
-	        let logger = Logger()
-	        func __safeDI_screen() -> Screen {
-	            let detail = Detail(logger: logger)
-	            return Screen(detail: detail)
-	        }
-	        let screen: Screen = __safeDI_screen()
-	        self.init(logger: logger, screen: screen)
-	    }
-	}
-	"""
-
-	private static func importBlock(_ moduleName: String) -> String {
-		"""
-		#if canImport(\(moduleName))
-		import \(moduleName)
-		#endif
-		"""
 	}
 }
