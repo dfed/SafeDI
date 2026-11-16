@@ -2244,16 +2244,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				propertiesGeneratedLater: propertiesGeneratedLater,
 				builderFunctionNames: builderFunctionNames,
 			)
-			if let generateCodeTask = unavailablePropertiesToGenerateCodeTask[cacheKey] {
+			if let cachedCode = unavailablePropertiesToGeneratedCode[cacheKey] {
+				generatedCode = cachedCode
+			} else if let generateCodeTask = unavailablePropertiesToGenerateCodeTask[cacheKey] {
 				generatedCode = try await generateCodeTask.value
 			} else {
 				let generateCodeTask = Task {
-					try await generatePropertyCode(
+					let code = try await generatePropertyCode(
 						codeGeneration: .dependencyTree,
 						unavailableProperties: unavailableProperties,
 						propertiesGeneratedLater: propertiesGeneratedLater,
 						builderFunctionNames: builderFunctionNames,
 					)
+					// A task keeps the memory its async frames took until it is released, so the cache keeps the finished code
+					// rather than the task: keeping every finished task held that memory for every scope of the tree until the
+					// tree's code was done, about 13 KB for each line generated. The task runs on this actor, so it runs after
+					// the line below caches it, and is uncached before anything that asks for the code again can look.
+					unavailablePropertiesToGeneratedCode[cacheKey] = code
+					unavailablePropertiesToGenerateCodeTask[cacheKey] = nil
+					return code
 				}
 				unavailablePropertiesToGenerateCodeTask[cacheKey] = generateCodeTask
 				generatedCode = try await generateCodeTask.value
@@ -2272,6 +2281,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Every level of the tree indents its whole subtree again, so this runs over each line once per level above it.
 			return GeneratedCodeText.indentingNonEmptyLines(of: generatedCode, by: leadingWhitespace)
 		}
+	}
+
+	/// The code tasks the generators of this scope's tree still hold (see `HeldCodeTasks`). Once the tree's code is
+	/// generated, each is a finished task, or one a scope started early for a context nothing asked for, still running.
+	/// The tree is walked with a stack, since it can be as deep as the module has types.
+	func codeTasksHeldInTree() async -> Int {
+		var generators = [self]
+		var heldTaskCount = 0
+		while let generator = generators.popLast() {
+			heldTaskCount += await generator.unavailablePropertiesToGenerateCodeTask.count
+			generators += generator.children
+		}
+		return heldTaskCount
 	}
 
 	func generateDOT() async throws -> String {
@@ -3732,7 +3754,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let builderFunctionNames: BuilderFunctionNames
 	}
 
+	/// The tasks generating this scope's dependency tree code for each context, until each finishes.
 	private var unavailablePropertiesToGenerateCodeTask = [UnavailablePropertiesCacheKey: Task<String, Error>]()
+	/// This scope's finished dependency tree code for each context.
+	private var unavailablePropertiesToGeneratedCode = [UnavailablePropertiesCacheKey: String]()
 	/// The task that builds a mock root's parameter tree. Collecting configuration types, collecting
 	/// sendable configuration type names, and generating the mock each read the same tree.
 	private var rootMockParameterTreeTask: Task<[MockTreeItem], Never>?

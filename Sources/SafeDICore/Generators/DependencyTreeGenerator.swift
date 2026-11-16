@@ -257,6 +257,12 @@ public actor DependencyTreeGenerator {
 			}
 			return generatedRoots
 		}
+		if let observer = HeldCodeTasks.observer {
+			for rootInfo in rootScopeGenerators {
+				let heldTaskCount = await rootInfo.scopeGenerator.codeTasksHeldInTree()
+				observer(heldTaskCount)
+			}
+		}
 		// The file `scan` plans for a root another module declares holds no code: that module generates the root's
 		// `init()`, so the file says where, and what to do when that module does not run SafeDI. A root without
 		// dependencies gets no `init()` in its own module either, so its file says nothing.
