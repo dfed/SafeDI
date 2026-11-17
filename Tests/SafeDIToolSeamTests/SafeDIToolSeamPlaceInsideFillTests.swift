@@ -1031,7 +1031,7 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			    nonisolated public enum SafeDIScope_Api {
 			        nonisolated public struct inner_serviceBuilder_Values {
 			            public var mark: Mark? { __safeDI_mark.instance }
-			            let __safeDI_mark: LazilyInstantiated<Mark?>
+			            public let __safeDI_mark: LazilyInstantiated<Mark?>
 
 			            init(mark: LazilyInstantiated<Mark?>) {
 			                __safeDI_mark = mark

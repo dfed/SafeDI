@@ -542,7 +542,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        nonisolated public struct api_Values {
 		            package var theme: Theme? { __safeDI_theme.instance }
 		            public let badge: Badge
-		            let __safeDI_theme: LazilyInstantiated<Theme?>
+		            package let __safeDI_theme: LazilyInstantiated<Theme?>
 
 		            init(theme: LazilyInstantiated<Theme?>, badge: Badge) {
 		                __safeDI_theme = theme
@@ -659,7 +659,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        nonisolated public struct api_Values {
 		            internal var color: Color? { __safeDI_color.instance }
 		            public let swatch: Swatch
-		            let __safeDI_color: LazilyInstantiated<Color?>
+		            internal let __safeDI_color: LazilyInstantiated<Color?>
 
 		            init(color: LazilyInstantiated<Color?>, swatch: Swatch) {
 		                __safeDI_color = color
