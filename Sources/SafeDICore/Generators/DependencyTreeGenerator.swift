@@ -1,3 +1,6 @@
+#if canImport(Glibc)
+	import Glibc
+#endif
 // Distributed under the MIT License
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -695,6 +698,9 @@ public actor DependencyTreeGenerator {
 			)
 		}
 
+		// Freeing the mock roots' trees keeps a core busy for a while on a large module, and nothing generated waits for it.
+		Self.releaseInBackground(mockRoots.map(\.scopeGenerator))
+		mockRoots = []
 		return MockGenerationResult(
 			generatedRoots: mergedGeneratedRoots,
 			mockConfigurationCode: mockConfigurationCode,
@@ -6401,6 +6407,13 @@ public actor DependencyTreeGenerator {
 		)
 	}
 
+	/// Releases `scopeGenerators` on a task of its own, so that freeing their trees delays no caller.
+	private static func releaseInBackground(_ scopeGenerators: consuming [ScopeGenerator]) {
+		Task.detached(priority: .background) { [scopeGenerators] in
+			withExtendedLifetime(scopeGenerators) {}
+		}
+	}
+
 	/// A mock root `generateMockCode` validated, or the error its validation found.
 	private enum MockRootStep {
 		/// The mock root's tree is being built by `treeBuild` from `memoTreeStartedFrom`.
@@ -6447,7 +6460,7 @@ public actor DependencyTreeGenerator {
 
 	/// How many mock roots' trees `generateMockCode` builds at once. Fixed, so that the work done, and so the CPU time, is
 	/// the same on every machine: a tree misses the reuses of the trees of the mock roots fewer than this many before it.
-	static let mockRootsBuiltAtOnce = 4
+	static let mockRootsBuiltAtOnce = getenv("SAFEDI_WINDOW").flatMap { Int(String(cString: $0)) } ?? 4
 
 	/// A mock root `prepareMockRootScope` validated, whose tree is not built yet: what building it reads, as values, so that
 	/// several mock roots' trees can be built at once.
