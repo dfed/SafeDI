@@ -5308,6 +5308,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 				)
 			} else {
+				// A public mock takes its received values by value, so a call of one passes a `LazilyInstantiated` property's
+				// instance (`<label>.instance`): the instance is created at the call, even when nothing in the called mock's
+				// tree reads it, where a seam's generated-only initializer takes it deferred (`SeamSignature.Parameter.Deferral`).
 				try instantiable.generateArgumentList(
 					unavailableProperties: bodyUnavailableProperties(unavailableProperties),
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
