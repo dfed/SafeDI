@@ -432,7 +432,8 @@ public struct SeamSignature: Sendable {
 			public let declarationLocation: Dependency.DeclarationLocation?
 			/// The place whose fill's tree holds the path.
 			public let pathPlace: UncarriedDeclaration.PresentedPlace
-			/// The type whose scope makes the call, the property it builds the seam under, and the seam it calls.
+			/// The type whose scope makes the call, the property it builds the seam under, and the seam it calls: the filled seam,
+			/// or a seam that builds it again, such as one that passes its place up, which the message names as written.
 			public let callingType: TypeDescription
 			public let callProperty: Property
 			public let calledSeam: TypeDescription
@@ -450,7 +451,8 @@ public struct SeamSignature: Sendable {
 			public let field: Field
 			/// The place whose fill makes the call.
 			public let reenteringPlace: UncarriedDeclaration.PresentedPlace
-			/// The property the call builds the seam under, and the seam it calls.
+			/// The property the call builds the seam under, and the seam it calls: the filled seam, or a seam that builds it
+			/// again, such as one that passes its place up, which the message names as written.
 			public let callProperty: Property
 			public let calledSeam: TypeDescription
 		}
