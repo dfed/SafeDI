@@ -1089,11 +1089,15 @@ enum GraphFuzzerCallingMockCheck {
 			return .skipChildren
 		}
 
+		/// Whether `node` is a member of an extension of the type itself, never of a type the extension nests, such as a
+		/// seam's builder struct inside its scope enum, whose initializers are not the type's.
 		private func isInExtensionOfType(_ node: some SyntaxProtocol) -> Bool {
 			var parent = node.parent
 			while let ancestor = parent {
 				if let extensionDeclaration = ancestor.as(ExtensionDeclSyntax.self) {
 					return extensionDeclaration.extendedType.trimmedDescription == typeName
+				} else if ancestor.is(StructDeclSyntax.self) || ancestor.is(ClassDeclSyntax.self) || ancestor.is(EnumDeclSyntax.self) || ancestor.is(ActorDeclSyntax.self) {
+					return false
 				} else {
 					parent = ancestor.parent
 				}

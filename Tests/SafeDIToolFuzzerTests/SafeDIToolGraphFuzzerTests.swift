@@ -1030,17 +1030,17 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_acceptPlaceForwardingNothingBesidePlainPlace_whenSeamCorpusDeclaresHoleImplInNamespace() async throws {
-		// Seed 663 declares `HoleImpl` in an extension of `HoleNamespace` and holds a place that forwards nothing beside the
+		// Seed 311 declares `HoleImpl` in an extension of `HoleNamespace` and holds a place that forwards nothing beside the
 		// plain place of `any HoleService`, of the same builder: the place names `HoleImpl` as its declaration spells it,
 		// `HoleNamespace.HoleImpl`, which the calling module's fill declares, so the tool accepts the graph.
-		let fixture = GraphFuzzerGenerator.fixture(forSeed: 663, features: [.generateDependencyTree])
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 311, features: [.generateDependencyTree])
 		#expect(GraphFuzzerFeature.seamDrawFeatures(of: fixture).isSuperset(of: [.holeImplInNamespace, .holeNothingForwardedPlaceBesidePlain]))
-		#expect(fixture.swiftFileContent.contains { $0.contains("@Instantiated(fulfilledByType: \"S663_HoleNamespace.S663_HoleImpl\") let holeServiceLater") })
+		#expect(fixture.swiftFileContent.contains { $0.contains("@Instantiated(fulfilledByType: \"S311_HoleNamespace.S311_HoleImpl\") let holeServiceLater") })
 
 		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
 
 		guard case .accepted = runs.firstOutcome else {
-			Issue.record("Seed 663 is expected to be accepted:\n\(runs.firstOutcome.description)")
+			Issue.record("Seed 311 is expected to be accepted:\n\(runs.firstOutcome.description)")
 			return
 		}
 	}
