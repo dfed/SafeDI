@@ -589,6 +589,7 @@ extension DependencyTreeGenerator {
 		}
 		return combined.sorted { first, second in
 			if first.carried.field.declarationLocation != second.carried.field.declarationLocation {
+				// No message reads this order, since each re-sorts what it names by name; it keeps the stored list deterministic.
 				Dependency.DeclarationLocation.precedesInSourceOrder(first.carried.field.declarationLocation, second.carried.field.declarationLocation)
 			} else {
 				first.identity.lexicographicallyPrecedes(second.identity)
@@ -1601,7 +1602,7 @@ extension DependencyTreeGenerator {
 				for (first, hidings) in groups {
 					findings.append(.init(hole: hole, kind: .declarationBoundOnPathToReenteringCall(reader: reader, readsOnlyIfAvailable: onlyIfAvailable, hidings: hidings, reenteredPlace: first.reenteredPlace, fillingModule: first.fillingModule, seamModule: first.reenteredSeamModule)))
 				}
-			} else if case let reenteringPlaceFields = hole.reenteringPlaceFields.filter({ $0.carried.field.property.label == property.label && provides($0.carried.field, property) }), !reenteringPlaceFields.isEmpty {
+			} else if case let reenteringPlaceFields = hole.reenteringPlaceFields.filter({ provides($0.carried.field, property) }), !reenteringPlaceFields.isEmpty {
 				// The same for a field of a place whose fill builds that seam again, which the visible build reports where the fill
 				// reads the label from the caller's scope (`checkReadFromCallersScope`): tested after the declarations on the path,
 				// as the visible build tests those first, and before the field branch, since a field bound above the seam call does
