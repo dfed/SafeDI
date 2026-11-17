@@ -277,9 +277,15 @@ enum GraphFuzzerSeamDependencyDraw {
 	static func drawn(in fixture: GraphFuzzerFixture) -> (movesDeclaration: Bool, drawsChain: Bool) {
 		var drawn = (movesDeclaration: false, drawsChain: false)
 		let chainNames = [chainLinkSuffix, chainBaseSuffix, chainLeafSuffix].map { fixture.typeNamePrefix + $0 }
-		// The hole draws' `HoleDeep`, `HoleNest` and `HoleNestScreen`, and the public mock corpus's `PlaceInFillInner`,
-		// which their draws declare beneath the seam's module themselves, are neither.
-		let holeDrawNames = ["HoleDeep", "HoleNest", "HoleNestScreen", "PlaceInFillInner"].map { fixture.typeNamePrefix + $0 }
+		// The hole draws' `HoleDeep`, `HoleNest` and `HoleNestScreen`, the public mock corpus's `PlaceInFillInner`, and the
+		// types `addingFillCallShapes`, `addingCarriedLevelShapes` and `addingReenteredFillShapes` declare there, which their
+		// draws declare beneath the seam's module themselves, are neither.
+		let holeDrawNames = [
+			"HoleDeep", "HoleNest", "HoleNestScreen", "PlaceInFillInner",
+			"FillCallBadge", "FillCallInner",
+			"CarriedInner", "CarriedScreen", "CarriedServiceImpl", "CarriedOuter",
+			"ReenteredLabel", "ReenteredMark", "ReenteredSubA", "ReenteredSubB", "ReenteredTop",
+		].map { fixture.typeNamePrefix + $0 }
 		for content in fixture.swiftFileContent {
 			guard let module = GraphFuzzerModule(declaredIn: content), module < .seamModule,
 			      !declaredTypeNames(in: content, prefix: fixture.typeNamePrefix).contains(where: holeDrawNames.contains)
