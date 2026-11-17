@@ -8540,7 +8540,7 @@ public actor DependencyTreeGenerator {
 		var candidates = [Candidate]()
 		for calledType in publicMockCalls.keys.sorted() {
 			guard let publicMockCall = publicMockCalls[calledType] else { continue }
-			let readers = InnerScopeReaders(enumsByKey: publicMockCall.calledBuilders.enumsByKey, nameByKey: [:])
+			let readers = InnerScopeReaders(enumsByKey: publicMockCall.calledBuilders.enumsByKey)
 			for hole in publicMockCall.holes {
 				guard let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap),
 				      Self.inaccessibleConstructions(
