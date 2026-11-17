@@ -143,7 +143,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			publicMockLevelFunctions = PublicMockLevelFunctions(
 				dispatchers: fillDispatchers,
 				fillParametersByKey: fillParametersByKey,
-				rootKeys: builderCallArguments.compactMap(\.builderStruct?.rootDispatcherKey),
+				roots: builderCallArguments.compactMap { builderCallArgument in
+					builderCallArgument.builderStruct.flatMap { builderStruct in
+						builderStruct.rootDispatcherKey.map { PublicMockLevelFunctions.Root(label: builderCallArgument.label, dispatcherKey: $0, up: builderStruct.upValue, carriedStructs: builderStruct.carriedStructs) }
+					}
+				},
 				reservedNames: namesTakenByCall.union(fillNames),
 			)
 		} else {
@@ -1094,24 +1098,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// its builders, which the closure passes on to the called `mock()`: a builder a person writes.
 		enum OverrideHanding: Sendable {
 			/// Nothing a person writes: the call is made in a public mock's body, which holds only the builder struct its
-			/// caller built, and passes a place of the builder up; or it fills some places of the builder and passes others up.
+			/// caller built, and passes the builder up whole.
 			case none
 			/// The builder the calling internal mock takes, `value`, which it passes up whole.
 			case callersBuilder
-			/// A function over the call's fill: the call fills every place the builder reaches.
+			/// A function over the call's fill, where the root level function's every member fills the one place the builder
+			/// reaches: a call that passes a place up, or fills some places and passes others up, offers none
+			/// (`publicMockOverrideBuilders`).
 			case fills
 		}
 
-		/// What a call passes a public mock's builder whose places it fills: the call of the root level function of the
-		/// dispatcher of `rootDispatcherKey` (`PublicMockLevelFunctions`), handed `upValue` where a route passes a place up.
+		/// What a call passes a public mock's builder: the call of the root level function of the dispatcher of
+		/// `rootDispatcherKey` (`PublicMockLevelFunctions`), which takes `upValue` exactly where a route passes a place up
+		/// (`PublicMockLevelFunctions.Function.takesUp`), or, where the call fills no place of the builder, `upValue` itself.
 		struct PublicMockBuilderStruct: Sendable {
-			/// The key of the root enum the builder is handed.
-			let enumKey: SeamSignature.ScopeEnum.Key
-			/// The key of the dispatcher whose level function the call passes.
-			let rootDispatcherKey: String
+			/// The key of the dispatcher whose level function the call passes, or `nil` where the call fills no place of the
+			/// builder.
+			let rootDispatcherKey: String?
 			/// The struct the caller passes up, of the called mock's root level: the member of the caller's own struct, or the
-			/// struct of the builder the caller takes; `nil` where the call fills every place the builder reaches.
-			let upValue: String?
+			/// struct of the builder the caller takes.
+			let upValue: String
 			/// On a route to a place inside a fill of the call, the name the caller's tree binds the struct its own member for the
 			/// call's case returns under, by the name a fill takes the struct of its level under.
 			let carriedStructs: [String: String]
@@ -3747,7 +3753,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// The called mock's one level holds every place the builder reaches, so its root level function's every member is a
 				// fill, which takes no value beside its payload. One builder a person writes stands for every place, so every place
 				// must be filled by one fill: a fill is generated per place, so a builder with two places gets no closure.
-				let members = builderCallArgument.builderStruct.flatMap { publicMockLevelFunctions?.rootMembers(ofDispatcherKeyed: $0.rootDispatcherKey) } ?? []
+				let members = builderCallArgument.builderStruct?.rootDispatcherKey.flatMap { publicMockLevelFunctions?.rootMembers(ofDispatcherKeyed: $0) } ?? []
 				let fillTargets = members.compactMap(\.fillTakingOnlyItsPayload)
 				guard fillTargets.count == members.count, Set(fillTargets.map(\.key)).count == 1, let target = fillTargets.first, let fill = propertiesToGenerate.first(where: { $0.fillKey == target.key && $0.fillEmitsCode }), fill.fillHole?.forwardedType == nil || fill.fillReturnsWrapperBuilder else { return nil }
 				let fields = fill.fillMemberParameterFields(takingPayloadFields: true)
@@ -5068,15 +5074,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return generatedProperties
 	}
 
-	/// What this scope's call of another module's public mock passes each builder whose places it fills, by label: the call of
-	/// the builder's root level function (`PublicMockLevelFunctions`).
+	/// What this scope's call of another module's public mock passes each builder, by label: the call of the builder's root
+	/// level function (`PublicMockLevelFunctions.rootCallsByLabel`), or the struct the caller passes up where the call fills
+	/// no place of the builder.
 	nonisolated var publicMockBuilderStructValuesByLabel: [String: String] {
 		var valuesByLabel = [String: String]()
 		for builderCallArgument in builderCallArguments {
 			guard let builderStruct = builderCallArgument.builderStruct else { continue }
-			valuesByLabel[builderCallArgument.label] = publicMockLevelFunctions?.rootCall(ofDispatcherKeyed: builderStruct.rootDispatcherKey, up: builderStruct.upValue, carriedStructs: builderStruct.carriedStructs)
-				?? builderStruct.upValue
-				?? ""
+			valuesByLabel[builderCallArgument.label] = publicMockLevelFunctions?.rootCallsByLabel[builderCallArgument.label] ?? builderStruct.upValue
 		}
 		return valuesByLabel
 	}

@@ -85,19 +85,33 @@ struct PublicMockLevelFunctions: Sendable {
 		return upNames.claim("up")
 	}
 
+	/// A builder the call passes the root level function of: the label it passes it under, the key of the root dispatcher, the
+	/// struct the caller passes up, which the function takes where a route passes a place up, and the struct `carriedStructs`
+	/// names for each struct of the caller's levels it is handed, by the name a fill takes it under.
+	struct Root: Sendable {
+		let label: String
+		let dispatcherKey: String
+		let up: String
+		let carriedStructs: [String: String]
+	}
+
 	/// The functions, in the order they are first reached.
 	private(set) var functions = [Function]()
 	/// The name each function takes the caller's struct of its level under.
 	let upName: String
 	/// The index of the function each root dispatcher's key is handed to with no value bound.
 	private(set) var rootFunctionIndexByKey = [String: Int]()
+	/// What the call passes each of its roots, by label: the call of the root level function, handed the caller's struct
+	/// exactly where the function takes it (`Function.takesUp`), or, for a root whose dispatcher the call declares none of,
+	/// the caller's struct itself, every place passed up.
+	private(set) var rootCallsByLabel = [String: String]()
 
 	/// The level functions of a call whose dispatchers are `dispatchers` and whose fills take `fillParametersByKey` beside
-	/// their case's payload, for the root dispatchers of `rootKeys`.
+	/// their case's payload, for `roots`.
 	init(
 		dispatchers: [ScopeGenerator.FillDispatcher],
 		fillParametersByKey: [String: [SeamSignature.Hole.Field]],
-		rootKeys: [String],
+		roots: [Root],
 		reservedNames: Set<String>,
 	) {
 		let dispatchersByKey = Dictionary(dispatchers.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
@@ -139,7 +153,8 @@ struct PublicMockLevelFunctions: Sendable {
 			let ownEnvironment = Dictionary(parameters.map { ($0.property.label, $0) }, uniquingKeysWith: { first, _ in first })
 			var members = [Member]()
 			for dispatcherCase in dispatcher.cases {
-				guard let target = dispatcherCase.target else {
+				// A case whose target is neither a fill nor a level is passed up.
+				guard let target = dispatcherCase.target, fillParametersByKey[target.key] != nil || dispatchersByKey[target.key] != nil else {
 					members.append(.passedUp(caseName: dispatcherCase.name))
 					continue
 				}
@@ -190,16 +205,14 @@ struct PublicMockLevelFunctions: Sendable {
 						Argument(label: parameter.property.label, readsPayload: payloadFields[parameter.property.label] != nil, heldForm: parameter.property, handedForm: parameter.property)
 					}
 					members.append(.level(caseName: dispatcherCase.name, functionIndex: childIndex, arguments: arguments))
-				} else {
-					members.append(.passedUp(caseName: dispatcherCase.name))
 				}
 			}
 			functions[index].members = members
 			return index
 		}
-		for key in rootKeys {
-			guard rootFunctionIndexByKey[key] == nil, let dispatcher = dispatchersByKey[key] else { continue }
-			rootFunctionIndexByKey[key] = function(of: dispatcher, given: [:])
+		for root in roots {
+			guard rootFunctionIndexByKey[root.dispatcherKey] == nil, let dispatcher = dispatchersByKey[root.dispatcherKey] else { continue }
+			rootFunctionIndexByKey[root.dispatcherKey] = function(of: dispatcher, given: [:])
 		}
 		// A function takes the caller's struct where a member passes a place up, or hands it to a level beneath that does.
 		changed = true
@@ -222,6 +235,9 @@ struct PublicMockLevelFunctions: Sendable {
 				}
 			}
 		}
+		for root in roots {
+			rootCallsByLabel[root.label] = rootFunctionIndexByKey[root.dispatcherKey].map { rootCall(of: functions[$0], for: root) } ?? root.up
+		}
 	}
 
 	/// The members of the root level function of the dispatcher of `key`, or `nil` where no function is.
@@ -229,17 +245,15 @@ struct PublicMockLevelFunctions: Sendable {
 		rootFunctionIndexByKey[key].map { functions[$0].members }
 	}
 
-	/// The call of the root level function of the dispatcher of `key`, handed `up` where it takes the caller's struct, and the
-	/// struct `carriedStructs` names for each struct of the caller's levels it is handed, by the name a fill takes it under.
-	func rootCall(ofDispatcherKeyed key: String, up: String?, carriedStructs: [String: String]) -> String? {
-		guard let index = rootFunctionIndexByKey[key] else { return nil }
-		let function = functions[index]
+	/// The call of `function`, a root level function, handed `root`'s struct where it takes the caller's struct, and the struct
+	/// `root.carriedStructs` names for each struct of the caller's levels it is handed, by the name a fill takes it under.
+	private func rootCall(of function: Function, for root: Root) -> String {
 		var arguments = [String]()
 		if function.takesUp {
-			arguments.append("\(upName.spelledAsArgumentLabel): \(up ?? "")")
+			arguments.append("\(upName.spelledAsArgumentLabel): \(root.up)")
 		}
 		for carried in function.carriedInnerScopes {
-			arguments.append("\(carried.upName.spelledAsArgumentLabel): \(carriedStructs[carried.name] ?? "")")
+			arguments.append("\(carried.upName.spelledAsArgumentLabel): \(root.carriedStructs[carried.name] ?? "")")
 		}
 		return "\(function.name)(\(arguments.joined(separator: ", ")))"
 	}
