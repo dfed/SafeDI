@@ -1174,41 +1174,128 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_compilesHandWrittenSwitch_whenCallerOpensOrLeavesAnInnerSeam() async throws {
+	mutating func generate_buildsEachPlaceFromHandWrittenBuilder_whenInnerSeamHoldsPlaceOfSeamsHoleType() async throws {
+		// `Host`'s builder struct reaches `Inner`'s place through a level, so its enum declares no case a person could switch
+		// over: the readable initializer takes the one builder, and `Host` and the `Inner` it calls each build their place
+		// from it.
 		let feature = [
 			Self.service,
 			Self.type("Inner", seam: true, ["@Instantiated public let service: any Service"]),
 			Self.type("Host", seam: true, ["@Instantiated public let inner: Inner", "@Instantiated public let service: any Service"]),
 		]
-		_ = try await compiledOutput(of: Self.modules(feature: feature, app: [
-			"""
-			struct DefaultService: Service {}
+		let modules = Self.modules(feature: feature, app: [Self.handWritten("""
+		struct CountedService: Service {
+		    let count: Int
+		}
 
-			func opened() -> Host {
-			    Host(serviceBuilder: { scope in
-			        switch scope {
-			        case .service: DefaultService()
-			        case let .inner(inner):
-			            switch inner {
-			            case .service: DefaultService()
-			            }
-			        }
-			    })
-			}
+		func host() -> Host {
+		    var count = 0
+		    return Host(serviceBuilder: {
+		        count += 1
+		        return CountedService(count: count)
+		    })
+		}
+		""")], featureConfiguration: plainDependencyTreeInitializersConfiguration)
+		let output = try await compiledOutput(of: modules)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Host {
+		    nonisolated public enum SafeDIScope_Service {
+		        nonisolated public struct inner_Values: Sendable {}
 
-			func notOpened() -> Host {
-			    Host(serviceBuilder: { scope in
-			        switch scope {
-			        case .service, .inner: DefaultService()
-			        }
-			    })
-			}
+		        nonisolated public struct service_Values {
+		            public let inner: Inner
+		        }
 
-			func ignored() -> Host {
-			    Host(serviceBuilder: { _ in DefaultService() })
-			}
-			""",
-		], featureConfiguration: plainDependencyTreeInitializersConfiguration))
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let inner: (inner_Values) -> Inner.SafeDIScope_Service.__safeDI_Builder<__safeDI_Built>
+		            public let service: (service_Values) -> __safeDI_Built
+
+		            public init(inner: @escaping (inner_Values) -> Inner.SafeDIScope_Service.__safeDI_Builder<__safeDI_Built>, service: @escaping (service_Values) -> __safeDI_Built) {
+		                self.inner = inner
+		                self.service = service
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.service = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public init(serviceBuilder: @escaping () -> any Service) {
+		        self.init(__safeDI_serviceBuilder: .init(__safeDI_noScope: serviceBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+		        func __safeDI_inner() -> Inner {
+		            _ = Inner.__safeDI_Inner_8DBB5EEFBE99D753.self
+		            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder.inner(SafeDIScope_Service.inner_Values()))
+		        }
+		        let inner: Inner = __safeDI_inner()
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values(inner: inner))
+		        self.init(inner: inner, service: service)
+		    }
+		}
+
+		extension Host {
+		    public enum __safeDI_Host_548D1F04EAE15611 {}
+		}
+
+		extension Inner {
+		    nonisolated public enum SafeDIScope_Service {
+		        nonisolated public struct service_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values) -> __safeDI_Built
+
+		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                self.service = service
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.service = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public init(serviceBuilder: @escaping () -> any Service) {
+		        self.init(__safeDI_serviceBuilder: .init(__safeDI_noScope: serviceBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values())
+		        self.init(service: service)
+		    }
+		}
+
+		extension Inner {
+		    public enum __safeDI_Inner_8DBB5EEFBE99D753 {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader])
+
+		let description = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("host()")], filesToDelete: &filesToDelete)
+
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe host()
+			Host
+			  inner: Inner
+			    service: CountedService
+			      count: Int 1
+			  service: CountedService
+			    count: Int 2
+
+			""")
+		}
 	}
 
 	@Test
