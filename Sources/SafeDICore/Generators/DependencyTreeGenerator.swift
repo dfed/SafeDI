@@ -1943,8 +1943,8 @@ public actor DependencyTreeGenerator {
 
 		/// An `error:` line that names the type declaring the wrapper, since Xcode drops notes from build-tool
 		/// output, and a `note:` at that declaration so command-line builds can navigate to it. The remedy names
-		/// every type that declares a wrapper `captures` reports captured at the same receive: the receive takes one
-		/// type, so each of them must change for any of its errors to clear.
+		/// every type that declares a wrapper `captures` reports captured at the same receive: each named declaration
+		/// feeds that receive, and changing all of them clears every one of these errors.
 		private static func sourceDiagnostics(of capture: ScopeGenerator.NonSendableWrapperCapture, among captures: [ScopeGenerator.NonSendableWrapperCapture]) -> [SourceDiagnostic] {
 			let wrapperProperty = capture.wrapperProperty
 			let label = wrapperProperty.label
