@@ -2028,10 +2028,11 @@ jobs:
       # imports, which `SafeDIToolTestSupport` depending on the
       # executable target `SafeDITool` did.
       - name: Build the SafeDITool Test Support Target Alone with Swift Build
-        # Measured 26 s on a 10-core Mac (Swift 6.4.2, swift-syntax built
-        # from source into the empty scratch path); set from this job's
-        # first runs on the 4-core Linux runner, which has no measurement yet.
-        timeout-minutes: 15
+        # Every run is cold: swift-syntax builds from source into the empty
+        # scratch path. Ten CI runs on the 4-core Linux runner took at most
+        # 1.9 minutes (2026-11-16 and 17); the limit is about two and a half
+        # times that, rounded up for the runner's variance.
+        timeout-minutes: 5
         run: swift build --build-system swiftbuild --traits sourceBuild --target SafeDIToolTestSupport --scratch-path "$RUNNER_TEMP/swiftbuild-test-support"
       # A time limit for the macOS job's reason: about twice the longest
       # duration measured. On 2026-11-15, eight successful runs of this
