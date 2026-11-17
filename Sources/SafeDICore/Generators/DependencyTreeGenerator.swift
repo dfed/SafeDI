@@ -229,7 +229,7 @@ public actor DependencyTreeGenerator {
 	}
 
 	public func generatePerRootCodeTrees() async throws -> [GeneratedRoot] {
-		let rootScopeGenerators = try rootScopeGenerators
+		let rootScopeGenerators = try await rootScopeGenerators
 		try Self.validateFills(
 			inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator),
 			callerModule: seams.currentModule,
@@ -1470,7 +1470,7 @@ public actor DependencyTreeGenerator {
 	}
 
 	public func generateDOTTree() async throws -> String {
-		let rootScopeGenerators = try rootScopeGenerators
+		let rootScopeGenerators = try await rootScopeGenerators
 
 		let dependencyTree = try await withThrowingTaskGroup(
 			of: String.self,
@@ -3239,10 +3239,10 @@ public actor DependencyTreeGenerator {
 	private var validatedScopes = Set<Scope>()
 
 	private var rootScopeGenerators: [RootScopeInfo] {
-		get throws {
+		get async throws {
 			// The trees of the foreign seams with holes, built inline with the fills this module generates.
 			var inlineForeignSeamTrees = [ScopeGenerator]()
-			let rootScopeGenerators: [RootScopeInfo] = try {
+			let rootScopeGenerators: [RootScopeInfo] = try await { () async throws -> [RootScopeInfo] in
 				// The roots' trees and the generated seams' trees build exactly the reachable types, the foreign seams
 				// their trees call included. First, before any seam signature is computed: a seam's parameters are keyed
 				// by property, so a seam that repeats a label is reported here rather than generating a tier that
@@ -3258,6 +3258,14 @@ public actor DependencyTreeGenerator {
 				try validateReachableTypeDescriptions()
 
 				let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
+				// A module whose declarations hold no seam builds its roots' trees from the scopes the walks below validate,
+				// which no walk changes, so the trees are built while the walks run. Only a tree whose scopes the walks
+				// accept is generated: a walk's error is thrown first, and the trees are dropped unread.
+				let rootTreesBuiltDuringValidation = seams.isEmpty ? buildingRootTrees(
+					of: rootInstantiables.sorted().compactMap { typeDescription in
+						typeDescriptionToScopeMap[typeDescription].map { (typeDescription: typeDescription, scope: $0) }
+					},
+				) : nil
 				var receivedPropertiesCache = ReceivedPropertiesCache()
 				try validatePropertiesAreFulfillable(
 					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
@@ -3282,33 +3290,57 @@ public actor DependencyTreeGenerator {
 				// checked where it is generated, so the validated scopes decide nothing about access in a module
 				// that holds a seam: a root's tree constructs the seam with its generated initializer, and the
 				// seam's tree compiles in the module that declares the seam.
-				guard !seams.isEmpty else {
-					// Creating a generator starts generating its code, so every construction must be known to compile first.
-					let rootScopesToGenerate = try rootScopesThisModuleGenerates(
-						from: rootInstantiables.sorted().compactMap { typeDescription in
-							typeDescriptionToScopeMap[typeDescription].map { (typeDescription: typeDescription, scope: $0) }
-						},
-					)
-					var constructionMemo = ConstructionMemo()
-					return try rootScopesToGenerate.map { typeDescription, scope in
-						try RootScopeInfo(
+				guard let rootTreesBuiltDuringValidation else {
+					return try seamWorldRootScopeGenerators()
+				}
+				// Every construction must be known to compile before a tree is generated.
+				let rootScopesToGenerate = try rootScopesThisModuleGenerates(
+					from: rootInstantiables.sorted().compactMap { typeDescription in
+						typeDescriptionToScopeMap[typeDescription].map { (typeDescription: typeDescription, scope: $0) }
+					},
+				)
+				let rootTrees = try await rootTreesBuiltDuringValidation.value
+				return rootScopesToGenerate.compactMap { typeDescription, scope in
+					rootTrees[typeDescription].map { scopeGenerator in
+						RootScopeInfo(
 							typeDescription: typeDescription,
 							instantiable: scope.instantiable,
 							sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-							scopeGenerator: scope.createScopeGenerator(
-								for: nil,
-								lazilyInstantiatedInstanceProperties: [],
-								erasedToConcreteExistential: false,
-								declaredTypeNames: declaredTypeNames,
-								constructionMemo: &constructionMemo,
-							),
+							scopeGenerator: scopeGenerator,
 						)
 					}
 				}
-				return try seamWorldRootScopeGenerators()
 			}()
 			try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator) + inlineForeignSeamTrees)
 			return rootScopeGenerators
+		}
+	}
+
+	/// Starts building, on a task of its own, the trees of the roots among `rootScopes` that this module generates
+	/// (`rootScopesThisModuleGenerates(from:)` keeps those declared in its own files), in order, sharing one construction
+	/// memo as the trees built one after another do. The task reads a snapshot of each root's scopes, taken now.
+	private func buildingRootTrees(of rootScopes: [(typeDescription: TypeDescription, scope: Scope)]) -> Task<[TypeDescription: ScopeGenerator], any Error> {
+		let isOwnFile = emittingModule.map { emittingModule in { (filePath: String) in emittingModule.isOwnFile(filePath) } }
+		let roots = rootScopes.compactMap { typeDescription, scope -> (TypeDescription, ConstructionGraph)? in
+			guard let isOwnFile else { return (typeDescription, ConstructionGraph(rootedAt: scope)) }
+			guard scope.instantiable.sourceFilePath.map(isOwnFile) == true else { return nil }
+			return (typeDescription, ConstructionGraph(rootedAt: scope))
+		}
+		let declaredTypeNames = declaredTypeNames
+		// The task inherits the task-local values the memo oracle reads, and reads nothing of this generator's.
+		return Task {
+			var constructionMemo = ConstructionMemo()
+			var trees = [TypeDescription: ScopeGenerator]()
+			for (typeDescription, graph) in roots {
+				trees[typeDescription] = try graph.createScopeGenerator(
+					for: nil,
+					lazilyInstantiatedInstanceProperties: [],
+					erasedToConcreteExistential: false,
+					declaredTypeNames: declaredTypeNames,
+					constructionMemo: &constructionMemo,
+				)
+			}
+			return trees
 		}
 	}
 
