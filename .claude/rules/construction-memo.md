@@ -19,7 +19,7 @@ paths:
 | Input or stored value | Classification |
 |---|---|
 | `scope`, `property`, `erasedToConcreteExistential`, `forMockGeneration`, `startsCodeGeneration`, `validatesForwardedProperties`, `buildsWithHandWrittenMocks` | Key. |
-| `lazilyInstantiatedInstanceProperties`, `reboundProperties` | Key, with the spellings of both sets. |
+| `lazilyInstantiatedInstanceProperties`, `reboundProperties` | Key, with the spellings of both sets, compared by UTF-8 bytes, since `String`'s `==` reads canonically equivalent labels as one. |
 | `previousPassGenerator` and everything read from it (`foundCycleParameters`, `receivedBuilderLoops`, the child taken by index) | Key (its identity). Only first-pass entries cross trees, and their key holds `nil` there. |
 | `propertyStack`, `concreteTypeStack`, `depthStack` | Logged: read only through `declarationClosedOn`, whose answer is the declaration closed on. `closedOnFillPathDeclarationsBeneath` reads the stack unlogged, only where `fillPathStackCount > 0`: inside a fill, excluded. |
 | `nearestDeclarations` | Logged: `nearestDeclaration`, `binding`. |
