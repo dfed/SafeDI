@@ -982,8 +982,9 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachGatingDraw() {
 		// The gating draws – a seam and its caller forwarding one label, a public mock that builds itself again with a
-		// place beneath, a place inside a public mock's fill, and a seam or a public mock that binds a value before an
-		// instantiator nothing beneath reads it from (the retention oracle's) – gate generator changes only while each of
+		// place beneath, a place inside a public mock's fill, a seam or a public mock that binds a value before an
+		// instantiator nothing beneath reads it from, and a loop of builders around places inside a seam (the retention
+		// oracle's) – gate generator changes only while each of
 		// their shapes lands in at least ten graphs the tool accepts, which the corpus runs pin exactly.
 		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isForwardedLabelAcrossSeamCallShape || feature.isRetentionShape || feature.isForwardingPlaceShape {
 			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
@@ -6273,13 +6274,13 @@ struct SafeDIToolGraphFuzzerTests {
 	static let gatingDrawJudgedGraphFloor = 10
 
 	/// What the retention oracle judges over the seam corpus (`Corpus.retentionCounts`). Pins: derived on CI.
-	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 61, judgedDrawingRetentionShape: 44, judgedThroughHandWrittenBuilder: 33, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 30, "SendableErasedInstantiator": 16, "Instantiator": 29, "SendableInstantiator": 11])
+	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 61, judgedDrawingRetentionShape: 51, judgedThroughHandWrittenBuilder: 33, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 30, "SendableErasedInstantiator": 16, "Instantiator": 29, "SendableInstantiator": 11])
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
-	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 561, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
+	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 567, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x68E8DD2A5FA95F82
+	static let seamCorpusFixtureHash: UInt64 = 0x53E979C1BCE5A958
 	static let seamCorpusAcceptedSeedCount = 289
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -6356,6 +6357,10 @@ struct SafeDIToolGraphFuzzerTests {
 		.forwardedLabelAcrossSeamCallSameClassType: 18,
 		.forwardedLabelAcrossSeamCallSameValueType: 26,
 		.forwardedLabelAcrossSeamCallSendable: 29,
+		.retentionLoopOfBuilders: 84,
+		.retentionLoopOfBuildersBeneathSeam: 40,
+		.retentionLoopOfBuildersFourMembers: 37,
+		.retentionLoopOfBuildersSendable: 25,
 		.retentionSeamValueBeforeBuilder: 104,
 		.retentionSeamValueBeforeBuilderFillReadsValue: 15,
 		.retentionSeamValueBeforeBuilderInnerSeam: 31,
@@ -6436,7 +6441,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`seamBuilderOrderShape(listedBy:)`). Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x18CB353E24F0F8BF
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x3BCF8B66DAB0F208
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -6698,6 +6703,10 @@ struct SafeDIToolGraphFuzzerTests {
 		.forwardedLabelAcrossSeamCallSameClassType: 89,
 		.forwardedLabelAcrossSeamCallSameValueType: 92,
 		.forwardedLabelAcrossSeamCallSendable: 114,
+		.retentionLoopOfBuilders: 274,
+		.retentionLoopOfBuildersBeneathSeam: 113,
+		.retentionLoopOfBuildersFourMembers: 102,
+		.retentionLoopOfBuildersSendable: 77,
 		.retentionSeamValueBeforeBuilder: 386,
 		.retentionSeamValueBeforeBuilderFillReadsValue: 68,
 		.retentionSeamValueBeforeBuilderInnerSeam: 133,
@@ -7560,6 +7569,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusAcceptedDrawFeatureCounts: [GraphFuzzerPublicMockDrawFeature: Int] = [
 		.placeInsidePublicMockFill: 323,
 		.placeInsidePublicMockFillFilledByConsumer: 236,
+		.placeInsidePublicMockFillHoldsLoopOfBuilders: 110,
 		.placeInsidePublicMockFillOnForwardingRoute: 133,
 		.placeInsidePublicMockFillPassedUp: 87,
 		.placeInsidePublicMockFillReadsForwardedValue: 62,
@@ -7616,7 +7626,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x2AF5A5F789481B4
+	static let publicMockCorpusFixtureHash: UInt64 = 0xA76D5B5D65E6E197
 	static let publicMockCorpusAcceptedSeedCount = 856
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x00FC421C8B43BC22
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -7666,7 +7676,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x37B82E937A0C994B
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x6811652CBED7F527
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -7690,8 +7700,8 @@ struct SafeDIToolGraphFuzzerTests {
 		// before, a consumer held a holder the public tier omitted, which the tool rejected; now `Dock`'s own declaration
 		// proves the holder `public`, or, `package`, leaves a consumer in another package holding none.
 		GraphFuzzerKnownIssue(
-			reason: "Two public mocks a consumer in another package calls each build their own instance of a dependency it cannot name (M8.9b), first built in a leaf's child, which the stated divergence's exemption does not derive",
-			signatures: [.publicMockBuildsOtherValuesThanKnownRight(containing: "t1 > t4 > session")],
+			reason: "Two public mocks a consumer in another package calls each build their own instance of a dependency it cannot name (M8.9b), first built in a leaf's child, which the stated divergence's exemption does not derive; and \(publicMockLeakReason)",
+			signatures: [.publicMockBuildsOtherValuesThanKnownRight(containing: "t1 > t4 > session")] + publicMockLeakSignatures,
 			seeds: [95],
 		),
 		// The nested builders' design, as a seam orders its builders: a mock's parameters are sorted by label, and a builder's
@@ -7719,7 +7729,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockFormsNamedApartOrderReason,
 			signatures: [.renamedGraphDiffers(.mockCode)],
-			seeds: [18, 22, 101, 156, 161, 326, 629, 881, 977],
+			seeds: [22, 101, 156, 161, 326, 629, 881, 977],
 		),
 		// The root-level stream's lazily received `holeSession` (`holeRootLevelHoldsWrapper`): each call of `T6`'s mock wraps
 		// again the instance its consumer passes (M8.32), and its root level holds that wrapper, so the fill beneath a later
@@ -7734,7 +7744,9 @@ struct SafeDIToolGraphFuzzerTests {
 		// function of an instantiator on that way captures them, so holding the instantiator keeps them alive, as a
 		// hand-written builder's levels' values stay alive. It shows in each gating draw – the retention draw's
 		// `RetainNavigator`, bound before `retainDetailBuilder`; the place inside a fill's `PlaceInFillDefault`, with the
-		// `PlaceInFillLive` it holds, and `PlaceInFillTag`, bound before `placeInFillInnerScreenBuilder`; the shape #702
+		// `PlaceInFillLive` it holds, and `PlaceInFillTag`, bound before `placeInFillInnerScreenBuilder`, and the
+		// `PlaceInFillLive` the fill holds, bound before the builders of its loop, `placeInFillLoopABuilder` and
+		// `placeInFillLoopBBuilder`, and those builders, bound before `placeInFillInnerScreenBuilder`; the shape #702
 		// fixed's `SelfToken` and `SelfPart`, with the `SelfLive` it holds, bound before `selfNodeBuilder` – in the hole
 		// draw's `Session`, bound before `T6`'s `holeBuilder`, and in the values `T6`'s mock binds at its root level
 		// (`HoleSession`, `HoleToken`, `HoleContext`, `Session`, and the two forms `HoleDraft` and `HoleSibling`), bound
@@ -7742,15 +7754,17 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockLeakReason,
 			signatures: publicMockLeakSignatures,
-			seeds: [2, 11, 15, 25, 26, 34, 44, 45, 48, 57, 67, 77, 90, 92, 98, 110, 111, 115, 122, 123, 124, 125, 133, 136, 143,
-			        152, 159, 165, 172, 177, 178, 185, 196, 199, 205, 206, 207, 212, 225, 233, 243, 244, 266, 269, 271, 273, 278,
-			        282, 285, 297, 304, 314, 319, 322, 331, 335, 338, 339, 340, 342, 353, 356, 362, 369, 379, 386, 389, 393, 401,
-			        412, 415, 419, 421, 423, 428, 429, 431, 434, 436, 437, 438, 442, 443, 445, 465, 467, 477, 478, 482, 519, 520,
-			        522, 525, 532, 538, 540, 541, 543, 550, 552, 558, 560, 563, 571, 575, 582, 595, 601, 608, 619, 631, 633,
-			        651, 654, 657, 660, 664, 678, 679, 682, 684, 693, 699, 713, 732, 738, 747, 753, 768, 770, 775, 777, 782, 787,
-			        788, 797, 798, 802, 805, 807, 811, 827, 834, 835, 838, 843, 844, 846, 847, 849, 851, 852, 858, 872, 877, 879,
-			        883, 888, 890, 891, 902, 903, 905, 926, 927, 933, 934, 940, 943, 945, 949, 957, 958, 968, 971, 975, 978, 979,
-			        984, 989, 990, 991, 994, 995],
+			seeds: [2, 8, 10, 11, 15, 25, 26, 28, 34, 44, 45, 48, 57, 67, 73, 77, 90, 92, 98, 110, 111, 115, 122, 123,
+			        124, 125, 133, 136, 143, 152, 159, 165, 172, 177, 178, 185, 196, 199, 205, 206, 207, 212, 225, 233,
+			        238, 243, 244, 266, 269, 271, 273, 278, 282, 285, 293, 297, 300, 304, 312, 313, 314, 319, 322, 331,
+			        335, 338, 339, 340, 342, 353, 356, 362, 369, 379, 386, 389, 393, 401, 409, 412, 415, 419, 421, 423,
+			        428, 429, 431, 434, 436, 437, 438, 442, 443, 445, 465, 467, 477, 478, 482, 511, 519, 520, 522, 525,
+			        532, 538, 540, 541, 543, 550, 552, 558, 560, 563, 571, 575, 582, 592, 595, 601, 608, 619, 624, 631,
+			        633, 651, 654, 657, 660, 664, 678, 679, 682, 684, 693, 699, 713, 716, 732, 738, 739, 747, 753, 758,
+			        766, 768, 770, 775, 777, 782, 787, 788, 792, 797, 798, 802, 805, 807, 811, 827, 834, 835, 838, 843,
+			        844, 846, 847, 849, 851, 852, 853, 858, 859, 872, 877, 879, 883, 888, 890, 891, 898, 899, 902, 903,
+			        905, 926, 927, 933, 934, 940, 943, 945, 949, 957, 958, 966, 968, 971, 975, 978, 979, 981, 984, 988,
+			        989, 990, 991, 994, 995],
 		),
 		// The root-level stream's label in two forms in a graph with a lazy cycle whose back-edge the move across wrapper
 		// names moves: `SelfStep`'s, or the stale-value draw's loop around `T6`'s hole (`HoleHost` and `HoleLoop`).
@@ -7763,7 +7777,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(publicMockFormsNamedApartOrderReason); and \(publicMockLeakReason)",
 			signatures: [.renamedGraphDiffers(.mockCode)] + publicMockLeakSignatures,
-			seeds: [327, 474, 970, 983],
+			seeds: [18, 327, 474, 970, 983],
 		),
 		// A graph of a gating draw that shows a public mock's leak, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy cycle through it, or whose `SelfStep` the move across wrapper names puts on either side of `Instantiator`, or the shared-construction draw's `ShareService` and `ShareTicker`.
 		GraphFuzzerKnownIssue(
@@ -7797,8 +7811,8 @@ struct SafeDIToolGraphFuzzerTests {
 			seeds: [333],
 		),
 		GraphFuzzerKnownIssue(
-			reason: "\(passedUpBuildersNamedApartReason); and \(lazyCycleConfigurationFieldReason)",
-			signatures: [.holeNamesChangeWithSecondPlace(containing: "`t6Twin`"), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
+			reason: "\(passedUpBuildersNamedApartReason); and \(lazyCycleConfigurationFieldReason); and \(publicMockLeakReason)",
+			signatures: [.holeNamesChangeWithSecondPlace(containing: "`t6Twin`"), .renamedGraphDiffers(.mockConfigurationFieldPresence)] + publicMockLeakSignatures,
 			seeds: [211, 307],
 		),
 		GraphFuzzerKnownIssue(
@@ -7908,8 +7922,9 @@ struct SafeDIToolGraphFuzzerTests {
 		],
 	)
 
-	/// `publicMockKnownIssues`, with the smoke seeds beyond the public mock corpus that fail the builder surface, which the
-	/// corpus's list, bounded by its size, cannot hold.
+	/// `publicMockKnownIssues`, with the smoke seeds beyond the public mock corpus that fail the builder surface or show a
+	/// public mock's leak (2,687 draws a loop of builders inside a public mock's fill), which the corpus's list, bounded by
+	/// its size, cannot hold.
 	static let publicMockSmokeKnownIssues = addingBuilderSurfaceShapes(
 		seeds: BuilderSurfaceSeeds(
 			base: [1_339, 1_649, 2_687, 2_840],
@@ -7922,7 +7937,7 @@ struct SafeDIToolGraphFuzzerTests {
 			forwardingOtherValues: [1_649],
 			callingMocks: [],
 		),
-		to: publicMockKnownIssues,
+		to: publicMockKnownIssues + [GraphFuzzerKnownIssue(reason: publicMockLeakReason, signatures: publicMockLeakSignatures, seeds: [2_687])],
 	)
 
 	/// What a public mock's leak keeps alive in the public mock corpus's graphs, each type after its graph's prefix with what
@@ -7940,7 +7955,13 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleToken alive holding t6.holeHost once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_PlaceInFillDefault alive holding placeInFillOuter.placeInFillInner.placeInFillInnerScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_PlaceInFillLive alive holding placeInFillOuter.placeInFillInner.placeInFillInnerScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_PlaceInFillLive alive holding placeInFillOuter.placeInFillInner.placeInFillService.placeInFillLoopABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_PlaceInFillLive alive holding placeInFillOuter.placeInFillInner.placeInFillService.placeInFillLoopBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_PlaceInFillLoopA> alive holding placeInFillOuter.placeInFillInner.placeInFillInnerScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_PlaceInFillLoopB> alive holding placeInFillOuter.placeInFillInner.placeInFillInnerScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_PlaceInFillTag alive holding placeInFillOuter.placeInFillInner.placeInFillInnerScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_PlaceInFillTag alive holding placeInFillOuter.placeInFillInner.placeInFillService.placeInFillLoopABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_PlaceInFillTag alive holding placeInFillOuter.placeInFillInner.placeInFillService.placeInFillLoopBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_RetainNavigator alive holding retainHome.retainDetailBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_SelfLive alive holding selfNode.selfNodeBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_SelfLive alive holding selfNode.selfStep.selfNodeBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -8018,6 +8039,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeScopeHoldsPublicValue: 225,
 		.placeInsidePublicMockFill: 355,
 		.placeInsidePublicMockFillFilledByConsumer: 261,
+		.placeInsidePublicMockFillHoldsLoopOfBuilders: 125,
 		.placeInsidePublicMockFillOnForwardingRoute: 148,
 		.placeInsidePublicMockFillPassedUp: 94,
 		.placeInsidePublicMockFillReadsForwardedValue: 70,

@@ -638,14 +638,16 @@ public struct SeamSignature: Sendable {
 			let member: Member?
 
 			/// The call of a case's member on a route: the name the seam's tree binds the struct it returns under, the type of
-			/// the struct it is handed, as the seam's extension spells it, that struct's fields, the path of the property the
-			/// call is made for, and whether it is made at the top of that property's own builder function rather than just
-			/// before it: a member of a `@Sendable` enum whose property is built in a `@Sendable` function, since what it returns
-			/// can be a plain struct, which that function could not capture.
+			/// the struct it is handed, as the seam's extension spells it, that struct's fields, the type of the struct it
+			/// returns, the builder struct of the enum the case holds, the path of the property the call is made for, and
+			/// whether it is made at the top of that property's own builder function rather than just before it: a member of a
+			/// `@Sendable` enum whose property is built in a `@Sendable` function, since what it returns can be a plain struct,
+			/// which that function could not capture.
 			struct Member: Sendable {
 				let bindingName: String
 				let valuesType: TypeDescription
 				let fields: [Field]
+				let levelType: TypeDescription
 				let bindingPath: [Property]
 				let isCalledInsideFunction: Bool
 			}
@@ -689,7 +691,7 @@ public struct SeamSignature: Sendable {
 					innerScope: innerScope.map { InnerScope(callPath: $0.callPath, innerKey: $0.innerKey, enumType: $0.enumType, builderLabel: $0.builderLabel, name: innerScopeName ?? $0.name) },
 					leadsIntoFill: leadsIntoFill,
 					member: memberBindingName.flatMap { name in
-						member.map { Member(bindingName: name, valuesType: $0.valuesType, fields: $0.fields, bindingPath: $0.bindingPath, isCalledInsideFunction: $0.isCalledInsideFunction) }
+						member.map { Member(bindingName: name, valuesType: $0.valuesType, fields: $0.fields, levelType: $0.levelType, bindingPath: $0.bindingPath, isCalledInsideFunction: $0.isCalledInsideFunction) }
 					},
 				)
 			}
@@ -954,6 +956,18 @@ public struct SeamSignature: Sendable {
 		}
 
 		/// The key of the enum `enumCase` holds, or `nil` for a place.
+		/// The type of the enum `enumCase` holds, as the seam's extension spells it, or `nil` for a place's case.
+		static func heldEnumType(of enumCase: Case) -> TypeDescription? {
+			switch enumCase.kind {
+			case .place:
+				nil
+			case let .nested(_, enumType, _),
+			     let .inner(_, enumType, _),
+			     let .fill(_, _, _, enumType, _):
+				enumType
+			}
+		}
+
 		static func heldKey(of enumCase: Case) -> Key? {
 			switch enumCase.kind {
 			case .place:
