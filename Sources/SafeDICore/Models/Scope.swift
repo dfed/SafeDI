@@ -1191,7 +1191,7 @@ private struct ScopeGeneratorUnderConstruction {
 	private static func callerReads(of fill: Fill, child: ScopeGenerator) -> ScopeGenerator.FillCallerReads {
 		var reads = ScopeGenerator.FillCallerReads()
 		// The inner scope, only where the fill's tree builds a place or a call that passes one up, whose case carries it.
-		if child.containsBuildSite || child.passesUpBuilder {
+		if child.readsFillInnerScopes {
 			reads.innerScopeParameters = fill.innerScopeParameters
 		}
 		for field in fill.fields where fill.callerReadLabels.contains(field.property.label) && fill.boundLabels.contains(field.property.label) {
@@ -1399,6 +1399,7 @@ private struct ScopeGeneratorUnderConstruction {
 			sendableFunctionsAreNonisolated: seamHoles.declaresBuilderStructs,
 			isBuiltByFill: fill != nil,
 			fillReturnsWrapperBuilder: fill?.returnsWrapperBuilder ?? false,
+			innerScopesCalledWithForwardedValue: fill.map { $0.returnsWrapperBuilder ? $0.innerScopeParameters.map(\.property.label) : [] } ?? [],
 			constructsWithHandWrittenMock: buildsWithHandWrittenMocks
 				&& scope.publicMockCall == nil
 				&& scope.instantiable.mockInitializer != nil
