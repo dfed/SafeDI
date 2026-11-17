@@ -139,25 +139,12 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
-      # Gives each source file a time derived from its content
-      # (.github/scripts/stamp-source-times.sh), as ci.yml's build jobs do, so
-      # that SwiftPM reuses what the restored build holds of the files this
-      # commit did not change. The checkout is the container's, so git needs
-      # telling that this user may read it.
-      - name: Stamp Source Times
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          .github/scripts/stamp-source-times.sh
-      # ci.yml's stamped builds come first; the older, unstamped ones are a
-      # start for the dependencies only.
       - name: Restore Build Directory
         uses: actions/cache/restore@v6
         with:
           path: .build
           key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-without-coverage
           restore-keys: |
-            spm-release-v2-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
-            spm-release-v2-${{ runner.os }}-swift-6.2-
             spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
             spm-release-${{ runner.os }}-swift-6.2-
       - name: Resolve Package Dependencies
