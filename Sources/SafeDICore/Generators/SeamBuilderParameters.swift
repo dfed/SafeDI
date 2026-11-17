@@ -1413,18 +1413,20 @@ extension DependencyTreeGenerator {
 				}
 			} else if !onlyIfAvailable, let field = sameLabelFields.first(where: { $0.property.typeDescription.isOptional && $0.property.asUnwrappedProperty == property }) {
 				findings.append(.init(hole: hole, kind: .fieldHeldOnlyOptionally(reader: reader, field: field, seamModule: seamModule)))
-			} else if sameLabelFields.isEmpty, let declaration = hole.uncarriedDeclarations.first(where: { $0.property.label == property.label })
+			} else if sameLabelFields.isEmpty, let declarations = hole.uncarriedDeclarations.first(where: { $0.property.label == property.label }).map({ [$0] })
 				// A call inside a fill that passes it to a seam passing the site up hands it that seam's copy of the hole,
-				// which does not carry what that seam binds on its path to the call presenting the site.
+				// which does not carry what that seam binds on its path to the call presenting the site: each such call's.
 				?? hidden.calledCopyDeclarations[property.label]
 			{
-				switch declaration.reason {
-				case let .boundByPassingUpSeam(_, passingUpSeamModule, _):
-					findings.append(.init(hole: hole, kind: .declarationBoundAfterSite(reader: reader, declaration: declaration, seamModule: passingUpSeamModule)))
-				case .instantiatorBuildingSite:
-					findings.append(.init(hole: hole, kind: .receivesInstantiatorBuildingSite(reader: reader, declaration: declaration, seamModule: seamModule)))
-				case .receivesPathScopeOnlyIfAvailable, .requiresOtherCarrier, .other, .boundOutsideSendableFunction:
-					findings.append(.init(hole: hole, kind: .declarationBoundAfterSite(reader: reader, declaration: declaration, seamModule: seamModule)))
+				for declaration in declarations {
+					switch declaration.reason {
+					case let .boundByPassingUpSeam(_, passingUpSeamModule, _):
+						findings.append(.init(hole: hole, kind: .declarationBoundAfterSite(reader: reader, declaration: declaration, seamModule: passingUpSeamModule)))
+					case .instantiatorBuildingSite:
+						findings.append(.init(hole: hole, kind: .receivesInstantiatorBuildingSite(reader: reader, declaration: declaration, seamModule: seamModule)))
+					case .receivesPathScopeOnlyIfAvailable, .requiresOtherCarrier, .other, .boundOutsideSendableFunction:
+						findings.append(.init(hole: hole, kind: .declarationBoundAfterSite(reader: reader, declaration: declaration, seamModule: seamModule)))
+					}
 				}
 			} else if sameLabelFields.isEmpty, let hidings = hidden.pathDeclarations[property.label] {
 				findings.append(.init(hole: hole, kind: .declarationBoundOnPathToReenteringCall(reader: reader, hidings: hidings, callerModule: callerModule, seamModule: seamModule)))
@@ -1500,9 +1502,11 @@ extension DependencyTreeGenerator {
 		/// by label: of each path, the first it declares of the label. Every path's, since which path a walk meets first
 		/// follows the order of the files that declare the fills' places.
 		var pathDeclarations = [String: [DeclarationOnPathToReenteringCall]]()
-		/// The declarations the copies of this fill's hole that those calls' seams take do not carry, by label, the first
-		/// met for each.
-		var calledCopyDeclarations = [String: SeamSignature.Hole.UncarriedDeclaration]()
+		/// The declarations the copies of this fill's hole that those calls' seams take do not carry, by label: every copy's,
+		/// since which call a walk meets first follows the order of the files that declare the fills' places, and two seams'
+		/// copies name different declarations. A declaration two calls hide gives findings that print the same, which
+		/// `validateFills` merges.
+		var calledCopyDeclarations = [String: [SeamSignature.Hole.UncarriedDeclaration]]()
 	}
 
 	/// What the calls inside the fills of `leaf`'s seam call hide from each of those fills, by the fill's key: the fills in
@@ -1530,8 +1534,8 @@ extension DependencyTreeGenerator {
 				guard !generator.closesPropertyCycle else { continue }
 				for (fillKey, calledHole) in generator.enclosingFillsPassed {
 					var hidden = hiddenByFillKey[fillKey, default: FillReentryHidings()]
-					for declaration in calledHole.uncarriedDeclarations where hidden.calledCopyDeclarations[declaration.property.label] == nil {
-						hidden.calledCopyDeclarations[declaration.property.label] = declaration
+					for declaration in calledHole.uncarriedDeclarations {
+						hidden.calledCopyDeclarations[declaration.property.label, default: []].append(declaration)
 					}
 					// The fill's root declares what is on every path, so a call that is the root itself has no scope above it.
 					if let callingType, let callProperty = generator.property, let calledSeam = generator.builtInstantiable?.concreteInstantiable {
