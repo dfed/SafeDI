@@ -1,0 +1,252 @@
+name: Release Acceptance
+
+# Checks that every base corpus graph SafeDI 2.2.0 accepts still compiles and
+# builds the same values: it builds 2.2.0's tool, macros and runtime sources
+# once, runs the base corpus through 2.2.0 and through this commit in four
+# shards (SafeDIToolReleaseAcceptanceTests/longRun), and combines their
+# reports (.github/scripts/combine-release-acceptance-reports.py). See
+# .claude/rules/fuzzer-release-acceptance.md.
+#
+# Only called. ci.yml calls it on every pull request and push to main that
+# changes more than Markdown, with the name of the bundle "Build Tests on
+# Linux" uploaded, so nothing of this commit is built again.
+# graph-fuzzer.yml's `release_acceptance` input calls it with no bundle, to
+# check a branch by hand, and the build job below then builds one. It is a
+# workflow of its own, rather than jobs of graph-fuzzer.yml, so that ci.yml
+# calls a workflow whose every job asks for `contents: read` only: a caller
+# must allow the most any job of the workflow it calls asks for, and
+# graph-fuzzer.yml has a job that deletes a ref.
+#
+# Every job builds or runs the commit of the calling run, `github.sha`, never
+# one an input names, for the reason graph-fuzzer.yml gives.
+on:
+  workflow_call:
+    inputs:
+      bundle:
+        description: The artifact of the caller's run that holds the test bundle, a `<name>.tar.gz` of what "Build Tests on Linux" packages, or empty to build one.
+        type: string
+        required: false
+        default: ''
+
+permissions: {}
+
+jobs:
+  # Builds the
+  # older release's tool, macros and runtime sources, which every comparing
+  # shard needs and none rebuilds. It builds the commit tag 2.2.0 names, which
+  # this file fixes, never one an input names, so the cache it writes holds
+  # only that release's build.
+  release-acceptance-older-release:
+    name: Build SafeDI 2.2.0 for Release Acceptance on Linux
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      OLDER_RELEASE: 2.2.0
+      # The commit tag 2.2.0 names.
+      OLDER_RELEASE_COMMIT: 8596f075f46ea1a4043d5c2c2d0a0b99ea50cd46
+    steps:
+      # This commit, for its retry action.
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Checkout SafeDI 2.2.0
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.OLDER_RELEASE_COMMIT }}
+          path: older-release
+      # The build's cache key names every input to the build: the release and
+      # the commit its tag names, the runner's operating system, the container
+      # image (`swift:6.2`), and a hash of the compiler's `swift --version`,
+      # which tells two compilers that image tag has named apart.
+      - name: Compute Older Release Cache Key
+        id: older-release-key
+        run: |
+          compiler=$(swift --version 2>&1 | sha256sum | cut -c1-16)
+          test "${#compiler}" -eq 16
+          echo "key=safedi-release-$OLDER_RELEASE-${OLDER_RELEASE_COMMIT:0:9}-$RUNNER_OS-swift-6.2-$compiler" >> "$GITHUB_OUTPUT"
+      - name: Cache Older Release Build
+        id: older-release-cache
+        uses: actions/cache@v6
+        with:
+          path: older-release/.build
+          key: ${{ steps.older-release-key.outputs.key }}
+      - name: Resolve Older Release Dependencies
+        if: ${{ steps.older-release-cache.outputs.cache-hit != 'true' }}
+        uses: ./.github/actions/retry
+        with:
+          command: swift package resolve --package-path older-release
+      # Only the tool and the macros, never 2.2.0's tests, which write into the
+      # system temporary directory. Measured on a 4-core cloud machine with
+      # Swift 6.2: 7 min 57 s for the tool and 6 min 58 s for the macros (a
+      # cloud-machine figure; confirm on CI and set each limit to twice it).
+      - name: Build Older Release Tool
+        if: ${{ steps.older-release-cache.outputs.cache-hit != 'true' }}
+        timeout-minutes: 16
+        run: swift build -c release --traits sourceBuild --package-path older-release --product SafeDITool
+      - name: Build Older Release Macros
+        if: ${{ steps.older-release-cache.outputs.cache-hit != 'true' }}
+        timeout-minutes: 14
+        run: swift build -c release --traits sourceBuild --package-path older-release --product SafeDI
+      # A missing product fails the job here rather than leaving the shards to
+      # find it.
+      - name: Package Older Release
+        run: |
+          products=older-release/.build/x86_64-unknown-linux-gnu/release
+          test -x "$products/SafeDITool"
+          test -x "$products/SafeDIMacros-tool"
+          test -d older-release/Sources/SafeDI
+          mkdir -p older-release-package
+          cp "$products/SafeDITool" "$products/SafeDIMacros-tool" older-release-package/
+          cp -R older-release/Sources/SafeDI older-release-package/SafeDIRuntimeSources
+          tar -czf older-release.tar.gz older-release-package
+      - name: Upload Older Release
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-acceptance-older-release
+          path: older-release.tar.gz
+          retention-days: 1
+
+  # This commit's test bundle, built once for the comparing shards, as
+  # coverage-build builds one, without coverage. Skipped when a caller names
+  # the bundle its own build uploaded.
+  release-acceptance-build:
+    name: Build for Release Acceptance on Linux
+    if: ${{ !inputs.bundle }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Restore Build Directory
+        uses: actions/cache/restore@v6
+        with:
+          path: .build
+          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/ci.yml') }}
+          restore-keys: |
+            spm-release-${{ runner.os }}-swift-6.2-
+      - name: Resolve Package Dependencies
+        uses: ./.github/actions/retry
+        with:
+          command: swift package resolve
+      - name: Build
+        run: swift build -c release -Xswiftc -enable-testing --traits sourceBuild --build-tests
+      - name: Package Test Bundle
+        run: |
+          products=.build/x86_64-unknown-linux-gnu/release
+          tar -czf release-acceptance-test-bundle.tar.gz \
+            "$products/SafeDIPackageTests.xctest" \
+            "$products/SafeDITool" \
+            "$products/SafeDIMacros-tool" \
+            "$products/Modules/SafeDI.swiftmodule"
+      - name: Upload Test Bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-acceptance-test-bundle
+          path: release-acceptance-test-bundle.tar.gz
+          retention-days: 1
+
+  # Four shards of the base corpus's 5000 seeds. combine-release-acceptance
+  # checks that they cover it once.
+  release-acceptance:
+    name: Compare with SafeDI 2.2.0 on Linux (shard ${{ matrix.shard }} of 4)
+    needs: [release-acceptance-older-release, release-acceptance-build]
+    if: ${{ !cancelled() && needs.release-acceptance-older-release.result == 'success' && (needs.release-acceptance-build.result == 'success' || inputs.bundle) }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    defaults:
+      run:
+        shell: bash
+    env:
+      REPORT: ${{ github.workspace }}/release-acceptance/report.txt
+      # This run's own bundle, or the one a calling workflow names.
+      BUNDLE: ${{ inputs.bundle || 'release-acceptance-test-bundle' }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Download Test Bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.BUNDLE }}
+      - name: Download Older Release
+        uses: actions/download-artifact@v8
+        with:
+          name: release-acceptance-older-release
+      - name: Unpack
+        run: |
+          tar -xzf "$BUNDLE.tar.gz"
+          tar -xzf older-release.tar.gz
+          mkdir -p release-acceptance
+      # Measured on CI (run 43739187246): the four shards of 1250 seeds took
+      # 3 min 28 s to 5 min 24 s each, so about twice the longest.
+      - name: Compare with the Older Release
+        timeout-minutes: 11
+        env:
+          SAFEDI_RELEASE_ACCEPTANCE_RELEASE: '2.2.0'
+          SAFEDI_RELEASE_ACCEPTANCE_TOOL: ${{ github.workspace }}/older-release-package/SafeDITool
+          SAFEDI_RELEASE_ACCEPTANCE_MACROS_TOOL: ${{ github.workspace }}/older-release-package/SafeDIMacros-tool
+          SAFEDI_RELEASE_ACCEPTANCE_RUNTIME_SOURCES: ${{ github.workspace }}/older-release-package/SafeDIRuntimeSources
+          SAFEDI_RELEASE_ACCEPTANCE_REPORT: ${{ github.workspace }}/release-acceptance/report.txt
+          SAFEDI_RELEASE_ACCEPTANCE_SHARD: ${{ matrix.shard }}/4
+          # A caller's bundle is built for coverage, which this job does not
+          # collect, so its profiles go to the runner's temporary directory.
+          LLVM_PROFILE_FILE: ${{ runner.temp }}/release-acceptance-%p.profraw
+        run: .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing --filter 'SafeDIToolReleaseAcceptanceTests/longRun'
+      # A run the filter skipped writes no report, and a crashed one no
+      # `completed` line: either fails here, never passes.
+      - name: Check Report
+        if: ${{ !cancelled() }}
+        run: |
+          test -f "$REPORT" || { echo "::error::The shard wrote no report."; exit 1; }
+          grep -q '^completed ' "$REPORT" || { echo "::error::The shard's report does not complete."; exit 1; }
+          grep -E '^(failure|stale|problem) ' "$REPORT" >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Upload Report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-acceptance-report-${{ matrix.shard }}
+          path: release-acceptance/
+          if-no-files-found: ignore
+
+  combine-release-acceptance:
+    name: Check Release Acceptance on Linux
+    needs: release-acceptance
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Download Shard Reports
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-acceptance-report-*
+          path: reports
+      - name: Combine
+        run: python3 .github/scripts/combine-release-acceptance-reports.py reports 4 >> "$GITHUB_STEP_SUMMARY"
