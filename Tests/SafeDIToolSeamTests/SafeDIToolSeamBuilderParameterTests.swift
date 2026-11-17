@@ -1828,6 +1828,43 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryNotingDeclarationsInSourceOrder_whenDeclaringTypesNameOrderReversesTheirFilesOrder() async {
+		// As above, with `MiddleZed` declared in a file that sorts before `MiddleAlpha`'s: the error names the paths in name
+		// order, and its notes, each a diagnostic of its own, follow where each declaration is.
+		let feature = [
+			platformConditionedDeclaration("public protocol Router {}"),
+			platformConditionedDeclaration("public protocol Zed {}"),
+			platformConditionedDeclaration("public protocol Alpha {}"),
+			seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Profile", isFinalClass: true, declarations: ["@Instantiated let router: any Router"]),
+			seamFixtureType(named: "Flow", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let profileBuilder: Instantiator<Profile>"]),
+			seamFixtureType(named: "Inner", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let zed: any Zed", "@Instantiated let alpha: any Alpha"]),
+		]
+		let app = [
+			("DefaultRouter.swift", Self.fulfillingType(named: "DefaultRouter", fulfilling: "Router", declarations: ["@Received let logger: Logger", "@Instantiated let inner: Inner"])),
+			("DefaultZed.swift", Self.fulfillingType(named: "DefaultZed", fulfilling: "Zed", declarations: ["@Instantiated let middleZed: MiddleZed"])),
+			("DefaultAlpha.swift", Self.fulfillingType(named: "DefaultAlpha", fulfilling: "Alpha", declarations: ["@Instantiated let middleAlpha: MiddleAlpha"])),
+			("File1.swift", seamFixtureType(named: "MiddleZed", isFinalClass: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let flowBuilder: Instantiator<Flow>"])),
+			("File2.swift", seamFixtureType(named: "MiddleAlpha", isFinalClass: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let flowBuilder: Instantiator<Flow>"])),
+			("Root.swift", seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let flow: Flow"])),
+		]
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [], swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: app.map { ($0.0, "import Feature\n\n" + $0.1) }), dependencies: ["Feature"]),
+		]
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `MiddleAlpha` declares on the path from the builder for `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) to the call by which `MiddleAlpha` instantiates `Flow` again (`flowBuilder`) and `MiddleZed` declares on the path from the builder for `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) to the call by which `MiddleZed` instantiates `Flow` again (`flowBuilder`), but those calls pass the builder on as module `App` fills it, which cannot hand it `MiddleAlpha`’s and `MiddleZed`’s values. Declare `@Received let logger: Logger` on `Flow`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["File1.swift"]):10:5: note: `MiddleZed` declares `logger: Logger` here.
+			\(fixtures["App"]!["File2.swift"]):10:5: note: `MiddleAlpha` declares `logger: Logger` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
 	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryNamingEveryPath_whenFillsOfPlacesDeclaredInTwoFilesReachCallThatReentersSeam(reversesFileNames: Bool) async {
