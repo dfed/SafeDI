@@ -129,6 +129,8 @@ extension DependencyTreeGenerator {
 		let seamType = seam.concreteInstantiable
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
 		var holesBySite = Dictionary(flatHoles.map { ($0.site, $0) }, uniquingKeysWith: { first, _ in first })
+		// Each site's key is spelled once: spelled inside a comparison, a path was spelled again for every pair compared.
+		let sortKeyBySite = holesBySite.mapValues(\.site.sortKey)
 
 		var holeTypesInReachOrder = [SeamSignature.HoleType]()
 		var seenHoleTypes = Set<SeamSignature.HoleType>()
@@ -342,7 +344,10 @@ extension DependencyTreeGenerator {
 					enumsReachedByKey[reachedEnum.key] = reachedEnum
 				}
 				let placesOfReadableType = takesBuilderStruct
-					? SeamSignature.ScopeEnum.sitesReached(from: key, in: enumsReachedByKey).sorted { $0.sortKey < $1.sortKey }.compactMap { holesBySite[$0] }
+					? SeamSignature.ScopeEnum.sitesReached(from: key, in: enumsReachedByKey)
+						.compactMap { site in sortKeyBySite[site].map { (site: site, sortKey: $0) } }
+						.sorted { $0.sortKey < $1.sortKey }
+						.compactMap { holesBySite[$0.site] }
 					: reachedPlaces
 				let parameterType = takesBuilderStruct
 					? .nested(name: ReservedName.builderStructTypeName, parentType: enumType, generics: [builtType])
@@ -364,9 +369,7 @@ extension DependencyTreeGenerator {
 		}
 		// Every place carries the names of the builder of its family, a fill's among them: a place in a `@Sendable` enum is
 		// built by the `@Sendable` builder, which its fill is handed to, so the fill is `@Sendable`.
-		// Each site's key is spelled once: spelled inside the comparison, a path was spelled again for every pair compared.
-		let keyedSites = holesBySite.keys.map { (site: $0, sortKey: $0.sortKey) }
-		let sitesInOrder = keyedSites.sorted { $0.sortKey < $1.sortKey }.map(\.site)
+		let sitesInOrder = sortKeyBySite.map { (site: $0.key, sortKey: $0.value) }.sorted { $0.sortKey < $1.sortKey }.map(\.site)
 		for site in sitesInOrder {
 			guard let hole = holesBySite[site], hole.innerSeamType == nil else { continue }
 			let isSendable = hole.enumPlace?.isBuiltBySendableBuilder ?? false
