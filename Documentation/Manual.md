@@ -1092,7 +1092,7 @@ To give every type its own instance, as the app does, declare a [`mockOnly`](#th
 
 The mocked type’s own renames are the exception. When the mocked type declares a rename, a dependency the mock builds beside it that receives the rename’s label, as the rename’s type or its optional form, has no entry for that label: it gets the rename, as types beneath the mocked type do.
 
-**Names.** When two flat `mock()` parameters, or two entries of one `SafeDIOverrides` or `SafeDIMockConfiguration`, share a label, each is named by its label followed by its type, spelled as an identifier: received dependencies named `items` of types `[String]` and `Set<String>` become `items_Array_String` and `items_Set__String`. A mock builds every form in which its tree receives one label: when one type requires `x: X` and another requires `x: Instantiator<X>`, the mock builds both, as `x_X` and `x_Instantiator__X`. An optional form beside its non-optional form, and the instance of a `LazilyInstantiated`, are not forms of their own.
+**Names.** When two flat `mock()` parameters, or two entries of one `SafeDIOverrides` or `SafeDIMockConfiguration`, share a label, each is named by its label followed by its type, spelled as an identifier: received dependencies named `items` of types `[String]` and `Set<String>` become `items_Array_String` and `items_Set__String`. A mock builds every form in which its tree receives one label: when one type requires `x: X` and another beside it requires `x: Instantiator<X>`, the mock builds both, as `x_X` and `x_Instantiator__X`. An optional form beside its non-optional form, and the instance of a `LazilyInstantiated`, are not forms of their own. Two forms received by one type, or one beneath the other, read the one declaration nearest above them, as [`@Received`](#received) describes, so they are an error unless both are received [only if available](#conditionally-receiving-dependencies).
 
 #### Receiving a type-erased dependency
 
@@ -1283,7 +1283,7 @@ public struct Service: Instantiable {
     }
 
     @Received private let analytics: LazilyInstantiated<Analytics>
-    @Received private let session: Session // `Session` is `package`.
+    @Received private let session: Session // `Session` is a `package` @Instantiable type.
     @Instantiated private let tokenCache: TokenCache
 }
 ```
@@ -1904,7 +1904,7 @@ Each of these errors says what to change.
 - **A name hidden from its receiver.** A type between the seam and the receiver, the seam included, declares the name with a property that does not provide it.
 - **An initializer the generated one would collide with**, such as an initializer in the seam’s body that a call with the readable labels could also reach, in a module that sets `generatePlainDependencyTreeInitializers: true`. Without the setting, the seam can keep such an initializer for the code that already calls it. A tier that takes no argument is `init()` either way, so a hand-written `init()` collides with it.
 - **A hole’s implementation that reads a value bound on the way to a seam built again.** When a seam’s tree builds the seam again, directly or through another seam of its module, the builders it took are handed on to that call. So the caller that fills a builder cannot hand its implementation a value the tree declares on that path.
-- **A hole’s implementation that reads a value a cycle in the seam’s tree declares again.** Inline, the type an `Instantiator` or lazy cycle builds again receives the values declared along the cycle, but a builder hands its implementation the same values at every level of the cycle.
+- **A hole’s implementation that reads a value declared on a cycle in the seam’s tree, between where a type is instantiated and where the cycle instantiates it again.** Inline, the type an `Instantiator` or lazy cycle builds again receives the value declared at its own level of the cycle, but a builder hands its implementation the same values at every level. A value declared above the cycle, or by the type built again, is the same in both, and is no error.
 - **A hole’s implementation that receives an instantiator the seam’s tree instantiates.** Say a seam declares `@Instantiated let detailBuilder: ErasedInstantiator<(), any Detail>`, and the type that implements `Detail` in another module receives `detailBuilder` to open itself again. Inline, it gets an instantiator of its own, as [Dependency cycles](#dependency-cycles) describes, but that instantiator builds through a function inside the seam’s initializer, which the caller cannot refer to. The same holds for an instantiator that builds a type on the way to the hole, and for one the seam builds after the hole, such as the instantiator of a second hole whose implementation receives the first one back. Declare the instantiator on a type above the seam instead, and receive it in the seam’s tree.
 
 #### Trees a seam builds differently
