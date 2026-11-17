@@ -748,6 +748,7 @@ struct SafeDIToolGraphFuzzerTests {
 			.holePlaceInsidePlainFillTwoTypesDeep,
 			.holePlaceInsidePlainFillTwoCalls,
 			.holePlaceInsidePlainFillFulfillerReadsInnerLevel,
+			.holePlacesInsideFillSpellTypeWithAndWithoutAny,
 			.holeUnderLaterLoopMember,
 			.holeUnderEveryLoopMember,
 			.holeLoopOfThreeMembers,
@@ -779,6 +780,9 @@ struct SafeDIToolGraphFuzzerTests {
 			.cycleParameterOpenedByValue,
 			.cycleParameterSendableWrappers,
 		]).subtracting(drawFeatures).sorted() == [])
+		// The re-entered fill's read of a value one route holds, remedied by the seam built again receiving it, in an accepted
+		// graph: the two unremedied reads are rejected by design.
+		#expect(drawFeatures.contains(.reenteredFillReadsValueOfOneRouteRemedied))
 		// A graph with a hole whose builder labels and case names the name-stability oracle compared with those of the graph
 		// without its second place.
 		#expect(acceptedResults.contains { $0.isComparedWithoutSecondHolePlace })
@@ -6551,10 +6555,17 @@ struct SafeDIToolGraphFuzzerTests {
 	/// hole type, for a hole read only if available. Seeds 309, 1010, 1020 and 1890, whose seams later draws gave a second
 	/// hole type that the move reorders, stay for the shapes above: they are listed under `seamBuilderOrderReason`, a
 	/// sanctioned order, which `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` counts as passing
-	/// (`seamBuilderOrderShape(listedBy:)`). Pinned by `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
+	/// (`seamBuilderOrderShape(listedBy:)`). Seeds 0, 227, 1010 and 1890 are now rejected – both builds reject a
+	/// re-entered fill's unremedied read of a value one route holds, and passing-up copies hide a label – so seeds 93, 273,
+	/// 468, 743, 892 and 1986 show, accepted, the rolls they showed: a cycle of two seams with a `@Sendable` edge (seed 93),
+	/// a diamond with a `@Sendable` seam (seed 273), `HoleOwner` aliasing the field (seeds 468 and 1986), a fulfiller's
+	/// `package` initializer in another package (seed 743), two calls of the plain fill (seed 892) and mixed wrapper kinds
+	/// in the cycle (seed 1986); seeds 151, 309, 594 and 969 draw places inside a plain fill that spell their hole type
+	/// with and without `any`, seed 969 with no known issue, and seeds 68 and 84 the remedied read of a value one route
+	/// holds. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 609, 705, 743, 850, 892, 969, 1_010, 1_020, 1_450, 1_814, 1_890, 1_986]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x99BF1346CF10640A
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xD8FF5EF57A3B334B
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -6705,6 +6716,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.holePlaceInsidePlainFillTwoTypesDeep: 40,
 		.holePlaceInsidePlainFillTwoCalls: 28,
 		.holePlaceInsidePlainFillFulfillerReadsInnerLevel: 23,
+		.holePlacesInsideFillSpellTypeWithAndWithoutAny: 68,
 		.holeUnderLaterLoopMember: 37,
 		.holeUnderEveryLoopMember: 26,
 		.holeLoopOfThreeMembers: 8,
@@ -6891,7 +6903,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
-			seeds: [15, 68, 93, 94, 98, 108, 121, 164, 227, 273, 283, 298, 304, 308, 309, 326, 347, 348, 362, 365, 407, 481, 527, 556, 594, 605, 623, 663, 670, 699, 701, 750, 797, 832, 850, 858, 876, 883, 892, 929, 930],
+			seeds: [15, 68, 93, 94, 98, 108, 121, 164, 273, 283, 298, 304, 308, 309, 326, 347, 348, 362, 365, 407, 481, 527, 556, 594, 605, 623, 663, 670, 699, 701, 750, 797, 832, 850, 858, 876, 883, 892, 929, 930],
 		),
 		// Seed 391's chain of hole draws that re-enter one another holds more wrappers than a graph compared on its own may
 		// traverse (`DifferentialValueLimits.isolatedFuzzerGraph`), so the comparator describes none of its values beneath
@@ -7030,7 +7042,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
-			seeds: [1_020, 1_890],
+			seeds: [1_020],
 		),
 	]
 
