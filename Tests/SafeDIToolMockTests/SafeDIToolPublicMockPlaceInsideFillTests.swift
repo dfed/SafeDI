@@ -1588,9 +1588,9 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			    ) -> Root {
 			        func __safeDI_outer() -> Outer {
 			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget> {
-			                .init(inner_serviceBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner(tag: values.tag) })
+			                .init(inner_serviceBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner_SafeDIMockScope_Service(tag: values.tag) })
 			            }
-			            func __safeDI_gadgetBuilder_Outer_Inner(tag: Tag) -> Inner.SafeDIMockScope_Service.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+			            func __safeDI_gadgetBuilder_Outer_Inner_SafeDIMockScope_Service(tag: Tag) -> Inner.SafeDIMockScope_Service.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
 			                .init(service: { _ in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(tag: tag) })
 			            }
 			            @Sendable nonisolated func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(tag: Tag) -> Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
@@ -1610,9 +1610,9 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                })
 			            }
 			            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Outer(up: Outer.SafeDISendableMockScope_Gadget.__safeDI_Builder<any Gadget>) -> Outer.SafeDISendableMockScope_Gadget.__safeDI_Builder<any Gadget> {
-			                .init(inner_serviceSendableBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner_(up: up.inner_serviceSendableBuilder(values)) })
+			                .init(inner_serviceSendableBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner_SafeDISendableMockScope_Service(up: up.inner_serviceSendableBuilder(values)) })
 			            }
-			            @Sendable nonisolated func __safeDI_gadgetBuilder_Outer_Inner_(up: Inner.SafeDISendableMockScope_Service.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.SafeDISendableMockScope_Service.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+			            @Sendable nonisolated func __safeDI_gadgetBuilder_Outer_Inner_SafeDISendableMockScope_Service(up: Inner.SafeDISendableMockScope_Service.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.SafeDISendableMockScope_Service.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
 			                .init(screenBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(up: up.screenBuilder(values)) })
 			            }
 			            @Sendable nonisolated func __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(up: Inner.SafeDIMockScope_Service.Screen_Scope.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.SafeDIMockScope_Service.Screen_Scope.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
