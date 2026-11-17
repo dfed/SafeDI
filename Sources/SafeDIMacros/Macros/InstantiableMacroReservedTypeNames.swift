@@ -40,7 +40,9 @@ extension InstantiableMacro {
 			diagnoseReservedTypeName(name, context: context)
 		}
 		for declaration in declarations(in: members) where declaration.asProtocol(WithAttributesSyntax.self)?.attributes.instantiableMacro == nil {
-			if let nestedTypeName = declaration.nestedTypeNameToken {
+			// An associated type, which only a protocol declares, is no type nested in the declaration for anything else
+			// the macro reads, so `nestedTypeNameToken` does not name it.
+			if let nestedTypeName = declaration.nestedTypeNameToken ?? AssociatedTypeDeclSyntax(declaration)?.name {
 				diagnoseReservedTypeName(nestedTypeName, context: context)
 			}
 			if let nestedTypeDeclaration = declaration.asProtocol(DeclGroupSyntax.self) {
