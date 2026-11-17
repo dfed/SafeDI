@@ -2304,7 +2304,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The code tasks the generators of this scope's tree still hold (see `HeldCodeTasks`). Once the tree's code is
 	/// generated, each is a finished task, or one a scope started early for a context nothing asked for, still running.
-	/// The tree is walked with a stack, since it can be as deep as the module has types.
+	/// The tree is walked with a stack, since it can be as deep as the module has types. A generator a construction memo
+	/// shares between places is reached once for each place, so its tasks count once for each.
 	func codeTasksHeldInTree() async -> Int {
 		var generators = [self]
 		var heldTaskCount = 0
@@ -3803,6 +3804,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillCodeByPropertiesGeneratedLater[propertiesGeneratedLater, default: []]
 	}
 
+	/// Every argument of `generatePropertyCode` but `codeGeneration`, which is `.dependencyTree` wherever the key is made,
+	/// is in this key: a construction memo can share one generator between several
+	/// places, each emitting it with its own arguments, and the memo oracle compares construction only, so an emission
+	/// argument left out of the key would hand one place the code another place's arguments made.
 	private struct UnavailablePropertiesCacheKey: Hashable {
 		let unavailableProperties: Set<Property>
 		let propertiesGeneratedLater: Set<Property>

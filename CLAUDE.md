@@ -178,6 +178,7 @@ If your session started outside the worktree you are editing, scoped rules and n
 | a seam's or public mock's design: the contract, retention, hand-written builders | `.claude/rules/seam-and-mock-contract.md` |
 | a generator's design: type spelling, cost, captures, parallel work, runtime safety | `.claude/rules/generator-design.md` |
 | a source rule, `SourceRuleTests`, a waiver | `.claude/rules/source-rules.md` |
+| the construction memo, a new input to a place's build or a new stored generator field | `.claude/rules/construction-memo.md` |
 | a change's tests, before writing them | `.claude/rules/test-design.md` |
 | `Documentation/`, `README.md` | `.claude/rules/documentation.md` |
 | a breaking-change judgment, release notes, `publish.yml`, packaging | `.claude/rules/releases-and-packaging.md` |

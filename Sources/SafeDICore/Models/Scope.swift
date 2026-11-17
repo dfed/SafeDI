@@ -484,7 +484,10 @@ final class Scope: Hashable {
 	) throws -> ScopeGenerator {
 		var previousPassGenerator: ScopeGenerator?
 		var firstPassMemo = ConstructionMemo()
-		// A tree with a seam root or a mock root's builders has holes, whose places read context the memo does not cover.
+		// A tree with a seam root or a mock root's builders reads its own `SeamHoles` (its values bindings, member calls,
+		// builder structs and the names the seam binds), constant within the tree but not across trees, so its memo is never
+		// shared across trees or kept past a pass. Its places with holes store nothing; a seam without holes memoizes the
+		// rest, a pass at a time.
 		let sharesMemo = seamRoot == nil && mockBuilders == nil
 		var placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?
 		var scopeGenerator: ScopeGenerator

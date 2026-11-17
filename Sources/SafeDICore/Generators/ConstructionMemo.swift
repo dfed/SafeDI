@@ -30,18 +30,22 @@
 /// answered above it reads, at the other place, the context the other place inherits, which the log checks. So no read
 /// differs, and the builds are equal.
 ///
-/// A place is never stored or reused when it or anything in its subtree is a fill, is inside one, or belongs to a tree
-/// with holes (a seam's tree, or a public mock's), which read context this log does not cover. The memo lives for one
-/// pass, so what is constant in a pass (the order a seam's places start in, the declared type names) is equal for every
-/// place it compares. Only completed builds are stored: a pass that throws throws away its memo.
+/// A place is never stored or reused when it or anything in its subtree is a fill, is inside one, holds a hole, calls a
+/// seam or public mock with holes, or is in a tree with seam holes, which read context this log does not cover. A
+/// seam's or public mock's tree without holes is memoized, with a memo of its own: what it reads of its `SeamHoles` is
+/// the same at every place of the tree, since `sitePath` is empty wherever `seamHoles` is. The memo lives for one pass,
+/// so what is constant in a pass (the order a seam's places start in, the declared type names) is equal for every place
+/// it compares. Only completed builds are stored: a pass that throws throws away its memo.
 ///
 /// A memo shared across trees (`Sharing.acrossTrees`) carries the first pass of each tree that finished to the trees
 /// created after it with the same memo, which only the mock roots do: production trees keep a memo per tree. A first
 /// pass's keys name no generator of a pass before, and the memo keeps alive every scope its keys name, so no key names an
 /// object whose address another object can take while the memo lives. A root's own place is never stored. A tree built
-/// with a seam root or a mock root's builders neither reads nor keeps a shared memo. A first pass starts each generator's code as it creates it,
-/// so every generator a later tree reuses has started. What is constant in a pass of one tree and not across trees is
-/// either in the key (the flags) or excluded (a tree with holes, which alone has a start order of its own).
+/// with a seam root or a mock root's builders reads its own `SeamHoles`, constant within the tree but not across trees,
+/// so it neither reads nor keeps a shared memo. A first pass starts each generator's code as it creates it, so every
+/// generator a later tree reuses has started. What is constant in a pass of one tree and not across trees is either in
+/// the key (the flags) or kept to the tree (its `SeamHoles`, and the start order of a tree with holes). The list of every
+/// input and stored value and why each is covered is `.claude/rules/construction-memo.md`.
 struct ConstructionMemo {
 	/// Which trees a memo carries generators between.
 	enum Sharing {

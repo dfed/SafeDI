@@ -5180,7 +5180,8 @@ public actor DependencyTreeGenerator {
 				lazilyInstantiatedInstanceProperties.insert(property.asUnwrappedProperty)
 			}
 		}
-		// A seam's tree has holes, whose places no memo holds.
+		// A seam's tree reads its own `SeamHoles`, constant within the tree but not across trees, so it keeps a memo of its
+		// own, for one pass: a seam without holes reuses its places within a pass, and one with holes stores none.
 		var constructionMemo = ConstructionMemo()
 		return try rootScope.createScopeGenerator(
 			for: nil,
