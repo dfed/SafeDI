@@ -815,11 +815,15 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(results.contains { !$0.isAccepted && $0.failure == nil }, "Rejected none of \(Self.seamSmokeSeeds.count) graphs")
 	}
 
-	@Test(arguments: [(UInt64(153), GraphFuzzerGeneratorFeature.generateDependencyTree), (163, .generateDependencyTree), (98, .generateMockPublic), (208, .generateMockPublic)])
+	@Test(arguments: [(UInt64(1_209), GraphFuzzerGeneratorFeature.generateDependencyTree), (682, .generateDependencyTree), (98, .generateMockPublic), (208, .generateMockPublic)])
 	func seamDependencyDraw_importsOnlyTheModuleBeneath_whenDeclarationsMoveOrAChainIsDrawnBeneathSeamsModule(seed: UInt64, feature: GraphFuzzerGeneratorFeature) throws {
-		// Each module of the chain beneath the seam's module imports only the module beneath it, and a caller only the seam's
-		// module, so that under the module-info flow a caller reads the chain only through the seam's module's view.
+		// Each module of the chain beneath the seam's module imports only the module beneath it, and a caller lists only the
+		// seam's module, which its imports mirror, so that under the module-info flow a caller reads the chain only through
+		// the seam's module's view.
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [feature])
+		// A graph that declares the roots of the draws beneath the seam's module lists every module beneath, so no caller of it
+		// can show a read through the view.
+		#expect(!fixture.modulesListEveryModuleBeneath)
 		let modules = try #require(fixture.modules)
 		for (module, content) in zip(modules, fixture.swiftFileContent) {
 			let importedModuleNames = content.split(separator: "\n").filter { $0.hasPrefix("import Fuzz") }.map { String($0.dropFirst("import ".count)) }
@@ -827,7 +831,7 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 		let drawn = GraphFuzzerSeamDependencyDraw.drawn(in: fixture)
 		// Seed 208 moves a declaration beside its chain.
-		let expected: [UInt64: (movesDeclaration: Bool, drawsChain: Bool)] = [153: (true, false), 163: (false, true), 98: (true, false), 208: (true, true)]
+		let expected: [UInt64: (movesDeclaration: Bool, drawsChain: Bool)] = [1_209: (true, false), 682: (false, true), 98: (true, false), 208: (true, true)]
 		#expect(drawn.movesDeclaration == expected[seed]?.movesDeclaration)
 		#expect(drawn.drawsChain == expected[seed]?.drawsChain)
 		#expect(Set(modules).isSuperset(of: drawn.drawsChain ? [.seamDependency, .seamDependencyBase, .seamDependencyLeaf] : [.seamDependency]))
@@ -6628,8 +6632,10 @@ struct SafeDIToolGraphFuzzerTests {
 	/// declares a type in a flag's clause in the seam's module (`recordedInFlagClause`), which the two integrations agree
 	/// on once the plugin flow's assertions about that module's block are excused (seed 84); and a graph it rejects, which
 	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks; and declarations moved beneath the seam's module
-	/// (seed 153) and a chain of seams through the three modules beneath it (seed 347), which a caller computes from the
-	/// seam's module's view (`GraphFuzzerSeamDependencyDraw`); and seams naming a type declared in a block that guards
+	/// (seed 1209) and a chain of seams through the three modules beneath it (seed 682), which a caller computes from the
+	/// seam's module's view (`GraphFuzzerSeamDependencyDraw`), in graphs whose modules list only what they import (a graph
+	/// that declares the roots of the draws beneath the seam's module lists every module beneath, so no caller of it reads
+	/// through the view); and seams naming a type declared in a block that guards
 	/// mock-only declarations, whose other clauses declare it at the same level (seed 277), wider (seed 151) or narrower
 	/// (seed 1814), or which has none while another file declares it where `DEBUG` is inactive (seed 609, in the seam's
 	/// module), each compiled as a release build too; and `addingCycleParameterShapes`' cycle, its hole between the cycle's
@@ -6652,7 +6658,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// holds. Seeds 2006 and 3575 are a fill that builds its seam again and reads a value only the place it fills,
 	/// inside an inner seam's screen, carries, which the tool rejects (`fieldOfReenteringPlace`). Pinned by
 	/// `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 609, 705, 743, 850, 892, 969, 1_010, 1_020, 1_450, 1_814, 1_890, 1_986, 2_006, 3_575]
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 609, 682, 705, 743, 850, 892, 969, 1_010, 1_020, 1_209, 1_450, 1_814, 1_890, 1_986, 2_006, 3_575]
 
 	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x00D882B413AAA30B
 
