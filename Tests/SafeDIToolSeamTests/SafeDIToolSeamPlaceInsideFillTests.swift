@@ -187,6 +187,223 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsEveryBuilderAndStructOverTheMostExplicitSpelling_whenPlacesInsideFillSpellTheirTypeWithAndWithoutAny() async throws {
+		// `DefaultService` holds six places of `Gadget`: the last it declares spells `any Gadget`, the others `Gadget`. Every
+		// builder, struct and level function is over `any Gadget`, the most explicit spelling, whatever the places are named:
+		// each rotation of the six labels over the six declarations generates the same code once each label is read back as
+		// the position of its declaration, and the guard, which hashes the labels, as one name.
+		var generatedByRotation = [String]()
+		for rotation in Self.sixLabels.indices {
+			let labels = Array(Self.sixLabels[rotation...] + Self.sixLabels[..<rotation])
+			let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(feature: Self.inner(screen: ["@Forwarded public let id: Int"]), middle: Self.middleSpellingGadgetSixWays(labels: labels), app: Self.appFillingGadget), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+			var generated = ["Middle", "App"].map { output.modules[$0]?.generatedFiles["\($0).swift"] ?? "" }.joined(separator: "\n")
+			for (position, label) in labels.enumerated() {
+				generated = generated.replacingOccurrences(of: label, with: "place\(position)")
+			}
+			generatedByRotation.append(generated.replacingOccurrences(of: "__safeDI_Outer_[0-9A-F]{16}", with: "__safeDI_Outer_guard", options: .regularExpression))
+		}
+		#expect(Set(generatedByRotation).count == 1)
+		try await expectPlaceInsideFill(
+			feature: Self.inner(screen: ["@Forwarded public let id: Int"]),
+			middle: Self.middleSpellingGadgetSixWays(labels: Self.sixLabels),
+			app: Self.appFillingGadget,
+			probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().outer.inner.screenBuilder.instantiate(7)")],
+			expectedMiddle: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Outer {
+			    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+			    nonisolated public enum SafeDIScope_Gadget {
+			        nonisolated public struct inner_serviceBuilder_Values {}
+
+			        nonisolated public enum DefaultService_Scope {
+			            nonisolated public struct uniform_Values {}
+
+			            nonisolated public struct victor_Values {
+			                public let uniform: Gadget
+			            }
+
+			            nonisolated public struct whiskey_Values {
+			                public let uniform: Gadget
+			                public let victor: Gadget
+			            }
+
+			            nonisolated public struct xray_Values {
+			                public let uniform: Gadget
+			                public let victor: Gadget
+			                public let whiskey: Gadget
+			            }
+
+			            nonisolated public struct yankee_Values {
+			                public let uniform: Gadget
+			                public let victor: Gadget
+			                public let whiskey: Gadget
+			                public let xray: Gadget
+			            }
+
+			            nonisolated public struct zulu_Values {
+			                public let uniform: Gadget
+			                public let victor: Gadget
+			                public let whiskey: Gadget
+			                public let xray: Gadget
+			                public let yankee: Gadget
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let uniform: (uniform_Values) -> __safeDI_Built
+			                public let victor: (victor_Values) -> __safeDI_Built
+			                public let whiskey: (whiskey_Values) -> __safeDI_Built
+			                public let xray: (xray_Values) -> __safeDI_Built
+			                public let yankee: (yankee_Values) -> __safeDI_Built
+			                public let zulu: (zulu_Values) -> __safeDI_Built
+
+			                public init(uniform: @escaping (uniform_Values) -> __safeDI_Built, victor: @escaping (victor_Values) -> __safeDI_Built, whiskey: @escaping (whiskey_Values) -> __safeDI_Built, xray: @escaping (xray_Values) -> __safeDI_Built, yankee: @escaping (yankee_Values) -> __safeDI_Built, zulu: @escaping (zulu_Values) -> __safeDI_Built) {
+			                    self.uniform = uniform
+			                    self.victor = victor
+			                    self.whiskey = whiskey
+			                    self.xray = xray
+			                    self.yankee = yankee
+			                    self.zulu = zulu
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.uniform = { _ in __safeDI_builder() }
+			                    self.victor = { _ in __safeDI_builder() }
+			                    self.whiskey = { _ in __safeDI_builder() }
+			                    self.xray = { _ in __safeDI_builder() }
+			                    self.yankee = { _ in __safeDI_builder() }
+			                    self.zulu = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let inner_serviceBuilder: (inner_serviceBuilder_Values) -> Inner.SafeDIScope_Service.__safeDI_Builder<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>
+
+			            public init(inner_serviceBuilder: @escaping (inner_serviceBuilder_Values) -> Inner.SafeDIScope_Service.__safeDI_Builder<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
+			                self.inner_serviceBuilder = inner_serviceBuilder
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.inner_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
+			        let __safeDI_gadgetBuilder_inner_serviceBuilder = __safeDI_gadgetBuilder.inner_serviceBuilder(SafeDIScope_Gadget.inner_serviceBuilder_Values())
+			        func __safeDI_inner() -> Inner {
+			            _ = Inner.__safeDI_Inner_F6242724384070E7.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_serviceBuilder_Inner_service(_ scope: Inner.SafeDIScope_Service.service_Values, __safeDI_inner_serviceBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
+			                func __safeDI_service() -> DefaultService {
+			                    let uniform: Gadget = __safeDI_inner_serviceBuilder.uniform(SafeDIScope_Gadget.DefaultService_Scope.uniform_Values())
+			                    let victor: Gadget = __safeDI_inner_serviceBuilder.victor(SafeDIScope_Gadget.DefaultService_Scope.victor_Values(uniform: uniform))
+			                    let whiskey: Gadget = __safeDI_inner_serviceBuilder.whiskey(SafeDIScope_Gadget.DefaultService_Scope.whiskey_Values(uniform: uniform, victor: victor))
+			                    let xray: Gadget = __safeDI_inner_serviceBuilder.xray(SafeDIScope_Gadget.DefaultService_Scope.xray_Values(uniform: uniform, victor: victor, whiskey: whiskey))
+			                    let yankee: Gadget = __safeDI_inner_serviceBuilder.yankee(SafeDIScope_Gadget.DefaultService_Scope.yankee_Values(uniform: uniform, victor: victor, whiskey: whiskey, xray: xray))
+			                    let zulu: any Gadget = __safeDI_inner_serviceBuilder.zulu(SafeDIScope_Gadget.DefaultService_Scope.zulu_Values(uniform: uniform, victor: victor, whiskey: whiskey, xray: xray, yankee: yankee))
+			                    return DefaultService(uniform: uniform, victor: victor, whiskey: whiskey, xray: xray, yankee: yankee, zulu: zulu)
+			                }
+			                let service: any Service = __safeDI_service()
+			                return service
+			            }
+			            func __safeDI_serviceBuilder_Inner_Screen_Scope_service(_ scope: Inner.SafeDIScope_Service.Screen_Scope.service_Values, __safeDI_inner_serviceBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
+			                func __safeDI_service() -> DefaultService {
+			                    let uniform: Gadget = __safeDI_inner_serviceBuilder.uniform(SafeDIScope_Gadget.DefaultService_Scope.uniform_Values())
+			                    let victor: Gadget = __safeDI_inner_serviceBuilder.victor(SafeDIScope_Gadget.DefaultService_Scope.victor_Values(uniform: uniform))
+			                    let whiskey: Gadget = __safeDI_inner_serviceBuilder.whiskey(SafeDIScope_Gadget.DefaultService_Scope.whiskey_Values(uniform: uniform, victor: victor))
+			                    let xray: Gadget = __safeDI_inner_serviceBuilder.xray(SafeDIScope_Gadget.DefaultService_Scope.xray_Values(uniform: uniform, victor: victor, whiskey: whiskey))
+			                    let yankee: Gadget = __safeDI_inner_serviceBuilder.yankee(SafeDIScope_Gadget.DefaultService_Scope.yankee_Values(uniform: uniform, victor: victor, whiskey: whiskey, xray: xray))
+			                    let zulu: any Gadget = __safeDI_inner_serviceBuilder.zulu(SafeDIScope_Gadget.DefaultService_Scope.zulu_Values(uniform: uniform, victor: victor, whiskey: whiskey, xray: xray, yankee: yankee))
+			                    return DefaultService(uniform: uniform, victor: victor, whiskey: whiskey, xray: xray, yankee: yankee, zulu: zulu)
+			                }
+			                let service: any Service = __safeDI_service()
+			                return service
+			            }
+			            func __safeDI_serviceBuilder_Inner(up: Inner.SafeDIScope_Service.__safeDI_Builder<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.SafeDIScope_Service.__safeDI_Builder<any Service> {
+			                .init(screenBuilder: { values in __safeDI_serviceBuilder_Inner_Screen_Scope(up: up.screenBuilder(values)) }, service: { scope in __safeDI_serviceBuilder_Inner_service(scope, __safeDI_inner_serviceBuilder: up.service(scope)) })
+			            }
+			            func __safeDI_serviceBuilder_Inner_Screen_Scope(up: Inner.SafeDIScope_Service.Screen_Scope.__safeDI_Builder<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.SafeDIScope_Service.Screen_Scope.__safeDI_Builder<any Service> {
+			                .init(service: { scope in __safeDI_serviceBuilder_Inner_Screen_Scope_service(scope, __safeDI_inner_serviceBuilder: up.service(scope)) })
+			            }
+			            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Inner(up: __safeDI_gadgetBuilder_inner_serviceBuilder))
+			        }
+			        let inner: Inner = __safeDI_inner()
+			        self.init(inner: inner)
+			    }
+			}
+
+			extension Outer {
+			    public enum __safeDI_Outer_C13C7A63113D9B06 {}
+			}
+			""",
+			expectedApp: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(Middle)
+			import Middle
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_outer() -> Outer {
+			            _ = Outer.__safeDI_Outer_C13C7A63113D9B06.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+			                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner() })
+			            }
+			            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope() -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
+			                .init(
+			                    uniform: { _ in
+			                        let uniform: Gadget = LiveGadget()
+			                        return uniform
+			                    },
+			                    victor: { _ in
+			                        let victor: Gadget = LiveGadget()
+			                        return victor
+			                    },
+			                    whiskey: { _ in
+			                        let whiskey: Gadget = LiveGadget()
+			                        return whiskey
+			                    },
+			                    xray: { _ in
+			                        let xray: Gadget = LiveGadget()
+			                        return xray
+			                    },
+			                    yankee: { _ in
+			                        let yankee: Gadget = LiveGadget()
+			                        return yankee
+			                    },
+			                    zulu: { _ in
+			                        let zulu: any Gadget = LiveGadget()
+			                        return zulu
+			                    }
+			                )
+			            }
+			            func __safeDI_gadgetBuilder_Outer_Inner() -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+			                .init(screenBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope() }, service: { _ in __safeDI_gadgetBuilder_Outer_DefaultService_Scope() })
+			            }
+			            func __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope() -> Inner.SafeDIScope_Service.Screen_Scope.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+			                .init(service: { _ in __safeDI_gadgetBuilder_Outer_DefaultService_Scope() })
+			            }
+			            return Outer(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Outer())
+			        }
+			        let outer: Outer = __safeDI_outer()
+			        self.init(outer: outer)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_nestsEachTypeInsideFillByType_whenPlaceIsTwoTypesDeepInsideFill() async throws {
 		// `DefaultService` builds `tool`, then `widget`, whose `Widget` builds `gadget`: `DefaultService_Scope`'s case
 		// `widget` carries `tool` and holds `Widget_Scope`. `LiveGadget` reads `tool` from that level, `tag` from `Outer`'s,
@@ -2785,6 +3002,24 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 		seamFixtureType(named: "LiveGadget", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) public let id: Int?", "@Received(onlyIfAvailable: true) public let name: String?", "@Received public let tag: Tag"], conformances: ", Gadget")
 			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Gadget.self])\n"),
 		seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let outer: Outer"]),
+	]
+
+	/// Six labels, in the order they sort.
+	private static let sixLabels = ["uniform", "victor", "whiskey", "xray", "yankee", "zulu"]
+
+	/// `Outer`, which calls `Inner`, and `DefaultService`, which fills `Inner`'s `service` and holds six places of `Gadget`
+	/// labeled `labels`, in order, the last spelled `any Gadget` and the others `Gadget`.
+	private static func middleSpellingGadgetSixWays(labels: [String]) -> [String] {
+		[
+			fulfillingType(named: "DefaultService", fulfilling: "Service", declarations: labels.enumerated().map { "@Instantiated public let \($0.element): \($0.offset == labels.count - 1 ? "any Gadget" : "Gadget")" }),
+			seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated public let inner: Inner"]),
+		]
+	}
+
+	/// `LiveGadget`, which fills every place of `Gadget`, and `Root`.
+	private static let appFillingGadget = [
+		fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: []),
+		seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let outer: Outer"]),
 	]
 
 	private static func fulfillingType(named name: String, fulfilling fulfilledType: String, declarations: [String], conformances: String = "") -> String {

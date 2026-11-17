@@ -1483,6 +1483,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		) -> [FillDispatcher] {
 			let enumsByKey = calledBuilders.enumsByKey
 			let holesBySite = Dictionary(calledBuilders.holes.map { ($0.site, $0) }, uniquingKeysWith: { first, _ in first })
+			let builtTypeByHoleType = calledBuilders.holes.builtTypeByHoleType
 			let calledSeamTypes = Set(calledBuilders.builders.map(\.enumKey.seamType))
 			let sitesFilledOnEveryRoute = filledSites.subtracting(sitesPassedUpOnSomeRoute)
 			var sitesReachedByKey = [SeamSignature.ScopeEnum.Key: Set<SeamSignature.Hole.Site>]()
@@ -1641,9 +1642,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					key: dispatcherKey,
 					functionName: dispatcherNames[dispatcherKey] ?? "",
 					enumType: scopeEnum.type,
-					// The first place of the hole type in the order the builders reach them: `holes` is ordered, so the spelling
-					// never depends on a dictionary's order when places spell one type differently.
-					returnType: calledBuilders.holes.first { $0.holeType == key.holeType }?.builtType ?? key.holeType.builtType,
+					// The most explicit of the places' spellings, as the called seam's builder spells it (`builtType(of:)`).
+					returnType: builtTypeByHoleType[key.holeType] ?? key.holeType.builtType,
 					isSendableFamily: key.isSendable,
 					takesPassUp: takesPassUp(key, onRoutesOf: family),
 					cases: cases.map { dispatcherCase in
