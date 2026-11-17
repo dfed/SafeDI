@@ -3508,35 +3508,81 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 
 			#if DEBUG
 			extension Outer {
-			    @frozen public enum SafeDIMockScope_Gadget {
-			        case inner_serviceBuilder(inner_serviceBuilder_Values, Inner.SafeDIMockScope_Service, SafeDIMockScope_Gadget.DefaultService_Scope)
-
-			        public struct inner_serviceBuilder_Values {
+			    nonisolated public enum SafeDIMockScope_Gadget {
+			        nonisolated public struct inner_serviceBuilder_Values {
 			            public let tag: Tag
 			        }
 
-			        @frozen public enum DefaultService_Scope {
-			            case aBuilder(aBuilder_Values, SafeDIMockScope_Gadget.LoopA_Scope)
-			            case bBuilder(bBuilder_Values, SafeDIMockScope_Gadget.LoopB_Scope)
+			        nonisolated public enum DefaultService_Scope {
+			            nonisolated public struct aBuilder_Values {}
 
-			            public struct aBuilder_Values {}
+			            nonisolated public struct bBuilder_Values {}
 
-			            public struct bBuilder_Values {}
-			        }
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let aBuilder: (aBuilder_Values) -> SafeDIMockScope_Gadget.LoopA_Scope.__safeDI_Builder<__safeDI_Built>
+			                public let bBuilder: (bBuilder_Values) -> SafeDIMockScope_Gadget.LoopB_Scope.__safeDI_Builder<__safeDI_Built>
 
-			        @frozen public enum LoopA_Scope {
-			            case gadget(gadget_Values)
+			                public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIMockScope_Gadget.LoopA_Scope.__safeDI_Builder<__safeDI_Built>, bBuilder: @escaping (bBuilder_Values) -> SafeDIMockScope_Gadget.LoopB_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                    self.aBuilder = aBuilder
+			                    self.bBuilder = bBuilder
+			                }
 
-			            public struct gadget_Values {
-			                public let bBuilder: Instantiator<LoopB>
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                }
 			            }
 			        }
 
-			        @frozen public enum LoopB_Scope {
-			            case gadget(gadget_Values)
+			        nonisolated public enum LoopA_Scope {
+			            nonisolated public struct gadget_Values {
+			                public let bBuilder: Instantiator<LoopB>
+			            }
 
-			            public struct gadget_Values {
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let gadget: (gadget_Values) -> __safeDI_Built
+
+			                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
+			                    self.gadget = gadget
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.gadget = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        nonisolated public enum LoopB_Scope {
+			            nonisolated public struct gadget_Values {
 			                public let aBuilder: Instantiator<LoopA>
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let gadget: (gadget_Values) -> __safeDI_Built
+
+			                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
+			                    self.gadget = gadget
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.gadget = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let inner_serviceBuilder: (inner_serviceBuilder_Values) -> Inner.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>
+
+			            public init(inner_serviceBuilder: @escaping (inner_serviceBuilder_Values) -> Inner.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
+			                self.inner_serviceBuilder = inner_serviceBuilder
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.inner_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
 			            }
 			        }
 			    }
@@ -3544,69 +3590,70 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			    /// Overrides for the mock dependency tree.
 			    nonisolated public struct SafeDIOverrides {
 			        public init(
-			            tag: (() -> Tag)? = nil,
-			            inner: ((@escaping (Inner.SafeDIMockScope_Service) -> any Service) -> Inner)? = nil
+			            tag: (() -> Tag)? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
-			                tag: tag,
-			                inner: inner
+			                tag: tag
 			            )
 			        }
 
 			        public var tag: (() -> Tag)? { __safeDI_storage.tag }
-			        public var inner: ((@escaping (Inner.SafeDIMockScope_Service) -> any Service) -> Inner)? { __safeDI_storage.inner }
 
 			        private let __safeDI_storage: __safeDI_Storage
 
 			        private final class __safeDI_Storage {
 			            init(
-			                tag: (() -> Tag)?,
-			                inner: ((@escaping (Inner.SafeDIMockScope_Service) -> any Service) -> Inner)?
+			                tag: (() -> Tag)?
 			            ) {
 			                self.tag = tag
-			                self.inner = inner
 			            }
 
 			            let tag: (() -> Tag)?
-			            let inner: ((@escaping (Inner.SafeDIMockScope_Service) -> any Service) -> Inner)?
 			        }
 			    }
 
 			    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 			    public static func mock(
-			        gadgetBuilder: @escaping (Outer.SafeDIMockScope_Gadget) -> any Gadget,
+			        gadgetBuilder: @escaping () -> any Gadget,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Outer {
-			        let __safeDI_gadgetBuilder = gadgetBuilder
+			        Outer.__safeDI_mock(gadgetBuilder: .init(__safeDI_noScope: gadgetBuilder), safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        gadgetBuilder __safeDI_gadgetBuilder: Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget>,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Outer {
 			        let tag = if let safeDIBuilder = safeDIOverrides.tag { safeDIBuilder() } else { Tag() }
-			        let __safeDI_gadgetValues_inner_serviceBuilder = SafeDIMockScope_Gadget.inner_serviceBuilder_Values(tag: tag)
+			        let __safeDI_gadgetBuilder_inner_serviceBuilder = __safeDI_gadgetBuilder.inner_serviceBuilder(SafeDIMockScope_Gadget.inner_serviceBuilder_Values(tag: tag))
 			        func __safeDI_inner() -> Inner {
-			            func __safeDI_serviceBuilder_Inner(_ __safeDI_inner_serviceBuilder: Inner.SafeDIMockScope_Service) -> any Service {
-			                switch __safeDI_inner_serviceBuilder {
-			                case .service:
-			                    func __safeDI_service() -> DefaultService {
-			                        let __safeDI_gadgetValues_aBuilder = SafeDIMockScope_Gadget.DefaultService_Scope.aBuilder_Values()
-			                        let __safeDI_gadgetValues_bBuilder = SafeDIMockScope_Gadget.DefaultService_Scope.bBuilder_Values()
-			                        func __safeDI_aBuilder() -> LoopA {
-			                            let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
-			                            let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_serviceBuilder(__safeDI_gadgetValues_inner_serviceBuilder, __safeDI_inner_serviceBuilder, .aBuilder(__safeDI_gadgetValues_aBuilder, .gadget(SafeDIMockScope_Gadget.LoopA_Scope.gadget_Values(bBuilder: bBuilder)))))
-			                            return LoopA(gadget: gadget, bBuilder: bBuilder)
-			                        }
-			                        let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
-			                        func __safeDI_bBuilder() -> LoopB {
-			                            let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
-			                            let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_serviceBuilder(__safeDI_gadgetValues_inner_serviceBuilder, __safeDI_inner_serviceBuilder, .bBuilder(__safeDI_gadgetValues_bBuilder, .gadget(SafeDIMockScope_Gadget.LoopB_Scope.gadget_Values(aBuilder: aBuilder)))))
-			                            return LoopB(gadget: gadget, aBuilder: aBuilder)
-			                        }
+			            func __safeDI_serviceBuilder_Inner_service(_ scope: Inner.SafeDIMockScope_Service.service_Values, __safeDI_inner_serviceBuilder: SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
+			                func __safeDI_service() -> DefaultService {
+			                    let __safeDI_gadgetBuilder_aBuilder = __safeDI_inner_serviceBuilder.aBuilder(SafeDIMockScope_Gadget.DefaultService_Scope.aBuilder_Values())
+			                    let __safeDI_gadgetBuilder_bBuilder = __safeDI_inner_serviceBuilder.bBuilder(SafeDIMockScope_Gadget.DefaultService_Scope.bBuilder_Values())
+			                    func __safeDI_aBuilder() -> LoopA {
 			                        let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
-			                        return DefaultService(aBuilder: aBuilder, bBuilder: bBuilder)
+			                        let gadget: any Gadget = __safeDI_gadgetBuilder_aBuilder.gadget(SafeDIMockScope_Gadget.LoopA_Scope.gadget_Values(bBuilder: bBuilder))
+			                        return LoopA(gadget: gadget, bBuilder: bBuilder)
 			                    }
-			                    let service: any Service = __safeDI_service()
-			                    return service
+			                    let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
+			                    func __safeDI_bBuilder() -> LoopB {
+			                        let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
+			                        let gadget: any Gadget = __safeDI_gadgetBuilder_bBuilder.gadget(SafeDIMockScope_Gadget.LoopB_Scope.gadget_Values(aBuilder: aBuilder))
+			                        return LoopB(gadget: gadget, aBuilder: aBuilder)
+			                    }
+			                    let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
+			                    return DefaultService(aBuilder: aBuilder, bBuilder: bBuilder)
 			                }
+			                let service: any Service = __safeDI_service()
+			                return service
+			            }
+			            func __safeDI_serviceBuilder_Inner(up: Inner.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+			                .init(service: { scope in __safeDI_serviceBuilder_Inner_service(scope, __safeDI_inner_serviceBuilder: up.service(scope)) })
 			            }
 			            _ = Inner.__safeDI_Inner_mock_E789692848368FB8.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return if let safeDIBuilder = safeDIOverrides.inner { safeDIBuilder(__safeDI_serviceBuilder_Inner) } else { Inner.__safeDI_mock(serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) })) }
+			            return Inner.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Inner(up: __safeDI_gadgetBuilder_inner_serviceBuilder))
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        return Outer(tag: tag, inner: inner)
@@ -3614,7 +3661,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			}
 
 			extension Outer {
-			    public enum __safeDI_Outer_mock_3585558781D5ADA4 {}
+			    public enum __safeDI_Outer_mock_F96B719AA2C307A8 {}
 			}
 			#endif
 			""",
@@ -3657,33 +3704,29 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        func __safeDI_outer() -> Outer {
-			            func __safeDI_gadgetBuilder_Outer(_ scope: Outer.SafeDIMockScope_Gadget) -> any Gadget {
-			                switch scope {
-			                case let .inner_serviceBuilder(_, _, scope): return __safeDI_gadgetBuilder_Outer_DefaultService_Scope(scope)
-			                }
+			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget> {
+			                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner() })
 			            }
-			            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(_ scope: Outer.SafeDIMockScope_Gadget.DefaultService_Scope) -> any Gadget {
-			                switch scope {
-			                case let .aBuilder(_, scope): return __safeDI_gadgetBuilder_Outer_LoopA_Scope(scope)
-			                case let .bBuilder(_, scope): return __safeDI_gadgetBuilder_Outer_LoopB_Scope(scope)
-			                }
+			            func __safeDI_gadgetBuilder_Outer_Inner() -> Inner.SafeDIMockScope_Service.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+			                .init(service: { _ in __safeDI_gadgetBuilder_Outer_DefaultService_Scope() })
 			            }
-			            func __safeDI_gadgetBuilder_Outer_LoopA_Scope(_ scope: Outer.SafeDIMockScope_Gadget.LoopA_Scope) -> any Gadget {
-			                switch scope {
-			                case .gadget:
+			            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope() -> Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
+			                .init(aBuilder: { _ in __safeDI_gadgetBuilder_Outer_LoopA_Scope() }, bBuilder: { _ in __safeDI_gadgetBuilder_Outer_LoopB_Scope() })
+			            }
+			            func __safeDI_gadgetBuilder_Outer_LoopA_Scope() -> Outer.SafeDIMockScope_Gadget.LoopA_Scope.__safeDI_Builder<any Gadget> {
+			                .init(gadget: { _ in
 			                    let gadget: any Gadget = LiveGadget()
 			                    return gadget
-			                }
+			                })
 			            }
-			            func __safeDI_gadgetBuilder_Outer_LoopB_Scope(_ scope: Outer.SafeDIMockScope_Gadget.LoopB_Scope) -> any Gadget {
-			                switch scope {
-			                case .gadget:
+			            func __safeDI_gadgetBuilder_Outer_LoopB_Scope() -> Outer.SafeDIMockScope_Gadget.LoopB_Scope.__safeDI_Builder<any Gadget> {
+			                .init(gadget: { _ in
 			                    let gadget: any Gadget = LiveGadget()
 			                    return gadget
-			                }
+			                })
 			            }
-			            _ = Outer.__safeDI_Outer_mock_3585558781D5ADA4.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Outer.mock(gadgetBuilder: __safeDI_gadgetBuilder_Outer, safeDIOverrides: safeDIOverrides.outer)
+			            _ = Outer.__safeDI_Outer_mock_F96B719AA2C307A8.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Outer.__safeDI_mock(gadgetBuilder: __safeDI_gadgetBuilder_Outer(), safeDIOverrides: safeDIOverrides.outer)
 			        }
 			        let outer: Outer = __safeDI_outer()
 			        return Root(outer: outer)
