@@ -2053,10 +2053,24 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        init(
 		            profile: ((any UserService) -> Profile)? = nil
 		        ) {
-		            self.profile = profile
+		            __safeDI_storage = __safeDI_Storage(
+		                profile: profile
+		            )
 		        }
 
-		        let profile: ((any UserService) -> Profile)?
+		        var profile: ((any UserService) -> Profile)? { __safeDI_storage.profile }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                profile: ((any UserService) -> Profile)?
+		            ) {
+		                self.profile = profile
+		            }
+
+		            let profile: ((any UserService) -> Profile)?
+		        }
 		    }
 
 		    static func mock(
@@ -2162,12 +2176,29 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            profile: ((any UserService) -> Profile)? = nil,
 		            panel: ((@escaping () -> any UserService) -> Panel)? = nil
 		        ) {
-		            self.profile = profile
-		            self.panel = panel
+		            __safeDI_storage = __safeDI_Storage(
+		                profile: profile,
+		                panel: panel
+		            )
 		        }
 
-		        let profile: ((any UserService) -> Profile)?
-		        let panel: ((@escaping () -> any UserService) -> Panel)?
+		        var profile: ((any UserService) -> Profile)? { __safeDI_storage.profile }
+		        var panel: ((@escaping () -> any UserService) -> Panel)? { __safeDI_storage.panel }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                profile: ((any UserService) -> Profile)?,
+		                panel: ((@escaping () -> any UserService) -> Panel)?
+		            ) {
+		                self.profile = profile
+		                self.panel = panel
+		            }
+
+		            let profile: ((any UserService) -> Profile)?
+		            let panel: ((@escaping () -> any UserService) -> Panel)?
+		        }
 		    }
 
 		    static func mock(
