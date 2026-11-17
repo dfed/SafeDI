@@ -4990,6 +4990,10 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause)", declaringTypes: "`MiddleAlpha`’s and `MiddleOmega`’s")) == "its diagnostics")
 		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause)", notes: [zedNote])) == "its diagnostics")
 		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause)", notes: [alphaNote, zedNote.replacingOccurrences(of: "`logger: Logger`", with: "`logger: Logger?`")])) == "its diagnostics")
+		// A clause whose call is of a seam that builds `Flow`, named as written, sorts as a clause too.
+		let zedRelayClause = zedClause.replacingOccurrences(of: "instantiates `Flow` again (`flowBuilder`)", with: "instantiates `Relay` (`relayBuilder`), which instantiates `Flow` again")
+		#expect(GraphFuzzerToolOutcome.difference(between: diagnostics(clauses: "\(alphaClause) and \(zedRelayClause)"), and: diagnostics(clauses: "\(zedRelayClause) and \(reorderedAlphaClause)", declaringTypes: "`MiddleZed`’s and `MiddleAlpha`’s", notes: [zedNote, alphaNote])) == nil)
+		#expect(GraphFuzzerToolOutcome.difference(between: diagnostics(clauses: "\(alphaClause) and \(zedRelayClause)"), and: diagnostics(clauses: "\(alphaClause) and \(zedRelayClause.replacingOccurrences(of: "`Relay`", with: "`Hub`"))")) == "its diagnostics")
 	}
 
 	@Test
@@ -5003,6 +5007,12 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(GraphFuzzerToolOutcome.differences(between: outcome("A", "B"), and: outcome("B", "A")) == [])
 		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "C")) == "its diagnostics")
 		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "A", call: "Factory")) == "its diagnostics")
+		// Calls of seams that build the seam built again, named as written.
+		func relayOutcome(_ first: String, _ second: String) -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+		}
+		#expect(GraphFuzzerToolOutcome.differences(between: relayOutcome("A", "B"), and: relayOutcome("B", "A")) == [])
+		#expect(GraphFuzzerToolOutcome.difference(between: relayOutcome("A", "B"), and: relayOutcome("B", "C")) == "its diagnostics")
 	}
 
 	@Test

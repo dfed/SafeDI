@@ -11667,7 +11667,8 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// `MiddleAlpha` instantiates `Flow` again (`flowBuilder`) and `MiddleZed` declares …, but"), each clause's places, and
 	/// its declaring types ("cannot hand it `MiddleAlpha`’s and `MiddleZed`’s values"), and, where a fill's seam opened again
 	/// loses a value (`fieldOfReenteringPlace`), the types the places carry it from ("carries from `AScreen` and `BScreen`,
-	/// and"), the seams and calls that open it again ("instantiates `ASeam` and `BSeam` again (`aBuilder` and `bBuilder`)"),
+	/// and"), the calls that open it again ("instantiates `ASeam` again (`aBuilder` and `bBuilder`)", or, through seams that
+	/// build it, "instantiates `ARelay` and `BRelay` (`aBuilder` and `bBuilder`), which instantiate `ASeam` again"),
 	/// and the alternatives inline reads ("would read `AScreen`’s or `BScreen`’s `id` inside that `ASeam` or `BSeam`") – sorted as text, each item in its
 	/// place among the list's separators, so two diagnostics that list the same items in another order compare equal, and
 	/// any other difference, including an item added, removed or changed, still tells them apart. A place keeps its owner,
@@ -11682,8 +11683,9 @@ enum GraphFuzzerToolOutcome: Equatable {
 		let separator = "(?:, and |, | and )"
 		// A remedy that fulfills one type of a merged fill finding's places.
 		let fulfillRemedy = "declare an @Instantiable type that fulfills `[^`]*` in (?:module `[^`]*`|this module) or a module it lists among its SafeDI dependencies, so `[^`]*` fills the builders? itself"
-		// A clause of a declaration that hides a value on the paths from its places to a call that re-enters a seam.
-		let reenteringCallClause = "`[^`]*` declares on the paths? from the builders? for \(place)(?:\(separator)\(place))* to the call by which `[^`]*` instantiates `[^`]*` again \\(`[^`]*`\\)"
+		// A clause of a declaration that hides a value on the paths from its places to a call that re-enters a seam: a call of
+		// the seam itself, or of a seam that builds it, such as one that passes its place up.
+		let reenteringCallClause = "`[^`]*` declares on the paths? from the builders? for \(place)(?:\(separator)\(place))* to the call by which `[^`]*` instantiates `[^`]*`(?: again \\(`[^`]*`\\)| \\(`[^`]*`\\), which instantiates `[^`]*` again)"
 		var diagnostic = diagnostic
 		for (list, item) in [
 			("(?<=Did you mean one of )`[^`]*`(?:, `[^`]*`)+(?=\\?)", backtickedItem),
@@ -11701,8 +11703,8 @@ enum GraphFuzzerToolOutcome: Equatable {
 			// reads, and the seams inline reads it inside. The seams its remedy declares the value on are the remedy's list
 			// above.
 			("(?<= carries from | carry from )`[^`]*`(?:\(separator)`[^`]*`)+(?=, and )", backtickedItem),
-			("(?<= instantiates )`[^`]*`(?:\(separator)`[^`]*`)+(?= again \\()", backtickedItem),
-			("(?<= again \\()`[^`]*`(?:\(separator)`[^`]*`)+(?=\\))", backtickedItem),
+			("(?<= instantiates )`[^`]*`(?:\(separator)`[^`]*`)+(?= again \\(| \\(`)", backtickedItem),
+			("(?<= again \\(|` \\()`[^`]*`(?:\(separator)`[^`]*`)+(?=\\))", backtickedItem),
 			("(?<=would read )`[^`]*`’s(?:(?:, or |, | or )`[^`]*`’s)+(?= `)", "`[^`]*`’s"),
 			("(?<=inside that )`[^`]*`(?:(?:, or |, | or )`[^`]*`)+(?=, but )", backtickedItem),
 		] {

@@ -2093,6 +2093,23 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					"`\(declaration.declaringType.asSource)` builds on the path where `\(seam.asSource)` calls \(calledSeams)"
 				}
 			}
+			/// What `calls`, made inside a fill, instantiate, named as written: `seamBuiltAgain` itself, or a seam that builds it
+			/// again, such as one that passes its place up. Each list is in name order, which only presents it.
+			func instantiatesAgain(_ calls: [(calledSeam: TypeDescription, label: String)], seamBuiltAgain: TypeDescription) -> String {
+				let seamBuiltAgainName = seamBuiltAgain.asSource
+				let directLabels = Set(calls.filter { $0.calledSeam.asSource == seamBuiltAgainName }.map(\.label)).sorted()
+				let callsThroughOtherSeams = calls.filter { $0.calledSeam.asSource != seamBuiltAgainName }
+				var parts = [String]()
+				if !directLabels.isEmpty {
+					parts.append("`\(seamBuiltAgainName)` again (\(listed(directLabels.map { "`\($0)`" })))")
+				}
+				if !callsThroughOtherSeams.isEmpty {
+					let otherSeams = Set(callsThroughOtherSeams.map(\.calledSeam.asSource)).sorted()
+					let otherLabels = Set(callsThroughOtherSeams.map(\.label)).sorted()
+					parts.append("\(listed(otherSeams.map { "`\($0)`" })) (\(listed(otherLabels.map { "`\($0)`" }))), which \(otherSeams.count > 1 ? "instantiate" : "instantiates") `\(seamBuiltAgainName)` again")
+				}
+				return parts.joined(separator: " and ")
+			}
 			func fulfillRemedy(_ seamModule: ModuleIdentity) -> String {
 				SeamAccessExplanation.fulfillRemedy(fulfilling: hole.instantiatedType, seamModuleName: seamModule.moduleName, effect: nil)
 			}
@@ -2289,7 +2306,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					let places = clause.places.sorted { $0.nameOrder.lexicographicallyPrecedes($1.nameOrder) }
 					let namesSeveralPlaces = Set(places.map(\.nameOrder)).count > 1
 					let namesSeveralBuilders = Set(places.map { "\($0.seamType.asSource) \($0.builderLabel)" }).count > 1
-					return "`\(clause.declaration.declaringType.asSource)` declares on the path\(namesSeveralPlaces ? "s" : "") from the builder\(namesSeveralBuilders ? "s" : "") for \(listed(places.map { placeDescription(of: $0, namingSeam: false) })) to the call by which `\(clause.declaration.callingType.asSource)` instantiates `\(clause.declaration.calledSeam.asSource)` again (`\(clause.declaration.callProperty.label)`)"
+					return "`\(clause.declaration.declaringType.asSource)` declares on the path\(namesSeveralPlaces ? "s" : "") from the builder\(namesSeveralBuilders ? "s" : "") for \(listed(places.map { placeDescription(of: $0, namingSeam: false) })) to the call by which `\(clause.declaration.callingType.asSource)` instantiates \(instantiatesAgain([(clause.declaration.calledSeam, clause.declaration.callProperty.label)], seamBuiltAgain: reenteredPlace.seamType))"
 				}
 				let callsAreSeveral = Set(clauses.map { [$0.declaration.callingType.asSource, $0.declaration.calledSeam.asSource, $0.declaration.callProperty.label] }).count > 1
 				// A declaration two calls hide from is noted once. Each note is a diagnostic of its own, so the notes follow where
@@ -2334,11 +2351,11 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				}
 				let carriedNamesSeveralBuilders = Set(places.map { "\($0.seamType.asSource) \($0.builderLabel)" }).count > 1
 				let fillsInstantiate = places.count > 1 ? "each of their fills instantiates" : "that builder’s fill instantiates"
-				let calledSeams = Set(carried.map(\.calledSeam.asSource)).sorted().map { "`\($0)`" }
-				let calledSeam = listed(calledSeams)
-				let callLabels = Set(carried.map(\.callProperty.label)).sorted().map { "`\($0)`" }
+				// The seam built again, beneath the place whose fill reopens it, which a call names as written: it can be of a
+				// seam that builds the seam built again, such as one that passes its place up.
+				let seamBuiltAgain = "`\(reenteredPlace.seamType.asSource)`"
 				let callsAreSeveral = Set(carried.map { "\($0.calledSeam.asSource) \($0.callProperty.label)" }).count > 1
-				let carriers = "the builder\(carriedNamesSeveralBuilders ? "s" : "") for \(listed(places.map { placeDescription(of: $0, namingSeam: false) })) \(carriedNamesSeveralBuilders ? "carry" : "carries") from \(listed(Set(carried.map(\.field.declaringType.asSource)).sorted().map { "`\($0)`" })), and \(fillsInstantiate) \(calledSeam) again (\(listed(callLabels)))"
+				let carriers = "the builder\(carriedNamesSeveralBuilders ? "s" : "") for \(listed(places.map { placeDescription(of: $0, namingSeam: false) })) \(carriedNamesSeveralBuilders ? "carry" : "carries") from \(listed(Set(carried.map(\.field.declaringType.asSource)).sorted().map { "`\($0)`" })), and \(fillsInstantiate) \(instantiatesAgain(carried.map { ($0.calledSeam, $0.callProperty.label) }, seamBuiltAgain: reenteredPlace.seamType))"
 				let declaringTypes = Set(carried.map(\.field.declaringType.asSource)).sorted().map { "`\($0)`’s" }
 				// The forms the places carry differ at most in optionality, each providing the receive: the remedy spells the
 				// first in name order.
@@ -2363,12 +2380,12 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				// A place a `@Sendable` function builds carries none of the seam's parameters (`fields(of:)`), so its fill reads the
 				// outer caller's value whatever the seam receives: only filling the builder in the seam's module helps.
 				let remedy = if reenteredPlace.isBuiltBySendableBuilder {
-					"The scope\(namesSeveralBuilders ? "s" : "") SafeDI hands \(namedBuilders) \(scopeCarries) only what a `@Sendable` function binds, so no value \(calledSeams.count > 1 ? "those seams receive" : "\(calledSeam) receives") reaches \(builderPronoun): \(fulfillRemedies)."
+					"The scope\(namesSeveralBuilders ? "s" : "") SafeDI hands \(namedBuilders) \(scopeCarries) only what a `@Sendable` function binds, so no value \(seamBuiltAgain) receives reaches \(builderPronoun): \(fulfillRemedies)."
 				} else {
-					"Declare `\(receive)` on \(calledSeam), so the builder’s scope carries it, or \(fulfillRemedies)."
+					"Declare `\(receive)` on \(seamBuiltAgain), so the builder’s scope carries it, or \(fulfillRemedies)."
 				}
 				return [
-					SourceDiagnostic(severity: .error, location: location, message: "\(receives), which \(carriers). Inline, \(readerName) would read \(listedAlternatives(declaringTypes)) `\(field.property.label)` inside that \(listedAlternatives(calledSeams)), but \(callsAreSeveral ? "those calls pass" : "the call passes") the builder on as \(module(fillingModule)) fills it, whose scope there does not carry `\(field.property.label)`, so \(readerName) would get \(handed). \(remedy)"),
+					SourceDiagnostic(severity: .error, location: location, message: "\(receives), which \(carriers). Inline, \(readerName) would read \(listedAlternatives(declaringTypes)) `\(field.property.label)` inside that \(seamBuiltAgain), but \(callsAreSeveral ? "those calls pass" : "the call passes") the builder on as \(module(fillingModule)) fills it, whose scope there does not carry `\(field.property.label)`, so \(readerName) would get \(handed). \(remedy)"),
 				]
 			case let .closesCycleInSeamTree(closingProperty, closingType, declarationLocation, fillAncestors, closedOnDeclaration, closesOnOwnerOfHole, seamModule):
 				let closingTypeName = "`\(closingType.asSource)`"
