@@ -23,8 +23,9 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// The graph fuzzer's readers of generated code, each over a seam that takes a builder struct, where a reader that stops
-/// matching the struct's form would go silent, and over a seam that keeps its closure over its scope enum, which each reads
-/// as before. Each fixture is code the tool generates.
+/// matching the struct's form would go silent, and over a builder that keeps its closure over its scope enum, the form a
+/// public mock's hole types keep, which each reads as before. Each fixture is code the tool generated: the closure form
+/// as a seam spelled it before every hole type of a seam took a builder struct.
 struct GraphFuzzerBuilderStructReaderTests {
 	// MARK: holeBuilderNames
 

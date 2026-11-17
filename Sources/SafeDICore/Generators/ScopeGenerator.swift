@@ -4585,8 +4585,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// How generated code spells the attributes of a local function it declares: `@Sendable` where the function is, and
 	/// `nonisolated` beside it where the code is a seam's that takes a builder struct, or the calling module's code for one,
-	/// whose `@Sendable` functions are called from closures no actor isolates. A hole type that keeps its closure over the
-	/// enum gets no `nonisolated`, a deliberate gap: its generated code is unchanged until it takes the struct.
+	/// whose `@Sendable` functions are called from closures no actor isolates. A public mock’s hole type, which keeps its
+	/// closure over the enum, gets no `nonisolated`, a deliberate gap: its generated code is unchanged until it takes the
+	/// struct.
 	static func localFunctionPrefix(isSendable: Bool, isNonisolated: Bool) -> String {
 		guard isSendable else { return "" }
 		return isNonisolated ? "@Sendable nonisolated " : "@Sendable "
@@ -6525,8 +6526,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if declaresBuilderStruct, !scopeEnum.cases.isEmpty {
 			body += (body.isEmpty ? "" : "\n\n") + builderStructDeclaration(of: scopeEnum, holesBySite: holesBySite, levelForms: &levelForms, calledRootsTakingValue: calledRootsTakingValue, indent: caseIndent)
 		}
-		// A hole type that keeps its closure over the enum gets no `nonisolated`, a deliberate gap: its generated code is
-		// unchanged until it takes the struct.
+		// A public mock’s hole type, which keeps its closure over the enum, gets no `nonisolated`, a deliberate gap: its
+		// generated code is unchanged until it takes the struct.
 		return """
 		\(indent)\(declaresCases ? "@frozen " : "")\(declaresBuilderStruct ? "nonisolated " : "")public enum \(scopeEnum.typeName) {
 		\(body)

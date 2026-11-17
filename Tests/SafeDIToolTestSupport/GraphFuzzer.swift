@@ -1346,8 +1346,8 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// The second place spells the value it forwards otherwise, `Swift.Int` for `Int`: the builder takes the erased
 	/// wrapper's `Builder`.
 	case holeForwardingPlaceSecondPlaceSpelledOtherwise
-	/// `HoleOuter` passes up `HoleSeam`'s forwarding place: the kept seam rebuilds the place's case around the value it
-	/// forwards.
+	/// `HoleOuter` passes up `HoleSeam`'s forwarding place, so `HoleOuter`'s builder struct carries the member that takes
+	/// the value the place forwards.
 	case holeForwardingPlacePassedUp
 	/// `HoleHandedHolder`'s place held in an `Instantiator` or `SendableInstantiator` of `HoleHanded`, a class of the seam's
 	/// module that conforms to `Instantiable` by hand, filled by its subclass `HoleHandedImpl`: it forwards nothing, an
@@ -1368,8 +1368,7 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case holeNothingForwardedPlaceBesidePlain
 	/// That place beside the instantiator place of `HoleHanded`, which forwards nothing.
 	case holeNothingForwardedPlaceBesideInstantiator
-	/// `HoleOuter` passes up the place that forwards nothing: the kept seam hands the place's member a builder that ignores
-	/// what it is handed.
+	/// `HoleOuter` passes up the place that forwards nothing, so `HoleOuter`'s builder struct carries the place's member.
 	case holeNothingForwardedPlacePassedUp
 	/// `HoleBoth`, a seam that builds `HoleSeam` by value and in a `SendableInstantiator`: an inner seam reached by a plain
 	/// and a `@Sendable` route.
@@ -5273,8 +5272,8 @@ enum GraphFuzzerGenerator {
 			let forwardsTicketPair = holeRolls.forwardingPlaceShapes.percentChance(75)
 			let drawsSecondTicketPlace = holeRolls.forwardingPlaceShapes.percentChance(90)
 			let secondTicketPlaceSpelledOtherwise = holeRolls.forwardingPlaceShapes.percentChance(95)
-			// Where the base draw passes nothing up, `HoleOuter` passes the forwarding place up now and then, so that a kept seam
-			// rebuilds its case around the value it forwards (`holeForwardingPlacePassedUp`).
+			// Where the base draw passes nothing up, `HoleOuter` passes the forwarding place up now and then, so that an outer
+			// seam's struct carries the member of a place that forwards a value (`holeForwardingPlacePassedUp`).
 			let passesUpForwardingPlace = holeRolls.forwardingPlaceShapes.percentChance(40)
 			// Its rolls beside other places are drawn mostly, so that each of them is judged in ten graphs after acceptance.
 			let drawsInstantiatorPlace = holeRolls.instantiatorPlace.percentChance(80)
