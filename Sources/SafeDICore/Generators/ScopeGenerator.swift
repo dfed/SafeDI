@@ -6683,7 +6683,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if let values = enumCase.values {
 				payloadStructs.append(structDeclaration(named: values.typeName, fields: values.fields, indent: caseIndent, typesDeclaredEscaping: typesDeclaredEscaping, isNonisolated: declaresBuilderStruct))
 			} else if declaresBuilderStruct, let memberValuesTypeName = enumCase.memberValuesTypeName {
-				// A `@Sendable` enum's case carries no values: its member takes an empty `Sendable` struct.
+				// A case that carries no values – every case of a `@Sendable` enum, and a call's case, which holds the called enum
+				// alone – has a member that takes an empty `Sendable` struct.
 				payloadStructs.append("\(caseIndent)nonisolated public struct \(memberValuesTypeName): Sendable {}")
 			}
 			switch enumCase.kind {
