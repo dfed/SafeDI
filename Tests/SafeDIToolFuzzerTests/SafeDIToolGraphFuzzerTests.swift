@@ -5921,7 +5921,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 7, 12, 14, 18, 25, 30, 40, 59, 62, 70, 94, 97, 98, 99, 133, 161, 212, 267, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x4BD493CF8A860445
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x45CED7B81C6E1395
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -5931,7 +5931,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x7EE444C41C6E7E56
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x1B9222733D66F520
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -8125,7 +8125,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// The remedy oracle's shapes: advice an error states that does not fix it. Each names its minimal graph, a test in
 	// `SafeDIToolGraphFuzzerRemedyTests` that expects the advice to work as a known issue.
-	static let remedyCapturedInSendableBuilderReason = "An error at a receive inside a `@Sendable` builder advises receiving, or declaring, a property that is not `Sendable`, which then cannot be received there (remedyRuns_leaveNoErrorAtTheReceive_whenTheSuggestedOnlyIfAvailableReceiveIsInsideASendableBuilder: Root builds `t1Builder: SendableInstantiator<T1>` and `t2Builder: Instantiator<T2>`, and T1 requires `t2Builder: Instantiator<T2>?`, which the error says to receive only if available)"
+	static let remedyCapturedInSendableBuilderReason = "An error at a receive inside a `@Sendable` builder advises receiving, or declaring, a property that is not `Sendable`, or relabeling the declaration that hides one, which then cannot be received there (remedyRuns_leaveNoErrorAtTheReceive_whenTheSuggestedOnlyIfAvailableReceiveIsInsideASendableBuilder: Root builds `t1Builder: SendableInstantiator<T1>` and `t2Builder: Instantiator<T2>`, and T1 requires `t2Builder: Instantiator<T2>?`, which the error says to receive only if available)"
 
 	static let remedyHiddenByCloserDeclarationReason = "An error advises receiving a property only if available, or a suggested property, beneath a type whose mock is generated and that declares the label with another type, so the mock rejects the receive as hidden (remedyRuns_leaveNoErrorAtTheReceive_whenAMockedTypeBetweenDeclaresItsLabelWithAnotherType: T3, mocked, declares `t4: T1` and builds T5, which Root builds too and which requires `t4: T0?`, and the error says to declare `t4: T0` on Root and receive it only if available)"
 
@@ -8135,6 +8135,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	static let remedyDeclarationClosesCycleThroughRootReason = "An error advises declaring a property on a root whose own properties the declared type's tree receives and that require the declaration, so the declaration closes a dependency cycle there (remedyRuns_leaveNoErrorAtTheReceive_whenTheDeclaredTypesTreeReceivesARootPropertyThatRequiresTheDeclaration: Root builds `t2: T2`, which requires `t0Builder: Instantiator<T0>`, and T0 receives `t2`)"
 
+	static let remedyHiddenByEachDeclarationAlongTheChainReason = "An error for a receive that a declaration of its label hides names only the closest such declaration, so relabeling it leaves the receive hidden by the next one up the chain (remedyRuns_leaveNoErrorAtTheReceive_whenTwoTypesAlongTheChainDeclareTheReceivedLabelWithOtherTypes: Root declares `t3: S1_T3` and builds S1_T1, which declares `t3: S1_T4` and builds S1_T2, which declares `t3: S1_T5` and builds S1_T0, which receives `t3: S1_T3`, and the error names only S1_T2’s declaration). Plan row I7 owns the fix: name every hiding declaration along the chain"
 	static let remedySeamProvidingWrapperUndeclaredReason = "A seam's error for one label its tree receives in two forms advises declaring on the seam the wrapper that provides the others, which no type that builds the seam declares, so the seam's receive is then unfulfilled (remedyRuns_leaveNoErrorAtTheSeam_whenTheProvidingFormIsAWrapperTheSeamsCallerDoesNotDeclare: Root declares `user: S1_User` and builds S1_Seam, which receives `user: LazilyInstantiated<S1_User>?` only if available and builds S1_Child, which requires `user: S1_User`, and the error says to declare `@Received let user: LazilyInstantiated<S1_User>` on S1_Seam). Plan row I8 owns the fix"
 	static let remedySendableWrapperNamesOneDeclarationReason = "An error at a receive inside a `@Sendable` function advises declaring the captured property as its `Sendable` wrapper on the one root its chain starts at, and at the receive, where another root declares the property, or another type receives it, as the wrapper that is not `Sendable`: the receive is then unfulfilled beneath the other root, or hidden beneath the other receiver (remedyRuns_leaveNoErrorAtTheReceive_whenAnotherRootDeclaresThePropertyTheSendableBuilderCannotCapture: Root0 builds T1 through `SendableInstantiator<T1>` and Root1 as a constant, each declares `t2Builder: Instantiator<T2>`, and T1 receives it). The fix, on the branch claude/sendable-remedy-names-all, names every declaration; its roll is seed 1436"
 
@@ -8212,10 +8213,11 @@ struct SafeDIToolGraphFuzzerTests {
 				.remedyLeavesErrorAtSite(.receiveOnlyIfAvailable, containing: "cannot be received inside a `@Sendable` function"),
 				.remedyLeavesErrorAtSite(.receiveOptionallyIfAvailable, containing: "cannot be received inside a `@Sendable` function"),
 				.remedyLeavesErrorAtSite(.receiveSuggestedProperty, containing: "cannot be received inside a `@Sendable` function"),
+				.remedyLeavesErrorAtSite(.relabelHidingDeclaration, containing: "cannot be received inside a `@Sendable` function"),
 			],
 			seeds: [
-				167, 614, 1_556, 1_724, 1_830, 1_915, 2_310, 2_627, 2_751, 2_907, 2_963, 3_145, 3_173, 3_193, 3_586, 3_619,
-				4_586, 4_671,
+				167, 456, 614, 1_556, 1_724, 1_830, 1_915, 1_935, 2_310, 2_627, 2_751, 2_907, 2_963, 3_145, 3_173, 3_193, 3_586,
+				3_619, 4_345, 4_586, 4_671,
 			],
 		),
 		GraphFuzzerKnownIssue(
@@ -8230,6 +8232,11 @@ struct SafeDIToolGraphFuzzerTests {
 				445, 492, 1_712, 1_832, 2_322, 2_500, 2_605, 2_663, 2_982, 3_240, 3_529, 3_778, 3_799, 3_981, 4_142, 4_441,
 				4_940,
 			],
+		),
+		GraphFuzzerKnownIssue(
+			reason: remedyHiddenByEachDeclarationAlongTheChainReason,
+			signatures: [.remedyLeavesErrorAtSite(.relabelHidingDeclaration, containing: "is hidden in chain")],
+			seeds: [1_898, 2_485],
 		),
 		GraphFuzzerKnownIssue(
 			reason: remedySuggestionClosesCycleReason,
