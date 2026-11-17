@@ -420,6 +420,7 @@ public struct Generate: AsyncParsableCommand {
 					projectFilePaths.map { $0.manifestPath(of: $0.projectFilePath(of: filePath)) } ?? filePath
 				},
 			),
+			compilesGeneratedMocks: evaluator.compilesGeneratedMocks,
 			emittingModule: DependencyTreeGenerator.EmittingModule(
 				identity: ModuleIdentity(moduleName: module.moduleName, packageName: module.packageName),
 				isOwnFile: isOwnFile,
