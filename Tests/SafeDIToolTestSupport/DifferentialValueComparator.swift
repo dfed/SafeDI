@@ -370,6 +370,8 @@ enum DifferentialValueRetention {
 		var differences = [DifferentialValueRetentionDifference]()
 		/// The experiments holding a wrapper that both paths ran: the probe's retention is judged only when there is one.
 		var pairedWrapperExperimentCount = 0
+		/// The names of those experiments, the labels on the way to the wrapper each held, in the feature path's order.
+		var pairedWrapperExperimentNames = [String]()
 		/// The experiments only one path ran, which judge nothing.
 		var unpairedExperimentCount = 0
 	}
@@ -410,6 +412,7 @@ enum DifferentialValueRetention {
 			}
 			if experiment != holdingNothing {
 				judgment.pairedWrapperExperimentCount += 1
+				judgment.pairedWrapperExperimentNames.append(experiment)
 			}
 			for (typeName, count) in kept.sorted(by: { $0.key < $1.key }) where count > knownRightKept[typeName, default: 0] {
 				judgment.differences.append(DifferentialValueRetentionDifference(probe: probe, holding: experiment, typeName: typeName, featureCount: count, knownRightCount: knownRightKept[typeName, default: 0]))
@@ -461,6 +464,12 @@ struct DifferentialValueComparison {
 	/// The probes whose retention the comparator judged: those with an experiment holding a wrapper that both paths ran.
 	var retentionJudgedProbes: [String] {
 		retentionJudgments.filter { $0.judgment.pairedWrapperExperimentCount > 0 }.map(\.probe)
+	}
+
+	/// The labels of the wrappers held by retention experiments both paths ran, over every probe: the last label on each
+	/// experiment's way to the wrapper it held.
+	var retentionPairedWrapperLabels: Set<String> {
+		Set(retentionJudgments.flatMap(\.judgment.pairedWrapperExperimentNames).compactMap { $0.split(separator: ".").last.map(String.init) })
 	}
 
 	/// How many retention experiments only one path ran, over every probe.
@@ -2365,20 +2374,23 @@ extension GraphFuzzerFixture {
 	/// A probe building `RetainHome`, the seam of `GraphFuzzerGenerator`'s retention draw, through a builder written by
 	/// hand that reads nothing, beside the inline build of the same tree, `RetainRoot().retainHome`, so that the retention
 	/// oracle judges what a hand-written builder keeps alive; `nil` when the graph has no such seam, when its fill reads a
-	/// value, which a builder that reads nothing cannot hand it, or when no readable initializer of the seam takes the
-	/// builder.
+	/// value, which a builder that reads nothing cannot hand it (a value it is forwarded is the place's, which the builder
+	/// takes), or when no readable initializer of the seam takes the builder.
 	///
 	/// The probe calls the readable initializer, which every seam module of the corpus generates, as a person does, and
 	/// writes the builder as its type takes it: `{ RetainLive() }` where the type is a closure that takes nothing, `() -> T`
-	/// or `@Sendable () -> T` (the builder takes a builder struct, which the readable initializer makes from it), and
-	/// `{ _ in RetainLive() }` where it takes the scope (the builder keeps its closure over the enum, as when `RetainHome`
-	/// holds another seam's scope). A readable initializer of another form leaves the probe uncompiled, and every graph that
+	/// or `@Sendable () -> T` (the builder takes a builder struct, which the readable initializer makes from it),
+	/// `{ ticket in RetainLive(retainTicket: ticket) }` where it is a wrapper's `Builder` (`RetainLeaf`'s place is held in an
+	/// erased instantiator that forwards `retainTicket`), and `{ _ in RetainLive() }` where it takes the scope (the builder
+	/// keeps its closure over the enum, as when `RetainHome` holds another seam's scope); none where the scope's place
+	/// forwards a value, which a builder that reads nothing cannot take. A readable initializer of another form leaves the probe uncompiled, and every graph that
 	/// has it fails as `valueComparatorCouldNotDescribeGraph`, rather than the probe dropping out. The long run pins how many
 	/// graphs the probe judged (`GraphFuzzerRetentionCounts.judgedThroughHandWrittenBuilder`).
 	private func handWrittenRetentionProbe(generatedFiles: [String: String]) -> DifferentialValueProbe? {
 		let homeName = typeNamePrefix + "RetainHome"
 		let liveName = typeNamePrefix + "RetainLive"
 		var liveReadsValue = false
+		var liveIsForwardedValue = false
 		var declaresHome = false
 		for content in swiftFileContent {
 			var typeName: String?
@@ -2387,8 +2399,13 @@ extension GraphFuzzerFixture {
 				case let .typeDeclaration(name):
 					typeName = name
 					declaresHome = declaresHome || name == homeName
-				case .property where typeName == liveName:
-					liveReadsValue = true
+				case let .property(attribute, _, _) where typeName == liveName:
+					// A value `RetainLive` is forwarded is what the place hands it, which the hand-written builder takes too.
+					if attribute == "@Forwarded" {
+						liveIsForwardedValue = true
+					} else {
+						liveReadsValue = true
+					}
 				case .instantiableAttribute, .instantiateMethod, .property, .other:
 					break
 				}
@@ -2404,9 +2421,21 @@ extension GraphFuzzerFixture {
 		let label = initializerLine[initializerLine.index(initializerLine.startIndex, offsetBy: initializerPrefix.count)..<initializerLine.index(separator.upperBound, offsetBy: -2)]
 		let parameterType = initializerLine[separator.upperBound...]
 		let takesNothing = parameterType.hasPrefix("@escaping () -> ") || parameterType.hasPrefix("@escaping @Sendable () -> ")
+		// A builder of a wrapper's `Builder` type takes the value the place forwards, which `RetainLive` takes.
+		let takesForwardedValue = parameterType.hasPrefix("@escaping ") && parameterType.contains(">.Builder")
+		// A builder over the scope of a place that forwards a value is handed it inside the scope, which no hand-written
+		// builder reads: no probe.
+		guard !liveIsForwardedValue || takesForwardedValue else { return nil }
+		let builder = if takesNothing {
+			"{ \(liveName)() }"
+		} else if takesForwardedValue {
+			"{ ticket in \(liveName)(retainTicket: ticket) }"
+		} else {
+			"{ _ in \(liveName)() }"
+		}
 		return DifferentialValueProbe(
 			name: homeName + Self.handWrittenBuilderProbeNameSuffix,
-			expression: "\(homeName)(\(label): { \(takesNothing ? "" : "_ in ")\(liveName)() })",
+			expression: "\(homeName)(\(label): \(builder))",
 			knownRightExpression: "\(typeNamePrefix)RetainRoot().retainHome",
 		)
 	}

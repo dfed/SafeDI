@@ -239,9 +239,22 @@ struct GraphFuzzerFixture: Equatable {
 	/// `HoleNest`'s `holeNestScreenBuilder`, which forwards `holeNestId`, so that it traverses the route of the inner seam's
 	/// enum a place inside a plain fill reads `holeNestId` from (`DifferentialValueSample`). Empty for a graph without it.
 	var holeDrawForwardedPropertiesSamples: [DifferentialValueSample] {
+		var samples = [DifferentialValueSample]()
 		let screenName = typeNamePrefix + "HoleNestScreen"
-		guard swiftFileContent.contains(where: { $0.contains("final class \(screenName): ") }) else { return [] }
-		return [DifferentialValueSample(type: "\(screenName).ForwardedProperties", expression: "7")]
+		if swiftFileContent.contains(where: { $0.contains("final class \(screenName): ") }) {
+			samples.append(DifferentialValueSample(type: "\(screenName).ForwardedProperties", expression: "7"))
+		}
+		// `HoleHanded`'s `ForwardedProperties`, which its declaration says: the instantiator place's, and the erased place's
+		// beside it.
+		let handedName = typeNamePrefix + "HoleHanded"
+		if let declaration = swiftFileContent.first(where: { $0.contains("open class \(handedName): ") }) {
+			if declaration.contains("ForwardedProperties = Int\n") {
+				samples.append(DifferentialValueSample(type: "\(handedName).ForwardedProperties", expression: "7"))
+			} else if declaration.contains("ForwardedProperties = (holeHandedId: Int, holeHandedName: String)") {
+				samples.append(DifferentialValueSample(type: "\(handedName).ForwardedProperties", expression: "(holeHandedId: 7, holeHandedName: \"7\")"))
+			}
+		}
+		return samples
 	}
 
 	/// The sample values the comparator calls the instantiators `addingForwardedLabelAcrossSeamCallShapes` draws with:
@@ -1284,6 +1297,38 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `HoleSeam`'s erased instantiator of `any HoleTicketService`, which `HoleTicketImpl` fills: a place whose wrapper
 	/// forwards a value, `holeTicketId`, to its builder.
 	case holeForwardingPlace
+	/// `holeTicketBuilder` forwards a labeled pair, `holeTicketId` and `holeTicketName`, which `HoleTicketImpl` reads by label.
+	case holeForwardingPlaceLabeledPair
+	/// A second place of `holeTicketBuilder`'s builder, `HoleTicketHolder`'s `holeTicketOther`, forwarding the same value.
+	case holeForwardingPlaceSecondPlace
+	/// The second place spells the value it forwards otherwise, `Swift.Int` for `Int`: the builder takes the erased
+	/// wrapper's `Builder`.
+	case holeForwardingPlaceSecondPlaceSpelledOtherwise
+	/// `HoleOuter` passes up `HoleSeam`'s forwarding place: the kept seam rebuilds the place's case around the value it
+	/// forwards.
+	case holeForwardingPlacePassedUp
+	/// `HoleHandedHolder`'s place held in an `Instantiator` or `SendableInstantiator` of `HoleHanded`, a class of the seam's
+	/// module that conforms to `Instantiable` by hand, filled by its subclass `HoleHandedImpl`: it forwards nothing, an
+	/// `Int` or a labeled pair.
+	case holeInstantiatorPlace
+	/// Beside it, the seam's erased place of `HoleHanded.ForwardedProperties`, which the calling module trusts as it trusts
+	/// the instantiator place.
+	case holeInstantiatorPlaceBesideErased
+	/// Where `HoleHanded` forwards nothing, the seam's plain place of it, a level above the instantiator place: the builder
+	/// takes nothing.
+	case holeInstantiatorPlaceBesidePlain
+	/// That pair, with `HoleHandedHolder` built also through a `SendableInstantiator`: the families' builders take
+	/// different types over one plain level.
+	case holeInstantiatorPlaceBesidePlainAcrossFamilies
+	/// The seam's place of an erased instantiator that forwards nothing, spelled `()` or `Void`, alone in its builder.
+	case holeNothingForwardedPlace
+	/// That place beside the plain place of `any HoleService`, of the same builder.
+	case holeNothingForwardedPlaceBesidePlain
+	/// That place beside the instantiator place of `HoleHanded`, which forwards nothing.
+	case holeNothingForwardedPlaceBesideInstantiator
+	/// `HoleOuter` passes up the place that forwards nothing: the kept seam hands the place's member a builder that ignores
+	/// what it is handed.
+	case holeNothingForwardedPlacePassedUp
 	/// `HoleBoth`, a seam that builds `HoleSeam` by value and in a `SendableInstantiator`: an inner seam reached by a plain
 	/// and a `@Sendable` route.
 	case holeInnerSeamPlainAndSendableRoutes
@@ -1596,6 +1641,9 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case retentionSeamValueBeforeBuilderFillReadsValue
 	/// The instantiators are `SendableInstantiator`s, so the place is in the `@Sendable` family.
 	case retentionSeamValueBeforeBuilderSendable
+	/// `RetainLeaf`'s place is held in an erased instantiator that forwards `retainTicket`, which `RetainLive` takes: the
+	/// builder the wrapper keeps is the one the retention oracle holds.
+	case retentionSeamValueBeforeBuilderForwardingPlace
 
 	/// Whether `addingCycleParameterShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
 	/// (`acceptedDrawFeatureCounts`).
@@ -1619,6 +1667,12 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// corpus pins too (`acceptedDrawFeatureCounts`), at least ten each.
 	var isErasurePlaceShape: Bool {
 		rawValue.hasPrefix("holeErasure")
+	}
+
+	/// Whether `addingHoleShapes` draws this shape of a place held in an instantiator, whose count in accepted graphs the seam
+	/// corpus pins (`acceptedDrawFeatureCounts`), at least ten each, and whose judged graphs the long run floors.
+	var isForwardingPlaceShape: Bool {
+		rawValue.hasPrefix("holeForwardingPlace") || rawValue.hasPrefix("holeInstantiatorPlace") || rawValue.hasPrefix("holeNothingForwardedPlace")
 	}
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
@@ -4993,8 +5047,10 @@ enum GraphFuzzerGenerator {
 		/// place on a `@Sendable` route; a cycle of two seams with a `@Sendable` edge; an inner seam reached by a plain and a
 		/// `@Sendable` route, now and then passed up with both enums; and a place inside a `@Sendable` fill the seam generates.
 		/// Four more draw the shapes a scope nested by type is for: types shared under a hole, a tangle of cycles, a place
-		/// inside a plain fill, and a hole under a later member of a loop of received instantiators. The pass records the
-		/// property that gives the graph its second place of a hole (`secondHolePlace`).
+		/// inside a plain fill, and a hole under a later member of a loop of received instantiators. Three more draw places held
+		/// in instantiators: the forwarding place's labeled pair and second place, a place of an instantiator of a class that
+		/// conforms to `Instantiable` by hand with an erased or a plain place of its builder beside it, and an erased place that
+		/// forwards nothing. The pass records the property that gives the graph its second place of a hole (`secondHolePlace`).
 		private mutating func addingHoleShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.contains(.generateDependencyTree), holeRandom.percentChance(33) else { return declarations }
 			var declarations = declarations
@@ -5045,6 +5101,34 @@ enum GraphFuzzerGenerator {
 			let drawsSecondHoleType = holeRolls.secondHoleType.percentChance(25)
 			let drawsForwardingPlace = holeRolls.forwardingPlace.percentChance(35)
 			let forwardingPlaceWrapper = holeRolls.forwardingPlace.element(of: sendability == .nonSendable ? ["ErasedInstantiator"] : sendability == .sendable ? ["SendableErasedInstantiator"] : ["ErasedInstantiator", "SendableErasedInstantiator"])
+			let erasedInstantiators = switch sendability {
+			case .nonSendable:
+				["ErasedInstantiator"]
+			case .sendable:
+				["SendableErasedInstantiator"]
+			case .mixed:
+				["ErasedInstantiator", "SendableErasedInstantiator"]
+			}
+			// The forwarding place's rolls, the instantiator place's, and the place that forwards nothing, each on a generator
+			// of its own, made whatever the base draw. The labeled pair, the second place and its other spelling are drawn
+			// often enough that ten graphs of each are judged after acceptance, as is the place beside the plain place.
+			let forwardsTicketPair = holeRolls.forwardingPlaceShapes.percentChance(75)
+			let drawsSecondTicketPlace = holeRolls.forwardingPlaceShapes.percentChance(90)
+			let secondTicketPlaceSpelledOtherwise = holeRolls.forwardingPlaceShapes.percentChance(95)
+			// Where the base draw passes nothing up, `HoleOuter` passes the forwarding place up now and then, so that a kept seam
+			// rebuilds its case around the value it forwards (`holeForwardingPlacePassedUp`).
+			let passesUpForwardingPlace = holeRolls.forwardingPlaceShapes.percentChance(40)
+			let drawsInstantiatorPlace = holeRolls.instantiatorPlace.percentChance(80)
+			let handedForwardsRoll = holeRolls.instantiatorPlace.integer(in: 0...4)
+			let handedWrapper = holeRolls.instantiatorPlace.element(of: instantiators)
+			let handedHolderAlsoSendable = holeRolls.instantiatorPlace.percentChance(90)
+			let drawsErasedBesideInstantiator = holeRolls.instantiatorPlace.percentChance(50)
+			let handedErasedWrapper = holeRolls.instantiatorPlace.element(of: erasedInstantiators)
+			let drawsPlainBesideInstantiator = holeRolls.instantiatorPlace.percentChance(90)
+			let drawsNothingForwardedPlace = holeRolls.nothingForwardedPlace.percentChance(95)
+			let nothingForwardedPlacement = holeRolls.nothingForwardedPlace.integer(in: 0...9)
+			let nothingForwardedSpelling = holeRolls.nothingForwardedPlace.element(of: ["()", "Void"])
+			let nothingForwardedWrapper = holeRolls.nothingForwardedPlace.element(of: erasedInstantiators)
 			// Six in ten, so that the second erasure lands in enough accepted graphs for the builder surface's floor of its pair
 			// (`secondErasureOfFillingType`).
 			let secondHoleTypeCollides = holeRolls.secondHoleType.percentChance(60)
@@ -5174,7 +5258,7 @@ enum GraphFuzzerGenerator {
 
 			// A second seam of the seam's module that calls `HoleSeam`, whose builder it passes up.
 			var outerIndex: Int?
-			if holePassUpRandom.percentChance(25) {
+			if holePassUpRandom.percentChance(25) || drawsForwardingPlace && passesUpForwardingPlace {
 				var outer = instantiable("HoleOuter", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeSeam", type: seamName)])
 				outer.instantiableArguments = ["generateDependencyTree: true"]
 				if serviceAccess == .package {
@@ -5404,11 +5488,111 @@ enum GraphFuzzerGenerator {
 				let ticketServiceName = name("HoleTicketService")
 				seam.additionalDeclarations.append("public protocol \(ticketServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
 				var ticketImpl = instantiable("HoleTicketImpl", module: fillerModule, properties: [PropertyDeclaration(attribute: "@Forwarded", label: "holeTicketId", type: "Int")])
+				// Now and then the place forwards a labeled pair, which the fill reads by label (`holeForwardingPlaceLabeledPair`).
+				if forwardsTicketPair {
+					ticketImpl.properties.append(PropertyDeclaration(attribute: "@Forwarded", label: "holeTicketName", type: "String"))
+				}
 				ticketImpl.additionalConformances.append(ticketServiceName)
 				ticketImpl.fillsHole = true
 				callerDeclarations.append(ticketImpl)
-				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(ticketImpl.name)\")", label: "holeTicketBuilder", type: "\(forwardingPlaceWrapper)<Int, any \(ticketServiceName)>"))
+				let forwardedTicket = forwardsTicketPair ? "(holeTicketId: Int, holeTicketName: String)" : "Int"
+				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(ticketImpl.name)\")", label: "holeTicketBuilder", type: "\(forwardingPlaceWrapper)<\(forwardedTicket), any \(ticketServiceName)>"))
 				drawnHolePlaces.append(GraphFuzzerDrawnHolePlace(kind: .forwarding, returnedTypeName: ticketServiceName))
+				// A second place of the same builder on `HoleTicketHolder`, which the seam builds by value, forwarding the same
+				// value spelled alike, or spelled `Swift.Int`, which makes the builder the erased wrapper's
+				// (`holeForwardingPlaceSecondPlace`, `holeForwardingPlaceSecondPlaceSpelledOtherwise`).
+				if drawsSecondTicketPlace {
+					let otherTicket = forwardsTicketPair ? "(holeTicketId: Swift.Int, holeTicketName: String)" : "Swift.Int"
+					let holder = instantiable("HoleTicketHolder", module: .seamModule, properties: [
+						PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(ticketImpl.name)\")", label: "holeTicketOther", type: "\(forwardingPlaceWrapper)<\(secondTicketPlaceSpelledOtherwise ? otherTicket : forwardedTicket), any \(ticketServiceName)>"),
+					])
+					seamModuleDeclarations.append(holder)
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeTicketHolder", type: holder.name))
+					drawnHolePlaces.append(GraphFuzzerDrawnHolePlace(kind: .forwarding, returnedTypeName: ticketServiceName))
+				}
+			}
+			// A place held in an instantiator of `HoleHanded`, a class of the seam's module that conforms to `Instantiable` by
+			// hand and that `HoleHandedImpl`, its subclass in the fillers' module, fills: it forwards nothing, an `Int` or a
+			// labeled pair, which its own `ForwardedProperties` says. The place is on `HoleHandedHolder`, which the seam builds
+			// by value, and also through a `SendableInstantiator` now and then. Beside it, an erased place of
+			// `HoleHanded.ForwardedProperties` on the seam, and, where it forwards nothing, a plain place of `HoleHanded` on the
+			// seam, a level above (`holeInstantiatorPlace` and its rolls).
+			// Three times in five it forwards nothing, so that the plain place and the place that forwards nothing are drawn beside
+			// it.
+			let handedForwardedType: String? = switch handedForwardsRoll {
+			case 0, 1, 2:
+				nil
+			case 3:
+				"Int"
+			default:
+				"(holeHandedId: Int, holeHandedName: String)"
+			}
+			var handedName: String?
+			if drawsInstantiatorPlace {
+				let handed = name("HoleHanded")
+				handedName = handed
+				let typealiasLine = handedForwardedType.map { "\tpublic typealias ForwardedProperties = \($0)\n\n" } ?? ""
+				seam.additionalDeclarations.append("open class \(handed): Instantiable, @unchecked Sendable {\n\(typealiasLine)\tpublic init() {}\n}")
+				var forwardedProperties = [(label: String, type: String)]()
+				if handedForwardedType != nil {
+					forwardedProperties.append((label: "holeHandedId", type: "Int"))
+				}
+				if handedForwardsRoll == 4 {
+					forwardedProperties.append((label: "holeHandedName", type: "String"))
+				}
+				let parameters = forwardedProperties.map { "\($0.label): \($0.type)" }.joined(separator: ", ")
+				let assignments = forwardedProperties.map { "\t\tself.\($0.label) = \($0.label)\n" }.joined()
+				let declarations = forwardedProperties.map { "\t@Forwarded let \($0.label): \($0.type)\n" }.joined()
+				impl.additionalDeclarations.append("@Instantiable(fulfillingAdditionalTypes: [\(handed).self], conformsElsewhere: true)\npublic final class \(handed)Impl: \(handed), @unchecked Sendable {\n\tpublic \(parameters.isEmpty ? "override " : "")init(\(parameters)) {\n\(assignments)\t\tsuper.init()\n\t}\(declarations.isEmpty ? "" : "\n\n" + declarations.dropLast())\n}")
+				let holder = instantiable("HoleHandedHolder", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeHandedBuilder", type: "\(handedWrapper)<\(handed)>")])
+				seamModuleDeclarations.append(holder)
+				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeHandedHolder", type: holder.name))
+				// The builder surface's forwarding floor counts a place that forwards a value; one that forwards nothing is
+				// judged under `holeNothingForwardedPlace`, as the places that forward `()` are.
+				if handedForwardedType != nil {
+					drawnHolePlaces.append(GraphFuzzerDrawnHolePlace(kind: .forwarding, returnedTypeName: handed))
+				}
+				if handedHolderAlsoSendable, sendability != .nonSendable {
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeHandedHolderBuilder", type: "SendableInstantiator<\(holder.name)>"))
+				}
+				if drawsErasedBesideInstantiator {
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(handed)\")", label: "holeHandedErased", type: "\(handedErasedWrapper)<\(handed).ForwardedProperties, \(handed)>"))
+					if handedForwardedType != nil {
+						drawnHolePlaces.append(GraphFuzzerDrawnHolePlace(kind: .forwarding, returnedTypeName: handed))
+					}
+				}
+				if drawsPlainBesideInstantiator, handedForwardedType == nil {
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeHandedValue", type: handed))
+				}
+			}
+			// A place of an erased instantiator that forwards nothing, spelled `()` or `Void`: alone, of `any HoleLaterService`,
+			// which `HoleLaterImpl` fills; beside the plain place of `any HoleService`, of the same builder; or beside the
+			// instantiator place of `HoleHanded` where it forwards nothing, of `HoleHanded` (`holeNothingForwardedPlace` and its
+			// placements). A `@Sendable` place of `any HoleService` could read nothing `HoleImpl` reads, so a graph whose types
+			// are all `Sendable` places it alone.
+			if drawsNothingForwardedPlace {
+				if nothingForwardedPlacement >= 5, let handedName, handedForwardedType == nil {
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(handedName)\")", label: "holeHandedLater", type: "\(nothingForwardedWrapper)<\(nothingForwardedSpelling), \(handedName)>"))
+				} else if nothingForwardedPlacement != 0, sendability != .sendable {
+					// Beside the plain place, on `HoleOwner` where it holds it, so `HoleImpl` reads there what it reads at the plain
+					// place: a value the owner aliases, or `holeAnalytics` where the owner instantiates it. It names `HoleImpl` as
+					// its declaration spells it, inside `HoleNamespace` where the namespace draw declares it there.
+					let implSpelling = drawsNamespace ? "\(name("HoleNamespace")).\(impl.name)" : impl.name
+					let property = PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(implSpelling)\")", label: "holeServiceLater", type: "ErasedInstantiator<\(nothingForwardedSpelling), any \(serviceName)>")
+					if let ownerIndex {
+						seamModuleDeclarations[ownerIndex].properties.append(property)
+					} else {
+						seam.properties.append(property)
+					}
+				} else {
+					let laterServiceName = name("HoleLaterService")
+					seam.additionalDeclarations.append("public protocol \(laterServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+					var laterImpl = instantiable("HoleLaterImpl", module: fillerModule)
+					laterImpl.additionalConformances.append(laterServiceName)
+					laterImpl.fillsHole = true
+					callerDeclarations.append(laterImpl)
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(laterImpl.name)\")", label: "holeLaterBuilder", type: "\(nothingForwardedWrapper)<\(nothingForwardedSpelling), any \(laterServiceName)>"))
+				}
 			}
 			// A wrapper of the hole beside its by-value place, on the type that holds it: a `LazilyInstantiated`, a plain
 			// wrapper whose place is a case of the plain enum, or a `SendableLazilyInstantiated`, whose place is a case of the `@Sendable` enum. A mock
@@ -5814,6 +5998,9 @@ enum GraphFuzzerGenerator {
 				loopPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6552696E67)
 				forwardingPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C65466F7277)
 				erasurePlaces = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6545726173)
+				forwardingPlaceShapes = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C65466F5368)
+				instantiatorPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6548616E64)
+				nothingForwardedPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654E6F7468)
 			}
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
@@ -5848,6 +6035,12 @@ enum GraphFuzzerGenerator {
 			/// in the `@Sendable` family (`holeErasureInsidePlainFill`, `holeErasureInsideSendableFill`,
 			/// `holeErasureBeneathSeamInSendableFamily`).
 			var erasurePlaces: GraphFuzzerRandomNumberGenerator
+			/// That place's rolls: a labeled pair, and a second place of its builder.
+			var forwardingPlaceShapes: GraphFuzzerRandomNumberGenerator
+			/// A place held in an instantiator of a class that conforms to `Instantiable` by hand (`holeInstantiatorPlace`).
+			var instantiatorPlace: GraphFuzzerRandomNumberGenerator
+			/// A place of an erased instantiator that forwards nothing (`holeNothingForwardedPlace`).
+			var nothingForwardedPlace: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -7154,7 +7347,9 @@ enum GraphFuzzerGenerator {
 		/// keeps alive. 35 in 100 draws make it `RetainInnerDetail`, a seam of its own that passes its place up, the shape
 		/// #703 fixed, across seams; 35 in 100 make `RetainLive` read `retainNavigator`, which the inline build then
 		/// keeps alive too. The instantiators are `Sendable` as the graph's sendability allows, and then the place is in the
-		/// `@Sendable` family, whose cases carry no values, so the fill reads nothing.
+		/// `@Sendable` family, whose cases carry no values, so the fill reads nothing. Four in ten hold `RetainLeaf`'s place in
+		/// an erased instantiator, `ErasedInstantiator` or its `Sendable` twin as the instantiators are, which `RetainLive`
+		/// fills forwarding `retainTicket`, so the oracle holds the builder that wrapper keeps.
 		///
 		/// `retentionRandom` draws only for this pass, which runs after every other pass and only in a graph another pass
 		/// split, so that every graph in one module, and every other draw of a graph it draws in, draws as before.
@@ -7166,6 +7361,9 @@ enum GraphFuzzerGenerator {
 			let leafThroughInstantiator = retentionRandom.percentChance(50)
 			let fillReadsNavigator = retentionRandom.percentChance(35)
 			let sendableRoll = retentionRandom.percentChance(50)
+			// `RetainLeaf`'s place held in an erased instantiator, which `RetainLive` fills forwarding `retainTicket`: a place
+			// whose builder takes the value it forwards (`retentionSeamValueBeforeBuilderForwardingPlace`).
+			let leafPlaceForwards = retentionRandom.percentChance(40)
 			let isSendable = switch sendability {
 			case .nonSendable: false
 			case .sendable: true
@@ -7181,7 +7379,12 @@ enum GraphFuzzerGenerator {
 			}
 			let apiName = "\(prefix)RetainApi"
 			let navigator = instantiable("RetainNavigator")
-			let leaf = instantiable("RetainLeaf", properties: [PropertyDeclaration(attribute: "@Instantiated", label: "retainApi", type: "any \(apiName)")])
+			let leafPlace = if leafPlaceForwards {
+				PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(prefix)RetainLive\")", label: "retainApiBuilder", type: "\(isSendable ? "SendableErasedInstantiator" : "ErasedInstantiator")<Int, any \(apiName)>")
+			} else {
+				PropertyDeclaration(attribute: "@Instantiated", label: "retainApi", type: "any \(apiName)")
+			}
+			let leaf = instantiable("RetainLeaf", properties: [leafPlace])
 			var detail = instantiable(detailIsSeam ? "RetainInnerDetail" : "RetainDetail", properties: [
 				leafThroughInstantiator
 					? PropertyDeclaration(attribute: "@Instantiated", label: "retainLeafBuilder", type: "\(instantiator)<\(leaf.name)>")
@@ -7200,6 +7403,9 @@ enum GraphFuzzerGenerator {
 			live.instantiableArguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
 			live.additionalConformances.append(apiName)
 			live.fillsHole = true
+			if leafPlaceForwards {
+				live.properties.append(PropertyDeclaration(attribute: "@Forwarded", label: "retainTicket", type: "Int"))
+			}
 			// A fill of a place another seam passes up reads its caller's scope, which holds no navigator; nor does a place in
 			// the `@Sendable` family, whose cases carry no values, so there the tool would reject the read, and with it every
 			// other shape of the graph.
@@ -8783,6 +8989,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		if homeProperties.contains(where: { $0.type.hasPrefix("SendableInstantiator<") }) {
 			features.insert(.retentionSeamValueBeforeBuilderSendable)
 		}
+		if propertiesByType[prefix + "RetainLeaf"]?.contains(where: { $0.label == "retainApiBuilder" }) == true {
+			features.insert(.retentionSeamValueBeforeBuilderForwardingPlace)
+		}
 		return features
 	}
 
@@ -9120,8 +9329,46 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		} else if declares("HoleGadgetOwner") {
 			features.insert(.holeSecondHoleType)
 		}
-		if seamProperties.contains(where: { $0.label == "holeTicketBuilder" }) {
+		if let ticketPlace = seamProperties.first(where: { $0.label == "holeTicketBuilder" }) {
 			features.insert(.holeForwardingPlace)
+			if ticketPlace.type.contains("holeTicketName") {
+				features.insert(.holeForwardingPlaceLabeledPair)
+			}
+			if let otherPlace = properties(of: "HoleTicketHolder").first(where: { $0.label == "holeTicketOther" }) {
+				features.insert(.holeForwardingPlaceSecondPlace)
+				if otherPlace.type.contains("Swift.Int") {
+					features.insert(.holeForwardingPlaceSecondPlaceSpelledOtherwise)
+				}
+			}
+			if declares("HoleOuter") {
+				features.insert(.holeForwardingPlacePassedUp)
+			}
+		}
+		if properties(of: "HoleHandedHolder").contains(where: { $0.label == "holeHandedBuilder" }) {
+			features.insert(.holeInstantiatorPlace)
+			if seamProperties.contains(where: { $0.label == "holeHandedErased" }) {
+				features.insert(.holeInstantiatorPlaceBesideErased)
+			}
+			if seamProperties.contains(where: { $0.label == "holeHandedValue" }) {
+				features.insert(.holeInstantiatorPlaceBesidePlain)
+				if seamProperties.contains(where: { $0.label == "holeHandedHolderBuilder" }) {
+					features.insert(.holeInstantiatorPlaceBesidePlainAcrossFamilies)
+				}
+			}
+		}
+		// `holeServiceLater` is beside the plain place of `any HoleService`: on the seam, or on `HoleOwner`.
+		let drawsServiceLater = (seamProperties + properties(of: "HoleOwner")).contains { $0.label == "holeServiceLater" }
+		if drawsServiceLater || seamProperties.contains(where: { ["holeLaterBuilder", "holeHandedLater"].contains($0.label) }) {
+			features.insert(.holeNothingForwardedPlace)
+			if drawsServiceLater {
+				features.insert(.holeNothingForwardedPlaceBesidePlain)
+			}
+			if seamProperties.contains(where: { $0.label == "holeHandedLater" }) {
+				features.insert(.holeNothingForwardedPlaceBesideInstantiator)
+			}
+			if declares("HoleOuter") {
+				features.insert(.holeNothingForwardedPlacePassedUp)
+			}
 		}
 		if declares("HoleBoth") {
 			features.insert(.holeInnerSeamPlainAndSendableRoutes)
@@ -9900,6 +10147,16 @@ struct GraphFuzzerOutcomeDifference: Equatable {
 		/// configuration file, along with the reads of it.
 		case mockConfigurationFieldPresence = "which configuration fields its generated mock has"
 		case dependencyTreeCode = "its generated dependency tree code"
+		/// A dependency tree file's code holds the same items of its lists in another order, under a renaming that reorders
+		/// type names or labels: the order of the lists SafeDI sorts by label, such as a seam's builders and pass-throughs.
+		/// Compared with the items of each list and each block sorted, recursively (`listsInCanonicalOrder(of:)`), so only
+		/// siblings within one list or one block may move: a seam's builders and pass-throughs, the declarations and cases
+		/// of its builders, and the statements that bind its values, across line boundaries too. Only while that code, with its
+		/// renaming undone, compiles with the graph and ends its value comparison as the graph's own does; otherwise the
+		/// difference is the file's code (`GraphFuzzerToolRuns.renamedGraphFailures(refutingOrderOf:)`). That check alone
+		/// judges what the sorted form also finds equal: a statement moved between two `case` bodies of one `switch`, and
+		/// swapped unlabeled arguments.
+		case dependencyTreeListOrder = "the order of the label-sorted lists in its generated dependency tree code"
 		case warnings = "its warnings"
 	}
 
@@ -9918,9 +10175,11 @@ struct GraphFuzzerOutcomeDifference: Equatable {
 	}
 
 	/// The aspects of the difference between `code` and `otherCode`, the code of the generated file named `fileName` in
-	/// each outcome: one for each known reason a mock file's difference shows, or, when anything else differs, the
-	/// aspect of the file's code as a whole, which no shape that names a reason documents.
-	static func aspects(ofCodeInFileNamed fileName: String, code: String, otherCode: String, comparedBy mockDifference: GraphFuzzerMockDifference) -> [Aspect] {
+	/// each outcome: one for each known reason a mock file's difference shows, the order of a dependency tree file's
+	/// label-sorted lists where `renaming` reorders type names or labels and nothing but order differs
+	/// (`dependencyTreeListOrder`), or, when anything else differs, the aspect of the file's code as a whole, which no
+	/// shape that names a reason documents.
+	static func aspects(ofCodeInFileNamed fileName: String, code: String, otherCode: String, comparedBy mockDifference: GraphFuzzerMockDifference, renaming: GraphFuzzerRenaming?) -> [Aspect] {
 		let codeAspect: Aspect = if fileName.hasSuffix("+SafeDIMock.swift") {
 			.mockCode
 		} else if fileName.hasSuffix("SafeDIMockConfiguration.swift") {
@@ -9928,7 +10187,13 @@ struct GraphFuzzerOutcomeDifference: Equatable {
 		} else {
 			.dependencyTreeCode
 		}
-		guard codeAspect != .dependencyTreeCode else { return [codeAspect] }
+		guard codeAspect != .dependencyTreeCode else {
+			// A renaming of file names alone moves no label sort, so it never explains a difference of order.
+			guard let renaming, renaming.changesOrderOfTypeNames || renaming.reversesLabels, listsInCanonicalOrder(of: code) == listsInCanonicalOrder(of: otherCode) else {
+				return [codeAspect]
+			}
+			return [.dependencyTreeListOrder]
+		}
 		let reasons = mockDifference.reasons(forDifferenceBetween: code, and: otherCode).map { reason -> Aspect in
 			switch reason {
 			case .orderOfParametersAndFields:
@@ -9938,6 +10203,175 @@ struct GraphFuzzerOutcomeDifference: Equatable {
 			}
 		}
 		return reasons.isEmpty ? [codeAspect] : reasons
+	}
+
+	/// `code` with the items of each of its lists and blocks in sorted order: each balanced `(…)`, `[…]` and generic `<…>`
+	/// group split at its own top-level commas, and each `{…}` block split at its own newlines and semicolons into its
+	/// declarations and statements (a multi-line one, whose other lines are inside a nested group or block, stays one
+	/// item, as does an `#if` region with everything up to its `#endif` and a `#sourceLocation(file:…)` run up to its
+	/// `#sourceLocation()`), each item put in this form itself and trimmed,
+	/// and the items sorted, while everything outside the groups and blocks keeps its order. So two files compare equal
+	/// when they differ only in the order of siblings within one list or one block, recursively: an item moved to
+	/// another list or block, a value swapped between two calls, a changed nesting, a respelled type or a value moved to
+	/// another label still differs. Some moves this form finds equal are not sibling order: a statement moved from one
+	/// `case` body of a `switch` to another, whose lines are siblings of the block, and swapped unlabeled arguments or case
+	/// bindings, items of one list. Those, with statement order inside one block, are left to a check apart: a renamed graph
+	/// whose code this form finds equal is compiled, with its renaming undone, with the graph, and compared with the graph's
+	/// own code by its values, and must end as the graph's own comparison does
+	/// (`GraphFuzzerOracle.listOrderRefutation(of:by:)`), so a use before a declaration, or a move that changes what is
+	/// built, is the file's code (`GraphFuzzerToolRuns.renamedGraphFailures(refutingOrderOf:)`). A run without compile
+	/// verification makes no such check. A run of whitespace that holds a newline reads as one space inside a list.
+	static func listsInCanonicalOrder(of code: String) -> String {
+		var canonicalizer = GraphFuzzerListOrderCanonicalizer(characters: Array(code))
+		return canonicalizer.sequence()
+	}
+}
+
+/// Puts a generated file's lists and blocks in canonical order (`GraphFuzzerOutcomeDifference.listsInCanonicalOrder(of:)`).
+private struct GraphFuzzerListOrderCanonicalizer {
+	let characters: [Character]
+	var index = 0
+
+	/// The text from `index` to the end, its groups and blocks in canonical form.
+	mutating func sequence() -> String {
+		var text = ""
+		while index < characters.count {
+			appendNext(to: &text)
+		}
+		return text
+	}
+
+	/// Appends the character at `index`, or the canonical form of the group or block it opens, to `text`, and moves past
+	/// it. A run of whitespace that holds a newline is appended as one space.
+	private mutating func appendNext(to text: inout String) {
+		let character = characters[index]
+		if let closer = closer(openedAt: index) {
+			let start = index
+			index += 1
+			if let contents = closer == "}" ? block() : group(closedBy: closer) {
+				text += "\(character)\(contents)\(closer)"
+				return
+			}
+			// Not a group: the opener is text, and the scan resumes after it.
+			index = start + 1
+			text.append(character)
+		} else if character.isWhitespace {
+			let run = whitespaceRun()
+			text += run.contains(where: \.isNewline) ? " " : run
+		} else {
+			text.append(character)
+			index += 1
+		}
+	}
+
+	/// The run of whitespace at `index`, moving past it.
+	private mutating func whitespaceRun() -> String {
+		var run = ""
+		while index < characters.count, characters[index].isWhitespace {
+			run.append(characters[index])
+			index += 1
+		}
+		return run
+	}
+
+	/// The closer of the group or block the character at `position` opens, or `nil`: `(`, `[` and `{` always open one, and
+	/// `<` where it follows a name, as a generic argument list does.
+	private func closer(openedAt position: Int) -> Character? {
+		switch characters[position] {
+		case "(":
+			")"
+		case "[":
+			"]"
+		case "{":
+			"}"
+		case "<":
+			position > 0 && (characters[position - 1].isLetter || characters[position - 1].isNumber || characters[position - 1] == "_") ? ">" : nil
+		default:
+			nil
+		}
+	}
+
+	/// The items of the group whose opener `index` follows, sorted and joined, with `index` moved past `closer`; or `nil`
+	/// where no `closer` balances it: a generic argument list ends at a newline or a brace.
+	private mutating func group(closedBy closer: Character) -> String? {
+		var items = [String]()
+		var item = ""
+		while index < characters.count {
+			let character = characters[index]
+			if character == closer, closer != ">" || characters[index - 1] != "-" {
+				index += 1
+				items.append(item.trimmingCharacters(in: .whitespaces))
+				return items.sorted().joined(separator: ", ")
+			} else if character == "," {
+				items.append(item.trimmingCharacters(in: .whitespaces))
+				item = ""
+				index += 1
+			} else if ")]}".contains(character) || (closer == ">" && (character == "{" || character.isNewline)) {
+				return nil
+			} else {
+				appendNext(to: &item)
+			}
+		}
+		return nil
+	}
+
+	/// The items of the block whose `{` `index` follows, an `#if` region joined into one, sorted and joined, with `index`
+	/// moved past its `}`; or `nil` where no `}` balances it.
+	private mutating func block() -> String? {
+		var items = [String]()
+		var item = ""
+		while index < characters.count {
+			let character = characters[index]
+			if character == "}" {
+				index += 1
+				items.append(item.trimmingCharacters(in: .whitespaces))
+				return Self.joiningRegions(of: items.filter { !$0.isEmpty }).sorted().joined(separator: "; ")
+			} else if character == ";" {
+				items.append(item.trimmingCharacters(in: .whitespaces))
+				item = ""
+				index += 1
+			} else if character == ")" || character == "]" {
+				return nil
+			} else if character.isWhitespace {
+				let run = whitespaceRun()
+				if run.contains(where: \.isNewline) {
+					items.append(item.trimmingCharacters(in: .whitespaces))
+					item = ""
+				} else {
+					item += run
+				}
+			} else {
+				appendNext(to: &item)
+			}
+		}
+		return nil
+	}
+
+	/// `items` with each `#if` item and those after it up to its `#endif`, and each `#sourceLocation(file:…)` item and those
+	/// after it up to the `#sourceLocation()` that ends it, joined into one, in their order.
+	private static func joiningRegions(of items: [String]) -> [String] {
+		var joined = [String]()
+		var region = [String]()
+		var depth = 0
+		for item in items {
+			let opensRegion = item.hasPrefix("#if") || (item.hasPrefix("#sourceLocation(") && item != "#sourceLocation()")
+			if opensRegion {
+				depth += 1
+			}
+			if depth > 0 {
+				region.append(item)
+			} else {
+				joined.append(item)
+			}
+			if item.hasPrefix("#endif") || item == "#sourceLocation()", depth > 0 {
+				depth -= 1
+				if depth == 0 {
+					joined.append(region.joined(separator: "; "))
+					region = []
+				}
+			}
+		}
+		return joined + region
 	}
 }
 
@@ -10009,7 +10443,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 				guard !code.utf8.elementsEqual(otherCode.utf8) else { continue }
 				let differsOnlyInOrderOfExtensions = GraphFuzzerExtensionOrder.sortingExtensionsWithinTheirPlaces(in: code) == GraphFuzzerExtensionOrder.sortingExtensionsWithinTheirPlaces(in: otherCode)
 				guard codeComparison == .byteForByte || !differsOnlyInOrderOfExtensions else { continue }
-				differences += GraphFuzzerOutcomeDifference.aspects(ofCodeInFileNamed: fileName, code: code, otherCode: otherCode, comparedBy: mockDifference).map { aspect in
+				differences += GraphFuzzerOutcomeDifference.aspects(ofCodeInFileNamed: fileName, code: code, otherCode: otherCode, comparedBy: mockDifference, renaming: renaming).map { aspect in
 					GraphFuzzerOutcomeDifference(aspect: aspect, fileName: fileName, differsOnlyInOrderOfExtensions: differsOnlyInOrderOfExtensions)
 				}
 			}
@@ -10338,10 +10772,25 @@ struct GraphFuzzerRetentionCounts: Equatable {
 	/// The retention experiments only one path ran, over every probe of every judged graph: each a wrapper one path's value
 	/// holds where the other's holds none, which judges nothing.
 	var unpairedExperiments = 0
+	/// The judged graphs in which both paths ran an experiment holding a place held in an instantiator, by the wrapper the
+	/// place is held in (`forwardingWrapperName(ofHeldLabels:in:)`): an experiment that holds such a wrapper judges what the
+	/// builder the wrapper keeps keeps alive.
+	var judgedHoldingForwardingWrapper = [String: Int]()
+
+	/// The wrappers `judgedHoldingForwardingWrapper` counts graphs by, in the order the report writes them.
+	static let forwardingWrapperNames = ["ErasedInstantiator", "SendableErasedInstantiator", "Instantiator", "SendableInstantiator"]
+
+	/// The labels of the places held in an instantiator that `addingHoleShapes` and `addingRetentionShapes` draw, which an
+	/// experiment holding one counts in `judgedHoldingForwardingWrapper`.
+	static let forwardingPlaceLabels: Set = ["holeTicketBuilder", "holeTicketOther", "holeHandedBuilder", "holeHandedErased", "holeHandedLater", "holeLaterBuilder", "holeServiceLater", "retainApiBuilder"]
 
 	/// The counts as the long run's report and `combine-graph-fuzzer-reports.py` write them.
 	var reportField: String {
-		"judged=\(judged),drawJudged=\(judgedDrawingRetentionShape),handWrittenJudged=\(judgedThroughHandWrittenBuilder),unpairedExperiments=\(unpairedExperiments)"
+		var field = "judged=\(judged),drawJudged=\(judgedDrawingRetentionShape),handWrittenJudged=\(judgedThroughHandWrittenBuilder),unpairedExperiments=\(unpairedExperiments)"
+		for wrapperName in Self.forwardingWrapperNames {
+			field += ",forwardingJudged\(wrapperName)=\(judgedHoldingForwardingWrapper[wrapperName, default: 0])"
+		}
+		return field
 	}
 
 	mutating func add(_ other: GraphFuzzerRetentionCounts) {
@@ -10349,6 +10798,23 @@ struct GraphFuzzerRetentionCounts: Equatable {
 		judgedDrawingRetentionShape += other.judgedDrawingRetentionShape
 		judgedThroughHandWrittenBuilder += other.judgedThroughHandWrittenBuilder
 		unpairedExperiments += other.unpairedExperiments
+		judgedHoldingForwardingWrapper.merge(other.judgedHoldingForwardingWrapper, uniquingKeysWith: +)
+	}
+
+	/// The wrappers of the places held in an instantiator among `heldLabels`, the labels experiments held, each once, as
+	/// `fixture` declares them: `ErasedInstantiator` for `holeTicketBuilder: ErasedInstantiator<Int, any HoleTicketService>`.
+	static func forwardingWrapperNames(ofHeldLabels heldLabels: Set<String>, in fixture: GraphFuzzerFixture) -> Set<String> {
+		var wrapperNames = Set<String>()
+		for content in fixture.swiftFileContent {
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				guard case let .property(_, label, type) = line, forwardingPlaceLabels.contains(label), heldLabels.contains(label) else { continue }
+				let wrapperName = String(type.prefix { $0 != "<" })
+				if forwardingWrapperNames.contains(wrapperName) {
+					wrapperNames.insert(wrapperName)
+				}
+			}
+		}
+		return wrapperNames
 	}
 
 	/// Whether `fixture` draws the retention oracle's own shape, in the seam corpus or the public mock corpus.
@@ -10615,16 +11081,18 @@ struct GraphFuzzerKnownIssue: Equatable {
 		}
 	}
 
-	/// Whether every shape of the issue is a value, retention or builder-surface difference, which documents only the
-	/// differences its signatures match and masks no later failure of the oracle's chain (`GraphFuzzerFinding`): a
-	/// graph listed under such an issue still reports a new failure of any oracle, so the gating draws count it as
-	/// judged.
+	/// Whether every shape of the issue is a value, retention or builder-surface difference, or a difference of a renamed
+	/// graph, which documents only the differences its signatures match and masks no later failure of the oracle's chain
+	/// (`GraphFuzzerFinding`): a graph listed under such an issue still reports a new failure of any oracle, so the gating
+	/// draws count it as judged. The chain judges a renamed graph after every oracle but retention, so a graph whose first
+	/// failure is a renamed difference passed every earlier oracle, and `GraphFuzzerFinding` masks no later failure of
+	/// such a known difference.
 	var masksNoLaterFailure: Bool {
 		signatures.allSatisfy { signature in
 			switch signature {
-			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderSurface:
+			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderSurface, .renamedGraphDiffers:
 				true
-			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
+			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
 				false
 			}
 		}
@@ -10845,8 +11313,9 @@ enum GraphFuzzerFinding: Equatable {
 			self = retentionIsJudged || !knownIssue.documentsOnlyRetention ? .staleKnownIssue(knownIssue) : .passed
 		case let (failure?, knownIssue?) where knownIssue.matches(failure):
 			// No signature lists the compile of `C` (`builderCallDoesNotCompile`), so a known failure of its kind never arises
-			// today; it is listed here so that one never masks a later failure should a signature come to list it.
-			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderCallDoesNotCompile].contains(failure.kind)
+			// today; it is listed here so that one never masks a later failure should a signature come to list it. A known
+			// difference of a renamed graph masks none either, whatever order the chain judges in.
+			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderCallDoesNotCompile, .renamedGraphDiffers].contains(failure.kind)
 				|| GraphFuzzerFailure.knownBuilderSurfaceKinds.contains(failure.kind)
 			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers || $0.kind == .seamRetainsWhatInlineFrees || $0.kind == .publicMockRetainsWhatKnownRightFrees || GraphFuzzerFailure.builderSurfaceKindsNeverMasked.contains($0.kind)) && !knownIssue.matches($0) }) {
 				self = .failure(unmasked)
@@ -11480,15 +11949,39 @@ struct GraphFuzzerToolRuns {
 	/// each diagnostic's suggestions in any order, other generated file names, or the code of each generated file that
 	/// differs by more than the order of its extensions.
 	var renamedGraphFailures: [GraphFuzzerFailure] {
-		renamedOutcomes.flatMap { renaming, outcome in
-			GraphFuzzerToolOutcome.differences(between: firstOutcome, and: outcome, comparingCode: .inAnyOrderOfExtensions, renaming: renaming, of: fixture).map { difference in
-				GraphFuzzerFailure(
+		renamedGraphFailures(refutingOrderOf: [:])
+	}
+
+	/// `renamedGraphFailures`, where the renamed graph at each index of `renamedOutcomes` that `refutations` lists has a
+	/// difference of the order of its label-sorted lists that its code does not bear out: the code, with its renaming undone,
+	/// does not compile with the graph, or builds other values than the graph's own code
+	/// (`GraphFuzzerOracle.valueComparisons(of:isolatingValueGraphsOf:)`). Each such difference is the file's code
+	/// (`dependencyTreeCode`), with what refuted the order.
+	func renamedGraphFailures(refutingOrderOf refutations: [Int: String]) -> [GraphFuzzerFailure] {
+		renamedOutcomes.enumerated().flatMap { index, renamed in
+			let (renaming, outcome) = renamed
+			return GraphFuzzerToolOutcome.differences(between: firstOutcome, and: outcome, comparingCode: .inAnyOrderOfExtensions, renaming: renaming, of: fixture).map { difference in
+				let refutation = difference.aspect == .dependencyTreeListOrder ? refutations[index] : nil
+				let reportedDifference = refutation == nil ? difference : GraphFuzzerOutcomeDifference(aspect: .dependencyTreeCode, fileName: difference.fileName)
+				return GraphFuzzerFailure(
 					seed: fixture.seed,
 					kind: .renamedGraphDiffers,
-					details: "\(renaming.description.prefix(1).uppercased())\(renaming.description.dropFirst()) changes \(difference.description).\nThis graph:\n\(firstOutcome.description)\nThe renamed graph, with its renaming undone:\n\(outcome.description)",
-					renamedGraphDifference: difference.aspect,
+					details: "\(renaming.description.prefix(1).uppercased())\(renaming.description.dropFirst()) changes \(reportedDifference.description).\(refutation.map { "\n\($0)" } ?? "")\nThis graph:\n\(firstOutcome.description)\nThe renamed graph, with its renaming undone:\n\(outcome.description)",
+					renamedGraphDifference: reportedDifference.aspect,
 				)
 			}
+		}
+	}
+
+	/// The index in `renamedOutcomes` and the generated files of each renamed graph the tool accepted whose code differs
+	/// from this graph's in the order of its label-sorted lists (`dependencyTreeListOrder`): code that, with its renaming
+	/// undone, must compile with this graph and build its values.
+	var renamedOutcomesDifferingInListOrder: [(index: Int, generatedFiles: [String: String])] {
+		renamedOutcomes.enumerated().compactMap { index, renamed in
+			guard case let .accepted(generatedFiles, _) = renamed.outcome,
+			      GraphFuzzerToolOutcome.differences(between: firstOutcome, and: renamed.outcome, comparingCode: .inAnyOrderOfExtensions, renaming: renamed.renaming, of: fixture).contains(where: { $0.aspect == .dependencyTreeListOrder })
+			else { return nil }
+			return (index, generatedFiles)
 		}
 	}
 
@@ -11737,7 +12230,7 @@ enum GraphFuzzerOracle {
 			try await self.valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && codeCompilationFailures[$0.fixture.seed] == nil }, isolatingValueGraphsOf: isolatedSeeds)
 		}
 		return toolRuns.map { runs in
-			let renamedGraphFailures = runs.renamedGraphFailures
+			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
 			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
@@ -11764,9 +12257,18 @@ enum GraphFuzzerOracle {
 				retentionCounts: valueComparisons.retentionCounts[runs.fixture.seed] ?? GraphFuzzerRetentionCounts(),
 				valueOracle: runs.valueOracle,
 				remedyRuns: runs.remedyRuns,
-				builderSurfaceFloorKinds: runs.builderSurfaceFloorKinds,
+				builderSurfaceFloorKinds: runs.builderSurfaceFloorKinds + Self.builderCallFloorKinds(of: runs, isCompiled: compileVerificationIsEnabled && runs.runsDifferFailure == nil && codeCompilationFailures[runs.fixture.seed] == nil),
 			)
 		}
+	}
+
+	/// The kinds a graph whose code compiled (`isCompiled`) counts toward the builder surface's floors for the compile of the
+	/// call a person writes, `C`, whether `C` compiled or not: `wrapperBuilderCall` where `C` called a builder whose
+	/// readable type is a wrapper's `Builder`.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	static func builderCallFloorKinds(of runs: GraphFuzzerToolRuns, isCompiled: Bool) -> [String] {
+		guard isCompiled, GraphFuzzerBuilderSurface.callsWrapperBuilder(in: runs.generatedFiles) else { return [] }
+		return [GraphFuzzerBuilderSurface.wrapperBuilderCallKind]
 	}
 
 	/// The failures of each graph of `toolRuns` the tool accepts with its seam and without it whose seam build
@@ -11797,6 +12299,9 @@ enum GraphFuzzerOracle {
 		/// What the retention oracle judged of each graph with a hole whose two builds the comparator compared, failing or
 		/// not, keyed by seed.
 		var retentionCounts = [UInt64: GraphFuzzerRetentionCounts]()
+		/// What refuted each renamed graph's order-only difference, by its index in `renamedOutcomes`, keyed by seed
+		/// (`GraphFuzzerToolRuns.renamedGraphFailures(refutingOrderOf:)`).
+		var listOrderRefutations = [UInt64: [Int: String]]()
 	}
 
 	/// Whether the graph of `fixture` holds a hole, judged by the retention oracle: it draws a type that fills a seam's hole
@@ -11845,17 +12350,7 @@ enum GraphFuzzerOracle {
 			if let graph = publicMockValueGraph(of: runs, judgesRetention: holdsHole(fixture: runs.fixture, generatedFiles: runs.generatedFiles)) {
 				return (runs, graph)
 			}
-			guard case let .accepted(seamFiles, _) = runs.firstOutcome, case let .accepted(inlineFiles, _) = runs.inlineOutcome else { return nil }
-			let storingFixture = GraphFuzzerGenerator.fixture(forSeed: runs.fixture.seed, features: GraphFuzzerGeneratorFeature.features(drawnIn: runs.fixture), storingEveryParameter: true)
-			return (runs, DifferentialValueGraph(
-				name: "seed \(runs.fixture.seed)",
-				feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: seamFiles),
-				knownRight: DifferentialValuePath(fixture: storingFixture.withoutSeams, generatedFiles: inlineFiles),
-				probes: storingFixture.differentialValueProbes(generatedFiles: seamFiles),
-				samples: storingFixture.holeDrawForwardedPropertiesSamples + storingFixture.forwardedLabelAcrossSeamCallSamples,
-				exemptions: [],
-				judgesRetention: holdsHole(fixture: runs.fixture, generatedFiles: seamFiles),
-			))
+			return seamValueGraph(of: runs).map { (runs, $0) }
 		}
 		let visibleGraphs = visibleRuns.compactMap { runs -> (runs: GraphFuzzerToolRuns, graph: DifferentialValueGraph)? in
 			guard case let .accepted(holeFiles, _) = runs.firstOutcome, case let .accepted(visibleFiles, _) = runs.visibleOutcome else { return nil }
@@ -11869,6 +12364,28 @@ enum GraphFuzzerOracle {
 			))
 		}
 		guard let comparisons = try await compare(graphs + visibleGraphs + valueOracleGraphs, isolating: isolatedSeeds, filesToDelete: &filesToDelete) else { return ValueComparisons() }
+		// A renamed graph's code that differs from the graph's only in the order of its label-sorted lists and blocks is that
+		// order only if it means the same: with its renaming undone, it must compile with the graph and build the values the
+		// graph's own code builds, against the same inline build. A seed's renamed graphs declare its types again, so each
+		// round holds at most one of each seed's, in one batch.
+		var renamedGraphsByRound = [[(runs: GraphFuzzerToolRuns, graphIndex: Int, renamedIndex: Int, graph: DifferentialValueGraph)]]()
+		for (graphIndex, (runs, graph)) in graphs.enumerated() where runs.knownRightOutcome == nil {
+			for (round, (renamedIndex, renamedGraph)) in listOrderGraphs(of: runs, beside: graph).enumerated() {
+				if renamedGraphsByRound.count == round {
+					renamedGraphsByRound.append([])
+				}
+				renamedGraphsByRound[round].append((runs, graphIndex, renamedIndex, renamedGraph))
+			}
+		}
+		var listOrderRefutations = [UInt64: [Int: String]]()
+		for round in renamedGraphsByRound {
+			guard let renamedComparisons = try await compare(round.map { ($0.runs, $0.graph) }, isolating: isolatedSeeds, filesToDelete: &filesToDelete) else { continue }
+			for (renamed, renamedComparison) in zip(round, renamedComparisons) {
+				if let refutation = listOrderRefutation(of: comparisons[renamed.graphIndex].result, by: renamedComparison.result) {
+					listOrderRefutations[renamed.runs.fixture.seed, default: [:]][renamed.renamedIndex] = refutation
+				}
+			}
+		}
 		let valueOracleComparisons = zip(valueOracleGraphs.map(\.runs), comparisons.suffix(valueOracleGraphs.count))
 		var failures = [UInt64: [GraphFuzzerFailure]]()
 		var comparedValueOracleSeeds = Set<UInt64>()
@@ -11923,6 +12440,10 @@ enum GraphFuzzerOracle {
 				judgedDrawingRetentionShape: !judgedProbes.isEmpty && GraphFuzzerRetentionCounts.drawsRetentionShape(runs.fixture) ? 1 : 0,
 				judgedThroughHandWrittenBuilder: judgedProbes.contains { $0.hasSuffix(GraphFuzzerFixture.handWrittenBuilderProbeNameSuffix) } ? 1 : 0,
 				unpairedExperiments: valueComparison.unpairedRetentionExperimentCount,
+				judgedHoldingForwardingWrapper: Dictionary(
+					GraphFuzzerRetentionCounts.forwardingWrapperNames(ofHeldLabels: valueComparison.retentionPairedWrapperLabels, in: runs.fixture).map { ($0, 1) },
+					uniquingKeysWith: +,
+				),
 			)
 			let differences = valueComparison.retentionDifferences
 			guard !differences.isEmpty else { continue }
@@ -11964,7 +12485,66 @@ enum GraphFuzzerOracle {
 				))
 			}
 		}
-		return ValueComparisons(failures: failures, comparedValueOracleSeeds: comparedValueOracleSeeds, retentionFailures: retentionFailures, retentionCounts: retentionCounts)
+		return ValueComparisons(failures: failures, comparedValueOracleSeeds: comparedValueOracleSeeds, retentionFailures: retentionFailures, retentionCounts: retentionCounts, listOrderRefutations: listOrderRefutations)
+	}
+
+	/// The value graph of a seam graph the tool accepts with its seams and without them: the seam build against its inline
+	/// build, each from the graph drawn storing every parameter, or `nil` for any other graph.
+	static func seamValueGraph(of runs: GraphFuzzerToolRuns) -> DifferentialValueGraph? {
+		guard case let .accepted(seamFiles, _) = runs.firstOutcome, case let .accepted(inlineFiles, _) = runs.inlineOutcome else { return nil }
+		let storingFixture = GraphFuzzerGenerator.fixture(forSeed: runs.fixture.seed, features: GraphFuzzerGeneratorFeature.features(drawnIn: runs.fixture), storingEveryParameter: true)
+		return DifferentialValueGraph(
+			name: "seed \(runs.fixture.seed)",
+			feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: seamFiles),
+			knownRight: DifferentialValuePath(fixture: storingFixture.withoutSeams, generatedFiles: inlineFiles),
+			probes: storingFixture.differentialValueProbes(generatedFiles: seamFiles),
+			samples: storingFixture.holeDrawForwardedPropertiesSamples + storingFixture.forwardedLabelAcrossSeamCallSamples,
+			exemptions: [],
+			judgesRetention: holdsHole(fixture: runs.fixture, generatedFiles: seamFiles),
+		)
+	}
+
+	/// The value graph of each renamed graph of `runs` whose code differs from the graph's only in the order of its lists
+	/// and blocks (`GraphFuzzerToolRuns.renamedOutcomesDifferingInListOrder`), by its index in `renamedOutcomes`: its code,
+	/// with its renaming undone, compiled with the graph, against `graph`'s known-right path, with `graph`'s samples.
+	static func listOrderGraphs(of runs: GraphFuzzerToolRuns, beside graph: DifferentialValueGraph) -> [(renamedIndex: Int, graph: DifferentialValueGraph)] {
+		let renamedGraphs = runs.renamedOutcomesDifferingInListOrder
+		guard !renamedGraphs.isEmpty else { return [] }
+		let storingFixture = GraphFuzzerGenerator.fixture(forSeed: runs.fixture.seed, features: GraphFuzzerGeneratorFeature.features(drawnIn: runs.fixture), storingEveryParameter: true)
+		return renamedGraphs.map { renamedIndex, generatedFiles in
+			(renamedIndex, DifferentialValueGraph(
+				name: "seed \(runs.fixture.seed), \(runs.renamedOutcomes[renamedIndex].renaming.description)",
+				feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: generatedFiles),
+				knownRight: graph.knownRight,
+				probes: storingFixture.differentialValueProbes(generatedFiles: generatedFiles),
+				samples: graph.samples,
+			))
+		}
+	}
+
+	/// What refutes a renamed graph's order-only difference, or `nil` when nothing does: the renamed graph's comparison,
+	/// `renamedResult`, must end as the graph's own, `ownResult`, did, with the same value differences, or the same failure,
+	/// at the same stage of the same path. So a renamed graph whose code does not compile refutes the order even where the
+	/// graph's own probes run out of traversals, as do differences the graph's own code does not show and values the graph's
+	/// own comparison could not describe.
+	static func listOrderRefutation(
+		of ownResult: Result<DifferentialValueComparison, DifferentialValueOracleError>,
+		by renamedResult: Result<DifferentialValueComparison, DifferentialValueOracleError>,
+	) -> String? {
+		switch (ownResult, renamedResult) {
+		case let (.success(valueComparison), .success(renamedValueComparison)):
+			valueComparison.differences.map(\.description) == renamedValueComparison.differences.map(\.description)
+				? nil
+				: "Its code, with its renaming undone, builds other values than the graph's own code:\n\(renamedValueComparison.differences.map(\.description).joined(separator: "\n"))\n\(renamedValueComparison.report)"
+		case let (.success, .failure(error)):
+			"Its code, with its renaming undone, does not compile with the graph, or its values cannot be described:\n\(error)"
+		case let (.failure(error), .failure(renamedError)):
+			error.stage == renamedError.stage && error.path == renamedError.path
+				? nil
+				: "Its code, with its renaming undone, fails otherwise than the graph's own code, which fails with:\n\(error)\nIts own failure:\n\(renamedError)"
+		case let (.failure(error), .success):
+			"Its code, with its renaming undone, is described where the graph's own code is not, which fails with:\n\(error)"
+		}
 	}
 
 	/// Compares each of `graphs`, beside the runs it judges: the graphs of seeds outside `isolatedSeeds` in one batch,

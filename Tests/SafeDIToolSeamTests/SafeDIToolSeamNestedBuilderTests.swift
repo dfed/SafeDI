@@ -2416,24 +2416,35 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, Self.root(["@Instantiated public let host: Host"])]), [
 			"Feature": ["Feature.swift": """
 			extension Host {
-			    @frozen public enum SafeDIScope_NamedGadget_AnyGadget {
+			    @frozen nonisolated public enum SafeDIScope_NamedGadget_AnyGadget {
 			        case maker(maker_Values, (count: Int, name: Name))
 
-			        public struct maker_Values {}
+			        nonisolated public struct maker_Values {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let maker: (maker_Values) -> ErasedInstantiator<(count: Int, name: Name), __safeDI_Built>.Builder
+
+			            public init(maker: @escaping (maker_Values) -> ErasedInstantiator<(count: Int, name: Name), __safeDI_Built>.Builder) {
+			                self.maker = maker
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(count: Int, name: Name), __safeDI_Built>.Builder) {
+			                self.maker = { _ in __safeDI_builder }
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_namedGadget_AnyGadgetBuilder: @escaping (SafeDIScope_NamedGadget_AnyGadget) -> AnyGadget) {
-			        let maker = ErasedInstantiator<(count: Int, name: Name), AnyGadget> {
-			            __safeDI_namedGadget_AnyGadgetBuilder(.maker(SafeDIScope_NamedGadget_AnyGadget.maker_Values(), $0))
-			        }
+			    public init(__safeDI_namedGadget_AnyGadgetBuilder: SafeDIScope_NamedGadget_AnyGadget.__safeDI_Builder<AnyGadget>) {
+			        let maker = ErasedInstantiator<(count: Int, name: Name), AnyGadget>(__safeDI_namedGadget_AnyGadgetBuilder.maker(SafeDIScope_NamedGadget_AnyGadget.maker_Values()))
 			        self.init(maker: maker)
 			    }
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_73E589C02F18A9CD {}
+			    public enum __safeDI_Host_AA8DD82CFED9DCFD {}
 			}
 			"""],
 			"App": ["App.swift": """
@@ -2444,17 +2455,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_73E589C02F18A9CD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_namedGadget_AnyGadgetBuilder_Host(_ scope: Host.SafeDIScope_NamedGadget_AnyGadget) -> AnyGadget {
-			                switch scope {
-			                case let .maker(_, __safeDI_forwarded):
-			                    func __safeDI_maker(count: Int, name: Name) -> NamedGadget {
-			                        NamedGadget(name: name, count: count)
-			                    }
-			                    return AnyGadget(__safeDI_maker(count: __safeDI_forwarded.count, name: __safeDI_forwarded.name))
+			            _ = Host.__safeDI_Host_AA8DD82CFED9DCFD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_namedGadget_AnyGadgetBuilder_Host_maker() -> ErasedInstantiator<(count: Int, name: Name), AnyGadget>.Builder {
+			                func __safeDI_maker(count: Int, name: Name) -> NamedGadget {
+			                    NamedGadget(name: name, count: count)
 			                }
+			                return { forwarded in AnyGadget(__safeDI_maker(count: forwarded.count, name: forwarded.name)) }
 			            }
-			            return Host(__safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host)
+			            func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.SafeDIScope_NamedGadget_AnyGadget.__safeDI_Builder<AnyGadget> {
+			                .init(maker: { _ in __safeDI_namedGadget_AnyGadgetBuilder_Host_maker() })
+			            }
+			            return Host(__safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
 			        self.init(host: host)
@@ -3064,7 +3075,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 	mutating func generate_throwsTierOmitsBuilder_whenPublicSeamsPlaceForwardsAnInternalType() async {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Host.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Host`: its generated `public` initializer, which `Host`’s `public` access requires, cannot take `hiddenGadget_GadgetBuilder: @escaping (SafeDIScope_HiddenGadget_Gadget) -> any Gadget`, the builder for `Host`’s `maker: ErasedInstantiator<Hidden, any Gadget>`, which no @Instantiable declaration that module `Feature` can see fulfills. `Hidden` is declared `internal`. Declare `Hidden` `public`; declare `Host` `internal`; declare an @Instantiable type that fulfills `HiddenGadget` in module `Feature` or a module it lists among its SafeDI dependencies, so `Host`’s tree builds it; or declare the dependency tree on an `internal` type that instantiates `Host`.
+			\(fixtures["Feature"]!["Host.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Host`: its generated `public` initializer, which `Host`’s `public` access requires, cannot take `hiddenGadget_GadgetBuilder: @escaping ErasedInstantiator<Hidden, any Gadget>.Builder`, the builder for `Host`’s `maker: ErasedInstantiator<Hidden, any Gadget>`, which no @Instantiable declaration that module `Feature` can see fulfills. `Hidden` is declared `internal`. Declare `Hidden` `public`; declare `Host` `internal`; declare an @Instantiable type that fulfills `HiddenGadget` in module `Feature` or a module it lists among its SafeDI dependencies, so `Host`’s tree builds it; or declare the dependency tree on an `internal` type that instantiates `Host`.
 			\(fixtures["Feature"]!["Hidden.swift"]):1:1: note: `Hidden` is declared `internal` here.
 			\(fixtures["Feature"]!["Hidden.swift"]):1:1-1:1: fixit: public\(" ")
 			"""
@@ -3188,22 +3199,35 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		#endif
 
 		extension Host {
-		    @frozen public enum SafeDISendableScope_NamedGadget_AnyGadget {
+		    @frozen nonisolated public enum SafeDISendableScope_NamedGadget_AnyGadget {
 		        case part(String)
+
+		        nonisolated public struct part_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let part: @Sendable (part_Values) -> SendableErasedInstantiator<String, __safeDI_Built>.Builder
+
+		            public init(part: @escaping @Sendable (part_Values) -> SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                self.part = part
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                self.part = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_namedGadget_AnyGadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_NamedGadget_AnyGadget) -> AnyGadget) {
-		        let part = SendableErasedInstantiator<String, AnyGadget> {
-		            __safeDI_namedGadget_AnyGadgetSendableBuilder(.part($0))
-		        }
+		    public init(__safeDI_namedGadget_AnyGadgetSendableBuilder: SafeDISendableScope_NamedGadget_AnyGadget.__safeDI_Builder<AnyGadget>) {
+		        let part = SendableErasedInstantiator<String, AnyGadget>(__safeDI_namedGadget_AnyGadgetSendableBuilder.part(SafeDISendableScope_NamedGadget_AnyGadget.part_Values()))
 		        self.init(part: part)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_D8AAC36F1C4689C3 {}
+		    public enum __safeDI_Host_74245742D5C8D5E1 {}
 		}
 		"""])
 	}
@@ -3569,40 +3593,48 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		struct CallingService: Service {}
 
 		func host() -> Host {
-		    Host(impl_ServiceBuilder: { scope in
-		        switch scope {
-		        case let .maker(_, callback):
-		            callback()
-		            return CallingService()
-		        }
+		    Host(impl_ServiceBuilder: { callback in
+		        callback()
+		        return CallingService()
 		    })
 		}
 		""")], featureConfiguration: plainDependencyTreeInitializersConfiguration))
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_Impl_Service {
+		    @frozen nonisolated public enum SafeDIScope_Impl_Service {
 		        case maker(maker_Values, Callback)
 
-		        public struct maker_Values {}
+		        nonisolated public struct maker_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let maker: (maker_Values) -> ErasedInstantiator<Callback, __safeDI_Built>.Builder
+
+		            public init(maker: @escaping (maker_Values) -> ErasedInstantiator<Callback, __safeDI_Built>.Builder) {
+		                self.maker = maker
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Callback, __safeDI_Built>.Builder) {
+		                self.maker = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public init(impl_ServiceBuilder: @escaping (SafeDIScope_Impl_Service) -> any Service) {
-		        self.init(__safeDI_impl_ServiceBuilder: impl_ServiceBuilder)
+		    public init(impl_ServiceBuilder: @escaping ErasedInstantiator<Callback, any Service>.Builder) {
+		        self.init(__safeDI_impl_ServiceBuilder: .init(__safeDI_noScope: impl_ServiceBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public init(__safeDI_impl_ServiceBuilder: @escaping (SafeDIScope_Impl_Service) -> any Service) {
-		        let maker = ErasedInstantiator<Callback, any Service> {
-		            __safeDI_impl_ServiceBuilder(.maker(SafeDIScope_Impl_Service.maker_Values(), $0))
-		        }
+		    public init(__safeDI_impl_ServiceBuilder: SafeDIScope_Impl_Service.__safeDI_Builder<any Service>) {
+		        let maker = ErasedInstantiator<Callback, any Service>(__safeDI_impl_ServiceBuilder.maker(SafeDIScope_Impl_Service.maker_Values()))
 		        self.init(maker: maker)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_6757EB86F7693B38 {}
+		    public enum __safeDI_Host_686312D31E2736BE {}
 		}
 		"""])
 	}
@@ -4125,24 +4157,35 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		#endif
 
 		extension Host {
-		    @frozen public enum SafeDIScope_Missing_Service {
+		    @frozen nonisolated public enum SafeDIScope_Missing_Service {
 		        case maker(maker_Values, Unread)
 
-		        public struct maker_Values {}
+		        nonisolated public struct maker_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let maker: (maker_Values) -> ErasedInstantiator<Unread, __safeDI_Built>.Builder
+
+		            public init(maker: @escaping (maker_Values) -> ErasedInstantiator<Unread, __safeDI_Built>.Builder) {
+		                self.maker = maker
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Unread, __safeDI_Built>.Builder) {
+		                self.maker = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    internal init(__safeDI_missing_ServiceBuilder: @escaping (SafeDIScope_Missing_Service) -> any Service) {
-		        let maker = ErasedInstantiator<Unread, any Service> {
-		            __safeDI_missing_ServiceBuilder(.maker(SafeDIScope_Missing_Service.maker_Values(), $0))
-		        }
+		    internal init(__safeDI_missing_ServiceBuilder: SafeDIScope_Missing_Service.__safeDI_Builder<any Service>) {
+		        let maker = ErasedInstantiator<Unread, any Service>(__safeDI_missing_ServiceBuilder.maker(SafeDIScope_Missing_Service.maker_Values()))
 		        self.init(maker: maker)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_D4A2E83016007304 {}
+		    public enum __safeDI_Host_06E7D0D2A51A0D2A {}
 		}
 		"""])
 		if compileVerificationIsEnabled {

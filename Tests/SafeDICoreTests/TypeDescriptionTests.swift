@@ -31,6 +31,72 @@ struct TypeDescriptionTests {
 	}
 
 	@Test(arguments: [
+		// Qualified beside bare, and the same two after renaming every identifier so their names sort the other way.
+		("Swift.Int", "Int", "Swift.Int"),
+		("A.Zed", "Zed", "A.Zed"),
+		("Feed.Token", "Token", "Feed.Token"),
+		("Optional<Token>", "Token?", "Optional<Token>"),
+		("Optional<Atom>", "Atom?", "Optional<Atom>"),
+		("Array<Token>", "[Token]", "Array<Token>"),
+		("Array<Atom>", "[Atom]", "Array<Atom>"),
+		("Dictionary<String, Int>", "[String: Int]", "Dictionary<String, Int>"),
+		("Dictionary<Zed, Ant>", "[Zed: Ant]", "Dictionary<Zed, Ant>"),
+		("any Gadget", "Gadget", "any Gadget"),
+		("any Ant", "Ant", "any Ant"),
+		// A qualifier at two different generic positions: one shape length, so the name-erased spelling's text decides.
+		("Pair<Swift.Int, String>", "Pair<Int, Swift.String>", "Pair<Int, Swift.String>"),
+		("Zed<A.Bee, Cat>", "Zed<Bee, A.Cat>", "Zed<Bee, A.Cat>"),
+		("Swift.Int?", "Optional<Int>", "Swift.Int?"),
+		("A.Zed?", "Optional<Zed>", "A.Zed?"),
+	])
+	func mostExplicitSpelling_choosesBySpellingsShape_whicheverSpellingComesFirst(first: String, second: String, expected: String) {
+		let firstType = Self.parsedType(first)
+		let secondType = Self.parsedType(second)
+
+		#expect(firstType.mostExplicitSpelling(among: [secondType]).asSource == expected)
+		#expect(secondType.mostExplicitSpelling(among: [firstType]).asSource == expected)
+	}
+
+	@Test
+	func mostExplicitSpelling_choosesSpellingThatSortsFirst_whenSpellingsHaveOneShape() {
+		// One type qualified by two modules: the stated last tie-break.
+		let feed = Self.parsedType("Feed.Token")
+		let core = Self.parsedType("Core.Token")
+
+		#expect(feed.mostExplicitSpelling(among: [core]).asSource == "Core.Token")
+		#expect(core.mostExplicitSpelling(among: [feed]).asSource == "Core.Token")
+	}
+
+	@Test(arguments: [
+		("Void", "Void"),
+		("()", "()"),
+		("Swift.Int", "_._"),
+		("Array<Int>", "_<_>"),
+		("Outer.Inner<Int>", "_._<_>"),
+		("A & B", "_ & _"),
+		("Int?", "_?"),
+		("Int!", "_!"),
+		("some Gadget", "some _"),
+		("any Gadget", "any _"),
+		("Gadget.Type", "_.Type"),
+		("[Int]", "[_]"),
+		("[String: Int]", "[_: _]"),
+		("(id: Int, name: String)", "(id: _, name: _)"),
+		("(Int) async throws -> String", "(_) async throws -> _"),
+		("@escaping @Sendable (Int) -> String", "@escaping @Sendable (_) -> _"),
+		("inout Int", "inout _"),
+		("(Int...) -> String", "(_...) -> _"),
+	])
+	func withNamesErased_keepsEverythingButNames_forEachKindOfType(source: String, expected: String) {
+		#expect(Self.parsedType(source).withNamesErased.asSource == expected)
+	}
+
+	@Test
+	func withNamesErased_keepsText_whenTypeIsUnknown() {
+		#expect(TypeDescription.unknown(text: "repeat each Element").withNamesErased == .unknown(text: "repeat each Element"))
+	}
+
+	@Test(arguments: [
 		("Store", "ModA.Store"),
 		("Box<Store>", "Box<ModA.Store>"),
 		("Outer.Box<Store>", "Outer.Box<ModA.Store>"),
