@@ -2777,7 +2777,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 				Self.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: []),
 				Self.mockedRoot(declarations: ["@Instantiated public let outer: Outer"]),
 			],
-			probes: [Self.probe(".outer.inner.service", builders: "")],
+			probes: [Self.probe(".outer.inner.service")],
 			expectedMiddle: """
 			#if canImport(Feature)
 			import Feature
