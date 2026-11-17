@@ -82,6 +82,7 @@ struct ConstructionMemo {
 			break
 		case .acrossTrees:
 			entriesByKey = firstPassMemo.entriesByKey
+			entriesByGenerator = firstPassMemo.entriesByGenerator
 			keyedScopes = firstPassMemo.keyedScopes
 		}
 	}
@@ -106,6 +107,23 @@ struct ConstructionMemo {
 		/// The generator the pass before created for the place, whose children and findings the place's build reads. Two
 		/// places of the pass before that shared a generator share it here too.
 		let previousPassGenerator: ObjectIdentifier?
+
+		/// This key with `previousPassGenerator` replaced.
+		func withPreviousPassGenerator(_ previousPassGenerator: ObjectIdentifier?) -> Key {
+			Key(
+				scope: scope,
+				property: property,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+				forMockGeneration: forMockGeneration,
+				startsCodeGeneration: startsCodeGeneration,
+				validatesForwardedProperties: validatesForwardedProperties,
+				buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
+				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+				reboundProperties: reboundProperties,
+				spellings: spellings,
+				previousPassGenerator: previousPassGenerator,
+			)
+		}
 	}
 
 	/// A finished place's generator, with the reads of the context above it its subtree made and its scope count, which
@@ -114,6 +132,13 @@ struct ConstructionMemo {
 		let reads: ConstructionLog
 		let generator: ScopeGenerator
 		let subtreeScopeCount: Int
+		/// The generators the build started or collected to start, in order, which a later pass that reuses the generator
+		/// collects again.
+		let startedBeneath: [ScopeGenerator]
+		/// Whether the build found, everywhere in its subtree, what it read from the pass before: the same cycle parameters,
+		/// loops of builders and fill struct labels. Building the place again from this generator then reads what the build
+		/// read from the pass before, so it builds this generator again (see `settledReuse`).
+		let isSettled: Bool
 	}
 
 	/// A reuse of an entry by another place: the entry, with the depths its reads are answered at in the place's context.
@@ -135,13 +160,51 @@ struct ConstructionMemo {
 		return nil
 	}
 
+	/// The generator the pass before built settled at the place `key` names, when `key`'s other fields equal the key it was
+	/// stored under and its reads are answered alike in `context`, with those reads as `context` answers them, or `nil`.
+	///
+	/// `key.previousPassGenerator` is that generator, `G`, which the pass before built from its own pass before's
+	/// generator, `G′`. Settled, `G` holds everything a build reads from the pass before as `G′` held it (its cycle parameters
+	/// and loops of builders, and its children, each settled in turn), so building the place from `G` takes the steps that
+	/// building it from `G′` took, which built `G`: the key's other fields and the reads are what the memo compares within a
+	/// pass. This memo is the pass before's.
+	func settledReuse(of key: Key, in context: ConstructionContext, besides siblings: Set<ObjectIdentifier>) -> Reuse? {
+		guard let previousPassGenerator = key.previousPassGenerator,
+		      let (storedKey, entry) = entriesByGenerator[previousPassGenerator],
+		      entry.isSettled,
+		      !siblings.contains(previousPassGenerator),
+		      storedKey == key.withPreviousPassGenerator(storedKey.previousPassGenerator),
+		      let reads = entry.reads.answeredAlike(in: context)
+		else { return nil }
+		return Reuse(entry: entry, reads: reads)
+	}
+
+	/// Whether `generator` found the cycle parameters and loops of builders that `previousPassGenerator`, the generator the
+	/// pass before built for its place, found, compared as a memo compares answers: by `==` and by spelling.
+	static func foundAlike(by generator: ScopeGenerator, asBy previousPassGenerator: ScopeGenerator?) -> Bool {
+		let loops = generator.receivedBuilderLoops
+		let previousPassLoops = previousPassGenerator?.receivedBuilderLoops ?? ScopeGenerator.ReceivedBuilderLoops()
+		return ConstructionLog.Answer.cycleParameterContext(generator.foundCycleParameters)
+			.isAlike(.cycleParameterContext(previousPassGenerator?.foundCycleParameters ?? []))
+			&& loops == previousPassLoops
+			&& loops.reboundPropertiesByChildIndex.allSatisfy { index, properties in
+				previousPassLoops.reboundPropertiesByChildIndex[index].map(properties.isSpelledAlike) ?? false
+			}
+	}
+
 	/// Stores `entry` under `key`, keeping `scope`, the scope the key names, alive as long as the memo.
 	mutating func store(_ entry: Entry, for key: Key, keepingAlive scope: Scope) {
 		entriesByKey[key, default: []].append(entry)
+		let generator = ObjectIdentifier(entry.generator)
+		if entriesByGenerator[generator] == nil {
+			entriesByGenerator[generator] = (key, entry)
+		}
 		keyedScopes.append(scope)
 	}
 
 	private var entriesByKey = [Key: [Entry]]()
+	/// Each stored generator with the key and entry it was first stored under.
+	private var entriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
 	/// The scopes `entriesByKey`'s keys name by identity, kept so that no other scope can take one's address.
 	private var keyedScopes = [Scope]()
 
@@ -151,16 +214,19 @@ struct ConstructionMemo {
 		get {
 			var oracleMemo = ConstructionMemo(sharing: .acrossTrees)
 			oracleMemo.entriesByKey = oracleEntriesByKey
+			oracleMemo.entriesByGenerator = oracleEntriesByGenerator
 			oracleMemo.keyedScopes = oracleKeyedScopes
 			return oracleMemo
 		}
 		set {
 			oracleEntriesByKey = newValue.entriesByKey
+			oracleEntriesByGenerator = newValue.entriesByGenerator
 			oracleKeyedScopes = newValue.keyedScopes
 		}
 	}
 
 	private var oracleEntriesByKey = [Key: [Entry]]()
+	private var oracleEntriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
 	private var oracleKeyedScopes = [Scope]()
 
 	/// Whether `Scope.createScopeGenerator` reuses the generators of places it already built. Turned off only by the memo
@@ -237,29 +303,40 @@ struct ConstructionLog {
 		case cycleParameterContext([CycleParameter]?)
 
 		func isAlike(_ other: Self) -> Bool {
-			self == other && spellings.map { Array($0.utf8) } == other.spellings.map { Array($0.utf8) }
-		}
-
-		/// The spelling of every type the answer holds, in an order that depends only on the answer.
-		private var spellings: [String] {
-			switch self {
-			case let .nearestDeclaration(declaration):
-				guard let declaration else { return [] }
-				return declaration.bindings.map { "\($0.key.spelling)=\($0.value.spelling)" }.sortedByUTF8()
-					+ declaration.formsBeingBuilt.map(\.spelling).sortedByUTF8()
-			case let .binding(property):
-				return property.map { [$0.spelling] } ?? []
-			case let .declarationClosedOn(declaration):
-				return declaration.map { [$0.property.spelling, $0.concreteType.asSource] } ?? []
-			case let .cycleParameterContext(parameters):
-				return (parameters ?? []).flatMap { parameter in
-					var spellings = [parameter.property.spelling, parameter.receiver.property.spelling, parameter.redeclaration.property.spelling, parameter.redeclaration.declaringType.asSource]
-					spellings += parameter.receiver.chain.map(\.asSource)
-					for forms in [parameter.receivedForms, parameter.requiredForms, parameter.requiredAliasFulfillingForms, parameter.onlyIfAvailableUnwrappedForms] {
-						spellings.append(forms.map(\.spelling).sortedByUTF8().joined(separator: ","))
-					}
-					return spellings
+			guard self == other else { return false }
+			// `==` holds, so each property of one answer has exactly one `==` counterpart in the other, which it must be
+			// spelled as: a `Set` or `Dictionary` holds no two properties `==` merges.
+			switch (self, other) {
+			case let (.nearestDeclaration(declaration), .nearestDeclaration(otherDeclaration)):
+				guard let declaration, let otherDeclaration else { return true }
+				return declaration.bindings.allSatisfy { key, value in
+					guard let index = otherDeclaration.bindings.index(forKey: key) else { return false }
+					let (otherKey, otherValue) = otherDeclaration.bindings[index]
+					return key.isSpelledAlike(otherKey) && value.isSpelledAlike(otherValue)
+				} && declaration.formsBeingBuilt.isSpelledAlike(otherDeclaration.formsBeingBuilt)
+			case let (.binding(property), .binding(otherProperty)):
+				guard let property, let otherProperty else { return true }
+				return property.isSpelledAlike(otherProperty)
+			case let (.declarationClosedOn(declaration), .declarationClosedOn(otherDeclaration)):
+				guard let declaration, let otherDeclaration else { return true }
+				return declaration.property.isSpelledAlike(otherDeclaration.property)
+					&& declaration.concreteType.isSpelledAlike(otherDeclaration.concreteType)
+			case let (.cycleParameterContext(parameters), .cycleParameterContext(otherParameters)):
+				guard let parameters, let otherParameters else { return true }
+				return zip(parameters, otherParameters).allSatisfy { parameter, otherParameter in
+					parameter.property.isSpelledAlike(otherParameter.property)
+						&& parameter.receiver.property.isSpelledAlike(otherParameter.receiver.property)
+						&& zip(parameter.receiver.chain, otherParameter.receiver.chain).allSatisfy { $0.isSpelledAlike($1) }
+						&& parameter.redeclaration.property.isSpelledAlike(otherParameter.redeclaration.property)
+						&& parameter.redeclaration.declaringType.isSpelledAlike(otherParameter.redeclaration.declaringType)
+						&& parameter.receivedForms.isSpelledAlike(otherParameter.receivedForms)
+						&& parameter.requiredForms.isSpelledAlike(otherParameter.requiredForms)
+						&& parameter.requiredAliasFulfillingForms.isSpelledAlike(otherParameter.requiredAliasFulfillingForms)
+						&& parameter.onlyIfAvailableUnwrappedForms.isSpelledAlike(otherParameter.onlyIfAvailableUnwrappedForms)
 				}
+			case (.nearestDeclaration, _), (.binding, _), (.declarationClosedOn, _), (.cycleParameterContext, _):
+				// `==` holds only between answers of one case.
+				return false
 			}
 		}
 	}
@@ -294,11 +371,18 @@ struct ConstructionLog {
 
 	/// These reads as `context` answers them, or `nil` when `context` answers one otherwise.
 	func answeredAlike(in context: ConstructionContext) -> Self? {
-		var reads = Self()
+		// Most candidates differ in some read, so the answers are kept in an array until every read is answered alike.
+		var answers = [(read: AnsweredRead, answer: Answer)]()
+		answers.reserveCapacity(answersByRead.count)
 		for (read, answered) in answersByRead {
 			let (answer, depth) = context.answer(read.read)
 			guard answer.isAlike(answered) else { return nil }
-			reads.answersByRead[AnsweredRead(read: read.read, depth: depth)] = answer
+			answers.append((AnsweredRead(read: read.read, depth: depth), answer))
+		}
+		var reads = Self()
+		reads.answersByRead.reserveCapacity(answers.count)
+		for (read, answer) in answers where reads.answersByRead[read] == nil {
+			reads.answersByRead[read] = answer
 		}
 		return reads
 	}
@@ -325,6 +409,29 @@ extension Property {
 			spellings.append(Array(properties.map(\.spelling).sortedByUTF8().joined(separator: ",").utf8))
 		}
 		return spellings
+	}
+}
+
+extension Property {
+	/// Whether `other`, which `==` equates with this property, is spelled as it is, byte for byte.
+	fileprivate func isSpelledAlike(_ other: Property) -> Bool {
+		label.utf8.elementsEqual(other.label.utf8) && typeDescription.isSpelledAlike(other.typeDescription)
+	}
+}
+
+extension TypeDescription {
+	/// Whether `other`, which `==` equates with this type, is spelled as it is, byte for byte.
+	fileprivate func isSpelledAlike(_ other: TypeDescription) -> Bool {
+		asSource.utf8.elementsEqual(other.asSource.utf8)
+	}
+}
+
+extension Set<Property> {
+	/// Whether `other`, which `==` equates with this set, spells each property as this set does.
+	fileprivate func isSpelledAlike(_ other: Set<Property>) -> Bool {
+		allSatisfy { property in
+			other.firstIndex(of: property).map { property.isSpelledAlike(other[$0]) } ?? false
+		}
 	}
 }
 

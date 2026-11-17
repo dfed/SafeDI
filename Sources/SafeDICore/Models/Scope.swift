@@ -484,6 +484,10 @@ final class Scope: Hashable {
 	) throws -> ScopeGenerator {
 		var previousPassGenerator: ScopeGenerator?
 		var firstPassMemo = ConstructionMemo()
+		// The memo of the pass before, whose settled generators a pass reuses (see `ConstructionMemo.settledReuse`), and the
+		// place-holding properties that pass read.
+		var previousPassMemo: ConstructionMemo?
+		var placeHoldingPropertiesOfPreviousPass: [TypeDescription: Set<Property>]?
 		// A tree with a seam root or a mock root's builders reads its own `SeamHoles` (its values bindings, member calls,
 		// builder structs and the names the seam binds), constant within the tree but not across trees, so its memo is never
 		// shared across trees or kept past a pass. Its places with holes store nothing; a seam without holes memoizes the
@@ -500,6 +504,9 @@ final class Scope: Hashable {
 				generatorsToStart = []
 			}
 			var passMemo = previousPassGenerator == nil && sharesMemo ? constructionMemo.memoForFirstPass : ConstructionMemo()
+			// A place whose generator the pass before built settled is reused across passes only while the passes share
+			// the place-holding properties every place's build reads.
+			let settledPassMemo = placeHoldingPropertiesByType == placeHoldingPropertiesOfPreviousPass ? previousPassMemo : nil
 			scopeGenerator = try createScopeGenerator(
 				for: property,
 				nearestDeclarations: nearestDeclarations,
@@ -515,10 +522,13 @@ final class Scope: Hashable {
 				generatorsToStart: &generatorsToStart,
 				placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 				memo: &passMemo,
+				settledPassMemo: settledPassMemo,
 			)
 			if previousPassGenerator == nil {
 				firstPassMemo = passMemo
 			}
+			previousPassMemo = passMemo
+			placeHoldingPropertiesOfPreviousPass = placeHoldingPropertiesByType
 			previousPassGenerator = scopeGenerator
 			startOrderChanged = false
 			if placeHoldingPropertiesByType == nil, scopeGenerator.containsBuildSite {
@@ -564,6 +574,7 @@ final class Scope: Hashable {
 		generatorsToStart: inout [ScopeGenerator]?,
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?,
 		memo: inout ConstructionMemo,
+		settledPassMemo: ConstructionMemo?,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: self,
@@ -592,6 +603,9 @@ final class Scope: Hashable {
 		let reusesGenerators = ConstructionMemo.isEnabled
 		// The generators whose code this pass started or collected, each of which a place that reuses it does not start again.
 		var startedGenerators = Set<ObjectIdentifier>()
+		// Every generator this pass started or collected, in order: what each place's build started is the part of it from
+		// the place's `startLogIndex` on, which a later pass that reuses the place's generator collects again.
+		var startLog = [ScopeGenerator]()
 		while true {
 			let index = scopeGeneratorsUnderConstruction.count - 1
 			if let propertyToGenerate = scopeGeneratorsUnderConstruction[index].nextPropertyToGenerate() {
@@ -603,6 +617,15 @@ final class Scope: Hashable {
 						: nil
 					if let key, let reuse = memo.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext, besides: scopeGeneratorsUnderConstruction[index].childGeneratorIdentifiers) {
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
+					} else if let key, let reuse = settledPassMemo?.settledReuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext, besides: scopeGeneratorsUnderConstruction[index].childGeneratorIdentifiers) {
+						// The pass before built this place's generator settled: building the place again would build it again.
+						// Its code starts as the build would have started it, and the memo holds it for the places after it.
+						for generator in reuse.entry.startedBeneath where startedGenerators.insert(ObjectIdentifier(generator)).inserted {
+							generatorsToStart?.append(generator)
+							startLog.append(generator)
+						}
+						memo.store(reuse.entry, for: key, keepingAlive: scope)
+						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
 					} else {
 						var child = scopeGeneratorsUnderConstruction[index].childUnderConstruction(
 							scope: scope,
@@ -610,6 +633,7 @@ final class Scope: Hashable {
 							erasedToConcreteExistential: erasedToConcreteExistential,
 						)
 						child.memoKey = key
+						child.startLogIndex = startLog.count
 						scopeGeneratorsUnderConstruction.append(child)
 					}
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
@@ -633,14 +657,23 @@ final class Scope: Hashable {
 				))
 			} else {
 				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
-				let scopeGenerator = createdScope.scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart, startedGenerators: &startedGenerators)
-				if let key = createdScope.memoKey, createdScope.isMemoizable {
-					memo.store(ConstructionMemo.Entry(reads: createdScope.readsAnsweredAbove, generator: scopeGenerator, subtreeScopeCount: createdScope.subtreeScopeCount), for: key, keepingAlive: createdScope.builtScope)
-				}
+				let scopeGenerator = createdScope.scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart, startedGenerators: &startedGenerators, startLog: &startLog)
 				if scopeGeneratorsUnderConstruction.isEmpty {
 					return scopeGenerator
 				} else {
-					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(childGenerator: scopeGenerator, createdBy: createdScope)
+					// Filtered once, for the memo and the parent alike.
+					let readsAnsweredAbove = createdScope.readsAnsweredAbove
+					let isSettled = createdScope.isSettled(building: scopeGenerator)
+					if let key = createdScope.memoKey, createdScope.isMemoizable {
+						memo.store(ConstructionMemo.Entry(
+							reads: readsAnsweredAbove,
+							generator: scopeGenerator,
+							subtreeScopeCount: createdScope.subtreeScopeCount,
+							startedBeneath: Array(startLog[createdScope.startLogIndex...]),
+							isSettled: isSettled,
+						), for: key, keepingAlive: createdScope.builtScope)
+					}
+					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(childGenerator: scopeGenerator, createdBy: createdScope, readsAnsweredAbove: readsAnsweredAbove, isSettled: isSettled)
 				}
 			}
 		}
@@ -1164,13 +1197,19 @@ private struct ScopeGeneratorUnderConstruction {
 	static let scopeCountOfLargeSubtree = 64
 
 	/// Adds `childGenerator`, the generator `child` created, to this scope's children.
-	mutating func add(childGenerator: ScopeGenerator, createdBy child: ScopeGeneratorUnderConstruction) {
+	/// - Parameters:
+	///   - readsAnsweredAbove: `child.readsAnsweredAbove`.
+	///   - isSettled: `child.isSettled(building: childGenerator)`.
+	mutating func add(childGenerator: ScopeGenerator, createdBy child: ScopeGeneratorUnderConstruction, readsAnsweredAbove: ConstructionLog, isSettled: Bool) {
 		childGenerators.append(childGenerator)
 		subtreeScopeCount += child.subtreeScopeCount
 		if child.startsCodeBeneathALargeSubtree {
 			childGeneratorsStartingBeneathALargeSubtree.append(childGenerator)
 		}
-		log.formUnion(child.readsAnsweredAbove)
+		log.formUnion(readsAnsweredAbove)
+		if !isSettled {
+			childrenAreSettled = false
+		}
 		if !child.isMemoizable {
 			isMemoizable = false
 		}
@@ -1186,6 +1225,20 @@ private struct ScopeGeneratorUnderConstruction {
 			childGeneratorsStartingBeneathALargeSubtree.append(reuse.entry.generator)
 		}
 		log.formUnion(reuse.reads)
+		if !reuse.entry.isSettled {
+			childrenAreSettled = false
+		}
+	}
+
+	/// Whether every child this scope created or reused found everywhere in its subtree what it read from the pass before
+	/// (see `ConstructionMemo.Entry.isSettled`).
+	private var childrenAreSettled = true
+
+	/// Whether `generator`, this scope's, found everywhere in its subtree what its build read from the pass before: its
+	/// children did, and it found the cycle parameters and loops of builders the pass before's generator for the place
+	/// found, spelled alike.
+	func isSettled(building generator: ScopeGenerator) -> Bool {
+		childrenAreSettled && ConstructionMemo.foundAlike(by: generator, asBy: previousPassGenerator)
 	}
 
 	/// What this scope's subtree read of the context above this scope (see `ConstructionMemo`).
@@ -1196,6 +1249,10 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The key this scope's generator is stored under once it exists, or `nil` for a root, a fill, or a scope the memo does
 	/// not cover (see `memoKey(ofChildBuilding:as:erasedToConcreteExistential:)`).
 	var memoKey: ConstructionMemo.Key?
+
+	/// How many generators the pass had started or collected when this scope's build began (see `createScopeGenerator`'s
+	/// `startLog`).
+	var startLogIndex = 0
 
 	/// Whether this scope's generator may start its code as soon as its tree exists, rather than when the scope above it
 	/// asks for it: a scope of a dependency tree that generates code (no mock's, no fill's, nor a tree built only to find a
@@ -1610,7 +1667,8 @@ private struct ScopeGeneratorUnderConstruction {
 	/// its code, or adds it to `generatorsToStart` when that is not `nil`.
 	/// - Parameter startedGenerators: The generators whose code the pass started or collected, which grows by those this
 	///   scope starts or collects: a generator several places share starts once.
-	mutating func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [ScopeGenerator]?, startedGenerators: inout Set<ObjectIdentifier>) -> ScopeGenerator {
+	/// - Parameter startLog: Every generator the pass started or collected, in order, which grows as `startedGenerators` does.
+	mutating func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [ScopeGenerator]?, startedGenerators: inout Set<ObjectIdentifier>, startLog: inout [ScopeGenerator]) -> ScopeGenerator {
 		// Every fill this call passes is an enclosing call's or its own.
 		let fillNames = holeArguments.isEmpty ? [:] : GenerationWork.taking(enclosingFillsOfThisCall, by: .gatheringFillsOfACall)
 		let builtGenerator = ScopeGenerator(
@@ -1705,6 +1763,7 @@ private struct ScopeGeneratorUnderConstruction {
 				generatorsStartingNow.append(scopeGenerator)
 			}
 			for generator in generatorsStartingNow where startedGenerators.insert(ObjectIdentifier(generator)).inserted {
+				startLog.append(generator)
 				if generatorsToStart != nil {
 					generatorsToStart?.append(generator)
 				} else {

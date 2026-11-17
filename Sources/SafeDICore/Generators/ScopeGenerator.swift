@@ -5680,7 +5680,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let functionArguments = if functionParameters.isEmpty {
 					""
 				} else {
-					functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
+					functionParameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 				}
 				// A fill that returns a wrapper's builder spells its builder function `nonisolated` where it is `@Sendable`, as the
 				// code that calls the fill is.
@@ -5738,7 +5738,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 					let receivedFunctionParameters = forwardedProperties.isEmpty
 						? ""
-						: forwardedProperties.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
+						: forwardedProperties.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 					let callArguments = (forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments).joined(separator: ", ")
 					let receivedFunctionDecorator = buildsInSendableFunction || property.propertyType.isSendable ? sendableFunctionDecorator : ""
 					let receivedFunctionDeclaration = """
@@ -5808,7 +5808,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
 				let functionParameters = cycleParameters.map(\.property)
-				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
+				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 				let builderCall = "\(functionName)(\(cycleArguments))"
 				let lastLine = if isBuiltByFill {
 					"return \(erasedToConcreteExistential ? "\(property.typeDescription.asInstantiatedType.asSource)(\(builderCall))" : builderCall)"
@@ -5849,7 +5849,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
 				let functionParameters = cycleParameters.map(\.property)
-				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
+				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 
 				let nonEmptyGeneratedProperties = generatedProperties.filter { !$0.isEmpty }
 				let hasGeneratedContent = !nonEmptyGeneratedProperties.isEmpty
@@ -10249,7 +10249,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						from: lazilyInstantiatedBindingNames,
 					)
 					let functionParameters = ownCycleParameters.map(\.property)
-					let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: node.typesDeclaredEscaping).map(\.description).joined()
+					let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: node.typesDeclaredEscaping)
 					let callArguments = mockCycleParameterArguments(
 						for: node,
 						flatParameterDisambiguationMap: flatParameterDisambiguationMap,
@@ -10737,7 +10737,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				let functionParameters = forwardedProperties.isEmpty
 					? ""
-					: forwardedProperties.initializerFunctionParameters(amongTypesDeclaredEscaping: node.typesDeclaredEscaping).map(\.description).joined()
+					: forwardedProperties.initializerFunctionParametersSource(amongTypesDeclaredEscaping: node.typesDeclaredEscaping)
 				let callArguments = (forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments).joined(separator: ", ")
 				let functionIndent = String(indent.dropLast(ScopeGenerator.standardIndent.count))
 				let decorator = node.buildsInSendableFunction || node.property.propertyType.isSendable ? "@Sendable " : ""
@@ -10974,7 +10974,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let functionArguments = if functionParameters.isEmpty {
 			""
 		} else {
-			functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: node.typesDeclaredEscaping).map(\.description).joined()
+			functionParameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: node.typesDeclaredEscaping)
 		}
 
 		// Build the forwarded arguments for the Instantiator closure call, followed by the bindings in scope here of the
