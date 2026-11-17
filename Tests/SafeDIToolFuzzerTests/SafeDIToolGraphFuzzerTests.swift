@@ -6383,31 +6383,32 @@ struct SafeDIToolGraphFuzzerTests {
 	/// builder it receives waits on the first through a value: its builder function must still wrap itself again, and
 	/// without that the generated code does not compile. Seed 94's type receives that builder only if available, and gets it
 	/// (`builderReceivedInsideItsTreeBesideBuilderLeftNil`). Seeds 4, 5, 7 and 70, which the tool rejects, keep the
-	/// rejected share at that quarter.
+	/// rejected share at that quarter. Seed 98, rejected too, draws a hand-written mock's parameter whose dependency an
+	/// inactive `#if` clause declares (`addingGuardedMockParameterShapes`), so the batch applies that error's two remedies.
 	/// It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on
 	/// every pull request. Compiling the batch is one `swiftc` invocation when nothing fails, and comparing its values
 	/// one compile and one link.
-	static let smokeSeeds: [UInt64] = [4, 5, 7, 12, 14, 18, 25, 30, 40, 59, 62, 70, 94, 97, 99, 133, 161, 212, 267, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516, 5_889, 6_388]
+	static let smokeSeeds: [UInt64] = [4, 5, 7, 12, 14, 18, 25, 30, 40, 59, 62, 70, 94, 97, 98, 99, 133, 161, 212, 267, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x502FD69AC8CFC66C
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x8DCF0FFDC53BD3BC
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
-	static let smokeRemedyKinds: [GraphFuzzerRemedyKind] = [.instantiateOnRoot, .instantiateOnRootAndReceiveOnlyIfAvailable, .receiveOptionallyIfAvailable, .receiveSuggestedProperty, .removeReceive]
+	static let smokeRemedyKinds: [GraphFuzzerRemedyKind] = [.defaultMockParameter, .instantiateOnRoot, .instantiateOnRootAndReceiveOnlyIfAvailable, .moveMockIntoClause, .receiveOptionallyIfAvailable, .receiveSuggestedProperty, .removeReceive]
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x8C28C1DA43D13B7B
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x7938B4A86C2BD376
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0xF01F2FDBA98B36E8
+	static let corpusFixtureHash: UInt64 = 0x0D347F7D0B95BC81
 
-	static let corpusPartitionHash: UInt64 = 0x1D96500A28618FE5
+	static let corpusPartitionHash: UInt64 = 0xC9EA4D3400421220
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -6623,8 +6624,15 @@ struct SafeDIToolGraphFuzzerTests {
 		valueOracleInspectedGraphCount: corpusValueOracleInspectedGraphCount,
 		spellingDrawFeatures: [],
 		omittedValueGraphCount: 0,
+		errorMarkers: [GraphFuzzerOracle.guardedMockParameterErrorMarker],
+		errorGraphCounts: corpusErrorGraphCounts,
 		valueOracleCounts: corpusValueOracleCounts,
 	)
+
+	/// How many of the corpus's graphs the tool rejects with the error of a hand-written mock's parameter whose
+	/// dependency an inactive `#if` clause declares (`GraphFuzzerOracle.guardedMockParameterErrorMarker`): every graph
+	/// that draws the shape (`addingGuardedMockParameterShapes`).
+	static let corpusErrorGraphCounts = [53]
 
 	/// How many of the corpus's graphs the base corpus's value oracle inspects: every graph the tool accepts.
 	static let corpusValueOracleInspectedGraphCount = corpusAcceptedSeedCount
@@ -8637,6 +8645,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 	static let remedyDeclarationClosesCycleThroughRootReason = "An error advises declaring a property on a root whose own properties the declared type's tree receives and that require the declaration, so the declaration closes a dependency cycle there (remedyRuns_leaveNoErrorAtTheReceive_whenTheDeclaredTypesTreeReceivesARootPropertyThatRequiresTheDeclaration: Root builds `t2: T2`, which requires `t0Builder: Instantiator<T0>`, and T0 receives `t2`)"
 
+	static let compileTimeAssertionsDifferBetweenIntegrationsReason = "The two multi-module integrations emit other compile-time assertions for a module whose declarations sit inside `#if` blocks, in a build that reports its conditions (the graphs `addingGuardedMockParameterShapes` draws, the first the fuzzer runs with conditions): a module that generates nothing else gets its assertions from the module-info flow and no generate run from the SwiftPM plugin flow (seed 4880: Alpha holds `Guarded` alone, and only the module-info flow emits `#if !(!FUZZ_GUARD)` `#error`), and a condition two blocks of one declaration test is asserted twice by the plugin flow and once by the module-info flow (seed 2915: `FUZZ_OTHER`)"
+
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
 	static let knownIssues = addingReportedIssueShapes(to: knownIssuesBesideReportedIssueShapes)
@@ -8668,10 +8678,10 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
 			seeds: [
 				6, 36, 45, 55, 154, 157, 209, 281, 300, 371, 380, 381, 434, 476, 541, 548,
-				593, 657, 774, 808, 840, 903, 1_042, 1_073, 1_140, 1_185, 1_217, 1_300, 1_335, 1_369, 1_432, 1_535,
+				593, 657, 774, 808, 840, 903, 1_042, 1_073, 1_140, 1_185, 1_217, 1_300, 1_335, 1_369, 1_432,
 				1_563, 1_646, 1_664, 1_675, 1_742, 1_795, 1_817, 1_853, 1_867, 2_051, 2_057, 2_083, 2_149, 2_296, 2_337, 2_484,
 				2_626, 2_742, 2_791, 2_841, 2_916, 2_935, 3_160, 3_352, 3_470, 3_491, 3_513, 3_534, 3_537, 3_589, 3_600, 3_623,
-				3_661, 3_674, 3_843, 3_994, 4_015, 4_090, 4_191, 4_192, 4_278, 4_541, 4_613, 4_634, 4_648, 4_664, 4_712, 4_729,
+				3_661, 3_674, 3_843, 3_994, 4_015, 4_090, 4_191, 4_192, 4_278, 4_541, 4_613, 4_634, 4_664, 4_712, 4_729,
 				4_834, 4_857, 4_865, 4_891, 4_947, 4_955, 4_983,
 			],
 		),
@@ -8682,14 +8692,14 @@ struct SafeDIToolGraphFuzzerTests {
 				3, 35, 107, 114, 116, 131, 168, 223, 241, 311, 338, 364, 383, 390, 431, 448,
 				450, 473, 515, 525, 527, 545, 567, 595, 617, 630, 680, 714, 728, 732, 735, 751,
 				768, 785, 786, 836, 847, 886, 912, 940, 948, 975, 987, 991, 1_004, 1_029, 1_044, 1_051,
-				1_061, 1_064, 1_072, 1_075, 1_084, 1_092, 1_139, 1_145, 1_147, 1_172, 1_215, 1_236, 1_244, 1_289, 1_322, 1_329,
+				1_061, 1_064, 1_072, 1_075, 1_084, 1_092, 1_139, 1_145, 1_147, 1_172, 1_236, 1_244, 1_322, 1_329,
 				1_352, 1_362, 1_372, 1_433, 1_441, 1_447, 1_453, 1_464, 1_492, 1_504, 1_524, 1_525, 1_531, 1_567, 1_580, 1_602, 1_633,
-				1_695, 1_708, 1_781, 1_784, 1_804, 1_857, 1_896, 1_938, 1_972, 2_013, 2_017, 2_084, 2_123, 2_152, 2_165, 2_234,
+				1_708, 1_781, 1_784, 1_804, 1_857, 1_896, 1_938, 1_972, 2_013, 2_017, 2_084, 2_123, 2_152, 2_165, 2_234,
 				2_249, 2_270, 2_277, 2_282, 2_287, 2_316, 2_325, 2_335, 2_348, 2_389, 2_403, 2_430, 2_432, 2_437, 2_444, 2_456,
 				2_529, 2_555, 2_577, 2_630, 2_637, 2_669, 2_732, 2_808, 2_835, 2_845, 2_874, 2_914, 3_064, 3_074, 3_075, 3_091,
 				3_134, 3_180, 3_183, 3_196, 3_215, 3_221, 3_241, 3_252, 3_298, 3_306, 3_329, 3_344, 3_345, 3_361, 3_430, 3_504,
-				3_506, 3_522, 3_526, 3_533, 3_567, 3_577, 3_582, 3_584, 3_588, 3_596, 3_602, 3_620, 3_648, 3_699, 3_707, 3_715,
-				3_723, 3_740, 3_741, 3_750, 3_775, 3_776, 3_805, 3_820, 3_823, 3_826, 3_850, 3_894, 3_915, 4_044, 4_068, 4_102,
+				3_506, 3_522, 3_526, 3_533, 3_567, 3_577, 3_582, 3_584, 3_588, 3_596, 3_602, 3_648, 3_699, 3_707, 3_715,
+				3_723, 3_741, 3_750, 3_775, 3_776, 3_805, 3_820, 3_823, 3_826, 3_850, 3_894, 3_915, 4_044, 4_068, 4_102,
 				4_107, 4_110, 4_117, 4_122, 4_125, 4_156, 4_177, 4_206, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281,
 				4_304, 4_344, 4_358, 4_371, 4_393, 4_396, 4_404, 4_420, 4_428, 4_515, 4_534, 4_545, 4_549, 4_567, 4_619, 4_637,
 				4_640, 4_642, 4_666, 4_684, 4_699, 4_707, 4_716, 4_717, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_859, 4_904,
@@ -8709,8 +8719,8 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree",
 			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain")],
 			seeds: [
-				47, 471, 598, 939, 1_028, 1_116, 1_278, 1_499, 1_614, 1_687, 1_793, 2_147, 2_775, 3_089, 3_208, 3_698,
-				3_761, 3_813, 4_311, 4_388,
+				47, 471, 598, 939, 1_028, 1_116, 1_499, 1_614, 1_687, 1_793, 2_147, 2_775, 3_089, 3_208, 3_698,
+				3_813, 4_311, 4_388,
 			],
 		),
 		// A known rejection masks no later failure, so a graph that also changes under a renaming documents both.
@@ -8765,6 +8775,11 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: remedyDeclarationClosesCycleThroughRootReason,
 			signatures: [.remedyLeavesErrorAtSite(.instantiateOnRoot, containing: "Dependency cycle: ")],
 			seeds: [984, 3_493, 4_375, 4_864],
+		),
+		GraphFuzzerKnownIssue(
+			reason: compileTimeAssertionsDifferBetweenIntegrationsReason,
+			signatures: [.integrationsDiffer(containing: "<compile-time assertions>")],
+			seeds: [1_278, 2_787, 2_915, 4_622, 4_880],
 		),
 	]
 
