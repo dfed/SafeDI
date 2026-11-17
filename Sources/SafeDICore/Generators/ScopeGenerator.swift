@@ -3927,9 +3927,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Whether a fill whose tree this scope's property roots is handed the structs of its own level
 	/// (`FillCallerReads.innerScopeParameters`): its tree builds a place, or a call that passes one up, whose case carries one,
-	/// or a call that re-enters an enclosing call's fill, whose case's member is called on one.
+	/// or a call that re-enters an enclosing call's fill, whose case's member is called on one. A fill that builds its type in
+	/// a `@Sendable` builder function of the type's own is handed none: its case carries no inner scope
+	/// (`SeamDeclarationGraph.FilledBuilder.carriesInnerScope`), and what its tree reads of the seam's builders is bound at the
+	/// top of that function, so a struct it took would be a parameter, and a binding, nothing reads.
 	nonisolated var readsFillInnerScopes: Bool {
-		containsBuildSite || passesUpBuilder || holdsCallReenteringEnclosingFill
+		!buildsInSendableFunction && (containsBuildSite || passesUpBuilder || holdsCallReenteringEnclosingFill)
 	}
 	/// The properties of this scope's type that hold a place of the seam whose tree is generated, by the seam's declaration
 	/// graph (`SeamDeclarationGraph`): a fact of the type, the same on every path, which orders this scope's children. `nil`
