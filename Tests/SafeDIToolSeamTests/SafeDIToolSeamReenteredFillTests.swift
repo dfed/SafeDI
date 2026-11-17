@@ -708,7 +708,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_37EDBDE082B78566.self\(seamCallComment(seam: "Host", module: "Middle"))
 		            func __safeDI_gadgetBuilder_Host() -> Host.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
-		                .init(top_firstBuilder: { _ in __safeDI_gadgetBuilder_Host_Top() }, top_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_() })
+		                .init(top_firstBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDIScope_First() }, top_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDIScope_Second() })
 		            }
 		            func __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() -> Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget> {
 		                .init(subB_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_SubB() })
@@ -719,13 +719,13 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                    return gadget
 		                })
 		            }
-		            func __safeDI_gadgetBuilder_Host_Top() -> Top.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
+		            func __safeDI_gadgetBuilder_Host_Top_SafeDIScope_First() -> Top.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
 		                .init(subA: { _ in __safeDI_gadgetBuilder_Host_SubA() })
 		            }
 		            func __safeDI_gadgetBuilder_Host_SubA() -> SubA.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
 		                .init(first: { _ in __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() })
 		            }
-		            func __safeDI_gadgetBuilder_Host_Top_() -> Top.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		            func __safeDI_gadgetBuilder_Host_Top_SafeDIScope_Second() -> Top.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
 		                .init(subB: { _ in __safeDI_gadgetBuilder_Host_SubB() })
 		            }
 		            func __safeDI_gadgetBuilder_Host_SubB() -> SubB.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
@@ -1714,6 +1714,112 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
+	// MARK: Level functions of root enums under one builder
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesLevelFunctionsByTheirEnums_whenTwoRootEnumsAreLevelsOfOneBuilder() async throws {
+		// `Host`'s fill of `gadget` leads through both of `Top`'s root enums, `SafeDIScope_First` and `SafeDIScope_Second`, each a
+		// level of `gadgetBuilder` whose function would be named `__safeDI_gadgetBuilder_Host_Top`: each takes its enum's name, so
+		// swapping the names `First` and `Second`, which swaps the order of `Top`'s builder labels, names each level's function
+		// as before once the swap is undone. The second output, the swap undone, differs from the first only in `Host`'s guard
+		// hash, which hashes the labels, and in the order of what is sorted by label: the call's arguments and the functions.
+		let fixture = Fixture()
+		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let swappedModules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: fixture.feature.map(Self.swappingFirstAndSecond)),
+			ModuleFixture(name: "Middle", packageName: "Mid", swiftFileContent: fixture.middle.map { "import Feature\n\n" + Self.swappingFirstAndSecond($0) }, dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: (fixture.app + [fixture.root]).map { "import Feature\nimport Middle\n\n" + Self.swappingFirstAndSecond($0) }, dependencies: ["Feature", "Middle"]),
+		]
+		let swappedOutput = try await executeSafeDIToolMultiModuleTest(modules: swappedModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_host() -> Host {
+		            _ = Host.__safeDI_Host_FB1A96447B9C287E.self\(seamCallComment(seam: "Host", module: "Middle"))
+		            func __safeDI_gadgetBuilder_Host() -> Host.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(top_firstBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDIScope_First() }, top_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDIScope_Second() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() -> Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget> {
+		                .init(subB_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_SubB() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_DefaultSecond_Scope() -> Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget> {
+		                .init(gadget: { _ in
+		                    let gadget: any Gadget = DefaultGadget()
+		                    return gadget
+		                })
+		            }
+		            func __safeDI_gadgetBuilder_Host_Top_SafeDIScope_First() -> Top.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(subA: { _ in __safeDI_gadgetBuilder_Host_SubA() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_SubA() -> SubA.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(first: { _ in __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_Top_SafeDIScope_Second() -> Top.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(subB: { _ in __safeDI_gadgetBuilder_Host_SubB() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_SubB() -> SubB.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(second: { _ in __safeDI_gadgetBuilder_Host_DefaultSecond_Scope() })
+		            }
+		            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host())
+		        }
+		        let host: Host = __safeDI_host()
+		        self.init(host: host)
+		    }
+		}
+		"""])
+		expectGeneratedFiles(swappedOutput.modules["App"]?.generatedFiles.mapValues(Self.swappingFirstAndSecond), ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_host() -> Host {
+		            _ = Host.__safeDI_Host_FB771D7B163E0742.self\(seamCallComment(seam: "Host", module: "Middle"))
+		            func __safeDI_gadgetBuilder_Host() -> Host.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(top_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDIScope_Second() }, top_firstBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDIScope_First() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_DefaultSecond_Scope() -> Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget> {
+		                .init(gadget: { _ in
+		                    let gadget: any Gadget = DefaultGadget()
+		                    return gadget
+		                })
+		            }
+		            func __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() -> Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget> {
+		                .init(subB_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_SubB() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_Top_SafeDIScope_Second() -> Top.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(subB: { _ in __safeDI_gadgetBuilder_Host_SubB() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_SubB() -> SubB.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(second: { _ in __safeDI_gadgetBuilder_Host_DefaultSecond_Scope() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_Top_SafeDIScope_First() -> Top.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(subA: { _ in __safeDI_gadgetBuilder_Host_SubA() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_SubA() -> SubA.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(first: { _ in __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() })
+		            }
+		            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host())
+		        }
+		        let host: Host = __safeDI_host()
+		        self.init(host: host)
+		    }
+		}
+		"""])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -1783,6 +1889,17 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [root].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
 			]
 		}
+	}
+
+	/// `text` with `First` and `Second`, and `first` and `second`, in each other's places.
+	private static func swappingFirstAndSecond(_ text: String) -> String {
+		text
+			.replacingOccurrences(of: "First", with: "\u{0}F")
+			.replacingOccurrences(of: "first", with: "\u{0}f")
+			.replacingOccurrences(of: "Second", with: "First")
+			.replacingOccurrences(of: "second", with: "first")
+			.replacingOccurrences(of: "\u{0}F", with: "Second")
+			.replacingOccurrences(of: "\u{0}f", with: "second")
 	}
 
 	/// Expects `generatedFiles` to equal `expected`, recording the files generated when they do not, so a failure shows
