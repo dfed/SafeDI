@@ -602,8 +602,12 @@ jobs:
       # saved only by a run on main that restored none: what a build reuses
       # from it is mostly swift-syntax, which changes with Package.resolved,
       # and a build of SafeDI's own targets from an older commit costs only
-      # the targets whose files differ. The key names the runner image for
-      # the reason "Build and Test on Xcode 26" gives.
+      # the targets whose files differ. That cost grows with every change to
+      # SafeDI's sources until the key changes, so a build that is slower in
+      # an entry's second week is the entry's age, not a broken cache. The
+      # key names the runner image for the reason "Build and Test on Xcode
+      # 26" gives; "Delete Older Build Directories" deletes the entry of the
+      # image or Package.resolved before.
       - name: Restore the Native Builds' Scratch Directories
         id: native-scratch
         uses: actions/cache/restore@v6
@@ -1357,7 +1361,7 @@ jobs:
   # leaves the builds for the next run or for eviction.
   prune-build-caches:
     name: Delete Older Build Directories
-    needs: [spm, linux-build, linux-latest-swift, generate-time]
+    needs: [spm, linux-build, generate-time, example-integrations]
     if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
@@ -1413,8 +1417,9 @@ jobs:
       # "Check Generate Time on Linux" saves each main commit's tool, 19 MB,
       # for the pull requests that branch from that commit, so ancestry is
       # the wrong rule here: an ancestor's tool is the one a pull request
-      # needs. The thirty newest stay, which covers the commits open pull
-      # requests branch from; a run whose base's tool is gone builds it.
+      # needs. The thirty newest stay, a few days of main on a day of many
+      # landings; a run whose base's tool is gone builds it, which costs
+      # time and changes no result.
       - name: Delete All but the Thirty Newest Generate Time Tools
         timeout-minutes: 1
         continue-on-error: true
@@ -1430,6 +1435,33 @@ jobs:
           fi
           if [ -z "$older" ]; then
             echo "$REF has thirty tools or fewer under $prefix."
+            exit 0
+          fi
+          printf '%s\n' "$older" | while read -r id key; do
+            if deleted=$(gh api -X DELETE "repos/$REPOSITORY/actions/caches/$id" 2>&1); then
+              echo "Deleted $key."
+            else
+              echo "::warning::Deleting $key failed: $(printf '%s' "$deleted" | tr '\r\n' '  ')"
+            fi
+          done
+      # The integrations job's scratch directories are saved once per runner
+      # image and Package.resolved, about 2 GB before compression, and the
+      # entry before stays until it ages out. Only the newest is restored.
+      - name: Delete All but the Newest Native Scratch Directories
+        timeout-minutes: 1
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        run: |
+          prefix=example-native-scratch-v1-
+          if ! older=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -f sort=created_at -f direction=desc -F per_page=100 --jq '.actions_caches[1:][] | "\(.id) \(.key)"' 2>&1); then
+            echo "::warning::Listing $REF's entries under $prefix failed: $(printf '%s' "$older" | tr '\r\n' '  ')"
+            exit 0
+          fi
+          if [ -z "$older" ]; then
+            echo "$REF has one entry or none under $prefix."
             exit 0
           fi
           printf '%s\n' "$older" | while read -r id key; do
