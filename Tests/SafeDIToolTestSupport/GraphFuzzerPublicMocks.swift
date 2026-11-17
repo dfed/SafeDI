@@ -262,7 +262,7 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// `SafeDIOverrides`, whose node's override member is a closure: `OverriddenScreen`, a mocked consumer, builds
 	/// `OverriddenDetail`, a `.public` type of the declaring module that builds nothing but places. The call cannot hand the
 	/// closure a builder a person writes, and the consumer's overrides then hold no member for it, where a `.public` consumer
-	/// passes a place up (S1), or where its fill of the `OverriddenApi` place reads the call's other place or a value the
+	/// passes a place up (S1), or where its fill of the `OverriddenPlace1Api` place reads the call's other place or a value the
 	/// called mock renames (S2); every other call keeps the member (`GraphFuzzerToolRuns.publicMockOverrideClosureFailure`).
 	case overrideClosureCall
 	case overrideClosureCallPublicCallerPassesPlaceUp
@@ -2074,12 +2074,12 @@ struct GraphFuzzerPublicMockDraw {
 	}
 
 	/// A call of a public mock whose override member is a closure, in two graphs in five: `OverriddenDetail`, a `.public` type
-	/// of the declaring module with an `internal` initializer, builds nothing but a place of `OverriddenApi` and, now and
-	/// then, one of `OverriddenStore`, so that its mock takes no `SafeDIOverrides`; now and then it receives
+	/// of the declaring module with an `internal` initializer, builds nothing but a place of `OverriddenPlace1Api` and, now and
+	/// then, one of `OverriddenPlace1Store`, so that its mock takes no `SafeDIOverrides`; now and then it receives
 	/// `overriddenSession`, which its module cannot build, plainly or renamed from `overriddenMainSession`.
 	/// `OverriddenScreen`, a mocked consumer in one consumer module, `true` or `.public`, builds it by value or through an
 	/// `Instantiator`, and builds the sessions in an extension of its module's own. `OverriddenLive` beside it fills the
-	/// `OverriddenApi` place, reading the session, the other place, both, or nothing, or, three draws in ten, nothing does and
+	/// `OverriddenPlace1Api` place, reading the session, the other place, both, or nothing, or, three draws in ten, nothing does and
 	/// the consumer's mock takes the builder; `OverriddenStoreLive` fills the other place half the time. The consumer's
 	/// overrides hold the closure that builds `OverriddenDetail` only where the call can hand it a builder a person writes
 	/// for each place (`GraphFuzzerPublicMockDrawFeature.overrideClosureCannotHandShapes`). Every roll is made before any is
@@ -2099,8 +2099,12 @@ struct GraphFuzzerPublicMockDraw {
 		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
 		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
 		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
-		let apiName = name("OverriddenApi")
-		let storeName = name("OverriddenStore")
+		// The two places' types share what the renaming that moves type names across wrapper names reads of a name,
+		// `OverriddenPlace1`, so it gives both one letter and keeps their builders' labels in one order: a mock sorts its
+		// parameters by label, and a builder's label begins with its type's name, which may follow names (CLAUDE.md, "What may
+		// follow names"), a known issue where other draws show it (`publicMockBuilderOrderReason`).
+		let apiName = name("OverriddenPlace1Api")
+		let storeName = name("OverriddenPlace1Store")
 		let sessionName = name("OverriddenSession")
 		// Three in ten receive no session, four plainly, three renamed from `overriddenMainSession`.
 		let receivesSession = sessionRoll >= 3
