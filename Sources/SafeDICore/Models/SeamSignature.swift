@@ -183,11 +183,7 @@ public struct SeamSignature: Sendable {
 		/// with an implicitly unwrapped optional spelled as its optional form, which an autoclosure's return type and a
 		/// generic argument cannot spell, and whose instance a receiver of the implicitly unwrapped type accepts.
 		public var deferredValueType: TypeDescription {
-			if case let .implicitlyUnwrappedOptional(wrappedType) = property.typeDescription {
-				.optional(wrappedType)
-			} else {
-				property.typeDescription
-			}
+			property.typeDescription.implicitlyUnwrappedOptionalSpelledAsOptional
 		}
 
 		/// The parameter as a tier's plain initializer declares it: by value, under its label alone. An underscored name
@@ -280,12 +276,7 @@ public struct SeamSignature: Sendable {
 			/// optional form, as the seam's tree holds it (`SeamSignature.Parameter.deferredValueType`).
 			public var memoType: TypeDescription? {
 				guard case let .deferred(isSendable) = deferral else { return nil }
-				let valueType: TypeDescription = if case let .implicitlyUnwrappedOptional(wrappedType) = property.typeDescription {
-					.optional(wrappedType)
-				} else {
-					property.typeDescription
-				}
-				return .simple(name: isSendable ? Dependency.sendableLazilyInstantiatedType : Dependency.lazilyInstantiatedType, generics: [valueType])
+				return .simple(name: isSendable ? Dependency.sendableLazilyInstantiatedType : Dependency.lazilyInstantiatedType, generics: [property.typeDescription.implicitlyUnwrappedOptionalSpelledAsOptional])
 			}
 
 			/// The name of the stored property that holds a deferred parameter's memo inside the struct, beside the field's
