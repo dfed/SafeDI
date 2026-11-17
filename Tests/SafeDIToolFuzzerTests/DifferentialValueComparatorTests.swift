@@ -2269,7 +2269,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			DifferentialValueGraph(name: "Spending", feature: Self.buildersPath(b2: "Instantiator { B(n: 99) }"), knownRight: Self.buildersPath(), probes: [DifferentialValueProbe("Root()")]),
 		]
 
-		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, limits: DifferentialValueLimits(traversalsPerProbe: 1), filesToDelete: &filesToDelete))
+		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, limits: DifferentialValueLimits(traversalsPerProbe: 1), memo: nil, filesToDelete: &filesToDelete))
 
 		// One batch of two paths, compared once: the graph that spent its traversals fails without the batch being
 		// compared again graph by graph.
@@ -2295,7 +2295,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			Self.batchGraph(named: "Third", featureSharesInstance: true, activeCompilationConditions: ["THIRD"]),
 		]
 
-		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete))
+		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, memo: nil, filesToDelete: &filesToDelete))
 
 		// Each path of each batch is one probe executable in a directory of its own: two batches of two paths. Compared
 		// one graph at a time, the graphs would make six; and the third graph's types exist only under its condition.
@@ -2323,7 +2323,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			Self.pairedGraph(named: "PairedSecond", featureSharesInstance: false),
 		]
 
-		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete))
+		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, memo: nil, filesToDelete: &filesToDelete))
 
 		// The two graphs share a layout and hold both ways in one path, so the batch is one compile of that path and one
 		// probe executable, in one directory.
@@ -2366,7 +2366,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			),
 		]
 
-		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete))
+		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, memo: nil, filesToDelete: &filesToDelete))
 
 		// The batch's two paths, described side by side, of which the feature path does not compile, then each graph on
 		// its own, two paths each.
@@ -2424,7 +2424,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			graph(named: "Second", featureState: "SharedState.instance", knownRightState: "SharedState.instance", featureTitle: "other"),
 		]
 
-		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete))
+		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, memo: nil, filesToDelete: &filesToDelete))
 
 		// One executable per path: the batch compiled the shared module once. A first visit in either path holds a
 		// `SharedState`; only the second graph's title differs. Without a reset at the second graph, its feature path
