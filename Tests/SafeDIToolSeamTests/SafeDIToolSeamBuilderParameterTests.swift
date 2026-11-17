@@ -2838,6 +2838,48 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: ["declarationOrder", "reversedFileNames"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsDeclarationBoundAfterSiteOfEveryPassingUpSeam_whenFillsOfOneSeamCallPassReadingFillToTwoSeamsThatBindLabel(fileNames: String) async {
+		// `Root` calls `Inner`, whose places `ProfileA`'s `userService` and `ProfileB`'s `gadget` `App` fills. The fill of
+		// `userService` reads `Root`'s `logger` and builds `Shell1`; the fill of `gadget` builds `Shell2`. Each calls `Inner`
+		// again, passing both fills on, and binds `logger` where it does, which its copy of the builder does not carry. Both
+		// calls hide `logger` from the fill of `userService`, whichever place's file comes first, so both are reported.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `logger: Logger`, which `Shell1` builds where it calls `Inner`, but `Shell1` passes the builder for `ProfileA`’s `userService: any UserService` (case `ProfileA_Scope.userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell1`’s values. Declare `@Received let logger: Logger` on `Inner`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Shell1` fills the builder itself.
+			\(fixtures["Feature"]!["Shell1.swift"]):8:5: note: `Shell1` declares `logger: Logger` here.
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `logger: Logger`, which `Shell2` builds where it calls `Inner`, but `Shell2` passes the builder for `ProfileA`’s `userService: any UserService` (case `ProfileA_Scope.userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell2`’s values. Declare `@Received let logger: Logger` on `Inner`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Shell2` fills the builder itself.
+			\(fixtures["Feature"]!["Shell2.swift"]):8:5: note: `Shell2` declares `logger: Logger` here.
+			"""
+		}) {
+			let reversesFileNames = fileNames == "reversedFileNames"
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						"public protocol Gadget {}",
+						seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
+						seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated let profileABuilder: Instantiator<ProfileA>", "@Instantiated let profileBBuilder: Instantiator<ProfileB>"]),
+						seamFixtureType(named: "Shell1", isSeam: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let innerBuilder: Instantiator<Inner>"]),
+						seamFixtureType(named: "Shell2", isSeam: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let innerBuilder: Instantiator<Inner>"]),
+					],
+					app: [
+						Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let logger: Logger", "@Instantiated let shell1Builder: Instantiator<Shell1>"]),
+						Self.fulfillingType(named: "DefaultGadget", fulfilling: "Gadget", declarations: ["@Instantiated let shell2Builder: Instantiator<Shell2>"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let inner: Inner"]),
+					],
+					featureConfiguration: [
+						reversesFileNames ? "PlaceSecond.swift" : "PlaceFirst.swift": seamFixtureType(named: "ProfileA", declarations: ["@Instantiated let userService: any UserService"]),
+						reversesFileNames ? "PlaceFirst.swift" : "PlaceSecond.swift": seamFixtureType(named: "ProfileB", declarations: ["@Instantiated let gadget: any Gadget"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesBuilderUpAsSendable_whenOuterSeamCallsInnerSeamInSendableBuilderFunction() async throws {
