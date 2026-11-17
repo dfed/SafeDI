@@ -8027,12 +8027,12 @@ enum GraphFuzzerGenerator {
 			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
 			let fillReadsLabel = passingUpCopyRandom.percentChance(60)
 			let seamsBindLabelRoll = passingUpCopyRandom.percentChance(35)
-			let holeSeamName = "\(self.prefix)HoleSeam"
-			let declaresHole = declarations.contains { $0.name == holeSeamName }
-			let seamsBindLabel = seamsBindLabelRoll && !(declaresHole && fillReadsLabel && sendability != .sendable)
 			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
 			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
 			let prefix = prefix
+			let holeSeamName = "\(prefix)HoleSeam"
+			let declaresHole = declarations.contains { $0.name == holeSeamName }
+			let seamsBindLabel = seamsBindLabelRoll && !(declaresHole && fillReadsLabel && sendability != .sendable)
 			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
 				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
 				declaration.module = module
@@ -8139,10 +8139,6 @@ enum GraphFuzzerGenerator {
 			// so each draws as before.
 			let relayCallInSendableFill = reenteredFillRandom.percentChance(60) && callThroughRelay && sendability != .nonSendable
 			let relayCallByTypeOfAnotherModule = reenteredFillRandom.percentChance(60) && callThroughRelay && sendability != .nonSendable
-			// A graph with a hole draws the remedied read where the roll draws one of the two the tool rejects by design.
-			let holeSeamName = "\(self.prefix)HoleSeam"
-			let declaresHole = declarations.contains { $0.name == holeSeamName }
-			let oneRouteVariant = declaresHole && oneRouteVariantRoll < 2 ? oneRouteVariantRoll + 2 : oneRouteVariantRoll
 			guard !modulesOmittingPackageName.contains(.seamModule) else { return declarations }
 			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
 			let callInstantiator = switch sendability {
@@ -8152,6 +8148,10 @@ enum GraphFuzzerGenerator {
 			}
 			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
 			let prefix = prefix
+			// A graph with a hole draws the remedied read where the roll draws one of the two the tool rejects by design.
+			let holeSeamName = "\(prefix)HoleSeam"
+			let declaresHole = declarations.contains { $0.name == holeSeamName }
+			let oneRouteVariant = declaresHole && oneRouteVariantRoll < 2 ? oneRouteVariantRoll + 2 : oneRouteVariantRoll
 			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
 				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
 				declaration.module = module
