@@ -1015,10 +1015,6 @@ extension ScopeGenerator {
 			parameters.append(PublicMockParameter(name: ReservedName.mockOverridesParameterName, type: overridesType, typeSource: overridesType.asSource, defaultSource: ".init()", defaultKind: .expression, access: .public, role: .overrides))
 		}
 		let tiers = [AccessLevel.public] + Set(parameters.map(\.access)).filter { $0 < .public }.sorted(by: >)
-		// The narrowest tier's body binds each builder by the name that tier takes it under, but a builder struct, which the
-		// function only generated code calls takes under that name.
-		let narrowestTier = tiers[tiers.count - 1]
-		defaultResolutions.insert(contentsOf: builders.filter { !$0.takesBuilderStruct }.map { "\(bodyIndent)let \($0.internalName) = \($0.label(inTierAt: narrowestTier))" }, at: 0)
 		var hash = SeamSignatureHash()
 		for parameter in parameters {
 			hash.combine(parameter.name)

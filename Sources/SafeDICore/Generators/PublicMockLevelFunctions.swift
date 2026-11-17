@@ -36,7 +36,7 @@ struct PublicMockLevelFunctions: Sendable {
 		var takesUp = false
 		/// On a route to a place inside a fill of the call, the struct of the level that the caller's member for the call's case
 		/// returns, for each of the caller's levels a fill beneath this level is handed (`FillDispatcher.carriedInnerScopes`).
-		var carriedInnerScopes = [ScopeGenerator.FillDispatcher.CarriedInnerScope]()
+		let carriedInnerScopes: [ScopeGenerator.FillDispatcher.CarriedInnerScope]
 		var members = [Member]()
 	}
 
@@ -275,16 +275,9 @@ struct PublicMockLevelFunctions: Sendable {
 		let memberIndent = indent + ScopeGenerator.standardIndent
 		return functions.map { function in
 			let dispatcher = function.dispatcher
-			let labels = Set(function.parameters.map(\.property.label) + [upName] + function.carriedInnerScopes.map(\.upName))
-			func name(_ base: String) -> String {
-				var name = base
-				while labels.contains(name) {
-					name += "_"
-				}
-				return name
-			}
-			let valuesName = name("values")
-			let scopeName = name("scope")
+			var names = GeneratedNameAllocator(reserving: Set(function.parameters.map(\.property.label) + [upName] + function.carriedInnerScopes.map(\.upName)))
+			let valuesName = names.claim("values")
+			let scopeName = names.claim("scope")
 			func argumentText(_ argument: Argument, payloadName: String, caseName: String) -> String {
 				if let carriedUpName = argument.carriedUpName {
 					return "\(argument.label.spelledAsArgumentLabel): \(carriedUpName).\(caseName.spelledAsMemberReference)(\(payloadName))"

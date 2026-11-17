@@ -68,8 +68,6 @@ extension DependencyTreeGenerator {
 		var enumPlaceBySite = [SeamSignature.Hole.Site: SeamSignature.Hole.EnumPlace]()
 		/// How the seam's tree hands each call's inner enum up.
 		var callRoutes = [SeamSignature.CallRoute]()
-		/// The payloads the seam's tree binds, each before building the last property of its path.
-		var valuesBindingKeys = Set<ValuesBindingKey>()
 		/// The member calls the seam's tree makes where the enums declare builder structs, each for the last property of its
 		/// path: one per case on a route, whether or not it carries values, by whether the route is the `@Sendable` root's.
 		var memberBindingKeysByFamily = [Bool: Set<ValuesBindingKey>]()
@@ -593,9 +591,6 @@ extension DependencyTreeGenerator {
 			guard let values = enumCase.values, let enumType else {
 				return SeamSignature.Hole.RouteStep(caseName: enumCase.name, values: nil, innerScope: innerScope, leadsIntoFill: leadsIntoFill, member: member)
 			}
-			if let bindingPrefix {
-				result.valuesBindingKeys.insert(ValuesBindingKey(path: bindingPrefix, caseName: enumCase.name))
-			}
 			return SeamSignature.Hole.RouteStep(
 				caseName: enumCase.name,
 				values: .init(bindingName: "", type: .nested(name: values.typeName, parentType: enumType, generics: []), fields: values.fields, bindingPath: bindingPrefix ?? []),
@@ -975,17 +970,13 @@ extension DependencyTreeGenerator {
 		let caseName: String
 	}
 
-	/// The names the seam's tree binds the payload of each case on the routes to its places under, by the builder's stem,
-	/// before the case's property, the last of its key's path in `keysByStem`, is built: one per path to the property, case
-	/// and stem, `__safeDI_<stem>Values_<case>`, with `_` appended while a name in `reservedNames`, one bound on the way to
-	/// the property, or one its scope binds already has it. The keys are named shortest path first, then in the order of
-	/// their spelling, so no name depends on the order the routes are met in.
-	///
-	/// The member calls of builder structs are named the same way with `nameInfix` `_`, by the builder's label for a stem:
-	/// `__safeDI_<label>_<case>`.
-	static func valuesBindingNames(
+	/// The names the seam's tree binds the struct each member call of a builder struct on the routes to its places returns
+	/// under, by the builder's label, before the case's property, the last of its key's path in `keysByStem`, is built: one
+	/// per path to the property, case and label, `__safeDI_<label>_<case>`, with `_` appended while a name in
+	/// `reservedNames`, one bound on the way to the property, or one its scope binds already has it. The keys are named
+	/// shortest path first, then in the order of their spelling, so no name depends on the order the routes are met in.
+	static func memberBindingNames(
 		of keysByStem: [String: Set<ValuesBindingKey>],
-		nameInfix: String = "Values_",
 		reservedNames: Set<String>,
 	) -> [String: [ValuesBindingKey: String]] {
 		struct Binding: Hashable {
@@ -1015,7 +1006,7 @@ extension DependencyTreeGenerator {
 			for length in 1..<path.count {
 				taken.formUnion(namesByPath[Array(path.prefix(length)), default: []])
 			}
-			var name = ScopeGenerator.functionName(toBuildPropertyNamed: "\(binding.stem)\(nameInfix)\(binding.key.caseName)")
+			var name = ScopeGenerator.functionName(toBuildPropertyNamed: "\(binding.stem)_\(binding.key.caseName)")
 			while taken.contains(name) {
 				name = "\(name)_".spelledAsJoinedIdentifier
 			}

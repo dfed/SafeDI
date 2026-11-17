@@ -1784,14 +1784,8 @@ struct SeamHoles {
 						carriedStructsByCall[RouteCall(sitePath: innerScope.callPath, innerKey: innerScope.innerKey), default: [:]][innerScope.name] = member.bindingName
 						parentName = innerScope.name
 					}
-				} else if let values = step.values {
-					valuesBindingsByName[values.bindingPath, default: [:]][values.bindingName] = ValuesBinding(values: values)
 				}
 			}
-		}
-		/// The cases that lead to a place or a call's case, each opened, and what closes them.
-		func opening(_ route: [SeamSignature.Hole.RouteStep]) -> String {
-			route.map { step in ".\(step.caseName)(\(step.leadingArguments)" }.joined()
 		}
 		for callRoute in callRoutes {
 			guard let builderName = internalNameByEnum[callRoute.rootKey] else { continue }
@@ -1813,12 +1807,7 @@ struct SeamHoles {
 					"\(callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName } ?? builderName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
 				}
 			}
-			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(
-				builderName: builderName,
-				prefix: opening(callRoute.route) + ".\(callRoute.caseName)(",
-				suffix: String(repeating: ")", count: callRoute.route.count + 1),
-				memberCall: memberCall,
-			)
+			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(memberCall: memberCall)
 		}
 		self.routeCasesByCall = routeCasesByCall
 		var sitesByPath = [[Property]: SeamSignature.Hole]()
@@ -1888,20 +1877,10 @@ struct SeamHoles {
 		}.joined(separator: ", ")
 	}
 
-	/// A case's payload the seam's tree binds just before the builder function of a property on a route to a place nested
-	/// by type: its binding's name, its struct's type and its fields.
-	///
-	/// Where the case's enum declares a builder struct, the binding is the struct the case's member returns, called on the
-	/// struct `memberCall`'s parent name is bound to, with the payload.
+	/// The struct the member of a case returns, which the seam's tree binds just before the builder function of a property
+	/// on a route to a place nested by type, called on the struct `memberCall`'s parent name is bound to, with the case's
+	/// payload: its binding's name, the payload struct's type and its fields.
 	struct ValuesBinding: Sendable {
-		init(values: SeamSignature.Hole.RouteStep.Values) {
-			bindingName = values.bindingName
-			type = values.type
-			fields = values.fields
-			memberCall = nil
-			isCalledInsideFunction = false
-		}
-
 		init(member: SeamSignature.Hole.RouteStep.Member, parentName: String, caseName: String) {
 			bindingName = member.bindingName
 			type = member.valuesType
@@ -1913,8 +1892,8 @@ struct SeamHoles {
 		let bindingName: String
 		let type: TypeDescription
 		let fields: [SeamSignature.Hole.Field]
-		/// The struct the member is called on, by name, and the member, or `nil` for a payload the case carries.
-		let memberCall: (parentName: String, caseName: String)?
+		/// The struct the member is called on, by name, and the member.
+		let memberCall: (parentName: String, caseName: String)
 		/// Whether the member is called at the top of the builder function of the binding's property, not before it.
 		let isCalledInsideFunction: Bool
 
@@ -1922,29 +1901,14 @@ struct SeamHoles {
 		/// `valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)` reads it.
 		func line(readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>, bindingNamesPassedByName: [String: String] = [:], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:]) -> String {
 			let payload = "\(type.asSource)(\(SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)))"
-			return if let memberCall {
-				"let \(bindingName) = \(memberCall.parentName).\(memberCall.caseName)(\(payload))"
-			} else {
-				"let \(bindingName) = \(payload)"
-			}
+			return "let \(bindingName) = \(memberCall.parentName).\(memberCall.caseName)(\(payload))"
 		}
 	}
 
-	/// How a call hands an inner enum up: the builder that takes it, and what wraps the inner value in the builder's enum.
+	/// How a call hands an inner seam's struct up: the member of its own case that returns it.
 	struct RouteCase {
-		let builderName: String
-		/// What precedes the inner value: the case that holds it, after each case that leads there.
-		let prefix: String
-		/// What closes the cases `prefix` opens.
-		let suffix: String
-		/// Where the call's enum declares a builder struct, the call of the call's own member, which returns the struct the
-		/// inner seam is handed; `nil` where the enum declares none.
+		/// The call of the call's own member, which returns the struct the inner seam is handed.
 		var memberCall: String?
-
-		/// The call of the builder with `innerValue` wrapped.
-		func call(handing innerValue: String) -> String {
-			"\(builderName)(\(prefix)\(innerValue)\(suffix))"
-		}
 	}
 
 	/// The name of every builder the seam's generated initializer takes, inside the initializer, which a call its tree
