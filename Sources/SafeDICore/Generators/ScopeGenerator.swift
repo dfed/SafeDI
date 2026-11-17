@@ -68,7 +68,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		callSiteLazilyInstantiatedInstanceProperties: Set<Property>? = nil,
 		reboundProperties: Set<Property> = [],
 		previousPassReceivedBuilderLoops: ReceivedBuilderLoops? = nil,
-		previousPassPublicMockRootLevelUpNames: [String: String] = [:],
+		previousPassPublicMockRootLevelReentries: [String: PublicMockLevelFunctions.Reentry] = [:],
 		namesBoundBySeam: Set<String> = [],
 		placeHoldingProperties: Set<Property>? = nil,
 	) {
@@ -132,13 +132,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if publicMockCall != nil, !fillDispatchers.isEmpty {
 			var fillParametersByKey = [String: [SeamSignature.Hole.Field]]()
 			var fillNames = Set<String>()
+			// What the root level functions read of the caller's scope, as a seam's root dispatcher reads it: each label in the
+			// form `FillDispatcher.dispatcherParameters(of:fillReads:)` types a dispatcher's parameter by, the form no fill
+			// reads optionally first, then in `Property` order, so neither the order of the fills nor of their cases decides it.
+			var callerReadFormsByLabel = [String: [Property: (field: SeamSignature.Hole.Field, arguments: Set<String>)]]()
 			for child in propertiesToGenerate {
 				if let key = child.fillKey, child.fillEmitsCode {
 					fillParametersByKey[key] = child.fillParameterFields
+					for (label, argument) in child.fillCallerReads.argumentByLabel {
+						guard let field = child.fillCallerReads.parameterByLabel[label] else { continue }
+						callerReadFormsByLabel[label, default: [:]][field.property, default: (field, [])].arguments.insert(argument)
+					}
 				}
 				if case let .fill(_, functionName) = child.scopeData {
 					fillNames.insert(functionName)
 				}
+			}
+			var callerReads = [String: (field: SeamSignature.Hole.Field, argument: String)]()
+			for (label, forms) in callerReadFormsByLabel {
+				let properties = forms.keys.sorted()
+				guard let property = properties.first(where: { !$0.typeDescription.isOptional }) ?? properties.first,
+				      let form = forms[property]
+				else { continue }
+				// A value one fill finds in the caller's scope is handed as that fill reads it, as a seam's root dispatcher hands it.
+				callerReads[label] = (form.field, form.arguments.filter { $0 != "nil" }.min() ?? "nil")
 			}
 			publicMockLevelFunctions = PublicMockLevelFunctions(
 				dispatchers: fillDispatchers,
@@ -149,6 +166,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				},
 				reservedNames: namesTakenByCall.union(fillNames),
+				callerReads: callerReads,
 			)
 		} else {
 			publicMockLevelFunctions = nil
@@ -259,11 +277,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			fillKeysReferencedFromSendableFunction.formUnion(child.fillKeysReferencedFromSendableFunction)
 		}
 		// A call inside a fill of this call that re-enters a root level function hands it the caller's struct where the function
-		// takes it, which the pass before found (`Scope.enclosingLevelUpNamesOfThisCall`). Nearly no call holds such a call.
-		let publicMockRootLevelUpNames = publicMockLevelFunctions?.rootLevelUpNames(amongKeys: Set(referencedFillNamesByKey.keys)) ?? [:]
-		self.publicMockRootLevelUpNames = publicMockRootLevelUpNames
-		publicMockRootLevelUpNamesChangedInTree = publicMockRootLevelUpNames != previousPassPublicMockRootLevelUpNames
-			|| propertiesToGenerate.contains(where: \.publicMockRootLevelUpNamesChangedInTree)
+		// takes it, which the pass before found (`Scope.enclosingLevelReentriesOfThisCall`). Nearly no call holds such a call.
+		let publicMockRootLevelReentries = publicMockLevelFunctions?.rootLevelReentries(amongKeys: Set(referencedFillNamesByKey.keys)) ?? [:]
+		self.publicMockRootLevelReentries = publicMockRootLevelReentries
+		publicMockRootLevelReentriesChangedInTree = publicMockRootLevelReentries != previousPassPublicMockRootLevelReentries
+			|| propertiesToGenerate.contains(where: \.publicMockRootLevelReentriesChangedInTree)
 		let ownFills = propertiesToGenerate.compactMap { child -> SendableFillNode? in
 			child.fillKey.map { SendableFillNode(key: $0, references: Set(child.referencedFillNamesByKey.keys), startsSendable: child.fillHole?.isSendable == true) }
 		} + fillDispatchers.map { dispatcher in
@@ -751,8 +769,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleParametersChangedInTree = false
 		receivedBuilderLoops = ReceivedBuilderLoops()
 		receivedBuilderLoopsChangedInTree = false
-		publicMockRootLevelUpNames = [:]
-		publicMockRootLevelUpNamesChangedInTree = false
+		publicMockRootLevelReentries = [:]
+		publicMockRootLevelReentriesChangedInTree = false
 		reboundProperties = []
 		description = property.asSource
 		propertiesToGenerate = []
@@ -852,8 +870,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleParametersChangedInTree = false
 		receivedBuilderLoops = ReceivedBuilderLoops()
 		receivedBuilderLoopsChangedInTree = false
-		publicMockRootLevelUpNames = [:]
-		publicMockRootLevelUpNamesChangedInTree = false
+		publicMockRootLevelReentries = [:]
+		publicMockRootLevelReentriesChangedInTree = false
 		reboundProperties = []
 		description = holeProperty.asSource
 		propertiesToGenerate = []
@@ -3332,12 +3350,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	let receivedBuilderLoopsChangedInTree: Bool
 	/// For a call of another module's public mock, the name each root level function a call inside one of its fills re-enters
 	/// takes the caller's struct under, by its dispatcher's key, where the function takes it
-	/// (`PublicMockLevelFunctions.rootLevelUpNames(amongKeys:)`), which the next pass of `Scope.createScopeGenerator` hands
+	/// (`PublicMockLevelFunctions.rootLevelReentries(amongKeys:)`), which the next pass of `Scope.createScopeGenerator` hands
 	/// those calls. Empty for nearly every scope.
-	nonisolated let publicMockRootLevelUpNames: [String: String]
-	/// Whether a call in this tree found other `publicMockRootLevelUpNames` than the pass before handed the calls inside its
+	nonisolated let publicMockRootLevelReentries: [String: PublicMockLevelFunctions.Reentry]
+	/// Whether a call in this tree found other `publicMockRootLevelReentries` than the pass before handed the calls inside its
 	/// fills, so that `Scope.createScopeGenerator` creates the tree again.
-	let publicMockRootLevelUpNamesChangedInTree: Bool
+	let publicMockRootLevelReentriesChangedInTree: Bool
 	/// The properties of the siblings this scope's builder function rebinds, as a member of a loop of its scope (see
 	/// `ReceivedBuilderLoops`), in the order its body first receives them. Empty for nearly every scope.
 	let reboundProperties: [Property]

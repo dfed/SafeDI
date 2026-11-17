@@ -95,6 +95,9 @@ struct PublicMockLevelFunctions: Sendable {
 		let carriedStructs: [String: String]
 	}
 
+	/// What the call hands each value a root level function reads of the caller's scope, by label: the caller's nearest
+	/// declaration of the value, its instance where the caller holds it lazily, or `nil` (`ScopeGenerator.FillCallerReads`).
+	let callerArgumentByLabel: [String: String]
 	/// The functions, in the order they are first reached.
 	private(set) var functions = [Function]()
 	/// The name each function takes the caller's struct of its level under.
@@ -107,13 +110,19 @@ struct PublicMockLevelFunctions: Sendable {
 	private(set) var rootCallsByLabel = [String: String]()
 
 	/// The level functions of a call whose dispatchers are `dispatchers` and whose fills take `fillParametersByKey` beside
-	/// their case's payload, for `roots`.
+	/// their case's payload, for `roots`. A root level function takes each value of `callerReads` its routes read, as a
+	/// seam's root dispatcher reads the caller's declaration of it: a route on which no level binds a value a fill reads
+	/// hands the fill the caller's, so the place is filled there, as production fills it.
+	/// - Parameter callerReads: The field each value the call's fills read of the caller's scope is taken as, by label, and
+	///   what the call hands it (`ScopeGenerator.FillCallerReads`).
 	init(
 		dispatchers: [ScopeGenerator.FillDispatcher],
 		fillParametersByKey: [String: [SeamSignature.Hole.Field]],
 		roots: [Root],
 		reservedNames: Set<String>,
+		callerReads: [String: (field: SeamSignature.Hole.Field, argument: String)],
 	) {
+		callerArgumentByLabel = callerReads.mapValues(\.argument)
 		let dispatchersByKey = Dictionary(dispatchers.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
 		// The labels each dispatcher's targets read that its cases' payloads do not carry and their types do not bind later.
 		var relevantLabelsByKey = [String: Set<String>]()
@@ -212,7 +221,7 @@ struct PublicMockLevelFunctions: Sendable {
 		}
 		for root in roots {
 			guard rootFunctionIndexByKey[root.dispatcherKey] == nil, let dispatcher = dispatchersByKey[root.dispatcherKey] else { continue }
-			rootFunctionIndexByKey[root.dispatcherKey] = function(of: dispatcher, given: [:])
+			rootFunctionIndexByKey[root.dispatcherKey] = function(of: dispatcher, given: callerReads.mapValues(\.field))
 		}
 		// A function takes the caller's struct where a member passes a place up, or hands it to a level beneath that does.
 		changed = true
@@ -240,14 +249,24 @@ struct PublicMockLevelFunctions: Sendable {
 		}
 	}
 
-	/// The name each root level function of a dispatcher whose key is in `keys` takes the caller's struct under, by the
-	/// dispatcher's key, where the function takes it (`Function.takesUp`): what a call that re-enters the function hands it.
-	func rootLevelUpNames(amongKeys keys: Set<String>) -> [String: String] {
-		var upNames = [String: String]()
-		for (key, index) in rootFunctionIndexByKey where keys.contains(key) && functions[index].takesUp {
-			upNames[key] = upName
+	/// What a call inside a fill that re-enters a root level function hands it beside the structs of the caller's levels.
+	struct Reentry: Equatable, Sendable {
+		/// The name the function takes the caller's struct under, where it takes it (`Function.takesUp`).
+		let upName: String?
+		/// The values the function takes of the caller's scope, which the re-entering call reads of its own scope, as the
+		/// call of the function reads them of the caller's: the nearest declaration enclosing it, so the place is filled with
+		/// what inline reads there.
+		let parameters: [Property]
+	}
+
+	/// What a call that re-enters the root level function of a dispatcher whose key is in `keys` hands it, by the
+	/// dispatcher's key, where it hands it anything beside the structs of the caller's levels.
+	func rootLevelReentries(amongKeys keys: Set<String>) -> [String: Reentry] {
+		var reentries = [String: Reentry]()
+		for (key, index) in rootFunctionIndexByKey where keys.contains(key) && (functions[index].takesUp || !functions[index].parameters.isEmpty) {
+			reentries[key] = Reentry(upName: functions[index].takesUp ? upName : nil, parameters: functions[index].parameters.map(\.property))
 		}
-		return upNames
+		return reentries
 	}
 
 	/// The members of the root level function of the dispatcher of `key`, or `nil` where no function is.
@@ -264,6 +283,11 @@ struct PublicMockLevelFunctions: Sendable {
 		}
 		for carried in function.carriedInnerScopes {
 			arguments.append("\(carried.upName.spelledAsArgumentLabel): \(root.carriedStructs[carried.name] ?? "")")
+		}
+		// Every value a root level function takes is one the call's fills read of the caller's scope.
+		for parameter in function.parameters {
+			let label = parameter.property.label
+			arguments.append("\(label.spelledAsArgumentLabel): \(callerArgumentByLabel[label] ?? "nil")")
 		}
 		return "\(function.name)(\(arguments.joined(separator: ", ")))"
 	}
