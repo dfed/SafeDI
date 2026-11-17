@@ -4735,6 +4735,72 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func difference_isNil_whenDiagnosticsListTheSameSeamsAndPlacesOfAPassedUpPlaceFindingInAnotherOrder() {
+		// Seam corpus seed 116's merged finding: the seams whose calls present its places, and the places, follow the order of
+		// type names, which moving type names across wrapper names reverses. The same items in another order are the same
+		// diagnostic; another called seam, a place under the other seam's tree, a remedy's other seam, or a fulfill remedy
+		// dropped is not.
+		let deepPlace = "`S116_HoleDeepImpl`’s `holeService: any S116_HoleService` (case `S116_HoleDeepImpl_Scope.holeService` of `s116_HoleServiceSendableBuilder`) in `S116_HoleSeam`’s tree"
+		let stagePlace = "`S116_HoleStageOwner`’s `holeService: any S116_HoleService` (case `S116_HoleStageOwner_Scope.holeService` of `s116_HoleServiceSendableBuilder`) in `S116_HoleStager`’s tree"
+		let serviceRemedy = "declare an @Instantiable type that fulfills `S116_HoleService` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S116_HoleOuter` fills the builders itself"
+		let gadgetRemedy = "declare an @Instantiable type that fulfills `S116_HoleGadget` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S116_HoleOuter` fills the builders itself"
+		func diagnostics(calledSeams: String, places: String, remedySeams: String = "`S116_HoleSeam` and `S116_HoleStager`", remedies: String = "\(serviceRemedy) and \(gadgetRemedy)") -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "<fixture-directory>/shop/Sources/FuzzApp/S116_HoleImpl.swift:13:3: error: `S116_HoleNamespace.S116_HoleImpl` receives `holeLogger: S116_HoleLogger`, which `S116_HoleOuter` builds where it calls \(calledSeams), but `S116_HoleOuter` passes the builders for \(places) on from its own caller, which cannot hand them `S116_HoleOuter`’s values. Declare `@Received let holeLogger: S116_HoleLogger` on \(remedySeams), so the builders’ scopes carry it, or \(remedies).\n<fixture-directory>/shop/Sources/FuzzFeature/S116_HoleOuter.swift:11:2: note: `S116_HoleOuter` declares `holeLogger: S116_HoleLogger` here.")
+		}
+		let original = diagnostics(calledSeams: "`S116_HoleSeam` and `S116_HoleStager`", places: "\(deepPlace) and \(stagePlace)")
+
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(calledSeams: "`S116_HoleStager` and `S116_HoleSeam`", places: "\(stagePlace) and \(deepPlace)", remedySeams: "`S116_HoleStager` and `S116_HoleSeam`", remedies: "\(gadgetRemedy) and \(serviceRemedy)")) == nil)
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(calledSeams: "`S116_HoleStager` and `S116_HoleRelay`", places: "\(stagePlace) and \(deepPlace)")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(calledSeams: "`S116_HoleSeam` and `S116_HoleStager`", places: "\(deepPlace) and \(stagePlace.replacingOccurrences(of: "in `S116_HoleStager`’s tree", with: "in `S116_HoleSeam`’s tree"))")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(calledSeams: "`S116_HoleSeam` and `S116_HoleStager`", places: "\(deepPlace) and \(stagePlace)", remedySeams: "`S116_HoleSeam` and `S116_HoleRelay`")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(calledSeams: "`S116_HoleSeam` and `S116_HoleStager`", places: "\(deepPlace) and \(stagePlace)", remedies: serviceRemedy)) == "its diagnostics")
+	}
+
+	@Test
+	func difference_isNil_whenDiagnosticsListTheSameClausesOfAReenteringCallFindingInAnotherOrder() {
+		// Seam corpus seed 331's shape: one clause per declaration and call, and the declaring types, in name order, and a note
+		// per declaring type, in that order, which a renaming of the types or the files reverses. The same items and notes in
+		// another order are the same diagnostic; another call, a place of another builder, a declaring type renamed in the
+		// list, or a note dropped or changed is not.
+		let alphaClause = "`MiddleAlpha` declares on the paths from the builders for `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) and `Screen`’s `screenRouter: any Router` (case `Screen_Scope.screenRouter` of `routerBuilder`) to the call by which `MiddleAlpha` instantiates `Flow` again (`flowBuilder`)"
+		let reorderedAlphaClause = "`MiddleAlpha` declares on the paths from the builders for `Screen`’s `screenRouter: any Router` (case `Screen_Scope.screenRouter` of `routerBuilder`) and `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) to the call by which `MiddleAlpha` instantiates `Flow` again (`flowBuilder`)"
+		let zedClause = "`MiddleZed` declares on the path from the builder for `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) to the call by which `MiddleZed` instantiates `Flow` again (`flowBuilder`)"
+		let alphaNote = "/a/<fixture-directory>/MiddleAlpha.swift:10:5: note: `MiddleAlpha` declares `logger: Logger` here."
+		let zedNote = "/a/<fixture-directory>/MiddleZed.swift:10:5: note: `MiddleZed` declares `logger: Logger` here."
+		func diagnostics(clauses: String, declaringTypes: String = "`MiddleAlpha`’s and `MiddleZed`’s", notes: [String] = [alphaNote, zedNote]) -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: (["/a/<fixture-directory>/DefaultRouter.swift:10:5: error: `DefaultRouter` receives `logger: Logger`, which \(clauses), but those calls pass the builder on as module `App` fills it, which cannot hand it \(declaringTypes) values. Declare `@Received let logger: Logger` on `Flow`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies."] + notes).joined(separator: "\n"))
+		}
+		let original = diagnostics(clauses: "\(alphaClause) and \(zedClause)")
+
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(zedClause) and \(reorderedAlphaClause)", declaringTypes: "`MiddleZed`’s and `MiddleAlpha`’s", notes: [zedNote, alphaNote])) == nil)
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause.replacingOccurrences(of: "instantiates `Flow` again (`flowBuilder`)", with: "instantiates `Shell` again (`shellBuilder`)"))")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause.replacingOccurrences(of: "of `routerBuilder`", with: "of `defaultRouter_RouterBuilder`"))")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause)", declaringTypes: "`MiddleAlpha`’s and `MiddleOmega`’s")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause)", notes: [zedNote])) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause)", notes: [alphaNote, zedNote.replacingOccurrences(of: "`logger: Logger`", with: "`logger: Logger?`")])) == "its diagnostics")
+	}
+
+	@Test
+	func diagnosticEntries_sortsEachErrorsNotesWithTheirFixIts_whenNotesFollowAnError() {
+		// Each note keeps the fix-it line after it, the lines before an error's first note stay with the error, and notes never
+		// move to another error.
+		let diagnostics = [
+			"/a/B.swift:1:1: error: second",
+			"/a/B.swift:1:1-1:2: fixit: of the second",
+			"/a/Z.swift:2:1: note: z",
+			"/a/A.swift:3:1: note: a",
+			"/a/A.swift:3:1-3:2: fixit: of a",
+			"/a/A.swift:1:1: error: first",
+			"/a/Y.swift:4:1: note: y",
+		].joined(separator: "\n")
+
+		#expect(GraphFuzzerToolOutcome.diagnosticEntries(of: diagnostics) == [
+			"/a/A.swift:1:1: error: first\n/a/Y.swift:4:1: note: y",
+			"/a/B.swift:1:1: error: second\n/a/B.swift:1:1-1:2: fixit: of the second\n/a/A.swift:3:1: note: a\n/a/A.swift:3:1-3:2: fixit: of a\n/a/Z.swift:2:1: note: z",
+		])
+	}
+
+	@Test
 	func difference_reportsDiagnostics_whenDiagnosticsDifferInMoreThanTheOrderOfTheirSuggestions() {
 		func diagnostics(chain: String, suggestions: String) -> GraphFuzzerToolOutcome {
 			.rejected(diagnostics: "/a/<fixture-directory>/S12_T1.swift:7:2: error: @Received property `t4: S12_T3` is not @Instantiated or @Forwarded in chain: \(chain). Did you mean one of \(suggestions)?")
