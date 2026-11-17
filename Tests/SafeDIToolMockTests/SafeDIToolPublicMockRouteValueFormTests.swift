@@ -26,8 +26,8 @@ import Testing
 
 /// The form a public mock's caller hands a value on in, route by route: a route whose nearest type binds the value in a
 /// form that provides the one the fill reads hands it on converted, and a route whose nearest level holds a form that
-/// does not provide it hands on `nil`, so its place is passed up there. Inline rejects the routes that pass the place
-/// up, so no value is compared; each test compiles every module.
+/// does not provide it hides the value, which the twin reports and so the calling mock reports too. Each test compiles
+/// every module.
 struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 	// MARK: Initialization
 
@@ -48,7 +48,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 	mutating func generate_handsOnInstanceOfLazilyInstantiatedValue_whenRouteBindsValueLazilyAndFillReadsItByValue() async throws {
 		// `Office` builds `Model` inside `Desk`, which binds `token` lazily before it, and beside `Desk`, where nothing binds
 		// one. `DefaultService` reads `token: Token`, which `Desk`'s `LazilyInstantiated<Token>` provides: `Desk`'s dispatcher
-		// hands on its instance, and the root's case hands on `nil`, so that route passes the place up.
+		// hands on its instance, and the root's case hands on the `token` the calling mock builds, as inline does.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
@@ -367,322 +367,52 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesPlaceUpOnEveryRouteOfCalledMock_whenItsLevelHidesValueAndNoLevelOfCallerHoldsIt() async throws {
+	mutating func generate_reportsTwinsHiddenReceiveError_whenCalledMocksLevelHidesValueNoLevelOfCallerHolds() async {
 		// `Outer` fills `Inner`'s `service` with `DefaultService`, whose `gadget` `App` fills with `LiveGadget`, which reads
 		// `id: Code`. `Outer` binds no `id` around `inner`, and `Inner`'s `Screen` forwards `id: String`, which hides any
-		// farther `id` on the `screenBuilder` route: every route of `Inner`'s enum hands on `nil`, so the place inside the
-		// fill is passed up there, and its case reads neither its payload nor `Inner`'s scope. `Holder` binds `id: Code`
-		// before `direct`, so the same case of `DefaultService_Scope` is filled on that route.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
+		// farther `id` on the `screenBuilder` route. `Holder` binds `id: Code` before `direct`, so the same case of
+		// `DefaultService_Scope` is reached on a route that holds it too. The twin reports the receive hidden, so the calling
+		// mock reports the same.
+		let modules = { (form: (String) -> String) in
+			[
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 					"public protocol Service {}\npublic protocol Gadget {}",
 					seamFixtureType(named: "Screen", declarations: ["@Forwarded public let id: String", "@Instantiated public let service: any Service"]),
 					Self.publicMockType(named: "Inner", declarations: ["@Instantiated public let screenBuilder: Instantiator<Screen>", "@Instantiated public let service: any Service"]),
-				]),
+				].map(form)),
 				ModuleFixture(name: "Middle", packageName: "Mid", swiftFileContent: [
 					seamFixtureType(named: "Code", isFinalClass: true, declarations: []),
 					Self.fulfillingType(named: "DefaultService", fulfilling: "Service", declarations: ["@Instantiated public let gadget: any Gadget"]),
 					seamFixtureType(named: "Holder", declarations: ["@Instantiated public let id: Code", "@Instantiated public let direct: DefaultService"]),
 					Self.publicMockType(named: "Outer", declarations: ["@Instantiated public let inner: Inner", "@Instantiated public let holder: Holder"]),
-				].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+				].map { form("import Feature\n\n" + $0) }, dependencies: ["Feature"]),
 				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
 					Self.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received public let id: Code"]),
 					seamFixtureType(named: "Root", declarations: ["@Instantiated public let outer: Outer"])
 						.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n"),
-				].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
-			],
-			integration: .moduleInfo,
-			filesToDelete: &filesToDelete,
-		)
-		#expect(output.modules["Middle"]?.generatedFiles["Middle.swift"] == generatedFileHeader + """
-		#if canImport(Feature)
-		import Feature
-		#endif
-
-		#if DEBUG
-		extension Outer {
-		    nonisolated public enum SafeDIMockScope_Gadget {
-		        nonisolated public struct inner_serviceBuilder_Values {}
-
-		        nonisolated public struct holder_Values {
-		            public let inner: Inner
-		        }
-
-		        nonisolated public enum DefaultService_Scope {
-		            nonisolated public struct gadget_Values {}
-
-		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let gadget: (gadget_Values) -> __safeDI_Built
-
-		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
-		                    self.gadget = gadget
-		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.gadget = { _ in __safeDI_builder() }
-		                }
-		            }
-		        }
-
-		        nonisolated public enum Holder_Scope {
-		            nonisolated public struct direct_Values {
-		                public let id: Code
-		            }
-
-		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let direct: (direct_Values) -> SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>
-
-		                public init(direct: @escaping (direct_Values) -> SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>) {
-		                    self.direct = direct
-		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.direct = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                }
-		            }
-		        }
-
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let inner_serviceBuilder: (inner_serviceBuilder_Values) -> Inner.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>
-		            public let holder: (holder_Values) -> SafeDIMockScope_Gadget.Holder_Scope.__safeDI_Builder<__safeDI_Built>
-
-		            public init(inner_serviceBuilder: @escaping (inner_serviceBuilder_Values) -> Inner.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>, holder: @escaping (holder_Values) -> SafeDIMockScope_Gadget.Holder_Scope.__safeDI_Builder<__safeDI_Built>) {
-		                self.inner_serviceBuilder = inner_serviceBuilder
-		                self.holder = holder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.inner_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
-		                self.holder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		            }
-		        }
-		    }
-
-		    /// Overrides for the mock dependency tree.
-		    nonisolated public struct SafeDIOverrides {
-		        public init(
-		            inner: Inner.SafeDIOverrides = .init(),
-		            holder: __safeDI_Middle_Holder_MockConfiguration = .init()
-		        ) {
-		            __safeDI_storage = __safeDI_Storage(
-		                inner: inner,
-		                holder: holder
-		            )
-		        }
-
-		        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
-		        public var holder: __safeDI_Middle_Holder_MockConfiguration { __safeDI_storage.holder }
-
-		        private let __safeDI_storage: __safeDI_Storage
-
-		        private final class __safeDI_Storage {
-		            init(
-		                inner: Inner.SafeDIOverrides,
-		                holder: __safeDI_Middle_Holder_MockConfiguration
-		            ) {
-		                self.inner = inner
-		                self.holder = holder
-		            }
-
-		            let inner: Inner.SafeDIOverrides
-		            let holder: __safeDI_Middle_Holder_MockConfiguration
-		        }
-		    }
-
-		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
-		    public static func mock(
-		        gadgetBuilder: @escaping () -> any Gadget,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Outer {
-		        Outer.__safeDI_mock(gadgetBuilder: .init(__safeDI_noScope: gadgetBuilder), safeDIOverrides: safeDIOverrides)
-		    }
-
-		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
-		    public static func __safeDI_mock(
-		        gadgetBuilder __safeDI_gadgetBuilder: Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget>,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Outer {
-		        let __safeDI_gadgetBuilder_inner_serviceBuilder = __safeDI_gadgetBuilder.inner_serviceBuilder(SafeDIMockScope_Gadget.inner_serviceBuilder_Values())
-		        func __safeDI_inner() -> Inner {
-		            func __safeDI_serviceBuilder_Inner_service(_ scope: Inner.SafeDIMockScope_Service.service_Values, __safeDI_inner_serviceBuilder: SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    let gadget: any Gadget = __safeDI_inner_serviceBuilder.gadget(SafeDIMockScope_Gadget.DefaultService_Scope.gadget_Values())
-		                    return DefaultService(gadget: gadget)
-		                }
-		                let service: any Service = __safeDI_service()
-		                return service
-		            }
-		            func __safeDI_serviceBuilder_Inner_Screen_Scope_service(_ scope: Inner.SafeDIMockScope_Service.Screen_Scope.service_Values, __safeDI_inner_serviceBuilder: SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    let gadget: any Gadget = __safeDI_inner_serviceBuilder.gadget(SafeDIMockScope_Gadget.DefaultService_Scope.gadget_Values())
-		                    return DefaultService(gadget: gadget)
-		                }
-		                let service: any Service = __safeDI_service()
-		                return service
-		            }
-		            func __safeDI_serviceBuilder_Inner(up: Inner.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-		                .init(screenBuilder: { values in __safeDI_serviceBuilder_Inner_Screen_Scope(up: up.screenBuilder(values)) }, service: { scope in __safeDI_serviceBuilder_Inner_service(scope, __safeDI_inner_serviceBuilder: up.service(scope)) })
-		            }
-		            func __safeDI_serviceBuilder_Inner_Screen_Scope(up: Inner.SafeDIMockScope_Service.Screen_Scope.__safeDI_Builder<SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.SafeDIMockScope_Service.Screen_Scope.__safeDI_Builder<any Service> {
-		                .init(service: { scope in __safeDI_serviceBuilder_Inner_Screen_Scope_service(scope, __safeDI_inner_serviceBuilder: up.service(scope)) })
-		            }
-		            _ = Inner.__safeDI_Inner_mock_718C21DDAD65EAF2.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Inner.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Inner(up: __safeDI_gadgetBuilder_inner_serviceBuilder), safeDIOverrides: safeDIOverrides.inner)
-		        }
-		        let inner: Inner = __safeDI_inner()
-		        let __safeDI_gadgetBuilder_holder = __safeDI_gadgetBuilder.holder(SafeDIMockScope_Gadget.holder_Values(inner: inner))
-		        func __safeDI_holder() -> Holder {
-		            let id = if let safeDIBuilder = safeDIOverrides.holder.id { safeDIBuilder() } else { Code() }
-		            let __safeDI_gadgetBuilder_direct = __safeDI_gadgetBuilder_holder.direct(SafeDIMockScope_Gadget.Holder_Scope.direct_Values(id: id))
-		            func __safeDI_direct() -> DefaultService {
-		                let gadget: any Gadget = __safeDI_gadgetBuilder_direct.gadget(SafeDIMockScope_Gadget.DefaultService_Scope.gadget_Values())
-		                return if let safeDIBuilder = safeDIOverrides.holder.direct { safeDIBuilder(gadget) } else { DefaultService(gadget: gadget) }
-		            }
-		            let direct: DefaultService = __safeDI_direct()
-		            return Holder.__safeDI_init(id: id, direct: direct, safeDIBuilder: safeDIOverrides.holder.safeDIBuilder)
-		        }
-		        let holder: Holder = __safeDI_holder()
-		        return Outer(inner: inner, holder: holder)
-		    }
+				].map { form("import Feature\nimport Middle\n\n" + $0) }, dependencies: ["Feature", "Middle"]),
+			]
 		}
-
-		extension Outer {
-		    public enum __safeDI_Outer_mock_B41DEA3313B1E564 {}
+		let diagnostics = { (fixtures: [String: FixturePaths]) in
+			"""
+			\(fixtures["App"]!["LiveGadget.swift"]):10:5: error: @Received property `id: Code` is hidden in chain: Root -> Outer -> Inner -> Instantiator<Screen> -> any Service -> LiveGadget. `Screen` declares `id: String` with the same label, so the types below `Screen` receive `id: String` instead. Give `id: String` on `Screen` a different label to fix.
+			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `id: String` is declared here
+			"""
 		}
-		#endif
-
-		#if DEBUG
-		/// Configuration for how `Holder` is constructed within the public mock trees of module `Middle`.
-		nonisolated public struct __safeDI_Middle_Holder_MockConfiguration {
-		    public init(
-		        id: (() -> Code)? = nil,
-		        direct: ((any Gadget) -> DefaultService)? = nil,
-		        _ safeDIBuilder: ((Code, DefaultService) -> Holder)? = nil
-		    ) {
-		        __safeDI_storage = __safeDI_Storage(
-		            id: id,
-		            direct: direct,
-		            safeDIBuilder: safeDIBuilder
-		        )
-		    }
-
-		    public var id: (() -> Code)? { __safeDI_storage.id }
-		    public var direct: ((any Gadget) -> DefaultService)? { __safeDI_storage.direct }
-		    /// Overrides how `Holder` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public var safeDIBuilder: ((Code, DefaultService) -> Holder)? { __safeDI_storage.safeDIBuilder }
-
-		    private let __safeDI_storage: __safeDI_Storage
-
-		    private final class __safeDI_Storage {
-		        init(
-		            id: (() -> Code)?,
-		            direct: ((any Gadget) -> DefaultService)?,
-		            safeDIBuilder: ((Code, DefaultService) -> Holder)?
-		        ) {
-		            self.id = id
-		            self.direct = direct
-		            self.safeDIBuilder = safeDIBuilder
-		        }
-
-		        let id: (() -> Code)?
-		        let direct: ((any Gadget) -> DefaultService)?
-		        let safeDIBuilder: ((Code, DefaultService) -> Holder)?
-		    }
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules { $0 }, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		}
-
-		extension Holder {
-		    static func __safeDI_init(id: Code, direct: DefaultService, safeDIBuilder: ((Code, DefaultService) -> Holder)?) -> Holder {
-		        if let safeDIBuilder { safeDIBuilder(id, direct) } else { Holder(id: id, direct: direct) }
-		    }
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules(callingMockProductionTwin(of:)), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		}
-		#endif
-
-		""")
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
-		#if canImport(Feature)
-		import Feature
-		#endif
-		#if canImport(Middle)
-		import Middle
-		#endif
-
-		#if DEBUG
-		extension Root {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            outer: Outer.SafeDIOverrides = .init()
-		        ) {
-		            __safeDI_storage = __safeDI_Storage(
-		                outer: outer
-		            )
-		        }
-
-		        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
-
-		        private let __safeDI_storage: __safeDI_Storage
-
-		        private final class __safeDI_Storage {
-		            init(
-		                outer: Outer.SafeDIOverrides
-		            ) {
-		                self.outer = outer
-		            }
-
-		            let outer: Outer.SafeDIOverrides
-		        }
-		    }
-
-		    static func mock(
-		        gadgetBuilder: @escaping () -> any Gadget,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Root {
-		        func __safeDI_outer() -> Outer {
-		            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope_gadget(_ scope: Outer.SafeDIMockScope_Gadget.DefaultService_Scope.gadget_Values, id: Code) -> any Gadget {
-		                let gadget: any Gadget = LiveGadget(id: id)
-		                return gadget
-		            }
-		            func __safeDI_gadgetBuilder_Outer(up: Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget>) -> Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget> {
-		                .init(inner_serviceBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner(up: up.inner_serviceBuilder(values)) }, holder: { _ in __safeDI_gadgetBuilder_Outer_Holder_Scope() })
-		            }
-		            func __safeDI_gadgetBuilder_Outer_Inner(up: Inner.SafeDIMockScope_Service.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.SafeDIMockScope_Service.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(screenBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(up: up.screenBuilder(values)) }, service: { values in __safeDI_gadgetBuilder_Outer_DefaultService_Scope_(up: up.service(values)) })
-		            }
-		            func __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(up: Inner.SafeDIMockScope_Service.Screen_Scope.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.SafeDIMockScope_Service.Screen_Scope.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(service: { values in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(up: up.service(values), id: values.id) })
-		            }
-		            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(up: Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>, id: String) -> Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
-		                .init(gadget: up.gadget)
-		            }
-		            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope_(up: Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
-		                .init(gadget: up.gadget)
-		            }
-		            func __safeDI_gadgetBuilder_Outer_Holder_Scope() -> Outer.SafeDIMockScope_Gadget.Holder_Scope.__safeDI_Builder<any Gadget> {
-		                .init(direct: { values in __safeDI_gadgetBuilder_Outer_DefaultService_Scope__(id: values.id) })
-		            }
-		            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope__(id: Code) -> Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
-		                .init(gadget: { scope in __safeDI_gadgetBuilder_Outer_DefaultService_Scope_gadget(scope, id: id) })
-		            }
-		            _ = Outer.__safeDI_Outer_mock_B41DEA3313B1E564.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Outer.__safeDI_mock(gadgetBuilder: __safeDI_gadgetBuilder_Outer(up: .init(__safeDI_noScope: gadgetBuilder)), safeDIOverrides: safeDIOverrides.outer)
-		        }
-		        let outer: Outer = __safeDI_outer()
-		        return Root(outer: outer)
-		    }
-		}
-		#endif
-		""")
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesPassUpParameterApartFromValue_whenFillReadsValueLabeledPassUp() async throws {
-		// The fill `DefaultService` reads a value labeled `passUp`, which the level function of `Desk`’s level hands down
-		// as its wrapper, beside the level function of `Office`’s root, which takes the caller’s struct as `up`.
+	mutating func generate_handsValueUnderItsLabel_whenFillReadsValueLabeledPassUp() async throws {
+		// The fill `DefaultService` reads a value labeled `passUp`, the name a dispatcher takes its pass-up closure under,
+		// which the level function of `Desk`’s level hands down as its wrapper, and `Office`’s root level function takes from
+		// the caller. Every route fills the place, so no closure takes the name.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
@@ -964,9 +694,10 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesPassUpParameterApartFromValue_whenFillReadsValueLabeledUp() async throws {
-		// The fill `DefaultService` reads a value labeled `up`, which the level function of `Desk`’s level hands down as its
-		// wrapper, so the level function of `Office`’s root, which takes the caller’s struct, names that parameter `up_`.
+	mutating func generate_handsValueUnderItsLabel_whenFillReadsValueLabeledUp() async throws {
+		// The fill `DefaultService` reads a value labeled `up`, the name a level function takes the caller’s struct under,
+		// which the level function of `Desk`’s level hands down as its wrapper, and `Office`’s root level function takes from
+		// the caller. Every route fills the place, so no level function takes the caller’s struct.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [

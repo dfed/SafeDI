@@ -579,24 +579,19 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		}
 	}
 
-	// MARK: Tests – a call that passes a place up
-
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsLevelFunctionsItsBuilderAsUp_whenInternalCallerFillsOneRouteAndPassesTheOtherUp() async throws {
+	mutating func generate_handsRootLevelFunctionTheTokenItBuilds_whenInternalCallerFillsARouteThatBindsNoToken() async throws {
 		// `Model`'s `api` is reached through `Page`, which binds `token`, and straight from `Hub`, which does not. `Root` fills
-		// the first route with `LiveToken`, which reads `token`, and passes the second up: its level functions take the struct
-		// of the builder it takes, `.init(__safeDI_noScope: apiBuilder)`, as `up`, whose member the second route's level
-		// returns.
+		// both routes with `LiveToken`, which reads `token`: the first with `Page`'s, the second with the `token` its mock
+		// builds, which its root level function takes. Everything the probe built is freed.
 		let modules = Self.routeModules(app: [
 			Self.liveToken,
 			Self.root(holding: "hub: Hub"),
 			"""
-			final class StubApi: Api {}
-
 			func countsOfHubTheTestBuilds() -> String {
 			    do {
-			        let hub = Root.mock(apiBuilder: { StubApi() }).hub
+			        let hub = Root.mock().hub
 			        let page = hub.pageBuilder.instantiate()
 			        hub.navigator.stack.append(page)
 			        hub.navigator.stack.append(hub.modelBuilder.instantiate())
@@ -872,6 +867,8 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		}
 	}
 
+	// MARK: Tests – a call that passes a place up
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_handsTheStructOfTheBuilderItTakes_whenInternalCallerFillsNoPlace() async throws {
@@ -1142,18 +1139,16 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsLevelFunctionsItsOwnMemberAsUp_whenPublicCallerPassesThePlaceUpUnderItsOwnCase() async throws {
-		// `Shell`, a public mock in `Mid`, builds `Hub` and fills its route through `Page` with `LiveToken`, passing the other
-		// up under a case of its own enum, which holds `Hub`'s: its level functions take, as `up`, what the member of `Shell`'s
-		// own struct for the call returns.
+	mutating func generate_callsPublicCallersMockWithTheTokenItBuilds_whenPublicCallerFillsARouteThatBindsNoToken() async throws {
+		// `Shell`, a public mock in `Mid`, builds `Hub` and fills both of its routes with `LiveToken`: the one through `Page`
+		// with `Page`'s `token`, and the other with the `token` its mock takes, which `Root` builds and hands it. `Root` takes
+		// no builder. Everything the probe built is freed.
 		let modules = Self.chainModules(app: [
 			Self.root(holding: "shell: Shell"),
 			"""
-			final class StubApi: Api {}
-
 			func countsOfShellTheTestBuilds() -> String {
 			    do {
-			        let hub = Root.mock(apiBuilder: { StubApi() }).shell.hub
+			        let hub = Root.mock().shell.hub
 			        let page = hub.pageBuilder.instantiate()
 			        hub.navigator.stack.append(page)
 			        hub.navigator.stack.append(hub.modelBuilder.instantiate())
@@ -5058,9 +5053,10 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_convertsTheRouteClosureAndKeepsCallersDispatchers_whenModuleAboveFillsThePlacePublicCallerPassesUp() async throws {
-		// As above, and `App` fills the place `Shell` passes up with `AppApi`, which reads the navigator `Hub` binds: `Root`
-		// dispatches over `Shell`'s enum, which holds `Hub`'s, as before, and only `Shell`'s call of `Hub` converts.
+	mutating func generate_leavesThePlaceToThePublicCaller_whenCallersModuleAlsoSeesATypeThatFulfillsIt() async throws {
+		// `Shell`, a public mock in `Mid`, fills `Hub`'s place with `LiveToken`, which `Mid` sees; `App` sees `AppApi` too, but
+		// `Shell` fills the place, as its production twin does, so `Root` hands it no fill. Everything the probe built is
+		// freed.
 		let modules = Self.chainModules(mid: [Self.internalLiveToken], app: [
 			"""
 			@Instantiable(fulfillingAdditionalTypes: [Api.self])
@@ -5397,8 +5393,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		"""])
 		let description = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("countsOfShellRootBuilds()")], filesToDelete: &filesToDelete)
 		if compileVerificationIsEnabled {
-			// The base keeps the same instances alive.
-			#expect(description == "probe countsOfShellRootBuilds()\nString \"Navigator 1, Token 1, Logger 0\"\n")
+			#expect(description == "probe countsOfShellRootBuilds()\nString \"Navigator 0, Token 0, Logger 0\"\n")
 		}
 	}
 

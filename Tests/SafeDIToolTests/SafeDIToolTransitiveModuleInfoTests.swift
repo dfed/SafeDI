@@ -703,14 +703,10 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 		#if DEBUG
 		extension FeedScreen {
-		    @frozen nonisolated public enum SafeDIMockScope_Clock {
-		        case innerScreen(innerScreen_Values, SafeDIMockScope_Clock.InnerScreen_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Clock {
 		        nonisolated public struct innerScreen_Values {}
 
-		        @frozen nonisolated public enum InnerScreen_Scope {
-		            case clock(clock_Values)
-
+		        nonisolated public enum InnerScreen_Scope {
 		            nonisolated public struct clock_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
