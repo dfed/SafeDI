@@ -1286,6 +1286,16 @@ extension GraphFuzzerBuilderSurface {
 		return !errors.isEmpty && errors.allSatisfy { $0.contains("cannot be received inside a `@Sendable` function") }
 	}
 
+	/// Whether every error of `diagnostics` is the tool's rejection of a fill that reads a value a seam binds where it calls
+	/// the seam holding the fill's place, a call that passes the place's builder on from the calling seam's own caller,
+	/// which cannot hand it that value: the right outcome of moving a place into an inner seam of another module past
+	/// where its fill's value is bound, by a same-supply edit or by part (iii)'s remedy (seam corpus seeds 1331, 1524 and
+	/// 1972).
+	static func rejectsOnlyValuesBoundAbovePassedUpPlace(_ diagnostics: String) -> Bool {
+		let errors = diagnostics.split(separator: "\n").filter { $0.contains(": error: ") }
+		return !errors.isEmpty && errors.allSatisfy { $0.contains(" on from its own caller, which cannot hand ") }
+	}
+
 	/// The problem of an edit that keeps or adds to the supply which the tool rejects: the edit changes nothing a valid graph
 	/// may not have, so a rejection is a failure (`sameSupplyEditRejected` for part (i), the part's own for part (ii)),
 	/// though the pair, whose calls were never judged, counts toward no floor.
@@ -1393,9 +1403,18 @@ extension GraphFuzzerToolRuns {
 		}
 		for run in builderSurfaceRuns {
 			switch run.edit {
+			case .secondPlaceInInnerSeamOfAnotherModule,
+			     .holderMovedToInnerSeamOfAnotherModule:
+				let judgment = if case let .rejected(diagnostics) = run.outcome, GraphFuzzerBuilderSurface.rejectsOnlyValuesBoundAbovePassedUpPlace(diagnostics) {
+					// Moving a place into the inner seam of another module moves it past where its fill's value is bound when the
+					// type that calls the inner seam binds that value: the tool rightly rejects the edited graph, every error the
+					// pass-up error with its remedy, which leaves the pair unjudged and passing; any other rejection fails.
+					GraphFuzzerBuilderSurface.PairJudgment(isJudged: false, problems: [])
+				} else {
+					GraphFuzzerBuilderSurface.sameSupplyJudgment(drawn: firstOutcome, edited: run.outcome, seed: fixture.seed)
+				}
+				judgments.append((run.edit.rawValue, judgment))
 			case .secondPlaceInAnotherType,
-			     .secondPlaceInInnerSeamOfAnotherModule,
-			     .holderMovedToInnerSeamOfAnotherModule,
 			     .placeBehindLazilyInstantiated,
 			     .instantiatorPlaceMovedToPlainPlace,
 			     .instantiatorChangedToErasedInstantiator:
@@ -1428,8 +1447,18 @@ extension GraphFuzzerToolRuns {
 				if outcome(of: remedy) != nil {
 					judgments.append((run.edit.rawValue, GraphFuzzerBuilderSurface.rejectionJudgment(unremedied: run.outcome, rejectingModuleName: run.rejectingModuleName, meetingModule: .seamModule)))
 				}
-			case .placeForwardingOtherValuesRemedied, .placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied:
+			case .placeForwardingOtherValuesRemedied:
 				judgments.append((run.edit.rawValue, GraphFuzzerBuilderSurface.remedyJudgment(remedied: run.outcome)))
+				judgments.append((Self.remedyBuildersPairKind, GraphFuzzerBuilderSurface.remedyBuildersJudgment(drawn: firstOutcome, remedied: run.outcome)))
+			case .placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied:
+				let judgment = if case let .rejected(diagnostics) = run.outcome, GraphFuzzerBuilderSurface.rejectsOnlyValuesBoundAbovePassedUpPlace(diagnostics) {
+					// The remedy's added place moves into the inner seam as the same-supply edits' places do: where every error is
+					// the pass-up error, the tool rightly rejects the remedied graph, which leaves it unjudged and passing.
+					GraphFuzzerBuilderSurface.PairJudgment(isJudged: false, problems: [])
+				} else {
+					GraphFuzzerBuilderSurface.remedyJudgment(remedied: run.outcome)
+				}
+				judgments.append((run.edit.rawValue, judgment))
 				judgments.append((Self.remedyBuildersPairKind, GraphFuzzerBuilderSurface.remedyBuildersJudgment(drawn: firstOutcome, remedied: run.outcome)))
 			}
 		}
