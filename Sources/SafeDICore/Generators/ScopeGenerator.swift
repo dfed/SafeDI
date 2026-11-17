@@ -6590,7 +6590,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						DependencyTreeGenerator.erasedBuilderType(
 							forwarding: hole.forwardedType?.strippingEscaping ?? .void(.tuple),
 							returning: field.property.typeDescription,
-							isSendable: hole.enumPlace?.valuesTypeName == nil,
+							isSendable: hole.enumPlace?.isBuiltBySendableBuilder ?? false,
 						),
 						specifiers: [],
 						attributes: ["escaping"],
