@@ -48,7 +48,8 @@ struct PublicMockLevelFunctions: Sendable {
 
 		/// The fill of a member that fills its case's place with nothing but the payload, or `nil`.
 		var fillTakingOnlyItsPayload: ScopeGenerator.FillDispatcher.Case.Target? {
-			if case let .fill(_, target, arguments, _) = self, arguments.isEmpty { target } else { nil }
+			guard case let .fill(_, target, arguments, _) = self, arguments.isEmpty else { return nil }
+			return target
 		}
 	}
 
