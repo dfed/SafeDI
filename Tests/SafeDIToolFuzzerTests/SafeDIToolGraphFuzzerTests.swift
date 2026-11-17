@@ -6514,7 +6514,6 @@ struct SafeDIToolGraphFuzzerTests {
 		.fillCallReadsOwnLevelSendableCall: 22,
 		.fillCallReadsOwnLevelSendableRoute: 9,
 		.fillCallReadsOwnLevelSharedLabel: 19,
-		.holePassedUpPlaceReadsImplicitlyUnwrappedField: 9,
 		.holePassedUpPlaceReadsLazyValue: 10,
 		.holePassedUpPlaceReadsOptionalField: 8,
 		.holePassedUpPlaceReadsPassingSeamsValue: 11,
@@ -6908,7 +6907,6 @@ struct SafeDIToolGraphFuzzerTests {
 		.holePassedUpPlaceReadsValueTwoSeamsUp: 53,
 		.holePassedUpPlaceReadsLazyValue: 63,
 		.holePassedUpPlaceReadsOptionalField: 50,
-		.holePassedUpPlaceReadsImplicitlyUnwrappedField: 41,
 	]
 
 	/// Seeds in `0..<seamCorpusSeedCount` whose graphs fail today. The 1 000-seed run of this corpus found that each
