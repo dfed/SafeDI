@@ -452,7 +452,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		        nonisolated public struct owner_Values {
 		            public let onForward: OnTap
 		            public var config: Config { __safeDI_config.instance }
-		            let __safeDI_config: LazilyInstantiated<Config>
+		            public let __safeDI_config: LazilyInstantiated<Config>
 
 		            init(onForward: @escaping OnTap, config: LazilyInstantiated<Config>) {
 		                self.onForward = onForward

@@ -196,7 +196,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct kiloBuilder_Values {
 		            public var service: Service { __safeDI_service.instance }
-		            let __safeDI_service: LazilyInstantiated<Service>
+		            public let __safeDI_service: LazilyInstantiated<Service>
 
 		            init(service: LazilyInstantiated<Service>) {
 		                __safeDI_service = service
@@ -206,7 +206,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		        nonisolated public struct echoBuilder_Values {
 		            public var service: Service { __safeDI_service.instance }
 		            public let kiloBuilder: Instantiator<Kilo>
-		            let __safeDI_service: LazilyInstantiated<Service>
+		            public let __safeDI_service: LazilyInstantiated<Service>
 
 		            init(service: LazilyInstantiated<Service>, kiloBuilder: Instantiator<Kilo>) {
 		                __safeDI_service = service
@@ -218,7 +218,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            public var service: Service { __safeDI_service.instance }
 		            public let kiloBuilder: Instantiator<Kilo>
 		            public let echoBuilder: Instantiator<Echo>
-		            let __safeDI_service: LazilyInstantiated<Service>
+		            public let __safeDI_service: LazilyInstantiated<Service>
 
 		            init(service: LazilyInstantiated<Service>, kiloBuilder: Instantiator<Kilo>, echoBuilder: Instantiator<Echo>) {
 		                __safeDI_service = service
@@ -232,7 +232,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            public let kiloBuilder: Instantiator<Kilo>
 		            public let echoBuilder: Instantiator<Echo>
 		            public let zuluBuilder: Instantiator<Zulu>
-		            let __safeDI_service: LazilyInstantiated<Service>
+		            public let __safeDI_service: LazilyInstantiated<Service>
 
 		            init(service: LazilyInstantiated<Service>, kiloBuilder: Instantiator<Kilo>, echoBuilder: Instantiator<Echo>, zuluBuilder: Instantiator<Zulu>) {
 		                __safeDI_service = service
