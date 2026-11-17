@@ -191,9 +191,8 @@ extension DependencyTreeGenerator {
 			}
 			return fillEdges
 		}, fulfillingCallsHoldPlaces: !bindsReceivesAgain)
-		// The type the builder of the hole type returns, as the first of its places spells it, which the struct of a fill's own
-		// level is over.
-		let builtTypeOfHoleType = holesBySite.values.filter { $0.holeType == holeType }.min { $0.site.sortKey < $1.site.sortKey }?.builtType ?? holeType.builtType
+		// The type the builder of the hole type returns, which the struct of a fill's own level is over.
+		let builtTypeOfHoleType = holesBySite.values.builtType(of: holeType)
 		let cycleParametersOfAnyBuild = Self.cycleParametersOfAnyBuild(inTreeRootedAt: generator)
 		let reboundPropertiesOfAnyBuild = Self.reboundPropertiesOfAnyBuild(inTreeRootedAt: generator)
 		let receivesBoundAgainOfAnyBuild = bindsReceivesAgain
