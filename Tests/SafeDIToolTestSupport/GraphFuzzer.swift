@@ -6264,7 +6264,10 @@ enum GraphFuzzerGenerator {
 				seamModuleDeclarations += [tag, screen]
 				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeScreenBuilder", type: "Instantiator<\(screen.name)>"))
 				// 0–5: read only if available; 6–9: required. Within each: lost, remedied by the seam's receive, or built by the
-				// seam.
+				// seam. The lost reads stay drawn in a graph with a hole, unlike the rolls the tool rejects by design that have a
+				// home outside hole graphs (`oneRouteVariant`, `declaresHole` in `addingReenteredFillShapes`): this draw is a
+				// hole's by construction and rejects only where the fill builds the seam again, so a hole graph is the only place
+				// the rejection can be drawn, at the cost of the few hole graphs that draw it.
 				let readsRequired = screenRoll >= 6
 				let variant = readsRequired ? [0, 0, 1, 2][screenRoll - 6] : [0, 0, 0, 1, 2, 2][screenRoll]
 				impl.properties.append(readsRequired
@@ -8219,7 +8222,8 @@ enum GraphFuzzerGenerator {
 		/// the place whose fill builds `ReenteredSubB` again carries it: rejected in both builds with `fieldOfReenteringPlace`,
 		/// also where `ReenteredHost` binds the label above its call of `ReenteredTop` (always, for a required read), and
 		/// accepted where `ReenteredSubB` receives it as the reader does, the error's remedy, or where `ReenteredSecondImpl`
-		/// declares it above the place.
+		/// declares it above the place. In a graph with a hole, the rolls that draw the two rejected reads of `reenteredTag`
+		/// draw the remedy instead, which keeps the hole graph the tool accepts.
 		///
 		/// `reenteredFillRandom` and `reenteredPlaceFieldRandom` draw only for this pass, which runs after `addingPassingUpCopyShapes` and only in a graph
 		/// another pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as
@@ -8258,6 +8262,11 @@ enum GraphFuzzerGenerator {
 			let placeFieldReadIsRequired = reenteredPlaceFieldRandom.percentChance(40)
 			let placeFieldVariantRoll = reenteredPlaceFieldRandom.integer(in: 0...9)
 			guard !modulesOmittingPackageName.contains(.seamModule) else { return declarations }
+			// A graph with a hole draws the remedied read where a roll draws one of the reads the tool rejects by design, which
+			// would throw away the hole graph the rest of the draw has it accept: here and for the sibling read only one route
+			// holds (`oneRouteVariant`). The rolls are made above, so every graph without a hole draws as before.
+			// `self.prefix`, since this function declares a `prefix` of its own below.
+			let declaresHole = declarations.contains { $0.name == "\(self.prefix)HoleSeam" }
 			/// How the read of `reenteredTag` is drawn: unremedied, which both builds reject; unremedied with `ReenteredHost`
 			/// binding the label above its call of `ReenteredTop`, a field of the label that lifts no rejection; remedied, the
 			/// seam built again receiving the label as the reader does, the error's remedy; or with `ReenteredSecondImpl`
@@ -8271,11 +8280,12 @@ enum GraphFuzzerGenerator {
 			// A required read needs a value on `ReenteredTop`'s own route too, which `ReenteredHost` binds above its call. The
 			// remedy takes the largest share, since the graph's other draws reject most graphs it lands in, and the corpus floors
 			// the graphs of it the tool accepts.
+			// In a graph with a hole, the remedy stands in for both rejected reads.
 			let placeFieldVariant: PlaceFieldVariant? = if !readsPlaceField {
 				nil
 			} else if placeFieldVariantRoll >= 7 {
 				.declaredInFill
-			} else if placeFieldVariantRoll >= (placeFieldReadIsRequired ? 3 : 4) {
+			} else if placeFieldVariantRoll >= (placeFieldReadIsRequired ? 3 : 4) || declaresHole {
 				.receivedBySeamBuiltAgain
 			} else if placeFieldReadIsRequired || placeFieldVariantRoll >= 2 {
 				.boundAboveCall
@@ -8291,8 +8301,6 @@ enum GraphFuzzerGenerator {
 			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
 			let prefix = prefix
 			// A graph with a hole draws the remedied read where the roll draws one of the two the tool rejects by design.
-			let holeSeamName = "\(prefix)HoleSeam"
-			let declaresHole = declarations.contains { $0.name == holeSeamName }
 			let oneRouteVariant = declaresHole && oneRouteVariantRoll < 2 ? oneRouteVariantRoll + 2 : oneRouteVariantRoll
 			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
 				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)

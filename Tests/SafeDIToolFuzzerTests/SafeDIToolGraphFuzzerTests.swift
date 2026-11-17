@@ -2801,19 +2801,25 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 	}
 
-	@Test(arguments: [UInt64(69), 80, 233])
+	@Test(arguments: [UInt64(80), 279, 306])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_rejectBothBuildsWithFieldOfReenteringPlace_whenCallerFillsPlaceInsideFillBuiltAgainUnremedied(seed: UInt64) async throws {
 		// `ReenteredSubA` binds `reenteredTag` before `reenteredFirst`, whose fill `ReenteredFirstImpl` builds `ReenteredSubB`
-		// again, and `ReenteredGadgetImpl`, which fills from the roots' module a place inside the fill of `reenteredSecond`
-		// that `ReenteredHost` passes up, reads it, so only the place whose fill builds the seam again carries it: only if
-		// available in seed 233, also beside `ReenteredHost`'s binding of the label above its call of `ReenteredTop` in seed
-		// 69, and required in seed 80. The build that fills the place from the roots' module, which reads what
-		// `ReenteredHost`'s module records on the place, and the visible build, which fills it in the seam's module, both
-		// reject the read with `fieldOfReenteringPlace`, in the same words.
+		// again – in seed 279 through `ReenteredRelay`, a seam that builds `ReenteredSubB` and passes its place up – and
+		// `ReenteredGadgetImpl`, which fills from the roots' module a place inside the fill of `reenteredSecond` that
+		// `ReenteredHost` passes up, reads it, so only the place whose fill builds the seam again carries it: only if available
+		// in seed 279, also beside `ReenteredHost`'s binding of the label above its call of `ReenteredTop` in seed 306, and
+		// required in seed 80. None declares `HoleSeam`, whose graphs draw the remedy in place of these reads. The build that
+		// fills the place from the roots' module, which reads what `ReenteredHost`'s module records on the place, and the
+		// visible build, which fills it in the seam's module, both reject the read with `fieldOfReenteringPlace`, in the same
+		// words, naming the call as written and offering the receive on `ReenteredSubB`, the seam built again: a receive on
+		// `ReenteredRelay` would not reach the place it passes up.
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
 		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
 		#expect(!drawFeatures.isDisjoint(with: [.reenteredFillReadsPlaceField, .reenteredFillReadsPlaceFieldBoundAboveCall, .reenteredFillRequiresPlaceField]))
+		#expect(!drawFeatures.contains(.hole))
+		let callsThroughRelay = drawFeatures.contains(.reenteredFillCallThroughSeamPassingPlaceUp)
+		#expect(callsThroughRelay == (seed == 279))
 		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
 		let prefix = fixture.typeNamePrefix
 		// Each error about the reader's receive of `reenteredTag`, without its location: the reader's file is in another
@@ -2824,16 +2830,49 @@ struct SafeDIToolGraphFuzzerTests {
 				return String(line[range.upperBound...])
 			}
 		}
+		let call = callsThroughRelay
+			? "that builder’s fill instantiates `\(prefix)ReenteredRelay` (`"
+			: "that builder’s fill instantiates `\(prefix)ReenteredSubB` again (`"
 		var findingsByBuild = [String: [String]]()
 		for (build, outcome) in [("hole", Optional(runs.firstOutcome)), ("visible", runs.visibleOutcome)] {
 			guard case let .rejected(diagnostics)? = outcome else {
 				Issue.record("Seed \(seed)’s \(build) build is not rejected")
 				continue
 			}
-			findingsByBuild[build] = findings(in: diagnostics)
-			#expect(findingsByBuild[build]?.contains { $0.contains("carries from `\(prefix)ReenteredSubA`, and that builder’s fill instantiates `\(prefix)ReenteredSubB` again") } == true, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
+			let buildFindings = findings(in: diagnostics)
+			findingsByBuild[build] = buildFindings
+			#expect(buildFindings.contains { $0.contains("carries from `\(prefix)ReenteredSubA`, and \(call)") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
+			#expect(buildFindings.contains { $0.contains("inside that `\(prefix)ReenteredSubB`, but") && $0.contains("` on `\(prefix)ReenteredSubB`, so the builder’s scope carries it") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
+			#expect(!buildFindings.contains { $0.contains("` on `\(prefix)ReenteredRelay`") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
 		}
 		#expect(findingsByBuild["hole"] == findingsByBuild["visible"])
+	}
+
+	@Test(arguments: [UInt64(59)])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_acceptBothBuildsWithVisibleBuildsValues_whenSeamBuiltAgainReceivesLabelOnlyTheReenteringPlaceCarries(seed: UInt64) async throws {
+		// The remedy `fieldOfReenteringPlace` offers, applied as the draw applies it: `ReenteredSubB`, the seam built again,
+		// receives `reenteredTag` as `ReenteredGadgetImpl` does. Seed 59's fill calls `ReenteredRelay`, which builds
+		// `ReenteredSubB` and passes its place up, so the receive goes on another seam than the one the call names. Both
+		// builds accept the graph, and every oracle passes, the comparison of the hole build's values with the visible
+		// build's included.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
+		#expect(drawFeatures.isSuperset(of: [.reenteredFillReadsPlaceFieldRemedied, .reenteredFillCallThroughSeamPassingPlaceUp]))
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
+		for (build, outcome) in [("hole", Optional(runs.firstOutcome)), ("visible", runs.visibleOutcome)] {
+			switch outcome {
+			case .accepted?:
+				break
+			case let .rejected(diagnostics)?:
+				Issue.record("Seed \(seed)’s \(build) build is rejected:\n\(diagnostics)")
+			case nil:
+				Issue.record("Seed \(seed) has no \(build) build")
+			}
+		}
+		let results = try await GraphFuzzerOracle.results(of: [runs])
+		#expect(results.map { $0.failure.map { "\($0.kind): \($0.details)" } } == [nil])
+		#expect(results.flatMap { $0.laterFailures.map { "\($0.kind): \($0.details)" } } == [])
 	}
 
 	@Test
