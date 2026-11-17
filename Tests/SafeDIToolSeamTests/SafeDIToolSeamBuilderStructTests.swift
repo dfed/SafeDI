@@ -24,12 +24,11 @@ import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
-/// A seam whose places forward no value and hold no seam's scope takes a builder struct for each hole type, one stored
-/// function per member, which its initializer only generated code calls calls where the seam binds each level, so what a
+/// A seam takes a builder struct for each hole type, one stored function per member, which its initializer only
+/// generated code calls calls where the seam binds each level, so what a
 /// level's member returns captures only what the calling module reads from it. Its readable initializer takes a closure
 /// that takes nothing. The module that calls the seam writes one function per level, each returning that level's struct;
-/// a seam that still takes a closure over its enum, and calls such a seam, hands it a struct whose members build the case
-/// its own closure takes.
+/// a seam that passes up another seam's places takes a struct whose member for that seam returns that seam's struct.
 struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 	// MARK: Initialization
 
@@ -510,11 +509,10 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsCalledSeamStructBuildingKeptSeamsCase_whenKeptSeamPassesUpSwitchedSeamsPlace() async throws {
-		// `Innermost`'s place forwards nothing, so it takes a builder struct; `Inner` passes it up and keeps its closure over
-		// its enum, whose case holds `Innermost`'s. `Inner` hands `Innermost` a struct whose member for the place calls its
-		// own builder with the case rebuilt from the values each member was handed. While only a `Detail` lives, `Inner` and
-		// its `Navigator` are freed and `Innermost`'s `Logger` is not, as with the closure over `Innermost`'s enum.
+	mutating func generate_handsCalledSeamMemberOfOuterSeamsStruct_whenOuterSeamPassesUpSwitchedSeamsPlace() async throws {
+		// `Innermost`'s place forwards nothing, so it takes a builder struct; `Inner` passes it up and takes a struct whose
+		// member for `Innermost` returns `Innermost`'s, which `Inner` hands `Innermost`. While only a `Detail` lives, `Inner`
+		// and its `Navigator` are freed and `Innermost`'s `Logger` is not.
 		let modules = Self.fixtures["deep"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
@@ -657,11 +655,11 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_convertsThroughOneFunctionPerFirstOpening_whenKeptSeamPassesUpSwitchedSeamWhoseLevelsLoop() async throws {
-		// `Hub`'s `T` and `C` each build the other. `Shell` passes `Hub`'s place up and keeps its closure over its enum: one
-		// function per level each route first opens, and a member that opens a level again calls that level's function with
-		// what wrapped the case where the route first opened it. Holding only a `C` two levels deep, then only a `T` five
-		// levels deep, keeps alive the `Mark`s and `MarkReader`s the closure over `Hub`'s enum keeps alive.
+	mutating func generate_buildsEachLevelsStructInOneFunction_whenOuterSeamPassesUpSwitchedSeamWhoseLevelsLoop() async throws {
+		// `Hub`'s `T` and `C` each build the other. `Shell` passes `Hub`'s place up and takes a struct whose member returns
+		// `Hub`'s: `Root` builds each level's struct in one function, and a member that opens a level again calls that level's
+		// function. Holding only a `C` two levels deep keeps alive one `Mark` and no `MarkReader`, and holding only a `T`
+		// five levels deep keeps alive one of each.
 		let modules = Self.fixtures["tangle"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
@@ -897,11 +895,11 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsCallersDispatcherTheRebuiltCase_whenKeptSeamsCaseCarriesSwitchedSeamsScope() async throws {
+	mutating func generate_handsCalledSeamStructOverCallersStruct_whenOuterSeamsCaseCarriesSwitchedSeamsScope() async throws {
 		// `Outer` fills `Inner`'s `service` with a type that holds `Outer`'s own place, so `Outer`'s case carries the scope
-		// `Inner` hands the fill, and its dispatchers keep their switch over `Inner`'s enum: `Inner` is handed a struct whose
-		// members hand them the case. A screen keeps alive only its own service's gadget, as with the closure over `Inner`'s
-		// enum.
+		// `Inner` hands the fill: `Root` builds `Inner`'s struct over `Outer`'s level struct, and `Outer`'s dispatchers take it
+		// and hand `Inner` a struct whose members call it and build the fill from what it returns. A screen keeps alive only
+		// its own service's gadget.
 		let modules = Self.fixtures["insideFill"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
@@ -1872,13 +1870,12 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsKeptSeamTheDispatchersOverTheEnum_whenFillOfSwitchedSeamCallsKeptSeamThatPassesItsPlaceUp() async throws {
+	mutating func generate_reusesRootsLevelFunctionInOuterSeamsStruct_whenFillOfSwitchedSeamCallsOuterSeamThatPassesItsPlaceUp() async throws {
 		// `HoleImpl` fills `HoleSeam`'s place beneath `HoleOwner`, reading `holeAnalytics`, which `HoleOwner`'s level carries,
-		// and builds `HoleRelay`, which keeps its closure over its enum, whose case carries `HoleSeam`'s, since `HoleRelay`
-		// builds `HoleSeam` and passes its place up. `HoleRelay`'s dispatcher reuses `Root`'s over `HoleSeam`'s enum, which
-		// hand the fill `holeAnalytics` from the case that carries it, so `Root` keeps them over the enum and hands `HoleSeam`
-		// their conversion to its builder struct.
-		let modules = Self.fixtures["reentryThroughKeptSeam"] ?? []
+		// and builds `HoleRelay`, which builds `HoleSeam` and passes its place up. The member of `HoleRelay`'s struct for
+		// `HoleSeam` calls the function `Root` builds `HoleSeam`'s struct with, whose level function hands the fill
+		// `holeAnalytics` from the values of `HoleOwner`'s level.
+		let modules = Self.fixtures["reentryThroughOuterSeam"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension HoleRelay {
@@ -2023,10 +2020,10 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesNestedMembersValuesApart_whenKeptSeamPassesUpPlaceBeneathRepeatedLabel() async throws {
-		// `Innermost` builds `X` and `X` builds `Y` under one label, `child`, and the fill reads a value each level binds. The
-		// member `Inner` hands `X`'s level is a closure inside the one it hands `Innermost`'s, so it names its values apart,
-		// and the rebuilt case hands each level its own.
+	mutating func generate_buildsEachLevelsStructInItsOwnFunction_whenOuterSeamPassesUpPlaceBeneathRepeatedLabel() async throws {
+		// `Innermost` builds `X` and `X` builds `Y` under one label, `child`, and the fill reads a value each level binds.
+		// `Root` builds each level's struct in a function of its own, which its parent level's member calls with the values
+		// that level binds, so each level is handed its own.
 		let modules = Self.fixtures["repeatedLabel"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
@@ -2181,7 +2178,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_spellsMembersValuesAsRawIdentifier_whenKeptSeamPassesUpPlaceLabelledWithRawIdentifier() async throws {
+	mutating func generate_spellsMembersValuesAsRawIdentifier_whenOuterSeamPassesUpPlaceLabelledWithRawIdentifier() async throws {
 		// `Innermost`'s place is `` `my leaf` ``, so the values its member is handed are named by a raw identifier, which needs
 		// backticks.
 		let modules = Self.fixtures["rawLabel"] ?? []
@@ -2286,8 +2283,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_spellsMembersValuesAsRawIdentifier_whenKeptSeamConvertsLoopWhosePlaceIsLabelledWithRawIdentifier() async throws {
-		// The tangle, whose `T` holds its place under `` `my leaf` ``: each conversion function's member for the place names
+	mutating func generate_spellsMembersValuesAsRawIdentifier_whenOuterSeamPassesUpLoopWhosePlaceIsLabelledWithRawIdentifier() async throws {
+		// The tangle, whose `T` holds its place under `` `my leaf` ``: the place's member, and the values it is handed, are named
 		// the values it is handed by a raw identifier.
 		let modules = Self.fixtures["tangleRawLabel"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
@@ -2506,8 +2503,8 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_spellsConversionsFunctionsAndWrapsAsRawIdentifiers_whenKeptSeamConvertsLoopOfSeamNamedByRawIdentifier() async throws {
-		// The tangle, whose seam is `` `My Hub` ``: each conversion function, and the wrap it takes, is named after the seam, so
+	mutating func generate_spellsLevelFunctionsAsRawIdentifiers_whenOuterSeamPassesUpLoopOfSeamNamedByRawIdentifier() async throws {
+		// The tangle, whose seam is `` `My Hub` ``: each function `Root` builds a level's struct with is named after the seam, so
 		// both names are raw identifiers, which need backticks around the whole name.
 		let modules = Self.fixtures["tangleRawStem"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
@@ -3194,7 +3191,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 			feature: markFeature,
 			app: [fulfillingType(named: "Live", fulfilling: "Api", declarations: ["@Received public let cache: Cache", "@Received(onlyIfAvailable: true) public let mark: Mark?"]), seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let home: Home"])],
 		),
-		"reentryThroughKeptSeam": featureAndApp(
+		"reentryThroughOuterSeam": featureAndApp(
 			feature: [
 				"public protocol HoleService {}",
 				seamFixtureType(named: "HoleAnalytics", isFinalClass: true, declarations: []),
