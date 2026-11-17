@@ -455,7 +455,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func drawnValueProbes_describeKnownRight_inFirstGraphOfEachProbedCell() async throws {
 		let seeds = GraphFuzzerCallingMockCell.firstSeeds.filter { GraphFuzzerCallingMockDraw(seed: $0).valueProbes != nil }
-		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293])
+		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453])
 		for seed in seeds {
 			var filesToDelete = [URL]()
 			defer {
@@ -1020,7 +1020,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			for passUp in result.passUps {
 				passUpCountsByReason[passUp.reason?.rawValue ?? "unclassified", default: 0] += 1
 			}
-			if draw.cell.shape.isControl {
+			if draw.cell.shape.passesUpExactlyTheExpectedLabels {
 				#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels, "seed \(seed) (\(draw.cell))")
 			}
 			switch (result.failure, knownIssue) {
@@ -1043,6 +1043,45 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		print("calling-mock pass-ups \(GraphFuzzerCallingMockPassUpReason.allCases.map { "\($0.rawValue)=\(passUpCountsByReason[$0.rawValue, default: 0])" }.joined(separator: " ")) unclassified=\(passUpCountsByReason["unclassified", default: 0]) values-compared=\(comparedGraphCount)")
 
 		#expect(GraphFuzzerCallingMockCell.drawnCells.filter { intendedGraphsByCell[$0, default: 0] < 10 } == [])
+	}
+
+	/// Seed 450 draws the first graph of `fillInstantiatesWhatNothingFulfills/internal/plain`, the first of its block: an
+	/// internal calling mock whose fill's implementation instantiates what nothing in its module fulfills. It takes the
+	/// twin's builders and fills the place, where it passed the place up before (`DependencyTreeGenerator.holesFilled`),
+	/// which the check reports as an unclassified pass-up.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_takesTwinsBuilders_whenDrawnFillInstantiatesWhatNothingFulfills() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 450)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 450)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillInstantiatesWhatNothingFulfills, caller: .internal, place: .plain))
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels)
+		#expect(!draw.expectedPassUpLabels.isEmpty)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// The graphs of the shape whose fill instantiates what nothing fulfills draw each of its variations (`FillHoles`) in
+	/// the pinned number of graphs, each value in at least ten, so that the cell test, which requires every graph's mock to
+	/// take its twin's builders, judges each.
+	@Test
+	func fillInstantiatesWhatNothingFulfillsDraw_drawsEachVariation_inPinnedNumberOfGraphs() {
+		let fillHoles = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).compactMap { GraphFuzzerCallingMockDraw(seed: $0).fillHoles }
+		let counts = [
+			"graphs": fillHoles.count,
+			"fulfillerIsSeam": fillHoles.count(where: \.fulfillerIsSeam),
+			"calledTypeIsSeam": fillHoles.count(where: \.calledTypeIsSeam),
+			"depthTwo": fillHoles.count { $0.depth == 2 },
+			"insideSendableFunction": fillHoles.count(where: \.isInsideSendableFunction),
+			"erasedInstantiator": fillHoles.count(where: \.isErasedInstantiator),
+			"twoPlaces": fillHoles.count { $0.placeCount == 2 },
+			"twoHoleTypes": fillHoles.count { $0.holeTypeCount == 2 },
+		]
+		print("calling-mock fill holes \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+		#expect(counts == ["graphs": 40, "fulfillerIsSeam": 20, "calledTypeIsSeam": 25, "depthTwo": 22, "insideSendableFunction": 11, "erasedInstantiator": 17, "twoPlaces": 17, "twoHoleTypes": 21])
 	}
 
 	/// The plain app-only screen cells draw the canonical loop: the seam's settings builder forwards nothing, so the twin
@@ -1099,7 +1138,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 45)
+		#expect(GraphFuzzerCallingMockCell.all.count == 49)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
 		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)
