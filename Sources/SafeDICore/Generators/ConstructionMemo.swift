@@ -53,7 +53,7 @@ struct ConstructionMemo {
 
 	/// How `DependencyTreeGenerator` shares the memo between the mock roots it creates. Production trees always keep a
 	/// memo per tree.
-	@TaskLocal static var sharingBetweenMockRoots = Sharing.perTree
+	@TaskLocal static var sharingBetweenMockRoots = Sharing.acrossTrees
 
 	init(sharing: Sharing = .perTree) {
 		self.sharing = sharing
