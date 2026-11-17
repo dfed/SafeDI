@@ -762,11 +762,6 @@ private struct ScopeGeneratorUnderConstruction {
 		var fillsOfThisCall = [(fill: Fill, scope: Scope)]()
 		var dispatchersOfThisCall = [ScopeGenerator.FillDispatcher]()
 		var namesOfThisCall = GeneratedNameAllocator(reserving: [])
-		let builderKeysDispatchedOverTheEnum: Set<SeamSignature.ScopeEnum.Key> = if let calledBuilders = scope.calledBuilders {
-			ScopeGeneratorUnderConstruction.builderKeysHandedInEnumForm(byCallsInside: holeArguments, calling: calledBuilders)
-		} else {
-			[]
-		}
 		if !holeArguments.isEmpty {
 			let callPath = self.sitePath
 			// The names are asked of each set in turn, never of their union: a union made for every call holds every name the
@@ -853,7 +848,6 @@ private struct ScopeGeneratorUnderConstruction {
 					filledSites: Self.filledSites(of: holeArguments),
 					sitesPassedUpOnSomeRoute: scope.publicMockCall?.sitesPassedUpOnSomeRoute ?? [],
 					enclosingDispatchers: enclosingFills,
-					builderKeysDispatchedOverTheEnum: builderKeysDispatchedOverTheEnum,
 					fillNames: fillNames,
 					names: &names,
 					innerScopeNameByKey: Dictionary(calledBuilders.scopeEnums.compactMap { scopeEnum in
@@ -879,7 +873,6 @@ private struct ScopeGeneratorUnderConstruction {
 		self.fillsOfThisCall = fillsOfThisCall
 		self.dispatchersOfThisCall = dispatchersOfThisCall
 		self.namesOfThisCall = namesOfThisCall
-		self.builderKeysDispatchedOverTheEnum = builderKeysDispatchedOverTheEnum
 		// Gathered once for the call, not once for each of its fills, each of which is handed all of them: gathered for each
 		// fill, a call's fills grew with the square of the places of the seam it calls.
 		var enclosingFillsOfThisCall = enclosingFills
@@ -906,45 +899,6 @@ private struct ScopeGeneratorUnderConstruction {
 			GenerationWork.record(enclosingFillsOfThisCall.count, by: .gatheringFillsOfACall)
 		}
 		childGenerators.reserveCapacity(propertiesToGenerate.count + fillsOfThisCall.count)
-	}
-
-	/// The enum keys of `calledBuilders`' builders that take a builder struct, of each hole type a call inside the trees of
-	/// `holeArguments`' fills reaches the called seam's enum of through a builder that takes a closure over its own enum: a
-	/// seam that passes up the called seam's place, whose case carries the called seam's enum. That call reuses this call's
-	/// dispatchers over the enum, which hand a fill what a case on the way carries, as a builder struct's level hands it;
-	/// a dispatcher of its own could not, since the fill is this call's. So this call keeps them over the enum, and hands
-	/// the called seam the struct of their conversion.
-	private static func builderKeysHandedInEnumForm(byCallsInside holeArguments: [Scope.HoleArgument], calling calledBuilders: CalledBuilders) -> Set<SeamSignature.ScopeEnum.Key> {
-		let structKeys = calledBuilders.builders.filter(\.takesBuilderStruct).map(\.enumKey)
-		guard !structKeys.isEmpty else { return [] }
-		var keys = Set<SeamSignature.ScopeEnum.Key>()
-		var visited = Set<ObjectIdentifier>()
-		var scopesToVisit = holeArguments.compactMap { argument -> Scope? in
-			guard case let .fill(_, scope) = argument else { return nil }
-			return scope
-		}
-		while let scope = scopesToVisit.popLast() {
-			guard visited.insert(ObjectIdentifier(scope)).inserted else { continue }
-			if let innerBuilders = scope.calledBuilders {
-				let innerEnumsByKey = innerBuilders.enumsByKey
-				var reachedKeys = Set<SeamSignature.ScopeEnum.Key>()
-				var keysToVisit = innerBuilders.builders.filter { !$0.takesBuilderStruct }.map(\.enumKey)
-				while let key = keysToVisit.popLast() {
-					guard reachedKeys.insert(key).inserted else { continue }
-					keysToVisit += innerEnumsByKey[key]?.cases.compactMap(SeamSignature.ScopeEnum.heldKey(of:)) ?? []
-				}
-				for key in structKeys where reachedKeys.contains(where: { $0.seamType == key.seamType && $0.holeType == key.holeType }) {
-					keys.insert(key)
-				}
-				for case let .fill(_, fillScope) in scope.holeArguments {
-					scopesToVisit.append(fillScope)
-				}
-			}
-			for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
-				scopesToVisit.append(childScope)
-			}
-		}
-		return keys
 	}
 
 	/// A fill of a seam call: the hole it fills, its key (see `ScopeGenerator.fillKey(of:)`), and its function's name.
@@ -1387,8 +1341,7 @@ private struct ScopeGeneratorUnderConstruction {
 			let returnsBuilderStruct = builder.takesBuilderStruct && !calledBuilders.builders.contains { calledBuilder in
 				calledBuilder.enumKey.holeType == enumKey.holeType
 					&& ((seamHoles.innerScope(at: sitePath, innerKey: calledBuilder.enumKey) != nil && !seamHoles.carriesStruct(at: sitePath, innerKey: calledBuilder.enumKey))
-						|| enclosingFills[ScopeGenerator.FillDispatcher.key(of: calledBuilder.enumKey)] != nil
-						|| builderKeysDispatchedOverTheEnum.contains(calledBuilder.enumKey))
+						|| enclosingFills[ScopeGenerator.FillDispatcher.key(of: calledBuilder.enumKey)] != nil)
 			}
 			let dispatcherKey = ScopeGenerator.FillDispatcher.key(of: enumKey, returnsBuilderStruct: returnsBuilderStruct)
 			let dispatcher = fillNames[dispatcherKey] ?? ""
@@ -1623,9 +1576,6 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The fills of `holeArguments` this scope's generator holds – those no enclosing call already fills – each with the
 	/// scope of the type that fulfills its hole.
 	private let fillsOfThisCall: [(fill: Fill, scope: Scope)]
-	/// The enum keys of the called seam's builders that take a builder struct whose dispatchers this call keeps over the
-	/// enum, for a call inside its fills that reuses them (`builderKeysHandedInEnumForm(byCallsInside:calling:)`).
-	private let builderKeysDispatchedOverTheEnum: Set<SeamSignature.ScopeEnum.Key>
 	/// The dispatchers this scope's seam call declares – those no enclosing call declares – in the order the call's arguments
 	/// first reach them.
 	private let dispatchersOfThisCall: [ScopeGenerator.FillDispatcher]
