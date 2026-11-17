@@ -5787,7 +5787,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            package let session: Session
 		            public let badge: Badge
 		            public let banner: Banner
-		            let __safeDI_theme: LazilyInstantiated<Theme?>
+		            package let __safeDI_theme: LazilyInstantiated<Theme?>
 
 		            init(theme: LazilyInstantiated<Theme?>, session: Session, badge: Badge, banner: Banner) {
 		                __safeDI_theme = theme

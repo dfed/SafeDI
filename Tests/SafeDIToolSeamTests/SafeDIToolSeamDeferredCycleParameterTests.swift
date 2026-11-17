@@ -155,7 +155,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    nonisolated public enum SafeDIScope_Api {
 			        nonisolated public struct aBuilder_Values {
 			            public var tag: Tag { __safeDI_tag.instance }
-			            let __safeDI_tag: LazilyInstantiated<Tag>
+			            public let __safeDI_tag: LazilyInstantiated<Tag>
 
 			            init(tag: LazilyInstantiated<Tag>) {
 			                __safeDI_tag = tag
@@ -272,7 +272,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    nonisolated public enum SafeDIScope_Api {
 			        nonisolated public struct aBuilder_Values {
 			            public var tag: Tag? { __safeDI_tag.instance }
-			            let __safeDI_tag: LazilyInstantiated<Tag?>
+			            public let __safeDI_tag: LazilyInstantiated<Tag?>
 
 			            init(tag: LazilyInstantiated<Tag?>) {
 			                __safeDI_tag = tag
@@ -388,7 +388,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct a_Values {
 		            public var tag: Tag { __safeDI_tag.instance }
-		            let __safeDI_tag: LazilyInstantiated<Tag>
+		            public let __safeDI_tag: LazilyInstantiated<Tag>
 
 		            init(tag: LazilyInstantiated<Tag>) {
 		                __safeDI_tag = tag
@@ -619,7 +619,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    nonisolated public enum SafeDIScope_Api {
 			        nonisolated public struct aBuilder_Values {
 			            public var tag: Tag { __safeDI_tag.instance }
-			            let __safeDI_tag: LazilyInstantiated<Tag>
+			            public let __safeDI_tag: LazilyInstantiated<Tag>
 
 			            init(tag: LazilyInstantiated<Tag>) {
 			                __safeDI_tag = tag
@@ -868,7 +868,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    nonisolated public enum SafeDIScope_Api {
 			        nonisolated public struct aBuilder_Values {
 			            public var tag: Tag { __safeDI_tag.instance }
-			            let __safeDI_tag: LazilyInstantiated<Tag>
+			            public let __safeDI_tag: LazilyInstantiated<Tag>
 
 			            init(tag: LazilyInstantiated<Tag>) {
 			                __safeDI_tag = tag
@@ -1067,7 +1067,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    nonisolated public enum SafeDIScope_Api {
 			        nonisolated public struct aBuilder_Values {
 			            package var tag: Tag { __safeDI_tag.instance }
-			            let __safeDI_tag: LazilyInstantiated<Tag>
+			            package let __safeDI_tag: LazilyInstantiated<Tag>
 
 			            init(tag: LazilyInstantiated<Tag>) {
 			                __safeDI_tag = tag
@@ -1249,7 +1249,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct aBuilder_Values {
 		            public var tag: Tag { __safeDI_tag.instance }
-		            let __safeDI_tag: LazilyInstantiated<Tag>
+		            public let __safeDI_tag: LazilyInstantiated<Tag>
 
 		            init(tag: LazilyInstantiated<Tag>) {
 		                __safeDI_tag = tag
