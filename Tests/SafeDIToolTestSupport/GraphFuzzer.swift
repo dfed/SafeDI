@@ -1740,6 +1740,9 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case reenteredFillCallBeneathFilledType
 	/// The call is made through a `SendableInstantiator`, which builds the called seam in a `@Sendable` function.
 	case reenteredFillSendableCall
+	/// The call is of `ReenteredRelay`, a seam that calls `ReenteredSubB` and passes its place up: the level function the call
+	/// declares hands the reused one the struct of its level, which the generator once left out.
+	case reenteredFillCallThroughSeamPassingPlaceUp
 
 	/// Whether `addingCycleParameterShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
 	/// (`acceptedDrawFeatureCounts`).
@@ -7939,8 +7942,10 @@ enum GraphFuzzerGenerator {
 		/// `ReenteredHost` binds the label above its call of `ReenteredTop`, and accepted where `ReenteredSubB`, the seam built
 		/// again, receives it only if available, the error's remedy; `ReenteredFirstImpl` holds a place of `ReenteredGadget` of its own; `ReenteredSecondImpl`
 		/// calls `ReenteredSubB` again through an instantiator, re-entering the fill that encloses it; the call is made
-		/// beneath `ReenteredFirstImpl`, by `ReenteredMid`; and the call is made through an instantiator, a `Sendable` one as
-		/// the graph's sendability allows, which builds the called seam in a `@Sendable` function.
+		/// beneath `ReenteredFirstImpl`, by `ReenteredMid`; the call is made through an instantiator, a `Sendable` one as
+		/// the graph's sendability allows, which builds the called seam in a `@Sendable` function; and the call is of
+		/// `ReenteredRelay`, a seam that calls `ReenteredSubB` and passes its place up, so the level function the call declares
+		/// leads to the reused one, which the generator once called without the struct it takes.
 		///
 		/// `reenteredFillRandom` draws only for this pass, which runs after `addingPassingUpCopyShapes` and only in a graph
 		/// another pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as
@@ -7960,6 +7965,9 @@ enum GraphFuzzerGenerator {
 			// binding the label above its call of `ReenteredTop` too (1), or remedied, `ReenteredSubB` receiving it only if
 			// available (2 and 3).
 			let oneRouteVariantRoll = reenteredFillRandom.integer(in: 0...3)
+			// Whether the call is of `ReenteredRelay`, a seam that calls `ReenteredSubB` and passes its place up, rather than of
+			// `ReenteredSubB` itself. Drawn after every other roll, so each draws as before.
+			let callThroughRelay = reenteredFillRandom.percentChance(35)
 			guard !modulesOmittingPackageName.contains(.seamModule) else { return declarations }
 			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
 			let callInstantiator = switch sendability {
@@ -8004,11 +8012,19 @@ enum GraphFuzzerGenerator {
 				PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubB", type: subB.name),
 			])
 			top.additionalDeclarations.append("public protocol \(firstName)\(sendableSuffix) {}\npublic protocol \(secondName)\(sendableSuffix) {}")
+			// The seam the call builds: `ReenteredSubB`, or `ReenteredRelay`, which calls it and passes its place up, so the level
+			// function the call declares leads to the enclosing call's, which it reuses.
+			let relay = seam("ReenteredRelay", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubB", type: subB.name)])
+			let calledSeam = callThroughRelay ? relay : subB
+			let calledLabel = callThroughRelay ? "reenteredRelay" : "reenteredSubB"
 			let call = callThroughInstantiator
-				? PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubBBuilder", type: "\(callInstantiator)<\(subB.name)>")
-				: PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubB", type: subB.name)
+				? PropertyDeclaration(attribute: "@Instantiated", label: "\(calledLabel)Builder", type: "\(callInstantiator)<\(calledSeam.name)>")
+				: PropertyDeclaration(attribute: "@Instantiated", label: calledLabel, type: calledSeam.name)
 			let gadgetPlace = PropertyDeclaration(attribute: "@Instantiated", label: "reenteredGadget", type: "any \(gadgetName)")
 			var added = [label, subA, subB, top, mark]
+			if callThroughRelay {
+				added.append(relay)
+			}
 			var firstProperties = [PropertyDeclaration]()
 			if readsOnlyIfAvailable {
 				firstProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "reenteredMark", type: mark.name))
@@ -9625,8 +9641,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			if propertiesByType[prefix + "ReenteredMid"] != nil {
 				features.insert(.reenteredFillCallBeneathFilledType)
 			}
-			if callerProperties.contains(where: { $0.label == "reenteredSubBBuilder" && $0.type.hasPrefix("SendableInstantiator<") }) {
+			if callerProperties.contains(where: { ["reenteredSubBBuilder", "reenteredRelayBuilder"].contains($0.label) && $0.type.hasPrefix("SendableInstantiator<") }) {
 				features.insert(.reenteredFillSendableCall)
+			}
+			if propertiesByType[prefix + "ReenteredRelay"] != nil {
+				features.insert(.reenteredFillCallThroughSeamPassingPlaceUp)
 			}
 		}
 		return features

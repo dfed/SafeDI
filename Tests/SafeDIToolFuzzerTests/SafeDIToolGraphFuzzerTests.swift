@@ -6855,6 +6855,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.reenteredFillReentersEnclosingFill: 114,
 		.reenteredFillCallBeneathFilledType: 117,
 		.reenteredFillSendableCall: 59,
+		.reenteredFillCallThroughSeamPassingPlaceUp: 142,
 		.holePassedUpPlaceReadsPassingSeamsValue: 59,
 		.holePassedUpPlaceReadsValueTwoSeamsUp: 53,
 		.holePassedUpPlaceReadsLazyValue: 63,
