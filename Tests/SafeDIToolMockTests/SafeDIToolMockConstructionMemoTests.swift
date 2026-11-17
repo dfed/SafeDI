@@ -144,6 +144,19 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 		try await expectSameMocksInEverySetting(of: fixture)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_generatesSameMockWithMemoAsWithout_whenPublicMockReachesTypeWithHoleByTwoPathsAndMockConditionIsOff() async throws {
+		// As above, compiled without `DEBUG`, the module's mock condition, so the generated mocks are compiled out.
+		let fixture = [
+			"public protocol Api {}",
+			seamFixtureType(named: "S", declarations: ["@Instantiated public let api: any Api"]),
+			seamFixtureType(named: "X", declarations: ["@Instantiated public let s: S"]),
+			Self.publicMockedType(named: "P", declarations: ["@Instantiated public let s: S", "@Instantiated public let x: X"]),
+		]
+		try await expectSameMocksInEverySetting(of: fixture, verificationCompilationConditions: [])
+	}
+
 	// MARK: Private
 
 	/// How the module's mock roots share the construction memo.
@@ -168,11 +181,11 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 
 	/// Expects `fixture`'s mocks to be the same in every `MemoSetting`.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func expectSameMocksInEverySetting(of fixture: [String]) async throws {
+	private mutating func expectSameMocksInEverySetting(of fixture: [String], verificationCompilationConditions: [String]? = nil) async throws {
 		var mocksBySetting = [[String: String]]()
 		for setting in MemoSetting.allCases {
 			let output = try await setting.run { [fixture] in
-				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, verificationCompilationConditions: verificationCompilationConditions)
 			}
 			mocksBySetting.append(output.mockFiles)
 		}
