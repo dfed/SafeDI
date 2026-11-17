@@ -89,7 +89,7 @@ struct ConstructionMemo {
 
 	/// What a place is built from besides the context it reads: compared whole.
 	struct Key: Hashable {
-		/// The scope the place builds.
+		/// The scope the place builds, by its `ConstructionScopeIdentity`.
 		let scope: ObjectIdentifier
 		let property: Property
 		let erasedToConcreteExistential: Bool
@@ -193,7 +193,7 @@ struct ConstructionMemo {
 	}
 
 	/// Stores `entry` under `key`, keeping `scope`, the scope the key names, alive as long as the memo.
-	mutating func store(_ entry: Entry, for key: Key, keepingAlive scope: Scope) {
+	mutating func store(_ entry: Entry, for key: Key, keepingAlive scope: ConstructionScopeIdentity) {
 		entriesByKey[key, default: []].append(entry)
 		let generator = ObjectIdentifier(entry.generator)
 		if entriesByGenerator[generator] == nil {
@@ -205,8 +205,8 @@ struct ConstructionMemo {
 	private var entriesByKey = [Key: [Entry]]()
 	/// Each stored generator with the key and entry it was first stored under.
 	private var entriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
-	/// The scopes `entriesByKey`'s keys name by identity, kept so that no other scope can take one's address.
-	private var keyedScopes = [Scope]()
+	/// The scope identities `entriesByKey`'s keys name, kept so that no other identity can take one's address.
+	private var keyedScopes = [ConstructionScopeIdentity]()
 
 	/// The memo the memo oracle's build with the memo shares across the trees created with this memo
 	/// (`ConstructionMemoOracle`).
@@ -227,7 +227,7 @@ struct ConstructionMemo {
 
 	private var oracleEntriesByKey = [Key: [Entry]]()
 	private var oracleEntriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
-	private var oracleKeyedScopes = [Scope]()
+	private var oracleKeyedScopes = [ConstructionScopeIdentity]()
 
 	/// Whether `Scope.createScopeGenerator` reuses the generators of places it already built. Turned off only by the memo
 	/// oracle, which compares the trees built with and without it.

@@ -14,6 +14,8 @@ paths:
 
 "Excluded" means only places the memo neither stores nor reuses hold the value in a non-trivial form: `memoKey` is `nil` inside a fill and in a tree with seam holes, and `isMemoizable` is cleared up through every ancestor by a fill, a scope inside one, non-empty `seamHoles`, non-empty `holeArguments` (a seam or public mock call with holes), and `addHoleGenerator`.
 
+Construction reads the scopes through `ConstructionGraph`, a `Sendable` snapshot taken once per tree before its first pass, never through `Scope` itself: a scope's key is its `ConstructionScopeIdentity`, which the memo keeps alive. A new read of a scope during construction goes into the graph's node, in the same change.
+
 ## Inputs a place passes to its children, and values a generator stores without querying them
 
 | Input or stored value | Classification |

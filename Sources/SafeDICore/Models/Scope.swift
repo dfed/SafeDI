@@ -85,6 +85,9 @@ final class Scope: Hashable {
 	/// nothing. `nil` for every other scope.
 	let publicMockCall: PublicMockCall?
 
+	/// What a construction memo keys and keeps alive for this scope (see `ConstructionGraph`).
+	let constructionIdentity = ConstructionScopeIdentity()
+
 	/// The builders the call `seamCall` or `publicMockCall` stands for passes, or `nil` for a scope that builds its type.
 	var calledBuilders: CalledBuilders? {
 		seamCall?.calledBuilders ?? publicMockCall?.calledBuilders
@@ -217,6 +220,11 @@ final class Scope: Hashable {
 
 	/// The created property that provides each form, for `createdBinding(of:)`. A type's labels are distinct, so no two
 	/// of its created properties provide one form.
+	/// The declaration this scope creates that provides each form, which `createdBinding(of:)` reads.
+	var createdBindingsByForm: [Property: Property] {
+		createdBindings
+	}
+
 	private lazy var createdBindings: [Property: Property] = {
 		var createdBindings = [Property: Property]()
 		for dependency in instantiable.dependencies where !dependency.source.isReceived {
@@ -270,11 +278,11 @@ final class Scope: Hashable {
 		+ instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)
 
 	/// The labels of `declaredProperties`.
-	fileprivate lazy var declaredLabels = Set(declaredProperties.map(\.label))
+	private(set) lazy var declaredLabels = Set(declaredProperties.map(\.label))
 
 	/// `declaredProperties` in `Property` order, each with the forms it provides (`CycleParameter.forms(providedBy:)`),
 	/// which every tree that builds this scope declares beneath it.
-	fileprivate lazy var sortedDeclaredPropertyForms: [(property: Property, forms: Set<Property>)] = declaredProperties
+	private(set) lazy var sortedDeclaredPropertyForms: [(property: Property, forms: Set<Property>)] = declaredProperties
 		.sorted()
 		.map { (property: $0, forms: CycleParameter.forms(providedBy: $0)) }
 
@@ -282,7 +290,7 @@ final class Scope: Hashable {
 	/// instantiated property this scope declares. A mock root can declare a property itself and also be given
 	/// a promoted lazily instantiated property with the same label. Types that receive the property by value
 	/// are then built with the root's own. Read only once `propertiesToGenerate` is complete.
-	fileprivate lazy var declaredLazilyInstantiatedInstanceProperties = Set(
+	private(set) lazy var declaredLazilyInstantiatedInstanceProperties = Set(
 		(
 			propertiesToGenerate.compactMap(\.lazilyInstantiatedInstanceProperty)
 				+ instantiatedDependenciesNotGenerated.compactMap(\.lazilyInstantiatedInstanceProperty)
@@ -499,6 +507,8 @@ final class Scope: Hashable {
 		// Every scope of the tree is enclosed by these, so they are held in storage each scope's copy shares.
 		let nearestDeclarations = nearestDeclarations.sharingDeclarations()
 		var startOrderChanged: Bool
+		// Every pass reads the scopes as they are now, which nothing changes while the tree is built.
+		let graph = ConstructionGraph(rootedAt: self)
 		repeat {
 			if previousPassGenerator != nil {
 				generatorsToStart = []
@@ -523,6 +533,7 @@ final class Scope: Hashable {
 				placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 				memo: &passMemo,
 				settledPassMemo: settledPassMemo,
+				graph: graph,
 			)
 			if previousPassGenerator == nil {
 				firstPassMemo = passMemo
@@ -575,9 +586,10 @@ final class Scope: Hashable {
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?,
 		memo: inout ConstructionMemo,
 		settledPassMemo: ConstructionMemo?,
+		graph: ConstructionGraph,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
-			scope: self,
+			scope: graph.root,
 			property: property,
 			propertyStack: [],
 			concreteTypeStack: [],
@@ -624,7 +636,7 @@ final class Scope: Hashable {
 							generatorsToStart?.append(generator)
 							startLog.append(generator)
 						}
-						memo.store(reuse.entry, for: key, keepingAlive: scope)
+						memo.store(reuse.entry, for: key, keepingAlive: scope.identity)
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
 					} else {
 						var child = scopeGeneratorsUnderConstruction[index].childUnderConstruction(
@@ -671,7 +683,7 @@ final class Scope: Hashable {
 							subtreeScopeCount: createdScope.subtreeScopeCount,
 							startedBeneath: Array(startLog[createdScope.startLogIndex...]),
 							isSettled: isSettled,
-						), for: key, keepingAlive: createdScope.builtScope)
+						), for: key, keepingAlive: createdScope.builtScope.identity)
 					}
 					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(childGenerator: scopeGenerator, createdBy: createdScope, readsAnsweredAbove: readsAnsweredAbove, isSettled: isSettled)
 				}
@@ -690,7 +702,7 @@ private struct ScopeGeneratorUnderConstruction {
 	///   - fillPathStackCount: How many of the outermost entries of `propertyStack` are the path of the seam whose hole the
 	///     enclosing fill fills (`SeamSignature.Hole.fillPropertyStack`): none outside a fill, and a nested fill's are its own.
 	init(
-		scope: Scope,
+		scope: ConstructionScope,
 		property: Property?,
 		propertyStack: [Property],
 		concreteTypeStack: [TypeDescription],
@@ -923,7 +935,7 @@ private struct ScopeGeneratorUnderConstruction {
 		// pass names both, fills first, then dispatchers, apart from what encloses the call: the
 		// fills and dispatchers enclosing it, and the names the seam whose tree holds it binds for its builders, which a call
 		// inside it passes by name and which a closer declaration would shadow.
-		var fillsOfThisCall = [(fill: Fill, scope: Scope)]()
+		var fillsOfThisCall = [(fill: Fill, scope: ConstructionScope)]()
 		var dispatchersOfThisCall = [ScopeGenerator.FillDispatcher]()
 		var namesOfThisCall = GeneratedNameAllocator(reserving: [])
 		let builderKeysDispatchedOverTheEnum: Set<SeamSignature.ScopeEnum.Key> = if let calledBuilders = scope.calledBuilders {
@@ -1086,17 +1098,17 @@ private struct ScopeGeneratorUnderConstruction {
 	/// dispatchers over the enum, which hand a fill what a case on the way carries, as a builder struct's level hands it;
 	/// a dispatcher of its own could not, since the fill is this call's. So this call keeps them over the enum, and hands
 	/// the called seam the struct of their conversion.
-	private static func builderKeysHandedInEnumForm(byCallsInside holeArguments: [Scope.HoleArgument], calling calledBuilders: CalledBuilders) -> Set<SeamSignature.ScopeEnum.Key> {
+	private static func builderKeysHandedInEnumForm(byCallsInside holeArguments: [ConstructionScope.HoleArgument], calling calledBuilders: CalledBuilders) -> Set<SeamSignature.ScopeEnum.Key> {
 		let structKeys = calledBuilders.builders.filter(\.takesBuilderStruct).map(\.enumKey)
 		guard !structKeys.isEmpty else { return [] }
 		var keys = Set<SeamSignature.ScopeEnum.Key>()
 		var visited = Set<ObjectIdentifier>()
-		var scopesToVisit = holeArguments.compactMap { argument -> Scope? in
+		var scopesToVisit = holeArguments.compactMap { argument -> ConstructionScope? in
 			guard case let .fill(_, scope) = argument else { return nil }
 			return scope
 		}
 		while let scope = scopesToVisit.popLast() {
-			guard visited.insert(ObjectIdentifier(scope)).inserted else { continue }
+			guard visited.insert(ObjectIdentifier(scope.identity)).inserted else { continue }
 			if let innerBuilders = scope.calledBuilders {
 				let innerEnumsByKey = innerBuilders.enumsByKey
 				var reachedKeys = Set<SeamSignature.ScopeEnum.Key>()
@@ -1268,7 +1280,7 @@ private struct ScopeGeneratorUnderConstruction {
 	}
 
 	/// The next of `propertiesToGenerate` to create a generator for, or `nil` once every one has its generator.
-	mutating func nextPropertyToGenerate() -> Scope.PropertyToGenerate? {
+	mutating func nextPropertyToGenerate() -> ConstructionScope.PropertyToGenerate? {
 		guard nextPropertyIndex < propertiesToGenerate.count else { return nil }
 		let propertyToGenerate = propertiesToGenerate[nextPropertyIndex]
 		nextPropertyIndex += 1
@@ -1277,7 +1289,7 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// The next of `fillsOfThisCall` to create a generator for, once every one of `propertiesToGenerate` has its
 	/// generator, or `nil` once every fill has its generator.
-	mutating func nextFill() -> (fill: Fill, scope: Scope)? {
+	mutating func nextFill() -> (fill: Fill, scope: ConstructionScope)? {
 		guard nextFillIndex < fillsOfThisCall.count else { return nil }
 		let fill = fillsOfThisCall[nextFillIndex]
 		nextFillIndex += 1
@@ -1287,7 +1299,7 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The scope under construction for the property a fill of this scope's seam call builds: the scope of the type
 	/// that fulfills the hole in the caller's declarations, built with the stack the seam whose tree holds the site
 	/// reaches it with, and with the fields of the site's scope struct in scope beside what encloses the call.
-	func fillUnderConstruction(fill: Fill, scope: Scope) throws -> ScopeGeneratorUnderConstruction {
+	func fillUnderConstruction(fill: Fill, scope: ConstructionScope) throws -> ScopeGeneratorUnderConstruction {
 		var fill = fill
 		let hole = fill.hole
 		try validateForwardedProperties(of: hole.property, declaredAt: hole.declarationLocation, on: hole.ownerType, seeingThroughModulesNamed: hole.declaringModuleNames, building: scope.instantiable)
@@ -1368,7 +1380,7 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// The scope under construction for a scope this one instantiates.
 	func childUnderConstruction(
-		scope: Scope,
+		scope: ConstructionScope,
 		property: Property,
 		erasedToConcreteExistential: Bool,
 	) -> ScopeGeneratorUnderConstruction {
@@ -1404,7 +1416,7 @@ private struct ScopeGeneratorUnderConstruction {
 	/// Throws when `property`, a dependency of this scope's type that `scope` builds, is an erased instantiator whose first
 	/// generic argument is not the `@Forwarded` properties of `scope`'s type (see `validateForwardedProperties(of:…)`). Run for
 	/// every child, whether its generator is created or reused.
-	func validateForwardedProperties(ofChildBuilding scope: Scope, as property: Property) throws {
+	func validateForwardedProperties(ofChildBuilding scope: ConstructionScope, as property: Property) throws {
 		try validateForwardedProperties(
 			of: property,
 			declaredAt: self.scope.instantiable.dependencies.first(where: { $0.property == property })?.declarationLocation,
@@ -1417,10 +1429,10 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The key under which the generator of the child of this scope that builds `property` with `scope` is stored and looked
 	/// up in a construction memo, or `nil` where the child reads context the memo's log does not cover: it is inside a fill,
 	/// or in a tree with holes (see `ConstructionMemo`).
-	func memoKey(ofChildBuilding scope: Scope, as property: Property, erasedToConcreteExistential: Bool) -> ConstructionMemo.Key? {
+	func memoKey(ofChildBuilding scope: ConstructionScope, as property: Property, erasedToConcreteExistential: Bool) -> ConstructionMemo.Key? {
 		guard enclosingFills.isEmpty, seamHoles.isEmpty, fill == nil else { return nil }
 		return ConstructionMemo.Key(
-			scope: ObjectIdentifier(scope),
+			scope: ObjectIdentifier(scope.identity),
 			property: property,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
@@ -1587,7 +1599,7 @@ private struct ScopeGeneratorUnderConstruction {
 	}
 
 	/// The sites of the places a call whose builders `holeArguments` are fills.
-	private static func filledSites(of holeArguments: [Scope.HoleArgument]) -> Set<SeamSignature.Hole.Site> {
+	private static func filledSites(of holeArguments: [ConstructionScope.HoleArgument]) -> Set<SeamSignature.Hole.Site> {
 		Set(holeArguments.compactMap { holeArgument in
 			if case let .fill(hole, _) = holeArgument {
 				hole.site
@@ -1792,9 +1804,9 @@ private struct ScopeGeneratorUnderConstruction {
 		}
 	}
 
-	private let scope: Scope
+	private let scope: ConstructionScope
 	/// The scope this place builds.
-	var builtScope: Scope {
+	var builtScope: ConstructionScope {
 		scope
 	}
 
@@ -1804,7 +1816,7 @@ private struct ScopeGeneratorUnderConstruction {
 	private let buildsWithHandWrittenMocks: Bool
 	/// Whether the tree checks each erased instantiator against the type it builds (see `createScopeGenerator`).
 	private let validatesForwardedProperties: Bool
-	private let propertiesToGenerate: [Scope.PropertyToGenerate]
+	private let propertiesToGenerate: [ConstructionScope.PropertyToGenerate]
 	/// The index in `propertiesToGenerate` of the next property to create a generator for.
 	private var nextPropertyIndex = 0
 	private let childPropertyStack: [Property]
@@ -1868,10 +1880,10 @@ private struct ScopeGeneratorUnderConstruction {
 	/// name of its function; `nil` for every other scope.
 	private let fill: Fill?
 	/// How the seam call this scope makes passes each builder (see `Scope.holeArguments`).
-	private let holeArguments: [Scope.HoleArgument]
+	private let holeArguments: [ConstructionScope.HoleArgument]
 	/// The fills of `holeArguments` this scope's generator holds – those no enclosing call already fills – each with the
 	/// scope of the type that fulfills its hole.
-	private let fillsOfThisCall: [(fill: Fill, scope: Scope)]
+	private let fillsOfThisCall: [(fill: Fill, scope: ConstructionScope)]
 	/// The enum keys of the called seam's builders that take a builder struct whose dispatchers this call keeps over the
 	/// enum, for a call inside its fills that reuses them (`builderKeysHandedInEnumForm(byCallsInside:calling:)`).
 	private let builderKeysDispatchedOverTheEnum: Set<SeamSignature.ScopeEnum.Key>
