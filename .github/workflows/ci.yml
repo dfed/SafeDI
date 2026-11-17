@@ -1410,6 +1410,35 @@ jobs:
               fi
             done
           done
+      # "Check Generate Time on Linux" saves each main commit's tool, 19 MB,
+      # for the pull requests that branch from that commit, so ancestry is
+      # the wrong rule here: an ancestor's tool is the one a pull request
+      # needs. The thirty newest stay, which covers the commits open pull
+      # requests branch from; a run whose base's tool is gone builds it.
+      - name: Delete All but the Thirty Newest Generate Time Tools
+        timeout-minutes: 1
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        run: |
+          prefix=generate-time-tool-Linux-swift-6.2-
+          if ! older=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -f sort=created_at -f direction=desc -F per_page=100 --jq '.actions_caches[30:][] | "\(.id) \(.key)"' 2>&1); then
+            echo "::warning::Listing $REF's tools under $prefix failed: $(printf '%s' "$older" | tr '\r\n' '  ')"
+            exit 0
+          fi
+          if [ -z "$older" ]; then
+            echo "$REF has thirty tools or fewer under $prefix."
+            exit 0
+          fi
+          printf '%s\n' "$older" | while read -r id key; do
+            if deleted=$(gh api -X DELETE "repos/$REPOSITORY/actions/caches/$id" 2>&1); then
+              echo "Deleted $key."
+            else
+              echo "::warning::Deleting $key failed: $(printf '%s' "$deleted" | tr '\r\n' '  ')"
+            fi
+          done
 
   linux:
     name: Build and Test on Linux
