@@ -132,115 +132,13 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		)
 	}
 
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func plainInitializer_handsBuilderEachSeamsOwnValue_whenInnerSeamForwardsLabelOfOuterSeamsValue() async throws {
-		// Both forward `id: Int`. A hand-written builder reads `List`'s `id` at `List`'s own place, `List(id: 1)`'s, and
-		// `Detail`'s at the place `List` passes up, the `2` its instantiator forwards, through the case that holds `Detail`'s
-		// enum alone.
-		let modules = Self.innerAndOuterModules(
-			inner: [Self.detail(forwarding: "id: Int")],
-			outer: [
-				seamFixtureType(named: "List", isSeam: true, declarations: ["@Forwarded public let id: Int", "@Instantiated public let api: any Api", "@Instantiated public let detailBuilder: Instantiator<Detail>"]),
-				Self.recorder,
-				"""
-				struct Live: Api {}
-
-				func identifiersTheBuilderReads() -> [Int] {
-				    let recorder = Recorder()
-				    let list = List(id: 1, apiBuilder: { scope in
-				        switch scope {
-				        case let .api(list):
-				            recorder.values.append(list.id)
-				        case let .detailBuilder(.api(detail)):
-				            recorder.values.append(detail.id)
-				        }
-				        return Live()
-				    })
-				    _ = list.detailBuilder.instantiate(2)
-				    return recorder.values
-				}
-				""",
-			],
-		)
-		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		let description = try await DifferentialValueOracle.describe(
-			DifferentialValuePath(output: output, modules: modules),
-			probes: [DifferentialValueProbe("identifiersTheBuilderReads()")],
-			filesToDelete: &filesToDelete,
-		)
-		if compileVerificationIsEnabled {
-			#expect(description == """
-			probe identifiersTheBuilderReads()
-			Array<Int>
-			  0: Int 1
-			  1: Int 2
-
-			""")
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func plainInitializer_handsBuilderEachNodesOwnValue_whenSeamBuildsItselfAgainThroughInstantiator() async throws {
-		// `Node` forwards `id` and builds another `Node` through `nextBuilder`: the place under the second node is handed its
-		// own `id` in the case for `api`, which the case for `nextBuilder` holds alone.
-		let modules = [
-			ModuleFixture(
-				name: "Feature",
-				packageName: "Shop",
-				swiftFileContent: [
-					"public protocol Api {}",
-					seamFixtureType(named: "Node", isSeam: true, isFinalClass: true, declarations: ["@Forwarded public let id: Int", "@Instantiated public let api: any Api", "@Instantiated public let nextBuilder: Instantiator<Node>"]),
-					Self.recorder,
-					"""
-					struct Live: Api {}
-
-					func identifiersTheBuilderReads() -> [Int] {
-					    let recorder = Recorder()
-					    let node = Node(id: 1, apiBuilder: { scope in
-					        switch scope {
-					        case let .api(values):
-					            recorder.values.append(values.id)
-					        case let .nextBuilder(.api(inner)):
-					            recorder.values.append(inner.id)
-					        default:
-					            break
-					        }
-					        return Live()
-					    })
-					    _ = node.nextBuilder.instantiate(2)
-					    return recorder.values
-					}
-					""",
-				],
-				swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration,
-			),
-		]
-		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		let description = try await DifferentialValueOracle.describe(
-			DifferentialValuePath(output: output, modules: modules),
-			probes: [DifferentialValueProbe("identifiersTheBuilderReads()")],
-			filesToDelete: &filesToDelete,
-		)
-		if compileVerificationIsEnabled {
-			#expect(description == """
-			probe identifiersTheBuilderReads()
-			Array<Int>
-			  0: Int 1
-			  1: Int 2
-
-			""")
-		}
-	}
-
 	@Test(arguments: [true, false])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_releasesOuterSeamsValues_whenValueOuterSeamBuiltBeforeInnerSeamHoldsInnerSeam(fillsWithGeneratedCode: Bool) async throws {
 		// `Home` builds `navigator`, then `detailBuilder`, which builds `Detail`, a seam of another module whose place `api`
 		// `Home` passes up. Inline, nothing `Detail` holds captures `navigator`, so a navigator that holds a detail is freed
-		// with `Home`. The closure that hands `Detail`'s enum up is the builder `Detail` holds, so the case it builds carries
-		// no value of `Home`'s.
+		// with `Home`. The builder `Detail` holds is the one `Home` passes up, which takes nothing, so it carries no value of
+		// `Home`'s.
 		let modules = Self.innerAndOuterModules(
 			inner: [
 				seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
@@ -264,7 +162,7 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 				func homeIsFreedWithItsNavigator() -> Bool {
 				    weak var weakNavigator: Navigator?
 				    do {
-				        let home = \(fillsWithGeneratedCode ? "Root().home" : "Home(apiBuilder: { _ in Live() })")
+				        let home = \(fillsWithGeneratedCode ? "Root().home" : "Home(apiBuilder: { Live() })")
 				        weakNavigator = home.navigator
 				        home.navigator.stack.append(home.detailBuilder.instantiate())
 				    }
@@ -296,13 +194,6 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 	private static func detail(forwarding forwarded: String) -> String {
 		seamFixtureType(named: "Detail", isSeam: true, isFinalClass: true, declarations: ["@Forwarded public let \(forwarded)", "@Instantiated public let api: any Api"])
 	}
-
-	/// A box a hand-written builder records what it reads in.
-	private static let recorder = """
-	final class Recorder {
-	    var values = [Int]()
-	}
-	"""
 
 	/// `Inner`, in package `Shop`, which declares `Api` and `inner`'s types; `Outer`, in package `Other`, which declares
 	/// `outer`'s; and, when `app` is not empty, `App`, which declares `app`'s. Every module sets

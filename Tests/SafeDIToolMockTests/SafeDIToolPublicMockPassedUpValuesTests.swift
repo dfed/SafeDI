@@ -75,57 +75,6 @@ struct SafeDIToolPublicMockPassedUpValuesTests: ~Copyable {
 		)
 	}
 
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_handsBuilderCallingTypesValueAtItsOwnPlace_whenCalledPublicMockForwardsLabelOfCallingTypesValue() async throws {
-		// `List` and `Detail` both forward `id: Int`. A hand-written builder reads `List`'s `id` at `List`'s own place, `1`,
-		// never the `2` `List`'s instantiator forwards to `Detail`, and reaches `Detail`'s place through the case that holds
-		// `Detail`'s mock's enum alone.
-		let modules = Self.modules(
-			outer: [
-				seamFixtureType(named: "List", isFinalClass: true, declarations: ["@Forwarded public let id: Int", "@Instantiated public let api: any Api", "@Instantiated public let detailBuilder: Instantiator<Detail>"]),
-				Self.publicMockType(named: "Home", declarations: ["@Instantiated public let listBuilder: Instantiator<List>"]),
-				"""
-				struct Live: Api {}
-
-				final class Recorder {
-				    var values = [String]()
-				}
-
-				func placesTheBuilderFills() -> [String] {
-				    let recorder = Recorder()
-				    let home = Home.mock(apiBuilder: { scope in
-				        switch scope {
-				        case let .listBuilder(_, .api(list)):
-				            recorder.values.append("list \\(list.id)")
-				        case .listBuilder(_, .detailBuilder(.api)):
-				            recorder.values.append("detail")
-				        }
-				        return Live()
-				    })
-				    _ = home.listBuilder.instantiate(1).detailBuilder.instantiate(2)
-				    return recorder.values
-				}
-				""",
-			],
-		)
-		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		let description = try await DifferentialValueOracle.describe(
-			DifferentialValuePath(output: output, modules: modules),
-			probes: [DifferentialValueProbe("placesTheBuilderFills()")],
-			filesToDelete: &filesToDelete,
-		)
-		if compileVerificationIsEnabled {
-			#expect(description == """
-			probe placesTheBuilderFills()
-			Array<String>
-			  0: String "list 1"
-			  1: String "detail"
-
-			""")
-		}
-	}
-
 	// MARK: Private
 
 	private var filesToDelete: [URL]

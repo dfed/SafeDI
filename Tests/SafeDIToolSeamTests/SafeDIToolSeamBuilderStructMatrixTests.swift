@@ -1604,9 +1604,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_leavesPublicMocksAsTheyWere_whenKeptSeamWithPublicMockCallsSeamTakingBuilderStruct() async throws {
-		// `Inner`'s seam side hands `Innermost` a struct; its public mock builds `Innermost`'s tree itself, and `Screen`'s mock
-		// calls `Inner`'s, both as they did when every seam took a closure over its enum.
+	mutating func generate_takesBuilderStructInPublicMock_whenKeptSeamWithPublicMockCallsSeamTakingBuilderStruct() async throws {
+		// `Inner`'s seam side hands `Innermost` a struct; its public mock builds `Innermost`'s tree itself and takes its builder
+		// struct, as the seam does, and `Screen`'s mock calls `Inner`'s with one.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["mockBeside"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Inner {
