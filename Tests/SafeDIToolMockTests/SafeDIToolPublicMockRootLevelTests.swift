@@ -2283,26 +2283,46 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 
 				#if DEBUG
 				extension Detail {
-				    @frozen public enum SafeDIMockScope_Api {
+				    @frozen nonisolated public enum SafeDIMockScope_Api {
 				        case api(api_Values)
 
-				        public struct api_Values {
+				        nonisolated public struct api_Values {
 				            public let id: Int
+				        }
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let api: (api_Values) -> __safeDI_Built
+
+				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
+				                self.api = api
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.api = { _ in __safeDI_builder() }
+				            }
 				        }
 				    }
 
 				    public static func mock(
 				        id: Int,
-				        apiBuilder: @escaping (Detail.SafeDIMockScope_Api) -> any Api
+				        apiBuilder: @escaping () -> any Api
 				    ) -> Detail {
-				        let __safeDI_apiBuilder = apiBuilder
-				        let api: any Api = __safeDI_apiBuilder(.api(SafeDIMockScope_Api.api_Values(id: id)))
+				        Detail.__safeDI_mock(id: id, apiBuilder: .init(__safeDI_noScope: apiBuilder))
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        id: Int,
+				        apiBuilder __safeDI_apiBuilder: Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api>
+				    ) -> Detail {
+				        let api: any Api = __safeDI_apiBuilder.api(SafeDIMockScope_Api.api_Values(id: id))
 				        return Detail(id: id, api: api)
 				    }
 				}
 
 				extension Detail {
-				    public enum __safeDI_Detail_mock_31DA67991BB5767F {}
+				    public enum __safeDI_Detail_mock_DD9B82BEF924BE71 {}
 				}
 				#endif
 				"""
@@ -2342,26 +2362,46 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 
 				#if DEBUG
 				extension Detail {
-				    @frozen public enum SafeDIMockScope_Api {
+				    @frozen nonisolated public enum SafeDIMockScope_Api {
 				        case api(api_Values)
 
-				        public struct api_Values {
+				        nonisolated public struct api_Values {
 				            public let session: Session
+				        }
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let api: (api_Values) -> __safeDI_Built
+
+				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
+				                self.api = api
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.api = { _ in __safeDI_builder() }
+				            }
 				        }
 				    }
 
 				    public static func mock(
 				        session: Session,
-				        apiBuilder: @escaping (Detail.SafeDIMockScope_Api) -> any Api
+				        apiBuilder: @escaping () -> any Api
 				    ) -> Detail {
-				        let __safeDI_apiBuilder = apiBuilder
-				        let api: any Api = __safeDI_apiBuilder(.api(SafeDIMockScope_Api.api_Values(session: session)))
+				        Detail.__safeDI_mock(session: session, apiBuilder: .init(__safeDI_noScope: apiBuilder))
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        session: Session,
+				        apiBuilder __safeDI_apiBuilder: Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api>
+				    ) -> Detail {
+				        let api: any Api = __safeDI_apiBuilder.api(SafeDIMockScope_Api.api_Values(session: session))
 				        return Detail(session: session, api: api)
 				    }
 				}
 
 				extension Detail {
-				    public enum __safeDI_Detail_mock_6037F8B4036DC8EF {}
+				    public enum __safeDI_Detail_mock_761E40A8BF1136DD {}
 				}
 				#endif
 				"""
@@ -2401,26 +2441,46 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 
 				#if DEBUG
 				extension Detail {
-				    @frozen public enum SafeDIMockScope_Api {
+				    @frozen nonisolated public enum SafeDIMockScope_Api {
 				        case api(api_Values)
 
-				        public struct api_Values {
+				        nonisolated public struct api_Values {
 				            public let token: Token?
+				        }
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let api: (api_Values) -> __safeDI_Built
+
+				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
+				                self.api = api
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.api = { _ in __safeDI_builder() }
+				            }
 				        }
 				    }
 
 				    public static func mock(
-				        apiBuilder: @escaping (Detail.SafeDIMockScope_Api) -> any Api,
+				        apiBuilder: @escaping () -> any Api,
 				        token: Token? = nil
 				    ) -> Detail {
-				        let __safeDI_apiBuilder = apiBuilder
-				        let api: any Api = __safeDI_apiBuilder(.api(SafeDIMockScope_Api.api_Values(token: token)))
+				        Detail.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), token: token)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        apiBuilder __safeDI_apiBuilder: Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api>,
+				        token: Token? = nil
+				    ) -> Detail {
+				        let api: any Api = __safeDI_apiBuilder.api(SafeDIMockScope_Api.api_Values(token: token))
 				        return Detail(token: token, api: api)
 				    }
 				}
 
 				extension Detail {
-				    public enum __safeDI_Detail_mock_C07D469C609A4C0A {}
+				    public enum __safeDI_Detail_mock_7C2A6CBE62BC0F52 {}
 				}
 				#endif
 				"""

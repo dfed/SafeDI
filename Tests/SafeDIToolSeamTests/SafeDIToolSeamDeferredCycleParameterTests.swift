@@ -974,11 +974,12 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    }
 
 			    static func mock(
-			        api: Api,
+			        apiBuilder: @escaping () -> any Api,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Hub {
 			        let tag = if let safeDIBuilder = safeDIOverrides.tag { safeDIBuilder() } else { Tag() }
 			        func __safeDI_aBuilder(tag: Tag) -> A {
+			            let api: any Api = apiBuilder()
 			            let reader = if let safeDIBuilder = safeDIOverrides.aBuilder.reader { safeDIBuilder(tag) } else { TagReader(tag: tag) }
 			            func __safeDI_bBuilder(tag: Tag) -> B {
 			                let aBuilder = Instantiator<A> {
