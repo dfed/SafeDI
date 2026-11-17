@@ -1113,6 +1113,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			/// The struct the caller passes up, of the called mock's root level: the member of the caller's own struct, or the
 			/// struct of the builder the caller takes; `nil` where the call fills every place the builder reaches.
 			let upValue: String?
+			/// On a route to a place inside a fill of the call, the name the caller's tree binds the struct its own member for the
+			/// call's case returns under, by the name a fill takes the struct of its level under.
+			let carriedStructs: [String: String]
 		}
 
 		/// The enclosing fill or dispatcher a call passes by name, whatever expression passes it: its key and its name.
@@ -1595,8 +1598,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				while let key = keysToVisit.popLast() {
 					guard !sitesReached(from: key, onRoutesOf: family).isDisjoint(with: filledSites),
 					      visited.insert(key).inserted,
-					      // A public mock's call declares every level function it passes: each is decided by its own routes.
-					      decidesPerRoute || enclosingDispatchers[Self.key(of: key, returnsBuilderStruct: returnsBuilderStruct(key))] == nil,
+					      enclosingDispatchers[Self.key(of: key, returnsBuilderStruct: returnsBuilderStruct(key))] == nil,
 					      let scopeEnum = enumsByKey[key]
 					else { continue }
 					if familiesByKey[key] == nil {
@@ -1725,7 +1727,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// The fill's level each level function of a seam the called seam calls on the way to a fill leads to, by the function's
 			// key: where this call's own caller carries a struct to that level, the function carries it too.
 			var fillLevelKeyByCarriedDispatcherKey = [String: SeamSignature.ScopeEnum.Key]()
-			if !decidesPerRoute {
+			// A public mock's caller's dispatchers are each a level function that returns the level's struct, as one that returns
+			// its builder struct is (`PublicMockLevelFunctions`).
+			func returnsLevelStruct(_ dispatcher: FillDispatcher) -> Bool {
+				dispatcher.returnsBuilderStruct || decidesPerRoute
+			}
+			do {
 				/// A level of a seam on a carried route, and the fills' levels its places lead to, nearest first: the last is a level
 				/// of the called seam's own enums, which the call's dispatchers return; each before it is a level of a seam whose
 				/// fill of a deeper seam's place the route passes through, itself carried by the levels after it.
@@ -1749,7 +1756,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				func parts(of level: CarriedLevel) -> (nearestFillLevelKey: SeamSignature.ScopeEnum.Key, ownFillLevelKey: SeamSignature.ScopeEnum.Key, fillLevelDispatcher: FillDispatcher, fillLevelEnum: SeamSignature.ScopeEnum, scopeEnum: SeamSignature.ScopeEnum, returnType: TypeDescription)? {
 					guard let nearestFillLevelKey = level.fillLevelKeys.first,
 					      let ownFillLevelKey = level.fillLevelKeys.last,
-					      let fillLevelDispatcher = dispatchers.first(where: { dispatcherKeys[$0.key] == ownFillLevelKey && $0.returnsBuilderStruct }),
+					      let fillLevelDispatcher = dispatchers.first(where: { dispatcherKeys[$0.key] == ownFillLevelKey && returnsLevelStruct($0) }),
 					      let fillLevelEnum = enumsByKey[nearestFillLevelKey],
 					      let scopeEnum = enumsByKey[level.key],
 					      let returnType = carriedReturnType(of: level.fillLevelKeys[...], builtType: fillLevelDispatcher.returnType)
@@ -1783,7 +1790,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				// The levels the cases below lead to, each with the case it carries.
 				var carriedFillCases = [(index: Int, caseIndex: Int, level: CarriedLevel)]()
-				for index in dispatchers.indices where dispatchers[index].returnsBuilderStruct {
+				for index in dispatchers.indices where returnsLevelStruct(dispatchers[index]) {
 					guard let enumKey = dispatcherKeys[dispatchers[index].key], let scopeEnum = enumsByKey[enumKey] else { continue }
 					for (caseIndex, enumCase) in scopeEnum.cases.enumerated() {
 						guard case let .fill(innerKey, _?, fillLevelKey, _, _) = enumCase.kind,
@@ -1913,7 +1920,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				dispatchers = dispatchers.map { dispatcher in
 					var dispatcher = dispatcher
-					guard dispatcher.returnsBuilderStruct, let key = dispatcherKeys[dispatcher.key] ?? fillLevelKeyByCarriedDispatcherKey[dispatcher.key], let carried = carriedInnerScopesByLevel[key] else { return dispatcher }
+					guard returnsLevelStruct(dispatcher), let key = dispatcherKeys[dispatcher.key] ?? fillLevelKeyByCarriedDispatcherKey[dispatcher.key], let carried = carriedInnerScopesByLevel[key] else { return dispatcher }
 					dispatcher.carriedInnerScopes = carried.map { CarriedInnerScope(name: $0.name, type: $0.type, upName: (carried.count == 1 ? singleUpName : upNameByCarriedName[$0.name]) ?? "") }
 					// A deeper seam's root on the route takes the struct of its level as a level nested by type does; the called seam's
 					// root is handed it by the call.
@@ -2306,7 +2313,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The type a level's struct is generic over on a carried route, given `returnType`, what the level's function returns
 		/// its struct over: `carriedType`, the caller's struct of the fill's own level, in place of the built type, inside the
 		/// structs of the fills' levels a deeper seam's level returns its struct over.
-		private static func carried(_ carriedType: TypeDescription, through returnType: TypeDescription) -> TypeDescription {
+		static func carried(_ carriedType: TypeDescription, through returnType: TypeDescription) -> TypeDescription {
 			guard case let .nested(name, parentType, generics) = returnType, name == ReservedName.builderStructTypeName, let built = generics.first, generics.count == 1 else {
 				return carriedType
 			}
@@ -5523,7 +5530,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var valuesByLabel = [String: String]()
 		for builderCallArgument in builderCallArguments {
 			guard let builderStruct = builderCallArgument.builderStruct else { continue }
-			valuesByLabel[builderCallArgument.label] = publicMockLevelFunctions?.rootCall(ofDispatcherKeyed: builderStruct.rootDispatcherKey, up: builderStruct.upValue)
+			valuesByLabel[builderCallArgument.label] = publicMockLevelFunctions?.rootCall(ofDispatcherKeyed: builderStruct.rootDispatcherKey, up: builderStruct.upValue, carriedStructs: builderStruct.carriedStructs)
 				?? builderStruct.upValue
 				?? ""
 		}
@@ -6588,7 +6595,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		typesDeclaredEscaping: Set<TypeDescription>,
 		unreadTypeComment: UnreadTypeComment?,
 		namesForwardedTypes: Bool,
-		isSeam: Bool,
 	) -> [String] {
 		guard let ownType = builders.first?.enumKey.seamType else { return [] }
 		let holesBySite = Dictionary(holes.map { ($0.site, $0) }, uniquingKeysWith: { first, _ in first })
@@ -6614,7 +6620,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 			var levelForms = levelFormsByHoleType[key.holeType] ?? LevelBuilderForms(enumsOfHoleType: scopeEnums.filter { $0.key.holeType == key.holeType }, holesBySite: holesBySite)
-			let declaration = scopeEnumDeclaration(of: scopeEnum, nestedEnums: nestedEnums, holesBySite: holesBySite, typesDeclaredEscaping: typesDeclaredEscaping, levelForms: &levelForms, calledRootsTakingValue: calledRootsTakingValue, isSeam: isSeam)
+			let declaration = scopeEnumDeclaration(of: scopeEnum, nestedEnums: nestedEnums, holesBySite: holesBySite, typesDeclaredEscaping: typesDeclaredEscaping, levelForms: &levelForms, calledRootsTakingValue: calledRootsTakingValue)
 			levelFormsByHoleType[key.holeType] = levelForms
 			guard let marker = unreadTypeComment?.markerLine(namedBy: namedTypes, indent: standardIndent) else { return declaration }
 			return "\(marker)\n\(declaration)"
@@ -6656,9 +6662,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   - calledRootsTakingValue: The called seams' root enums whose struct takes a builder that takes a value from its
 	///     no-scope initializer, which decide what the struct of such a root that a case for a builder the seam fills returns
 	///     takes from its builder (`calledRootsTakingValue(amongEnumsOf:filledBy:)`).
-	///   - isSeam: Whether the enum is a seam's, which declares no case where it declares a builder struct; a public mock's keeps
-	///     its cases and `@frozen`.
-	static func scopeEnumDeclaration(of scopeEnum: SeamSignature.ScopeEnum, nestedEnums: [SeamSignature.ScopeEnum] = [], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole], typesDeclaredEscaping: Set<TypeDescription>, levelForms: inout LevelBuilderForms, calledRootsTakingValue: Set<SeamSignature.ScopeEnum.Key> = [], isSeam: Bool, indent: String = standardIndent) -> String {
+	static func scopeEnumDeclaration(of scopeEnum: SeamSignature.ScopeEnum, nestedEnums: [SeamSignature.ScopeEnum] = [], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole], typesDeclaredEscaping: Set<TypeDescription>, levelForms: inout LevelBuilderForms, calledRootsTakingValue: Set<SeamSignature.ScopeEnum.Key> = [], indent: String = standardIndent) -> String {
 		let caseIndent = indent + standardIndent
 		var caseLines = [String]()
 		var payloadStructs = [String]()
@@ -6699,11 +6703,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				caseLines.append(caseLine(enumCase.name, isIndirect: isIndirect, payloads: [valuesTypeName, innerEnumType?.asSource, enumType.asSource]))
 			}
 		}
-		// A seam's enum that declares a builder struct is a namespace for its payload structs, the enums nested in it and its
-		// struct: no generated code builds or switches over a case of it. A public mock's keeps its cases and `@frozen`, a
-		// deliberate gap: its callers' conversions and dispatchers still build and switch over them (see
-		// `seam-builder-structs.md`).
-		let declaresCases = !(isSeam && declaresBuilderStruct)
+		// An enum that declares a builder struct, a seam's or a public mock's, is a namespace for its payload structs, the enums
+		// nested in it and its struct: no generated code builds or switches over a case of it.
+		let declaresCases = !declaresBuilderStruct
 		var body = declaresCases ? caseLines.joined(separator: "\n") : ""
 		if !payloadStructs.isEmpty {
 			body += (body.isEmpty ? "" : "\n\n") + payloadStructs.joined(separator: "\n\n")
@@ -6711,7 +6713,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Only the root declares the enums nested in it; a nested enum's cases spell them from the root.
 		if scopeEnum.rootTypeName == nil {
 			for nestedEnum in nestedEnums {
-				body += (body.isEmpty ? "" : "\n\n") + scopeEnumDeclaration(of: nestedEnum, holesBySite: holesBySite, typesDeclaredEscaping: typesDeclaredEscaping, levelForms: &levelForms, calledRootsTakingValue: calledRootsTakingValue, isSeam: isSeam, indent: caseIndent)
+				body += (body.isEmpty ? "" : "\n\n") + scopeEnumDeclaration(of: nestedEnum, holesBySite: holesBySite, typesDeclaredEscaping: typesDeclaredEscaping, levelForms: &levelForms, calledRootsTakingValue: calledRootsTakingValue, indent: caseIndent)
 			}
 		}
 		// A root of the plain family with no case of its own, a namespace for the enums its `@Sendable` root's cases hold,
@@ -7290,7 +7292,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			unreadTypeComment: seamRoot.unreadTypeComment,
 			namesForwardedTypes: signature.tiers.first == .public,
-			isSeam: true,
 		)
 		// The class each of the tree's boxes is, after the initializers, in the order of their names (`boxedLoops`).
 		var members = scopeTypes + initializers
@@ -8313,7 +8314,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				typesDeclaredEscaping: parameters.typesDeclaredEscaping,
 				unreadTypeComment: unreadTypeComment,
 				namesForwardedTypes: true,
-				isSeam: false,
 			) {
 				lines.append(declaration)
 				lines.append("")
