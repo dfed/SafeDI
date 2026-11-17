@@ -198,7 +198,11 @@ struct GraphFuzzerScopeDeclarations {
 	/// fill, is not its own, and neither is a case whose nested enum holds no case of its own: the places an inner seam
 	/// passes up have no levels (`GraphFuzzerPlaceFacts`), and the Seams PR decides whether a place passed up counts as
 	/// holding one. A fill case, `<call>_<builder>`, is judged as a case of its own is: some place inside the fill produces
-	/// it. Only the root enums, and the enums an own case or a fill case of a judged enum holds, are judged. Judge it only
+	/// it; but not a fill case whose nested enum holds no case of its own, which the fill's calls of seams that pass places
+	/// up or call a seam again hold alone (`holdsNoOwnCase`), nor the case of a call its holder declares whose nested enum
+	/// is that of a type some place's path builds through another fill, the call of a seam again inside a fill whose own
+	/// fill reuses that type's level by name: neither adds levels of a place. Only the root enums, and the enums an own case or a fill case of a judged
+	/// enum holds but for the first kind, are judged. Judge it only
 	/// on a graph without a tangle of cycles, which can keep a case no run produces (question 3 of the design, ruled
 	/// acceptable).
 	func unproducedDeclaredCases(of facts: GraphFuzzerPlaceFacts) -> [String] {
@@ -207,7 +211,7 @@ struct GraphFuzzerScopeDeclarations {
 		var judgedEnumNames = Set(seamEnums.filter(\.isRoot).map(\.qualifiedName))
 		var enumsToVisit = seamEnums.filter(\.isRoot)
 		while let scopeEnum = enumsToVisit.popLast() {
-			for scopeCase in scopeEnum.cases where ownCaseLabelsByEnum[scopeEnum.qualifiedName, default: []].contains(scopeCase.label) || scopeCase.isFillCase(extendedType: scopeEnum.extendedType) {
+			for scopeCase in scopeEnum.cases where ownCaseLabelsByEnum[scopeEnum.qualifiedName, default: []].contains(scopeCase.label) || scopeCase.isFillCase(extendedType: scopeEnum.extendedType) && !Self.holdsNoOwnCase(scopeCase, of: scopeEnum, ownCaseLabelsByEnum: ownCaseLabelsByEnum) {
 				guard let nestedPath = scopeCase.nestedEnumPath(extendedType: scopeEnum.extendedType) else { continue }
 				let nestedName = ([scopeEnum.extendedType] + nestedPath).joined(separator: ".")
 				if judgedEnumNames.insert(nestedName).inserted, let nestedEnum = seamEnums.first(where: { $0.qualifiedName == nestedName }) {
@@ -235,12 +239,12 @@ struct GraphFuzzerScopeDeclarations {
 					descriptions.append("`\(scopeEnum.qualifiedName)` declares the case `\(scopeCase.label)`, which no place's path produces.")
 				}
 			}
-			for scopeCase in scopeEnum.cases where scopeCase.isFillCase(extendedType: scopeEnum.extendedType) {
+			for scopeCase in scopeEnum.cases where scopeCase.isFillCase(extendedType: scopeEnum.extendedType) && !Self.holdsNoOwnCase(scopeCase, of: scopeEnum, ownCaseLabelsByEnum: ownCaseLabelsByEnum) {
 				let isProduced = facts.producedCases.contains { producedCase in
 					guard producedCase.holder == holder, let filledType = producedCase.filledType else { return false }
 					return Self.isFillCase(scopeCase, of: scopeEnum, forCallLabeled: producedCase.label, filling: filledType)
 				}
-				if !isProduced {
+				if !isProduced, !reusesLevelOfTypeBuiltThroughAnotherFill(scopeCase, of: scopeEnum, heldBy: holder, facts: facts) {
 					descriptions.append("`\(scopeEnum.qualifiedName)` declares the fill case `\(scopeCase.label)`, which no place inside a fill produces.")
 				}
 			}
@@ -249,7 +253,8 @@ struct GraphFuzzerScopeDeclarations {
 	}
 
 	/// A description of each case of a scope enum whose label names no property of the type the enum describes – `p`,
-	/// `p_Sendable`, or, for a place inside a fill, `p_<builder>` for a property `p` the type declares – so that no enum
+	/// `p_Sendable`, or, for a place inside a fill, `p_<builder>`, or `p_<builder>_Sendable` in the `@Sendable` family,
+	/// whose member returns the struct of the type the fill builds, for a property `p` the type declares – so that no enum
 	/// holds more cases than its type has properties, twice over with `@Sendable` functions, however many paths reach the
 	/// type (the design's section 2.9: no generated switch grows with anything but the size of one declaration). An enum
 	/// whose type no place's path builds is left to `unproducedDeclaredCases(of:)`.
@@ -263,6 +268,7 @@ struct GraphFuzzerScopeDeclarations {
 				let namesProperty = declaredLabels.contains(scopeCase.label)
 					|| scopeCase.label.hasSuffix("_Sendable") && declaredLabels.contains(String(scopeCase.label.dropLast("_Sendable".count)))
 					|| scopeCase.wrapsAnotherSeamsEnum(extendedType: scopeEnum.extendedType) && declaredLabels.contains { scopeCase.label.hasPrefix($0 + "_") }
+					|| Self.isSendableFillCase(scopeCase, namingOneOf: declaredLabels)
 				if !namesProperty {
 					descriptions.append("`\(scopeEnum.qualifiedName)` declares the case `\(scopeCase.label)`, which names no property of \(Self.description(of: holder)).")
 				}
@@ -272,6 +278,35 @@ struct GraphFuzzerScopeDeclarations {
 	}
 
 	// MARK: Private
+
+	/// Whether `scopeCase`, a fill case of `scopeEnum`, holds a nested enum with no case of its own: the enum of a fill
+	/// whose tree holds only calls of seams that pass places up or call a seam again.
+	private static func holdsNoOwnCase(_ scopeCase: ScopeCase, of scopeEnum: ScopeEnum, ownCaseLabelsByEnum: [String: Set<String>]) -> Bool {
+		guard let nestedPath = scopeCase.nestedEnumPath(extendedType: scopeEnum.extendedType) else { return false }
+		return ownCaseLabelsByEnum[([scopeEnum.extendedType] + nestedPath).joined(separator: "."), default: []].isEmpty
+	}
+
+	/// Whether `scopeCase`, a fill case of `scopeEnum`, the enum of `callingHolder`, is the case of a call `callingHolder` declares and
+	/// holds the nested enum of a type some place's path builds, through another fill: the case of a call of a seam again
+	/// inside a fill, whose own fill reuses that type's level by name, so no place's path runs through the call.
+	private func reusesLevelOfTypeBuiltThroughAnotherFill(_ scopeCase: ScopeCase, of scopeEnum: ScopeEnum, heldBy callingHolder: GraphFuzzerPlaceFacts.Holder, facts: GraphFuzzerPlaceFacts) -> Bool {
+		guard facts.declaredLabels[callingHolder, default: []].contains(where: { scopeCase.label.hasPrefix($0 + "_") }),
+		      let nestedPath = scopeCase.nestedEnumPath(extendedType: scopeEnum.extendedType),
+		      let nestedEnum = seamEnums.first(where: { $0.qualifiedName == ([scopeEnum.extendedType] + nestedPath).joined(separator: ".") })
+		else { return false }
+		return holder(of: nestedEnum, in: facts) != nil
+	}
+
+	/// Whether `scopeCase` is the `@Sendable` family's case of a call inside a fill, `<p>_<builder>_Sendable`, for a property
+	/// `p` of `declaredLabels` that makes the call and the builder `<builder>` its fill fills: a member that carries no
+	/// values and returns the struct of the type the fill builds, nested in its own seam's `@Sendable` enum.
+	private static func isSendableFillCase(_ scopeCase: ScopeCase, namingOneOf declaredLabels: Set<String>) -> Bool {
+		guard scopeCase.label.hasSuffix("_Sendable") else { return false }
+		let label = scopeCase.label.dropLast("_Sendable".count)
+		return declaredLabels.contains { property in
+			label.hasPrefix(property + "_") && label.dropFirst(property.count + 1).hasSuffix("Builder")
+		}
+	}
 
 	/// Whether `scopeCase`, a case of `scopeEnum`, is the case for the call labeled `callLabel` of a builder a fill fills,
 	/// `<callLabel>_<builder>`, which holds the enum of `filledType`, the type the fill builds.
