@@ -596,8 +596,10 @@ jobs:
         run: |
           xcrun swift build --build-system native --scratch-path "$RUNNER_TEMP/native-debug" --package-path "Examples/Example Package Integration"
           grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/native-debug/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
+      # Twice the longest of ten runs, 5.5 minutes (run 44034763455; the
+      # median was 3.9).
       - name: Build Package Integration in release configuration (swift build, native backend)
-        timeout-minutes: 8
+        timeout-minutes: 11
         if: ${{ !cancelled() }}
         run: |
           xcrun swift build --build-system native -c release -Xswiftc -Onone --scratch-path "$RUNNER_TEMP/native-release" --package-path "Examples/Example Package Integration"
@@ -609,8 +611,10 @@ jobs:
       # plugin reads `DEBUG` from Package.swift anyway, because Xcode evaluates
       # a package's `.when(configuration:)` defines as for a debug build, and
       # only the build settings let SafeDITool wire `DisabledEventLogger`.
+      # The limit is twice the longest of ten runs, 3.6 minutes (run
+      # 44041978606).
       - name: Build Package Integration (xcodebuild)
-        timeout-minutes: 6
+        timeout-minutes: 8
         if: ${{ !cancelled() }}
         run: |
           log="$RUNNER_TEMP/xcodebuild-debug.log"
@@ -623,8 +627,10 @@ jobs:
           [ "$status" -eq 0 ] || { tail -n 100 "$log"; exit 1; }
           [ "$arguments" = expanded ]
           grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/xcodebuild-debug/Build/Intermediates.noindex/BuildToolPluginIntermediates" -path "*/RootModule/SafeDIGenerator/SafeDIOutput/Root+SafeDI.swift")"
+      # Twice the longest of ten runs, 3.4 minutes (run 44041978606; the
+      # median was 2.4).
       - name: Build Package Integration in release configuration (xcodebuild)
-        timeout-minutes: 5
+        timeout-minutes: 7
         if: ${{ !cancelled() }}
         run: |
           log="$RUNNER_TEMP/xcodebuild-release.log"
@@ -1461,10 +1467,10 @@ jobs:
       - name: Unpack Test Bundle
         run: tar -xzf graph-fuzzer-test-bundle.tar.gz
       # A pass took about 6.3 minutes when four took 25.3 (run 43755152593)
-      # and about 5.1 in run 43760851366; the limit is about twice the
-      # slower.
+      # and about 5.1 in run 43760851366, and up to 8.3 over forty passes
+      # since (run 44034763455); the limit is about twice the slowest.
       - name: Run Tests
-        timeout-minutes: 14
+        timeout-minutes: 17
         env:
           SAFEDI_SKIP_COMPILE_CHECK: 1
           LLVM_PROFILE_FILE: ${{ runner.temp }}/repeat-tests-%p.profraw
@@ -1671,7 +1677,10 @@ jobs:
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    timeout-minutes: 30
+    # Above the fuzzer step's limit by more than the longest the job's other
+    # steps have taken, so that a shard that runs out of time still uploads:
+    # one job spent 11 minutes initializing its container (run 43879263598).
+    timeout-minutes: 40
     permissions:
       contents: read
     strategy:
@@ -1756,9 +1765,12 @@ jobs:
       # (TestTemporaryDirectory.environment). The step's limit is under the
       # job's, so a shard that runs out of time still summarizes and uploads
       # its report; the job's limit would cancel those steps too. A shard's
-      # fuzzer has taken 4.4 to 10.1 minutes (runs 43762600658, 43774447047).
+      # fuzzer took 4.4 to 10.1 minutes when the corpora were split this way
+      # (runs 43762600658, 43774447047), and up to 12.8 over ten runs since
+      # (run 44095267353, the newest and the longest); the limit is twice
+      # that.
       - name: Run Graph Fuzzer
-        timeout-minutes: 20
+        timeout-minutes: 26
         env:
           SAFEDI_GRAPH_FUZZER_ITERATIONS: ${{ matrix.iterations }}
           SAFEDI_GRAPH_FUZZER_STARTING_SEED: ${{ matrix.starting-seed }}

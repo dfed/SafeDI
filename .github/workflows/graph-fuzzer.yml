@@ -306,7 +306,10 @@ jobs:
     if: ${{ !cancelled() && inputs.coverage && (needs.coverage-build.result == 'success' || inputs.bundle) }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    timeout-minutes: 30
+    # Above the fuzzer step's limit by more than the longest the job's other
+    # steps have taken: one job ran 20.0 minutes, 11 of them initializing
+    # its container (run 43879263598).
+    timeout-minutes: 40
     permissions:
       contents: read
     strategy:
@@ -344,11 +347,12 @@ jobs:
           mkdir -p graph-fuzzer "$RUNNER_TEMP/graph-fuzzer-profiles"
       # Only the fuzzer's own process writes to the profile folder: every
       # process it starts gets an LLVM_PROFILE_FILE of its own in the test's
-      # temporary directory. A shard's fuzzer has taken 4.4 to 10.1 minutes
-      # (runs 43762600658, 43774447047); the step's limit is twice that and under the
+      # temporary directory. A shard's fuzzer has taken up to 14.1 minutes over
+      # five dispatches (run 43995669689, the seam corpus's seeds 250+250;
+      # 13.95 in run 43945139805); the step's limit is twice that and under the
       # job's, so a shard that runs out of time still uploads what it has.
       - name: Run Graph Fuzzer
-        timeout-minutes: 20
+        timeout-minutes: 28
         env:
           SAFEDI_GRAPH_FUZZER_ITERATIONS: ${{ matrix.iterations }}
           SAFEDI_GRAPH_FUZZER_STARTING_SEED: ${{ matrix.starting-seed }}
