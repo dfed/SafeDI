@@ -99,10 +99,10 @@ struct ConstructionMemo {
 		/// The received properties in scope at the place only as the instance of a `LazilyInstantiated` property.
 		let lazilyInstantiatedInstanceProperties: Set<Property>
 		let reboundProperties: Set<Property>
-		/// The spellings of `property`'s type and of each property of the two sets, sorted, which generated code spells as
+		/// The spellings of `property`'s type and of each property of the two sets, sorted, as UTF-8 bytes, which generated code spells as
 		/// declared: `==` reads `any P` as `P`, so it alone would let a place reuse a generator that spells its property
 		/// otherwise.
-		let spellings: [String]
+		let spellings: [[UInt8]]
 		/// The generator the pass before created for the place, whose children and findings the place's build reads. Two
 		/// places of the pass before that shared a generator share it here too.
 		let previousPassGenerator: ObjectIdentifier?
@@ -237,7 +237,7 @@ struct ConstructionLog {
 		case cycleParameterContext([CycleParameter]?)
 
 		func isAlike(_ other: Self) -> Bool {
-			self == other && spellings == other.spellings
+			self == other && spellings.map { Array($0.utf8) } == other.spellings.map { Array($0.utf8) }
 		}
 
 		/// The spelling of every type the answer holds, in an order that depends only on the answer.
@@ -245,8 +245,8 @@ struct ConstructionLog {
 			switch self {
 			case let .nearestDeclaration(declaration):
 				guard let declaration else { return [] }
-				return declaration.bindings.map { "\($0.key.spelling)=\($0.value.spelling)" }.sorted()
-					+ declaration.formsBeingBuilt.map(\.spelling).sorted()
+				return declaration.bindings.map { "\($0.key.spelling)=\($0.value.spelling)" }.sortedByUTF8()
+					+ declaration.formsBeingBuilt.map(\.spelling).sortedByUTF8()
 			case let .binding(property):
 				return property.map { [$0.spelling] } ?? []
 			case let .declarationClosedOn(declaration):
@@ -256,7 +256,7 @@ struct ConstructionLog {
 					var spellings = [parameter.property.spelling, parameter.receiver.property.spelling, parameter.redeclaration.property.spelling, parameter.redeclaration.declaringType.asSource]
 					spellings += parameter.receiver.chain.map(\.asSource)
 					for forms in [parameter.receivedForms, parameter.requiredForms, parameter.requiredAliasFulfillingForms, parameter.onlyIfAvailableUnwrappedForms] {
-						spellings.append(forms.map(\.spelling).sorted().joined(separator: ","))
+						spellings.append(forms.map(\.spelling).sortedByUTF8().joined(separator: ","))
 					}
 					return spellings
 				}
@@ -319,12 +319,20 @@ extension Property {
 	}
 
 	/// The spellings of `property`'s and `properties`' types, for a construction memo's key (see `ConstructionMemo.Key`).
-	static func spellingsForConstructionMemo(of property: Property, _ propertySets: Set<Property>...) -> [String] {
-		var spellings = [property.spelling]
+	static func spellingsForConstructionMemo(of property: Property, _ propertySets: Set<Property>...) -> [[UInt8]] {
+		var spellings = [Array(property.spelling.utf8)]
 		for properties in propertySets where !properties.isEmpty {
-			spellings.append(properties.map(\.spelling).sorted().joined(separator: ","))
+			spellings.append(Array(properties.map(\.spelling).sortedByUTF8().joined(separator: ",").utf8))
 		}
 		return spellings
+	}
+}
+
+extension [String] {
+	/// The strings in the order of their UTF-8 bytes. `String`'s `==` and `<` read canonically equivalent spellings as one,
+	/// which generated code spells as declared, so spellings a memo compares are compared and ordered by their bytes.
+	fileprivate func sortedByUTF8() -> [String] {
+		sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }
 	}
 }
 

@@ -84,6 +84,8 @@ enum ConstructionMemoChecks {
 	}
 
 	/// A 128-bit digest of each value's data, memoized per class instance, which holds the same data wherever it is reached.
+	/// Text is hashed by its UTF-8 bytes, since `String`'s hash reads canonically equivalent spellings as one, and generated
+	/// code spells each as declared.
 	private struct Digests {
 		struct Digest: Hashable, Comparable {
 			let high: Int
@@ -108,22 +110,22 @@ enum ConstructionMemoChecks {
 				high.combine(identifier)
 				low.combine(identifier)
 			case let .leaf(text):
-				high.combine(text)
-				low.combine(text)
+				high.combine(Array(text.utf8))
+				low.combine(Array(text.utf8))
 			case let .unordered(typeName, children):
-				high.combine(typeName)
-				low.combine(typeName)
+				high.combine(Array(typeName.utf8))
+				low.combine(Array(typeName.utf8))
 				for childDigest in children.map({ digest(of: $0.value) }).sorted() {
 					high.combine(childDigest)
 					low.combine(childDigest)
 				}
 			case let .ordered(typeName, children):
-				high.combine(typeName)
-				low.combine(typeName)
+				high.combine(Array(typeName.utf8))
+				low.combine(Array(typeName.utf8))
 				for child in children {
 					let childDigest = digest(of: child.value)
-					high.combine(child.label)
-					low.combine(child.label)
+					high.combine(child.label.map { Array($0.utf8) })
+					low.combine(child.label.map { Array($0.utf8) })
 					high.combine(childDigest)
 					low.combine(childDigest)
 				}
