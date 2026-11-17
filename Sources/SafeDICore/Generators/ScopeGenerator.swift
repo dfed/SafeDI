@@ -7537,7 +7537,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let sendablePassedUpBuilders = parameters.parameterTree.passedUpBuildersCapturedBySendableFunctions
 		let flatReceivedParameters = zip(flatReceivedProperties, flatReceivedNames).map { property, name in
 			let typeDescription = if sendablePassedUpBuilders.contains(property), !property.typeDescription.isSendableFunction {
-				property.typeDescription.asSendableFunction
+				property.typeDescription.asSendableBuilder
 			} else {
 				property.typeDescription
 			}
