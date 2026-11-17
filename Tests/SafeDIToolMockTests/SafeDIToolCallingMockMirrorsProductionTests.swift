@@ -85,15 +85,35 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	mutating func generate_reportsTwinsError_whenCallingMocksFillReceivesValueMiddleCalledTypeBuilds(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePaymentService` receives `cart: Cart`, which `OrderScreen` builds where it calls `CheckoutScreen`, but `OrderScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it `OrderScreen`’s values. Declare `@Received let cart: Cart` on `CheckoutScreen`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `OrderScreen` fills the builder itself.
+			\(fixtures["App"]!["AppTypes.swift"]):12:5: error: `LivePaymentService` receives `cart: Cart`, which `OrderScreen` builds where it calls `CheckoutScreen`, but `OrderScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it `OrderScreen`’s values. Declare `@Received let cart: Cart` on `CheckoutScreen`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `PaymentService` in module `Order` or a module it lists among its SafeDI dependencies, so `OrderScreen` fills the builder itself.
+			\(fixtures["Order"]!["OrderTypes.swift"]):16:5: note: `OrderScreen` declares `cart: Cart` here.
+			"""
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.w1MiddleModuleModules(caller: caller.attribute, callee: calledTypes.attribute), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.w1MiddleModuleModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsErrorOnOuterCalledTypesPath_whenMiddleTypeThatBuildsValueIsInOuterCalledTypesModule(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
+		// `OrderScreen` is in `StoreScreen`’s module, so `StoreScreen`’s public mock builds it inline, and the path where
+		// `StoreScreen` calls `CheckoutScreen` is the one that loses `OrderScreen`’s `cart`. The twin builds `OrderScreen`
+		// inline too: it declares it a plain type.
+		let diagnostics = { (fixtures: [String: FixturePaths]) in
+			"""
+			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePaymentService` receives `cart: Cart`, which `OrderScreen` builds on the path where `StoreScreen` calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let cart: Cart` on `CheckoutScreen`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
 			\(fixtures["Store"]!["StoreTypes.swift"]):16:5: note: `OrderScreen` declares `cart: Cart` here.
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
-			try await executeSafeDIToolMultiModuleTest(modules: Self.w1MiddleModules(caller: caller.attribute, callee: calledTypes.attribute), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+			try await executeSafeDIToolMultiModuleTest(modules: Self.w1MiddleModules(caller: caller.attribute, callee: calledTypes.attribute, middle: calledTypes.attribute), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
-			try await executeSafeDIToolMultiModuleTest(modules: Self.w1MiddleModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+			try await executeSafeDIToolMultiModuleTest(modules: Self.w1MiddleModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, middle: "@Instantiable"), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		}
 	}
 
@@ -166,19 +186,50 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_reportsTwinsError_whenCallingMocksFillReadsValueOfLevelBetweenBuildsOfCalledType(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
-		let diagnostics = { (fixtures: [String: FixturePaths]) in
+	mutating func generate_fillsEachHomesApiWithNearestLogger_whenCallingMocksFillReadsValueOfLevelBetweenBuildsOfCalledType(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		// The seam form passes the builder `Home` takes on unchanged where `Loop` builds `Home` again, so its caller cannot hand
+		// the inner `Home`’s place `Loop`’s `logger`, and the twin reports it. The calling mock builds `Home` inline, so its
+		// level functions hand that place `Loop`’s `logger` and the outer place `Root`’s, as inline does: it accepts the graph
+		// and builds inline’s values, which the twin’s error would say of it falsely.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: `LiveApi` receives `logger: Logger`, which `Home`’s tree builds where it instantiates `Home` again, but that call passes the builder `Home` takes for `Home`’s `api: any Api` on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let logger: Logger` on `Home`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies, so `Home` fills the builder itself.
 			\(fixtures["Feature"]!["FeatureTypes.swift"]):22:5: note: `Loop` declares `logger: Logger` here.
 			"""
-		}
-		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
-			try await executeSafeDIToolMultiModuleTest(modules: Self.seamBuiltAgainModules(caller: caller.attribute, callee: calledTypes.attribute), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
-		}
-		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
+		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.seamBuiltAgainModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		}
+		try await expectValuesEqualInline(
+			mock: Self.seamBuiltAgainModules(caller: caller.attribute, callee: calledTypes.attribute),
+			inline: Self.seamBuiltAgainInlineModules,
+			caller: caller,
+			handWrittenCall: "import Feature\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: [DifferentialValueProbe(name: "Root", expression: "Root.mock()", knownRightExpression: "Root()")],
+		)
+	}
+
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsReenteredPlaceTheScreensCart_whenCallInsideFillReentersCalledTypesRootLevel(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		// `LivePayments` fills `Checkout`’s `payments` and builds `Checkout` again, from inside the fill of the `payments`
+		// place `CartScreen` holds, where inline reads `CartScreen`’s `cart`. The call inside the fill re-enters the root level
+		// function of the call that encloses it, and hands it its own `cart`, so the re-entered `Checkout`’s top place gets
+		// `CartScreen`’s `cart`, as inline’s does, never the enclosing caller’s, which has none.
+		try await expectValuesEqualInline(
+			mock: Self.reenteringFillModules(caller: caller.attribute, callee: calledTypes.attribute),
+			inline: Self.reenteringFillInlineModules,
+			caller: caller,
+			handWrittenCall: "import Shared\n\nfunc callMock() {\n    _ = Holder.mock()\n}\n",
+			probes: [
+				DifferentialValueProbe(name: "Holder", expression: "Holder.mock()", knownRightExpression: "Holder()"),
+				DifferentialValueProbe(
+					name: "retried payments’ cart",
+					expression: "{ let cart = Cart(); let screen = Holder.mock().checkout.cartScreenBuilder.instantiate(cart); return ((screen.payments as! LivePayments).retryBuilder.instantiate().payments as! LivePayments).cart === cart }()",
+					knownRightExpression: "{ let cart = Cart(); let screen = Holder().checkout.cartScreenBuilder.instantiate(cart); return ((screen.payments as! LivePayments).retryBuilder.instantiate().payments as! LivePayments).cart === cart }()",
+				),
+			],
+			samples: [DifferentialValueSample(type: "Cart", expression: "Cart()")],
+		)
 	}
 
 	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
@@ -458,9 +509,232 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		#expect(result.comparedValues == compileVerificationIsEnabled)
 	}
 
+	@Test(arguments: CallingMockCaller.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesTheValueTwoFillsReadInItsRequiredForm_whenTheirTypesAndTheCallerAreDeclaredInAnyOrder(caller: CallingMockCaller) async throws {
+		// `DefaultService` receives `token: Token` and `DefaultGadget` `token: Token?` only if available, each beneath the
+		// route where `Page` binds `token` and the one where nothing does: the call hands both fills the caller’s `token` in
+		// its required form, which `mock()` takes, whatever order the three types are declared in.
+		let declarations = [
+			"""
+			@Instantiable(fulfillingAdditionalTypes: [Service.self])
+			public struct DefaultService: Service, Instantiable {
+			    public init(token: Token) {
+			        self.token = token
+			    }
+
+			    @Received public let token: Token
+			}
+			""",
+			"""
+			@Instantiable(fulfillingAdditionalTypes: [Gadget.self])
+			public struct DefaultGadget: Gadget, Instantiable {
+			    public init(token: Token?) {
+			        self.token = token
+			    }
+
+			    @Received(onlyIfAvailable: true) public let token: Token?
+			}
+			""",
+			"""
+			\(caller.attribute)
+			public struct HubScreen: Instantiable {
+			    public init(hub: Hub) {
+			        self.hub = hub
+			    }
+
+			    @Instantiated public let hub: Hub
+			}
+			""",
+		]
+		let orders = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]
+		var generatedFilesByOrder = [[Int]: [String: String]]()
+		for order in orders {
+			let modules = [
+				Self.twoReadersCoreModule,
+				ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+					"AppTypes.swift": "import Core\nimport SafeDI\n\n" + order.map { declarations[$0] }.joined(separator: "\n\n"),
+				], dependencies: ["Core"]),
+			]
+			let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: order == orders[0] ? .returningOutcomeOnly : .skipped, filesToDelete: &filesToDelete)
+			if order == orders[0], let compilation = output.compilation {
+				#expect(compilation.failure == nil, "\(compilation.failure.map { "\($0)" } ?? "")")
+			}
+			generatedFilesByOrder[order] = output.modules["App"]?.generatedFiles
+		}
+		let firstFiles = try #require(generatedFilesByOrder[orders[0]])
+		// The internal mock builds `token`, as inline does; the public one takes it, and builds it where its caller passes `nil`.
+		let expectedSignature = switch caller {
+		case .internal:
+			"static func mock(\n        safeDIOverrides: SafeDIOverrides = .init()\n    ) -> HubScreen {"
+		case .public:
+			"static func mock(\n        token: Token? = nil,\n        safeDIOverrides: SafeDIOverrides = .init()\n    ) -> HubScreen {"
+		}
+		#expect(Self.mockSignature(of: "HubScreen", in: firstFiles["App.swift"] ?? "") == expectedSignature)
+		for order in orders.dropFirst() {
+			#expect(generatedFilesByOrder[order] == firstFiles, "order \(order)")
+		}
+	}
+
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsEachRouteItsNearestToken_whenOneRouteBindsTokenLazilyAndTheCallerHoldsAPlainToken(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		// `Desk` binds `token` lazily above one of `Model`’s places, and the caller holds a plain `token` above the other:
+		// `DefaultService` reads `Desk`’s instance beneath `Desk` and the caller’s `token` beside it, as inline does.
+		try await expectValuesEqualInline(
+			mock: Self.lazyRouteModules(caller: caller.attribute, callee: calledTypes.attribute),
+			inline: Self.lazyRouteInlineModules,
+			caller: caller,
+			handWrittenCall: "import Core\n\nfunc callMock() {\n    _ = OfficeScreen.mock()\n}\n",
+			probes: [DifferentialValueProbe(name: "OfficeScreen", expression: "OfficeScreen.mock()", knownRightExpression: "OfficeScreen()")],
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// `Office` builds `Model`, whose `service` is a place, inside `Desk`, which binds `token` lazily first, and beside it,
+	/// where the caller’s plain `token` is nearest.
+	private static func lazyRouteModules(caller: String, callee: String) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Core", packageName: "Core", swiftFileContentByFilePath: ["CoreTypes.swift": Self.lazyRouteCore(callee: callee)]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": "import Core\n" + Self.lazyRouteApp(caller: caller)], dependencies: ["Core"]),
+		]
+	}
+
+	/// `lazyRouteModules`’ types in one module, `OfficeScreen` a root: what inline builds.
+	private static let lazyRouteInlineModules = [
+		ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": Self.lazyRouteCore(callee: "@Instantiable") + "\n" + Self.lazyRouteApp(caller: "@Instantiable(isRoot: true)").replacingOccurrences(of: "import SafeDI\n", with: "")]),
+	]
+
+	private static func lazyRouteCore(callee: String) -> String {
+		"""
+		import SafeDI
+
+		public protocol Service {}
+
+		@Instantiable
+		public final class Token: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public struct Model: Instantiable {
+		    public init(service: any Service) {
+		        self.service = service
+		    }
+
+		    @Instantiated public let service: any Service
+		}
+
+		@Instantiable
+		public struct Desk: Instantiable {
+		    public init(token: LazilyInstantiated<Token>, model: Model) {
+		        self.token = token
+		        self.model = model
+		    }
+
+		    @Instantiated public let token: LazilyInstantiated<Token>
+		    @Instantiated public let model: Model
+		}
+
+		\(callee)
+		public struct Office: Instantiable {
+		    init(desk: Desk, model: Model) {
+		        self.desk = desk
+		        self.model = model
+		    }
+
+		    @Instantiated public let desk: Desk
+		    @Instantiated public let model: Model
+		}
+		"""
+	}
+
+	private static func lazyRouteApp(caller: String) -> String {
+		"""
+		import SafeDI
+
+		@Instantiable(fulfillingAdditionalTypes: [Service.self])
+		public struct DefaultService: Service, Instantiable {
+		    public init(token: Token) {
+		        self.token = token
+		    }
+
+		    @Received public let token: Token
+		}
+
+		\(caller)
+		public struct OfficeScreen: Instantiable {
+		    public init(token: Token, office: Office) {
+		        self.token = token
+		        self.office = office
+		    }
+
+		    @Instantiated public let token: Token
+		    @Instantiated public let office: Office
+		}
+		"""
+	}
+
+	/// `Hub` builds `Model`, whose `service` and `gadget` are places, inside `Page`, which binds `token` first, and beside it.
+	private static let twoReadersCoreModule = ModuleFixture(name: "Core", packageName: "Core", swiftFileContentByFilePath: [
+		"CoreTypes.swift": """
+		import SafeDI
+
+		public protocol Service {}
+		public protocol Gadget {}
+
+		@Instantiable
+		public final class Token: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public struct Model: Instantiable {
+		    public init(service: any Service, gadget: any Gadget) {
+		        self.service = service
+		        self.gadget = gadget
+		    }
+
+		    @Instantiated public let service: any Service
+		    @Instantiated public let gadget: any Gadget
+		}
+
+		@Instantiable
+		public struct Page: Instantiable {
+		    public init(token: Token, model: Model) {
+		        self.token = token
+		        self.model = model
+		    }
+
+		    @Instantiated public let token: Token
+		    @Instantiated public let model: Model
+		}
+
+		@Instantiable(generateMock: .public)
+		public struct Hub: Instantiable {
+		    init(page: Page, model: Model) {
+		        self.page = page
+		        self.model = model
+		    }
+
+		    @Instantiated public let page: Page
+		    @Instantiated public let model: Model
+		}
+		""",
+	])
+
+	/// The declaration of `typeName`’s `mock(` in `generatedFile`, from `static func mock(` or `public static func mock(`
+	/// to the line that opens its body, or `nil` when the file declares none.
+	private static func mockSignature(of typeName: String, in generatedFile: String) -> String? {
+		guard let extensionRange = generatedFile.range(of: "extension \(typeName) {"),
+		      let start = generatedFile.range(of: "static func mock(", range: extensionRange.upperBound..<generatedFile.endIndex),
+		      let end = generatedFile.range(of: "-> \(typeName) {", range: start.upperBound..<generatedFile.endIndex)
+		else { return nil }
+		return String(generatedFile[start.lowerBound..<end.upperBound])
+	}
 
 	/// The caller’s attribute line in its production twin.
 	private static let twinCaller = "@Instantiable(generateDependencyTree: true)"
@@ -538,9 +812,242 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		#expect(compilation.failure == nil, "\(compilation.failure.map { "\($0)" } ?? "")", sourceLocation: sourceLocation)
 	}
 
+	/// Expects the calling mock of `mock` to be accepted and to compile with `handWrittenCall`, a call of its `mock()` in the
+	/// caller’s module for an internal caller and in a module that depends on it for a `.public` one, and, where compile
+	/// verification is on, `probes` to build in it what they build of `inline`, the same types in one module.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func expectValuesEqualInline(
+		mock: [ModuleFixture],
+		inline: [ModuleFixture],
+		caller: CallingMockCaller,
+		handWrittenCall: String,
+		probes: [DifferentialValueProbe],
+		samples: [DifferentialValueSample] = [],
+		sourceLocation: SourceLocation = #_sourceLocation,
+	) async throws {
+		let callerModule = mock[mock.count - 1]
+		let modules: [ModuleFixture] = switch caller {
+		case .internal:
+			Array(mock.dropLast()) + [ModuleFixture(
+				name: callerModule.name,
+				packageName: callerModule.packageName,
+				swiftFileContentByFilePath: callerModule.swiftFileContentByFilePath.merging(["HandWrittenCall.swift": handWrittenCall]) { first, _ in first },
+				dependencies: callerModule.dependencies,
+			)]
+		case .public:
+			mock + [ModuleFixture(
+				name: "Consumer",
+				packageName: "Consumer",
+				swiftFileContentByFilePath: ["HandWrittenCall.swift": "import \(callerModule.name)\n" + handWrittenCall],
+				dependencies: mock.map(\.name),
+			)]
+		}
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
+		#expect(compilation.failure == nil, "\(compilation.failure.map { "\($0)" } ?? "")", sourceLocation: sourceLocation)
+		guard compileVerificationIsEnabled, compilation.failure == nil else { return }
+		let inlineOutput = try await executeSafeDIToolMultiModuleTest(modules: inline, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		let comparison = try #require(try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(output: output, modules: modules),
+			knownRight: DifferentialValuePath(output: inlineOutput, modules: inline),
+			probes: probes,
+			samples: samples,
+			filesToDelete: &filesToDelete,
+		), sourceLocation: sourceLocation)
+		for difference in comparison.differences {
+			Issue.record("The calling mock builds other values than inline for \(difference)\n\(comparison.report)", sourceLocation: sourceLocation)
+		}
+	}
+
 	// MARK: Fixtures
 
-	/// W1: `LivePaymentService` fills `CheckoutScreen`’s place and receives the `cart` `StoreScreen`, which calls `CheckoutScreen`, builds (slice 4 helper’s W1-0).
+	/// `seamBuiltAgainModules`’ types in one module, `Root` a root: what inline builds.
+	private static let seamBuiltAgainInlineModules = [
+		ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+			"AppTypes.swift": """
+			import SafeDI
+
+			public protocol Api {}
+
+			@Instantiable
+			public final class Cache: Instantiable {
+			    public init() {}
+			}
+
+			@Instantiable
+			public final class Logger: Instantiable {
+			    public init() {}
+			}
+
+			@Instantiable
+			final class Loop: Instantiable {
+			    init(logger: Logger, homeBuilder: Instantiator<Home>) {
+			        self.logger = logger
+			        self.homeBuilder = homeBuilder
+			    }
+
+			    @Instantiated private let logger: Logger
+			    @Instantiated private let homeBuilder: Instantiator<Home>
+			}
+
+			@Instantiable
+			public final class Home: Instantiable {
+			    init(api: any Api, loopBuilder: Instantiator<Loop>) {
+			        self.api = api
+			        self.loopBuilder = loopBuilder
+			    }
+
+			    @Instantiated private let api: any Api
+			    @Instantiated private let loopBuilder: Instantiator<Loop>
+			}
+
+			@Instantiable(fulfillingAdditionalTypes: [Api.self])
+			final class LiveApi: Api, Instantiable {
+			    init(logger: Logger) {
+			        self.logger = logger
+			    }
+
+			    @Received private let logger: Logger
+			}
+
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(logger: Logger, home: Home) {
+			        self.logger = logger
+			        self.home = home
+			    }
+
+			    @Instantiated private let logger: Logger
+			    @Instantiated private let home: Home
+			}
+			""",
+		]),
+	]
+
+	/// D1’s shape for a calling mock: `LivePayments` fills both of `Checkout`’s `payments` places, receives `cart` only if
+	/// available, which only `CartScreen`, beneath the second place, holds, and builds `Checkout` again.
+	private static func reenteringFillModules(caller: String, callee: String) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Shared", packageName: "Shared", swiftFileContentByFilePath: [
+				"SharedTypes.swift": """
+				import SafeDI
+
+				public final class Cart {
+				    public init() {}
+				}
+
+				public protocol Payments: AnyObject {}
+
+				\(callee)
+				public struct Checkout: Instantiable {
+				    init(payments: any Payments, cartScreenBuilder: Instantiator<CartScreen>) {
+				        self.payments = payments
+				        self.cartScreenBuilder = cartScreenBuilder
+				    }
+
+				    @Instantiated public let payments: any Payments
+				    @Instantiated public let cartScreenBuilder: Instantiator<CartScreen>
+				}
+
+				@Instantiable
+				public struct CartScreen: Instantiable {
+				    public init(cart: Cart, payments: any Payments) {
+				        self.cart = cart
+				        self.payments = payments
+				    }
+
+				    @Forwarded public let cart: Cart
+				    @Instantiated public let payments: any Payments
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+				"AppTypes.swift": """
+				import SafeDI
+				import Shared
+
+				@Instantiable(fulfillingAdditionalTypes: [(any Payments).self])
+				public final class LivePayments: Payments, Instantiable {
+				    public init(cart: Cart?, retryBuilder: Instantiator<Checkout>) {
+				        self.cart = cart
+				        self.retryBuilder = retryBuilder
+				    }
+
+				    @Received(onlyIfAvailable: true) public let cart: Cart?
+				    @Instantiated public let retryBuilder: Instantiator<Checkout>
+				}
+
+				\(caller)
+				public struct Holder: Instantiable {
+				    public init(checkout: Checkout) {
+				        self.checkout = checkout
+				    }
+
+				    @Instantiated public let checkout: Checkout
+				}
+				""",
+			], dependencies: ["Shared"]),
+		]
+	}
+
+	/// `reenteringFillModules`’ types in one module, `Holder` a root: what inline builds.
+	private static let reenteringFillInlineModules = [
+		ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+			"AppTypes.swift": """
+			import SafeDI
+
+			public final class Cart {
+			    public init() {}
+			}
+
+			public protocol Payments: AnyObject {}
+
+			@Instantiable
+			public struct Checkout: Instantiable {
+			    init(payments: any Payments, cartScreenBuilder: Instantiator<CartScreen>) {
+			        self.payments = payments
+			        self.cartScreenBuilder = cartScreenBuilder
+			    }
+
+			    @Instantiated public let payments: any Payments
+			    @Instantiated public let cartScreenBuilder: Instantiator<CartScreen>
+			}
+
+			@Instantiable
+			public struct CartScreen: Instantiable {
+			    public init(cart: Cart, payments: any Payments) {
+			        self.cart = cart
+			        self.payments = payments
+			    }
+
+			    @Forwarded public let cart: Cart
+			    @Instantiated public let payments: any Payments
+			}
+
+			@Instantiable(fulfillingAdditionalTypes: [(any Payments).self])
+			public final class LivePayments: Payments, Instantiable {
+			    public init(cart: Cart?, retryBuilder: Instantiator<Checkout>) {
+			        self.cart = cart
+			        self.retryBuilder = retryBuilder
+			    }
+
+			    @Received(onlyIfAvailable: true) public let cart: Cart?
+			    @Instantiated public let retryBuilder: Instantiator<Checkout>
+			}
+
+			@Instantiable(isRoot: true)
+			public struct Holder: Instantiable {
+			    public init(checkout: Checkout) {
+			        self.checkout = checkout
+			    }
+
+			    @Instantiated public let checkout: Checkout
+			}
+			""",
+		]),
+	]
+
+	/// W1:`LivePaymentService` fills `CheckoutScreen`’s place and receives the `cart` `StoreScreen`, which calls `CheckoutScreen`, builds (slice 4 helper’s W1-0).
 	private static func w1Modules(caller: String, callee: String) -> [ModuleFixture] {
 		[
 			ModuleFixture(name: "Checkout", packageName: "Checkout", swiftFileContentByFilePath: [
@@ -609,8 +1116,94 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		]
 	}
 
-	/// W1 three called types deep: the fill receives the `cart` of `OrderScreen`, the middle one (W1-h).
-	private static func w1MiddleModules(caller: String, callee: String) -> [ModuleFixture] {
+	/// W1 three called types deep: the fill receives the `cart` of `OrderScreen`, the middle one (W1-h), in a module and
+	/// package of its own between `StoreScreen`’s and `CheckoutScreen`’s.
+	private static func w1MiddleModuleModules(caller: String, callee: String) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Checkout", packageName: "Checkout", swiftFileContentByFilePath: [
+				"CheckoutTypes.swift": """
+				import SafeDI
+
+				public protocol PaymentService {}
+
+				\(callee)
+				public final class CheckoutScreen: Instantiable {
+				    init(payments: any PaymentService) {
+				        self.payments = payments
+				    }
+
+				    @Instantiated private let payments: any PaymentService
+				}
+				""",
+			]),
+			ModuleFixture(name: "Order", packageName: "Order", swiftFileContentByFilePath: [
+				"OrderTypes.swift": """
+				import SafeDI
+				import Checkout
+
+				@Instantiable
+				public final class Cart: Instantiable {
+				    public init() {}
+				}
+
+				\(callee)
+				public final class OrderScreen: Instantiable {
+				    init(cart: Cart, checkout: CheckoutScreen) {
+				        self.cart = cart
+				        self.checkout = checkout
+				    }
+
+				    @Instantiated private let cart: Cart
+				    @Instantiated private let checkout: CheckoutScreen
+				}
+				""",
+			], dependencies: ["Checkout"]),
+			ModuleFixture(name: "Store", packageName: "Store", swiftFileContentByFilePath: [
+				"StoreTypes.swift": """
+				import SafeDI
+				import Order
+
+				\(callee)
+				public final class StoreScreen: Instantiable {
+				    init(order: OrderScreen) {
+				        self.order = order
+				    }
+
+				    @Instantiated private let order: OrderScreen
+				}
+				""",
+			], dependencies: ["Checkout", "Order"]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+				"AppTypes.swift": """
+				import SafeDI
+				import Checkout
+				import Order
+				import Store
+
+				@Instantiable(fulfillingAdditionalTypes: [PaymentService.self])
+				final class LivePaymentService: PaymentService, Instantiable {
+				    init(cart: Cart) {
+				        self.cart = cart
+				    }
+
+				    @Received private let cart: Cart
+				}
+
+				\(caller)
+				public final class Root: Instantiable {
+				    public init(store: StoreScreen) {
+				        self.store = store
+				    }
+
+				    @Instantiated private let store: StoreScreen
+				}
+				""",
+			], dependencies: ["Checkout", "Order", "Store"]),
+		]
+	}
+
+	/// W1-h with `OrderScreen` in `StoreScreen`’s module, declared with `middle`.
+	private static func w1MiddleModules(caller: String, callee: String, middle: String) -> [ModuleFixture] {
 		[
 			ModuleFixture(name: "Checkout", packageName: "Checkout", swiftFileContentByFilePath: [
 				"CheckoutTypes.swift": """
@@ -638,7 +1231,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				    public init() {}
 				}
 
-				\(callee)
+				\(middle)
 				public final class OrderScreen: Instantiable {
 				    init(cart: Cart, checkout: CheckoutScreen) {
 				        self.cart = cart

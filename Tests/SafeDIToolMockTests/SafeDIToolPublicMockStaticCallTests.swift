@@ -4101,8 +4101,9 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 	/// mock in `Top`, builds `Shell`. Then `App`.
 	private static func chainModules(sendable: Bool = false, outer: Bool = false, app: [String]) -> [ModuleFixture] {
 		let instantiator = sendable ? "SendableInstantiator" : "Instantiator"
+		// A `@Sendable` builder function captures the `token` a fill reads of its caller, so it must be `Sendable`.
 		var modules = [
-			ModuleFixture(name: "Core", packageName: "Core", swiftFileContent: [chainCore]),
+			ModuleFixture(name: "Core", packageName: "Core", swiftFileContent: [sendable ? chainCore + "\n\nextension Token: @unchecked Sendable {}\n" : chainCore]),
 			ModuleFixture(name: "Feed", packageName: "Feed", swiftFileContent: [
 				"""
 				import Core
