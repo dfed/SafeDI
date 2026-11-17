@@ -11942,7 +11942,10 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// and `x: LazilyInstantiated<X>?` under different labels to fix.", `unpassableCycleLabel`), and of each list of the
 	/// places one fill finding holds for ("the builders for `A`’s `x: X` (`x` of `xBuilder`) and `B`’s `y: Y`",
 	/// "the builder `Seam` takes for `A`’s `x: X`, `B`’s `y: Y`, and `B`’s `z: Z` on unchanged", `FillFinding`), each of
-	/// which SafeDI lists in the order of their types' names, and of the lists a merged fill finding prints, also in name
+	/// which SafeDI lists in the order of their types' names, and of each list of the types a `@Sendable` capture error
+	/// tells to declare a wrapper `Sendable` ("Declare `x` on `A`, `B`, and `C`, and this property, as
+	/// `SendableInstantiator<X>` to fix."), which SafeDI lists in source order, so a file-name reversal reorders them,
+	/// and of the lists a merged fill finding prints, in name
 	/// order: the seams whose calls present its places ("which `Mid` builds where it calls `Hub` and `Hub2`, but"), the
 	/// seams a remedy names ("Declare `@Received let tag: Tag` on `Hub` and `Hub2`, so the builders’ values structs carry it"), its
 	/// fulfil remedies ("declare an @Instantiable type that fulfills `Api` in module `Middle` or a module it lists among its
@@ -11991,6 +11994,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 			("(?<= again \\()`[^`]*`(?:\(separator)`[^`]*`)+(?=\\))", backtickedItem),
 			("(?<=would read )`[^`]*`’s(?:(?:, or |, | or )`[^`]*`’s)+(?= `)", "`[^`]*`’s"),
 			("(?<=inside that )`[^`]*`(?:(?:, or |, | or )`[^`]*`)+(?=, but )", backtickedItem),
+			("(?<=` on )`[^`]*`(?:(?:, and |, | and )`[^`]*`)+(?=(?:, and this property,)? as `Sendable[^`]*` to fix\\.)", backtickedItem),
 		] {
 			diagnostic = sortingItems(ofListsMatching: try! NSRegularExpression(pattern: list), item: try! NSRegularExpression(pattern: item), in: diagnostic)
 		}
