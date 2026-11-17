@@ -4872,11 +4872,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let label = parameter.property.label
 			let value = if unavailableProperties.contains(parameter.property) {
 				"nil"
-			} else if callSiteLazilyInstantiatedInstanceProperties.contains(parameter.property.asUnwrappedProperty) {
+			} else if let instanceRead = callSiteLazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceRead(of: parameter.property) {
 				// A deliberate gap: reading the instance here creates it when the function is called, not when a receiver in
 				// the function's body first reads it. Mock generation does the same (`mockCycleParameterArguments`). See
-				// "Eager instances at a lazy cycle's calls" in `.claude/rules/cycle-generation.md`.
-				"\(label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+				// "Eager instances at a lazy cycle's calls" in `.claude/rules/cycle-generation.md`. Beneath a fill that takes the
+				// wrapper optionally, the instance is read through the optional.
+				"\(label)\(instanceRead)"
 			} else {
 				label
 			}
