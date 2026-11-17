@@ -242,7 +242,7 @@ extension DependencyTreeGenerator {
 		for holeType in orderedHoleTypes {
 			let stem = stemByHoleType[holeType, default: ""]
 			let rootTypeNames = (plain: "\(scopeTypeNames.plain)_\(stem)".spelledAsIdentifier, sendable: "\(scopeTypeNames.sendable)_\(stem)".spelledAsIdentifier)
-			let builtType = returnType(of: holeType, in: flatHoles)
+			let builtType = flatHoles.builtType(of: holeType)
 			// The enums, nested by type.
 			var byType = ScopeEnumsByType()
 			if let reached = reachedByHoleType[holeType] {
@@ -596,12 +596,6 @@ extension DependencyTreeGenerator {
 	private static func builderParameterType(takingEnum enumType: TypeDescription, returning builtType: TypeDescription, isSendable: Bool) -> TypeDescription {
 		let functionType = TypeDescription.closure(arguments: [enumType], isAsync: false, doesThrow: false, returnType: builtType)
 		return (isSendable ? functionType.asSendableFunction : functionType).asFunctionParameter
-	}
-
-	/// The type the builder of `holeType` returns, as a place of the type spells it: the first in `holes`, which `holes(of:)`
-	/// lists in a fixed order, so a caller's spelling never depends on anything else.
-	private static func returnType(of holeType: SeamSignature.HoleType, in holes: [SeamSignature.Hole]) -> TypeDescription {
-		holes.first { $0.holeType == holeType }?.builtType ?? holeType.builtType
 	}
 
 	// MARK: The type of a builder a person writes
@@ -1031,6 +1025,31 @@ extension DependencyTreeGenerator {
 			}
 		}
 		return scopeEnums
+	}
+}
+
+extension Sequence<SeamSignature.Hole> {
+	/// The type a builder of `holeType` returns, as these places spell it: the most explicit of their spellings
+	/// (`TypeDescription.mostExplicitSpelling(among:)`), which reads the spellings alone, so neither the places' labels, the
+	/// types that declare them nor the order they are declared in decide it, and every site that spells it – the builder, the
+	/// struct of a fill's own level, a caller's dispatchers and conversions – spells it alike; `holeType`'s own spelling where
+	/// no place is of it.
+	func builtType(of holeType: SeamSignature.HoleType) -> TypeDescription {
+		var builtType: TypeDescription?
+		for hole in self where hole.holeType == holeType {
+			builtType = builtType.map { $0.mostExplicitSpelling(among: [hole.builtType]) } ?? hole.builtType
+		}
+		return builtType ?? holeType.builtType
+	}
+
+	/// The type a builder of each hole type of these places returns (`builtType(of:)`), for a caller that spells several.
+	var builtTypeByHoleType: [SeamSignature.HoleType: TypeDescription] {
+		var builtTypeByHoleType = [SeamSignature.HoleType: TypeDescription]()
+		for hole in self {
+			let holeType = hole.holeType
+			builtTypeByHoleType[holeType] = builtTypeByHoleType[holeType].map { $0.mostExplicitSpelling(among: [hole.builtType]) } ?? hole.builtType
+		}
+		return builtTypeByHoleType
 	}
 }
 
