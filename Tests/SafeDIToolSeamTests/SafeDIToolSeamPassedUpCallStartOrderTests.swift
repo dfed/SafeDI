@@ -46,7 +46,7 @@ struct SafeDIToolSeamPassedUpCallStartOrderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_startsPassedUpCallsAfterTheSiblingTheirFillReads_whenTheCallsAreDeclaredBeforeIt() async throws {
+	mutating func generate_startsPassedUpCallsAfterTheSiblingTheirFillReads_whenTheCallsAreDeclaredBeforeIt() async {
 		// `App` fills both places with `LiveCart`, which receives `cart`. Inline, both calls wait for `cart`, so `cart` is
 		// built first. A call that passes a place up starts after a sibling its fill reads that is declared after it: `Store`
 		// builds `cart` first, binds the values its calls carry, then starts `banner` and `checkoutBuilder` in declaration
