@@ -3506,7 +3506,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			        func __safeDI_outer() -> Outer {
 			            _ = Outer.__safeDI_Outer_FF3057936D591834.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
-			                .init(inner_alphaBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner(tag: values.tag) }, inner_zetaBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner_(tag: values.tag) })
+			                .init(inner_alphaBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner_SafeDIScope_Alpha(tag: values.tag) }, inner_zetaBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner_SafeDIScope_Zeta(tag: values.tag) })
 			            }
 			            func __safeDI_gadgetBuilder_Outer_DefaultAlpha_Scope(tag: Tag) -> Outer.SafeDIScope_Gadget.DefaultAlpha_Scope.__safeDI_Builder<any Gadget> {
 			                .init(gadget: { _ in
@@ -3520,10 +3520,10 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			                    return gadget
 			                })
 			            }
-			            func __safeDI_gadgetBuilder_Outer_Inner(tag: Tag) -> Inner.SafeDIScope_Alpha.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultAlpha_Scope.__safeDI_Builder<any Gadget>> {
+			            func __safeDI_gadgetBuilder_Outer_Inner_SafeDIScope_Alpha(tag: Tag) -> Inner.SafeDIScope_Alpha.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultAlpha_Scope.__safeDI_Builder<any Gadget>> {
 			                .init(alpha: { _ in __safeDI_gadgetBuilder_Outer_DefaultAlpha_Scope(tag: tag) })
 			            }
-			            func __safeDI_gadgetBuilder_Outer_Inner_(tag: Tag) -> Inner.SafeDIScope_Zeta.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultZeta_Scope.__safeDI_Builder<any Gadget>> {
+			            func __safeDI_gadgetBuilder_Outer_Inner_SafeDIScope_Zeta(tag: Tag) -> Inner.SafeDIScope_Zeta.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultZeta_Scope.__safeDI_Builder<any Gadget>> {
 			                .init(zeta: { _ in __safeDI_gadgetBuilder_Outer_DefaultZeta_Scope(tag: tag) })
 			            }
 			            return Outer(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Outer())
@@ -3707,7 +3707,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			        func __safeDI_outer() -> Outer {
 			            _ = Outer.__safeDI_Outer_1C249FD2603AF6F0.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
-			                .init(inner_alphaBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner(tag: values.tag) }, inner_zetaBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner_(tag: values.tag) })
+			                .init(inner_alphaBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner_SafeDIScope_Alpha(tag: values.tag) }, inner_zetaBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner_SafeDIScope_Zeta(tag: values.tag) })
 			            }
 			            func __safeDI_gadgetBuilder_Outer_DefaultAlpha_Scope(tag: Tag) -> Outer.SafeDIScope_Gadget.DefaultAlpha_Scope.__safeDI_Builder<any Gadget> {
 			                .init(gadget: { _ in
@@ -3721,10 +3721,10 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			                    return gadget
 			                })
 			            }
-			            func __safeDI_gadgetBuilder_Outer_Inner(tag: Tag) -> Inner.SafeDIScope_Alpha.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultAlpha_Scope.__safeDI_Builder<any Gadget>> {
+			            func __safeDI_gadgetBuilder_Outer_Inner_SafeDIScope_Alpha(tag: Tag) -> Inner.SafeDIScope_Alpha.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultAlpha_Scope.__safeDI_Builder<any Gadget>> {
 			                .init(alpha: { _ in __safeDI_gadgetBuilder_Outer_DefaultAlpha_Scope(tag: tag) })
 			            }
-			            func __safeDI_gadgetBuilder_Outer_Inner_(tag: Tag) -> Inner.SafeDIScope_Zeta.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultZeta_Scope.__safeDI_Builder<any Gadget>> {
+			            func __safeDI_gadgetBuilder_Outer_Inner_SafeDIScope_Zeta(tag: Tag) -> Inner.SafeDIScope_Zeta.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultZeta_Scope.__safeDI_Builder<any Gadget>> {
 			                .init(zeta: { _ in __safeDI_gadgetBuilder_Outer_DefaultZeta_Scope(tag: tag) })
 			            }
 			            return Outer(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Outer())

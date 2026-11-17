@@ -1654,8 +1654,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let generic = fillLevelKeys.count == 1 ? builtType : carriedReturnType(of: fillLevelKeys.dropFirst(), builtType: builtType)
 					return generic.map { .nested(name: ReservedName.builderStructTypeName, parentType: fillLevelEnum.type, generics: [$0]) }
 				}
-				/// The target of a case that leads to `level`, declaring its function and those of the levels beneath it first.
-				func carriedTarget(_ level: CarriedLevel) -> Case.Target? {
+				/// What declaring `level`'s function needs, or `nil` where it declares none.
+				func parts(of level: CarriedLevel) -> (nearestFillLevelKey: SeamSignature.ScopeEnum.Key, ownFillLevelKey: SeamSignature.ScopeEnum.Key, fillLevelDispatcher: FillDispatcher, fillLevelEnum: SeamSignature.ScopeEnum, scopeEnum: SeamSignature.ScopeEnum, returnType: TypeDescription)? {
 					guard let nearestFillLevelKey = level.fillLevelKeys.first,
 					      let ownFillLevelKey = level.fillLevelKeys.last,
 					      let fillLevelDispatcher = dispatchers.first(where: { dispatcherKeys[$0.key] == ownFillLevelKey && $0.returnsBuilderStruct }),
@@ -1663,10 +1663,65 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					      let scopeEnum = enumsByKey[level.key],
 					      let returnType = carriedReturnType(of: level.fillLevelKeys[...], builtType: fillLevelDispatcher.returnType)
 					else { return nil }
+					return (nearestFillLevelKey, ownFillLevelKey, fillLevelDispatcher, fillLevelEnum, scopeEnum, returnType)
+				}
+				/// The level a case of `level` leads on to: `nil` for a place's case where the places are the fill's own level's,
+				/// and for a fill's case that leads no further.
+				func nextLevel(after enumCase: SeamSignature.ScopeEnum.Case, of level: CarriedLevel) -> CarriedLevel? {
+					switch enumCase.kind {
+					case .place:
+						// A place of a seam further out on the route leads to that seam's level, itself carried.
+						level.fillLevelKeys.count == 1 ? nil : level.fillLevelKeys.first.map { CarriedLevel(key: $0, fillLevelKeys: Array(level.fillLevelKeys.dropFirst())) }
+					case let .nested(heldKey, _, _),
+					     let .inner(heldKey, _, _):
+						CarriedLevel(key: heldKey, fillLevelKeys: level.fillLevelKeys)
+					case let .fill(innerKey, innerEnumType, fillLevelKey, _, _):
+						// A fill of a deeper seam's place that leads on: its levels lead to the fill's level, then on as this level does.
+						innerEnumType == nil ? nil : CarriedLevel(key: innerKey, fillLevelKeys: [fillLevelKey] + level.fillLevelKeys)
+					}
+				}
+				/// The name of `level`'s function before it is claimed: the builder label of the nearest fill's level, the stems of
+				/// that level's seam and `level`'s, and, for a nested enum or where `qualifiesEnum`, the enum's name.
+				func unclaimedFunctionName(of level: CarriedLevel, nearestFillLevelKey: SeamSignature.ScopeEnum.Key, fillLevelEnum: SeamSignature.ScopeEnum, scopeEnum: SeamSignature.ScopeEnum, qualifiesEnum: Bool) -> String {
+					let enumName = if qualifiesEnum {
+						"_" + [scopeEnum.rootTypeName, scopeEnum.typeName].compactMap(\.self).joined(separator: "_")
+					} else {
+						scopeEnum.rootTypeName == nil ? "" : "_\(scopeEnum.typeName)"
+					}
+					return "\(fillLevelEnum.builderLabel.spelledWithoutBackticks)_\(DependencyTreeGenerator.seamStem(of: nearestFillLevelKey.seamType))_\(DependencyTreeGenerator.seamStem(of: level.key.seamType))\(enumName)"
+				}
+				// The levels the cases below lead to, each with the case it carries.
+				var carriedFillCases = [(index: Int, caseIndex: Int, level: CarriedLevel)]()
+				for index in dispatchers.indices where dispatchers[index].returnsBuilderStruct {
+					guard let enumKey = dispatcherKeys[dispatchers[index].key], let scopeEnum = enumsByKey[enumKey] else { continue }
+					for (caseIndex, enumCase) in scopeEnum.cases.enumerated() {
+						guard case let .fill(innerKey, _?, fillLevelKey, _, _) = enumCase.kind,
+						      caseIndex < dispatchers[index].cases.count,
+						      dispatchers[index].cases[caseIndex].target != nil
+						else { continue }
+						carriedFillCases.append((index, caseIndex, CarriedLevel(key: innerKey, fillLevelKeys: [fillLevelKey])))
+					}
+				}
+				// The enums of the levels that declare a function, by the name each would take: two levels of one builder label and
+				// seam pair whose enums are roots, as a seam's plain and `@Sendable` root enums or two root enums under one fill's
+				// builder are, would take one name, which the allocator would name apart in the order it meets them, the builder
+				// labels' order. Each such level takes its enum's name instead, and none keeps the bare one.
+				var enumKeysByUnclaimedFunctionName = [String: Set<SeamSignature.ScopeEnum.Key>]()
+				var levelsToReach = carriedFillCases.map(\.level)
+				var reachedLevels = Set<CarriedLevel>()
+				while let level = levelsToReach.popLast() {
+					guard reachedLevels.insert(level).inserted, let levelParts = parts(of: level) else { continue }
+					enumKeysByUnclaimedFunctionName[unclaimedFunctionName(of: level, nearestFillLevelKey: levelParts.nearestFillLevelKey, fillLevelEnum: levelParts.fillLevelEnum, scopeEnum: levelParts.scopeEnum, qualifiesEnum: false), default: []].insert(level.key)
+					levelsToReach += levelParts.scopeEnum.cases.compactMap { nextLevel(after: $0, of: level) }
+				}
+				/// The target of a case that leads to `level`, declaring its function and those of the levels beneath it first.
+				func carriedTarget(_ level: CarriedLevel) -> Case.Target? {
+					guard case let (nearestFillLevelKey, ownFillLevelKey, fillLevelDispatcher, fillLevelEnum, scopeEnum, returnType)? = parts(of: level) else { return nil }
 					let key = carriedDispatcherKey(of: level)
 					if declaredLevels.insert(level).inserted {
-						let enumName = scopeEnum.rootTypeName == nil ? "" : "_\(scopeEnum.typeName)"
-						let functionName = names.claim(ScopeGenerator.functionName(toBuildPropertyNamed: "\(fillLevelEnum.builderLabel.spelledWithoutBackticks)_\(DependencyTreeGenerator.seamStem(of: nearestFillLevelKey.seamType))_\(DependencyTreeGenerator.seamStem(of: level.key.seamType))\(enumName)".spelledAsIdentifier))
+						let unclaimedName = unclaimedFunctionName(of: level, nearestFillLevelKey: nearestFillLevelKey, fillLevelEnum: fillLevelEnum, scopeEnum: scopeEnum, qualifiesEnum: false)
+						let qualifiesEnum = enumKeysByUnclaimedFunctionName[unclaimedName, default: []].count > 1
+						let functionName = names.claim(ScopeGenerator.functionName(toBuildPropertyNamed: unclaimedFunctionName(of: level, nearestFillLevelKey: nearestFillLevelKey, fillLevelEnum: fillLevelEnum, scopeEnum: scopeEnum, qualifiesEnum: qualifiesEnum).spelledAsIdentifier))
 						let index = carriedDispatchers.count
 						carriedDispatchers.append(FillDispatcher(
 							key: key,
@@ -1678,21 +1733,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							cases: [],
 						))
 						let cases = scopeEnum.cases.map { enumCase -> Case in
-							let target: Case.Target? = switch enumCase.kind {
-							case .place:
-								// Every place of the called seam's builder is filled with the one fulfilling type, whose own level the
-								// fill's struct is: the call's, or a seam's further out on the route, itself carried.
-								if level.fillLevelKeys.count == 1 {
-									Case.Target(name: fillLevelDispatcher.functionName, key: fillLevelDispatcher.key, takesPassUp: false)
-								} else {
-									carriedTarget(CarriedLevel(key: nearestFillLevelKey, fillLevelKeys: Array(level.fillLevelKeys.dropFirst())))
-								}
-							case let .nested(heldKey, _, _),
-							     let .inner(heldKey, _, _):
-								carriedTarget(CarriedLevel(key: heldKey, fillLevelKeys: level.fillLevelKeys))
-							case let .fill(innerKey, innerEnumType, fillLevelKey, _, _):
-								// A fill of a deeper seam's place that leads on: its levels lead to the fill's level, then on as this level does.
-								innerEnumType == nil ? nil : carriedTarget(CarriedLevel(key: innerKey, fillLevelKeys: [fillLevelKey] + level.fillLevelKeys))
+							// Every place of the called seam's builder is filled with the one fulfilling type, whose own level the fill's
+							// struct is: the call's, or a seam's further out on the route, itself carried.
+							let target: Case.Target? = if case .place = enumCase.kind, level.fillLevelKeys.count == 1 {
+								Case.Target(name: fillLevelDispatcher.functionName, key: fillLevelDispatcher.key, takesPassUp: false)
+							} else {
+								nextLevel(after: enumCase, of: level).flatMap(carriedTarget)
 							}
 							var dispatcherCase = Case(name: enumCase.name, carriesPayload: enumCase.values != nil, hasForwardedValue: false, target: target, values: enumCase.values?.fields, labelsBoundLater: enumCase.values?.labelsBoundLater ?? [])
 							// The called seam's levels are bound by calls the caller's seam makes.
@@ -1710,26 +1756,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 					return Case.Target(name: carriedDispatchers.first { $0.key == key }?.functionName ?? "", key: key, takesPassUp: false)
 				}
-				for index in dispatchers.indices where dispatchers[index].returnsBuilderStruct {
-					guard let enumKey = dispatcherKeys[dispatchers[index].key], let scopeEnum = enumsByKey[enumKey] else { continue }
-					for (caseIndex, enumCase) in scopeEnum.cases.enumerated() {
-						guard case let .fill(innerKey, _?, fillLevelKey, _, _) = enumCase.kind,
-						      caseIndex < dispatchers[index].cases.count,
-						      dispatchers[index].cases[caseIndex].target != nil,
-						      let target = carriedTarget(CarriedLevel(key: innerKey, fillLevelKeys: [fillLevelKey]))
-						else { continue }
-						var carriedCase = Case(
-							name: dispatchers[index].cases[caseIndex].name,
-							hasForwardedValue: false,
-							target: target,
-							values: dispatchers[index].cases[caseIndex].values,
-							labelsBoundLater: dispatchers[index].cases[caseIndex].labelsBoundLater,
-						)
-						// The case hands on the memo of a deferred parameter its payload carries, as the case it replaces does: the seam the
-						// called seam calls bound it from what its call passed, which no declaration of the caller's is.
-						carriedCase.carriesDeferredFields = dispatchers[index].cases[caseIndex].carriesDeferredFields
-						dispatchers[index].cases[caseIndex] = carriedCase
-					}
+				for (index, caseIndex, level) in carriedFillCases {
+					guard let target = carriedTarget(level) else { continue }
+					var carriedCase = Case(
+						name: dispatchers[index].cases[caseIndex].name,
+						hasForwardedValue: false,
+						target: target,
+						values: dispatchers[index].cases[caseIndex].values,
+						labelsBoundLater: dispatchers[index].cases[caseIndex].labelsBoundLater,
+					)
+					// The case hands on the memo of a deferred parameter its payload carries, as the case it replaces does: the seam the
+					// called seam calls bound it from what its call passed, which no declaration of the caller's is.
+					carriedCase.carriesDeferredFields = dispatchers[index].cases[caseIndex].carriesDeferredFields
+					dispatchers[index].cases[caseIndex] = carriedCase
 				}
 				dispatchers += carriedDispatchers
 			}
