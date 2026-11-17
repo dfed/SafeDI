@@ -165,6 +165,7 @@ public struct InstantiableMacro: MemberMacro {
 			for diagnostic in visitor.diagnostics {
 				context.diagnose(diagnostic)
 			}
+			Self.diagnoseReservedTypeNames(declaredBy: concreteDeclaration.name, among: declaration.memberBlock.members, context: context)
 			Self.diagnoseRenamesOfRenamesAndOfThemselves(among: declaration.memberBlock.members, context: context)
 
 			let memberDeclarations = Self.declarations(in: declaration.memberBlock.members)
@@ -863,6 +864,11 @@ public struct InstantiableMacro: MemberMacro {
 			for diagnostic in visitor.diagnostics {
 				context.diagnose(diagnostic)
 			}
+			Self.diagnoseReservedTypeNames(
+				declaredBy: Self.typeNameToken(of: extensionDeclaration.extendedType),
+				among: declaration.memberBlock.members,
+				context: context,
+			)
 
 			// Each parameter of `instantiate(…)` without a default value is a dependency, as `InstantiableVisitor` finds.
 			Self.diagnoseNestedTypesSpelledThroughSelf(
@@ -1771,7 +1777,7 @@ public struct InstantiableMacro: MemberMacro {
 
 	/// The declarations among `members`, with those in every clause of each `#if` block among them, as
 	/// `InstantiableVisitor` scans the clauses of a declaration the macro decorates.
-	private static func declarations(in members: MemberBlockItemListSyntax) -> [DeclSyntax] {
+	static func declarations(in members: MemberBlockItemListSyntax) -> [DeclSyntax] {
 		members.flatMap { member in
 			if let ifConfigDeclaration = IfConfigDeclSyntax(member.decl) {
 				ifConfigDeclaration.clauses
@@ -2268,10 +2274,15 @@ extension DeclSyntax {
 	/// The name of the type this declares – a struct, class, actor, enum, protocol, or type alias – or `nil` when this
 	/// declares no type.
 	fileprivate var nestedTypeName: String? {
+		nestedTypeNameToken?.text
+	}
+
+	/// The token that names the type this declares, as `nestedTypeName` names it.
+	var nestedTypeNameToken: TokenSyntax? {
 		guard isProtocol(DeclGroupSyntax.self) || `is`(TypeAliasDeclSyntax.self) else {
 			return nil
 		}
-		return asProtocol(NamedDeclSyntax.self)?.name.text
+		return asProtocol(NamedDeclSyntax.self)?.name
 	}
 }
 
