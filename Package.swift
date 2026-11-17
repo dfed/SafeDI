@@ -88,6 +88,7 @@ let package = Package(
 				"SafeDICore/Utilities",
 				"SafeDICore/Extensions/ImportDeclSyntaxExtensions.swift",
 				"SafeDICore/Models/AliasDeclarationReferences.swift",
+				"SafeDICore/Models/ConstructionGraph.swift",
 				"SafeDICore/Models/CycleParameter.swift",
 				"SafeDICore/Models/ImportStatement.swift",
 				"SafeDICore/Models/SafeDIToolManifest.swift",
