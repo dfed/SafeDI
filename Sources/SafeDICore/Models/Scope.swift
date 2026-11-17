@@ -1360,8 +1360,9 @@ private struct ScopeGeneratorUnderConstruction {
 		let sitesFilledOnEveryRoute = scope.publicMockCall?.sitesFilledOnEveryRoute ?? filledSites
 		// A builder struct's levels a call converts through are functions named apart from the call's fills and dispatchers.
 		var names = namesOfThisCall
+		let builtTypeByHoleType = calledBuilders.holes.builtTypeByHoleType
 		return calledBuilders.builders.map { builder in
-			let builtType = calledBuilders.holes.first { $0.holeType == builder.enumKey.holeType }?.builtType ?? builder.enumKey.holeType.builtType
+			let builtType = builtTypeByHoleType[builder.enumKey.holeType] ?? builder.enumKey.holeType.builtType
 			let label = isPublicMockCall ? builder.label : builder.generatedOnlyArgumentLabel
 			let enumKey = builder.enumKey
 			let reachedSites = isPublicMockCall
