@@ -10704,17 +10704,27 @@ enum GraphFuzzerToolOutcome: Equatable {
 		differences(between: outcome, and: otherOutcome).first?.description
 	}
 
-	/// The diagnostics, each with the notes after it and with its suggestions sorted, sorted.
-	private static func diagnosticEntries(of diagnostics: String) -> [String] {
-		var entries = [[Substring]]()
+	/// The diagnostics, each with the notes after it, in any order, and with its suggestions sorted, sorted. A note is a
+	/// diagnostic of its own at its own location, which says all it means, so no note's place among an error's notes
+	/// carries meaning: SafeDI emits them in source order (a file-name reversal swaps them), in name order, or along a
+	/// cycle whose chain the error itself spells. Each note keeps the lines that follow it, its fix-its, and the lines
+	/// before an error's first note stay with the error.
+	static func diagnosticEntries(of diagnostics: String) -> [String] {
+		var entries = [[[Substring]]]()
 		for line in diagnostics.split(separator: "\n", omittingEmptySubsequences: false) {
 			if line.contains(": error: ") || line.contains(": warning: ") || entries.isEmpty {
-				entries.append([line])
+				entries.append([[line]])
+			} else if line.contains(": note: ") {
+				entries[entries.count - 1].append([line])
 			} else {
-				entries[entries.count - 1].append(line)
+				entries[entries.count - 1][entries[entries.count - 1].count - 1].append(line)
 			}
 		}
-		return entries.map { sortingSuggestions(in: $0.joined(separator: "\n")) }.sorted()
+		return entries.map { groups in
+			let head = groups[0].joined(separator: "\n")
+			let notes = groups.dropFirst().map { $0.joined(separator: "\n") }.sorted()
+			return sortingSuggestions(in: ([head] + notes).joined(separator: "\n"))
+		}.sorted()
 	}
 
 	/// `diagnostic` with the items of each list of suggestions it makes – "Did you mean one of `a: A`, `b: B`?",
@@ -10725,15 +10735,31 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// and `x: LazilyInstantiated<X>?` under different labels to fix.", `unpassableCycleLabel`), and of each list of the
 	/// places one fill finding holds for ("the builders for `A`’s `x: X` (case `A_Scope.x` of `xBuilder`) and `B`’s `y: Y`",
 	/// "the builder `Seam` takes for `A`’s `x: X`, `B`’s `y: Y`, and `B`’s `z: Z` on unchanged", `FillFinding`), each of
-	/// which SafeDI lists in the order of their types' names – sorted as text, each item in its place among the list's
-	/// separators, so two diagnostics that list the same items in another order compare equal, and any other difference,
-	/// including an item added, removed or changed, still tells them apart.
+	/// which SafeDI lists in the order of their types' names, and of the lists a merged fill finding prints, also in name
+	/// order: the seams whose calls present its places ("which `Mid` builds where it calls `Hub` and `Hub2`, but"), the
+	/// seams a remedy names ("Declare `@Received let tag: Tag` on `Hub` and `Hub2`, so the builders’ scopes carry it"), its
+	/// fulfil remedies ("declare an @Instantiable type that fulfills `Api` in module `Middle` or a module it lists among its
+	/// SafeDI dependencies, so `Mid` fills the builders itself, and declare … that fulfills `Gadget` …", `boundByPassingUpSeam`),
+	/// and, where a declaration hides a value on the paths to a call that re-enters a seam
+	/// (`declarationBoundOnPathToReenteringCall`), its clauses ("which `MiddleAlpha` declares on the path from the builder
+	/// for `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) to the call by which
+	/// `MiddleAlpha` instantiates `Flow` again (`flowBuilder`) and `MiddleZed` declares …, but"), each clause's places, and
+	/// its declaring types ("cannot hand it `MiddleAlpha`’s and `MiddleZed`’s values") – sorted as text, each item in its
+	/// place among the list's separators, so two diagnostics that list the same items in another order compare equal, and
+	/// any other difference, including an item added, removed or changed, still tells them apart. A place keeps its owner,
+	/// its case and the seam whose tree holds it in one item, so a place moved to another seam's tree still differs; a
+	/// list inside a clause is sorted before the clauses are. A new merged message adds its lists here.
 	private static func sortingSuggestions(in diagnostic: String) -> String {
 		// Each item is a property's or a declaration's source between backticks, and no fuzzer label or type contains one.
 		let backtickedItem = "`[^`]*`"
 		// A place is the type that declares it and its property, then the case of the builder's scope enum that holds it
 		// and the seam whose tree holds it, where the message names them.
 		let place = "`[^`]*`’s `[^`]*`(?: \\(case `[^`]*` of `[^`]*`\\))?(?: in `[^`]*`’s tree)?"
+		let separator = "(?:, and |, | and )"
+		// A remedy that fulfills one type of a merged fill finding's places.
+		let fulfillRemedy = "declare an @Instantiable type that fulfills `[^`]*` in (?:module `[^`]*`|this module) or a module it lists among its SafeDI dependencies, so `[^`]*` fills the builders? itself"
+		// A clause of a declaration that hides a value on the paths from its places to a call that re-enters a seam.
+		let reenteringCallClause = "`[^`]*` declares on the paths? from the builders? for \(place)(?:\(separator)\(place))* to the call by which `[^`]*` instantiates `[^`]*` again \\(`[^`]*`\\)"
 		var diagnostic = diagnostic
 		for (list, item) in [
 			("(?<=Did you mean one of )`[^`]*`(?:, `[^`]*`)+(?=\\?)", backtickedItem),
@@ -10741,6 +10767,11 @@ enum GraphFuzzerToolOutcome: Equatable {
 			("(?<= as )`[^`]*`(?:(?:, and |, | and )`[^`]*`)+(?=, which one value cannot carry together\\.)", backtickedItem),
 			("(?<=which one value cannot carry together\\. Receive )`[^`]*`(?:(?:, and |, | and )`[^`]*`)+(?= under different labels to fix\\.)", backtickedItem),
 			("(?<=builder for |builders for |takes for )\(place)(?:(?:, and |, | and )\(place))+", place),
+			("(?<= calls )`[^`]*`(?:\(separator)`[^`]*`)+(?=, but |, because )", backtickedItem),
+			("(?<= on )`[^`]*`(?:\(separator)`[^`]*`)+(?=, so the )", backtickedItem),
+			("\(fulfillRemedy)(?:\(separator)\(fulfillRemedy))+", fulfillRemedy),
+			("(?<=, which )\(reenteringCallClause)(?:\(separator)\(reenteringCallClause))+(?=, but )", reenteringCallClause),
+			("(?<=cannot hand it |cannot hand them )`[^`]*`’s(?:\(separator)`[^`]*`’s)+(?= values)", "`[^`]*`’s"),
 		] {
 			diagnostic = sortingItems(ofListsMatching: try! NSRegularExpression(pattern: list), item: try! NSRegularExpression(pattern: item), in: diagnostic)
 		}
