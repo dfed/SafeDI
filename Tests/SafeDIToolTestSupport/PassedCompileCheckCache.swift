@@ -420,7 +420,7 @@ private struct CompileCheckDescription: Encodable {
 /// Rewrites the text of one compile check so that what differs between runs of it does not: each fixture root
 /// becomes `/safedi-test-root`, and each distinct UUID becomes the next of `00000000-0000-0000-0000-000000000001`,
 /// `…002` and so on, in the order the check first spells it.
-private struct CompileCheckTextNormalization {
+struct CompileCheckTextNormalization {
 	init(fixtureRoots: [String]) {
 		// The longest first, so that a root that holds another is replaced whole.
 		self.fixtureRoots = Set(fixtureRoots.filter { !$0.isEmpty }).sorted { ($0.count, $0) > ($1.count, $1) }
