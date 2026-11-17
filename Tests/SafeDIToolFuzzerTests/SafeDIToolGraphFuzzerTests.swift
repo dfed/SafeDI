@@ -2771,7 +2771,7 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Self.propertyDeclarations(of: "S4224_T2", in: fixture).last == "@Received(fulfilledByDependencyNamed: \"t1\", ofType: S4224_T1.self) let t1Alias: S4224_T1")
 		let result = try #require(try await smokeResults.value.first { $0.fixture.seed == 4_224 })
 		#expect(result.failure == nil)
-		#expect(Self.diagnostics(of: result.outcome) == "S4224_T2.swift:9:2: error: Dependency cycle: @Instantiated `t1: S4224_T1` -> @Received `t2: S4224_T2?` -> @Received `t1: S4224_T1`. `t1: S4224_T1` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.")
+		#expect(Self.diagnostics(of: result.outcome) == "S4224_T2.swift:9:2: error: Dependency cycle: @Instantiated `t1: S4224_T1` -> @Received `t2: S4224_T2?` -> @Received `t1: S4224_T1`. `t1: S4224_T1` is received while it is still being instantiated. Remove this @Received property.")
 	}
 
 	@Test
@@ -5705,7 +5705,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
-	static let smokeRemedyKinds: [GraphFuzzerRemedyKind] = [.instantiateOnRoot, .instantiateOnRootAndReceiveOnlyIfAvailable, .receiveOptionallyIfAvailable, .receiveSuggestedProperty, .removeReceive]
+	static let smokeRemedyKinds: [GraphFuzzerRemedyKind] = [.instantiateOnRoot, .instantiateOnRootAndReceiveOnlyIfAvailable, .receiveSuggestedProperty, .removeReceive]
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it

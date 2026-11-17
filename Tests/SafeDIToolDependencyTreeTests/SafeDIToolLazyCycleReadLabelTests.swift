@@ -127,7 +127,7 @@ struct SafeDIToolLazyCycleReadLabelTests: ~Copyable {
 		]
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["T3.swift"]):9:5: error: Dependency cycle: `T1` -> `Instantiator<T3>` -> `T1`. `T3` receives `t1: T1`, which is still being built when `T3` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			\(fixtures["T3.swift"]):9:5: error: Dependency cycle: `T1` -> `Instantiator<T3>` -> `T1`. `T3` receives `t1: T1`, which is still being built when `T3` is built. Remove this @Received property.
 			\(fixtures["T1.swift"]):1:1: note: `T1` is part of the cycle
 			\(fixtures["T3.swift"]):1:1: note: `T3` is part of the cycle
 			"""

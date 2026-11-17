@@ -220,7 +220,7 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func remedyRuns_removeTheReceiveOrReceiveItOptionallyAndLeaveNoErrorAtIt_whenAReceiveClosesACycle() async throws {
+	func remedyRuns_removeTheReceiveAndLeaveNoErrorAtIt_whenAReceiveClosesACycle() async throws {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
 			"""
 			@Instantiable(isRoot: true)
@@ -256,7 +256,7 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 		let runs = try await Self.remedyRuns(of: fixture)
 
-		#expect(runs.map(\.remedy.kind) == [.removeReceive, .receiveOptionallyIfAvailable])
+		#expect(runs.map(\.remedy.kind) == [.removeReceive])
 		#expect(runs.map { $0.remedy.fixture.swiftFileContent[2] } == [
 			"""
 			@Instantiable
@@ -264,18 +264,8 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 				public init() {}
 			}
 			""",
-			"""
-			@Instantiable
-			public final class S1_T2: Instantiable {
-				public init(t1: S1_T1?) {
-					self.t1 = t1
-				}
-
-				@Received(onlyIfAvailable: true) let t1: S1_T1?
-			}
-			""",
 		])
-		#expect(runs.map(\.errorsAtSite) == [[], []])
+		#expect(runs.map(\.errorsAtSite) == [[]])
 	}
 
 	@Test

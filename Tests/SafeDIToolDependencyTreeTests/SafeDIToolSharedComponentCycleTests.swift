@@ -52,7 +52,7 @@ struct SafeDIToolSharedComponentCycleTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["P.swift"]):9:5: error: Dependency cycle: @Instantiated `v: V` -> @Received `qBuilder: Instantiator<Q>` -> @Received `pBuilder: Instantiator<P>` -> @Received `v: V`. `v: V` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["P.swift"]):9:5: error: Dependency cycle: @Instantiated `v: V` -> @Received `qBuilder: Instantiator<Q>` -> @Received `pBuilder: Instantiator<P>` -> @Received `v: V`. `v: V` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -77,7 +77,7 @@ struct SafeDIToolSharedComponentCycleTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["W.swift"]):7:5: error: Dependency cycle: @Instantiated `qBuilder: Instantiator<Q>` -> @Received `pBuilder: Instantiator<P>` -> @Received `wBuilder: Instantiator<W>` -> @Received `anyQ: AnyQ` -> @Received `qBuilder: Instantiator<Q>`. `qBuilder: Instantiator<Q>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["W.swift"]):7:5: error: Dependency cycle: @Instantiated `qBuilder: Instantiator<Q>` -> @Received `pBuilder: Instantiator<P>` -> @Received `wBuilder: Instantiator<W>` -> @Received `anyQ: AnyQ` -> @Received `qBuilder: Instantiator<Q>`. `qBuilder: Instantiator<Q>` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {

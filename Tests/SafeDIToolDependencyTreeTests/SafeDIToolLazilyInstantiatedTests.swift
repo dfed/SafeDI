@@ -2404,7 +2404,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `A` -> `B` -> `A`. `B` receives `a: A`, which is still being built when `B` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `A` -> `B` -> `A`. `B` receives `a: A`, which is still being built when `B` is built. Remove this @Received property. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				"""
@@ -2455,7 +2455,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `A` -> `B` -> `A`. `B` receives `a: LazilyInstantiated<A>`, which is still being built when `B` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `A` -> `B` -> `A`. `B` receives `a: LazilyInstantiated<A>`, which is still being built when `B` is built. Remove this @Received property. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				"""
@@ -2506,7 +2506,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
 				"""
 			},
 		) {
@@ -2556,7 +2556,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`, `b: LazilyInstantiated<B>` is validated as `b: B`.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`, `b: LazilyInstantiated<B>` is validated as `b: B`.
 				"""
 			},
 		) {
@@ -2939,7 +2939,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Service.swift"]):7:5: error: Dependency cycle: @Instantiated `logger: Logger` -> @Received `service: Service` -> @Received `logger: Logger`. `logger: Logger` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `service: LazilyInstantiated<Service>` is validated as `service: Service`.
+				\(fixtures["Service.swift"]):7:5: error: Dependency cycle: @Instantiated `logger: Logger` -> @Received `service: Service` -> @Received `logger: Logger`. `logger: Logger` is received while it is still being instantiated. Remove this @Received property. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `service: LazilyInstantiated<Service>` is validated as `service: Service`.
 				"""
 			},
 		) {
@@ -2989,7 +2989,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Logger.swift"]):7:5: error: Dependency cycle: `Analytics` -> `Logger` -> `Analytics?`. `Logger` receives `analytics: Analytics?`, which is still being built when `Logger` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `analytics: LazilyInstantiated<Analytics>` is validated as `analytics: Analytics`.
+				\(fixtures["Logger.swift"]):7:5: error: Dependency cycle: `Analytics` -> `Logger` -> `Analytics?`. `Logger` receives `analytics: Analytics?`, which is still being built when `Logger` is built. Remove this @Received property. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `analytics: LazilyInstantiated<Analytics>` is validated as `analytics: Analytics`.
 				\(fixtures["Analytics.swift"]):1:1: note: `Analytics` is part of the cycle
 				\(fixtures["Logger.swift"]):1:1: note: `Logger` is part of the cycle
 				"""
@@ -3040,7 +3040,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["A.swift"]):7:5: error: Dependency cycle: @Instantiated `bBuilder: Instantiator<B>` -> @Received `a: A` -> @Received `bBuilder: Instantiator<B>`. `bBuilder: Instantiator<B>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["A.swift"]):7:5: error: Dependency cycle: @Instantiated `bBuilder: Instantiator<B>` -> @Received `a: A` -> @Received `bBuilder: Instantiator<B>`. `bBuilder: Instantiator<B>` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -4004,7 +4004,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):7:5: error: Dependency cycle: `A` -> `Child` -> `A`. `Child` receives `a: A`, which is still being built when `Child` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
+				\(fixtures["Child.swift"]):7:5: error: Dependency cycle: `A` -> `Child` -> `A`. `Child` receives `a: A`, which is still being built when `Child` is built. Remove this @Received property. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["Child.swift"]):1:1: note: `Child` is part of the cycle
 				"""
@@ -4058,7 +4058,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Node.swift"]):7:5: error: Dependency cycle: `Node` -> `Node`. `Node` receives `child: LazilyInstantiated<Node>`, which is still being built when `Node` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `nodeBuilder: LazilyInstantiated<Node>` is validated as `nodeBuilder: Node`.
+				\(fixtures["Node.swift"]):7:5: error: Dependency cycle: `Node` -> `Node`. `Node` receives `child: LazilyInstantiated<Node>`, which is still being built when `Node` is built. Remove this @Received property. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `nodeBuilder: LazilyInstantiated<Node>` is validated as `nodeBuilder: Node`.
 				\(fixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
 				"""
 			},
@@ -4273,7 +4273,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
 				"""
 			},
 		) {

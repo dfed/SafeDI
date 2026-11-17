@@ -14487,7 +14487,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -14552,7 +14552,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: `B` -> `C` -> `X?` -> `X` -> `B`. `X` receives `b: B`, which is still being built when `X` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: `B` -> `C` -> `X?` -> `X` -> `B`. `X` receives `b: B`, which is still being built when `X` is built. Remove this @Received property.
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
 				\(fixtures["X.swift"]):1:1: note: `X` is part of the cycle
@@ -14619,7 +14619,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -14972,7 +14972,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {

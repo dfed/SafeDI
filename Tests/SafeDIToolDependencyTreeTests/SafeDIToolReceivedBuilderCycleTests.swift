@@ -1805,7 +1805,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Router.swift"]):7:5: error: Dependency cycle: @Instantiated `screenBuilder: Instantiator<Screen>` -> @Received `router: Router` -> @Received `screenBuilder: Instantiator<Screen>`. `screenBuilder: Instantiator<Screen>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Router.swift"]):7:5: error: Dependency cycle: @Instantiated `screenBuilder: Instantiator<Screen>` -> @Received `router: Router` -> @Received `screenBuilder: Instantiator<Screen>`. `screenBuilder: Instantiator<Screen>` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -1823,7 +1823,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Router.swift"]):7:5: error: Dependency cycle: @Instantiated `screenBuilder: Instantiator<Screen>` -> @Received `router: Router` -> @Received `screenBuilder: Instantiator<Screen>`. `screenBuilder: Instantiator<Screen>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `router: LazilyInstantiated<Router>` is validated as `router: Router`.
+				\(fixtures["Router.swift"]):7:5: error: Dependency cycle: @Instantiated `screenBuilder: Instantiator<Screen>` -> @Received `router: Router` -> @Received `screenBuilder: Instantiator<Screen>`. `screenBuilder: Instantiator<Screen>` is received while it is still being instantiated. Remove this @Received property. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `router: LazilyInstantiated<Router>` is validated as `router: Router`.
 				"""
 			},
 		) {
@@ -1841,7 +1841,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `v: V` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `v: V` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -1860,7 +1860,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Screen.swift"]):7:5: error: Dependency cycle: @Instantiated `screenBuilder: Instantiator<Screen>` -> @Received `anyBuilder: AnyBuilder` -> @Received `screenBuilder: Instantiator<Screen>`. `screenBuilder: Instantiator<Screen>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Screen.swift"]):7:5: error: Dependency cycle: @Instantiated `screenBuilder: Instantiator<Screen>` -> @Received `anyBuilder: AnyBuilder` -> @Received `screenBuilder: Instantiator<Screen>`. `screenBuilder: Instantiator<Screen>` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -1882,7 +1882,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["V.swift"]):7:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `v: V` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["V.swift"]):7:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `v: V` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -1901,7 +1901,7 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `A` -> `Instantiator<B>` -> `A`. `B` receives `a: LazilyInstantiated<A>`, which is still being built when `B` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `A` -> `Instantiator<B>` -> `A`. `B` receives `a: LazilyInstantiated<A>`, which is still being built when `B` is built. Remove this @Received property. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				"""

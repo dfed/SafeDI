@@ -974,7 +974,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 	mutating func generate_throwsReceivedCycleError_whenReceiveClosesCycleWithInstantiatorAlongIt() async {
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["C.swift"]):7:5: error: Dependency cycle: `A` -> `B` -> `Instantiator<C>` -> `A`. `C` receives `a: A`, which is still being built when `C` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			\(fixtures["C.swift"]):7:5: error: Dependency cycle: `A` -> `B` -> `Instantiator<C>` -> `A`. `C` receives `a: A`, which is still being built when `C` is built. Remove this @Received property.
 			\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 			\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 			\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle

@@ -1692,7 +1692,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency cycle: @Instantiated `authService: AuthService` -> @Received `authService: AuthService`. `authService: AuthService` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency cycle: @Instantiated `authService: AuthService` -> @Received `authService: AuthService`. `authService: AuthService` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -1757,7 +1757,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Shared.swift"]):9:5: error: Dependency cycle: @Instantiated `parent: Parent` -> @Received `extra: Extra` -> @Received `shared: Shared` -> @Received `parent: Parent`. `parent: Parent` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Shared.swift"]):9:5: error: Dependency cycle: @Instantiated `parent: Parent` -> @Received `extra: Extra` -> @Received `shared: Shared` -> @Received `parent: Parent`. `parent: Parent` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -1840,7 +1840,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Gate.swift"]):9:5: error: Dependency cycle: @Instantiated `parent: Parent` -> @Received `otherLoop: Loop` -> @Received `gate: Gate` -> @Received `parent: Parent`. `parent: Parent` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Gate.swift"]):9:5: error: Dependency cycle: @Instantiated `parent: Parent` -> @Received `otherLoop: Loop` -> @Received `gate: Gate` -> @Received `parent: Parent`. `parent: Parent` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -1913,7 +1913,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Shared.swift"]):9:5: error: Dependency cycle: @Instantiated `parent: Parent` -> @Received `extra: Extra` -> @Received `relay: Relay` -> @Received `shared: Shared` -> @Received `parent: Parent`. `parent: Parent` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Shared.swift"]):9:5: error: Dependency cycle: @Instantiated `parent: Parent` -> @Received `extra: Extra` -> @Received `relay: Relay` -> @Received `shared: Shared` -> @Received `parent: Parent`. `parent: Parent` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -2032,7 +2032,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `ping: Ping` -> @Received `pong: Pong` -> @Received `ping: Ping`. `ping: Ping` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `ping: Ping` -> @Received `pong: Pong` -> @Received `ping: Ping`. `ping: Ping` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -2110,7 +2110,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Ping.swift"]):7:5: error: Dependency cycle: @Instantiated `left0: Left0`\(receivedChain) -> @Received `ping: Ping` -> @Received `left0: Left0`. `left0: Left0` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Ping.swift"]):7:5: error: Dependency cycle: @Instantiated `left0: Left0`\(receivedChain) -> @Received `ping: Ping` -> @Received `left0: Left0`. `left0: Left0` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -2185,7 +2185,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `pingBuilder: Instantiator<Ping>` -> @Received `pong: Pong` -> @Received `pingBuilder: Instantiator<Ping>`. `pingBuilder: Instantiator<Ping>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `pingBuilder: Instantiator<Ping>` -> @Received `pong: Pong` -> @Received `pingBuilder: Instantiator<Ping>`. `pingBuilder: Instantiator<Ping>` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -2275,7 +2275,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `pingBuilder: Instantiator<Ping>` -> @Received `pongAlias: Pong` -> @Received `pingAlias: Instantiator<Ping>` -> @Received `pingBuilder: Instantiator<Ping>`. `pingBuilder: Instantiator<Ping>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `pingBuilder: Instantiator<Ping>` -> @Received `pongAlias: Pong` -> @Received `pingAlias: Instantiator<Ping>` -> @Received `pingBuilder: Instantiator<Ping>`. `pingBuilder: Instantiator<Ping>` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -2432,7 +2432,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency cycle: @Instantiated `authService: AuthService` -> @Received `authService: AuthService`. `authService: AuthService` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency cycle: @Instantiated `authService: AuthService` -> @Received `authService: AuthService`. `authService: AuthService` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -2821,7 +2821,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):14:2: error: Dependency cycle: `A` -> `C` -> `B` -> `A`. `B` receives `a: A`, which is still being built when `B` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Root.swift"]):14:2: error: Dependency cycle: `A` -> `C` -> `B` -> `A`. `B` receives `a: A`, which is still being built when `B` is built. Remove this @Received property.
 				\(fixtures["Root.swift"]):7:1: note: `A` is part of the cycle
 				\(fixtures["Root.swift"]):17:1: note: `C` is part of the cycle
 				\(fixtures["Root.swift"]):12:1: note: `B` is part of the cycle
@@ -2865,7 +2865,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):3:5: error: Dependency cycle: `A` -> `B` -> `C` -> `A`. `C` receives `a: A`, which is still being built when `C` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["C.swift"]):3:5: error: Dependency cycle: `A` -> `B` -> `C` -> `A`. `C` receives `a: A`, which is still being built when `C` is built. Remove this @Received property.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
@@ -3029,7 +3029,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency cycle: `A` -> `B` -> `A`. `B` receives `renamedA: A`, which is still being built when `B` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: `A` -> `B` -> `A`. `B` receives `renamedA: A`, which is still being built when `B` is built. Remove this @Received property.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				"""
@@ -3073,7 +3073,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency cycle: `A` -> `B` -> `A?`. `B` receives `a: A?`, which is still being built when `B` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: `A` -> `B` -> `A?`. `B` receives `a: A?`, which is still being built when `B` is built. Remove this @Received property.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				"""
@@ -3161,7 +3161,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):3:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `c: C` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["C.swift"]):3:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `c: C` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -3206,7 +3206,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):3:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `renamedB: B` -> @Received `c: C` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["C.swift"]):3:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `renamedB: B` -> @Received `c: C` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -3252,7 +3252,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):3:5: error: Dependency cycle: @Instantiated `c: C` -> @Received `renamedB: B` -> @Received `c: C`. `c: C` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["B.swift"]):3:5: error: Dependency cycle: @Instantiated `c: C` -> @Received `renamedB: B` -> @Received `c: C`. `c: C` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -3791,7 +3791,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):4:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `renamedA: A` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["C.swift"]):4:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `renamedA: A` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -5839,7 +5839,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):4:5: error: Dependency cycle: `User` -> `Parent` -> `Child` -> `User?`. `Child` receives `user: User?`, which is still being built when `Child` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Child.swift"]):4:5: error: Dependency cycle: `User` -> `Parent` -> `Child` -> `User?`. `Child` receives `user: User?`, which is still being built when `Child` is built. Remove this @Received property.
 				\(fixtures["User.swift"]):1:1: note: `User` is part of the cycle
 				\(fixtures["Parent.swift"]):1:1: note: `Parent` is part of the cycle
 				\(fixtures["Child.swift"]):1:1: note: `Child` is part of the cycle
@@ -6592,7 +6592,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -6708,7 +6708,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -6775,7 +6775,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: `B` -> `C` -> `X?` -> `X?` -> `X` -> `B`. `X` receives `b: B`, which is still being built when `X` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: `B` -> `C` -> `X?` -> `X?` -> `X` -> `B`. `X` receives `b: B`, which is still being built when `X` is built. Remove this @Received property.
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
 				\(fixtures["X.swift"]):1:1: note: `X` is part of the cycle
@@ -6961,7 +6961,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["T.swift"]):4:5: error: Dependency cycle: @Instantiated `t: T` -> @Received `tProtocol: TProtocol?` -> @Received `t: T`. `t: T` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["T.swift"]):4:5: error: Dependency cycle: @Instantiated `t: T` -> @Received `tProtocol: TProtocol?` -> @Received `t: T`. `t: T` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -6998,7 +6998,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultGreeter.swift"]):6:5: error: Dependency cycle: @Instantiated `missing: DefaultGreeter` -> @Received `maybe: Greeter` -> @Received `missing: DefaultGreeter`. `missing: DefaultGreeter` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["DefaultGreeter.swift"]):6:5: error: Dependency cycle: @Instantiated `missing: DefaultGreeter` -> @Received `maybe: Greeter` -> @Received `missing: DefaultGreeter`. `missing: DefaultGreeter` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -7640,7 +7640,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -7699,7 +7699,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -7759,7 +7759,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -7827,7 +7827,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {
@@ -7893,7 +7893,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property.
 				"""
 			},
 		) {

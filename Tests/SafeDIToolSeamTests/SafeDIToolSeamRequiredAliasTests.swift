@@ -192,7 +192,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 		let fixture = Self.fixture(token: ["@Received let screen: Screen"])
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Token.swift"]):7:5: error: Dependency cycle: `Screen` -> `Detail` -> `Token?` -> `Token` -> `Screen`. `Token` receives `screen: Screen`, which is still being built when `Token` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			\(fixtures["Token.swift"]):7:5: error: Dependency cycle: `Screen` -> `Detail` -> `Token?` -> `Token` -> `Screen`. `Token` receives `screen: Screen`, which is still being built when `Token` is built. Remove this @Received property.
 			\(fixtures["Screen.swift"]):1:1: note: `Screen` is part of the cycle
 			\(fixtures["Detail.swift"]):1:1: note: `Detail` is part of the cycle
 			\(fixtures["Token.swift"]):1:1: note: `Token` is part of the cycle
@@ -202,7 +202,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 		}
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Token.swift"]):7:5: error: Dependency cycle: `Screen` -> `Detail` -> `Token?` -> `Token` -> `Screen`. `Token` receives `screen: Screen`, which is still being built when `Token` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			\(fixtures["Token.swift"]):7:5: error: Dependency cycle: `Screen` -> `Detail` -> `Token?` -> `Token` -> `Screen`. `Token` receives `screen: Screen`, which is still being built when `Token` is built. Remove this @Received property.
 			\(fixtures["Screen.swift"]):1:1: note: `Screen` is part of the cycle
 			\(fixtures["Detail.swift"]):1:1: note: `Detail` is part of the cycle
 			\(fixtures["Token.swift"]):1:1: note: `Token` is part of the cycle

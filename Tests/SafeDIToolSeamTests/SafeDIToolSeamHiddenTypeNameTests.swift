@@ -1193,7 +1193,7 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	mutating func generate_reportsCycleThroughHiddenType_whenAppClosesCycle(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):6:5: error: Dependency cycle: `Thing` -> `SeamA` -> `ModA.Store` -> `Thing`. `ModA.Store` receives `thing: Thing`, which is still being built when `ModA.Store` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):6:5: error: Dependency cycle: `Thing` -> `SeamA` -> `ModA.Store` -> `Thing`. `ModA.Store` receives `thing: Thing`, which is still being built when `ModA.Store` is built. Remove this @Received property.
 			\(Self.path(of: "Impl.swift", in: "ModT", fixtures: fixtures, integration: integration)):4:1: note: `Thing` is part of the cycle
 			\(Self.path(of: "SeamA.swift", in: "ModA", fixtures: fixtures, integration: integration)):3:1: note: `SeamA` is part of the cycle
 			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):3:1: note: `ModA.Store` is part of the cycle

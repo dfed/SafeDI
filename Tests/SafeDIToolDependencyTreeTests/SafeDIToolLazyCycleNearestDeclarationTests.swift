@@ -3605,7 +3605,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		let fixture = Self.typeBuiltAsParameterLabelFixture(xDeclares: ["@Received let renamed: X?"])
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["X.swift"]):7:5: error: Dependency cycle: @Instantiated `renamed: X` -> @Received `renamed: X?`. `renamed: X` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			\(fixtures["X.swift"]):7:5: error: Dependency cycle: @Instantiated `renamed: X` -> @Received `renamed: X?`. `renamed: X` is received while it is still being instantiated. Remove this @Received property.
 			"""
 		}) {
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)

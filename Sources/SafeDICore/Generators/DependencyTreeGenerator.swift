@@ -1699,7 +1699,7 @@ public actor DependencyTreeGenerator {
 							+ ". `\(instantiated.asSource)` is received while it is still being instantiated. "
 							// An alias received only if available says how to break the cycle at that alias.
 							+ (requiredOnlyIfAvailableAliases.isEmpty
-								? Self.onlyIfAvailableRemedy
+								? Self.removeReceiveRemedy
 								: requiredOnlyIfAvailableAliases.map(\.hint).joined(separator: " "))
 							+ Self.lazilyInstantiatedHint(for: lazilyInstantiatedProperties),
 					),
@@ -1715,6 +1715,17 @@ public actor DependencyTreeGenerator {
 		static let fulfillingDeclarationInAnotherModuleRemedy = "or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target’s `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target’s `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target’s `SafeDI.preCompileScript` under Tuist."
 
 		/// How to break a cycle closed by a receive of a property that is still being built.
+		/// A deliberate gap: it does not offer to receive the property with `onlyIfAvailable: true` and an optional type,
+		/// although inline that receive is passed `nil` and breaks the cycle. Where the receiver is inside a fill of a seam’s
+		/// or public mock’s place and the property is the called tree’s own, that tree builds the property only after it calls
+		/// the place’s builder, so the remedied receive draws the seam builder’s error for a value bound after the call
+		/// (`declarationBoundAfterSite`) instead. Validation walks a seam’s tree inline and cannot tell a fill from the rest
+		/// of it, so the remedy is offered nowhere. `onlyIfAvailableRemedy`, for a receive nothing fulfills, keeps it.
+		fileprivate static let removeReceiveRemedy = "Remove this @\(Dependency.Source.receivedRawValue) property."
+
+		/// How to break the cycle a declaration of a property nothing fulfills would close: the receive, fulfilled by no
+		/// declaration, is passed `nil` when received only if available, inside a fill as inline, so this remedy, unlike
+		/// `removeReceiveRemedy`, offers it.
 		fileprivate static let onlyIfAvailableRemedy = "Remove this @\(Dependency.Source.receivedRawValue) property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
 
 		/// A sentence to end a cycle diagnostic with when lazily instantiated properties are on the cycle, or an
@@ -2781,7 +2792,8 @@ public actor DependencyTreeGenerator {
 						case .possible:
 							"Declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain\(instantiatedDeclarationEnd)"
 						case .closesCycle:
-							// The remedies of the cycle error a declaration would lead to.
+							// Remove the receive, or receive it only if available, which reads no declaration here and is passed
+							// `nil`. The cycle error a declaration would lead to offers only the removal (`removeReceiveRemedy`).
 							"Declaring `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` would close a dependency cycle wherever it is declared, because the tree of `\(suggestedProperty.typeDescription.asInstantiatedType.asSource)` requires `\(suggestedProperty.label)`, which is still being built there. \(DependencyTreeGeneratorError.onlyIfAvailableRemedy)"
 						case .typeHasForwardedProperties:
 							"`\(typeName)` has @\(Dependency.Source.forwardedRawValue) properties, so SafeDI builds it only through an `Instantiator`, never as an @\(Dependency.Source.instantiatedRawValue) constant. \(forwardingRemedy), to fix."
@@ -3050,7 +3062,7 @@ public actor DependencyTreeGenerator {
 				case let .instantiated(hops):
 					"SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @\(Dependency.Source.instantiatedRawValue) instantiator, such as an `\(Dependency.instantiatorType)` or `\(Dependency.erasedInstantiatorType)`, which builds its type each time it is called. Change \(hops.count == 1 ? "" : "one of ")\(hops.map { "`\($0.asSource)`" }.joined(separator: ", ")) to an instantiator."
 				case let .received(property, receiver):
-					"`\(receiver.asSource)` receives `\(property.asSource)`, which is still being built when `\(receiver.asSource)` is built. \(DependencyTreeGeneratorError.onlyIfAvailableRemedy)"
+					"`\(receiver.asSource)` receives `\(property.asSource)`, which is still being built when `\(receiver.asSource)` is built. \(DependencyTreeGeneratorError.removeReceiveRemedy)"
 				}
 			}
 		}

@@ -44,8 +44,8 @@ enum GraphFuzzerRemedyKind: String, CaseIterable, Comparable {
 	/// "Remove this @Received property", for a receive of a property still being built, or for an unfulfilled receive a
 	/// declaration would leave still being built ("Declaring `@Instantiated let x: X` would close a dependency cycle …").
 	case removeReceive = "remove-receive"
-	/// "or receive it with `onlyIfAvailable: true` and an optional type so that it is not required", the same error's
-	/// other remedy.
+	/// "or receive it with `onlyIfAvailable: true` and an optional type so that it is not required", the other remedy of
+	/// an unfulfilled receive a declaration would leave still being built. A cycle's error states only the removal.
 	case receiveOptionallyIfAvailable = "receive-optionally-if-available"
 
 	/// The words a failure line of a remedy of this kind begins with (`GraphFuzzerRemedyRun.failureLine`), which a known
@@ -142,6 +142,7 @@ enum GraphFuzzerRemedies {
 		case receiveOnlyIfAvailable(label: String)
 		case receiveSuggestedProperty(label: String, suggestions: [GraphFuzzerRemedyProperty])
 		case instantiateAsInstantiator(hopLabels: [String])
+		case removeReceive
 		case removeOrReceiveOptionallyIfAvailable
 
 		/// The remedy `message` states, or `nil` for an error outside the families the oracle reads, or one whose remedy
@@ -151,6 +152,7 @@ enum GraphFuzzerRemedies {
 			let unfulfilledPrefix = "@Received property `"
 			let unfulfilledMarker = "` is not @Instantiated or @Forwarded in chain: "
 			let onlyIfAvailableRemedy = " Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
+			let removeReceiveRemedy = " Remove this @Received property."
 			if message.hasPrefix(unfulfilledPrefix), let markerRange = message.range(of: unfulfilledMarker) {
 				let receivedLabel = Self.property(spelled: message[message.index(message.startIndex, offsetBy: unfulfilledPrefix.count)..<markerRange.lowerBound], attribute: "@Received")?.label
 				// Chain types spell no period followed by a space, so the hint begins after the first.
@@ -182,8 +184,8 @@ enum GraphFuzzerRemedies {
 					return nil
 				}
 			} else if message.hasPrefix("Dependency cycle: ") {
-				if message.contains(onlyIfAvailableRemedy) {
-					self = .removeOrReceiveOptionallyIfAvailable
+				if message.contains(removeReceiveRemedy) {
+					self = .removeReceive
 				} else if let changeStart = message.range(of: " Change ", options: .backwards), let changeEnd = message.range(of: " to an instantiator.", range: changeStart.upperBound..<message.endIndex) {
 					var hops = message[changeStart.upperBound..<changeEnd.lowerBound]
 					if hops.hasPrefix("one of ") {
@@ -327,6 +329,9 @@ enum GraphFuzzerRemedies {
 			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), hopLabels.contains(site.label), let instantiatorType = instantiatorType(of: siteProperty) else { return [] }
 			let property = GraphFuzzerRemedyProperty(attribute: siteProperty.attribute, label: site.label, type: instantiatorType)
 			return [remedy(.instantiateAsInstantiator, "declares \(site) as `\(instantiatorType)`", editing: [(site.typeName, replacingSiteProperty(with: property))])].compactMap(\.self)
+		case .removeReceive:
+			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), siteProperty.attribute.hasPrefix("@Received") else { return [] }
+			return [remedy(.removeReceive, "removes \(site)", editing: [(site.typeName, { properties in properties.filter { $0.label != site.label } })])].compactMap(\.self)
 		case .removeOrReceiveOptionallyIfAvailable:
 			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), siteProperty.attribute.hasPrefix("@Received") else { return [] }
 			let removal = remedy(.removeReceive, "removes \(site)", editing: [(site.typeName, { properties in properties.filter { $0.label != site.label } })])

@@ -194,8 +194,8 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):19:5: error: Dependency cycle: @Instantiated `p: Instantiator<P>` -> @Received `q: Q` -> @Received `p: Instantiator<P>`. `p: Instantiator<P>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
-					\(fixtures["Module.swift"]):38:5: error: Dependency cycle: @Instantiated `r: Instantiator<R>` -> @Received `s: S` -> @Received `r: Instantiator<R>`. `r: Instantiator<R>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+					\(fixtures["Module.swift"]):19:5: error: Dependency cycle: @Instantiated `p: Instantiator<P>` -> @Received `q: Q` -> @Received `p: Instantiator<P>`. `p: Instantiator<P>` is received while it is still being instantiated. Remove this @Received property.
+					\(fixtures["Module.swift"]):38:5: error: Dependency cycle: @Instantiated `r: Instantiator<R>` -> @Received `s: S` -> @Received `r: Instantiator<R>`. `r: Instantiator<R>` is received while it is still being instantiated. Remove this @Received property.
 					"""
 				},
 			) {
@@ -260,7 +260,7 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):30:5: error: Dependency cycle: @Instantiated `p: Instantiator<P>` -> @Received `q: Q` -> @Received `p: Instantiator<P>`. `p: Instantiator<P>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+					\(fixtures["Module.swift"]):30:5: error: Dependency cycle: @Instantiated `p: Instantiator<P>` -> @Received `q: Q` -> @Received `p: Instantiator<P>`. `p: Instantiator<P>` is received while it is still being instantiated. Remove this @Received property.
 					"""
 				},
 			) {
@@ -462,7 +462,7 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):19:5: error: Dependency cycle: `\(cycleType)` -> `\(otherType)` -> `\(cycleType)`. `\(otherType)` receives `\(cycleLabel): LazilyInstantiated<\(cycleType)>`, which is still being built when `\(otherType)` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `\(cycleLabel): LazilyInstantiated<\(cycleType)>` is validated as `\(cycleLabel): \(cycleType)`.
+					\(fixtures["Module.swift"]):19:5: error: Dependency cycle: `\(cycleType)` -> `\(otherType)` -> `\(cycleType)`. `\(otherType)` receives `\(cycleLabel): LazilyInstantiated<\(cycleType)>`, which is still being built when `\(otherType)` is built. Remove this @Received property. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `\(cycleLabel): LazilyInstantiated<\(cycleType)>` is validated as `\(cycleLabel): \(cycleType)`.
 					\(fixtures["Module.swift"]):10:1: note: `\(cycleType)` is part of the cycle
 					\(fixtures["Module.swift"]):16:1: note: `\(otherType)` is part of the cycle
 					"""
@@ -522,7 +522,7 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):18:5: error: Dependency cycle: @Instantiated `service: \(firstServiceName)` -> @Received `service: ServiceB` -> @Received `service: \(firstServiceName)`. `service: \(firstServiceName)` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `service: LazilyInstantiated<\(firstServiceName)>` is validated as `service: \(firstServiceName)`, `service: LazilyInstantiated<ServiceB>` is validated as `service: ServiceB`.
+					\(fixtures["Module.swift"]):18:5: error: Dependency cycle: @Instantiated `service: \(firstServiceName)` -> @Received `service: ServiceB` -> @Received `service: \(firstServiceName)`. `service: \(firstServiceName)` is received while it is still being instantiated. Remove this @Received property. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `service: LazilyInstantiated<\(firstServiceName)>` is validated as `service: \(firstServiceName)`, `service: LazilyInstantiated<ServiceB>` is validated as `service: ServiceB`.
 					"""
 				},
 			) {
@@ -566,7 +566,7 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):13:5: error: Dependency cycle: @Instantiated `gamma: Gamma` -> @Received `\(secondLabel): \(secondType)` -> @Received `gamma: Gamma`. `gamma: Gamma` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+					\(fixtures["Module.swift"]):13:5: error: Dependency cycle: @Instantiated `gamma: Gamma` -> @Received `\(secondLabel): \(secondType)` -> @Received `gamma: Gamma`. `gamma: Gamma` is received while it is still being instantiated. Remove this @Received property.
 					"""
 				},
 			) {
@@ -611,7 +611,7 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):14:5: error: Dependency cycle: @Instantiated `\(alphaLabel): Instantiator<Alpha>` -> @Received `beta: Beta` -> @Received `\(alphaLabel): Instantiator<Alpha>`. `\(alphaLabel): Instantiator<Alpha>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+					\(fixtures["Module.swift"]):14:5: error: Dependency cycle: @Instantiated `\(alphaLabel): Instantiator<Alpha>` -> @Received `beta: Beta` -> @Received `\(alphaLabel): Instantiator<Alpha>`. `\(alphaLabel): Instantiator<Alpha>` is received while it is still being instantiated. Remove this @Received property.
 					"""
 				},
 			) {

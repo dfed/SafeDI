@@ -153,7 +153,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	mutating func generate_reportsTwinsCycle_whenCallingMocksAppOnlyScreenBuiltByValueReceivesBuilderOfScreenThatReceivesIt(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: Dependency cycle: @Instantiated `feedBuilder: ErasedInstantiator<(), any FeedPage>` -> @Received `settings: any SettingsPage` -> @Received `feedBuilder: ErasedInstantiator<(), any FeedPage>`. `feedBuilder: ErasedInstantiator<(), any FeedPage>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: Dependency cycle: @Instantiated `feedBuilder: ErasedInstantiator<(), any FeedPage>` -> @Received `settings: any SettingsPage` -> @Received `feedBuilder: ErasedInstantiator<(), any FeedPage>`. `feedBuilder: ErasedInstantiator<(), any FeedPage>` is received while it is still being instantiated. Remove this @Received property.
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
@@ -186,7 +186,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	mutating func generate_reportsTwinsCycle_whenCallingMocksFillReceivesSiblingThatReceivesInnerCalledTypesBuilder(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["FeatureModule"]!["FeatureModuleTypes.swift"]):14:5: error: Dependency cycle: @Instantiated `innerBuilder: Instantiator<Inner>` -> @Received `sibling: Sibling` -> @Received `innerBuilder: Instantiator<Inner>`. `innerBuilder: Instantiator<Inner>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			\(fixtures["FeatureModule"]!["FeatureModuleTypes.swift"]):14:5: error: Dependency cycle: @Instantiated `innerBuilder: Instantiator<Inner>` -> @Received `sibling: Sibling` -> @Received `innerBuilder: Instantiator<Inner>`. `innerBuilder: Instantiator<Inner>` is received while it is still being instantiated. Remove this @Received property.
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "Tests", diagnostics: diagnostics) {
@@ -266,12 +266,22 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		_ = try await executeSafeDIToolMultiModuleTest(modules: Self.w4FulfilledInFeatureModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 	}
 
-	@Test(arguments: CallingMockCaller.allCases)
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_acceptsCallingMockAndTwin_whenReceiveIsOptionalAsCycleErrorSays(caller: CallingMockCaller) async throws {
-		// The second remedy of the dependency cycle: `AppSettings` receives `feedBuilder` only if available.
-		_ = try await executeSafeDIToolMultiModuleTest(modules: Self.w4ConstantCycleOptionalModules(caller: caller.attribute, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
-		_ = try await executeSafeDIToolMultiModuleTest(modules: Self.w4ConstantCycleOptionalModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+	func generate_buildsTwinsValues_whenReceiveIsRemovedAsCycleErrorSays(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		// The dependency cycle’s one remedy: `AppSettings` no longer receives `feedBuilder`. The calling mock and its twin
+		// are accepted, the mock fills `settings` as the twin does, and what it builds equals what the twin builds.
+		let result = try await GraphFuzzerCallingMockCheck.run(Self.graph(
+			named: "the plain W4 cycle with its receive removed",
+			mock: Self.w4ConstantCycleRemediedModules(caller: caller.attribute, callee: calledTypes.attribute),
+			twin: Self.w4ConstantCycleRemediedModules(caller: Self.twinCaller, callee: Self.twinCalledTypes),
+			callerTypeName: "Root",
+			caller: caller,
+			expectedTwinInitializerLabels: [],
+			valueProbes: [DifferentialValueProbe(name: "Root", expression: "App.Root.mock()", knownRightExpression: "App.Root()")],
+		), seed: 0)
+
+		Self.expectFillsAsTwin(result)
 	}
 
 	// MARK: Tests – fills where the twin fills, takes a builder where the twin takes one
@@ -1295,77 +1305,6 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				@Instantiable(fulfillingAdditionalTypes: [SettingsPage.self])
 				final class AppSettings: SettingsPage, Instantiable {
 				    init() {}
-				}
-
-				\(caller)
-				public final class Root: Instantiable {
-				    public init(signedInBuilder: Instantiator<SignedIn>) {
-				        self.signedInBuilder = signedInBuilder
-				    }
-
-				    @Instantiated private let signedInBuilder: Instantiator<SignedIn>
-				}
-				""",
-			], dependencies: ["Feature"]),
-		]
-	}
-
-	/// The plain W4 cycle with its second remedy applied: `AppSettings` receives `feedBuilder` only if available.
-	private static func w4ConstantCycleOptionalModules(caller: String, callee: String) -> [ModuleFixture] {
-		[
-			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContentByFilePath: [
-				"FeatureTypes.swift": """
-				import SafeDI
-
-				public protocol FeedPage {}
-
-				public protocol SettingsPage {}
-
-				public struct User {
-				    public init(name: String) {
-				        self.name = name
-				    }
-
-				    public let name: String
-				}
-
-				@Instantiable
-				final class Feed: FeedPage, Instantiable {
-				    init(user: User, settings: any SettingsPage) {
-				        self.user = user
-				        self.settings = settings
-				    }
-
-				    @Received private let user: User
-				    @Received private let settings: any SettingsPage
-				}
-
-				\(callee)
-				public final class SignedIn: Instantiable {
-				    init(user: User, feedBuilder: ErasedInstantiator<(), any FeedPage>, settings: any SettingsPage) {
-				        self.user = user
-				        self.feedBuilder = feedBuilder
-				        self.settings = settings
-				    }
-
-				    @Forwarded private let user: User
-				    @Instantiated(fulfilledByType: "Feed") private let feedBuilder: ErasedInstantiator<(), any FeedPage>
-				    @Instantiated private let settings: any SettingsPage
-				}
-				""",
-			]),
-			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
-				"AppTypes.swift": """
-				import SafeDI
-				import Feature
-
-				@Instantiable(fulfillingAdditionalTypes: [SettingsPage.self])
-				final class AppSettings: SettingsPage, Instantiable {
-				    init(feedBuilder: ErasedInstantiator<(), any FeedPage>?) {
-				        self.feedBuilder = feedBuilder
-				    }
-
-				    @Received(onlyIfAvailable: true) private let feedBuilder: ErasedInstantiator<(), any FeedPage>?
 				}
 
 				\(caller)
