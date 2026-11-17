@@ -6396,18 +6396,18 @@ struct SafeDIToolGraphFuzzerTests {
 	static let gatingDrawJudgedGraphFloor = 10
 
 	/// What the retention oracle judges over the seam corpus (`Corpus.retentionCounts`). Pins: derived on CI.
-	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 61, judgedDrawingRetentionShape: 51, judgedThroughHandWrittenBuilder: 33, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 30, "SendableErasedInstantiator": 16, "Instantiator": 29, "SendableInstantiator": 11])
+	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 37, judgedDrawingRetentionShape: 31, judgedThroughHandWrittenBuilder: 23, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 21, "SendableErasedInstantiator": 9, "Instantiator": 16, "SendableInstantiator": 5])
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 567, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x53E979C1BCE5A958
-	static let seamCorpusAcceptedSeedCount = 289
-	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
+	static let seamCorpusFixtureHash: UInt64 = 0xBFD479D302B40D2D
+	static let seamCorpusAcceptedSeedCount = 250
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xB457A077460D0FB1
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 205
+	static let seamCorpusValueOracleInspectedGraphCount = 184
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
 	static let seamCorpusOmittedValueGraphCount = 0
 	/// The errors of a cycle's label in a seam's tree whose rejections the seam corpus pins, which
@@ -6424,87 +6424,111 @@ struct SafeDIToolGraphFuzzerTests {
 		"cannot be received inside a `@Sendable` function in chain",
 	]
 	/// How many of the seam corpus's graphs the tool rejects with each error of `seamCorpusErrorMarkers`, in its order.
-	static let seamCorpusErrorGraphCounts = [4, 11, 0, 26]
+	static let seamCorpusErrorGraphCounts = [4, 11, 0, 25]
 	/// How many of the seam corpus's graphs the tool accepts show each of `addingCycleParameterShapes`' draws, so that a
 	/// draw the tool rejects every time, or a change that rejects more of them, names the shape. Two draws the tool rejects
 	/// by design are pinned at none: an instantiator declaration between beside by-value ones, which hides the reads beneath
 	/// it, and a fill's read of a label no cycle parameter carries (`declarationBoundOnCycleReentry`, among
 	/// `seamCorpusErrorMarkers`).
 	static let seamCorpusAcceptedDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
-		.cycleParameterDeclaredAfterCloser: 12,
-		.cycleParameterDeclaredAsAlias: 12,
+		.cycleParameterDeclaredAfterCloser: 6,
+		.cycleParameterDeclaredAsAlias: 8,
 		.cycleParameterDeclaredAsHidingInstantiator: 0,
-		.cycleParameterDeclaredAsInstantiators: 17,
-		.cycleParameterDeclaredBySeam: 58,
-		.cycleParameterDeclaredLazily: 20,
-		.cycleParameterDeferredFromCaller: 20,
-		.cycleParameterDeferredNote: 24,
-		.cycleParameterFillReadsLabel: 54,
+		.cycleParameterDeclaredAsInstantiators: 9,
+		.cycleParameterDeclaredBySeam: 41,
+		.cycleParameterDeclaredLazily: 16,
+		.cycleParameterDeferredFromCaller: 15,
+		.cycleParameterDeferredNote: 16,
+		.cycleParameterFillReadsLabel: 40,
 		.cycleParameterFillReadsLabelNoParameterCarries: 0,
-		.cycleParameterFillReadsNote: 29,
-		.cycleParameterHoleAtOrBeneathDeclaration: 29,
-		.cycleParameterHoleBetween: 33,
-		.cycleParameterHoleOnClosedOnType: 32,
-		.cycleParameterHoleOnReader: 6,
-		.cycleParameterHoleOnSeam: 10,
-		.cycleParameterMixedWrapperKinds: 3,
-		.cycleParameterMocked: 18,
-		.cycleParameterNestedCycle: 10,
-		.cycleParameterNoteDeclaredAgain: 7,
-		.cycleParameterNoteReceivedAfterLabel: 11,
-		.cycleParameterOpenedByInstantiator: 37,
-		.cycleParameterOpenedByValue: 13,
-		.cycleParameterOpenedLazily: 31,
-		.cycleParameterReaderBetween: 13,
-		.cycleParameterReaderReceivesInstantiator: 15,
-		.cycleParameterReaderReceivesOnlyIfAvailable: 17,
+		.cycleParameterFillReadsNote: 19,
+		.cycleParameterHoleAtOrBeneathDeclaration: 20,
+		.cycleParameterHoleBetween: 23,
+		.cycleParameterHoleOnClosedOnType: 23,
+		.cycleParameterHoleOnReader: 4,
+		.cycleParameterHoleOnSeam: 7,
+		.cycleParameterMixedWrapperKinds: 1,
+		.cycleParameterMocked: 13,
+		.cycleParameterNestedCycle: 8,
+		.cycleParameterNoteDeclaredAgain: 5,
+		.cycleParameterNoteReceivedAfterLabel: 7,
+		.cycleParameterOpenedByInstantiator: 24,
+		.cycleParameterOpenedByValue: 12,
+		.cycleParameterOpenedLazily: 21,
+		.cycleParameterReaderBetween: 11,
+		.cycleParameterReaderReceivesInstantiator: 8,
+		.cycleParameterReaderReceivesOnlyIfAvailable: 15,
 		.cycleParameterReaderReceivesWrapperOnlyIfAvailable: 2,
-		.cycleParameterReaderRequiresValue: 25,
-		.cycleParameterReaderRequiresWrapper: 4,
-		.cycleParameterSeam: 81,
-		.cycleParameterSendableWrappers: 19,
-		.cycleParameterSideReceivesInstantiator: 3,
-		.cycleParameterSideReceivesValue: 23,
+		.cycleParameterReaderRequiresValue: 17,
+		.cycleParameterReaderRequiresWrapper: 3,
+		.cycleParameterSeam: 57,
+		.cycleParameterSendableWrappers: 14,
+		.cycleParameterSideReceivesInstantiator: 2,
+		.cycleParameterSideReceivesValue: 17,
 		.cycleParameterSideReceivesWrapper: 2,
-		.cycleParameterTwoLevelsDeep: 31,
-		.cycleParameterUndeclaredAbove: 3,
-		.cycleParameterWithoutReader: 10,
-		.forwardedLabelAcrossSeamCall: 107,
-		.forwardedLabelAcrossSeamCallCallerInsideSeam: 35,
-		.forwardedLabelAcrossSeamCallFillReadsLabel: 45,
-		.forwardedLabelAcrossSeamCallInnerOptional: 17,
-		.forwardedLabelAcrossSeamCallOtherTypes: 25,
-		.forwardedLabelAcrossSeamCallOuterDefers: 21,
-		.forwardedLabelAcrossSeamCallPlaceBeneath: 31,
-		.forwardedLabelAcrossSeamCallSameClassType: 18,
-		.forwardedLabelAcrossSeamCallSameValueType: 26,
-		.forwardedLabelAcrossSeamCallSendable: 29,
-		.retentionLoopOfBuilders: 84,
-		.retentionLoopOfBuildersBeneathSeam: 40,
-		.retentionLoopOfBuildersFourMembers: 37,
-		.retentionLoopOfBuildersSendable: 25,
-		.retentionSeamValueBeforeBuilder: 104,
-		.retentionSeamValueBeforeBuilderFillReadsValue: 15,
-		.retentionSeamValueBeforeBuilderInnerSeam: 31,
-		.retentionSeamValueBeforeBuilderLeafThroughInstantiator: 60,
-		.retentionSeamValueBeforeBuilderSendable: 30,
-		.holeErasureBeneathSeamInSendableFamily: 27,
-		.holeErasureInsidePlainFill: 21,
-		.holeErasureInsideSendableFill: 18,
-		.holeForwardingPlace: 31,
-		.holeForwardingPlaceLabeledPair: 28,
+		.cycleParameterTwoLevelsDeep: 23,
+		.cycleParameterUndeclaredAbove: 1,
+		.cycleParameterWithoutReader: 6,
+		.forwardedLabelAcrossSeamCall: 79,
+		.forwardedLabelAcrossSeamCallCallerInsideSeam: 26,
+		.forwardedLabelAcrossSeamCallFillReadsLabel: 34,
+		.forwardedLabelAcrossSeamCallInnerOptional: 12,
+		.forwardedLabelAcrossSeamCallOtherTypes: 17,
+		.forwardedLabelAcrossSeamCallOuterDefers: 15,
+		.forwardedLabelAcrossSeamCallPlaceBeneath: 24,
+		.forwardedLabelAcrossSeamCallSameClassType: 14,
+		.forwardedLabelAcrossSeamCallSameValueType: 21,
+		.forwardedLabelAcrossSeamCallSendable: 22,
+		.retentionLoopOfBuilders: 62,
+		.retentionLoopOfBuildersBeneathSeam: 28,
+		.retentionLoopOfBuildersFourMembers: 29,
+		.retentionLoopOfBuildersSendable: 19,
+		.retentionSeamValueBeforeBuilder: 77,
+		.retentionSeamValueBeforeBuilderFillReadsValue: 13,
+		.retentionSeamValueBeforeBuilderInnerSeam: 26,
+		.retentionSeamValueBeforeBuilderLeafThroughInstantiator: 40,
+		.retentionSeamValueBeforeBuilderSendable: 23,
+		.holeErasureBeneathSeamInSendableFamily: 19,
+		.holeErasureInsidePlainFill: 15,
+		.holeErasureInsideSendableFill: 14,
+		.holeForwardingPlace: 23,
+		.holeForwardingPlaceLabeledPair: 21,
 		.holeForwardingPlacePassedUp: 18,
-		.holeForwardingPlaceSecondPlace: 26,
-		.holeForwardingPlaceSecondPlaceSpelledOtherwise: 23,
-		.holeInstantiatorPlace: 77,
+		.holeForwardingPlaceSecondPlace: 19,
+		.holeForwardingPlaceSecondPlaceSpelledOtherwise: 18,
+		.holeInstantiatorPlace: 48,
 		.holeInstantiatorPlaceBesideErased: 36,
-		.holeInstantiatorPlaceBesidePlain: 44,
-		.holeInstantiatorPlaceBesidePlainAcrossFamilies: 13,
-		.holeNothingForwardedPlace: 90,
-		.holeNothingForwardedPlaceBesideInstantiator: 25,
-		.holeNothingForwardedPlaceBesidePlain: 42,
-		.holeNothingForwardedPlacePassedUp: 34,
-		.retentionSeamValueBeforeBuilderForwardingPlace: 45,
+		.holeInstantiatorPlaceBesidePlain: 38,
+		.holeInstantiatorPlaceBesidePlainAcrossFamilies: 11,
+		.holeNothingForwardedPlace: 60,
+		.holeNothingForwardedPlaceBesideInstantiator: 17,
+		.holeNothingForwardedPlaceBesidePlain: 28,
+		.holeNothingForwardedPlacePassedUp: 38,
+		.retentionSeamValueBeforeBuilderForwardingPlace: 35,
+		.carriedLevel: 48,
+		.carriedLevelFillReadsForwarded: 16,
+		.carriedLevelTwoRoutes: 31,
+		.fillCallReadsOwnLevel: 64,
+		.fillCallReadsOwnLevelInsideSendableFill: 22,
+		.fillCallReadsOwnLevelSendableCall: 22,
+		.fillCallReadsOwnLevelSendableRoute: 9,
+		.fillCallReadsOwnLevelSharedLabel: 19,
+		.holePassedUpPlaceReadsImplicitlyUnwrappedField: 9,
+		.holePassedUpPlaceReadsLazyValue: 10,
+		.holePassedUpPlaceReadsOptionalField: 8,
+		.holePassedUpPlaceReadsPassingSeamsValue: 11,
+		.holePassedUpPlaceReadsValueTwoSeamsUp: 10,
+		.passingUpCopies: 46,
+		.passingUpCopiesFillReadsLabel: 17,
+		.passingUpCopiesSeamsBindLabel: 15,
+		.reenteredFill: 71,
+		.reenteredFillCallBeneathFilledType: 20,
+		.reenteredFillCallThroughSeamPassingPlaceUp: 31,
+		.reenteredFillEnclosingFillHoldsPlace: 26,
+		.reenteredFillReadsValueAbove: 30,
+		.reenteredFillReadsValueOfOneRouteRemedied: 22,
+		.reenteredFillReentersEnclosingFill: 24,
+		.reenteredFillSendableCall: 11,
 	]
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
@@ -6570,7 +6594,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// holds. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 609, 705, 743, 850, 892, 969, 1_010, 1_020, 1_450, 1_814, 1_890, 1_986]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xD8FF5EF57A3B334B
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x00D882B413AAA30B
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -6847,12 +6871,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeForwardingPlaceSecondPlaceSpelledOtherwise: 108,
 		.holeForwardingPlacePassedUp: 86,
 		.holeInstantiatorPlace: 267,
-		.holeInstantiatorPlaceBesideErased: 124,
-		.holeInstantiatorPlaceBesidePlain: 145,
-		.holeInstantiatorPlaceBesidePlainAcrossFamilies: 58,
+		.holeInstantiatorPlaceBesideErased: 218,
+		.holeInstantiatorPlaceBesidePlain: 235,
+		.holeInstantiatorPlaceBesidePlainAcrossFamilies: 93,
 		.holeNothingForwardedPlace: 321,
-		.holeNothingForwardedPlaceBesidePlain: 178,
-		.holeNothingForwardedPlaceBesideInstantiator: 82,
+		.holeNothingForwardedPlaceBesidePlain: 151,
+		.holeNothingForwardedPlaceBesideInstantiator: 128,
 		.holeNothingForwardedPlacePassedUp: 194,
 		.retentionSeamValueBeforeBuilderForwardingPlace: 159,
 		.fillCallReadsOwnLevel: 364,
@@ -6913,7 +6937,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
-			seeds: [93, 94, 98, 121, 164, 273, 283, 298, 304, 308, 309, 326, 347, 348, 362, 365, 384, 481, 500, 527, 550, 556, 594, 605, 623, 669, 670, 699, 769, 791, 797, 832, 850, 858, 876, 883, 892, 905, 930],
+			seeds: [93, 98, 121, 164, 273, 283, 298, 304, 308, 309, 326, 347, 348, 362, 365, 384, 481, 500, 527, 550, 556, 594, 605, 669, 670, 699, 769, 791, 797, 832, 850, 858, 876, 883, 892, 905, 930],
 		),
 		// Seed 391's chain of hole draws that re-enter one another holds more wrappers than a graph compared on its own may
 		// traverse (`DifferentialValueLimits.isolatedFuzzerGraph`), so the comparator describes none of its values beneath
@@ -6929,7 +6953,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [311, 338, 567, 595, 617, 854, 940, 948],
+			seeds: [338, 567, 595, 617, 854, 940, 948],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(mockParameterAndFieldOrderReason)",
@@ -7549,9 +7573,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// at all, since the seam's draw changed their graphs, or the base corpus's mock vocabulary draw, which the seam
 	/// corpus does not draw, changed them there (154, 527, 657); the inherited lists leave them out. Observed, not
 	/// derived: a seed here that a run finds failing its inherited shape again is a new failure, and goes back. Seeds
-	/// 281, 300, 311, 338, 548, 567, 595, 617, 940 and 948 fail it beside the builder order, and are listed with it;
+	/// 281, 300, 338, 548, 567, 595, 617, 940 and 948 fail it beside the builder order, and are listed with it;
 	/// 593, 751 and 886 no longer fail it.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 116, 154, 157, 281, 300, 309, 311, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 548, 567, 593, 595, 617, 632, 657, 714, 728, 735, 751, 768, 774, 786, 808, 836, 840, 847, 886, 903, 912, 940, 948]
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 116, 154, 157, 281, 300, 309, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 548, 567, 593, 595, 617, 632, 657, 714, 728, 735, 751, 768, 774, 786, 808, 836, 840, 847, 886, 903, 912, 940, 948]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
