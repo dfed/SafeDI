@@ -826,12 +826,29 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            token: (() -> Token)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.token = token
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                hub: hub
+		            )
 		        }
 
-		        let token: (() -> Token)?
-		        let hub: Hub.SafeDIOverrides
+		        var token: (() -> Token)? { __safeDI_storage.token }
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.token = token
+		                self.hub = hub
+		            }
+
+		            let token: (() -> Token)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -1384,14 +1401,34 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            token: (() -> Token)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.logger = logger
-		            self.token = token
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                logger: logger,
+		                token: token,
+		                hub: hub
+		            )
 		        }
 
-		        public let logger: (() -> Logger)?
-		        public let token: (() -> Token)?
-		        public let hub: Hub.SafeDIOverrides
+		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
+		        public var token: (() -> Token)? { __safeDI_storage.token }
+		        public var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                logger: (() -> Logger)?,
+		                token: (() -> Token)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.logger = logger
+		                self.token = token
+		                self.hub = hub
+		            }
+
+		            let logger: (() -> Logger)?
+		            let token: (() -> Token)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    public static func mock(
@@ -1448,12 +1485,29 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            token: (() -> Token)? = nil,
 		            shell: Shell.SafeDIOverrides = .init()
 		        ) {
-		            self.token = token
-		            self.shell = shell
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                shell: shell
+		            )
 		        }
 
-		        let token: (() -> Token)?
-		        let shell: Shell.SafeDIOverrides
+		        var token: (() -> Token)? { __safeDI_storage.token }
+		        var shell: Shell.SafeDIOverrides { __safeDI_storage.shell }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                shell: Shell.SafeDIOverrides
+		            ) {
+		                self.token = token
+		                self.shell = shell
+		            }
+
+		            let token: (() -> Token)?
+		            let shell: Shell.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -5288,14 +5342,34 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            token: (() -> Token)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.logger = logger
-		            self.token = token
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                logger: logger,
+		                token: token,
+		                hub: hub
+		            )
 		        }
 
-		        public let logger: (() -> Logger)?
-		        public let token: (() -> Token)?
-		        public let hub: Hub.SafeDIOverrides
+		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
+		        public var token: (() -> Token)? { __safeDI_storage.token }
+		        public var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                logger: (() -> Logger)?,
+		                token: (() -> Token)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.logger = logger
+		                self.token = token
+		                self.hub = hub
+		            }
+
+		            let logger: (() -> Logger)?
+		            let token: (() -> Token)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    public static func mock(
@@ -5352,12 +5426,29 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            token: (() -> Token)? = nil,
 		            shell: Shell.SafeDIOverrides = .init()
 		        ) {
-		            self.token = token
-		            self.shell = shell
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                shell: shell
+		            )
 		        }
 
-		        let token: (() -> Token)?
-		        let shell: Shell.SafeDIOverrides
+		        var token: (() -> Token)? { __safeDI_storage.token }
+		        var shell: Shell.SafeDIOverrides { __safeDI_storage.shell }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                shell: Shell.SafeDIOverrides
+		            ) {
+		                self.token = token
+		                self.shell = shell
+		            }
+
+		            let token: (() -> Token)?
+		            let shell: Shell.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
