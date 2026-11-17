@@ -869,7 +869,6 @@ private struct ScopeGeneratorUnderConstruction {
 				dispatchersOfThisCall = ScopeGenerator.FillDispatcher.dispatchers(
 					of: calledBuilders,
 					filledSites: Self.filledSites(of: holeArguments),
-					sitesPassedUpOnSomeRoute: scope.publicMockCall?.sitesPassedUpOnSomeRoute ?? [],
 					enclosingDispatchers: enclosingFills,
 					builderKeysDispatchedOverTheEnum: builderKeysDispatchedOverTheEnum,
 					fillNames: fillNames,
@@ -1369,8 +1368,7 @@ private struct ScopeGeneratorUnderConstruction {
 		let filledSites = Self.filledSites(of: holeArguments)
 		let enumsByKey = calledBuilders.enumsByKey
 		// A seam's caller calls the initializer only generated code calls, under its prefixed labels; a public mock's
-		// caller passes each builder by the leaf's argument of its label, and passes up the places its builder's routes
-		// reach that it fills on some route only (`PublicMockCall.sitesPassedUpOnSomeRoute`).
+		// caller passes each builder by the leaf's argument of its label.
 		let isPublicMockCall = scope.publicMockCall != nil
 		return calledBuilders.builders.map { builder in
 			let label = isPublicMockCall ? builder.label : builder.generatedOnlyArgumentLabel
@@ -1520,13 +1518,12 @@ private struct ScopeGeneratorUnderConstruction {
 			fillDispatchers: dispatchersOfThisCall,
 			// A public mock's call names a level that needs a second function apart from every name the call claimed.
 			namesTakenByCall: scope.publicMockCall == nil ? [] : namesOfThisCall.taken,
-			// A place a public mock's caller fills on some route only is passed up too.
 			passedUpHoles: holeArguments.compactMap { holeArgument in
 				switch holeArgument {
 				case let .passUp(hole):
 					hole
-				case let .fill(hole, _):
-					scope.publicMockCall?.sitesPassedUpOnSomeRoute.contains(hole.site) == true ? hole : nil
+				case .fill:
+					nil
 				}
 			},
 			valuesBindings: seamHoles.valuesBindings(at: sitePath),
