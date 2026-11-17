@@ -8203,7 +8203,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					false
 				}
 				if dependency.source == .received(onlyIfAvailable: true), unavailableOptionalProperties.contains(dependency.property) {
-					// A receive the mock passes `nil`, as production always does (see `receivesPassedNil`).
+					// Every only-if-available receive no ancestor provides is passed `nil`, as production passes it: those
+					// `receivesPassedNil` names (a form the root binds, read by no one) and those nothing above declares.
 					parts.append("\(argument.label.spelledAsArgumentLabel): nil")
 				} else if readsInstanceOfLazilyInstantiatedProperty {
 					let resolved = Self.disambiguatedLazilyInstantiatedBinding(
