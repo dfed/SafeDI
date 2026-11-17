@@ -1050,7 +1050,8 @@ struct SafeDIToolGraphFuzzerTests {
 	func valueComparisons_countGraphJudgedHoldingErasedInstantiatorAndFindNoLeak_whenRetentionDrawsLeafPlaceThatForwards() async throws {
 		// Seed 454 holds `RetainLeaf`'s place in an `ErasedInstantiator<Int, any S454_RetainApi>`, which `RetainLive` fills
 		// forwarding `retainTicket`: the retention oracle holds that wrapper, and the builder the seam keeps for it keeps
-		// alive no value of `RetainHome`'s level, as inline.
+		// alive no value of `RetainHome`'s level, as inline. The graph's hole draws an instantiator place too, which the
+		// oracle holds in its own experiment.
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: 454, features: [.generateDependencyTree])
 		#expect(GraphFuzzerFeature.seamDrawFeatures(of: fixture).contains(.retentionSeamValueBeforeBuilderForwardingPlace))
 		#expect(fixture.swiftFileContent.contains { $0.contains("let retainApiBuilder: ErasedInstantiator<Int, any S454_RetainApi>") })
@@ -1062,7 +1063,7 @@ struct SafeDIToolGraphFuzzerTests {
 			judgedDrawingRetentionShape: 1,
 			judgedThroughHandWrittenBuilder: 1,
 			unpairedExperiments: 0,
-			judgedHoldingForwardingWrapper: ["ErasedInstantiator": 1],
+			judgedHoldingForwardingWrapper: ["Instantiator": 1, "ErasedInstantiator": 1],
 		))
 		#expect(comparisons.retentionFailures[454] == nil)
 	}
@@ -2635,7 +2636,7 @@ struct SafeDIToolGraphFuzzerTests {
 		try await Self.expectNoRenamedGraphFailureUnderPathHoldingALabel(of: GraphFuzzerGenerator.fixture(forSeed: 731))
 	}
 
-	@Test(arguments: [UInt64(15), 88])
+	@Test(arguments: [UInt64(56), 88])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_rejectBothBuildsWithDeclarationBoundOnPathToReenteringCall_whenFillReadsValueOnlyOneRouteHoldsUnremedied(seed: UInt64) async throws {
 		// `ReenteredGadgetImpl`, which fills a place `ReenteredHost` passes up, reads `reenteredMark` only if available, which
