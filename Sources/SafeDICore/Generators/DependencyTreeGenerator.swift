@@ -657,11 +657,21 @@ public actor DependencyTreeGenerator {
 			)
 		}
 
+		// Freeing the mock roots' trees keeps a core busy for a while on a large module, and nothing generated waits for it.
+		Self.releaseInBackground(mockRoots.map(\.scopeGenerator))
+		mockRoots = []
 		return MockGenerationResult(
 			generatedRoots: mergedGeneratedRoots,
 			mockConfigurationCode: mockConfigurationCode,
 			mockConfigurationFulfillers: mockConfigurationFulfillers,
 		)
+	}
+
+	/// Releases `scopeGenerators` on a task of its own, so that freeing their trees delays no caller.
+	private static func releaseInBackground(_ scopeGenerators: consuming [ScopeGenerator]) {
+		Task.detached(priority: .background) { [scopeGenerators] in
+			withExtendedLifetime(scopeGenerators) {}
+		}
 	}
 
 	/// The context every public mock of the module shares: one proof of every type's access over the module's
