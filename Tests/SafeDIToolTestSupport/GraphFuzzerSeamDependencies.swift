@@ -284,7 +284,7 @@ enum GraphFuzzerSeamDependencyDraw {
 			"HoleDeep", "HoleNest", "HoleNestScreen", "PlaceInFillInner",
 			"FillCallBadge", "FillCallInner",
 			"CarriedInner", "CarriedScreen", "CarriedServiceImpl", "CarriedOuter",
-			"ReenteredLabel", "ReenteredMark", "ReenteredSubA", "ReenteredSubB", "ReenteredTop",
+			"ReenteredLabel", "ReenteredMark", "ReenteredSubA", "ReenteredSubB", "ReenteredTag", "ReenteredTop",
 		].map { fixture.typeNamePrefix + $0 }
 		for content in fixture.swiftFileContent {
 			guard let module = GraphFuzzerModule(declaredIn: content), module < .seamModule,

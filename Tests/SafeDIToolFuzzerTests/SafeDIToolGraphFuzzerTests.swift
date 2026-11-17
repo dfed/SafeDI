@@ -2666,6 +2666,41 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 	}
 
+	@Test(arguments: [UInt64(59), 80, 196])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_rejectBothBuildsWithFieldOfReenteringPlace_whenCallerFillsPlaceInsideFillBuiltAgainUnremedied(seed: UInt64) async throws {
+		// `ReenteredSubA` binds `reenteredTag` before `reenteredFirst`, whose fill `ReenteredFirstImpl` builds `ReenteredSubB`
+		// again, and `ReenteredGadgetImpl`, which fills from the roots' module a place inside the fill of `reenteredSecond`
+		// that `ReenteredHost` passes up, reads it, so only the place whose fill builds the seam again carries it: only if
+		// available in seed 196, also beside `ReenteredHost`'s binding of the label above its call of `ReenteredTop` in seed
+		// 59, and required in seed 80. The build that fills the place from the roots' module, which reads what
+		// `ReenteredHost`'s module records on the place, and the visible build, which fills it in the seam's module, both
+		// reject the read with `fieldOfReenteringPlace`, in the same words.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
+		#expect(!drawFeatures.isDisjoint(with: [.reenteredFillReadsPlaceField, .reenteredFillReadsPlaceFieldBoundAboveCall, .reenteredFillRequiresPlaceField]))
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
+		let prefix = fixture.typeNamePrefix
+		// Each error about the reader's receive of `reenteredTag`, without its location: the reader's file is in another
+		// module in each build.
+		func findings(in diagnostics: String) -> [String] {
+			diagnostics.split(separator: "\n").compactMap { line in
+				guard line.contains("`\(prefix)ReenteredGadgetImpl` receives `reenteredTag: "), let range = line.range(of: ": error: ") else { return nil }
+				return String(line[range.upperBound...])
+			}
+		}
+		var findingsByBuild = [String: [String]]()
+		for (build, outcome) in [("hole", Optional(runs.firstOutcome)), ("visible", runs.visibleOutcome)] {
+			guard case let .rejected(diagnostics)? = outcome else {
+				Issue.record("Seed \(seed)’s \(build) build is not rejected")
+				continue
+			}
+			findingsByBuild[build] = findings(in: diagnostics)
+			#expect(findingsByBuild[build]?.contains { $0.contains("carries from `\(prefix)ReenteredSubA`, and that builder’s fill instantiates `\(prefix)ReenteredSubB` again") } == true, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
+		}
+		#expect(findingsByBuild["hole"] == findingsByBuild["visible"])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_reportNoRenamedGraphFailure_whenFixtureRootOfGraphSplitAcrossModulesLiesUnderPathHoldingALabelTheRenamingReverses() async throws {
@@ -6878,6 +6913,11 @@ struct SafeDIToolGraphFuzzerTests {
 		.reenteredFillReadsValueOfOneRoute: 54,
 		.reenteredFillReadsValueOfOneRouteBoundAboveCall: 44,
 		.reenteredFillReadsValueOfOneRouteRemedied: 79,
+		.reenteredFillReadsPlaceField: 61,
+		.reenteredFillReadsPlaceFieldBoundAboveCall: 25,
+		.reenteredFillRequiresPlaceField: 44,
+		.reenteredFillReadsPlaceFieldRemedied: 77,
+		.reenteredFillReadsPlaceFieldDeclaredInFill: 64,
 		.reenteredFillEnclosingFillHoldsPlace: 140,
 		.reenteredFillReentersEnclosingFill: 114,
 		.reenteredFillCallBeneathFilledType: 117,
