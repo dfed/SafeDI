@@ -1530,7 +1530,7 @@ struct PublicMockCall: Sendable {
 
 	/// The declarations in the public mock's tree that receive each label, which a diagnostic notes.
 	let receiversByLabel: [String: [(declaringType: TypeDescription, dependency: Dependency)]]
-	/// The places the call fills (`DependencyTreeGenerator.holesFilled(byCallsOf:in:unfulfilledInstantiationsAreHoles:)`), each
+	/// The places the call fills (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)`), each
 	/// with a fill on every route; the call passes every other place up.
 	var filledHoles = [SeamSignature.Hole]()
 	/// The types of the passed parameters that the mock's tree declares `@escaping` (`ScopeGenerator.typesDeclaredEscaping`).
