@@ -1386,7 +1386,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		        nonisolated public struct service_Values {
 		            package var serviceBuilder: Thing? { __safeDI_serviceBuilder.instance }
 		            package let badge: Badge
-		            let __safeDI_serviceBuilder: LazilyInstantiated<Thing?>
+		            package let __safeDI_serviceBuilder: LazilyInstantiated<Thing?>
 
 		            init(serviceBuilder: LazilyInstantiated<Thing?>, badge: Badge) {
 		                __safeDI_serviceBuilder = serviceBuilder

@@ -60,11 +60,11 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				                .init(inner: { _ in __safeDI_apiBuilder_Inner() })
 				            }
 				            func __safeDI_apiBuilder_Inner() -> Inner.SafeDIScope_Api.__safeDI_Builder<any Api> {
-				                .init(detail: { values in __safeDI_apiBuilder_Inner_Detail_Scope(logger: values.logger) })
+				                .init(detail: { values in __safeDI_apiBuilder_Inner_Detail_Scope(logger: values.__safeDI_logger) })
 				            }
-				            func __safeDI_apiBuilder_Inner_Detail_Scope(logger: Logger) -> Inner.SafeDIScope_Api.Detail_Scope.__safeDI_Builder<any Api> {
+				            func __safeDI_apiBuilder_Inner_Detail_Scope(logger: LazilyInstantiated<Logger>) -> Inner.SafeDIScope_Api.Detail_Scope.__safeDI_Builder<any Api> {
 				                .init(api: { _ in
-				                    let api: any Api = LiveApi(logger: logger)
+				                    let api: any Api = LiveApi(logger: logger.instance)
 				                    return api
 				                })
 				            }
@@ -80,7 +80,7 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				    nonisolated public enum SafeDIScope_Api {
 				        nonisolated public struct detail_Values {
 				            public var logger: Logger { __safeDI_logger.instance }
-				            let __safeDI_logger: LazilyInstantiated<Logger>
+				            public let __safeDI_logger: LazilyInstantiated<Logger>
 
 				            init(logger: LazilyInstantiated<Logger>) {
 				                __safeDI_logger = logger
@@ -201,11 +201,11 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				                .init(inner: { _ in __safeDI_apiBuilder_Inner() })
 				            }
 				            func __safeDI_apiBuilder_Inner() -> Inner.SafeDIScope_Api.__safeDI_Builder<any Api> {
-				                .init(detail: { values in __safeDI_apiBuilder_Inner_Detail_Scope(logger: values.logger) })
+				                .init(detail: { values in __safeDI_apiBuilder_Inner_Detail_Scope(logger: values.__safeDI_logger) })
 				            }
-				            func __safeDI_apiBuilder_Inner_Detail_Scope(logger: Logger) -> Inner.SafeDIScope_Api.Detail_Scope.__safeDI_Builder<any Api> {
+				            func __safeDI_apiBuilder_Inner_Detail_Scope(logger: LazilyInstantiated<Logger>) -> Inner.SafeDIScope_Api.Detail_Scope.__safeDI_Builder<any Api> {
 				                .init(api: { _ in
-				                    let api: any Api = LiveApi(logger: logger)
+				                    let api: any Api = LiveApi(logger: logger.instance)
 				                    return api
 				                })
 				            }
@@ -221,7 +221,7 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				    nonisolated public enum SafeDIScope_Api {
 				        nonisolated public struct detail_Values {
 				            public var logger: Logger { __safeDI_logger.instance }
-				            let __safeDI_logger: LazilyInstantiated<Logger>
+				            public let __safeDI_logger: LazilyInstantiated<Logger>
 
 				            init(logger: LazilyInstantiated<Logger>) {
 				                __safeDI_logger = logger
@@ -344,11 +344,11 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				                .init(inner: { _ in __safeDI_apiBuilder_Inner() })
 				            }
 				            func __safeDI_apiBuilder_Inner() -> Inner.SafeDIScope_Api.__safeDI_Builder<any Api> {
-				                .init(detailBuilder: { values in __safeDI_apiBuilder_Inner_Detail_Scope(logger: values.logger, tag: values.tag) })
+				                .init(detailBuilder: { values in __safeDI_apiBuilder_Inner_Detail_Scope(logger: values.__safeDI_logger, tag: values.__safeDI_tag) })
 				            }
-				            func __safeDI_apiBuilder_Inner_Detail_Scope(logger: Logger, tag: Tag?) -> Inner.SafeDIScope_Api.Detail_Scope.__safeDI_Builder<any Api> {
+				            func __safeDI_apiBuilder_Inner_Detail_Scope(logger: LazilyInstantiated<Logger>, tag: LazilyInstantiated<Tag?>) -> Inner.SafeDIScope_Api.Detail_Scope.__safeDI_Builder<any Api> {
 				                .init(api: { _ in
-				                    let api: any Api = LiveApi(logger: logger, tag: tag)
+				                    let api: any Api = LiveApi(logger: logger.instance, tag: tag.instance)
 				                    return api
 				                })
 				            }
@@ -365,8 +365,8 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        nonisolated public struct detailBuilder_Values {
 				            public var logger: Logger { __safeDI_logger.instance }
 				            public var tag: Tag? { __safeDI_tag.instance }
-				            let __safeDI_logger: LazilyInstantiated<Logger>
-				            let __safeDI_tag: LazilyInstantiated<Tag?>
+				            public let __safeDI_logger: LazilyInstantiated<Logger>
+				            public let __safeDI_tag: LazilyInstantiated<Tag?>
 
 				            init(logger: LazilyInstantiated<Logger>, tag: LazilyInstantiated<Tag?>) {
 				                __safeDI_logger = logger
@@ -505,6 +505,388 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsPassingUpSeamsLazyValuesWhereFillReadsThem_whenTwoSeamsPassThePlaceUpFromLazyDeclarations() async throws {
+		// The fill binds both memos, the optional one included, and reads each instance where it builds `LiveApi`, so neither
+		// value is created before `detailBuilder` builds `Detail`, as inline.
+		try await expectOutput(
+			of: Self.twoLevelPassUpModules(lazyOrigins: true),
+			[
+				"App": ["App.swift": """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        let logger = Logger()
+				        let tag = Tag()
+				        func __safeDI_outer() -> Outer {
+				            _ = Outer.__safeDI_Outer_583D2F623BD662A1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            func __safeDI_apiBuilder_Outer() -> Outer.SafeDIScope_Api.__safeDI_Builder<any Api> {
+				                .init(middle: { _ in __safeDI_apiBuilder_Middle() })
+				            }
+				            func __safeDI_apiBuilder_Middle() -> Middle.SafeDIScope_Api.__safeDI_Builder<any Api> {
+				                .init(inner: { _ in __safeDI_apiBuilder_Inner() })
+				            }
+				            func __safeDI_apiBuilder_Inner() -> Inner.SafeDIScope_Api.__safeDI_Builder<any Api> {
+				                .init(detailBuilder: { values in __safeDI_apiBuilder_Inner_Detail_Scope(logger: values.__safeDI_logger, tag: values.__safeDI_tag) })
+				            }
+				            func __safeDI_apiBuilder_Inner_Detail_Scope(logger: LazilyInstantiated<Logger>, tag: LazilyInstantiated<Tag?>) -> Inner.SafeDIScope_Api.Detail_Scope.__safeDI_Builder<any Api> {
+				                .init(api: { _ in
+				                    let api: any Api = LiveApi(logger: logger.instance, tag: tag.instance)
+				                    return api
+				                })
+				            }
+				            return Outer(__safeDI_apiBuilder: __safeDI_apiBuilder_Outer())
+				        }
+				        let outer: Outer = __safeDI_outer()
+				        self.init(logger: logger, tag: tag, outer: outer)
+				    }
+				}
+				"""],
+				"Feature": ["Feature.swift": """
+				extension Inner {
+				    nonisolated public enum SafeDIScope_Api {
+				        nonisolated public struct detailBuilder_Values {
+				            public var logger: Logger { __safeDI_logger.instance }
+				            public var tag: Tag? { __safeDI_tag.instance }
+				            public let __safeDI_logger: LazilyInstantiated<Logger>
+				            public let __safeDI_tag: LazilyInstantiated<Tag?>
+
+				            init(logger: LazilyInstantiated<Logger>, tag: LazilyInstantiated<Tag?>) {
+				                __safeDI_logger = logger
+				                __safeDI_tag = tag
+				            }
+				        }
+
+				        nonisolated public enum Detail_Scope {
+				            nonisolated public struct api_Values {}
+
+				            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				                public let api: (api_Values) -> __safeDI_Built
+
+				                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+				                    self.api = api
+				                }
+
+				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                    self.api = { _ in __safeDI_builder() }
+				                }
+				            }
+				        }
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let detailBuilder: (detailBuilder_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>
+
+				            public init(detailBuilder: @escaping (detailBuilder_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>) {
+				                self.detailBuilder = detailBuilder
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.detailBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				            }
+				        }
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_logger: @autoclosure @escaping () -> Logger, __safeDI_tag: @autoclosure @escaping () -> Tag?, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+				        let tag = LazilyInstantiated<Tag?>(__safeDI_tag)
+				        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(SafeDIScope_Api.detailBuilder_Values(logger: logger, tag: tag))
+				        func __safeDI_detailBuilder() -> Detail {
+				            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.api_Values())
+				            return Detail(logger: logger.instance, tag: tag.instance, api: api)
+				        }
+				        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+				        self.init(detailBuilder: detailBuilder)
+				    }
+				}
+
+				extension Inner {
+				    public enum __safeDI_Inner_1D55F50158483DDE {}
+				}
+
+				extension Middle {
+				    nonisolated public enum SafeDIScope_Api {
+				        nonisolated public struct inner_Values: Sendable {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let inner: (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
+
+				            public init(inner: @escaping (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
+				                self.inner = inner
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				            }
+				        }
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_logger: @autoclosure @escaping () -> Logger, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+				        func __safeDI_tag() -> Tag {
+				            Tag()
+				        }
+				        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
+				        func __safeDI_inner() -> Inner {
+				            _ = Inner.__safeDI_Inner_1D55F50158483DDE.self
+				            return Inner(__safeDI_logger: logger.instance, __safeDI_tag: tag.instance, __safeDI_apiBuilder: __safeDI_apiBuilder.inner(SafeDIScope_Api.inner_Values()))
+				        }
+				        let inner: Inner = __safeDI_inner()
+				        self.init(tag: tag, inner: inner)
+				    }
+				}
+
+				extension Middle {
+				    public enum __safeDI_Middle_47A35834A9D01D76 {}
+				}
+
+				extension Outer {
+				    nonisolated public enum SafeDIScope_Api {
+				        nonisolated public struct middle_Values: Sendable {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let middle: (middle_Values) -> Middle.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
+
+				            public init(middle: @escaping (middle_Values) -> Middle.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
+				                self.middle = middle
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.middle = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				            }
+				        }
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+				        func __safeDI_logger() -> Logger {
+				            Logger()
+				        }
+				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+				        func __safeDI_middle() -> Middle {
+				            _ = Middle.__safeDI_Middle_47A35834A9D01D76.self
+				            return Middle(__safeDI_logger: logger.instance, __safeDI_apiBuilder: __safeDI_apiBuilder.middle(SafeDIScope_Api.middle_Values()))
+				        }
+				        let middle: Middle = __safeDI_middle()
+				        self.init(logger: logger, middle: middle)
+				    }
+				}
+
+				extension Outer {
+				    public enum __safeDI_Outer_583D2F623BD662A1 {}
+				}
+				"""],
+			],
+			inline: Self.twoLevelPassUpModules(liveApiInFeature: true, lazyOrigins: true),
+			probes: [
+				DifferentialValueProbe("{ let root = Root(); let before = Stamp.next(); let detail = root.outer.middle.inner.detailBuilder.instantiate(); let api = detail.api as! LiveApi; return [before, api.logger.differentialValueCreationStamp, api.tag?.differentialValueCreationStamp ?? 0, detail.logger.differentialValueCreationStamp, detail.tag?.differentialValueCreationStamp ?? 0] }()"),
+				DifferentialValueProbe("{ let root = Root(); let detail = root.outer.middle.inner.detailBuilder.instantiate(); let api = detail.api as! LiveApi; return [api.logger === root.outer.logger.instance, api.tag === root.outer.middle.tag.instance, detail.tag === root.outer.middle.tag.instance] }()"),
+				DifferentialValueProbe("Root()"),
+			],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsPassingUpSeamsImplicitlyUnwrappedValueThroughItsMemo_whenFillReadsItBeneathInstantiator() async throws {
+		// `Inner`'s field `logger: Logger!` is held in a `LazilyInstantiated<Logger?>`: the fill binds the memo, and its tree
+		// reads `logger.instance` for the receive of `logger: Logger!`, as `Inner`'s own tree does.
+		try await expectOutput(
+			of: Self.implicitlyUnwrappedPassUpModules(),
+			{ output in
+				let middlePath = try #require(output.modules["Feature"]).fixtures.compilerPath(of: "Middle.swift")
+				return [
+					"App": ["App.swift": """
+					#if canImport(Feature)
+					import Feature
+					#endif
+
+					extension Root {
+					    public convenience init() {
+					        func __safeDI_outer() -> Outer {
+					            _ = Outer.__safeDI_Outer_6D6DFF556D4B949E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+					            func __safeDI_apiBuilder_Outer() -> Outer.SafeDIScope_Api.__safeDI_Builder<any Api> {
+					                .init(middle: { _ in __safeDI_apiBuilder_Middle() })
+					            }
+					            func __safeDI_apiBuilder_Middle() -> Middle.SafeDIScope_Api.__safeDI_Builder<any Api> {
+					                .init(inner: { _ in __safeDI_apiBuilder_Inner() })
+					            }
+					            func __safeDI_apiBuilder_Inner() -> Inner.SafeDIScope_Api.__safeDI_Builder<any Api> {
+					                .init(detailBuilder: { values in __safeDI_apiBuilder_Inner_Detail_Scope(logger: values.__safeDI_logger) })
+					            }
+					            func __safeDI_apiBuilder_Inner_Detail_Scope(logger: LazilyInstantiated<Logger?>) -> Inner.SafeDIScope_Api.Detail_Scope.__safeDI_Builder<any Api> {
+					                .init(api: { _ in
+					                    let api: any Api = LiveApi(logger: logger.instance)
+					                    return api
+					                })
+					            }
+					            return Outer(__safeDI_apiBuilder: __safeDI_apiBuilder_Outer())
+					        }
+					        let outer: Outer = __safeDI_outer()
+					        self.init(outer: outer)
+					    }
+					}
+					"""],
+					"Feature": ["Feature.swift": """
+					extension Inner {
+					    nonisolated public enum SafeDIScope_Api {
+					        nonisolated public struct detailBuilder_Values {
+					            public var logger: Logger! { __safeDI_logger.instance }
+					            public let __safeDI_logger: LazilyInstantiated<Logger?>
+
+					            init(logger: LazilyInstantiated<Logger?>) {
+					                __safeDI_logger = logger
+					            }
+					        }
+
+					        nonisolated public enum Detail_Scope {
+					            nonisolated public struct api_Values {}
+
+					            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+					            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+					                public let api: (api_Values) -> __safeDI_Built
+
+					                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+					                    self.api = api
+					                }
+
+					                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+					                    self.api = { _ in __safeDI_builder() }
+					                }
+					            }
+					        }
+
+					        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+					        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+					            public let detailBuilder: (detailBuilder_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>
+
+					            public init(detailBuilder: @escaping (detailBuilder_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>) {
+					                self.detailBuilder = detailBuilder
+					            }
+
+					            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+					                self.detailBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+					            }
+					        }
+					    }
+
+					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+					    public convenience init(__safeDI_logger: @autoclosure @escaping () -> Logger?, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+					        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
+					        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(SafeDIScope_Api.detailBuilder_Values(logger: logger))
+					        func __safeDI_detailBuilder() -> Detail {
+					            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.api_Values())
+					            return Detail(logger: logger.instance, api: api)
+					        }
+					        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+					        self.init(detailBuilder: detailBuilder)
+					    }
+					}
+
+					extension Inner {
+					    public enum __safeDI_Inner_09B4D8D955197ACA {}
+					}
+
+					extension Middle {
+					    nonisolated public enum SafeDIScope_Api {
+					        nonisolated public struct inner_Values: Sendable {}
+
+					        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+					        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+					            public let inner: (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
+
+					            public init(inner: @escaping (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
+					                self.inner = inner
+					            }
+
+					            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+					                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+					            }
+					        }
+					    }
+
+					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+					    public convenience init(__safeDI_currentLogger: @autoclosure @escaping () -> Logger, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+					        let currentLogger = LazilyInstantiated<Logger>(__safeDI_currentLogger)
+					        #sourceLocation(file: "\(middlePath)", line: 8)
+					        let logger: Logger! = currentLogger.instance
+					        #sourceLocation()
+					        func __safeDI_inner() -> Inner {
+					            _ = Inner.__safeDI_Inner_09B4D8D955197ACA.self
+					            return Inner(__safeDI_logger: logger, __safeDI_apiBuilder: __safeDI_apiBuilder.inner(SafeDIScope_Api.inner_Values()))
+					        }
+					        let inner: Inner = __safeDI_inner()
+					        self.init(logger: logger, inner: inner)
+					    }
+					}
+
+					extension Middle {
+					    public enum __safeDI_Middle_C75BCC721622E5D0 {}
+					}
+
+					extension Outer {
+					    nonisolated public enum SafeDIScope_Api {
+					        nonisolated public struct middle_Values: Sendable {}
+
+					        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+					        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+					            public let middle: (middle_Values) -> Middle.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
+
+					            public init(middle: @escaping (middle_Values) -> Middle.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
+					                self.middle = middle
+					            }
+
+					            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+					                self.middle = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+					            }
+					        }
+					    }
+
+					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+					    public convenience init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+					        func __safeDI_currentLogger() -> Logger {
+					            Logger()
+					        }
+					        let currentLogger = LazilyInstantiated<Logger>(__safeDI_currentLogger)
+					        func __safeDI_middle() -> Middle {
+					            _ = Middle.__safeDI_Middle_C75BCC721622E5D0.self
+					            return Middle(__safeDI_currentLogger: currentLogger.instance, __safeDI_apiBuilder: __safeDI_apiBuilder.middle(SafeDIScope_Api.middle_Values()))
+					        }
+					        let middle: Middle = __safeDI_middle()
+					        self.init(currentLogger: currentLogger, middle: middle)
+					    }
+					}
+
+					extension Outer {
+					    public enum __safeDI_Outer_6D6DFF556D4B949E {}
+					}
+					"""],
+				]
+			},
+			inline: Self.implicitlyUnwrappedPassUpModules(liveApiInFeature: true),
+			probes: [
+				DifferentialValueProbe("{ let root = Root(); let before = Stamp.next(); let detail = root.outer.middle.inner.detailBuilder.instantiate(); let api = detail.api as! LiveApi; return [before, api.logger.differentialValueCreationStamp, detail.logger.differentialValueCreationStamp] }()"),
+				DifferentialValueProbe("{ let root = Root(); let detail = root.outer.middle.inner.detailBuilder.instantiate(); let api = detail.api as! LiveApi; return [api.logger === root.outer.currentLogger.instance, detail.logger === root.outer.middle.logger] }()"),
+				DifferentialValueProbe("Root()"),
+			],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_fillsWithPassingUpSeamsValue_whenPlaceInsideFillOfCalledSeamsHoleReadsIt() async throws {
 		try await expectOutput(
 			of: Self.passedUpPlaceInsideFillModules(),
@@ -526,15 +908,15 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				                .init(inner: { _ in __safeDI_apiBuilder_Inner() })
 				            }
 				            func __safeDI_apiBuilder_Inner() -> Inner.SafeDIScope_Api.__safeDI_Builder<any Api> {
-				                .init(nest_serviceBuilder: { values in __safeDI_apiBuilder_Inner_Nest(logger: values.logger) })
+				                .init(nest_serviceBuilder: { values in __safeDI_apiBuilder_Inner_Nest(logger: values.__safeDI_logger) })
 				            }
-				            func __safeDI_apiBuilder_Inner_NestImpl_Scope(logger: Logger) -> Inner.SafeDIScope_Api.NestImpl_Scope.__safeDI_Builder<any Api> {
+				            func __safeDI_apiBuilder_Inner_NestImpl_Scope(logger: LazilyInstantiated<Logger>) -> Inner.SafeDIScope_Api.NestImpl_Scope.__safeDI_Builder<any Api> {
 				                .init(api: { _ in
-				                    let api: any Api = LiveApi(logger: logger)
+				                    let api: any Api = LiveApi(logger: logger.instance)
 				                    return api
 				                })
 				            }
-				            func __safeDI_apiBuilder_Inner_Nest(logger: Logger) -> Nest.SafeDIScope_Service.__safeDI_Builder<Inner.SafeDIScope_Api.NestImpl_Scope.__safeDI_Builder<any Api>> {
+				            func __safeDI_apiBuilder_Inner_Nest(logger: LazilyInstantiated<Logger>) -> Nest.SafeDIScope_Service.__safeDI_Builder<Inner.SafeDIScope_Api.NestImpl_Scope.__safeDI_Builder<any Api>> {
 				                .init(service: { _ in __safeDI_apiBuilder_Inner_NestImpl_Scope(logger: logger) })
 				            }
 				            return Outer(__safeDI_apiBuilder: __safeDI_apiBuilder_Outer())
@@ -554,7 +936,7 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				        nonisolated public struct nest_serviceBuilder_Values {
 				            public var logger: Logger { __safeDI_logger.instance }
 				            public let detail: Detail
-				            let __safeDI_logger: LazilyInstantiated<Logger>
+				            public let __safeDI_logger: LazilyInstantiated<Logger>
 
 				            init(logger: LazilyInstantiated<Logger>, detail: Detail) {
 				                __safeDI_logger = logger
@@ -691,7 +1073,162 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				"""],
 			],
 			inline: Self.passedUpPlaceInsideFillModules(liveApiInFeature: true),
-			probes: [DifferentialValueProbe("{ let outer = Root().outer; let api = (outer.inner.nest.service as! NestImpl).api as! LiveApi; return [api.logger === outer.logger] }()")],
+			// `Logger` is stamped, so the comparison sees when each logger is created as well as which one is read.
+			probes: [DifferentialValueProbe("Root()")],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsPassingUpSeamsLazyValueWhereFillReadsIt_whenReaderIsBeneathInstantiatorInsideFill() async throws {
+		try await expectOutput(
+			of: Self.passedUpLazyLoggerModules(),
+			[
+				"App": ["App.swift": """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_outer() -> Outer {
+				            _ = Outer.__safeDI_Outer_2B349E48977319FB.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            func __safeDI_apiBuilder_Inner_Detail_Scope_api(_ scope: Inner.SafeDIScope_Api.Detail_Scope.api_Values, logger: LazilyInstantiated<Logger>) -> any Api {
+				                func __safeDI_api() -> LiveApi {
+				                    func __safeDI_jobBuilder() -> Job {
+				                        Job(logger: logger.instance)
+				                    }
+				                    let jobBuilder = Instantiator<Job>(__safeDI_jobBuilder)
+				                    return LiveApi(jobBuilder: jobBuilder)
+				                }
+				                let api: any Api = __safeDI_api()
+				                return api
+				            }
+				            func __safeDI_apiBuilder_Outer() -> Outer.SafeDIScope_Api.__safeDI_Builder<any Api> {
+				                .init(inner: { _ in __safeDI_apiBuilder_Inner() })
+				            }
+				            func __safeDI_apiBuilder_Inner() -> Inner.SafeDIScope_Api.__safeDI_Builder<any Api> {
+				                .init(detail: { values in __safeDI_apiBuilder_Inner_Detail_Scope(logger: values.__safeDI_logger) })
+				            }
+				            func __safeDI_apiBuilder_Inner_Detail_Scope(logger: LazilyInstantiated<Logger>) -> Inner.SafeDIScope_Api.Detail_Scope.__safeDI_Builder<any Api> {
+				                .init(api: { scope in __safeDI_apiBuilder_Inner_Detail_Scope_api(scope, logger: logger) })
+				            }
+				            return Outer(__safeDI_apiBuilder: __safeDI_apiBuilder_Outer())
+				        }
+				        let outer: Outer = __safeDI_outer()
+				        self.init(outer: outer)
+				    }
+				}
+				"""],
+				"Feature": ["Feature.swift": """
+				extension Inner {
+				    nonisolated public enum SafeDIScope_Api {
+				        nonisolated public struct detail_Values {
+				            public var logger: Logger { __safeDI_logger.instance }
+				            public let __safeDI_logger: LazilyInstantiated<Logger>
+
+				            init(logger: LazilyInstantiated<Logger>) {
+				                __safeDI_logger = logger
+				            }
+				        }
+
+				        nonisolated public enum Detail_Scope {
+				            nonisolated public struct api_Values {
+				                public let readerBuilder: Instantiator<Reader>
+				            }
+
+				            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				                public let api: (api_Values) -> __safeDI_Built
+
+				                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+				                    self.api = api
+				                }
+
+				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                    self.api = { _ in __safeDI_builder() }
+				                }
+				            }
+				        }
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let detail: (detail_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>
+
+				            public init(detail: @escaping (detail_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>) {
+				                self.detail = detail
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.detail = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				            }
+				        }
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_logger: @autoclosure @escaping () -> Logger, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+				        let __safeDI_apiBuilder_detail = __safeDI_apiBuilder.detail(SafeDIScope_Api.detail_Values(logger: logger))
+				        func __safeDI_detail() -> Detail {
+				            func __safeDI_readerBuilder() -> Reader {
+				                Reader(logger: logger.instance)
+				            }
+				            let readerBuilder = Instantiator<Reader>(__safeDI_readerBuilder)
+				            let api: any Api = __safeDI_apiBuilder_detail.api(SafeDIScope_Api.Detail_Scope.api_Values(readerBuilder: readerBuilder))
+				            return Detail(api: api, readerBuilder: readerBuilder)
+				        }
+				        let detail: Detail = __safeDI_detail()
+				        self.init(detail: detail)
+				    }
+				}
+
+				extension Inner {
+				    public enum __safeDI_Inner_32244D23FC3122DA {}
+				}
+
+				extension Outer {
+				    nonisolated public enum SafeDIScope_Api {
+				        nonisolated public struct inner_Values: Sendable {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let inner: (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
+
+				            public init(inner: @escaping (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
+				                self.inner = inner
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				            }
+				        }
+				    }
+
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+				        func __safeDI_logger() -> Logger {
+				            Logger()
+				        }
+				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+				        func __safeDI_inner() -> Inner {
+				            _ = Inner.__safeDI_Inner_32244D23FC3122DA.self
+				            return Inner(__safeDI_logger: logger.instance, __safeDI_apiBuilder: __safeDI_apiBuilder.inner(SafeDIScope_Api.inner_Values()))
+				        }
+				        let inner: Inner = __safeDI_inner()
+				        self.init(logger: logger, inner: inner)
+				    }
+				}
+
+				extension Outer {
+				    public enum __safeDI_Outer_2B349E48977319FB {}
+				}
+				"""],
+			],
+			inline: Self.passedUpLazyLoggerModules(liveApiInFeature: true),
+			// `Logger` is stamped, so the comparison sees when the logger is created as well as which one is read.
+			probes: [DifferentialValueProbe("Root()")],
 		)
 	}
 
@@ -2885,9 +3422,63 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 		return Self.modules(feature: feature, app: app)
 	}
 
-	/// `Outer` instantiates `logger` and calls `Middle`, which instantiates `tag` and calls `Inner`, whose `Detail` receives
-	/// both, `tag` only if available, and instantiates `api: any Api`, which only `App` fills, with a `LiveApi` that receives
-	/// both the same way.
+	/// `Outer` declares `logger` lazily and calls `Inner`, whose `Detail` instantiates `api: any Api` before it receives
+	/// `logger` through an instantiator, so `Inner` takes it as a parameter; `App` fills `api` with a `LiveApi` whose `Job`,
+	/// built through `jobBuilder`, receives `logger`. `Logger` is stamped with the order it is created in.
+	private static func passedUpLazyLoggerModules(liveApiInFeature: Bool = false) -> [ModuleFixture] {
+		let liveApi = [
+			"""
+			@Instantiable
+			public final class Job: Instantiable {
+			    public init(logger: Logger) { self.logger = logger }
+			    @Received public let logger: Logger
+			}
+			""",
+			"""
+			@Instantiable(fulfillingAdditionalTypes: [Api.self])
+			public final class LiveApi: Instantiable, Api {
+			    public init(jobBuilder: Instantiator<Job>) { self.jobBuilder = jobBuilder }
+			    @Instantiated public let jobBuilder: Instantiator<Job>
+			}
+			""",
+		]
+		var feature = [
+			"public protocol Api: AnyObject {}\n\n" + DifferentialValueCreationStamp.counterDeclaration(named: "Stamp"),
+			"""
+			@Instantiable
+			public final class Logger: Instantiable {
+			    \(DifferentialValueCreationStamp.property(counterNamed: "Stamp"))
+
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Reader: Instantiable {
+			    public init(logger: Logger) { self.logger = logger }
+			    @Received public let logger: Logger
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Detail: Instantiable {
+			    public init(api: any Api, readerBuilder: Instantiator<Reader>) { self.api = api; self.readerBuilder = readerBuilder }
+			    @Instantiated public let api: any Api
+			    @Instantiated public let readerBuilder: Instantiator<Reader>
+			}
+			""",
+			seamFixtureType(named: "Inner", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let detail: Detail"]),
+			seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let logger: LazilyInstantiated<Logger>", "@Instantiated public let inner: Inner"]),
+		]
+		var app = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let outer: Outer"])]
+		if liveApiInFeature {
+			feature += liveApi
+		} else {
+			app.insert(contentsOf: liveApi, at: 0)
+		}
+		return Self.modules(feature: feature, app: app)
+	}
+
 	/// `Outer` (a seam) declares `logger` and calls `Inner` (a seam), whose `Detail` receives it, so `Inner` takes it as a
 	/// parameter, and whose call of `Nest`, a seam of `Session`, fills `Nest`'s hole with `NestImpl`, whose `api: any Api` only
 	/// `App` fills, with a `LiveApi` that receives `logger`. `App`'s root declares a `logger` of its own.
@@ -2904,10 +3495,14 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 			seamFixtureType(named: "Nest", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let service: any Service"]),
 		]
 		var feature = [
-			"public protocol Api: AnyObject {}",
+			"public protocol Api: AnyObject {}\n\n" + DifferentialValueCreationStamp.counterDeclaration(named: "Stamp"),
 			"""
 			@Instantiable
-			public final class Logger: Instantiable { public init() {} }
+			public final class Logger: Instantiable {
+			    \(DifferentialValueCreationStamp.property(counterNamed: "Stamp"))
+
+			    public init() {}
+			}
 			""",
 			seamFixtureType(named: "Detail", isFinalClass: true, declarations: ["@Received public let logger: Logger"]),
 			"""
@@ -2933,7 +3528,11 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 		]
 	}
 
-	private static func twoLevelPassUpModules(liveApiInFeature: Bool = false) -> [ModuleFixture] {
+	/// `Outer` instantiates `logger` and calls `Middle`, which instantiates `tag` and calls `Inner`, whose `Detail` receives
+	/// both, `tag` only if available, and instantiates `api: any Api`, which only `App` fills, with a `LiveApi` that receives
+	/// both the same way. Where `lazyOrigins`, `Outer` and `Middle` declare them lazily, and `Logger` and `Tag` are stamped
+	/// with the order they are created in.
+	private static func twoLevelPassUpModules(liveApiInFeature: Bool = false, lazyOrigins: Bool = false) -> [ModuleFixture] {
 		let liveApi = """
 		@Instantiable(fulfillingAdditionalTypes: [Api.self])
 		public final class LiveApi: Instantiable, Api {
@@ -2942,15 +3541,16 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 		    @Received(onlyIfAvailable: true) public let tag: Tag?
 		}
 		"""
+		let stamp = lazyOrigins ? "\n    \(DifferentialValueCreationStamp.property(counterNamed: "Stamp"))\n\n    " : " "
 		var feature = [
-			"public protocol Api: AnyObject {}",
+			lazyOrigins ? "public protocol Api: AnyObject {}\n\n" + DifferentialValueCreationStamp.counterDeclaration(named: "Stamp") : "public protocol Api: AnyObject {}",
 			"""
 			@Instantiable
-			public final class Logger: Instantiable { public init() {} }
+			public final class Logger: Instantiable {\(stamp)public init() {}\(lazyOrigins ? "\n" : " ")}
 			""",
 			"""
 			@Instantiable
-			public final class Tag: Instantiable { public init() {} }
+			public final class Tag: Instantiable {\(stamp)public init() {}\(lazyOrigins ? "\n" : " ")}
 			""",
 			"""
 			@Instantiable
@@ -2962,10 +3562,52 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 			}
 			""",
 			seamFixtureType(named: "Inner", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let detailBuilder: Instantiator<Detail>"]),
-			seamFixtureType(named: "Middle", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let tag: Tag", "@Instantiated public let inner: Inner"]),
-			seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let logger: Logger", "@Instantiated public let middle: Middle"]),
+			seamFixtureType(named: "Middle", isSeam: true, isFinalClass: true, declarations: [lazyOrigins ? "@Instantiated public let tag: LazilyInstantiated<Tag>" : "@Instantiated public let tag: Tag", "@Instantiated public let inner: Inner"]),
+			seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: [lazyOrigins ? "@Instantiated public let logger: LazilyInstantiated<Logger>" : "@Instantiated public let logger: Logger", "@Instantiated public let middle: Middle"]),
 		]
 		var app = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let logger: Logger", "@Instantiated public let tag: Tag", "@Instantiated public let outer: Outer"])]
+		if liveApiInFeature {
+			feature.append(liveApi)
+		} else {
+			app.insert(liveApi, at: 0)
+		}
+		return Self.modules(feature: feature, app: app)
+	}
+
+	/// `Outer` declares `currentLogger` lazily and calls `Middle`, which receives it as `logger: Logger!` and calls `Inner`,
+	/// whose `Detail`, built through `detailBuilder`, receives `logger: Logger!` and instantiates `api: any Api`, which only
+	/// `App` fills, with a `LiveApi` that receives `logger: Logger!` too. `Logger` is stamped with the order it is created in.
+	private static func implicitlyUnwrappedPassUpModules(liveApiInFeature: Bool = false) -> [ModuleFixture] {
+		let liveApi = """
+		@Instantiable(fulfillingAdditionalTypes: [Api.self])
+		public final class LiveApi: Instantiable, Api {
+		    public init(logger: Logger!) { self.logger = logger }
+		    @Received public let logger: Logger!
+		}
+		"""
+		var feature = [
+			"public protocol Api: AnyObject {}\n\n" + DifferentialValueCreationStamp.counterDeclaration(named: "Stamp"),
+			"""
+			@Instantiable
+			public final class Logger: Instantiable {
+			    \(DifferentialValueCreationStamp.property(counterNamed: "Stamp"))
+
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Detail: Instantiable {
+			    public init(logger: Logger!, api: any Api) { self.logger = logger; self.api = api }
+			    @Received public let logger: Logger!
+			    @Instantiated public let api: any Api
+			}
+			""",
+			seamFixtureType(named: "Inner", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let detailBuilder: Instantiator<Detail>"]),
+			seamFixtureType(named: "Middle", isSeam: true, isFinalClass: true, declarations: [#"@Received(fulfilledByDependencyNamed: "currentLogger", ofType: Logger.self) public let logger: Logger!"#, "@Instantiated public let inner: Inner"]),
+			seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let currentLogger: LazilyInstantiated<Logger>", "@Instantiated public let middle: Middle"]),
+		]
+		var app = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let outer: Outer"])]
 		if liveApiInFeature {
 			feature.append(liveApi)
 		} else {
@@ -3170,8 +3812,19 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 		probes: [DifferentialValueProbe],
 		sourceLocation: SourceLocation = #_sourceLocation,
 	) async throws {
+		try await expectOutput(of: modules, { _ in expected }, inline: inline, probes: probes, sourceLocation: sourceLocation)
+	}
+
+	/// As above, with the expected files of each module given the run's output, for a literal that names a fixture's path.
+	private mutating func expectOutput(
+		of modules: [ModuleFixture],
+		_ expectedGivenOutput: (MultiModuleTestOutput) throws -> [String: [String: String]],
+		inline: [ModuleFixture],
+		probes: [DifferentialValueProbe],
+		sourceLocation: SourceLocation = #_sourceLocation,
+	) async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		for (moduleName, files) in expected {
+		for (moduleName, files) in try expectedGivenOutput(output) {
 			#expect(output.modules[moduleName]?.generatedFiles == files.mapValues { generatedFileHeader + $0 }, sourceLocation: sourceLocation)
 		}
 		guard compileVerificationIsEnabled else { return }

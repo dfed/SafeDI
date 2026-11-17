@@ -709,7 +709,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct tBuilder_Values {
 		            public var mark: Mark? { __safeDI_mark.instance }
-		            let __safeDI_mark: LazilyInstantiated<Mark?>
+		            public let __safeDI_mark: LazilyInstantiated<Mark?>
 
 		            init(mark: LazilyInstantiated<Mark?>) {
 		                __safeDI_mark = mark
@@ -719,7 +719,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        nonisolated public struct cBuilder_Values {
 		            public var mark: Mark? { __safeDI_mark.instance }
 		            public let tBuilder: Instantiator<T>
-		            let __safeDI_mark: LazilyInstantiated<Mark?>
+		            public let __safeDI_mark: LazilyInstantiated<Mark?>
 
 		            init(mark: LazilyInstantiated<Mark?>, tBuilder: Instantiator<T>) {
 		                __safeDI_mark = mark
@@ -2336,7 +2336,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct tBuilder_Values {
 		            public var mark: Mark? { __safeDI_mark.instance }
-		            let __safeDI_mark: LazilyInstantiated<Mark?>
+		            public let __safeDI_mark: LazilyInstantiated<Mark?>
 
 		            init(mark: LazilyInstantiated<Mark?>) {
 		                __safeDI_mark = mark
@@ -2346,7 +2346,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        nonisolated public struct cBuilder_Values {
 		            public var mark: Mark? { __safeDI_mark.instance }
 		            public let tBuilder: Instantiator<T>
-		            let __safeDI_mark: LazilyInstantiated<Mark?>
+		            public let __safeDI_mark: LazilyInstantiated<Mark?>
 
 		            init(mark: LazilyInstantiated<Mark?>, tBuilder: Instantiator<T>) {
 		                __safeDI_mark = mark
@@ -2556,7 +2556,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public struct tBuilder_Values {
 		            public var mark: Mark? { __safeDI_mark.instance }
-		            let __safeDI_mark: LazilyInstantiated<Mark?>
+		            public let __safeDI_mark: LazilyInstantiated<Mark?>
 
 		            init(mark: LazilyInstantiated<Mark?>) {
 		                __safeDI_mark = mark
@@ -2566,7 +2566,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        nonisolated public struct cBuilder_Values {
 		            public var mark: Mark? { __safeDI_mark.instance }
 		            public let tBuilder: Instantiator<T>
-		            let __safeDI_mark: LazilyInstantiated<Mark?>
+		            public let __safeDI_mark: LazilyInstantiated<Mark?>
 
 		            init(mark: LazilyInstantiated<Mark?>, tBuilder: Instantiator<T>) {
 		                __safeDI_mark = mark

@@ -1234,6 +1234,17 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case holePassedUpPlaceReadsPassingSeamsValue
 	/// That value declared instead by `HoleLoggerTop`, a seam that calls `HoleOuter`, two seams above `HoleSeam`.
 	case holePassedUpPlaceReadsValueTwoSeamsUp
+	/// That value declared lazily (a `LazilyInstantiated` or its `Sendable` twin), and read by `HoleImpl` itself or by
+	/// `HoleLoggerReader`, which it builds through an instantiator: the fill creates the value where its tree reads it, as
+	/// the inline build does.
+	case holePassedUpPlaceReadsLazyValue
+	/// That value received by `HoleOwner` only if available, so `HoleSeam` holds it in a memo of an optional, which the fill
+	/// binds and reads the instance of where every reader, each only if available, reads it.
+	case holePassedUpPlaceReadsOptionalField
+	/// That value received by `HoleOwner` implicitly unwrapped, as `HoleOuter` retypes `HoleLoggerTop`'s, so `HoleSeam`
+	/// holds it in a memo of an optional, which the fill binds and reads the instance of where every reader, each
+	/// implicitly unwrapped, reads it.
+	case holePassedUpPlaceReadsImplicitlyUnwrappedField
 	/// `HoleImpl` instantiates `HoleSeam` again, so its fill passes itself to the re-entering call.
 	case holeReentersSeam
 	/// `HoleImpl` instantiates `HoleSeam` again through `HoleMiddle`, which declares `holeLogger` above the call while
@@ -5078,9 +5089,10 @@ enum GraphFuzzerGenerator {
 		/// inside a plain fill, and a hole under a later member of a loop of received instantiators. Three more draw places held
 		/// in instantiators: the forwarding place's labeled pair and second place, a place of an instantiator of a class that
 		/// conforms to `Instantiable` by hand with an erased or a plain place of its builder beside it, and an erased place that
-		/// forwards nothing. One more draws a value `HoleOuter`, or a seam above it, declares, which `HoleOwner` receives and
-		/// `HoleImpl` reads through the place `HoleOuter` passes up. The pass records the property that gives the graph its second
-		/// place of a hole (`secondHolePlace`).
+		/// forwards nothing. One more draws a value `HoleOuter`, or a seam above it, declares, now and then lazily, which
+		/// `HoleOwner` receives, by value, only if available or implicitly unwrapped, and `HoleImpl` reads through the place
+		/// `HoleOuter` passes up, itself or in a type it builds through an instantiator. The pass records the property that
+		/// gives the graph its second place of a hole (`secondHolePlace`).
 		private mutating func addingHoleShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.contains(.generateDependencyTree), holeRandom.percentChance(33) else { return declarations }
 			var declarations = declarations
@@ -5204,6 +5216,18 @@ enum GraphFuzzerGenerator {
 			let passedUpPlaceValueTwoSeamsUp = holeRolls.passedUpPlaceValue.percentChance(50)
 			let passedUpPlaceValueReadOnlyIfAvailable = holeRolls.passedUpPlaceValue.percentChance(50)
 			let rootDeclaresPassedUpPlaceValueLabel = holeRolls.passedUpPlaceValue.percentChance(50)
+			// Half the time the seam declares the value lazily, and half the time `HoleImpl` reads it in a type it builds through an
+			// instantiator, so a fill that created it early would show in when it is created.
+			let passedUpPlaceValueIsLazy = holeRolls.passedUpPlaceValue.percentChance(50)
+			let passedUpPlaceValueLazyWrapper = holeRolls.passedUpPlaceValue.element(of: lazyWrappers)
+			let passedUpPlaceValueReadBeneathInstantiator = holeRolls.passedUpPlaceValue.percentChance(50)
+			let passedUpPlaceValueReaderWrapper = holeRolls.passedUpPlaceValue.element(of: instantiators)
+			// Nearly half the time `HoleOwner` receives the value only if available, so `HoleSeam`'s field is optional and every
+			// reader receives it only if available; two thirds of the rest it receives the value implicitly unwrapped, which
+			// `HoleOuter` retypes, and every reader receives it so: each lands in ten graphs the tool accepts. The fill binds the
+			// memo of either as it does a value's, and reads its instance where its tree reads the value.
+			let passedUpPlaceValueOwnerReadsOnlyIfAvailable = holeRolls.passedUpPlaceValue.percentChance(45)
+			let passedUpPlaceValueOwnerReadsImplicitlyUnwrapped = holeRolls.passedUpPlaceValue.percentChance(65) && !passedUpPlaceValueOwnerReadsOnlyIfAvailable
 			// The fillers and the root that reaches the seam are in another package than the seam's, unless the seam's module
 			// has no package, which this draw keeps apart from a caller in another package, as every other graph's draws were.
 			let fillsFromOtherPackage = drawsCrossPackage && !modulesOmittingPackageName.contains(.seamModule)
@@ -5990,6 +6014,8 @@ enum GraphFuzzerGenerator {
 			// build `HoleSeam` again, which the tool rejects.
 			let buildsSeamAgain = impl.properties.contains { $0.label == "holeSeamBuilder" || $0.label == "holeMiddle" } || seam.properties.contains { $0.label == "holeLoopBuilder" }
 			var passedUpPlaceValueTop: TypeDeclaration?
+			// The root's declaration of the value `HoleOuter` retypes implicitly unwrapped, where no seam above it declares one.
+			var passedUpPlaceValueRootDeclaration: PropertyDeclaration?
 			let drawsPassedUpPlaceValue = ownerIndex != nil && !ownerIsBuiltInSendableFunction && !readsRootLogger && !buildsSeamAgain && !drawsDiamondOfOuterSeams
 			if drawsPassedUpPlaceValue, outerIndex == nil {
 				var outer = instantiable("HoleOuter", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeSeam", type: seamName)])
@@ -5999,20 +6025,52 @@ enum GraphFuzzerGenerator {
 				seamModuleDeclarations.append(outer)
 			}
 			if drawsPassedUpPlaceValue, let outerIndex, let ownerIndex {
-				let loggerProperty = PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: loggerName)
-				seamModuleDeclarations[ownerIndex].properties.insert(PropertyDeclaration(attribute: "@Received", label: "holeLogger", type: loggerName), at: 0)
+				let loggerProperty = PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: passedUpPlaceValueIsLazy ? "\(passedUpPlaceValueLazyWrapper)<\(loggerName)>" : loggerName)
+				let ownerRead = if passedUpPlaceValueOwnerReadsOnlyIfAvailable {
+					PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeLogger", type: loggerName + "?")
+				} else if passedUpPlaceValueOwnerReadsImplicitlyUnwrapped {
+					PropertyDeclaration(attribute: "@Received", label: "holeLogger", type: loggerName + "!")
+				} else {
+					PropertyDeclaration(attribute: "@Received", label: "holeLogger", type: loggerName)
+				}
+				seamModuleDeclarations[ownerIndex].properties.insert(ownerRead, at: 0)
+				if passedUpPlaceValueOwnerReadsImplicitlyUnwrapped {
+					// `HoleOuter` retypes the value of `HoleLoggerTop`, or of the root, keeping its label, so `HoleSeam` takes it
+					// implicitly unwrapped.
+					seamModuleDeclarations[outerIndex].properties.insert(PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"holeLogger\", ofType: \(loggerName).self)", label: "holeLogger", type: loggerName + "!"), at: 0)
+				}
 				if passedUpPlaceValueTwoSeamsUp {
 					var top = instantiable("HoleLoggerTop", module: .seamModule, properties: [loggerProperty, PropertyDeclaration(attribute: "@Instantiated", label: "holeOuter", type: outerName)])
 					top.instantiableArguments = ["generateDependencyTree: true"]
 					takingPackageService(&top)
 					seamModuleDeclarations.append(top)
 					passedUpPlaceValueTop = top
+				} else if passedUpPlaceValueOwnerReadsImplicitlyUnwrapped {
+					passedUpPlaceValueRootDeclaration = loggerProperty
 				} else {
 					seamModuleDeclarations[outerIndex].properties.insert(loggerProperty, at: 0)
 				}
-				impl.properties.append(passedUpPlaceValueReadOnlyIfAvailable
-					? PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeLogger", type: loggerName + "?")
-					: PropertyDeclaration(attribute: "@Received", label: "holeLogger", type: loggerName))
+				let loggerRead = if passedUpPlaceValueOwnerReadsImplicitlyUnwrapped {
+					PropertyDeclaration(attribute: "@Received", label: "holeLogger", type: loggerName + "!")
+				} else if passedUpPlaceValueReadOnlyIfAvailable || passedUpPlaceValueOwnerReadsOnlyIfAvailable {
+					PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeLogger", type: loggerName + "?")
+				} else {
+					PropertyDeclaration(attribute: "@Received", label: "holeLogger", type: loggerName)
+				}
+				// `HoleTrackerImpl`, where it reads the root's `holeLogger`, reads the value `HoleOuter` declares instead, so it
+				// receives it in the form the field carries, as `HoleImpl` does.
+				if passedUpPlaceValueOwnerReadsOnlyIfAvailable || passedUpPlaceValueOwnerReadsImplicitlyUnwrapped, let trackerName = trackerImpl?.name, let trackerIndex = callerDeclarations.firstIndex(where: { $0.name == trackerName }) {
+					callerDeclarations[trackerIndex].properties = callerDeclarations[trackerIndex].properties.map { $0.label == "holeLogger" ? loggerRead : $0 }
+				}
+				if passedUpPlaceValueReadBeneathInstantiator {
+					// `HoleLoggerReader` fills a hole as `HoleImpl`'s tree does, so the visible build declares it beside `HoleImpl`.
+					var reader = instantiable("HoleLoggerReader", module: fillerModule, properties: [loggerRead])
+					reader.fillsHole = true
+					callerDeclarations.append(reader)
+					impl.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeLoggerReaderBuilder", type: "\(passedUpPlaceValueReaderWrapper)<\(reader.name)>"))
+				} else {
+					impl.properties.append(loggerRead)
+				}
 			}
 			// The root that reaches the seam: the first, or, with the fillers in another package, `HoleOtherRoot` there.
 			let rootCall = if drawsDiamondOfOuterSeams {
@@ -6028,7 +6086,9 @@ enum GraphFuzzerGenerator {
 			if readsRootLogger {
 				impl.properties.append(PropertyDeclaration(attribute: "@Received", label: "holeLogger", type: loggerName))
 			}
-			if readsRootLogger || trackerImpl?.properties.contains(where: { $0.label == "holeLogger" }) == true || drawsPassedUpPlaceValue && rootDeclaresPassedUpPlaceValueLabel {
+			if let passedUpPlaceValueRootDeclaration {
+				rootProperties.append(passedUpPlaceValueRootDeclaration)
+			} else if readsRootLogger || trackerImpl?.properties.contains(where: { $0.label == "holeLogger" }) == true || drawsPassedUpPlaceValue && rootDeclaresPassedUpPlaceValueLabel {
 				rootProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: loggerName))
 			}
 			rootProperties.append(rootCall)
@@ -9432,6 +9492,15 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if properties(of: "HoleOwner").contains(where: { $0.label == "holeLogger" }) {
 			features.insert(declares("HoleLoggerTop") ? .holePassedUpPlaceReadsValueTwoSeamsUp : .holePassedUpPlaceReadsPassingSeamsValue)
+			if (properties(of: "HoleOuter") + properties(of: "HoleLoggerTop") + properties(of: "Root0") + properties(of: "HoleOtherRoot")).contains(where: { $0.label == "holeLogger" && $0.type.contains("LazilyInstantiated<") }) {
+				features.insert(.holePassedUpPlaceReadsLazyValue)
+			}
+			if properties(of: "HoleOwner").contains(where: { $0.label == "holeLogger" && $0.type.hasSuffix("?") }) {
+				features.insert(.holePassedUpPlaceReadsOptionalField)
+			}
+			if properties(of: "HoleOwner").contains(where: { $0.label == "holeLogger" && $0.type.hasSuffix("!") }) {
+				features.insert(.holePassedUpPlaceReadsImplicitlyUnwrappedField)
+			}
 		}
 		// A re-entry of `HoleSeam` itself, and one of `HoleRelay`: a fill passed to a seam that passes its site up.
 		let reentryProperties = implProperties + properties(of: "HoleMiddle")
