@@ -643,7 +643,7 @@ public struct SeamSignature: Sendable {
 		public let innerSeamType: TypeDescription?
 		/// When this seam passes the hole up, the properties from its root to the call of the seam whose tree holds the
 		/// site, through the calls of every seam between, outermost first; empty for a site of this seam's own tree.
-		public let passedUpRoute: [DeclaredProperty]
+		public internal(set) var passedUpRoute: [DeclaredProperty]
 		/// Whether the builder is `@Sendable`: the seam's tree passes it on from inside a `@Sendable` function, which
 		/// captures it.
 		public internal(set) var isSendable: Bool

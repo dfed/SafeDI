@@ -614,6 +614,19 @@ extension DependencyTreeGenerator {
 		}
 	}
 
+	/// The places the calls of other modules' public mocks in the tree of the internal mock of `mockedType`, which
+	/// `generator` roots, pass up, each once, in the order the tree presents them first, each with the properties from the
+	/// mock's root to the call that presents it prepended to its route, so that a message about the value it forwards is
+	/// reported in the mock's module (`SeamSignature.Hole.forwardingLocation`), as its production tree reports it.
+	static func placesPassedUp(inMockTreeOf mockedType: Instantiable, generator: ScopeGenerator) -> [SeamSignature.Hole] {
+		let mockedModule = ModuleIdentity(moduleName: mockedType.moduleName, packageName: mockedType.packageName)
+		return holesPassedUp(in: generator, seamType: mockedType.concreteInstantiable, seamModule: mockedModule, ownSitePaths: []).passedUpHoles.map { passedUp in
+			var place = passedUp.hole
+			place.passedUpRoute = passedUp.route + place.passedUpRoute
+			return place
+		}
+	}
+
 	/// What the calls a seam's tree makes that present one site add to the builder the seam takes for it.
 	private struct SiteAdditions {
 		/// The declarations a fill of the site cannot read, the first of each label, in the order the calls present them.
