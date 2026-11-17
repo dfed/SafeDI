@@ -911,10 +911,24 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        public init(
 		            top: __safeDI_Middle_Top_MockConfiguration = .init()
 		        ) {
-		            self.top = top
+		            __safeDI_storage = __safeDI_Storage(
+		                top: top
+		            )
 		        }
 
-		        public let top: __safeDI_Middle_Top_MockConfiguration
+		        public var top: __safeDI_Middle_Top_MockConfiguration { __safeDI_storage.top }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                top: __safeDI_Middle_Top_MockConfiguration
+		            ) {
+		                self.top = top
+		            }
+
+		            let top: __safeDI_Middle_Top_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -975,13 +989,30 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        second: ((any Gadget) -> Second)? = nil,
 		        _ safeDIBuilder: ((any Second) -> SubB)? = nil
 		    ) {
-		        self.second = second
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            second: second,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let second: ((any Gadget) -> Second)?
+		    public var second: ((any Gadget) -> Second)? { __safeDI_storage.second }
 		    /// Overrides how `SubB` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((any Second) -> SubB)?
+		    public var safeDIBuilder: ((any Second) -> SubB)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            second: ((any Gadget) -> Second)?,
+		            safeDIBuilder: ((any Second) -> SubB)?
+		        ) {
+		            self.second = second
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let second: ((any Gadget) -> Second)?
+		        let safeDIBuilder: ((any Second) -> SubB)?
+		    }
 		}
 
 		extension SubB {
@@ -996,13 +1027,30 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        subB: __safeDI_Middle_SubB_MockConfiguration = .init(),
 		        _ safeDIBuilder: ((SubB) -> DefaultFirst)? = nil
 		    ) {
-		        self.subB = subB
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            subB: subB,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let subB: __safeDI_Middle_SubB_MockConfiguration
+		    public var subB: __safeDI_Middle_SubB_MockConfiguration { __safeDI_storage.subB }
 		    /// Overrides how `DefaultFirst` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((SubB) -> DefaultFirst)?
+		    public var safeDIBuilder: ((SubB) -> DefaultFirst)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            subB: __safeDI_Middle_SubB_MockConfiguration,
+		            safeDIBuilder: ((SubB) -> DefaultFirst)?
+		        ) {
+		            self.subB = subB
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let subB: __safeDI_Middle_SubB_MockConfiguration
+		        let safeDIBuilder: ((SubB) -> DefaultFirst)?
+		    }
 		}
 
 		extension DefaultFirst {
@@ -1017,13 +1065,30 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        first: __safeDI_Middle_DefaultFirst_MockConfiguration = .init(),
 		        _ safeDIBuilder: ((any First) -> SubA)? = nil
 		    ) {
-		        self.first = first
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            first: first,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let first: __safeDI_Middle_DefaultFirst_MockConfiguration
+		    public var first: __safeDI_Middle_DefaultFirst_MockConfiguration { __safeDI_storage.first }
 		    /// Overrides how `SubA` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((any First) -> SubA)?
+		    public var safeDIBuilder: ((any First) -> SubA)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            first: __safeDI_Middle_DefaultFirst_MockConfiguration,
+		            safeDIBuilder: ((any First) -> SubA)?
+		        ) {
+		            self.first = first
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let first: __safeDI_Middle_DefaultFirst_MockConfiguration
+		        let safeDIBuilder: ((any First) -> SubA)?
+		    }
 		}
 
 		extension SubA {
@@ -1039,15 +1104,35 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        subB: __safeDI_Middle_SubB_MockConfiguration = .init(),
 		        _ safeDIBuilder: ((SubA, SubB) -> Top)? = nil
 		    ) {
-		        self.subA = subA
-		        self.subB = subB
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            subA: subA,
+		            subB: subB,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let subA: __safeDI_Middle_SubA_MockConfiguration
-		    public let subB: __safeDI_Middle_SubB_MockConfiguration
+		    public var subA: __safeDI_Middle_SubA_MockConfiguration { __safeDI_storage.subA }
+		    public var subB: __safeDI_Middle_SubB_MockConfiguration { __safeDI_storage.subB }
 		    /// Overrides how `Top` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((SubA, SubB) -> Top)?
+		    public var safeDIBuilder: ((SubA, SubB) -> Top)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            subA: __safeDI_Middle_SubA_MockConfiguration,
+		            subB: __safeDI_Middle_SubB_MockConfiguration,
+		            safeDIBuilder: ((SubA, SubB) -> Top)?
+		        ) {
+		            self.subA = subA
+		            self.subB = subB
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let subA: __safeDI_Middle_SubA_MockConfiguration
+		        let subB: __safeDI_Middle_SubB_MockConfiguration
+		        let safeDIBuilder: ((SubA, SubB) -> Top)?
+		    }
 		}
 
 		extension Top {
