@@ -52,19 +52,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case row(row_Values, SafeDIMockScope_Service.Row_Scope)
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct row_Values {}
 
 		        nonisolated public struct service_Values {
 		            public let row: Row
 		        }
 
-		        @frozen nonisolated public enum Row_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Row_Scope {
 		            nonisolated public struct service_Values {
 		                public let token: Token
 		            }
@@ -370,19 +365,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Hub {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case page(page_Values, SafeDIMockScope_Service.Page_Scope)
-		        case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct page_Values {}
 
 		        nonisolated public struct model_Values {
 		            public let page: Page
 		        }
 
-		        @frozen nonisolated public enum Page_Scope {
-		            case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-
+		        nonisolated public enum Page_Scope {
 		            nonisolated public struct model_Values {
 		                public let token: Token
 		            }
@@ -401,9 +391,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Model_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Model_Scope {
 		            nonisolated public struct service_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -509,19 +497,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case row(row_Values, SafeDIMockScope_Service.Row_Scope)
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct row_Values {}
 
 		        nonisolated public struct service_Values {
 		            public let row: Row
 		        }
 
-		        @frozen nonisolated public enum Row_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Row_Scope {
 		            nonisolated public struct service_Values {
 		                public let token: Token
 		            }
@@ -852,14 +835,10 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Home {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case store(store_Values, SafeDIMockScope_Api.Store_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct store_Values {}
 
-		        @frozen nonisolated public enum Store_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Store_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1837,16 +1816,12 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case row(row_Values, SafeDIMockScope_Service.Row_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct row_Values {
 		            public let serviceBuilder: ServiceBuilder
 		        }
 
-		        @frozen nonisolated public enum Row_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Row_Scope {
 		            nonisolated public struct service_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3002,10 +2977,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Office {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case lobbyBuilder(lobbyBuilder_Values, SafeDIMockScope_Service.Lobby_Scope)
-		        case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct lobbyBuilder_Values {
 		            public let token: Token
 		        }
@@ -3015,9 +2987,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            public let lobbyBuilder: Instantiator<Lobby>
 		        }
 
-		        @frozen nonisolated public enum Lobby_Scope {
-		            case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-
+		        nonisolated public enum Lobby_Scope {
 		            nonisolated public struct model_Values {
 		                public let token: Token?
 		            }
@@ -3036,9 +3006,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Model_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Model_Scope {
 		            nonisolated public struct service_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3152,19 +3120,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case row(row_Values, SafeDIMockScope_Service.Row_Scope)
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct row_Values {}
 
 		        nonisolated public struct service_Values {
 		            public let row: Row
 		        }
 
-		        @frozen nonisolated public enum Row_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Row_Scope {
 		            nonisolated public struct service_Values {
 		                public let token: Token
 		            }
@@ -3430,19 +3393,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Office {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case lobbyBuilder(lobbyBuilder_Values, SafeDIMockScope_Service.Lobby_Scope)
-		        case desk(desk_Values, SafeDIMockScope_Service.Desk_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct lobbyBuilder_Values {}
 
 		        nonisolated public struct desk_Values {
 		            public let lobbyBuilder: Instantiator<Lobby>
 		        }
 
-		        @frozen nonisolated public enum Lobby_Scope {
-		            case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-
+		        nonisolated public enum Lobby_Scope {
 		            nonisolated public struct model_Values {
 		                public let token: Token?
 		            }
@@ -3461,9 +3419,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Desk_Scope {
-		            case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-
+		        nonisolated public enum Desk_Scope {
 		            nonisolated public struct model_Values {
 		                public let token: Token
 		            }
@@ -3482,9 +3438,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Model_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Model_Scope {
 		            nonisolated public struct service_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3597,19 +3551,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case row(row_Values, SafeDIMockScope_Service.Row_Scope)
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct row_Values {}
 
 		        nonisolated public struct service_Values {
 		            public let row: Row
 		        }
 
-		        @frozen nonisolated public enum Row_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Row_Scope {
 		            nonisolated public struct service_Values {
 		                public let token: Token
 		            }
@@ -3928,10 +3877,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Office {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case lobbyBuilder(lobbyBuilder_Values, SafeDIMockScope_Service.Lobby_Scope)
-		        case wing(wing_Values, SafeDIMockScope_Service.Wing_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct lobbyBuilder_Values {
 		            public let token: Token
 		        }
@@ -3941,9 +3887,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            public let lobbyBuilder: Instantiator<Lobby>
 		        }
 
-		        @frozen nonisolated public enum Lobby_Scope {
-		            case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-
+		        nonisolated public enum Lobby_Scope {
 		            nonisolated public struct model_Values {
 		                public let token: Token?
 		            }
@@ -3962,10 +3906,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Wing_Scope {
-		            case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-		            case gauge(gauge_Values, SafeDIMockScope_Service.Gauge_Scope)
-
+		        nonisolated public enum Wing_Scope {
 		            nonisolated public struct model_Values {}
 
 		            nonisolated public struct gauge_Values {
@@ -3989,9 +3930,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Model_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Model_Scope {
 		            nonisolated public struct service_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4008,9 +3947,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Gauge_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Gauge_Scope {
 		            nonisolated public struct service_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4135,19 +4072,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case row(row_Values, SafeDIMockScope_Service.Row_Scope)
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct row_Values {}
 
 		        nonisolated public struct service_Values {
 		            public let row: Row
 		        }
 
-		        @frozen nonisolated public enum Row_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Row_Scope {
 		            nonisolated public struct service_Values {
 		                public let token: Token
 		            }
@@ -4478,19 +4410,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Hub {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case page(page_Values, SafeDIMockScope_Service.Page_Scope)
-		        case hall(hall_Values, SafeDIMockScope_Service.Hall_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct page_Values {}
 
 		        nonisolated public struct hall_Values {
 		            public let page: Page
 		        }
 
-		        @frozen nonisolated public enum Page_Scope {
-		            case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-
+		        nonisolated public enum Page_Scope {
 		            nonisolated public struct model_Values {
 		                public let token: Token
 		            }
@@ -4509,9 +4436,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Hall_Scope {
-		            case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-
+		        nonisolated public enum Hall_Scope {
 		            nonisolated public struct model_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4528,9 +4453,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Model_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Model_Scope {
 		            nonisolated public struct service_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4641,19 +4564,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case row(row_Values, SafeDIMockScope_Service.Row_Scope)
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct row_Values {}
 
 		        nonisolated public struct service_Values {
 		            public let row: Row
 		        }
 
-		        @frozen nonisolated public enum Row_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Row_Scope {
 		            nonisolated public struct service_Values {
 		                public let token: Token
 		            }
@@ -4975,15 +4893,10 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Hub {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct model_Values {}
 
-		        @frozen nonisolated public enum Model_Scope {
-		            case service(service_Values)
-		            case bench(bench_Values, SafeDIMockScope_Service.Bench_Scope)
-
+		        nonisolated public enum Model_Scope {
 		            nonisolated public struct service_Values {
 		                public let token: Token
 		            }
@@ -5010,9 +4923,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Bench_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Bench_Scope {
 		            nonisolated public struct service_Values {
 		                public let token: Badge
 		            }
@@ -5107,19 +5018,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case row(row_Values, SafeDIMockScope_Service.Row_Scope)
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct row_Values {}
 
 		        nonisolated public struct service_Values {
 		            public let row: Row
 		        }
 
-		        @frozen nonisolated public enum Row_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Row_Scope {
 		            nonisolated public struct service_Values {
 		                public let token: Token
 		            }
@@ -5786,10 +5692,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Office {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case desk(desk_Values, SafeDIMockScope_Service.Desk_Scope)
-		        case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct desk_Values {
 		            public let token: Token
 		        }
@@ -5799,9 +5702,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            public let desk: Desk
 		        }
 
-		        @frozen nonisolated public enum Desk_Scope {
-		            case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-
+		        nonisolated public enum Desk_Scope {
 		            nonisolated public struct model_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -5818,9 +5719,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Model_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Model_Scope {
 		            nonisolated public struct service_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -5933,19 +5832,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case row(row_Values, SafeDIMockScope_Service.Row_Scope)
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct row_Values {}
 
 		        nonisolated public struct service_Values {
 		            public let row: Row
 		        }
 
-		        @frozen nonisolated public enum Row_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Row_Scope {
 		            nonisolated public struct service_Values {
 		                public let token: Token
 		            }
@@ -6215,10 +6109,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Office {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case bench(bench_Values, SafeDIMockScope_Service.Bench_Scope)
-		        case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct bench_Values {
 		            public let token: Token
 		        }
@@ -6228,9 +6119,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            public let bench: Bench
 		        }
 
-		        @frozen nonisolated public enum Bench_Scope {
-		            case model(model_Values, SafeDIMockScope_Service.Model_Scope)
-
+		        nonisolated public enum Bench_Scope {
 		            nonisolated public struct model_Values {
 		                public let token: Badge
 		            }
@@ -6249,9 +6138,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Model_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Model_Scope {
 		            nonisolated public struct service_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -6364,19 +6251,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case row(row_Values, SafeDIMockScope_Service.Row_Scope)
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct row_Values {}
 
 		        nonisolated public struct service_Values {
 		            public let row: Row
 		        }
 
-		        @frozen nonisolated public enum Row_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Row_Scope {
 		            nonisolated public struct service_Values {
 		                public let token: Token
 		            }
@@ -6661,17 +6543,12 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Hub {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case node(node_Values, SafeDIMockScope_Service.Node_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct node_Values {
 		            public let token: Token
 		        }
 
-		        @frozen nonisolated public enum Node_Scope {
-		            indirect case next(next_Values, SafeDIMockScope_Service.Node_Scope)
-		            case service(service_Values)
-
+		        nonisolated public enum Node_Scope {
 		            nonisolated public struct next_Values {
 		                public let id: Int
 		            }
@@ -6786,19 +6663,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case row(row_Values, SafeDIMockScope_Service.Row_Scope)
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct row_Values {}
 
 		        nonisolated public struct service_Values {
 		            public let row: Row
 		        }
 
-		        @frozen nonisolated public enum Row_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Row_Scope {
 		            nonisolated public struct service_Values {
 		                public let token: Token
 		            }
@@ -7209,9 +7081,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct service_Values {
 		            package let serviceBuilder: Thing?
 		            package let badge: Badge
