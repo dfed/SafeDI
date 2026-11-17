@@ -118,6 +118,7 @@ struct SafeDIToolReleaseAcceptanceTests {
 			ListedSeed(seed: 1_406, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_473, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_477, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 1_525, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_545, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_548, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_553, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
