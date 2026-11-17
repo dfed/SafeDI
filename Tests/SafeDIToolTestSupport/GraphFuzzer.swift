@@ -1759,8 +1759,8 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// That call made inside a `@Sendable` fill: `ReenteredTop` builds `ReenteredSubA` in a `SendableInstantiator`, so the
 	/// reused level function the call reaches is `@Sendable`, which the generator once left plain.
 	case reenteredFillCallThroughSeamPassingPlaceUpInSendableFill
-	/// That call made by `ReenteredHub`, a type of the module beneath the seam's that `ReenteredFirstImpl` builds in a
-	/// `SendableInstantiator`: the `@Sendable` function above the call makes the reused level function `@Sendable`.
+	/// That call made, by value, by `ReenteredHub`, a type of the module beneath the seam's that `ReenteredFirstImpl` builds
+	/// in a `SendableInstantiator`: the `@Sendable` function above the call makes the reused level function `@Sendable`.
 	case reenteredFillCallThroughSeamPassingPlaceUpByTypeOfAnotherModule
 
 	/// Whether `addingCycleParameterShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
@@ -8175,8 +8175,9 @@ enum GraphFuzzerGenerator {
 			let seamCall = callThroughInstantiator
 				? PropertyDeclaration(attribute: "@Instantiated", label: "\(calledLabel)Builder", type: "\(callInstantiator)<\(calledSeam.name)>")
 				: PropertyDeclaration(attribute: "@Instantiated", label: calledLabel, type: calledSeam.name)
-			// The type of the module beneath the seam's that makes the call, built in a `SendableInstantiator`.
-			let hub = instantiable("ReenteredHub", module: .seamDependency, properties: [seamCall])
+			// The type of the module beneath the seam's that makes the call, built in a `SendableInstantiator`. It calls the seam
+			// by value, so that the `@Sendable` function above it is all that makes the reused level function `@Sendable`.
+			let hub = instantiable("ReenteredHub", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: calledLabel, type: calledSeam.name)])
 			let call = relayCallByTypeOfAnotherModule
 				? PropertyDeclaration(attribute: "@Instantiated", label: "reenteredHubBuilder", type: "SendableInstantiator<\(hub.name)>")
 				: seamCall
