@@ -298,6 +298,23 @@ struct GraphFuzzerFixture: Equatable {
 		return [DifferentialValueSample(type: "\(screenName).ForwardedProperties", expression: "7")]
 	}
 
+	/// Whether every module of this graph lists every module beneath it, as the tool asks of a module that declares a root,
+	/// a seam's included, whose tree reaches a place through a seam beneath the seam's module ("A module that declares a
+	/// root lists every module beneath it"): a graph of `addingFillCallShapes`, `addingCarriedLevelShapes` or
+	/// `addingReenteredFillShapes`, read from the roots they declare, whatever a renaming does to the prefix. Every other
+	/// graph's modules list the modules they import alone.
+	var modulesListEveryModuleBeneath: Bool {
+		swiftFileContent.contains { content in
+			GraphFuzzerSourceLine.lines(of: content).contains { line in
+				guard let name = line.declaredTypeName else { return false }
+				return Self.rootsOfDrawsBeneathTheSeamsModule.contains { name.hasSuffix("_" + $0) }
+			}
+		}
+	}
+
+	/// The roots `modulesListEveryModuleBeneath` reads.
+	private static let rootsOfDrawsBeneathTheSeamsModule = ["FillCallRoot", "CarriedRoot", "ReenteredRoot"]
+
 	/// The visible build of a graph with a hole: every file whose first line says it fills a hole declared in the seam's
 	/// module instead, which can then see the fulfilling type and builds it inline, so the seam takes no builder.
 	var withoutHoles: GraphFuzzerFixture {
@@ -520,7 +537,8 @@ enum GraphFuzzerModule: String, CaseIterable, Comparable {
 /// as `Builder` – are renamed by replacing index `i` with `9 - i`, wherever they appear, including inside generated
 /// names that embed them. Every index the generator writes is a single digit, so each name keeps its length and
 /// every other character, the names of each kind sort in reverse order, and no renamed name becomes another's
-/// prefix. Both maps are their own inverse. File order is reversed by naming each file `F<99 - rank>_<name>`.
+/// prefix. Both maps are their own inverse. File order is reversed by naming each file `F<99 - rank>_<name>`, with more
+/// digits in a graph of more than a hundred files (`fileNames(of:)`).
 ///
 /// Every type name begins with the prefix `S<seed>_`, and reversing indices keeps it, so the reversals alone always
 /// sort a type's name after `ErasedInstantiator<`, `Instantiator<`, and `LazilyInstantiated<`, and before
@@ -627,7 +645,7 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 		}
 		if reversesFileNames {
 			text = text.replacingOccurrences(
-				of: "F[0-9]{2}_(?=" + NSRegularExpression.escapedPattern(for: typeNamePrefix) + ")",
+				of: "F[0-9]{2,}_(?=" + NSRegularExpression.escapedPattern(for: typeNamePrefix) + ")",
 				with: "",
 				options: .regularExpression,
 			)
@@ -667,12 +685,19 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 	}
 
 	/// The names to give the files of `fixture`, in its order: their own names or, when this renaming reverses
-	/// file names, the same names with a prefix that reverses their order.
+	/// file names, the same names with a prefix that reverses their order, `F<99 - rank>_`, or, in a graph of more than a
+	/// hundred files, as many nines as its count of files has digits, less the rank, padded with zeros to that width, so
+	/// that every prefix has one width and sorts as its number does.
 	func fileNames(of fixture: GraphFuzzerFixture) -> [String]? {
 		guard reversesFileNames else { return nil }
 		let fileNames = fixture.fileNames
 		let rankByFileName = Dictionary(uniqueKeysWithValues: fileNames.sorted().enumerated().map { ($1, $0) })
-		return fileNames.map { "F\(99 - rankByFileName[$0]!)_\($0)" }
+		let width = max(2, String(fileNames.count - 1).count)
+		let largestRankPrefix = (0..<width).reduce(0) { value, _ in value * 10 + 9 }
+		return fileNames.map { fileName in
+			let number = String(largestRankPrefix - rankByFileName[fileName]!)
+			return "F" + String(repeating: "0", count: width - number.count) + number + "_" + fileName
+		}
 	}
 
 	/// `text` with each path to a fixture file reduced to the file's name, so that the oracle compares no part of a
@@ -1661,6 +1686,60 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `RetainLeaf`'s place is held in an erased instantiator that forwards `retainTicket`, which `RetainLive` takes: the
 	/// builder the wrapper keeps is the one the retention oracle holds.
 	case retentionSeamValueBeforeBuilderForwardingPlace
+	/// `addingFillCallShapes`' tree: `FillCallShell`, a seam, fills a place of `FillCallInner`, a seam of the module beneath
+	/// its own, with `FillCallTrackerImpl`, which calls `FillCallService`, a seam whose place `FillCallShell` passes up, so
+	/// the call inside the fill reads its member on the fill's own level struct.
+	case fillCallReadsOwnLevel
+	/// The two places share one label, so the fill and the builder `FillCallShell` takes for the passed-up place are
+	/// named apart.
+	case fillCallReadsOwnLevelSharedLabel
+	/// `FillCallShell` builds `FillCallInner` through a `SendableInstantiator`, so it takes the builder `@Sendable`.
+	case fillCallReadsOwnLevelSendableRoute
+	/// `FillCallInner` builds the place's holder through a `SendableInstantiator`, so the fill is `@Sendable`.
+	case fillCallReadsOwnLevelInsideSendableFill
+	/// `FillCallTrackerImpl` calls `FillCallService` through a `SendableInstantiator`.
+	case fillCallReadsOwnLevelSendableCall
+	/// `addingCarriedLevelShapes`' tree: a place inside a fill inside a fill, two seams deep, across four modules –
+	/// `CarriedInner`'s place `CarriedOuter` fills with `CarriedServiceImpl`, whose place `CarriedTop` fills with
+	/// `CarriedGadgetImpl`, whose place the roots' module fills – so `CarriedTop`'s levels of `CarriedInner` carry its
+	/// fill's struct, and the roots' module builds a carried level that holds a fill of a deeper seam.
+	case carriedLevel
+	/// `CarriedInner` reaches its place by a second route, through `CarriedScreen`, which forwards `carriedId`.
+	case carriedLevelTwoRoutes
+	/// `CarriedGizmoImpl`, the innermost fill, reads `carriedId` only if available.
+	case carriedLevelFillReadsForwarded
+	/// `addingPassingUpCopyShapes`' tree: `Copy1Root` calls `Copy1Inner`, whose places in two files the roots' module fills,
+	/// each fill building a seam of its own that calls `Copy1Inner` again and passes both fills on.
+	case passingUpCopies
+	/// `Copy1UserServiceImpl`, the first place's fill, reads `Copy1Root`'s `copyLogger`.
+	case passingUpCopiesFillReadsLabel
+	/// Both seams the fills build bind `copyLogger` where they call `Copy1Inner`.
+	case passingUpCopiesSeamsBindLabel
+	/// Both: each seam hides `copyLogger` from the fill it passes on, which the tool rejects, reporting both seams whichever
+	/// place's file comes first (a defect fixed with this draw: it reported one, chosen by file order).
+	case passingUpCopiesHideLabel
+	/// `addingReenteredFillShapes`' tree: `ReenteredHost`, a seam, calls `ReenteredTop`, whose called seams' places it fills,
+	/// and the fill of the first calls `ReenteredSubB` again, so the call's own fill reuses the enclosing call's level
+	/// function and takes its struct from a member of its own case.
+	case reenteredFill
+	/// `ReenteredTop` binds `reenteredLabel`, which both called seams and `ReenteredGadgetImpl` receive.
+	case reenteredFillReadsValueAbove
+	/// `ReenteredFirstImpl` binds `reenteredMark` before its call, which `ReenteredGadgetImpl` receives only if available:
+	/// only the route through the call holds it, which both builds reject with `declarationBoundOnPathToReenteringCall`.
+	case reenteredFillReadsValueOfOneRoute
+	/// The same read where `ReenteredHost` also binds `reenteredMark` above its call of `ReenteredTop`: a field of the label
+	/// above the seam call, which both builds reject too.
+	case reenteredFillReadsValueOfOneRouteBoundAboveCall
+	/// The same read remedied: `ReenteredSubB`, the seam built again, receives `reenteredMark` only if available. Accepted.
+	case reenteredFillReadsValueOfOneRouteRemedied
+	/// `ReenteredFirstImpl`, the enclosing fill, holds a place of `ReenteredGadget` of its own.
+	case reenteredFillEnclosingFillHoldsPlace
+	/// `ReenteredSecondImpl` calls `ReenteredSubB` again, re-entering the fill that encloses the call.
+	case reenteredFillReentersEnclosingFill
+	/// `ReenteredMid`, beneath `ReenteredFirstImpl`, makes the call.
+	case reenteredFillCallBeneathFilledType
+	/// The call is made through a `SendableInstantiator`, which builds the called seam in a `@Sendable` function.
+	case reenteredFillSendableCall
 
 	/// Whether `addingCycleParameterShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
 	/// (`acceptedDrawFeatureCounts`).
@@ -1696,6 +1775,19 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// whose count in accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least ten each.
 	var isPassedUpPlaceReadingPassingSeamsValueShape: Bool {
 		rawValue.hasPrefix("holePassedUpPlaceReads")
+	}
+
+	/// Whether `addingFillCallShapes`, `addingCarriedLevelShapes`, `addingPassingUpCopyShapes` or `addingReenteredFillShapes` draws this shape of a fixed
+	/// generator defect, whose count in accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least ten
+	/// each: every shape but those the tool rejects by design – `passingUpCopiesHideLabel`, which the renamings judge, and
+	/// the unremedied reads of a value one route holds, which `toolRuns_rejectBothBuildsWithDeclarationBoundOnPathToReenteringCall_whenFillReadsValueOnlyOneRouteHoldsUnremedied` judges.
+	var isFixedSeamCallDefectShape: Bool {
+		switch self {
+		case .passingUpCopiesHideLabel, .reenteredFillReadsValueOfOneRoute, .reenteredFillReadsValueOfOneRouteBoundAboveCall:
+			false
+		default:
+			["fillCallReadsOwnLevel", "carriedLevel", "passingUpCopies", "reenteredFill"].contains { rawValue.hasPrefix($0) }
+		}
 	}
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
@@ -2384,6 +2476,11 @@ enum GraphFuzzerGenerator {
 			retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionRandomSeedMask)
 			builderReceivedBesideReceiveLeftNilRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.builderReceivedBesideReceiveLeftNilRandomSeedMask)
 			keywordLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.keywordLabelRandomSeedMask)
+
+			fillCallRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.fillCallRandomSeedMask)
+			carriedLevelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.carriedLevelRandomSeedMask)
+			passingUpCopyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.passingUpCopyRandomSeedMask)
+			reenteredFillRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredFillRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2475,6 +2572,12 @@ enum GraphFuzzerGenerator {
 				finalDeclarations = addingForwardedLabelAcrossSeamCallShapes(to: finalDeclarations)
 				// Drawn after it, from a stream of its own, so that every graph the passes before it draw is drawn as before.
 				finalDeclarations = addingRetentionShapes(to: finalDeclarations)
+				// Drawn after it, each from a stream of its own, in this order, so that every graph the passes before them draw is
+				// drawn as before.
+				finalDeclarations = addingFillCallShapes(to: finalDeclarations)
+				finalDeclarations = addingCarriedLevelShapes(to: finalDeclarations)
+				finalDeclarations = addingPassingUpCopyShapes(to: finalDeclarations)
+				finalDeclarations = addingReenteredFillShapes(to: finalDeclarations)
 				presentModules = Set(finalDeclarations.compactMap(\.module))
 			}
 			// Left out after every draw, so that the graph without its second place is drawn, and split, as the graph with it.
@@ -2836,6 +2939,12 @@ enum GraphFuzzerGenerator {
 		/// Draws only `labelingHoleOwnersAsKeywords`' choices: whether a graph's seam builds `HoleOwner` under keyword labels,
 		/// and which.
 		private var keywordLabelRandom: GraphFuzzerRandomNumberGenerator
+		/// Draw only `addingFillCallShapes`', `addingCarriedLevelShapes`', `addingPassingUpCopyShapes`' and `addingReenteredFillShapes`' choices: whether a
+		/// split graph gains each tree, and every shape of it.
+		private var fillCallRandom: GraphFuzzerRandomNumberGenerator
+		private var carriedLevelRandom: GraphFuzzerRandomNumberGenerator
+		private var passingUpCopyRandom: GraphFuzzerRandomNumberGenerator
+		private var reenteredFillRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -7592,6 +7701,362 @@ enum GraphFuzzerGenerator {
 
 		private static let keywordLabelRandomSeedMask: UInt64 = 0x6B6579776F72644C
 
+		// MARK: A seam call inside a fill
+
+		/// With the `generateDependencyTree` feature on, three in four graphs already split across modules gain a seam call
+		/// inside a fill that a seam passes a place of up: `FillCallInner`, a seam of the module beneath the seam's module
+		/// (`FuzzSession`), builds `FillCallBadge`, which holds a place of `FillCallTracker`; `FillCallShell`, a seam of the
+		/// seam's module, builds `FillCallInner`, by value or through an instantiator, and fills that place with
+		/// `FillCallTrackerImpl`, which calls `FillCallService`, a seam of the seam's module whose `FillCallProfile` holds a
+		/// place of `FillCallUserService`; `FillCallShell` passes that place up, and `FillCallUserServiceImpl`, beside
+		/// `FillCallRoot` in the roots' module, fills it. The call inside the fill reads its member on the fill's own level
+		/// struct, which the generator once read on the called seam's (seed shapes of `SafeDIToolSeamSendableFillTests`'
+		/// `treatsFillAsTheFunctionItIs` and `takesOwnBuilderSendable`, and `namesFillApart`). Now and then both places share
+		/// one label; the instantiators are `Sendable` as the graph's sendability allows, one roll each: `FillCallShell`'s,
+		/// which then takes the builder `@Sendable`, `FillCallInner`'s, which makes the fill `@Sendable`, and the call's.
+		///
+		/// `fillCallRandom` draws only for this pass, which runs after every other pass and only in a graph another pass
+		/// split, so that every graph in one module, and every other draw of a graph it draws in, draws as before. A graph
+		/// whose seam's module has no package gains none, since the modules beneath it are drawn only with one.
+		private mutating func addingFillCallShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree), fillCallRandom.percentChance(75) else { return declarations }
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let sharesLabel = fillCallRandom.percentChance(35)
+			let shellBuildsInnerByValue = fillCallRandom.percentChance(40)
+			let shellRouteSendableRoll = fillCallRandom.percentChance(50)
+			let fillSendableRoll = fillCallRandom.percentChance(50)
+			let callSendableRoll = fillCallRandom.percentChance(50)
+			guard !modulesOmittingPackageName.contains(.seamModule) else { return declarations }
+			func instantiator(sendableRoll: Bool) -> String {
+				switch sendability {
+				case .nonSendable: "Instantiator"
+				case .sendable: "SendableInstantiator"
+				case .mixed: sendableRoll ? "SendableInstantiator" : "Instantiator"
+				}
+			}
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let prefix = prefix
+			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			func fill(_ suffix: String, fulfilling protocolName: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = instantiable(suffix, module: module, properties: properties)
+				declaration.instantiableArguments = ["fulfillingAdditionalTypes: [\(protocolName).self]"]
+				declaration.additionalConformances.append(protocolName)
+				return declaration
+			}
+			let sendableSuffix = helperTypesAreSendable ? ": Sendable" : ""
+			let trackerName = "\(prefix)FillCallTracker"
+			let userServiceName = "\(prefix)FillCallUserService"
+			let badge = instantiable("FillCallBadge", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: sharesLabel ? "fillCallUserService" : "fillCallTracker", type: "any \(trackerName)")])
+			var inner = instantiable("FillCallInner", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "fillCallBadgeBuilder", type: "\(instantiator(sendableRoll: fillSendableRoll))<\(badge.name)>")])
+			inner.instantiableArguments = ["generateDependencyTree: true"]
+			inner.additionalDeclarations.append("public protocol \(trackerName)\(sendableSuffix) {}")
+			let profile = instantiable("FillCallProfile", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "fillCallUserService", type: "any \(userServiceName)")])
+			var service = instantiable("FillCallService", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "fillCallProfileBuilder", type: "\(instantiator(sendableRoll: callSendableRoll))<\(profile.name)>")])
+			service.instantiableArguments = ["generateDependencyTree: true"]
+			service.additionalDeclarations.append("public protocol \(userServiceName)\(sendableSuffix) {}")
+			let trackerImplementation = fill("FillCallTrackerImpl", fulfilling: trackerName, module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "fillCallServiceBuilder", type: "\(instantiator(sendableRoll: callSendableRoll))<\(service.name)>")])
+			var shell = instantiable("FillCallShell", module: .seamModule, properties: [shellBuildsInnerByValue
+					? PropertyDeclaration(attribute: "@Instantiated", label: "fillCallInner", type: inner.name)
+					: PropertyDeclaration(attribute: "@Instantiated", label: "fillCallInnerBuilder", type: "\(instantiator(sendableRoll: shellRouteSendableRoll))<\(inner.name)>")])
+			shell.instantiableArguments = ["generateDependencyTree: true"]
+			var userServiceImplementation = fill("FillCallUserServiceImpl", fulfilling: userServiceName, module: .samePackageCaller)
+			userServiceImplementation.fillsHole = true
+			var root = instantiable("FillCallRoot", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "fillCallShell", type: shell.name)])
+			root.instantiableArguments = ["isRoot: true"]
+			return declarations + [badge, inner, profile, service, trackerImplementation, shell, userServiceImplementation, root]
+		}
+
+		private static let fillCallRandomSeedMask: UInt64 = 0x66696C6C43616C6C
+
+		// MARK: Carried levels of a deeper seam
+
+		/// With the `generateDependencyTree` feature on, three in four graphs already split across modules, but for those of
+		/// all-`Sendable` wrappers, gain a place inside a fill inside a fill, two seams deep, across four modules:
+		/// `CarriedInner`, a seam of `FuzzCore`, holds a place of `CarriedService`, and now and then reaches a second place of
+		/// it through `CarriedScreen`, which forwards `carriedId`; `CarriedOuter`, a seam of `FuzzSession`, builds it and
+		/// fills the place with `CarriedServiceImpl`, which holds a place of `CarriedGadget`; `CarriedTop`, a seam of the
+		/// seam's module, builds `CarriedOuter` and fills that place with `CarriedGadgetImpl`, which holds a place of
+		/// `CarriedGizmo`, which `CarriedTop` passes up and `CarriedGizmoImpl`, beside `CarriedRoot` in the roots' module,
+		/// fills, now and then reading `carriedId` only if available. `CarriedTop`'s levels of `CarriedInner` take the
+		/// carried struct of its fill, and the roots' module builds a carried level that holds a fill of a deeper seam, which
+		/// the generator once declared without that struct and built without that fill's member
+		/// (`SafeDIToolSeamPlaceInsideFillTests`' `readsValueThroughEveryInnerSeamsReader`).
+		///
+		/// `carriedLevelRandom` draws only for this pass, which runs after `addingFillCallShapes` and only in a graph another
+		/// pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as before. A
+		/// graph whose seam's module has no package gains none, as for `addingFillCallShapes`, and neither does one of
+		/// `Sendable` wrappers alone, whose places would all be in `@Sendable` fills.
+		private mutating func addingCarriedLevelShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree), carriedLevelRandom.percentChance(75) else { return declarations }
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let drawsSecondRoute = carriedLevelRandom.percentChance(70)
+			let fillReadsForwarded = carriedLevelRandom.percentChance(50)
+			guard !modulesOmittingPackageName.contains(.seamModule), sendability != .sendable else { return declarations }
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let prefix = prefix
+			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			func fill(_ suffix: String, fulfilling protocolName: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = instantiable(suffix, module: module, properties: properties)
+				declaration.instantiableArguments = ["fulfillingAdditionalTypes: [\(protocolName).self]"]
+				declaration.additionalConformances.append(protocolName)
+				return declaration
+			}
+			let sendableSuffix = helperTypesAreSendable ? ": Sendable" : ""
+			let serviceName = "\(prefix)CarriedService"
+			let gadgetName = "\(prefix)CarriedGadget"
+			let gizmoName = "\(prefix)CarriedGizmo"
+			let servicePlace = PropertyDeclaration(attribute: "@Instantiated", label: "carriedService", type: "any \(serviceName)")
+			var added = [TypeDeclaration]()
+			var inner = instantiable("CarriedInner", module: .seamDependencyBase, properties: [servicePlace])
+			inner.instantiableArguments = ["generateDependencyTree: true"]
+			inner.additionalDeclarations.append("public protocol \(serviceName)\(sendableSuffix) {}")
+			if drawsSecondRoute {
+				let screen = instantiable("CarriedScreen", module: .seamDependencyBase, properties: [PropertyDeclaration(attribute: "@Forwarded", label: "carriedId", type: "Int"), servicePlace])
+				inner.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "carriedScreenBuilder", type: "Instantiator<\(screen.name)>"), at: 0)
+				added.append(screen)
+			}
+			let serviceImplementation = fill("CarriedServiceImpl", fulfilling: serviceName, module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "carriedGadget", type: "any \(gadgetName)")])
+			var outer = instantiable("CarriedOuter", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "carriedInner", type: inner.name)])
+			outer.instantiableArguments = ["generateDependencyTree: true"]
+			outer.additionalDeclarations.append("public protocol \(gadgetName)\(sendableSuffix) {}")
+			let gadgetImplementation = fill("CarriedGadgetImpl", fulfilling: gadgetName, module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "carriedGizmo", type: "any \(gizmoName)")])
+			var top = instantiable("CarriedTop", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "carriedOuter", type: outer.name)])
+			top.instantiableArguments = ["generateDependencyTree: true"]
+			top.additionalDeclarations.append("public protocol \(gizmoName)\(sendableSuffix) {}")
+			var gizmoImplementation = fill("CarriedGizmoImpl", fulfilling: gizmoName, module: .samePackageCaller)
+			gizmoImplementation.fillsHole = true
+			if fillReadsForwarded, drawsSecondRoute {
+				gizmoImplementation.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "carriedId", type: "Int?"))
+			}
+			var root = instantiable("CarriedRoot", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "carriedTop", type: top.name)])
+			root.instantiableArguments = ["isRoot: true"]
+			return declarations + [inner] + added + [serviceImplementation, outer, gadgetImplementation, top, gizmoImplementation, root]
+		}
+
+		private static let carriedLevelRandomSeedMask: UInt64 = 0x6361727269656454
+
+		// MARK: Copies of one seam call passed up
+
+		/// With the `generateDependencyTree` feature on, half the graphs already split across modules gain two seams that each
+		/// call one seam again and pass its fills on: `Copy1Root`, in the roots' module, binds `copyLogger` and builds
+		/// `Copy1Inner`, a seam of the seam's module, whose `Copy1UserProfile` and `Copy1GadgetProfile`, each in a file of its own,
+		/// hold places of `Copy1UserService` and `Copy1Gadget`; the roots' module fills them with `Copy1UserServiceImpl`, which
+		/// builds the seam `Copy1UserShell`, and `Copy1GadgetImpl`, which builds the seam `Copy1GadgetShell`, and each seam
+		/// builds `Copy1Inner` again through an instantiator, passing both places up. Now and then the first fill reads
+		/// `copyLogger`, and now and then both seams bind `copyLogger` where they call `Copy1Inner`; with both, each seam
+		/// hides the value from the fill it passes on, which the tool rejects, reporting each seam whichever place's file
+		/// comes first, as the file-name renaming checks (the generator once kept one seam's declarations per label,
+		/// chosen by file order: `SafeDIToolSeamBuilderParameterTests`' `throwsDeclarationBoundAfterSiteOfEveryPassingUpSeam`).
+		///
+		/// `passingUpCopyRandom` draws only for this pass, which runs after `addingCarriedLevelShapes` and only in a graph
+		/// another pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as
+		/// before. The places are in the `@Sendable` family in a graph of `Sendable` wrappers alone, whose cases carry no
+		/// values, so the fill reads nothing there.
+		private mutating func addingPassingUpCopyShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree), passingUpCopyRandom.percentChance(50) else { return declarations }
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let fillReadsLabel = passingUpCopyRandom.percentChance(60)
+			let seamsBindLabel = passingUpCopyRandom.percentChance(35)
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let prefix = prefix
+			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			func fill(_ suffix: String, fulfilling protocolName: String, properties: [PropertyDeclaration]) -> TypeDeclaration {
+				var declaration = instantiable(suffix, module: .samePackageCaller, properties: properties)
+				declaration.instantiableArguments = ["fulfillingAdditionalTypes: [\(protocolName).self]"]
+				declaration.additionalConformances.append(protocolName)
+				declaration.fillsHole = true
+				return declaration
+			}
+			let sendableSuffix = helperTypesAreSendable ? ": Sendable" : ""
+			let userServiceName = "\(prefix)Copy1UserService"
+			let gadgetName = "\(prefix)Copy1Gadget"
+			// Every type of this draw is named `Copy1…`, so that the renaming that moves type names across wrapper names gives
+			// them one letter (it reads the letters and one digit after the prefix): the order of `Copy1Inner`'s builders by
+			// label, which its two hole types' names spell, sanctioned (`seamBuilderOrderReason`), then never moves.
+			let logger = instantiable("Copy1Logger", module: .seamModule)
+			let loggerProperty = PropertyDeclaration(attribute: "@Instantiated", label: "copyLogger", type: logger.name)
+			let userProfile = instantiable("Copy1UserProfile", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "copyUserService", type: "any \(userServiceName)")])
+			let gadgetProfile = instantiable("Copy1GadgetProfile", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "copyGadget", type: "any \(gadgetName)")])
+			var inner = instantiable("Copy1Inner", module: .seamModule, properties: [
+				PropertyDeclaration(attribute: "@Instantiated", label: "copyUserProfileBuilder", type: "\(instantiator)<\(userProfile.name)>"),
+				PropertyDeclaration(attribute: "@Instantiated", label: "copyGadgetProfileBuilder", type: "\(instantiator)<\(gadgetProfile.name)>"),
+			])
+			inner.instantiableArguments = ["generateDependencyTree: true"]
+			inner.additionalDeclarations.append("public protocol \(userServiceName)\(sendableSuffix) {}\npublic protocol \(gadgetName)\(sendableSuffix) {}")
+			func shell(_ suffix: String) -> TypeDeclaration {
+				var declaration = instantiable(suffix, module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "copyInnerBuilder", type: "\(instantiator)<\(inner.name)>")])
+				declaration.instantiableArguments = ["generateDependencyTree: true"]
+				if seamsBindLabel {
+					declaration.properties.insert(loggerProperty, at: 0)
+				}
+				return declaration
+			}
+			let userShell = shell("Copy1UserShell")
+			let gadgetShell = shell("Copy1GadgetShell")
+			var userServiceProperties = [PropertyDeclaration(attribute: "@Instantiated", label: "copyUserShellBuilder", type: "\(instantiator)<\(userShell.name)>")]
+			if fillReadsLabel, sendability != .sendable {
+				userServiceProperties.insert(PropertyDeclaration(attribute: "@Received", label: "copyLogger", type: logger.name), at: 0)
+			}
+			let userServiceImplementation = fill("Copy1UserServiceImpl", fulfilling: userServiceName, properties: userServiceProperties)
+			let gadgetImplementation = fill("Copy1GadgetImpl", fulfilling: gadgetName, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "copyGadgetShellBuilder", type: "\(instantiator)<\(gadgetShell.name)>")])
+			var root = instantiable("Copy1Root", module: .samePackageCaller, properties: [loggerProperty, PropertyDeclaration(attribute: "@Instantiated", label: "copyInner", type: inner.name)])
+			root.instantiableArguments = ["isRoot: true"]
+			return declarations + [logger, userProfile, gadgetProfile, inner, userShell, gadgetShell, userServiceImplementation, gadgetImplementation, root]
+		}
+
+		private static let passingUpCopyRandomSeedMask: UInt64 = 0x636F706965735570
+
+		// MARK: A seam called again inside a fill
+
+		/// With the `generateDependencyTree` feature on, three in four graphs already split across modules gain a seam call
+		/// made inside a fill whose own fill reuses, by name, a level function of an enclosing call that takes a carried
+		/// struct: `ReenteredTop`, a seam of the module beneath the seam's module (`FuzzSession`), calls the seams
+		/// `ReenteredSubA` and `ReenteredSubB`, which hold places of `ReenteredFirst` and `ReenteredSecond`; `ReenteredHost`, a
+		/// seam of the seam's module, calls `ReenteredTop` and fills `ReenteredFirst` with `ReenteredFirstImpl`, which calls
+		/// `ReenteredSubB` again, and `ReenteredSecond` with `ReenteredSecondImpl`, which holds a place of `ReenteredGadget`
+		/// that `ReenteredHost` passes up and `ReenteredGadgetImpl`, beside `ReenteredRoot` in the roots' module, fills. The
+		/// call takes its struct from a member of its own case, which the generator once left out, so the reused level
+		/// function was called without `up:` (`SafeDIToolSeamReenteredFillTests`). Rolls: `ReenteredTop` binds
+		/// `reenteredLabel`, which both called seams and `ReenteredGadgetImpl` receive; `ReenteredFirstImpl` binds
+		/// `reenteredMark` before its call, which `ReenteredGadgetImpl` receives only if available, so only the route
+		/// through the call holds it: rejected in both builds with `declarationBoundOnPathToReenteringCall`, also where
+		/// `ReenteredHost` binds the label above its call of `ReenteredTop`, and accepted where `ReenteredSubB`, the seam built
+		/// again, receives it only if available, the error's remedy; `ReenteredFirstImpl` holds a place of `ReenteredGadget` of its own; `ReenteredSecondImpl`
+		/// calls `ReenteredSubB` again through an instantiator, re-entering the fill that encloses it; the call is made
+		/// beneath `ReenteredFirstImpl`, by `ReenteredMid`; and the call is made through an instantiator, a `Sendable` one as
+		/// the graph's sendability allows, which builds the called seam in a `@Sendable` function.
+		///
+		/// `reenteredFillRandom` draws only for this pass, which runs after `addingPassingUpCopyShapes` and only in a graph
+		/// another pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as
+		/// before. A graph whose seam's module has no package gains none, as for `addingFillCallShapes`.
+		private mutating func addingReenteredFillShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree), reenteredFillRandom.percentChance(75) else { return declarations }
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let readsValueAbove = reenteredFillRandom.percentChance(40)
+			let readsOnlyIfAvailable = reenteredFillRandom.percentChance(45)
+			let enclosingFillHoldsPlace = reenteredFillRandom.percentChance(35)
+			let reentersEnclosingFill = reenteredFillRandom.percentChance(30)
+			let callIsBeneath = reenteredFillRandom.percentChance(30)
+			let callThroughInstantiator = reenteredFillRandom.percentChance(45)
+			let callSendableRoll = reenteredFillRandom.percentChance(50)
+			// How a read of `reenteredMark` only one route holds is drawn: unremedied (0), unremedied with `ReenteredHost`
+			// binding the label above its call of `ReenteredTop` too (1), or remedied, `ReenteredSubB` receiving it only if
+			// available (2 and 3).
+			let oneRouteVariantRoll = reenteredFillRandom.integer(in: 0...3)
+			guard !modulesOmittingPackageName.contains(.seamModule) else { return declarations }
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let callInstantiator = switch sendability {
+			case .nonSendable: "Instantiator"
+			case .sendable: "SendableInstantiator"
+			case .mixed: callSendableRoll ? "SendableInstantiator" : "Instantiator"
+			}
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let prefix = prefix
+			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			func seam(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration]) -> TypeDeclaration {
+				var declaration = instantiable(suffix, module: module, properties: properties)
+				declaration.instantiableArguments = ["generateDependencyTree: true"]
+				return declaration
+			}
+			func fill(_ suffix: String, fulfilling protocolName: String, module: GraphFuzzerModule, properties: [PropertyDeclaration]) -> TypeDeclaration {
+				var declaration = instantiable(suffix, module: module, properties: properties)
+				declaration.instantiableArguments = ["fulfillingAdditionalTypes: [\(protocolName).self]"]
+				declaration.additionalConformances.append(protocolName)
+				return declaration
+			}
+			let sendableSuffix = helperTypesAreSendable ? ": Sendable" : ""
+			let firstName = "\(prefix)ReenteredFirst"
+			let secondName = "\(prefix)ReenteredSecond"
+			let gadgetName = "\(prefix)ReenteredGadget"
+			let label = instantiable("ReenteredLabel", module: .seamDependency)
+			let labelReceive = PropertyDeclaration(attribute: "@Received", label: "reenteredLabel", type: label.name)
+			let subA = seam("ReenteredSubA", module: .seamDependency, properties: (readsValueAbove ? [labelReceive] : []) + [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredFirst", type: "any \(firstName)")])
+			// A type of the module beneath the seam's module, so that `ReenteredSubB` can receive it.
+			let mark = instantiable("ReenteredMark", module: .seamDependency)
+			var subB = seam("ReenteredSubB", module: .seamDependency, properties: (readsValueAbove ? [labelReceive] : []) + [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSecond", type: "any \(secondName)")])
+			if readsOnlyIfAvailable, oneRouteVariantRoll >= 2 {
+				// The remedy the error offers a reader only if available: the seam built again carries the label itself.
+				subB.properties.insert(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "reenteredMark", type: mark.name + "?"), at: 0)
+			}
+			var top = seam("ReenteredTop", module: .seamDependency, properties: (readsValueAbove ? [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredLabel", type: label.name)] : []) + [
+				PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubA", type: subA.name),
+				PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubB", type: subB.name),
+			])
+			top.additionalDeclarations.append("public protocol \(firstName)\(sendableSuffix) {}\npublic protocol \(secondName)\(sendableSuffix) {}")
+			let call = callThroughInstantiator
+				? PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubBBuilder", type: "\(callInstantiator)<\(subB.name)>")
+				: PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubB", type: subB.name)
+			let gadgetPlace = PropertyDeclaration(attribute: "@Instantiated", label: "reenteredGadget", type: "any \(gadgetName)")
+			var added = [label, subA, subB, top, mark]
+			var firstProperties = [PropertyDeclaration]()
+			if readsOnlyIfAvailable {
+				firstProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "reenteredMark", type: mark.name))
+			}
+			if enclosingFillHoldsPlace {
+				firstProperties.append(gadgetPlace)
+			}
+			if callIsBeneath {
+				let mid = instantiable("ReenteredMid", module: .seamModule, properties: [call])
+				firstProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "reenteredMid", type: mid.name))
+				added.append(mid)
+			} else {
+				firstProperties.append(call)
+			}
+			added.append(fill("ReenteredFirstImpl", fulfilling: firstName, module: .seamModule, properties: firstProperties))
+			var secondProperties = [gadgetPlace]
+			if reentersEnclosingFill {
+				secondProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubBBuilder", type: "\(instantiator)<\(subB.name)>"))
+			}
+			added.append(fill("ReenteredSecondImpl", fulfilling: secondName, module: .seamModule, properties: secondProperties))
+			var host = seam("ReenteredHost", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredTop", type: top.name)])
+			if readsOnlyIfAvailable, oneRouteVariantRoll == 1 {
+				// A field of the label above the seam call, which lifts no rejection.
+				host.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "reenteredMark", type: mark.name), at: 0)
+			}
+			host.additionalDeclarations.append("public protocol \(gadgetName)\(sendableSuffix) {}")
+			added.append(host)
+			var gadgetProperties = [PropertyDeclaration]()
+			if readsValueAbove {
+				gadgetProperties.append(labelReceive)
+			}
+			if readsOnlyIfAvailable {
+				gadgetProperties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "reenteredMark", type: mark.name + "?"))
+			}
+			var gadgetImplementation = fill("ReenteredGadgetImpl", fulfilling: gadgetName, module: .samePackageCaller, properties: gadgetProperties)
+			gadgetImplementation.fillsHole = true
+			if readsValueAbove || readsOnlyIfAvailable {
+				// `ReenteredLabel` and `ReenteredMark` are types of the module beneath the seam's module, which the roots' module
+				// does not import.
+				gadgetImplementation.imports.append(GraphFuzzerModule.seamDependency.name)
+			}
+			var root = instantiable("ReenteredRoot", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredHost", type: host.name)])
+			root.instantiableArguments = ["isRoot: true"]
+			return declarations + added + [gadgetImplementation, root]
+		}
+
+		private static let reenteredFillRandomSeedMask: UInt64 = 0x7265456E74657246
+
 		// MARK: Access proof extensions
 
 		/// With the `generateDependencyTree` feature on, extends `addingAccessProofShapes`' tree with the shapes that pass
@@ -9085,7 +9550,86 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 		}
 		return features.union(accessProofDrawFeatures(of: fixture)).union(holeDrawFeatures(of: fixture)).union(cycleParameterDrawFeatures(of: fixture))
-			.union(forwardedLabelAcrossSeamCallDrawFeatures(of: fixture)).union(retentionDrawFeatures(of: fixture))
+			.union(forwardedLabelAcrossSeamCallDrawFeatures(of: fixture)).union(retentionDrawFeatures(of: fixture)).union(fixedSeamCallDefectDrawFeatures(of: fixture))
+	}
+
+	/// The shapes `addingFillCallShapes`, `addingCarriedLevelShapes`, `addingPassingUpCopyShapes` and `addingReenteredFillShapes` draw, read from the
+	/// properties the fixture declares on their types.
+	private static func fixedSeamCallDefectDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
+		let prefix = fixture.typeNamePrefix
+		let (propertiesByType, _) = declaredProperties(of: fixture)
+		var features = Set<GraphFuzzerSeamDrawFeature>()
+		if let shellProperties = propertiesByType[prefix + "FillCallShell"] {
+			features.insert(.fillCallReadsOwnLevel)
+			let badgePlace = propertiesByType[prefix + "FillCallBadge"]?.first { $0.type.hasPrefix("any ") }
+			let profilePlace = propertiesByType[prefix + "FillCallProfile"]?.first { $0.type.hasPrefix("any ") }
+			if let badgePlace, badgePlace.label == profilePlace?.label {
+				features.insert(.fillCallReadsOwnLevelSharedLabel)
+			}
+			if shellProperties.contains(where: { $0.type.hasPrefix("SendableInstantiator<") }) {
+				features.insert(.fillCallReadsOwnLevelSendableRoute)
+			}
+			if propertiesByType[prefix + "FillCallInner"]?.contains(where: { $0.type.hasPrefix("SendableInstantiator<") }) == true {
+				features.insert(.fillCallReadsOwnLevelInsideSendableFill)
+			}
+			if propertiesByType[prefix + "FillCallTrackerImpl"]?.contains(where: { $0.type.hasPrefix("SendableInstantiator<") }) == true {
+				features.insert(.fillCallReadsOwnLevelSendableCall)
+			}
+		}
+		if propertiesByType[prefix + "CarriedTop"] != nil {
+			features.insert(.carriedLevel)
+			if propertiesByType[prefix + "CarriedScreen"] != nil {
+				features.insert(.carriedLevelTwoRoutes)
+			}
+			if propertiesByType[prefix + "CarriedGizmoImpl"]?.contains(where: { $0.label == "carriedId" }) == true {
+				features.insert(.carriedLevelFillReadsForwarded)
+			}
+		}
+		if propertiesByType[prefix + "Copy1Root"] != nil {
+			features.insert(.passingUpCopies)
+			let fillReadsLabel = propertiesByType[prefix + "Copy1UserServiceImpl"]?.contains(where: { $0.label == "copyLogger" }) == true
+			let seamsBindLabel = propertiesByType[prefix + "Copy1UserShell"]?.contains(where: { $0.label == "copyLogger" }) == true
+			if fillReadsLabel {
+				features.insert(.passingUpCopiesFillReadsLabel)
+			}
+			if seamsBindLabel {
+				features.insert(.passingUpCopiesSeamsBindLabel)
+			}
+			if fillReadsLabel, seamsBindLabel {
+				features.insert(.passingUpCopiesHideLabel)
+			}
+		}
+		if propertiesByType[prefix + "ReenteredHost"] != nil {
+			features.insert(.reenteredFill)
+			let gadgetProperties = propertiesByType[prefix + "ReenteredGadgetImpl"] ?? []
+			if gadgetProperties.contains(where: { $0.label == "reenteredLabel" }) {
+				features.insert(.reenteredFillReadsValueAbove)
+			}
+			if gadgetProperties.contains(where: { $0.label == "reenteredMark" }) {
+				if propertiesByType[prefix + "ReenteredSubB"]?.contains(where: { $0.label == "reenteredMark" }) == true {
+					features.insert(.reenteredFillReadsValueOfOneRouteRemedied)
+				} else if propertiesByType[prefix + "ReenteredHost"]?.contains(where: { $0.label == "reenteredMark" }) == true {
+					features.insert(.reenteredFillReadsValueOfOneRouteBoundAboveCall)
+				} else {
+					features.insert(.reenteredFillReadsValueOfOneRoute)
+				}
+			}
+			let firstProperties = propertiesByType[prefix + "ReenteredFirstImpl"] ?? []
+			if firstProperties.contains(where: { $0.label == "reenteredGadget" }) {
+				features.insert(.reenteredFillEnclosingFillHoldsPlace)
+			}
+			if propertiesByType[prefix + "ReenteredSecondImpl"]?.contains(where: { $0.label == "reenteredSubBBuilder" }) == true {
+				features.insert(.reenteredFillReentersEnclosingFill)
+			}
+			let callerProperties = propertiesByType[prefix + "ReenteredMid"] ?? firstProperties
+			if propertiesByType[prefix + "ReenteredMid"] != nil {
+				features.insert(.reenteredFillCallBeneathFilledType)
+			}
+			if callerProperties.contains(where: { $0.label == "reenteredSubBBuilder" && $0.type.hasPrefix("SendableInstantiator<") }) {
+				features.insert(.reenteredFillSendableCall)
+			}
+		}
+		return features
 	}
 
 	/// The shapes `addingRetentionShapes` draws, read from the properties the fixture declares on the `Retain` types.
@@ -13308,7 +13852,8 @@ enum GraphFuzzerOracle {
 	/// (`GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of:modules:)`), or, with `listsTransitiveDependencies`, every
 	/// module it depends on, as 2.2.0 asked. Each generated file is keyed by its
 	/// module's name and its own (`FuzzFeature/Type+SafeDI.swift`), and the outcome is the first module's error, if any,
-	/// with that module's name.
+	/// with that module's name. Every module of a graph whose roots reach a place through a seam beneath the seam's module
+	/// lists every module beneath it (`GraphFuzzerFixture.modulesListEveryModuleBeneath`).
 	private static func splitToolRun(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], fileNames: [String], integration: MultiModuleIntegration, listsTransitiveDependencies: Bool) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
 		var filesToDelete = [URL]()
 		defer {
@@ -13317,6 +13862,7 @@ enum GraphFuzzerOracle {
 			}
 		}
 		let presentModules = Set(modules)
+		let listsTransitiveDependencies = listsTransitiveDependencies || fixture.modulesListEveryModuleBeneath
 		// Under the module-info flow, a module also lists each module beneath it whose types its mocks build, as the Manual
 		// tells an adopter to; the SwiftPM plugin flow reads every module beneath a module itself.
 		let moduleInfoDependencies = integration == .moduleInfo && !listsTransitiveDependencies
