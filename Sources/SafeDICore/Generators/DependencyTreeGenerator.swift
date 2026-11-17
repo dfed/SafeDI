@@ -9091,15 +9091,19 @@ public actor DependencyTreeGenerator {
 	/// (they become required mock parameters).
 	/// - Parameters:
 	///   - additionalMockRootScopes: The scopes of types whose mock is generated because `additionalMocksToGenerate`
-	///     lists them. Their trees are validated for hidden received dependencies only.
+	///     lists them. Their trees are validated for hidden received dependencies only, unless
+	///     `validatesAdditionalMockRootsForCycles`.
 	///   - receivedPropertiesCache: The results of `collectReceivedProperties` for scopes of
 	///     `typeDescriptionToScopeMap`, which the mock validation fills.
+	///   - validatesAdditionalMockRootsForCycles: Whether the trees of `additionalMockRootScopes` are validated for cycles too,
+	///     each as the tree of a type with `generateMock` is, binding every property it receives from above it.
 	private func validatePropertiesAreFulfillable(
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		additionalMockRootScopes: Set<Scope> = [],
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 		cyclesOnly: Bool,
 		excludingMockRootsOf typesExcludedAsMockRoots: Set<TypeDescription> = [],
+		validatesAdditionalMockRootsForCycles: Bool = false,
 	) throws {
 		// Every tree is validated, and the errors are reported in source order, so neither depends on the order of the
 		// trees; they are validated in type order regardless. A root receives nothing, so its tree binds nothing above
@@ -9127,13 +9131,14 @@ public actor DependencyTreeGenerator {
 			)
 		}
 		// When checking cycles only (mock validation), also validate non-root types
-		// that have generateMock enabled — they bypass root entry points. Each one's
-		// mock binds every property its tree receives from above it.
+		// that have generateMock enabled, and the listed ones where asked — they bypass
+		// root entry points. Each one's mock binds every property its tree receives from
+		// above it.
 		if cyclesOnly {
 			let rootInstantiableSet = Set(rootInstantiables)
 			rootScopes += Set(typeDescriptionToScopeMap.values)
 				.filter { scope in
-					scope.instantiable.generatesMock
+					(scope.instantiable.generatesMock || validatesAdditionalMockRootsForCycles && additionalMockRootScopes.contains(scope))
 						&& !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
 						&& !typesExcludedAsMockRoots.contains(scope.instantiable.concreteInstantiable)
 				}
@@ -9211,6 +9216,10 @@ public actor DependencyTreeGenerator {
 			receivedPropertiesCache: &receivedPropertiesCache,
 			cyclesOnly: true,
 			excludingMockRootsOf: foreignPublicMockTypes,
+			// A listed type's mock fills the places of its calls as a `generateMock` type's does, so a cycle its tree closes
+			// through a fill is real, and the mock would not compile: its tree, fills included, is walked for cycles as that
+			// type's is, and reports the cycle its production twin reports.
+			validatesAdditionalMockRootsForCycles: true,
 		)
 		// The walk above does not follow a received `Instantiator` to the scope it builds, which a fill's tree can close a
 		// cycle through, so siblings that capture one another are judged after it, as production judges them.
@@ -10672,7 +10681,10 @@ public actor DependencyTreeGenerator {
 			throw error
 		}
 		// Walking the other additional mock roots for cycles here could reject a mock that compiles today. Their
-		// mocks are validated for cycles after promotion, in `createMockRootScopeGenerator`.
+		// mocks are validated for cycles after promotion, in `createMockRootScopeGenerator`. That holds only where no
+		// call's place is filled: over the trees built inline with the fills, `validateCyclesOfCallsWithPlaces` walks
+		// them among the roots above (`validatesAdditionalMockRootsForCycles`), since a cycle through a fill is real there
+		// and the mock that fills the place does not compile.
 		for rootScope in additionalMockRootScopes where !rootScopes.contains(where: { $0.scope == rootScope.scope }) {
 			try validatePropertiesAreFulfillable(
 				inTreeRootedAt: rootScope,

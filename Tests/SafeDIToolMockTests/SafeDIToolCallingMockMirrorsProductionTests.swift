@@ -250,6 +250,27 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 	@Test(arguments: CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTwinsCycle_whenFillOfListedMocksCallReceivesValueThatEnclosesTheCall(calledTypes: CalledTypeDeclaration) async {
+		// `Root` has no `generateMock`: its module lists it in `additionalMocksToGenerate`. The fill of `SignedIn`’s `settings`
+		// receives the `Session` whose tree calls `SignedIn`, which is still being built there.
+		let diagnostics = { (fixtures: [String: FixturePaths]) in
+			"""
+			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: Dependency cycle: `Session` -> `SignedIn` -> `any SettingsPage` -> `Session`. `AppSettings` receives `session: Session`, which is still being built when `AppSettings` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			\(fixtures["App"]!["AppTypes.swift"]):13:1: note: `Session` is part of the cycle
+			\(fixtures["Feature"]!["FeatureTypes.swift"]):5:1: note: `SignedIn` is part of the cycle
+			\(fixtures["App"]!["AppTypes.swift"]):4:1: note: `SettingsPage` is part of the cycle
+			"""
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.listedMockCycleModules(caller: "@Instantiable", callee: calledTypes.attribute, listsCaller: true), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.listedMockCycleModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, listsCaller: false), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test(arguments: CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsTwinsHiddenReceiveError_whenFillOfListedMocksCallReceivesLabelDeclaredAgainAboveTheCall(calledTypes: CalledTypeDeclaration) async {
 		// `Root` has no `generateMock`: its module lists it in `additionalMocksToGenerate`, so its mock is a mock root only
 		// through that list. Inside the fill of `SignedIn`’s `settings`, the receive of `logger: Logger` is hidden by the
@@ -1594,6 +1615,64 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	/// A receive hidden inside a fill: `Root` builds `logger: Logger` and `Session`, which builds `logger: AuditLogger` and
 	/// calls `SignedIn`, whose `settings` place `AppSettings` fills, receiving `logger: Logger`. Where `listsCaller`, module
 	/// `App` lists `Root` in `additionalMocksToGenerate`.
+	private static func listedMockCycleModules(caller: String, callee: String, listsCaller: Bool) -> [ModuleFixture] {
+		var appFiles = [
+			"AppTypes.swift": """
+			import SafeDI
+			import Feature
+
+			@Instantiable(fulfillingAdditionalTypes: [SettingsPage.self])
+			final class AppSettings: SettingsPage, Instantiable {
+			    init(session: Session) {
+			        self.session = session
+			    }
+
+			    @Received private let session: Session
+			}
+
+			@Instantiable
+			final class Session: Instantiable {
+			    init(signedIn: SignedIn) {
+			        self.signedIn = signedIn
+			    }
+
+			    @Instantiated private let signedIn: SignedIn
+			}
+
+			\(caller)
+			final class Root: Instantiable {
+			    init(session: Session) {
+			        self.session = session
+			    }
+
+			    @Instantiated private let session: Session
+			}
+			""",
+		]
+		if listsCaller {
+			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"])\n"
+		}
+		return [
+			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContentByFilePath: [
+				"FeatureTypes.swift": """
+				import SafeDI
+
+				public protocol SettingsPage {}
+
+				\(callee)
+				public final class SignedIn: Instantiable {
+				    init(settings: any SettingsPage) {
+				        self.settings = settings
+				    }
+
+				    @Instantiated private let settings: any SettingsPage
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Feature"]),
+		]
+	}
+
 	private static func listedMockHiddenModules(caller: String, callee: String, listsCaller: Bool) -> [ModuleFixture] {
 		var appFiles = [
 			"AppTypes.swift": """
