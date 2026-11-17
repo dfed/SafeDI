@@ -3772,9 +3772,11 @@ public actor DependencyTreeGenerator {
 				callerModuleMockCondition: seams.currentModuleMockCondition,
 				receiversByLabel: ownPlan.receiversByLabel,
 				typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.intersection(tierParameters.map(\.type)),
-				holes: (ownPlan.plan.holes + ownPlan.plan.unpresentedHoles).map { $0.atTier(tier) },
-				builders: ownPlan.plan.builders.map { $0.atTier(tier) },
-				scopeEnums: ownPlan.plan.scopeEnums,
+				calledBuilders: CalledBuilders(
+					holes: (ownPlan.plan.holes + ownPlan.plan.unpresentedHoles).map { $0.atTier(tier) },
+					builders: ownPlan.plan.builders.map { $0.atTier(tier) },
+					scopeEnums: ownPlan.plan.scopeEnums,
+				),
 			)
 		}
 		return publicMockCalls
