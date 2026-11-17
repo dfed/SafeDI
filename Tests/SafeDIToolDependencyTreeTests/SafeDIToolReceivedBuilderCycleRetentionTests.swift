@@ -105,6 +105,115 @@ struct SafeDIToolReceivedBuilderCycleRetentionTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generatedCode_freesWhatItsOwnerReleases_whenSeamsLoopOfScreensAroundPlacesHoldsItsLevelsInOneBox() async throws {
+		// `Home`, a seam of `Feature`, instantiates the builder of each of eight screens; each forwards its `id`, holds a place
+		// of `Api`, which `App`'s `DefaultApi` fills, and receives the builders of the three screens after it, so the
+		// builders are one loop, whose levels the seam's initializer holds in one box that every screen's builder function
+		// captures. A walk opens 1,000 screens through the loop and keeps five; releasing the root frees it and `Home`, and
+		// the screens kept hold only their apis.
+		let screenCount = 8
+		let screens = (0..<screenCount).map { index in
+			let opened = [1, 2, 3].map { (index + $0) % screenCount }
+			let properties = [("@Forwarded", "id", "Int"), ("@Instantiated", "api", "any Api")] + opened.map { ("@Received", "screen\($0)Builder", "Instantiator<Screen\($0)>") }
+			return """
+			@Instantiable
+			public final class Screen\(index): Screen, Instantiable {
+			    public init(\(properties.map { "\($0.1): \($0.2)" }.joined(separator: ", "))) {
+			\(properties.map { "        self.\($0.1) = \($0.1)" }.joined(separator: "\n"))
+			    }
+
+			\(properties.map { "    \($0.0) let \($0.1): \($0.2)" }.joined(separator: "\n"))
+
+			    public var identifier: Int { id }
+			    public var openers: [(Int) -> any Screen] { [\(opened.map { "{ self.screen\($0)Builder.instantiate($0) }" }.joined(separator: ", "))] }
+
+			    let tracker = Tracker()
+			}
+			"""
+		}
+		let homeProperties = (0..<screenCount).map { ("screen\($0)Builder", "Instantiator<Screen\($0)>") }
+		let home = """
+		@Instantiable(generateDependencyTree: true)
+		public final class Home: Instantiable {
+		    public init(\(homeProperties.map { "\($0.0): \($0.1)" }.joined(separator: ", "))) {
+		\(homeProperties.map { "        self.\($0.0) = \($0.0)" }.joined(separator: "\n"))
+		    }
+
+		\(homeProperties.map { "    @Instantiated let \($0.0): \($0.1)" }.joined(separator: "\n"))
+
+		    public var openers: [(Int) -> any Screen] { [\((0..<screenCount).map { "{ self.screen\($0)Builder.instantiate($0) }" }.joined(separator: ", "))] }
+
+		    let tracker = Tracker()
+		}
+		"""
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api {}",
+				"public protocol Screen: AnyObject {\n    var identifier: Int { get }\n    var openers: [(Int) -> any Screen] { get }\n}",
+				Self.liveObjects,
+				home,
+			] + screens),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Feature\n\n" + Self.trackedType("DefaultApi", attributes: "(fulfillingAdditionalTypes: [Api.self])").replacingOccurrences(of: ": Instantiable {", with: ": Instantiable, Api {"),
+				"import Feature\n\n" + Self.trackedType("Root", attributes: "(isRoot: true)", "@Instantiated let home: Home"),
+			], dependencies: ["Feature"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let printed = try await DifferentialValueOracle.output(of: DifferentialValuePath(output: output, modules: modules), running: """
+		struct Generator {
+		    var state: UInt64 = 0x9E37_79B9_7F4A_7C15
+		    mutating func next(_ bound: Int) -> Int {
+		        state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+		        return Int((state >> 33) % UInt64(bound))
+		    }
+		}
+
+		func walk() -> [any Screen] {
+		    var generator = Generator()
+		    var kept = [any Screen]()
+		    var reached = Set<ObjectIdentifier>()
+		    let root = Root()
+		    print("alive after building the root: \\(LiveObjects.count)")
+		    var isEachScreenBuiltAsDeclared = true
+		    for walk in 0..<20 {
+		        var screen = root.home.openers[generator.next(root.home.openers.count)](walk)
+		        for step in 0..<50 {
+		            isEachScreenBuiltAsDeclared = isEachScreenBuiltAsDeclared && screen.identifier == (step == 0 ? walk : walk * 1_000 + step)
+		            reached.insert(ObjectIdentifier(type(of: screen)))
+		            if step == 25, walk.isMultiple(of: 4) {
+		                kept.append(screen)
+		            }
+		            screen = screen.openers[generator.next(screen.openers.count)](walk * 1_000 + step + 1)
+		        }
+		    }
+		    print("each screen holds its own id: \\(isEachScreenBuiltAsDeclared)")
+		    print("screen types the walk reached: \\(reached.count)")
+		    print("alive while the root and \\(kept.count) screens are held: \\(LiveObjects.count)")
+		    return kept
+		}
+
+		var kept = walk()
+		print("alive after releasing the root: \\(LiveObjects.count)")
+		print("a screen kept opens others: \\(kept[0].openers[0](7).openers[1](8).identifier == 8)")
+		kept = []
+		print("alive after releasing the screens: \\(LiveObjects.count)")
+		""", filesToDelete: &filesToDelete)
+		guard let printed else { return }
+		// While the root is held: the root and `Home`; then five screens and their apis.
+		#expect(printed == """
+		alive after building the root: 2
+		each screen holds its own id: true
+		screen types the walk reached: 8
+		alive while the root and 5 screens are held: 12
+		alive after releasing the root: 10
+		a screen kept opens others: true
+		alive after releasing the screens: 0
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generatedCode_freesWhatItsOwnerReleases_whenEachLoopMemberFunctionTakesTheOtherAsCycleParameter() async throws {
 		// `A`'s tree receives `bBuilder`, and `StepA` closes a cycle on `aBuilder` and declares `bBuilder` again; `B` mirrors
 		// it. Each member's function takes the other as a cycle parameter, so each is wrapped by a function of its own.
