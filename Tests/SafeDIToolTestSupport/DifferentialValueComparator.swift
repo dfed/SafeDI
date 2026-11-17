@@ -629,9 +629,31 @@ enum DifferentialValueOracle {
 		filesToDelete: inout [URL],
 	) async throws -> [DifferentialValueGraphComparison]? {
 		guard compileVerificationIsEnabled else { return nil }
+		// The batches are compared side by side, since each is compiled and run by processes of its own, of which
+		// `ProcessSlots` runs one per core. What they return is read in the order of the batches, so the comparisons, and
+		// which batch's error is thrown when several fail, are those of comparing one batch after another.
+		let batches = batchesByLayout(of: graphs)
+		var batchWork = await withTaskGroup(of: (batchIndex: Int, work: FileLeavingWork<[Result<DifferentialValueComparison, DifferentialValueOracleError>]>).self) { group in
+			for (batchIndex, batch) in batches.enumerated() {
+				let batchGraphs = batch.map { graphs[$0] }
+				group.addTask {
+					await (batchIndex, collectingFilesToDelete { try await results(of: batchGraphs, limits: limits, filesToDelete: &$0) })
+				}
+			}
+			var batchWork = [(batchIndex: Int, work: FileLeavingWork<[Result<DifferentialValueComparison, DifferentialValueOracleError>]>)]()
+			for await finished in group {
+				batchWork.append(finished)
+			}
+			return batchWork
+		}
+		batchWork.sort { $0.batchIndex < $1.batchIndex }
+		for (_, work) in batchWork {
+			filesToDelete.append(contentsOf: work.filesToDelete)
+		}
 		var comparisons = [(index: Int, comparison: DifferentialValueGraphComparison)]()
-		for batch in batchesByLayout(of: graphs) {
-			let batchResults = try await results(of: batch.map { graphs[$0] }, limits: limits, filesToDelete: &filesToDelete)
+		for (batchIndex, work) in batchWork {
+			let batch = batches[batchIndex]
+			let batchResults = try work.result.get()
 			for (index, result) in zip(batch, batchResults) {
 				comparisons.append((index, DifferentialValueGraphComparison(name: graphs[index].name, result: result)))
 			}
@@ -819,6 +841,24 @@ enum DifferentialValueOracle {
 		return batches
 	}
 
+	/// What work done beside other work returned or threw, with the files it left to delete.
+	private struct FileLeavingWork<Value: Sendable>: Sendable {
+		let result: Result<Value, any Error>
+		let filesToDelete: [URL]
+	}
+
+	/// Runs `work` with a list of its own for the files it leaves, so that work done beside other work hands its files
+	/// back even when it throws.
+	private static func collectingFilesToDelete<Value: Sendable>(_ work: (inout [URL]) async throws -> Value) async -> FileLeavingWork<Value> {
+		var filesToDelete = [URL]()
+		do {
+			let value = try await work(&filesToDelete)
+			return FileLeavingWork(result: .success(value), filesToDelete: filesToDelete)
+		} catch {
+			return FileLeavingWork(result: .failure(error), filesToDelete: filesToDelete)
+		}
+	}
+
 	/// Compares `graphs`, whose paths have one layout, in one executable per path – one in all for graphs of probe
 	/// pairs – or, when that fails to compile or run, each graph on its own.
 	private static func results(
@@ -840,8 +880,16 @@ enum DifferentialValueOracle {
 				knownRightProbes = pairedProbes.enumerated().filter { !$0.offset.isMultiple(of: 2) }.map(\.element)
 			} else {
 				let probeGroups = graphs.map { ProbeGroup(probes: $0.probes, samples: $0.samples, judgesRetention: $0.judgesRetention) }
-				featureProbes = try await describedProbes(of: merging(graphs.map(\.feature)), role: .feature, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
-				knownRightProbes = try await describedProbes(of: merging(graphs.map(\.knownRight)), role: .knownRight, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
+				// The two paths share no file, so they are described side by side. The feature path's error is thrown first,
+				// as when the known-right path was described only after it.
+				let featurePath = merging(graphs.map(\.feature))
+				let knownRightPath = merging(graphs.map(\.knownRight))
+				async let featureWork = collectingFilesToDelete { try await describedProbes(of: featurePath, role: .feature, probeGroups: probeGroups, limits: limits, filesToDelete: &$0) }
+				async let knownRightWork = collectingFilesToDelete { try await describedProbes(of: knownRightPath, role: .knownRight, probeGroups: probeGroups, limits: limits, filesToDelete: &$0) }
+				let (describedFeature, describedKnownRight) = await (featureWork, knownRightWork)
+				filesToDelete.append(contentsOf: describedFeature.filesToDelete + describedKnownRight.filesToDelete)
+				featureProbes = try describedFeature.result.get()
+				knownRightProbes = try describedKnownRight.result.get()
 			}
 			var start = 0
 			return graphs.map { graph in
