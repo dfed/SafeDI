@@ -354,6 +354,7 @@ public final class FileVisitor: SyntaxVisitor {
 	private var recordsReservedTypeNamesAtPosition: Bool {
 		enclosingBlocksNameConditionOnlyTheCompilerDecides.isEmpty && !isInsideDeclarationTheMacroReads
 	}
+
 	private let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
 	private let sourceLocationConverter: SourceLocationConverter?
 	/// The `#if` clauses the evaluator selected for scanning.
