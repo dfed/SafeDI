@@ -87,7 +87,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.fillDispatchers = fillDispatchers
 		fillKey = fill?.key
 		fillStructBoundLabels = fill?.boundLabels ?? []
-		fillBindsDeferredFieldsFromStruct = fill.map { fill in fill.hole.innerSeamType != nil && fill.fields.contains(where: \.bindsMemo) } ?? false
+		fillBindsDeferredFieldsFromStruct = fill.map { fill in fill.hole.innerSeamType != nil && fill.fields.contains { $0.isDeferredParameter && fill.boundLabels.contains($0.property.label) } } ?? false
 		fillFields = fill?.fields ?? []
 		fillCaseHoles = fill?.caseHoles ?? []
 		fillEmitsCode = fill?.emitsCode ?? true
@@ -312,7 +312,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 		}
+		// A fill binds a deferred parameter's field it reads from the struct as the seam's memo, so the value is created when
+		// its tree reads it, as inline – except a label its tree reads inside a `@Sendable` function where the memo is a
+		// `LazilyInstantiated`, which no `@Sendable` function can capture: a deliberate gap, the fill binds the struct's by-value
+		// member, which creates the value where the fill, or a level function on its route, is handed the struct (see
+		// `Scope.fillUnderConstruction`). Nearly no scope calls such a seam.
+		let fillsBindingNonSendableMemos = propertiesToGenerate.compactMap { fill -> (fill: ScopeGenerator, key: String, labels: Set<String>)? in
+			guard let key = fill.fillKey else { return nil }
+			let labels = Set(fill.fillFields.filter { $0.deferral == .deferred(isSendable: false) && fill.fillStructBoundLabels.contains($0.property.label) }.map(\.property.label))
+			return labels.isEmpty ? nil : (fill, key, labels)
+		}
+		var fillDeferredLabelsReadInsideSendableFunction = [String: Set<String>]()
+		for (fill, key, nonSendableMemoLabels) in fillsBindingNonSendableMemos {
+			let labelsReadInsideSendableFunction = fill.labelsReadInsideSendableFunction(among: nonSendableMemoLabels)
+			if !labelsReadInsideSendableFunction.isEmpty {
+				fillDeferredLabelsReadInsideSendableFunction[key] = labelsReadInsideSendableFunction
+			}
+			if fill.fillFields.contains(where: { $0.bindsMemo && labelsReadInsideSendableFunction.contains($0.property.label) }) {
+				fillStructBoundLabelsChangedInTree = true
+			}
+		}
 		self.fillDeferredLabelsHiddenByReenteringCalls = fillDeferredLabelsHiddenByReenteringCalls
+		self.fillDeferredLabelsReadInsideSendableFunction = fillDeferredLabelsReadInsideSendableFunction
 		self.fillStructBoundLabelsChangedInTree = fillStructBoundLabelsChangedInTree
 		self.referencedFillNamesByKey = referencedFillNamesByKey.filter { !ownFillKeys.contains($0.key) }
 		self.fillKeysReferencedFromSendableFunction = fillKeysReferencedFromSendableFunction.subtracting(ownFillKeys)
@@ -789,6 +810,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillEmitsCode = true
 		fillCallerReads = FillCallerReads()
 		fillDeferredLabelsHiddenByReenteringCalls = [:]
+		fillDeferredLabelsReadInsideSendableFunction = [:]
 		fillStructBoundLabelsChangedInTree = false
 		constructsWithHandWrittenMock = false
 		referencedFillNamesByKey = [:]
@@ -887,6 +909,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillEmitsCode = true
 		fillCallerReads = FillCallerReads()
 		fillDeferredLabelsHiddenByReenteringCalls = [:]
+		fillDeferredLabelsReadInsideSendableFunction = [:]
 		fillStructBoundLabelsChangedInTree = false
 		constructsWithHandWrittenMock = false
 		referencedFillNamesByKey = [:]
@@ -3878,12 +3901,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// fill, one function, would read the outer call's declaration for every call, so it reads the struct's field for
 	/// them instead (see `DependencyTreeGenerator.hiddenByReenteringCalls(ofFills:)`). Empty for nearly every scope.
 	let fillDeferredLabelsHiddenByReenteringCalls: [String: Set<String>]
+	/// For a seam call, by the key of each of its fills, the labels of the hole's fields bound from deferred parameters held
+	/// in a `LazilyInstantiated` that the fill binds from its struct and that its tree reads inside a `@Sendable` function,
+	/// which cannot capture the memo: the fill binds the struct's by-value member for them instead (see
+	/// `Scope.fillUnderConstruction`). Empty for nearly every scope.
+	let fillDeferredLabelsReadInsideSendableFunction: [String: Set<String>]
 	/// Whether a fill in this subtree binds other fields from its struct than its call's
-	/// `fillDeferredLabelsHiddenByReenteringCalls` ask, which another pass of `Scope.createScopeGenerator` corrects.
+	/// `fillDeferredLabelsHiddenByReenteringCalls` ask, or binds a memo `fillDeferredLabelsReadInsideSendableFunction` binds
+	/// by value, which another pass of `Scope.createScopeGenerator` corrects.
 	let fillStructBoundLabelsChangedInTree: Bool
 
-	/// For a fill, whether it binds a field bound from a deferred parameter from its struct: its hole is a place the called
-	/// seam passes up, whose memo holds what the seam that passes it up passed (see `Scope.fillUnderConstruction`).
+	/// For a fill, whether it binds a field bound from a deferred parameter from its struct, as its memo or by value
+	/// (`fillDeferredLabelsReadInsideSendableFunction`): its hole is a place the called seam passes up, whose memo holds what
+	/// the seam that passes it up passed (see `Scope.fillUnderConstruction`).
 	let fillBindsDeferredFieldsFromStruct: Bool
 
 	/// For a fill, the fields of its hole's struct it binds from the struct (see `fillStructBoundLabels`), in
@@ -3911,10 +3941,62 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// the builder it returns then captures what it reads, never the payload struct.
 	nonisolated var fillMemberParameterFields: [SeamSignature.Hole.Field] {
 		guard fillReturnsWrapperBuilder, let enumPlace = fillHole?.enumPlace, let child = propertiesToGenerate.first else { return fillParameterFields }
-		return enumPlace.values.filter { field in
-			fillStructBoundLabels.contains(field.property.label)
-				&& (child.reads(field.property) || child.fieldsCarriedBySites.contains(field.property))
+		// Each is the fill's own field of the payload's label, which says how the fill binds it, as its body reads it: a
+		// deferred parameter's memo where it `bindsMemo`, which the member hands it in place of the value.
+		let boundFields = fillBoundFields
+		return enumPlace.values.compactMap { value in
+			guard let field = boundFields.first(where: { $0.property.label == value.property.label }),
+			      child.reads(value.property) || child.fieldsCarriedBySites.contains(value.property)
+			else { return nil }
+			return field
 		} + fillParameterFields
+	}
+
+	/// For a fill, the labels among `labels` its tree reads inside a `@Sendable` function, or hands to a nested seam that
+	/// takes them `@Sendable`, where no declaration inside the tree hides them, as
+	/// `DependencyTreeGenerator.receivers(in:of:instantiables:)` finds a seam's tree reading its parameters
+	/// (`ParameterReads`): the fill's bound fields stand where the seam's parameters do. The fill's own function is not one
+	/// of those functions: what it binds is a local of that function. A scope that closes a lazy cycle reads no label from
+	/// above the function it closes on, which takes each label the closer passes as a parameter (`CycleParameter`), so a
+	/// closer adds no read here.
+	nonisolated func labelsReadInsideSendableFunction(among labels: Set<String>) -> Set<String> {
+		var labelsRead = Set<String>()
+		var generatorsToVisit = children.map { (generator: $0, insideSendable: $0.buildsInSendableFunction, declaredLabels: Set<String>()) }
+		while let (visited, insideSendable, declaredLabels) = generatorsToVisit.popLast() {
+			func recordRead(of label: String, insideSendable: Bool) {
+				if insideSendable, labels.contains(label), !declaredLabels.contains(label) {
+					labelsRead.insert(label)
+				}
+			}
+			// A nested seam's call reads what it passes where the call is, and a parameter it takes `@Sendable` inside a
+			// `@Sendable` autoclosure.
+			for parameter in visited.seamCallParameters ?? [] {
+				recordRead(of: parameter.property.label, insideSendable: insideSendable || parameter.deferral == .deferred(isSendable: true))
+			}
+			let visitedLabels = Set(visited.providedProperties.map(\.label))
+			for dependency in visited.builtInstantiable?.dependencies ?? [] {
+				switch dependency.source {
+				case .received:
+					recordRead(of: dependency.property.label, insideSendable: insideSendable)
+				case let .aliased(fulfillingProperty, _, _):
+					// An alias that keeps its fulfilling property's label is not in scope where that property is read.
+					if fulfillingProperty.label == dependency.property.label || !visitedLabels.contains(fulfillingProperty.label) {
+						recordRead(of: fulfillingProperty.label, insideSendable: insideSendable)
+					}
+				case .instantiated, .forwarded:
+					continue
+				}
+			}
+			let childDeclaredLabels = declaredLabels.union(visitedLabels)
+			for child in visited.children {
+				generatorsToVisit.append((
+					generator: child,
+					insideSendable: insideSendable || child.buildsInSendableFunction || visited.buildsInSendableFunction(ofFill: child),
+					declaredLabels: childDeclaredLabels.union(child.fillStructBoundLabels),
+				))
+			}
+		}
+		return labelsRead
 	}
 
 	/// For a fill of a case nested by type, what it reads of the caller's scope through the root dispatcher. Empty for

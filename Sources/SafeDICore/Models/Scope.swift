@@ -1035,8 +1035,18 @@ private struct ScopeGeneratorUnderConstruction {
 		// A deferred parameter's field it reads from the struct, it binds as the memo (`bindingItsMemo`), whose instance its tree
 		// reads where it reads the value, so the value is created when the tree reads it, as inline. The field keeps its own
 		// property, which decides what it satisfies; the memo decides only when the value is created.
-		fill.fields = fill.fields.map { $0.isDeferredParameter && (readsDeferredFieldsFromStruct || deferredLabelsBoundFromStruct.contains($0.property.label)) ? $0.bindingItsMemo : $0 }
-		let boundFields = fill.fields.filter { !$0.isDeferredParameter || $0.bindsMemo }
+		// A deliberate gap against inline: where the fill's tree reads the label inside a `@Sendable` function and the memo is a
+		// `LazilyInstantiated`, which no `@Sendable` function can capture, the fill binds the struct's by-value member instead,
+		// which reads the memo's instance where the fill, or a level function on its route, is handed the struct, so the value
+		// is created there rather than where the tree reads it (`ScopeGenerator.fillDeferredLabelsReadInsideSendableFunction`,
+		// which the pass before found). The seam cannot defer it `@Sendable` instead: its signature is settled in its own
+		// module, which sees no fill, and SafeDI cannot tell whether the type is `Sendable`.
+		let deferredLabelsBoundByValue = previousPassGenerator?.fillDeferredLabelsReadInsideSendableFunction[fill.key] ?? []
+		func isBoundFromStruct(_ field: SeamSignature.Hole.Field) -> Bool {
+			field.isDeferredParameter && (readsDeferredFieldsFromStruct || deferredLabelsBoundFromStruct.contains(field.property.label))
+		}
+		fill.fields = fill.fields.map { isBoundFromStruct($0) && !deferredLabelsBoundByValue.contains($0.property.label) ? $0.bindingItsMemo : $0 }
+		let boundFields = fill.fields.filter { !$0.isDeferredParameter || isBoundFromStruct($0) }
 		fill.boundLabels = Set(boundFields.map(\.property.label))
 		fill.callerNearestDeclarations = childNearestDeclarations
 		fill.callerLazilyInstantiatedInstanceProperties = childLazilyInstantiatedInstanceProperties
