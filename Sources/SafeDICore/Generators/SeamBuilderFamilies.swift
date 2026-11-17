@@ -252,12 +252,8 @@ extension DependencyTreeGenerator {
 					instantiables: instantiables,
 					reachedEnum: reachedEnum,
 				)
-				// A public mock's hole type takes a builder struct by a rule of its own (`publicMockTakesBuilderStructs`), which reads
-				// what the mock's caller and its own tree can hand on through the struct. So a type that is a seam and a public mock
-				// keeps the closure over its mock's enum where a place is built in a `@Sendable` function, beside a
-				// `LazilyInstantiated`, or beneath a case that holds another scope, though its seam takes the struct: a deliberate
-				// difference until the mock's rule takes those too (`public-mock-builders.md`). A seam's own internal mock takes
-				// builders of its own (`ScopeGenerator.seamMockBuilders`), whatever this gives the seam's builder.
+				// A seam's and a public mock's hole types take builder structs by one rule. A seam's own internal mock takes builders of
+				// its own (`ScopeGenerator.seamMockBuilders`), whatever this gives the seam's builder.
 				let takesBuilderStructs = Self.declaresBuilderStructs(of: byType.enums)
 				if takesBuilderStructs {
 					// The seam's tree calls a member per level, bound under names of their own, and binds no payload.
@@ -566,43 +562,14 @@ extension DependencyTreeGenerator {
 
 	/// Whether a seam's builders of a hole type, both families together, take builder structs, its enums being `enums`: every
 	/// seam's do, whatever its places are – a call's case returns an inner seam's struct (the seam's own, where its tree builds
-	/// it again), and a case for a builder a call fills the called seam's struct over the struct of the fill's own level. Only a
-	/// public mock's builders keep the closure over its enum.
+	/// it again), and a case for a builder a call fills the called seam's struct over the struct of the fill's own level. A
+	/// public mock's builders take them by the same rule.
 	static func declaresBuilderStructs(of enums: [SeamSignature.ScopeEnum]) -> Bool {
 		enums.allSatisfy { scopeEnum in
 			scopeEnum.cases.allSatisfy { enumCase in
 				switch enumCase.kind {
 				case .place, .nested, .inner, .fill:
 					true
-				}
-			}
-		}
-	}
-
-	/// Whether a public mock's builders of a hole type, its enums being `enums`, take builder structs: when no place they reach
-	/// is built inside a `@Sendable` function (the hole type has a `@Sendable` enum), forwards a value (as a seam's place does,
-	/// `declaresBuilderStructs(of:)`), or is held in, built beneath, or handed a `LazilyInstantiated`; and no
-	/// case holds another scope: a call's case, which holds another module's public mock's enum, a case for a builder a call
-	/// fills, or a case that holds the mocked type's own root enum, where its tree builds it again. Every other hole type
-	/// keeps the closure over its enum, in the mock's module and at every call, which computes the mock's signature with
-	/// this rule too. A seam's rule (`declaresBuilderStructs(of:)`) switches every hole type, so one type's seam and public
-	/// mock differ wherever this keeps one: a deliberate difference (`public-mock-builders.md`).
-	static func publicMockTakesBuilderStructs(of enums: [SeamSignature.ScopeEnum], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) -> Bool {
-		enums.allSatisfy { scopeEnum in
-			!scopeEnum.key.isSendable && scopeEnum.cases.allSatisfy { enumCase in
-				let handsOnNoLazilyInstantiatedValue = enumCase.values?.fields.allSatisfy { !$0.property.propertyType.isLazilyInstantiated } ?? true
-				switch enumCase.kind {
-				case let .place(sites):
-					return handsOnNoLazilyInstantiatedValue && sites.allSatisfy { site in
-						guard let hole = holesBySite[site] else { return true }
-						return hole.forwardedType == nil
-							&& !hole.property.propertyType.isLazilyInstantiated
-							&& hole.sitePath.allSatisfy { !$0.propertyType.isLazilyInstantiated }
-					}
-				case let .nested(enumKey, _, _):
-					return handsOnNoLazilyInstantiatedValue && enumKey.describedType != nil
-				case .inner, .fill:
-					return false
 				}
 			}
 		}
