@@ -11675,9 +11675,11 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// `MiddleAlpha` instantiates `Flow` again (`flowBuilder`) and `MiddleZed` declares …, but"), each clause's places, and
 	/// its declaring types ("cannot hand it `MiddleAlpha`’s and `MiddleZed`’s values"), and, where a fill's seam opened again
 	/// loses a value (`fieldOfReenteringPlace`), the types the places carry it from ("carries from `AScreen` and `BScreen`,
-	/// and"), the calls that open it again ("instantiates `ASeam` again (`aBuilder` and `bBuilder`)", or, through seams that
-	/// build it, "instantiates `ARelay` and `BRelay` (`aBuilder` and `bBuilder`), which instantiate `ASeam` again"),
-	/// and the alternatives inline reads ("would read `AScreen`’s or `BScreen`’s `id` inside that `ASeam` or `BSeam`") – sorted as text, each item in its
+	/// and"), the calls that open it again ("instantiates `Seam` again (`aBuilder` and `bBuilder`)", or, through seams that
+	/// build it, "instantiates `ARelay` and `BRelay` (`aBuilder` and `bBuilder`), which instantiate `Seam` again", or both,
+	/// the direct call first: "instantiates `Seam` again (`seamBuilder`) and `ARelay` and `BRelay` (`aBuilder` and
+	/// `bBuilder`), which instantiate `Seam` again"), and the alternatives inline reads ("would read `AScreen`’s or
+	/// `BScreen`’s `id` inside that `Seam`", the seam built again) – sorted as text, each item in its
 	/// place among the list's separators, so two diagnostics that list the same items in another order compare equal, and
 	/// any other difference, including an item added, removed or changed, still tells them apart. A place keeps its owner,
 	/// its case and the seam whose tree holds it in one item, so a place moved to another seam's tree still differs; a
@@ -11712,6 +11714,8 @@ enum GraphFuzzerToolOutcome: Equatable {
 			// above.
 			("(?<= carries from | carry from )`[^`]*`(?:\(separator)`[^`]*`)+(?=, and )", backtickedItem),
 			("(?<= instantiates )`[^`]*`(?:\(separator)`[^`]*`)+(?= again \\(| \\(`)", backtickedItem),
+			// The seams that build it, after a direct call of it.
+			("(?<=\\) and )`[^`]*`(?:\(separator)`[^`]*`)+(?= \\(`[^`]*`(?:\(separator)`[^`]*`)*\\), which instantiate )", backtickedItem),
 			("(?<= again \\(|` \\()`[^`]*`(?:\(separator)`[^`]*`)+(?=\\))", backtickedItem),
 			("(?<=would read )`[^`]*`’s(?:(?:, or |, | or )`[^`]*`’s)+(?= `)", "`[^`]*`’s"),
 			("(?<=inside that )`[^`]*`(?:(?:, or |, | or )`[^`]*`)+(?=, but )", backtickedItem),

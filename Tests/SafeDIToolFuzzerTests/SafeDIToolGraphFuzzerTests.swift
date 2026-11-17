@@ -5064,6 +5064,17 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func differences_reportNothing_whenFieldOfReenteringPlaceListsRelaysBesideDirectCallInAnotherOrder() {
+		// A fill that opens the seam again both directly and through two seams that build it lists the direct call first, then
+		// the relays and their calls, which follow names. Another relay or call in that list still differs.
+		func outcome(_ first: String, _ second: String) -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `Seam` again (`seamBuilder`) and `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+		}
+		#expect(GraphFuzzerToolOutcome.differences(between: outcome("A", "B"), and: outcome("B", "A")) == [])
+		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "C")) == "its diagnostics")
+	}
+
+	@Test
 	func diagnosticEntries_sortsEachErrorsNotesWithTheirFixIts_whenNotesFollowAnError() {
 		// Each note keeps the fix-it line after it, the lines before an error's first note stay with the error, and notes never
 		// move to another error.
