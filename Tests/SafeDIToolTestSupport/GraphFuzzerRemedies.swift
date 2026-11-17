@@ -47,6 +47,12 @@ enum GraphFuzzerRemedyKind: String, CaseIterable, Comparable {
 	/// "or receive it with `onlyIfAvailable: true` and an optional type so that it is not required", the same error's
 	/// other remedy.
 	case receiveOptionallyIfAvailable = "receive-optionally-if-available"
+	/// "Give the parameter a default value", for a hand-written mock's parameter whose dependency the type declares only
+	/// inside an `#if` clause this build does not select: the mock's parameter gets one, a call of its type's initializer.
+	case defaultMockParameter = "default-mock-parameter"
+	/// "or move the `mock` method inside `#if X`", the same error's other remedy, where it offers one: the mock's
+	/// `#if DEBUG` block moves to the end of the clause the error is at.
+	case moveMockIntoClause = "move-mock-into-clause"
 
 	/// The words a failure line of a remedy of this kind begins with (`GraphFuzzerRemedyRun.failureLine`), which a known
 	/// issue's signature reads.
@@ -143,6 +149,7 @@ enum GraphFuzzerRemedies {
 		case receiveSuggestedProperty(label: String, suggestions: [GraphFuzzerRemedyProperty])
 		case instantiateAsInstantiator(hopLabels: [String])
 		case removeOrReceiveOptionallyIfAvailable
+		case defaultMockParameterOrMoveMock(typeName: String, mockName: String, parameter: GraphFuzzerRemedyProperty, offersMove: Bool)
 
 		/// The remedy `message` states, or `nil` for an error outside the families the oracle reads, or one whose remedy
 		/// the oracle cannot apply as stated: an erased instantiator whose fulfilling type the error leaves to the user, a
@@ -181,6 +188,27 @@ enum GraphFuzzerRemedies {
 				} else {
 					return nil
 				}
+			} else if message.contains(GraphFuzzerOracle.guardedMockParameterErrorMarker) {
+				// "`T.mock(x:)` takes `x: X`, which `T` declares only inside `#if C`, inactive in this build, so generated code
+				// cannot call the mock. Give the parameter a default value, or move the `mock` method inside `#if C`."
+				let takesMarker = "` takes `"
+				let whichMarker = "`, which `"
+				let defaultRemedy = " Give the parameter a default value"
+				guard message.hasPrefix("`"),
+				      let takesRange = message.range(of: takesMarker),
+				      let whichRange = message.range(of: whichMarker, range: takesRange.upperBound..<message.endIndex),
+				      let remedyRange = message.range(of: defaultRemedy, options: .backwards),
+				      let parameter = Self.property(spelled: message[takesRange.upperBound..<whichRange.lowerBound], attribute: ""),
+				      let typeNameEnd = message.range(of: GraphFuzzerOracle.guardedMockParameterErrorMarker, range: whichRange.upperBound..<message.endIndex)
+				else { return nil }
+				let typeName = message[whichRange.upperBound..<typeNameEnd.lowerBound]
+				let mockPrefix = "`\(typeName)."
+				let mock = message[..<takesRange.lowerBound]
+				guard mock.hasPrefix(mockPrefix), let mockNameEnd = mock.firstIndex(of: "(") else { return nil }
+				let mockName = mock[mock.index(mock.startIndex, offsetBy: mockPrefix.count)..<mockNameEnd]
+				let remedy = message[remedyRange.upperBound...]
+				guard remedy == "." || (remedy.hasPrefix(", or move the `\(mockName)` method inside `") && remedy.hasSuffix("`.")) else { return nil }
+				self = .defaultMockParameterOrMoveMock(typeName: String(typeName), mockName: String(mockName), parameter: parameter, offersMove: remedy != ".")
 			} else if message.hasPrefix("Dependency cycle: ") {
 				if message.contains(onlyIfAvailableRemedy) {
 					self = .removeOrReceiveOptionallyIfAvailable
@@ -288,7 +316,30 @@ enum GraphFuzzerRemedies {
 				return properties.map { $0.label == site.label ? property : $0 }
 			}
 		}
+		func mockRemedy(_ kind: GraphFuzzerRemedyKind, _ description: String, editing edit: (inout Files) -> Bool) -> GraphFuzzerRemedy? {
+			var editedFiles = files
+			guard edit(&editedFiles) else { return nil }
+			return GraphFuzzerRemedy(
+				kind: kind,
+				site: site,
+				answeredErrors: answeredErrors,
+				description: description,
+				fixture: GraphFuzzerFixture(seed: fixture.seed, swiftFileContent: editedFiles.contents),
+			)
+		}
 		switch firstStatedRemedy {
+		case let .defaultMockParameterOrMoveMock(typeName, mockName, parameter, offersMove):
+			// One mock reports each of its parameters once, at the clause that declares its dependency.
+			guard errors.count == 1, let clauseLine = errors.first?.line, typeName == site.typeName, parameter.label == site.label else { return [] }
+			let defaultValue = "\(parameter.type)()"
+			let defaulted = mockRemedy(.defaultMockParameter, "gives `\(parameter.label): \(parameter.type)` of `\(typeName).\(mockName)` the default value `\(defaultValue)`") { files in
+				files.giveDefaultValue(defaultValue, toParameterLabeled: parameter.label, ofMockNamed: mockName, ofTypeNamed: typeName)
+			}
+			guard offersMove else { return [defaulted].compactMap(\.self) }
+			let moved = mockRemedy(.moveMockIntoClause, "moves `\(typeName).\(mockName)` into the clause at line \(clauseLine)") { files in
+				files.moveMock(named: mockName, ofTypeNamed: typeName, intoClauseAtLine: clauseLine)
+			}
+			return [defaulted, moved].compactMap(\.self)
 		case let .instantiateOnRoot(property, _, receivingOnlyIfAvailable):
 			// Each error at the site may name another root, whose own walk reached the receive.
 			var roots = [String]()
@@ -376,10 +427,21 @@ enum GraphFuzzerRemedies {
 			guard let fileIndex = fileNames.firstIndex(of: error.fileName) else { return nil }
 			let lines = Self.lines(of: contents[fileIndex])
 			let lineIndex = error.line - 1
-			guard lines.indices.contains(lineIndex), let property = Self.property(on: lines[lineIndex]),
+			guard lines.indices.contains(lineIndex),
 			      let typeDeclaration = Self.typeDeclarations(in: lines).last(where: { $0.lines.contains(lineIndex) })
 			else { return nil }
-			return GraphFuzzerRemedy.Site(fileName: error.fileName, typeName: typeDeclaration.name, label: property.label)
+			if let property = Self.property(on: lines[lineIndex]) {
+				return GraphFuzzerRemedy.Site(fileName: error.fileName, typeName: typeDeclaration.name, label: property.label)
+			} else if lines[lineIndex].trimmingCharacters(in: .whitespaces).hasPrefix("#"),
+			          case let .defaultMockParameterOrMoveMock(typeName, _, parameter, _)? = StatedRemedy(message: error.message),
+			          typeName == typeDeclaration.name
+			{
+				// An error at an `#if` clause that declares a dependency a mock's parameter takes: the site is that dependency,
+				// which the message names, so that the same error after an edit that moves the clause is at the same site.
+				return GraphFuzzerRemedy.Site(fileName: error.fileName, typeName: typeDeclaration.name, label: parameter.label)
+			} else {
+				return nil
+			}
 		}
 
 		/// The property labeled `label` that the `final class` named `typeName` declares, in the first file that declares it.
@@ -452,6 +514,58 @@ enum GraphFuzzerRemedies {
 			return true
 		}
 
+		/// Gives the parameter labeled `label` of the method named `mockName` that the `final class` named `typeName`
+		/// declares on one line the default value `defaultValue`. Returns `false`, editing nothing, when the type declares
+		/// no such method, or its parameter already has a default value.
+		mutating func giveDefaultValue(_ defaultValue: String, toParameterLabeled label: String, ofMockNamed mockName: String, ofTypeNamed typeName: String) -> Bool {
+			guard let (fileIndex, typeDeclaration) = typeDeclaration(named: typeName) else { return false }
+			var lines = Self.lines(of: contents[fileIndex])
+			let methodPrefix = "static func \(mockName)("
+			guard let mockIndex = typeDeclaration.lines.first(where: { lines[$0].contains(methodPrefix) }),
+			      let parametersStart = lines[mockIndex].range(of: methodPrefix),
+			      let parametersEnd = lines[mockIndex].range(of: ") -> ", options: .backwards),
+			      parametersStart.upperBound <= parametersEnd.lowerBound
+			else { return false }
+			var parameters = GraphFuzzerOracle.topLevelParameters(String(lines[mockIndex][parametersStart.upperBound..<parametersEnd.lowerBound]))
+				.map { $0.trimmingCharacters(in: .whitespaces) }
+			guard let parameterIndex = parameters.firstIndex(where: { $0.hasPrefix("\(label): ") }), !parameters[parameterIndex].contains(" = ") else { return false }
+			parameters[parameterIndex] += " = \(defaultValue)"
+			lines[mockIndex] = lines[mockIndex][..<parametersStart.upperBound] + parameters.joined(separator: ", ") + lines[mockIndex][parametersEnd.lowerBound...]
+			contents[fileIndex] = lines.joined(separator: "\n")
+			return true
+		}
+
+		/// Moves the `#if DEBUG` block that holds the method named `mockName` of the `final class` named `typeName`, with the
+		/// empty line before it, to the end of the `#if` clause that begins on the one-based `clauseLine` of the type's
+		/// file. Returns `false`, editing nothing, when the type declares no such block as the fuzzer writes one, the line
+		/// begins no clause, or the block is inside the clause already.
+		mutating func moveMock(named mockName: String, ofTypeNamed typeName: String, intoClauseAtLine clauseLine: Int) -> Bool {
+			guard let (fileIndex, typeDeclaration) = typeDeclaration(named: typeName) else { return false }
+			var lines = Self.lines(of: contents[fileIndex])
+			let clauseIndex = clauseLine - 1
+			guard typeDeclaration.lines.contains(clauseIndex),
+			      let mockIndex = typeDeclaration.lines.first(where: { lines[$0].contains("static func \(mockName)(") }),
+			      mockIndex > 0
+			else { return false }
+			let indentation = String(lines[clauseIndex].prefix { $0 == "\t" || $0 == " " })
+			func isClauseBoundary(_ line: String) -> Bool {
+				line == indentation + "#else" || line == indentation + "#endif" || line.hasPrefix(indentation + "#elseif ")
+			}
+			// The clause ends at the next directive of its block: one at its indentation, since a nested block's are deeper.
+			guard lines[clauseIndex].hasPrefix(indentation + "#"),
+			      lines[mockIndex - 1] == indentation + "#if DEBUG",
+			      let clauseEnd = lines[(clauseIndex + 1)...].firstIndex(where: isClauseBoundary),
+			      let blockEnd = lines[mockIndex...].firstIndex(of: indentation + "#endif"),
+			      clauseEnd < mockIndex
+			else { return false }
+			let blockStart = mockIndex > 1 && lines[mockIndex - 2].isEmpty ? mockIndex - 2 : mockIndex - 1
+			let block = (blockStart == mockIndex - 1 ? [""] : []) + lines[blockStart...blockEnd]
+			lines.removeSubrange(blockStart...blockEnd)
+			lines.insert(contentsOf: block, at: clauseEnd)
+			contents[fileIndex] = lines.joined(separator: "\n")
+			return true
+		}
+
 		private static func lines(of content: String) -> [String] {
 			content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 		}
@@ -486,6 +600,12 @@ enum GraphFuzzerRemedies {
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension GraphFuzzerOracle {
+	/// What the error says that a mock tree reports for a hand-written mock's parameter whose dependency the type
+	/// declares only inside an `#if` clause the build does not select, which the base corpus counts the rejections of
+	/// (`addingGuardedMockParameterShapes` draws the shape) and whose remedies the remedy oracle applies. It ends the
+	/// name of the type and begins the clause.
+	static let guardedMockParameterErrorMarker = "` declares only inside `"
+
 	/// Runs SafeDITool over each remedy the errors of `outcome` state for `fixture` (`GraphFuzzerRemedies`), when the tool
 	/// rejects a base corpus graph in one module: tool runs only, no compile. Remedies are not applied to a graph of
 	/// another corpus, whose seams, holes and public mocks spell declarations the remedies do not edit.
