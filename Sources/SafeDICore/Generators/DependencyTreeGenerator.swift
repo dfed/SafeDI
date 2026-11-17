@@ -5095,6 +5095,17 @@ public actor DependencyTreeGenerator {
 				Self.populatePropertiesToGenerate(of: scope, from: typeDescriptionToScopeMap, instantiables: instantiables, aliasDeclarationReferences: aliasDeclarationReferences)
 			}
 		}
+		// Which labels each fill reads only if available, once every scope's tree is complete, for a place whose fields hold a
+		// `LazilyInstantiated`: a fill takes such a wrapper optionally where the caller hands it
+		// (`Scope.Fill.optionalLazilyInstantiatedLabels`). No other fill's parameters depend on it, so no other fill is walked.
+		var receivedPropertiesCache = ReceivedPropertiesCache()
+		for scope in scopes where scope.seamCall != nil {
+			for case let .fill(hole, fulfillingScope) in scope.holeArguments where hole.fields.contains(where: { $0.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding != nil }) {
+				let received = Self.collectReceivedProperties(from: fulfillingScope, cache: &receivedPropertiesCache)
+				let requiredLabels = Set(received.received.subtracting(received.onlyIfAvailable).map(\.label))
+				scope.fillLabelsReadOnlyIfAvailable[hole.site] = Set(received.received.map(\.label)).subtracting(requiredLabels)
+			}
+		}
 		return typeDescriptionToScopeMap
 	}
 

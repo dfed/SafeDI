@@ -102,6 +102,11 @@ final class Scope: Hashable {
 	/// Empty for every other scope.
 	var fillReceivedProperties = [SeamSignature.Hole.Site: Set<Property>]()
 
+	/// For a scope that calls a seam, by each filled place whose fields hold a `LazilyInstantiated`, the labels the tree of
+	/// the type that fills it reads in no form it requires: a fill takes such a wrapper optionally where the caller hands
+	/// it (see `Fill.optionalLazilyInstantiatedLabels`). Empty for every other scope.
+	var fillLabelsReadOnlyIfAvailable = [SeamSignature.Hole.Site: Set<String>]()
+
 	/// How a seam call passes the builder for one of the seam's holes.
 	enum HoleArgument {
 		/// A function the caller generates, which builds the hole's property with the scope of the type that fulfills
@@ -867,6 +872,16 @@ private struct ScopeGeneratorUnderConstruction {
 					callerReadLabels: caseFields?.callerReadLabels ?? [],
 				)
 				fill.innerScopeParameters = Self.innerScopeParameters(ofFillOf: hole, seamHoles: seamHoles, callPath: callPath, calledBuilders: scope.calledBuilders)
+				// A label a route binds as a `LazilyInstantiated` and the caller hands from its own scope stays the wrapper, so the
+				// instance is created where the fill's tree reads it, as inline; where every read of it is only if available, the
+				// fill takes it optionally (`Scope.fillLabelsReadOnlyIfAvailable`, set for the places whose fields hold a wrapper,
+				// each filled by the same type).
+				for field in fill.fields where fill.callerReadLabels.contains(field.property.label) && field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding != nil {
+					let places = placesByCaseKey[caseKey] ?? [hole]
+					if places.contains(where: { scope.fillLabelsReadOnlyIfAvailable[$0.site]?.contains(field.property.label) == true }) {
+						fill.optionalLazilyInstantiatedLabels.insert(field.property.label)
+					}
+				}
 				fillsOfThisCall.append((fill, fulfillingScope))
 			}
 			if let calledBuilders = scope.calledBuilders {
@@ -980,6 +995,10 @@ private struct ScopeGeneratorUnderConstruction {
 		/// route to the case and none holds on another, where the root dispatcher hands the fill the caller's declaration
 		/// (see `ScopeGenerator.caseFields(of:)`).
 		var callerReadLabels = Set<String>()
+		/// The labels among `callerReadLabels` of a `LazilyInstantiated` field whose tree reads every form only if available:
+		/// the fill takes the wrapper optionally, which the root dispatcher passes `nil` where the caller declares none, and its
+		/// tree reads the instance through the optional (see `fillUnderConstruction`).
+		var optionalLazilyInstantiatedLabels = Set<String>()
 		/// The labels of the fields of the hole's struct the fill binds from the struct (see `fillUnderConstruction`):
 		/// every field but one bound from a deferred parameter, which the fill reads from the caller's scope.
 		var boundLabels = Set<String>()
@@ -1110,7 +1129,9 @@ private struct ScopeGeneratorUnderConstruction {
 			let property = field.property
 			fillNearestDeclarations.replace(property, providing: CycleParameter.forms(providedBy: property))
 			if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
-				fieldInstanceProperties.insert(instanceProperty)
+				// A wrapper the fill takes optionally offers its instance only as an optional, which a receive reads through the
+				// optional (`Set<Property>.lazilyInstantiatedInstanceRead(of:)`).
+				fieldInstanceProperties.insert(fill.optionalLazilyInstantiatedLabels.contains(property.label) ? instanceProperty.asOptionalProperty : instanceProperty)
 			}
 			// A field bound as its memo is read as the memo's instance wherever the tree reads its label, as the seam's own tree
 			// reads a deferred parameter's memo (`DependencyTreeGenerator.seamRootGenerator`): `tag: Tag` for `tag: Tag?`, and
@@ -1248,27 +1269,36 @@ private struct ScopeGeneratorUnderConstruction {
 		onlyIfAvailable: Bool,
 		declarationReference: AliasDeclarationReferences.Reference?,
 	) {
+		// An alias that keeps the label of the dependency it retypes is not in scope where its
+		// own value is read, so it does not shadow a lazily instantiated property further up the tree.
+		let instanceProperties = fulfillingProperty.label == property.label
+			? lazilyInstantiatedInstanceProperties
+			: childLazilyInstantiatedInstanceProperties
+		// Beneath a fill that takes a wrapper optionally, an alias only if available reads the instance through the optional
+		// (`Fill.optionalLazilyInstantiatedLabels`).
+		let readsOptionalInstance = onlyIfAvailable
+			&& !instanceProperties.contains(fulfillingProperty.asUnwrappedProperty)
+			&& instanceProperties.contains(fulfillingProperty.asUnwrappedProperty.asOptionalProperty)
+		let fulfillingExpression: String? = if readsOptionalInstance {
+			"\(fulfillingProperty.label)?.\(Dependency.lazilyInstantiatedInstancePropertyName)"
+		} else if self.property == nil, fulfillingProperty.label == property.label {
+			// A seam's own alias that keeps the label of a deferred parameter is bound from the parameter's autoclosure.
+			seamRoot?.autoclosureCallByLabel(of: scope.instantiable)[property.label]
+		} else {
+			nil
+		}
 		childGenerators.append(ScopeGenerator(
 			property: property,
 			fulfillingProperty: fulfillingProperty,
-			// An alias that keeps the label of the dependency it retypes is not in scope where its
-			// own value is read, so it does not shadow a lazily instantiated property further up the tree.
-			fulfillingPropertyIsLazilyInstantiatedInstance: (
-				fulfillingProperty.label == property.label
-					? lazilyInstantiatedInstanceProperties
-					: childLazilyInstantiatedInstanceProperties,
-			).contains(fulfillingProperty.asUnwrappedProperty),
+			fulfillingPropertyIsLazilyInstantiatedInstance: instanceProperties.contains(fulfillingProperty.asUnwrappedProperty),
 			unavailableOptionalProperties: unavailableOptionalProperties,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			onlyIfAvailable: onlyIfAvailable,
 			// The declared property an `onlyIfAvailable` alias is bound from decides whether its value may be `nil`: a
 			// parameter made optional, a seam's optional parameter, or an optional property the alias reads in place of
 			// its fulfilling property's non-optional form.
-			fulfillingBindingIsOptional: aliasBindings[property]?.typeDescription.isOptional ?? false,
-			// A seam's own alias that keeps the label of a deferred parameter is bound from the parameter's autoclosure.
-			fulfillingExpression: self.property == nil && fulfillingProperty.label == property.label
-				? seamRoot?.autoclosureCallByLabel(of: scope.instantiable)[property.label]
-				: nil,
+			fulfillingBindingIsOptional: readsOptionalInstance || aliasBindings[property]?.typeDescription.isOptional ?? false,
+			fulfillingExpression: fulfillingExpression,
 			declarationReference: declarationReference,
 		))
 	}
@@ -1300,7 +1330,7 @@ private struct ScopeGeneratorUnderConstruction {
 			func isRequired(_ form: Property) -> Bool {
 				child.requiredReceivedProperties.contains(form)
 			}
-			let parameter = forms.contains(where: isRequired) || field.property.typeDescription.isOptional
+			let parameter = !fill.optionalLazilyInstantiatedLabels.contains(label) && (forms.contains(where: isRequired) || field.property.typeDescription.isOptional)
 				? field
 				: field.withProperty(field.property.asOptionalProperty)
 			reads.parameterByLabel[label] = parameter
@@ -1317,9 +1347,21 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// What a call hands a parameter of `property`'s form that a fill reads of the scope enclosing the call, given that
 	/// scope's `nearestDeclarations` and the properties it holds only as a `LazilyInstantiated`'s instance: the nearest
-	/// declaration of the form, its instance where the scope holds it lazily, or `nil`.
+	/// declaration of the form, its instance where the scope holds it lazily, or `nil`. A `LazilyInstantiated` form the
+	/// scope does not declare, where it declares the instance – a route of a seam's tree binds the wrapper and the caller
+	/// the value – is a wrapper the call makes of the caller's value, so the fill reads the instance where its tree reads
+	/// it on every route, as inline does; an optional one maps an optional value the scope declares.
 	private static func callerArgument(reading property: Property, of nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) -> String {
-		guard let binding = nearestDeclarations.binding(of: property) else { return "nil" }
+		guard let binding = nearestDeclarations.binding(of: property) else {
+			guard let instanceProperty = property.asLazilyInstantiatedInstanceProperty,
+			      let instanceBinding = nearestDeclarations.binding(of: instanceProperty)
+			else { return "nil" }
+			let wrapperType = property.typeDescription.unwrapped.asSource
+			let instance = callerArgument(reading: instanceProperty, of: nearestDeclarations, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties)
+			return instanceBinding.typeDescription.isOptional
+				? "\(instance).map { value in \(wrapperType)({ value }) }"
+				: "\(wrapperType)({ \(instance) })"
+		}
 		return !property.propertyType.isLazilyInstantiated
 			&& (binding.propertyType.isLazilyInstantiated || lazilyInstantiatedInstanceProperties.contains(property.asUnwrappedProperty))
 			? "\(property.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
