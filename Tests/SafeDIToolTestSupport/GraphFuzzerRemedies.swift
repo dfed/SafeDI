@@ -78,8 +78,7 @@ enum GraphFuzzerRemedyKind: String, CaseIterable, Comparable {
 	case forwardReceive = "forward-receive"
 	/// "Receive `x` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others:
 	/// `@Received let x: X`.", for a seam whose tree receives one label in forms of one type: the seam declares the
-	/// property the error spells, in place of its own property of that label where it has one. A seam graph's only remedy
-	/// (`GraphFuzzerRemedies.Reading`). The error's forms must each be received as an adopter would: one that is optional
+	/// property the error spells, in place of its own property of that label where it has one. The error's forms must each be received as an adopter would: one that is optional
 	/// is received only if available, since a required receive of an optional is not a shape anyone writes, so a site
 	/// whose error names such a form, or a form the oracle cannot read, gets no remedy.
 	case declareProvidingFormOnSeam = "declare-providing-form-on-seam"
@@ -424,34 +423,15 @@ enum GraphFuzzerRemedies {
 		}
 	}
 
-	/// Which errors of a rejected graph the oracle reads, by the graph's corpus, or `nil` for a graph it does not read: a
-	/// graph split across modules, or one of the public mock corpus.
-	enum Reading: Equatable {
-		/// Every family `StatedRemedy` reads: a base corpus graph.
-		case everyFamily
-		/// Only a seam's label collision (`declareProvidingFormOnSeam`): a seam corpus graph, whose other declarations
-		/// (holes, nested types, extensions) the other remedies do not edit.
-		case seamLabelCollisions
-
-		init?(of fixture: GraphFuzzerFixture) {
-			guard fixture.modules == nil else { return nil }
-			switch GraphFuzzerGeneratorFeature.features(drawnIn: fixture) {
-			case []:
-				self = .everyFamily
-			case [.generateDependencyTree]:
-				self = .seamLabelCollisions
-			default:
-				return nil
-			}
-		}
-
-		func reads(_ error: ReportedError) -> Bool {
-			switch self {
-			case .everyFamily:
-				true
-			case .seamLabelCollisions:
-				SeamLabelCollision(message: error.message) != nil
-			}
+	/// Whether the oracle reads the errors of `fixture`: a base or seam corpus graph, in one module or split across
+	/// modules, whose files the remedies edit in place (`Files`), so that a remedied split graph keeps its module map. A
+	/// public mock corpus graph is not read.
+	static func reads(_ fixture: GraphFuzzerFixture) -> Bool {
+		switch GraphFuzzerGeneratorFeature.features(drawnIn: fixture) {
+		case [], [.generateDependencyTree]:
+			true
+		default:
+			false
 		}
 	}
 
@@ -470,15 +450,15 @@ enum GraphFuzzerRemedies {
 	/// class`'s, or an attribute on two lines) counts as a site of its own, so that a draw the oracle cannot read shows
 	/// in the count.
 	static func unremediedSiteCount(of fixture: GraphFuzzerFixture, diagnostics: String) -> Int {
-		guard let reading = Reading(of: fixture) else { return 0 }
+		guard reads(fixture) else { return 0 }
 		func isOfAFamilyTheOracleReads(_ error: ReportedError) -> Bool {
-			guard reading == .everyFamily else { return reading.reads(error) }
-			return error.message.hasPrefix("Dependency cycle: ")
+			error.message.hasPrefix("Dependency cycle: ")
 				|| error.message.contains("` is not @Instantiated or @Forwarded in chain: ")
 				|| error.message.hasPrefix(StatedRemedy.multipleFulfillersPrefix)
 				|| error.message.hasPrefix(StatedRemedy.unfulfilledInstantiatedTypePrefix)
 				|| error.message.contains(StatedRemedy.sendableCaptureMarker)
 				|| (error.message.hasPrefix("@Received property `") && error.message.contains(StatedRemedy.hiddenMarker) && error.message.hasSuffix(StatedRemedy.hiddenSuffix))
+				|| SeamLabelCollision(message: error.message) != nil
 		}
 		let unremediedCount = sites(of: fixture, diagnostics: diagnostics).count(where: { site in
 			site.remedies.isEmpty && site.errors.contains(where: isOfAFamilyTheOracleReads)
@@ -494,11 +474,11 @@ enum GraphFuzzerRemedies {
 	/// Each property declaration `diagnostics` reports an error at, in the order of its first error, with its errors and
 	/// the remedies they state.
 	private static func sites(of fixture: GraphFuzzerFixture, diagnostics: String) -> [(errors: [ReportedError], remedies: [GraphFuzzerRemedy])] {
-		guard let reading = Reading(of: fixture), let files = Files(fixture) else { return [] }
+		guard reads(fixture), let files = Files(fixture) else { return [] }
 		var sites = [GraphFuzzerRemedy.Site]()
 		var errorsBySite = [GraphFuzzerRemedy.Site: [ReportedError]]()
 		for diagnosticLine in diagnostics.split(separator: "\n") {
-			guard let error = ReportedError(diagnosticLine), reading.reads(error), let site = files.site(of: error) else { continue }
+			guard let error = ReportedError(diagnosticLine), let site = files.site(of: error) else { continue }
 			if errorsBySite[site] == nil {
 				sites.append(site)
 			}
@@ -579,6 +559,13 @@ enum GraphFuzzerRemedies {
 			guard let error = ReportedError(diagnosticLine), files.site(of: error) == site else { return nil }
 			return error.message
 		}
+	}
+
+	/// Whether the advice to add `onlyIfAvailable: true` to a required receive of an optional goes unjudged in `fixture`'s
+	/// corpus: in the seam corpus, since that receive is not a shape anyone writes, so a remedy of it judges a graph no
+	/// adopter has. The base corpus judges it until its draws stop drawing the receive (plan I6).
+	private static func judgesNoRequiredOptionalReceive(in fixture: GraphFuzzerFixture) -> Bool {
+		GraphFuzzerGeneratorFeature.features(drawnIn: fixture) == [.generateDependencyTree]
 	}
 
 	private static func remedies(at site: GraphFuzzerRemedy.Site, answering errors: [ReportedError], in files: Files, of fixture: GraphFuzzerFixture) -> [GraphFuzzerRemedy] {
@@ -748,7 +735,7 @@ enum GraphFuzzerRemedies {
 			guard receivingOnlyIfAvailable else {
 				return [remedy(.instantiateOnRoot, description, editing: edits)].compactMap(\.self)
 			}
-			guard let attribute = onlyIfAvailableAttribute(of: siteProperty) else { return [] }
+			guard !judgesNoRequiredOptionalReceive(in: fixture), let attribute = onlyIfAvailableAttribute(of: siteProperty) else { return [] }
 			let receive = GraphFuzzerRemedyProperty(attribute: attribute, label: site.label, type: siteProperty.type)
 			description += " and decorates \(site) with `\(attribute)`"
 			edits.append((site.typeName, replacingSiteProperty(with: receive)))
@@ -769,7 +756,7 @@ enum GraphFuzzerRemedies {
 				return properties.map { $0.label == hiddenLabel ? GraphFuzzerRemedyProperty(attribute: $0.attribute, label: newLabel, type: $0.type) : $0 }
 			})])].compactMap(\.self)
 		case let .receiveOnlyIfAvailable(label):
-			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), label == site.label, siteProperty.attribute == "@Received" else { return [] }
+			guard !judgesNoRequiredOptionalReceive(in: fixture), statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), label == site.label, siteProperty.attribute == "@Received" else { return [] }
 			let property = GraphFuzzerRemedyProperty(attribute: "@Received(onlyIfAvailable: true)", label: label, type: siteProperty.type)
 			return [remedy(.receiveOnlyIfAvailable, "decorates \(site) with `\(property.attribute)`", editing: [(site.typeName, replacingSiteProperty(with: property))])].compactMap(\.self)
 		case let .receiveSuggestedProperty(label, suggestions):
@@ -1109,17 +1096,16 @@ extension GraphFuzzerOracle {
 	/// name of the type and begins the clause.
 	static let guardedMockParameterErrorMarker = "` declares only inside `"
 
-	/// Runs SafeDITool over each remedy the errors of `outcome` state for `fixture` (`GraphFuzzerRemedies`), when the tool
-	/// rejects a base or seam corpus graph in one module: tool runs only, no compile. A seam corpus graph gets only the
-	/// remedy of a seam's label collision, since its holes, nested types and extensions spell declarations the other
-	/// remedies do not edit, and a public mock corpus graph none (`GraphFuzzerRemedies.Reading`).
 	/// How many runs of the tool may follow a `forwardReceive` remedy, each applying the declarations the run before it
 	/// stated. The base corpus's graphs need three at most (a builder on each of three roots, a run each); a remedy that
 	/// still has an error to follow after these fails with it (`errorsIntroducedByForwarding`).
 	static let maximumForwardedReceiveFollowingRunCount = 6
 
+	/// Runs SafeDITool over each remedy the errors of `outcome` state for `fixture` (`GraphFuzzerRemedies`), when the tool
+	/// rejects a base or seam corpus graph, in one module or split across modules: tool runs only, no compile. A public
+	/// mock corpus graph gets none (`GraphFuzzerRemedies.reads(_:)`).
 	static func remedyRuns(of fixture: GraphFuzzerFixture, outcome: GraphFuzzerToolOutcome) async throws -> [GraphFuzzerRemedyRun] {
-		guard GraphFuzzerRemedies.Reading(of: fixture) != nil, case let .rejected(diagnostics) = outcome else { return [] }
+		guard GraphFuzzerRemedies.reads(fixture), case let .rejected(diagnostics) = outcome else { return [] }
 		var runs = [GraphFuzzerRemedyRun]()
 		for remedy in GraphFuzzerRemedies.remedies(of: fixture, diagnostics: diagnostics) {
 			var remedy = remedy
