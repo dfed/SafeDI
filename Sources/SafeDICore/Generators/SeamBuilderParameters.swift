@@ -1407,7 +1407,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			let unlistedModules = unlistedModuleNames.map { "`\($0)`" }.joinedAsList(conjunction: "or")
 			let listRemedy = (unlistedModuleNames.count > 1 ? "for each, " : "") + DependencyTreeGenerator.DependencyTreeGeneratorError.listModuleRemedy
 			let listUnlistedModules = unlistedModuleNames.isEmpty ? "" : " A module that declares a root lists every module beneath it, and \(callerModule) does not list \(unlistedModules): \(listRemedy) Listing \(unlistedModuleNames.count > 1 ? "them" : "it") lets SafeDI follow the chain, but \(typeName) still needs a declaration that fulfills it."
-			let takenBuilder = hole.enumPlace.map { "`\(hole.builderLabel)`, whose member `\($0.describedCase)` builds `\(hole.property.label)`" } ?? "`\(hole.builderLabel)`, which builds `\(hole.property.label)`"
+			let takenBuilder = hole.enumPlace.map { "`\(hole.builderLabel)`, whose member `\($0.caseName)` builds `\(hole.property.label)`" } ?? "`\(hole.builderLabel)`, which builds `\(hole.property.label)`"
 			let fill = "\(seamName) generates its dependency tree \(seamModule), so the initializer SafeDI generated for it takes \(takenBuilder), and the root `\(rootType.asSource)` must fill it.\(listUnlistedModules)"
 			let message = if let unreachedFulfillingType {
 				"`\(unreachedFulfillingType.asSource)` fulfills \(reference), but SafeDI cannot follow that chain, because \(callerModule) does not list \(unlistedModules). A module that declares a root lists every module beneath it: \(listRemedy)"
@@ -2099,10 +2099,10 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			// Every place the finding holds for, which may be cases of one builder or of several, of one seam or of several.
 			let places = namedPlaces
 			let namesSeveralSeams = Set(places.map(\.seamType.asSource)).count > 1
-			// A place in a scope enum is named by its case too, which a message calls the builder's member, and, where the
-			// places are several seams', by the seam whose tree holds it.
+			// A place in a scope enum is named by its case's name too, beside its builder, never qualified by a generated type,
+			// and, where the places are several seams', by the seam whose tree holds it.
 			func placeDescription(of place: SeamSignature.Hole.UncarriedDeclaration.PresentedPlace, namingSeam: Bool) -> String {
-				"`\(place.ownerType.asSource)`’s `\(place.property.asSource)`\(place.caseName.map { " (member `\($0)` of `\(place.builderLabel)`)" } ?? "")\(namingSeam ? " in `\(place.seamType.asSource)`’s tree" : "")"
+				"`\(place.ownerType.asSource)`’s `\(place.property.asSource)`\(place.caseName.map { " (`\($0)` of `\(place.builderLabel)`)" } ?? "")\(namingSeam ? " in `\(place.seamType.asSource)`’s tree" : "")"
 			}
 			func builderDescription(of hole: SeamSignature.Hole) -> String {
 				"the builder for \(placeDescription(of: SeamSignature.Hole.UncarriedDeclaration.PresentedPlace(hole), namingSeam: false))"
