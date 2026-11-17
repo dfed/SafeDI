@@ -859,6 +859,7 @@ private struct ScopeGeneratorUnderConstruction {
 						guard seamHoles.carriesStruct(at: callPath, innerKey: scopeEnum.key) else { return nil }
 						return (scopeEnum.key, seamHoles.innerScopes(at: callPath, innerKey: scopeEnum.key).map { (name: $0.name, type: $0.enumType) })
 					}, uniquingKeysWith: { first, _ in first }),
+					enclosingCarriedInnerScopes: enclosingCarriedInnerScopes,
 					decidesPerRoute: scope.publicMockCall != nil,
 				)
 			}

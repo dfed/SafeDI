@@ -1119,6 +1119,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let key: String
 				/// Whether the target is a dispatcher that takes `passUp`.
 				let takesPassUp: Bool
+				/// For a level function an enclosing call declares, which a call inside its fill reuses by name, the structs it
+				/// takes (`FillDispatcher.carriedInnerScopes`): this call's level function hands it its own struct of each type
+				/// under the reused function's name for it. Empty for every other target.
+				var reusedCarriedInnerScopes = [CarriedInnerScope]()
 			}
 		}
 
@@ -1441,6 +1445,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// - Parameters:
 		///   - sitesPassedUpOnSomeRoute: The sites among `filledSites` a public mock's caller passes up on some route too
 		///     (`PublicMockCall.sitesPassedUpOnSomeRoute`).
+		///   - enclosingCarriedInnerScopes: The structs each level function of `enclosingDispatchers` takes, by its key.
 		///   - decidesPerRoute: Whether the call is of a public mock (see `FillDispatcher.decidesPerRoute`).
 		static func dispatchers(
 			of calledBuilders: CalledBuilders,
@@ -1451,6 +1456,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			names: inout GeneratedNameAllocator,
 			innerScopeNameByKey: [SeamSignature.ScopeEnum.Key: String] = [:],
 			carriedInnerScopesByKey: [SeamSignature.ScopeEnum.Key: [(name: String, type: TypeDescription)]] = [:],
+			enclosingCarriedInnerScopes: [String: [CarriedInnerScope]] = [:],
 			decidesPerRoute: Bool = false,
 		) -> [FillDispatcher] {
 			let enumsByKey = calledBuilders.enumsByKey
@@ -1597,7 +1603,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						return Case(
 							name: dispatcherCase.name,
 							hasForwardedValue: false,
-							target: Case.Target(name: dispatcherNames[targetKey] ?? "", key: targetKey, takesPassUp: takesPassUp(innerKey, onRoutesOf: target.family)),
+							target: Case.Target(name: dispatcherNames[targetKey] ?? "", key: targetKey, takesPassUp: takesPassUp(innerKey, onRoutesOf: target.family), reusedCarriedInnerScopes: enclosingCarriedInnerScopes[targetKey] ?? []),
 							values: dispatcherCase.values,
 							isFillCase: dispatcherCase.isFillCase,
 							carriedInnerKey: dispatcherCase.carriedInnerKey,
@@ -2085,7 +2091,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			func argument(_ parameter: SeamSignature.Hole.Field, of target: Case.Target, for dispatcherCase: Case, payloadName: String, readsOwnPayload: Bool) -> (text: String, readsPayload: Bool) {
 				let label = parameter.property.label
 				if let carriedInnerScope = carriedInnerScopes.first(where: { $0.name == label }) {
-					let argumentLabel = Self.isFill(target) ? label : carriedInnerScope.upName
+					// A level function an enclosing call declares takes the struct under its own name for it.
+					let argumentLabel = Self.isFill(target) ? label : target.reusedCarriedInnerScopes.first { $0.type == carriedInnerScope.type }?.upName ?? carriedInnerScope.upName
 					return ("\(argumentLabel.spelledAsArgumentLabel): \(carriedInnerScope.upName).\(dispatcherCase.name.spelledAsMemberReference)(\(payloadName))", true)
 				} else if readsOwnPayload, dispatcherCase.carriedLabels.contains(label) {
 					// A target that binds a deferred parameter's memo is handed the memo, whose instance it reads where it reads the
@@ -2097,9 +2104,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 			/// The parameters of `target`, in the order it declares them: a fill's in their own order; a level function's with
-			/// the structs of carried levels first, in the order this function takes them, and the rest in their order.
+			/// the structs of carried levels first, in the order this function takes them, and the rest in their order; a level
+			/// function an enclosing call declares takes only structs, in its own order.
 			func orderedCarriedFirst(_ parameters: [SeamSignature.Hole.Field], of target: Case.Target) -> [SeamSignature.Hole.Field] {
-				guard !Self.isFill(target) else { return parameters }
+				guard !Self.isFill(target), target.reusedCarriedInnerScopes.isEmpty else { return parameters }
 				let carriedNames = carriedInnerScopes.map(\.name)
 				let carried = carriedNames.compactMap { name in parameters.first { $0.property.label == name } }
 				return carried + parameters.filter { !carriedNames.contains($0.property.label) }
@@ -5090,6 +5098,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					for (label, argument) in callerReads.argumentByLabel {
 						let forms = callerReads.dependencies.map(\.property).filter { $0.label == label }
 						callerArgumentsByLabel[label, default: []].insert(forms.allSatisfy(child.unavailableProperties.contains) ? "nil" : argument)
+					}
+				}
+			}
+		}
+		// A case of this call's that leads to a level function an enclosing call declares hands it this call's struct of the type
+		// of each struct it takes, in its order: what that function reads is found in the enclosing call, so this call reads it
+		// here, and the level functions on the way to it take those structs in turn.
+		for dispatcher in fillDispatchers {
+			for target in dispatcher.cases.compactMap(\.target) where !target.reusedCarriedInnerScopes.isEmpty {
+				fillParametersByKey[target.key] = target.reusedCarriedInnerScopes.compactMap { reused in
+					dispatcher.carriedInnerScopes.first { $0.type == reused.type }.map { carried in
+						SeamSignature.Hole.Field(property: Property(label: carried.name, typeDescription: carried.type), access: .public, declaringType: carried.type, declarationLocation: nil)
 					}
 				}
 			}
