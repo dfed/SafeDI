@@ -116,6 +116,11 @@ public enum ReservedName: Hashable, Sendable {
 	/// member can be named `builder`.
 	static let noScopeParameterName = "\(builderFunctionNamePrefix)builder"
 
+	/// The name under which a generated initializer reads the parameter that sets a member labeled `self`
+	/// (`String.spelledAsAssigningParameterName`): a parameter named `self` would hide the instance the initializer assigns
+	/// to.
+	static let selfParameterName = "\(builderFunctionNamePrefix)self"
+
 	/// The name of the final class each generated configuration (`SafeDIOverrides`, `SafeDIMockConfiguration`, a public
 	/// mock's module-level configuration) keeps its fields in, so that a copy of the configuration is one reference.
 	static let configurationStorageTypeName = "\(builderFunctionNamePrefix)Storage"

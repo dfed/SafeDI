@@ -78,6 +78,21 @@ extension String {
 		}
 	}
 
+	/// The name under which an initializer that assigns the member of this name, in `spelledAsIdentifier` spelling, reads
+	/// the parameter that sets it: this name, or, for `self`, `ReservedName.selfParameterName`, since a parameter named
+	/// `self` hides the instance whose members the initializer assigns.
+	var spelledAsAssigningParameterName: String {
+		spelledWithoutBackticks == "self" ? ReservedName.selfParameterName : self
+	}
+
+	/// The declaration of the parameter of an initializer that assigns the member of this name, in `spelledAsIdentifier`
+	/// spelling, from it: `label`, the parameter's argument label as the initializer spells it, which names the parameter
+	/// too, or, where the parameter is read by another name (`spelledAsAssigningParameterName`), `label` followed by it.
+	func spelledAsAssigningParameter(labeled label: String) -> String {
+		let name = spelledAsAssigningParameterName
+		return name == self ? label : "\(label.spelledAsArgumentLabel) \(name)"
+	}
+
 	/// This name, in `spelledAsIdentifier` spelling, as an expression spells it after a `.` to read a member: as an
 	/// argument label, except `init` and `self`, which keep their backticks, since `foo.init` and `foo.self` are an
 	/// initializer and the value itself.

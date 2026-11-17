@@ -1243,6 +1243,13 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case holeReadOnlyIfAvailable
 	/// `HoleOwner` aliases `holeAnalytics` before its hole, so the scope struct carries the alias, which `HoleImpl` reads.
 	case holeOwnerAliasesField
+	/// `HoleSeam` builds `HoleOwner` under a keyword label (`labelingHoleOwnersAsKeywords`): a level of the hole's builders,
+	/// a member of the hole type's builder struct where it takes one, named as Swift requires a member's name be escaped.
+	case holeOwnerLabeledAsKeyword
+	/// `holeServiceLazy`, a place held in a `SendableLazilyInstantiated`, labeled `Type` or `Protocol`
+	/// (`labelingHoleOwnersAsKeywords`): a case of the `@Sendable` enum that carries no values, named as Swift requires a
+	/// member's name be escaped.
+	case holeSendablePlaceLabeledAsKeyword
 	/// `HoleSeam` or `HoleOwner` declared with `generateMock: true`.
 	case holeMocks
 	/// `HoleImpl` declared in an extension of a namespace enum, `HoleNamespace`.
@@ -2299,6 +2306,7 @@ enum GraphFuzzerGenerator {
 			forwardedLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.forwardedLabelRandomSeedMask)
 			retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionRandomSeedMask)
 			builderReceivedBesideReceiveLeftNilRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.builderReceivedBesideReceiveLeftNilRandomSeedMask)
+			keywordLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.keywordLabelRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2409,6 +2417,9 @@ enum GraphFuzzerGenerator {
 				finalDeclarations = edited
 				appliesBuilderSurfaceEdit = true
 			}
+			// Drawn after every other draw and the builder surface's edit, from a stream of its own, so that every other graph is
+			// drawn as before.
+			finalDeclarations = labelingHoleOwnersAsKeywords(in: finalDeclarations)
 			// Each declaration moved to a file without a SafeDI marker, in its owner's module, named on its own line.
 			let markerFreeSources = markerFreeFiles.map { file in
 				let fileNameLine = GraphFuzzerFixture.fileNameMarker + file.fileName
@@ -2745,6 +2756,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `appendBuilderReceivedBesideReceiveLeftNilMotif`'s choices: whether a graph without another motif
 		/// ends with it, and its shapes.
 		private var builderReceivedBesideReceiveLeftNilRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `labelingHoleOwnersAsKeywords`' choices: whether a graph's seam builds `HoleOwner` under keyword labels,
+		/// and which.
+		private var keywordLabelRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -7199,6 +7213,61 @@ enum GraphFuzzerGenerator {
 
 		private static let retentionRandomSeedMask: UInt64 = 0x726574656E74696F
 
+		/// With the `generateDependencyTree` feature on, in two graphs in five whose seam, `HoleSeam`, builds the hole's owner,
+		/// `HoleOwner`, at its first site (`holeOwner` or `holeOwnerBuilder`), labels that property as a keyword: `Type` or
+		/// `Protocol`, which Swift rejects as a member's name written bare, `Self`, `init` or `default`. The property is a level
+		/// of the hole's builders – a case of the seam's enum and, where the hole type takes a builder struct, a member of its
+		/// struct – and, where `HoleSeam` is mocked, a field of its mock's overrides. Never `self`, which the fixture's
+		/// initializer would take as the name of a parameter that hides the instance it assigns to, nor the second site,
+		/// `holeSecondOwner`, whose label `holeOwnerReachedAtTwoSites` reads.
+		///
+		/// On a roll of its own, made whatever the first, four times in five it labels `holeServiceLazy` `Type` or `Protocol`
+		/// where it is a `SendableLazilyInstantiated` of the hole: a place held in a `Sendable` wrapper, a case of the
+		/// `@Sendable` enum that carries no values, which Swift rejects named `Type` or `Protocol` bare even where a case that
+		/// carries values compiles. It takes the other of the two where the owner's label is the one drawn.
+		///
+		/// `keywordLabelRandom` draws only for this pass, which runs after every other draw and the builder surface's edit,
+		/// so that every other graph, and every other draw of a graph it draws in, draws as before.
+		private mutating func labelingHoleOwnersAsKeywords(in declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let drawsShape = keywordLabelRandom.percentChance(40)
+			let keyword = keywordLabelRandom.element(of: Self.holeOwnerKeywordLabels)
+			let relabelsSendablePlace = keywordLabelRandom.percentChance(80)
+			let drawnPlaceKeyword = keywordLabelRandom.element(of: Self.sendablePlaceKeywordLabels)
+			let ownerName = "\(prefix)HoleOwner"
+			guard features.contains(.generateDependencyTree), let seamIndex = declarations.firstIndex(where: { $0.name == "\(prefix)HoleSeam" }) else { return declarations }
+			var declarations = declarations
+			var ownerKeyword: String?
+			if drawsShape {
+				for index in declarations[seamIndex].properties.indices where ["holeOwner", "holeOwnerBuilder"].contains(declarations[seamIndex].properties[index].label) {
+					let property = declarations[seamIndex].properties[index]
+					if property.type == ownerName || property.type.hasSuffix("<\(ownerName)>") {
+						declarations[seamIndex].properties[index] = property.relabeled(keyword)
+						ownerKeyword = keyword
+					}
+				}
+			}
+			if relabelsSendablePlace {
+				let placeKeyword = drawnPlaceKeyword == ownerKeyword ? Self.sendablePlaceKeywordLabels.first { $0 != drawnPlaceKeyword } ?? drawnPlaceKeyword : drawnPlaceKeyword
+				let sendablePlaceType = "SendableLazilyInstantiated<any \(prefix)HoleService>"
+				for declarationIndex in declarations.indices where [ownerName, "\(prefix)HoleSeam"].contains(declarations[declarationIndex].name) {
+					for index in declarations[declarationIndex].properties.indices where declarations[declarationIndex].properties[index].label == "holeServiceLazy" && declarations[declarationIndex].properties[index].type == sendablePlaceType {
+						declarations[declarationIndex].properties[index] = declarations[declarationIndex].properties[index].relabeled(placeKeyword)
+					}
+				}
+			}
+			return declarations
+		}
+
+		/// The keywords `labelingHoleOwnersAsKeywords` labels a place held in a `Sendable` wrapper with: those Swift rejects
+		/// as a case's name written bare.
+		static let sendablePlaceKeywordLabels = ["`Type`", "`Protocol`"]
+
+		/// The keywords `labelingHoleOwnersAsKeywords` labels the seam's property that builds `HoleOwner` with.
+		static let holeOwnerKeywordLabels = ["`Type`", "`Protocol`", "`Self`", "`init`", "`default`"]
+
+		private static let keywordLabelRandomSeedMask: UInt64 = 0x6B6579776F72644C
+
 		// MARK: Access proof extensions
 
 		/// With the `generateDependencyTree` feature on, extends `addingAccessProofShapes`' tree with the shapes that pass
@@ -9025,6 +9094,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		if properties(of: "HoleOwner").contains(where: { $0.attribute.contains("fulfilledByDependencyNamed") }) {
 			features.insert(.holeOwnerAliasesField)
 		}
+		if seamProperties.contains(where: { $0.label.hasPrefix("`") && ($0.type == prefix + "HoleOwner" || $0.type.hasSuffix("<\(prefix)HoleOwner>")) }) {
+			features.insert(.holeOwnerLabeledAsKeyword)
+		}
 		if mockedTypeNames.contains(prefix + "HoleSeam") || mockedTypeNames.contains(prefix + "HoleOwner") {
 			features.insert(.holeMocks)
 		}
@@ -9065,6 +9137,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		for property in properties(of: "HoleSeam") + properties(of: "HoleOwner") where property.label == "holeServiceLazy" {
 			features.insert(property.type.hasPrefix("Sendable") ? .holeSendableLazyWrapperBesideByValuePlace : .holeLazyWrapperBesideByValuePlace)
+		}
+		// `labelingHoleOwnersAsKeywords` labels the `Sendable` one as a keyword.
+		for property in properties(of: "HoleSeam") + properties(of: "HoleOwner") where property.label.hasPrefix("`") && property.type == "SendableLazilyInstantiated<any \(prefix)HoleService>" {
+			features.insert(.holeSendableLazyWrapperBesideByValuePlace)
+			features.insert(.holeSendablePlaceLabeledAsKeyword)
 		}
 		if declares("HoleDeep") {
 			features.insert(.holePlaceInsideSendableFill)
@@ -11477,13 +11554,16 @@ struct GraphFuzzerToolRuns {
 				}
 			}
 			// A parameter that keeps its declaration's label pairs first, so that a parameter named apart cannot take the
-			// declaration it names away from it.
+			// declaration it names away from it. A label written as a keyword is compared without its backticks, which the
+			// declaration and the parameter can spell differently.
 			for keepsLabel in [true, false] {
 				var stillUnpairedParameters = [(parameter: GraphFuzzerMirrorProperty, spelling: String)]()
 				for unpaired in unpairedParameters {
 					let parameter = unpaired.parameter
+					let parameterLabel = parameter.label.replacingOccurrences(of: "`", with: "")
 					if let index = unpairedInstantiatedProperties.firstIndex(where: { declaration in
-						declaration.type == parameter.type && (keepsLabel ? parameter.label == declaration.label : parameter.label.hasPrefix(declaration.label + "_"))
+						let declarationLabel = declaration.label.replacingOccurrences(of: "`", with: "")
+						return declaration.type == parameter.type && (keepsLabel ? parameterLabel == declarationLabel : parameterLabel.hasPrefix(declarationLabel + "_"))
 					}) {
 						unpairedInstantiatedProperties.remove(at: index)
 					} else {

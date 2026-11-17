@@ -67,7 +67,7 @@ struct ConfigurationStorage {
 			if let documentation = field.documentation {
 				lines.append("\(indent)/// \(documentation)")
 			}
-			lines.append("\(indent)\(field.accessPrefix)var \(field.name): \(field.typeSource) { \(ReservedName.configurationStoragePropertyName).\(field.name) }")
+			lines.append("\(indent)\(field.accessPrefix)var \(field.name.spelledAsMemberDeclarationName): \(field.typeSource) { \(ReservedName.configurationStoragePropertyName).\(field.name) }")
 		}
 		return lines
 	}
@@ -83,12 +83,14 @@ struct ConfigurationStorage {
 			"\(indent)private final class \(ReservedName.configurationStorageTypeName)\(sendableConformance) {",
 			"\(memberIndent)init(",
 		]
-		lines.append(fields.map { "\(parameterIndent)\($0.name): \($0.parameterTypeSource)" }.joined(separator: ",\n"))
+		// A field is named as a label: declared as a member's name is spelled, `Type` and `Protocol` in backticks, and set from
+		// a parameter named apart from `self`.
+		lines.append(fields.map { "\(parameterIndent)\($0.name.spelledAsAssigningParameter(labeled: $0.name)): \($0.parameterTypeSource)" }.joined(separator: ",\n"))
 		lines.append("\(memberIndent)) {")
-		lines.append(contentsOf: fields.map { "\(parameterIndent)self.\($0.name) = \($0.name)" })
+		lines.append(contentsOf: fields.map { "\(parameterIndent)self.\($0.name) = \($0.name.spelledAsAssigningParameterName)" })
 		lines.append("\(memberIndent)}")
 		lines.append("")
-		lines.append(contentsOf: fields.map { "\(memberIndent)let \($0.name): \($0.typeSource)" })
+		lines.append(contentsOf: fields.map { "\(memberIndent)let \($0.name.spelledAsMemberDeclarationName): \($0.typeSource)" })
 		lines.append("\(indent)}")
 		return lines
 	}

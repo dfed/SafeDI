@@ -1,0 +1,578 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+import Foundation
+import SafeDICore
+import Testing
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
+
+/// A seam's builder struct declares one member per case of its level, named as the case, which is the label of the
+/// property on the way to a hole: `Type` and `Protocol`, which Swift rejects as a member's name written bare, a keyword,
+/// or a raw identifier. No such label is `self`: the `@Instantiable` macro requires an initializer parameter named as each
+/// dependency, and a parameter named `self` hides the instance the initializer assigns to.
+struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
+	// MARK: Initialization
+
+	init() {
+		filesToDelete = [URL]()
+	}
+
+	deinit {
+		for fileToDelete in filesToDelete {
+			try! FileManager.default.removeItem(at: fileToDelete)
+		}
+	}
+
+	// MARK: Tests
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresScopeCaseInBackticks_whenPlaceHeldInSendableWrapperIsLabeledTypeOrProtocol() async throws {
+		// A place held in a `Sendable` wrapper is a case of the `@Sendable` enum that carries no values, which Swift rejects
+		// named `Type` or `Protocol` bare, as it rejects such a member.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.featureAndApp(
+			feature: [
+				"public protocol Gadget: Sendable {}",
+				seamFixtureType(named: "Host", isSeam: true, declarations: [
+					"@Instantiated public let `Type`: SendableLazilyInstantiated<any Gadget>",
+					"@Instantiated public let `Protocol`: SendableLazilyInstantiated<any Gadget>",
+				]),
+			],
+			app: [
+				seamFixtureType(named: "LiveGadget", isFinalClass: true, declarations: [], conformances: ", Gadget")
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Gadget.self])\n"),
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let host: Host"]),
+			],
+		), integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Host {
+		    @frozen nonisolated public enum SafeDISendableScope_Gadget {
+		        case `Type`
+		        case `Protocol`
+
+		        nonisolated public struct Type_Values: Sendable {}
+
+		        nonisolated public struct Protocol_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let `Type`: @Sendable (Type_Values) -> __safeDI_Built
+		            public let `Protocol`: @Sendable (Protocol_Values) -> __safeDI_Built
+
+		            public init(Type: @escaping @Sendable (Type_Values) -> __safeDI_Built, Protocol: @escaping @Sendable (Protocol_Values) -> __safeDI_Built) {
+		                self.Type = Type
+		                self.Protocol = Protocol
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.Type = { _ in __safeDI_builder() }
+		                self.Protocol = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public init(gadgetSendableBuilder: @escaping @Sendable () -> any Gadget) {
+		        self.init(__safeDI_gadgetSendableBuilder: .init(__safeDI_noScope: gadgetSendableBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
+		        @Sendable nonisolated func __safeDI_Type() -> any Gadget {
+		            __safeDI_gadgetSendableBuilder.Type(SafeDISendableScope_Gadget.Type_Values())
+		        }
+		        let Type = SendableLazilyInstantiated<any Gadget>(__safeDI_Type)
+		        @Sendable nonisolated func __safeDI_Protocol() -> any Gadget {
+		            __safeDI_gadgetSendableBuilder.Protocol(SafeDISendableScope_Gadget.Protocol_Values())
+		        }
+		        let Protocol = SendableLazilyInstantiated<any Gadget>(__safeDI_Protocol)
+		        self.init(Type: Type, Protocol: Protocol)
+		    }
+		}
+
+		extension Host {
+		    public enum __safeDI_Host_9E11DF95B1FD32CE {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_host() -> Host {
+		            _ = Host.__safeDI_Host_9E11DF95B1FD32CE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            @Sendable func __safeDI_gadgetSendableBuilder_Host_Type() -> any Gadget {
+		                @Sendable func __safeDI_Type() -> LiveGadget {
+		                    LiveGadget()
+		                }
+		                return __safeDI_Type()
+		            }
+		            @Sendable func __safeDI_gadgetSendableBuilder_Host_Protocol() -> any Gadget {
+		                @Sendable func __safeDI_Protocol() -> LiveGadget {
+		                    LiveGadget()
+		                }
+		                return __safeDI_Protocol()
+		            }
+		            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host() -> Host.SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(Type: { _ in __safeDI_gadgetSendableBuilder_Host_Type() }, Protocol: { _ in __safeDI_gadgetSendableBuilder_Host_Protocol() })
+		            }
+		            return Host(__safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_Host())
+		        }
+		        let host: Host = __safeDI_host()
+		        self.init(host: host)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresBuilderStructMemberInBackticks_whenSeamsPlaceIsLabeledType() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.featureAndApp(
+			feature: ["public protocol Api {}", seamFixtureType(named: "F", isSeam: true, declarations: ["@Instantiated public let `Type`: any Api"])],
+			app: [Self.liveApi(declarations: []), seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let f: F"])],
+		), integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension F {
+		    @frozen nonisolated public enum SafeDIScope_Api {
+		        case `Type`(Type_Values)
+
+		        nonisolated public struct Type_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let `Type`: (Type_Values) -> __safeDI_Built
+
+		            public init(Type: @escaping (Type_Values) -> __safeDI_Built) {
+		                self.Type = Type
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.Type = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public init(apiBuilder: @escaping () -> any Api) {
+		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		        let Type: any Api = __safeDI_apiBuilder.Type(SafeDIScope_Api.Type_Values())
+		        self.init(Type: Type)
+		    }
+		}
+
+		extension F {
+		    public enum __safeDI_F_B3BA8803CCFC0EA1 {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_f() -> F {
+		            _ = F.__safeDI_F_B3BA8803CCFC0EA1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_F() -> F.SafeDIScope_Api.__safeDI_Builder<any Api> {
+		                .init(Type: { _ in
+		                    let Type: any Api = LiveApi()
+		                    return Type
+		                })
+		            }
+		            return F(__safeDI_apiBuilder: __safeDI_apiBuilder_F())
+		        }
+		        let f: F = __safeDI_f()
+		        self.init(f: f)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsBuilderStructMembersCompilably_whenLevelsAndPlacesHaveKeywordLabels() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.keywordLevelsAndPlaces, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Home {
+		    @frozen nonisolated public enum SafeDIScope_Api {
+		        case `Type`(Type_Values, SafeDIScope_Api.Detail_Scope)
+
+		        nonisolated public struct Type_Values {
+		            public let `default`: Name
+		        }
+
+		        @frozen nonisolated public enum Detail_Scope {
+		            case `Self`(Self_Values)
+		            case `init`(init_Values)
+		            case `my leaf`(`my leaf_Values`)
+
+		            nonisolated public struct Self_Values {}
+
+		            nonisolated public struct init_Values {
+		                public let `Self`: any Api
+		            }
+
+		            nonisolated public struct `my leaf_Values` {
+		                public let `Self`: any Api
+		                public let `init`: any Api
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let `Self`: (Self_Values) -> __safeDI_Built
+		                public let `init`: (init_Values) -> __safeDI_Built
+		                public let `my leaf`: (`my leaf_Values`) -> __safeDI_Built
+
+		                public init(`Self`: @escaping (Self_Values) -> __safeDI_Built, `init`: @escaping (init_Values) -> __safeDI_Built, `my leaf`: @escaping (`my leaf_Values`) -> __safeDI_Built) {
+		                    self.`Self` = `Self`
+		                    self.`init` = `init`
+		                    self.`my leaf` = `my leaf`
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.`Self` = { _ in __safeDI_builder() }
+		                    self.`init` = { _ in __safeDI_builder() }
+		                    self.`my leaf` = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let `Type`: (Type_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(Type: @escaping (Type_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.Type = Type
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.Type = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    @frozen nonisolated public enum SafeDIScope_Gizmo {
+		        @frozen nonisolated public enum Gadget_Scope {
+		            case `Protocol`(Protocol_Values)
+
+		            nonisolated public struct Protocol_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let `Protocol`: (Protocol_Values) -> __safeDI_Built
+
+		                public init(Protocol: @escaping (Protocol_Values) -> __safeDI_Built) {
+		                    self.Protocol = Protocol
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.Protocol = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+		    }
+
+		    @frozen nonisolated public enum SafeDISendableScope_Gizmo {
+		        case `Protocol`(SafeDIScope_Gizmo.Gadget_Scope)
+
+		        nonisolated public struct Protocol_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let `Protocol`: @Sendable (Protocol_Values) -> SafeDIScope_Gizmo.Gadget_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(Protocol: @escaping @Sendable (Protocol_Values) -> SafeDIScope_Gizmo.Gadget_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.Protocol = Protocol
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.Protocol = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public init(apiBuilder: @escaping () -> any Api, gizmoSendableBuilder: @escaping @Sendable () -> any Gizmo) {
+		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder), __safeDI_gizmoSendableBuilder: .init(__safeDI_noScope: gizmoSendableBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>, __safeDI_gizmoSendableBuilder: SafeDISendableScope_Gizmo.__safeDI_Builder<any Gizmo>) {
+		        let `default` = Name()
+		        let __safeDI_apiBuilder_Type = __safeDI_apiBuilder.Type(SafeDIScope_Api.Type_Values(default: `default`))
+		        func __safeDI_Type() -> Detail {
+		            let `Self`: any Api = __safeDI_apiBuilder_Type.`Self`(SafeDIScope_Api.Detail_Scope.Self_Values())
+		            let `init`: any Api = __safeDI_apiBuilder_Type.`init`(SafeDIScope_Api.Detail_Scope.init_Values(Self: `Self`))
+		            let `my leaf`: any Api = __safeDI_apiBuilder_Type.`my leaf`(SafeDIScope_Api.Detail_Scope.`my leaf_Values`(Self: `Self`, init: `init`))
+		            return Detail(Self: `Self`, init: `init`, `my leaf`: `my leaf`)
+		        }
+		        let Type = Instantiator<Detail>(__safeDI_Type)
+		        @Sendable nonisolated func __safeDI_Protocol() -> Gadget {
+		            let __safeDI_gizmoSendableBuilder_Protocol = __safeDI_gizmoSendableBuilder.Protocol(SafeDISendableScope_Gizmo.Protocol_Values())
+		            let Protocol: any Gizmo = __safeDI_gizmoSendableBuilder_Protocol.Protocol(SafeDIScope_Gizmo.Gadget_Scope.Protocol_Values())
+		            return Gadget(Protocol: Protocol)
+		        }
+		        let Protocol = SendableInstantiator<Gadget>(__safeDI_Protocol)
+		        self.init(default: `default`, Type: Type, Protocol: Protocol)
+		    }
+		}
+
+		extension Home {
+		    public enum __safeDI_Home_8AAA55781E540DC3 {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_home() -> Home {
+		            _ = Home.__safeDI_Home_8AAA55781E540DC3.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
+		                .init(Type: { values in __safeDI_apiBuilder_Home_Detail_Scope(default: values.default) })
+		            }
+		            func __safeDI_apiBuilder_Home_Detail_Scope(default: Name) -> Home.SafeDIScope_Api.Detail_Scope.__safeDI_Builder<any Api> {
+		                .init(
+		                    Self: { _ in
+		                        let `Self`: any Api = LiveApi(default: `default`)
+		                        return `Self`
+		                    },
+		                    init: { _ in
+		                        let `init`: any Api = LiveApi(default: `default`)
+		                        return `init`
+		                    },
+		                    `my leaf`: { _ in
+		                        let `my leaf`: any Api = LiveApi(default: `default`)
+		                        return `my leaf`
+		                    }
+		                )
+		            }
+		            @Sendable nonisolated func __safeDI_gizmoSendableBuilder_Home() -> Home.SafeDISendableScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		                .init(Protocol: { _ in __safeDI_gizmoBuilder_Home_Gadget_Scope() })
+		            }
+		            @Sendable nonisolated func __safeDI_gizmoBuilder_Home_Gadget_Scope() -> Home.SafeDIScope_Gizmo.Gadget_Scope.__safeDI_Builder<any Gizmo> {
+		                .init(Protocol: { _ in
+		                    let Protocol: any Gizmo = LiveGizmo()
+		                    return Protocol
+		                })
+		            }
+		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home(), __safeDI_gizmoSendableBuilder: __safeDI_gizmoSendableBuilder_Home())
+		        }
+		        let home: Home = __safeDI_home()
+		        self.init(home: home)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsBuilderStructMembersCompilably_whenSeamOfAnotherModulePassesUpKeywordLabeledPlace() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(modules: [
+			ModuleFixture(name: "Core", packageName: "Shop", swiftFileContent: [
+				"public protocol Api {}",
+				seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated public let `Type`: any Api", "@Instantiated public let `default`: any Api"]),
+			]),
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated public let `Protocol`: Inner"]),
+			].map { "import Core\n\n" + $0 }, dependencies: ["Core"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				Self.liveApi(declarations: []),
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let outer: Outer"]),
+			].map { "import Core\nimport Feature\n\n" + $0 }, dependencies: ["Core", "Feature"]),
+		], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
+		extension Inner {
+		    @frozen nonisolated public enum SafeDIScope_Api {
+		        case `Type`(Type_Values)
+		        case `default`(default_Values)
+
+		        nonisolated public struct Type_Values {}
+
+		        nonisolated public struct default_Values {
+		            public let `Type`: any Api
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let `Type`: (Type_Values) -> __safeDI_Built
+		            public let `default`: (default_Values) -> __safeDI_Built
+
+		            public init(Type: @escaping (Type_Values) -> __safeDI_Built, `default`: @escaping (default_Values) -> __safeDI_Built) {
+		                self.Type = Type
+		                self.`default` = `default`
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.Type = { _ in __safeDI_builder() }
+		                self.`default` = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		        let Type: any Api = __safeDI_apiBuilder.Type(SafeDIScope_Api.Type_Values())
+		        let `default`: any Api = __safeDI_apiBuilder.`default`(SafeDIScope_Api.default_Values(Type: Type))
+		        self.init(Type: Type, default: `default`)
+		    }
+		}
+
+		extension Inner {
+		    public enum __safeDI_Inner_E2865DA5D9DAB609 {}
+		}
+		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		extension Outer {
+		    @frozen public enum SafeDIScope_Api {
+		        case `Protocol`(Inner.SafeDIScope_Api)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
+		        func __safeDI_Protocol() -> Inner {
+		            _ = Inner.__safeDI_Inner_E2865DA5D9DAB609.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Inner(__safeDI_apiBuilder: .init(Type: { __safeDI_TypeValues in __safeDI_apiBuilder(.Protocol(.Type(__safeDI_TypeValues))) }, default: { __safeDI_defaultValues in __safeDI_apiBuilder(.Protocol(.`default`(__safeDI_defaultValues))) }))
+		        }
+		        let Protocol: Inner = __safeDI_Protocol()
+		        self.init(Protocol: Protocol)
+		    }
+		}
+
+		extension Outer {
+		    public enum __safeDI_Outer_C29080DB6DBB9AD1 {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_C29080DB6DBB9AD1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Outer(_ scope: Outer.SafeDIScope_Api) -> any Api {
+		                switch scope {
+		                case let .Protocol(scope): return __safeDI_apiBuilder_Inner(scope)
+		                }
+		            }
+		            func __safeDI_apiBuilder_Inner(_ scope: Inner.SafeDIScope_Api) -> any Api {
+		                switch scope {
+		                case .Type:
+		                    let Type: any Api = LiveApi()
+		                    return Type
+		                case .`default`:
+		                    let `default`: any Api = LiveApi()
+		                    return `default`
+		                }
+		            }
+		            return Outer(__safeDI_apiBuilder: __safeDI_apiBuilder_Outer)
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+		"""])
+		try Self.expectCompiles(output)
+	}
+
+	// MARK: Fixtures
+
+	/// `Home`, a seam, binds `default`, then builds `Detail` through `Type` and `Gadget` through `Protocol`, whose places of
+	/// `Api` and `Gizmo`, which only `App` fulfills, are labeled as keywords and a raw identifier; `LiveApi` reads `default`.
+	private static let keywordLevelsAndPlaces = featureAndApp(
+		feature: [
+			"public protocol Api {}\npublic protocol Gizmo: Sendable {}",
+			seamFixtureType(named: "Name", declarations: []),
+			seamFixtureType(named: "Detail", declarations: [
+				"@Instantiated public let `Self`: any Api",
+				"@Instantiated public let `init`: any Api",
+				"@Instantiated public let `my leaf`: any Api",
+			]),
+			seamFixtureType(named: "Gadget", declarations: ["@Instantiated public let `Protocol`: any Gizmo"], conformances: ", Sendable"),
+			seamFixtureType(named: "Home", isSeam: true, declarations: [
+				"@Instantiated public let `default`: Name",
+				"@Instantiated public let `Type`: Instantiator<Detail>",
+				"@Instantiated public let `Protocol`: SendableInstantiator<Gadget>",
+			]),
+		],
+		app: [
+			Self.liveApi(declarations: ["@Received public let `default`: Name"]),
+			seamFixtureType(named: "LiveGizmo", isFinalClass: true, declarations: [], conformances: ", Gizmo")
+				.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Gizmo.self])\n"),
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let home: Home"]),
+		],
+	)
+
+	// MARK: Private
+
+	private var filesToDelete: [URL]
+
+	/// Expects every module of `output` to have compiled, and its generated code to have drawn no warning, where compile
+	/// verification is enabled.
+	private static func expectCompiles(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
+		guard compileVerificationIsEnabled else { return }
+		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
+		for module in compilation.modules {
+			#expect(module.result.exitCode == 0, "\(module.moduleName): \(module.result.stderr)", sourceLocation: sourceLocation)
+			#expect(module.generatedCodeWarnings.isEmpty, "\(module.moduleName): \(module.generatedCodeWarnings)", sourceLocation: sourceLocation)
+		}
+	}
+
+	/// `Feature`, which declares `feature`'s types and generates readable initializers, and `App`, which declares `app`'s.
+	private static func featureAndApp(feature: [String], app: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature, swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		]
+	}
+
+	/// `LiveApi`, a final class that fulfills `Api` and declares `declarations`.
+	private static func liveApi(declarations: [String]) -> String {
+		seamFixtureType(named: "LiveApi", isFinalClass: true, declarations: declarations, conformances: ", Api")
+			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api.self])\n")
+	}
+}
