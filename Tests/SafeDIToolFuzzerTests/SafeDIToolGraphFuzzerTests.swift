@@ -827,6 +827,17 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachLazyRouteShape() {
+		// Two routes to one case whose fill reads a value one route binds lazily and the caller holds by value – with a
+		// `SendableLazilyInstantiated`, read only if available, and beneath an instantiator – stand in for unit tests of the
+		// wrapper a seam's caller makes of its own value only while each lands in at least ten graphs the tool accepts, which
+		// the corpus runs pin exactly.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isLazyRouteShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_acceptErasedPlaceOfForwardedPropertiesOfHandConformingType_whenSeamCorpusDrawsItBesideInstantiatorPlace() async throws {
 		// Seed 135 holds `HoleHanded`, which declares that it forwards an `Int`, in a `SendableErasedInstantiator` of
@@ -6015,7 +6026,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isLazyRouteShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
@@ -6166,6 +6177,10 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeInstantiatorPlaceBesideErased: 36,
 		.holeInstantiatorPlaceBesidePlain: 44,
 		.holeInstantiatorPlaceBesidePlainAcrossFamilies: 13,
+		.holeLazyRoute: 10,
+		.holeLazyRouteBeneathInstantiator: 10,
+		.holeLazyRouteReadOnlyIfAvailable: 10,
+		.holeLazyRouteSendableWrapper: 10,
 		.holeNothingForwardedPlace: 90,
 		.holeNothingForwardedPlaceBesideInstantiator: 25,
 		.holeNothingForwardedPlaceBesidePlain: 42,
@@ -6374,6 +6389,10 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeTangleReadsInstantiator: 36,
 		.holeTangleTReadsMark: 73,
 		.holeTangleTBuiltByValue: 42,
+		.holeLazyRoute: 172,
+		.holeLazyRouteSendableWrapper: 50,
+		.holeLazyRouteReadOnlyIfAvailable: 82,
+		.holeLazyRouteBeneathInstantiator: 71,
 		.holePlaceInsidePlainFill: 108,
 		.holePlaceInsidePlainFillOnTwoInnerRoutes: 52,
 		.holePlaceInsidePlainFillReadsInnerLevel: 55,

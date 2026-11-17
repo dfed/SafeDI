@@ -576,18 +576,23 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		}
 	}
 
-	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsEachRouteItsNearestToken_whenOneRouteBindsTokenLazilyAndTheCallerHoldsAPlainToken(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+	func generate_handsEachRouteItsNearestTokenAsTwinDoes_whenOneRouteBindsTokenLazilyBesideCallersPlainToken(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
 		// `Desk` binds `token` lazily above one of `Model`’s places, and the caller holds a plain `token` above the other:
-		// `DefaultService` reads `Desk`’s instance beneath `Desk` and the caller’s `token` beside it, as inline does.
-		try await expectValuesEqualInline(
+		// `DefaultService` reads `Desk`’s instance beneath `Desk` and the caller’s `token` beside it, as inline does. The twin
+		// hands its fill `Desk`’s wrapper and a wrapper of the caller’s `token`; the mock builds what the twin builds.
+		let result = try await GraphFuzzerCallingMockCheck.run(Self.graph(
+			named: "a fill reading a token one route binds lazily and the caller holds by value",
 			mock: Self.lazyRouteModules(caller: caller.attribute, callee: calledTypes.attribute),
-			inline: Self.lazyRouteInlineModules,
+			twin: Self.lazyRouteModules(caller: Self.twinCaller, callee: Self.twinCalledTypes),
+			callerTypeName: "OfficeScreen",
 			caller: caller,
-			handWrittenCall: "import Core\n\nfunc callMock() {\n    _ = OfficeScreen.mock()\n}\n",
-			probes: [DifferentialValueProbe(name: "OfficeScreen", expression: "OfficeScreen.mock()", knownRightExpression: "OfficeScreen()")],
-		)
+			expectedTwinInitializerLabels: [],
+			valueProbes: [DifferentialValueProbe(name: "OfficeScreen", expression: "App.OfficeScreen.mock()", knownRightExpression: "App.OfficeScreen()")],
+		), seed: 0)
+
+		Self.expectFillsAsTwin(result)
 	}
 
 	// MARK: Private
@@ -602,11 +607,6 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": "import Core\n" + lazyRouteApp(caller: caller)], dependencies: ["Core"]),
 		]
 	}
-
-	/// `lazyRouteModules`’ types in one module, `OfficeScreen` a root: what inline builds.
-	private static let lazyRouteInlineModules = [
-		ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": Self.lazyRouteCore(callee: "@Instantiable") + "\n" + Self.lazyRouteApp(caller: "@Instantiable(isRoot: true)").replacingOccurrences(of: "import SafeDI\n", with: "")]),
-	]
 
 	private static func lazyRouteCore(callee: String) -> String {
 		"""

@@ -271,9 +271,9 @@ public struct Initializer: Codable, Hashable, Sendable {
 					"\($0.argument.label.spelledAsArgumentLabel): nil"
 				} else if !lazilyInstantiatedInstanceProperties.isEmpty,
 				          $0.dependency.source.isReceived,
-				          lazilyInstantiatedInstanceProperties.contains($0.dependency.property.asUnwrappedProperty)
+				          let instanceRead = lazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceRead(of: $0.dependency.property)
 				{
-					"\($0.argument.label.spelledAsArgumentLabel): \($0.argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+					"\($0.argument.label.spelledAsArgumentLabel): \($0.argument.innerLabel)\(instanceRead)"
 				} else {
 					"\($0.argument.label.spelledAsArgumentLabel): \($0.argument.innerLabel)"
 				}
@@ -447,6 +447,22 @@ extension TypeDescription {
 		     .variadic,
 		     .void:
 			self
+		}
+	}
+}
+
+extension Set<Property> {
+	/// How a receive of `property` reads it, where this set holds the by-value properties in scope only as the instance of
+	/// a `LazilyInstantiated`: through the wrapper's instance, `.instance`; through an optional wrapper, `?.instance`, for a
+	/// receive of the optional form where the set holds that form, which only a fill that takes the wrapper optionally adds
+	/// (`Scope.Fill.optionalLazilyInstantiatedLabels`); or `nil` where it reads no instance.
+	func lazilyInstantiatedInstanceRead(of property: Property) -> String? {
+		if contains(property.asUnwrappedProperty) {
+			".\(Dependency.lazilyInstantiatedInstancePropertyName)"
+		} else if property.typeDescription.isOptional, contains(property) {
+			"?.\(Dependency.lazilyInstantiatedInstancePropertyName)"
+		} else {
+			nil
 		}
 	}
 }
