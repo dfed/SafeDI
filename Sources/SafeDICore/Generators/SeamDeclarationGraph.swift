@@ -267,8 +267,12 @@ struct SeamDeclarationGraph {
 							placeNode = plainPlaceNode
 							placeKind = .plainPlace
 						case .sendablePlace:
-							placeNode = sendablePlaceNode
-							placeKind = .sendablePlace
+							// A call that hands up its plain enum from a `@Sendable` function is a plain place to the fill, whose edge says
+							// it is built in that function (`FillEdge.inSendableFunction`): the fill's case is then of the `@Sendable`
+							// family and holds the plain enum, as a child call's own case does. Counted here too, the function would put
+							// the case where only a `@Sendable` enum is held, and the call's enum would have no case.
+							placeNode = plainPlaceNode
+							placeKind = .plainPlace
 						case .sendableBeneathPlace:
 							placeNode = sendableBeneathPlaceNode
 							placeKind = .sendableBeneathPlace

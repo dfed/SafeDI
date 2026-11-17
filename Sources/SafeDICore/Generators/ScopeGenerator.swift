@@ -1714,14 +1714,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 			if !carriedInnerScopesByLevel.isEmpty {
+				// A level function takes the values its cases' targets read under their labels beside the struct of its level, so
+				// that struct's name is claimed apart from every label a carried level's cases hold too, which stay unclaimed: no
+				// other name moves for them.
+				var labelsOfCarriedLevels = Set<String>()
+				for key in carriedInnerScopesByLevel.keys {
+					for enumCase in enumsByKey[key]?.cases ?? [] {
+						labelsOfCarriedLevels.formUnion((enumCase.values?.fields ?? []).map(\.property.label))
+					}
+				}
+				func claimUpName(_ base: String) -> String {
+					var name = base
+					while labelsOfCarriedLevels.contains(name) || names.taken.contains(name) {
+						name = "\(name)_".spelledAsJoinedIdentifier
+					}
+					return names.claim(name)
+				}
 				var upNameByCarriedName = [String: String]()
 				var singleUpName: String?
 				for (_, carried) in carriedInnerScopesByKey.sorted(by: { $0.key.spelling < $1.key.spelling }) {
 					if carried.count == 1 {
-						singleUpName = singleUpName ?? names.claim("up")
+						singleUpName = singleUpName ?? claimUpName("up")
 					} else {
 						for carriedInnerScope in carried where upNameByCarriedName[carriedInnerScope.name] == nil {
-							upNameByCarriedName[carriedInnerScope.name] = names.claim("up_\(carriedInnerScope.name.dropFirst(ReservedName.builderFunctionNamePrefix.count))")
+							upNameByCarriedName[carriedInnerScope.name] = claimUpName("up_\(carriedInnerScope.name.dropFirst(ReservedName.builderFunctionNamePrefix.count))")
 						}
 					}
 				}

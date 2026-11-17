@@ -623,7 +623,17 @@ extension DependencyTreeGenerator {
 					// A call that is itself the fulfiller of a fill ends on the case of the call it fills, whose member is bound as a
 					// step's before that call, and is handed the struct of the fill's own level.
 					let isFulfillingCall = reached.call != nil && index == count - 1 && reachedStep.filledBuilder != nil && !bindsReceivesAgain
-					guard let step = routeStep(of: caseOfProperty, bindingPrefix: index < count - 1 || isFulfillingCall ? Array(reached.sitePath.prefix(reachedStep.pathLength)) : nil, buildsInSendableFunction: reachedStep.buildsInSendableFunction, isSendableRoute: innermostSendableIndex != nil) else { break }
+					// Where the call is built in a `@Sendable` function, the fill's own included, its member is called at the top of
+					// the call's own builder function, inside that function: bound at the calling scope, before the fill, it would be
+					// a plain struct a `@Sendable` function captures.
+					let bindingPrefix: [Property]? = if isFulfillingCall, caseOfProperty.described.isSendable, reachedStep.buildsInSendableFunction {
+						reached.sitePath
+					} else if index < count - 1 || isFulfillingCall {
+						Array(reached.sitePath.prefix(reachedStep.pathLength))
+					} else {
+						nil
+					}
+					guard let step = routeStep(of: caseOfProperty, bindingPrefix: bindingPrefix, buildsInSendableFunction: reachedStep.buildsInSendableFunction, isSendableRoute: innermostSendableIndex != nil) else { break }
 					if index < count - 1 {
 						steps.append(step)
 						continue
