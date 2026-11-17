@@ -1735,18 +1735,18 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	}
 
 	@Test(arguments: [
-		(["@Instantiated let router: any Router", "@Instantiated(fulfilledByType: \"DefaultRouter\") let routerLater: ErasedInstantiator<(), any Router>"], "Router"),
-		(["@Instantiated(fulfilledByType: \"DefaultRouter\") let routerLater: ErasedInstantiator<(), any Router>", "@Instantiated let router: any Router"], "DefaultRouter"),
+		["@Instantiated let router: any Router", "@Instantiated(fulfilledByType: \"DefaultRouter\") let routerLater: ErasedInstantiator<(), any Router>"],
+		["@Instantiated(fulfilledByType: \"DefaultRouter\") let routerLater: ErasedInstantiator<(), any Router>", "@Instantiated let router: any Router"],
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryNamingEveryPathAndRemedyOfPlaceDeclaredFirst_whenTwoBuildersOfOneFillReachCallThatReentersSeam(profileDeclarations: [String], firstPlaceFulfilledType: String) async {
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryNamingEveryPathAndRemedyOfEveryPlace_whenTwoBuildersOfOneFillReachCallThatReentersSeam(profileDeclarations: [String]) async {
 		// C1.27 through two builders that `DefaultRouter` fills: `router`'s, `routerBuilder`, and `routerLater`'s,
 		// `defaultRouter_RouterBuilder`, which sorts first by label. Both fills reach `Middle`'s call of `Flow`, so the error
-		// names the paths from both places, in either order, and its remedy the type the place `Profile` declares first names,
-		// whatever the builders' labels.
+		// names the paths from both places, in either order, and its remedy the type each place names, in one error whatever
+		// the builders' labels.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the paths from the builders for `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) and `Profile`’s `routerLater: ErasedInstantiator<(), any Router>` (case `Profile_Scope.routerLater` of `defaultRouter_RouterBuilder`) to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Flow`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `\(firstPlaceFulfilledType)` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the paths from the builders for `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) and `Profile`’s `routerLater: ErasedInstantiator<(), any Router>` (case `Profile_Scope.routerLater` of `defaultRouter_RouterBuilder`) to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Flow`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies and declare an @Instantiable type that fulfills `DefaultRouter` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["App"]!["Middle.swift"]):10:5: note: `Middle` declares `logger: Logger` here.
 			"""
 		}) {
@@ -1759,15 +1759,15 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	}
 
 	@Test(arguments: [
-		(["@Instantiated let router: any Router", "@Instantiated(fulfilledByType: \"DefaultRouter\") let routerLater: ErasedInstantiator<(), any Router>"], "Router"),
-		(["@Instantiated(fulfilledByType: \"DefaultRouter\") let routerLater: ErasedInstantiator<(), any Router>", "@Instantiated let router: any Router"], "DefaultRouter"),
+		["@Instantiated let router: any Router", "@Instantiated(fulfilledByType: \"DefaultRouter\") let routerLater: ErasedInstantiator<(), any Router>"],
+		["@Instantiated(fulfilledByType: \"DefaultRouter\") let routerLater: ErasedInstantiator<(), any Router>", "@Instantiated let router: any Router"],
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryNamingEveryPathAndRemedyOfPlaceDeclaredFirst_whenTwoPlacesPassedUpThroughOnePropertyReachCallThatReentersSeam(profileDeclarations: [String], firstPlaceFulfilledType: String) async {
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryNamingEveryPathAndRemedyOfEveryPlace_whenTwoPlacesPassedUpThroughOnePropertyReachCallThatReentersSeam(profileDeclarations: [String]) async {
 		// C1.27 through two places `Flow` declares on `Profile`, which `Shell` passes up through its one property `flow`, so
 		// both are reached at one location: `DefaultRouter` fills both, and both fills reach `Middle`'s call of `Shell`. The
 		// builder of `routerLater` sorts first by label, so the error names the paths from both places, in either order, and
-		// its remedy the type the place `Profile` declares first names, by where the places are declared.
+		// its remedy the type each place names, in one error whatever order the places are declared in.
 		let feature = [
 			platformConditionedDeclaration("public protocol Router {}"),
 			seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
@@ -1782,7 +1782,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		]
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the paths from the builders for `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) and `Profile`’s `routerLater: ErasedInstantiator<(), any Router>` (case `Profile_Scope.routerLater` of `defaultRouter_RouterBuilder`) to the call by which `Middle` instantiates `Shell` again (`shellBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Flow`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `\(firstPlaceFulfilledType)` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the paths from the builders for `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) and `Profile`’s `routerLater: ErasedInstantiator<(), any Router>` (case `Profile_Scope.routerLater` of `defaultRouter_RouterBuilder`) to the call by which `Middle` instantiates `Shell` again (`shellBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Flow`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies and declare an @Instantiable type that fulfills `DefaultRouter` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["App"]!["Middle.swift"]):10:5: note: `Middle` declares `logger: Logger` here.
 			"""
 		}) {
