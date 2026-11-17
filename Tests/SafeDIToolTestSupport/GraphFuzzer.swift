@@ -1756,6 +1756,12 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// The call is of `ReenteredRelay`, a seam that calls `ReenteredSubB` and passes its place up: the level function the call
 	/// declares hands the reused one the struct of its level, which the generator once left out.
 	case reenteredFillCallThroughSeamPassingPlaceUp
+	/// That call made inside a `@Sendable` fill: `ReenteredTop` builds `ReenteredSubA` in a `SendableInstantiator`, so the
+	/// reused level function the call reaches is `@Sendable`, which the generator once left plain.
+	case reenteredFillCallThroughSeamPassingPlaceUpInSendableFill
+	/// That call made by `ReenteredHub`, a type of the module beneath the seam's that `ReenteredFirstImpl` builds in a
+	/// `SendableInstantiator`: the `@Sendable` function above the call makes the reused level function `@Sendable`.
+	case reenteredFillCallThroughSeamPassingPlaceUpByTypeOfAnotherModule
 
 	/// Whether `addingCycleParameterShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
 	/// (`acceptedDrawFeatureCounts`).
@@ -5275,8 +5281,9 @@ enum GraphFuzzerGenerator {
 			// Where the base draw passes nothing up, `HoleOuter` passes the forwarding place up now and then, so that an outer
 			// seam's struct carries the member of a place that forwards a value (`holeForwardingPlacePassedUp`).
 			let passesUpForwardingPlace = holeRolls.forwardingPlaceShapes.percentChance(40)
-			// Its rolls beside other places are drawn mostly, so that each of them is judged in ten graphs after acceptance.
-			let drawsInstantiatorPlace = holeRolls.instantiatorPlace.percentChance(80)
+			// Its rolls beside other places are drawn mostly, so that each of them is judged in ten graphs after acceptance; never
+			// always, so that the graph without it is drawn too.
+			let drawsInstantiatorPlace = holeRolls.instantiatorPlace.percentChance(95)
 			let handedForwardsRoll = holeRolls.instantiatorPlace.integer(in: 0...19)
 			let handedWrapper = holeRolls.instantiatorPlace.element(of: instantiators)
 			let handedHolderAlsoSendable = holeRolls.instantiatorPlace.percentChance(100)
@@ -5344,12 +5351,16 @@ enum GraphFuzzerGenerator {
 			let passedUpPlaceValueLazyWrapper = holeRolls.passedUpPlaceValue.element(of: lazyWrappers)
 			let passedUpPlaceValueReadBeneathInstantiator = holeRolls.passedUpPlaceValue.percentChance(50)
 			let passedUpPlaceValueReaderWrapper = holeRolls.passedUpPlaceValue.element(of: instantiators)
-			// Nearly half the time `HoleOwner` receives the value only if available, so `HoleSeam`'s field is optional and every
-			// reader receives it only if available; two thirds of the rest it receives the value implicitly unwrapped, which
-			// `HoleOuter` retypes, and every reader receives it so: each lands in ten graphs the tool accepts. The fill binds the
-			// memo of either as it does a value's, and reads its instance where its tree reads the value.
-			let passedUpPlaceValueOwnerReadsOnlyIfAvailable = holeRolls.passedUpPlaceValue.percentChance(45)
-			let passedUpPlaceValueOwnerReadsImplicitlyUnwrapped = holeRolls.passedUpPlaceValue.percentChance(65) && !passedUpPlaceValueOwnerReadsOnlyIfAvailable
+			// Half the time `HoleOwner` receives the value only if available, so `HoleSeam`'s field is optional and every reader
+			// receives it only if available; nine tenths of the rest it receives the value implicitly unwrapped, which `HoleOuter`
+			// retypes, and every reader receives it so, leaving the read by value about one graph in twenty: each is judged in ten
+			// graphs after acceptance. The fill binds the memo of either as it does a value's, and reads its instance where its
+			// tree reads the value.
+			let passedUpPlaceValueOwnerReadsOnlyIfAvailable = holeRolls.passedUpPlaceValue.percentChance(50)
+			let passedUpPlaceValueOwnerReadsImplicitlyUnwrapped = holeRolls.passedUpPlaceValue.percentChance(90) && !passedUpPlaceValueOwnerReadsOnlyIfAvailable
+			// Where the base draw's read of the root's `holeLogger` is all that keeps the value from being drawn, the value is drawn
+			// most of the time in its place, the read left out. Made after the stream's other rolls, so each draws as before.
+			let passedUpPlaceValueDropsRootLoggerRead = holeRolls.passedUpPlaceValue.percentChance(75)
 			// The fillers and the root that reaches the seam are in another package than the seam's, unless the seam's module
 			// has no package, which this draw keeps apart from a caller in another package, as every other graph's draws were.
 			let fillsFromOtherPackage = drawsCrossPackage && !modulesOmittingPackageName.contains(.seamModule)
@@ -6153,7 +6164,11 @@ enum GraphFuzzerGenerator {
 			var passedUpPlaceValueTop: TypeDeclaration?
 			// The root's declaration of the value `HoleOuter` retypes implicitly unwrapped, where no seam above it declares one.
 			var passedUpPlaceValueRootDeclaration: PropertyDeclaration?
-			let drawsPassedUpPlaceValue = ownerIndex != nil && !ownerIsBuiltInSendableFunction && !readsRootLogger && !buildsSeamAgain && !drawsDiamondOfOuterSeams
+			let passedUpPlaceValueCanBeDrawn = ownerIndex != nil && !ownerIsBuiltInSendableFunction && !buildsSeamAgain && !drawsDiamondOfOuterSeams
+			if readsRootLogger, passedUpPlaceValueCanBeDrawn, passedUpPlaceValueDropsRootLoggerRead {
+				readsRootLogger = false
+			}
+			let drawsPassedUpPlaceValue = passedUpPlaceValueCanBeDrawn && !readsRootLogger
 			if drawsPassedUpPlaceValue, outerIndex == nil {
 				var outer = instantiable("HoleOuter", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeSeam", type: seamName)])
 				outer.instantiableArguments = ["generateDependencyTree: true"]
@@ -7980,13 +7995,16 @@ enum GraphFuzzerGenerator {
 		/// `passingUpCopyRandom` draws only for this pass, which runs after `addingCarriedLevelShapes` and only in a graph
 		/// another pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as
 		/// before. The places are in the `@Sendable` family in a graph of `Sendable` wrappers alone, whose cases carry no
-		/// values, so the fill reads nothing there.
+		/// values, so the fill reads nothing there. In a graph with a hole, the seams never bind the label the fill reads: the
+		/// tool rejects that by design, which would throw away the hole graph the rest of the draw has it accept.
 		private mutating func addingPassingUpCopyShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			// `build()` calls this pass only for a graph split across modules.
 			guard features.contains(.generateDependencyTree), passingUpCopyRandom.percentChance(50) else { return declarations }
 			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
 			let fillReadsLabel = passingUpCopyRandom.percentChance(60)
-			let seamsBindLabel = passingUpCopyRandom.percentChance(35)
+			let seamsBindLabelRoll = passingUpCopyRandom.percentChance(35)
+			let declaresHole = declarations.contains { $0.name == "\(prefix)HoleSeam" }
+			let seamsBindLabel = seamsBindLabelRoll && !(declaresHole && fillReadsLabel && sendability != .sendable)
 			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
 			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
 			let prefix = prefix
@@ -8061,7 +8079,13 @@ enum GraphFuzzerGenerator {
 		/// beneath `ReenteredFirstImpl`, by `ReenteredMid`; the call is made through an instantiator, a `Sendable` one as
 		/// the graph's sendability allows, which builds the called seam in a `@Sendable` function; and the call is of
 		/// `ReenteredRelay`, a seam that calls `ReenteredSubB` and passes its place up, so the level function the call declares
-		/// leads to the reused one, which the generator once called without the struct it takes.
+		/// leads to the reused one, which the generator once called without the struct it takes; where the graph's sendability
+		/// allows, that call is made inside a `@Sendable` fill, `ReenteredTop` building `ReenteredSubA` in a
+		/// `SendableInstantiator`, or by `ReenteredHub`, a type of the module beneath the seam's that `ReenteredFirstImpl` builds
+		/// in a `SendableInstantiator`, so the `@Sendable` function is above the call, in another module: each makes the reused
+		/// level function `@Sendable`, which the generator once left plain. In a graph with a hole, the read only one route
+		/// holds is always the remedied one: the tool rejects the other two by design, which would throw away the hole graph
+		/// the rest of the draw has it accept.
 		///
 		/// `reenteredFillRandom` draws only for this pass, which runs after `addingPassingUpCopyShapes` and only in a graph
 		/// another pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as
@@ -8084,6 +8108,15 @@ enum GraphFuzzerGenerator {
 			// Whether the call is of `ReenteredRelay`, a seam that calls `ReenteredSubB` and passes its place up, rather than of
 			// `ReenteredSubB` itself. Drawn after every other roll, so each draws as before.
 			let callThroughRelay = reenteredFillRandom.percentChance(35)
+			// Where the call is of `ReenteredRelay` and the graph's sendability allows: whether `ReenteredTop` builds
+			// `ReenteredSubA` in a `SendableInstantiator`, so the fill that makes the call is `@Sendable`, and whether the call is
+			// made by `ReenteredHub`, which `ReenteredFirstImpl` builds in a `SendableInstantiator`. Drawn after every other roll,
+			// so each draws as before.
+			let relayCallInSendableFill = reenteredFillRandom.percentChance(60) && callThroughRelay && sendability != .nonSendable
+			let relayCallByTypeOfAnotherModule = reenteredFillRandom.percentChance(60) && callThroughRelay && sendability != .nonSendable
+			// A graph with a hole draws the remedied read where the roll draws one of the two the tool rejects by design.
+			let declaresHole = declarations.contains { $0.name == "\(prefix)HoleSeam" }
+			let oneRouteVariant = declaresHole && oneRouteVariantRoll < 2 ? oneRouteVariantRoll + 2 : oneRouteVariantRoll
 			guard !modulesOmittingPackageName.contains(.seamModule) else { return declarations }
 			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
 			let callInstantiator = switch sendability {
@@ -8119,12 +8152,14 @@ enum GraphFuzzerGenerator {
 			// A type of the module beneath the seam's module, so that `ReenteredSubB` can receive it.
 			let mark = instantiable("ReenteredMark", module: .seamDependency)
 			var subB = seam("ReenteredSubB", module: .seamDependency, properties: (readsValueAbove ? [labelReceive] : []) + [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSecond", type: "any \(secondName)")])
-			if readsOnlyIfAvailable, oneRouteVariantRoll >= 2 {
+			if readsOnlyIfAvailable, oneRouteVariant >= 2 {
 				// The remedy the error offers a reader only if available: the seam built again carries the label itself.
 				subB.properties.insert(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "reenteredMark", type: mark.name + "?"), at: 0)
 			}
 			var top = seam("ReenteredTop", module: .seamDependency, properties: (readsValueAbove ? [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredLabel", type: label.name)] : []) + [
-				PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubA", type: subA.name),
+				relayCallInSendableFill
+					? PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubABuilder", type: "SendableInstantiator<\(subA.name)>")
+					: PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubA", type: subA.name),
 				PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubB", type: subB.name),
 			])
 			top.additionalDeclarations.append("public protocol \(firstName)\(sendableSuffix) {}\npublic protocol \(secondName)\(sendableSuffix) {}")
@@ -8133,13 +8168,21 @@ enum GraphFuzzerGenerator {
 			let relay = seam("ReenteredRelay", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubB", type: subB.name)])
 			let calledSeam = callThroughRelay ? relay : subB
 			let calledLabel = callThroughRelay ? "reenteredRelay" : "reenteredSubB"
-			let call = callThroughInstantiator
+			let seamCall = callThroughInstantiator
 				? PropertyDeclaration(attribute: "@Instantiated", label: "\(calledLabel)Builder", type: "\(callInstantiator)<\(calledSeam.name)>")
 				: PropertyDeclaration(attribute: "@Instantiated", label: calledLabel, type: calledSeam.name)
+			// The type of the module beneath the seam's that makes the call, built in a `SendableInstantiator`.
+			let hub = instantiable("ReenteredHub", module: .seamDependency, properties: [seamCall])
+			let call = relayCallByTypeOfAnotherModule
+				? PropertyDeclaration(attribute: "@Instantiated", label: "reenteredHubBuilder", type: "SendableInstantiator<\(hub.name)>")
+				: seamCall
 			let gadgetPlace = PropertyDeclaration(attribute: "@Instantiated", label: "reenteredGadget", type: "any \(gadgetName)")
 			var added = [label, subA, subB, top, mark]
 			if callThroughRelay {
 				added.append(relay)
+			}
+			if relayCallByTypeOfAnotherModule {
+				added.append(hub)
 			}
 			var firstProperties = [PropertyDeclaration]()
 			if readsOnlyIfAvailable {
@@ -8162,7 +8205,7 @@ enum GraphFuzzerGenerator {
 			}
 			added.append(fill("ReenteredSecondImpl", fulfilling: secondName, module: .seamModule, properties: secondProperties))
 			var host = seam("ReenteredHost", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredTop", type: top.name)])
-			if readsOnlyIfAvailable, oneRouteVariantRoll == 1 {
+			if readsOnlyIfAvailable, oneRouteVariant == 1 {
 				// A field of the label above the seam call, which lifts no rejection.
 				host.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "reenteredMark", type: mark.name), at: 0)
 			}
@@ -9753,7 +9796,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			if propertiesByType[prefix + "ReenteredSecondImpl"]?.contains(where: { $0.label == "reenteredSubBBuilder" }) == true {
 				features.insert(.reenteredFillReentersEnclosingFill)
 			}
-			let callerProperties = propertiesByType[prefix + "ReenteredMid"] ?? firstProperties
+			let callerProperties = propertiesByType[prefix + "ReenteredHub"] ?? propertiesByType[prefix + "ReenteredMid"] ?? firstProperties
 			if propertiesByType[prefix + "ReenteredMid"] != nil {
 				features.insert(.reenteredFillCallBeneathFilledType)
 			}
@@ -9762,6 +9805,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 			if propertiesByType[prefix + "ReenteredRelay"] != nil {
 				features.insert(.reenteredFillCallThroughSeamPassingPlaceUp)
+				if propertiesByType[prefix + "ReenteredTop"]?.contains(where: { $0.label == "reenteredSubABuilder" }) == true {
+					features.insert(.reenteredFillCallThroughSeamPassingPlaceUpInSendableFill)
+				}
+				if propertiesByType[prefix + "ReenteredHub"] != nil {
+					features.insert(.reenteredFillCallThroughSeamPassingPlaceUpByTypeOfAnotherModule)
+				}
 			}
 		}
 		return features
