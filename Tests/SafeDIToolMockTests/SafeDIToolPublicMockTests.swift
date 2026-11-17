@@ -14455,12 +14455,25 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 				#if DEBUG
 				extension FeedScreen {
-				    @frozen public enum SafeDIMockScope_FeedService {
+				    @frozen nonisolated public enum SafeDIMockScope_FeedService {
 				        case service(service_Values)
 
-				        public struct service_Values {
+				        nonisolated public struct service_Values {
 				            public let shared: SharedThing
 				            internal let store: FeedStore
+				        }
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let service: (service_Values) -> __safeDI_Built
+
+				            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+				                self.service = service
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.service = { _ in __safeDI_builder() }
+				            }
 				        }
 				    }
 
@@ -14505,20 +14518,28 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				    }
 
 				    public static func mock(
-				        feedServiceBuilder: @escaping (FeedScreen.SafeDIMockScope_FeedService) -> FeedService,
+				        feedServiceBuilder: @escaping () -> FeedService,
 				        shared: SharedThing? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> FeedScreen {
-				        let __safeDI_feedServiceBuilder = feedServiceBuilder
+				        FeedScreen.__safeDI_mock(feedServiceBuilder: .init(__safeDI_noScope: feedServiceBuilder), shared: shared, safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        feedServiceBuilder __safeDI_feedServiceBuilder: FeedScreen.SafeDIMockScope_FeedService.__safeDI_Builder<FeedService>,
+				        shared: SharedThing? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> FeedScreen {
 				        let shared = if let shared { shared } else if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { SharedThing() }
 				        let store = if let safeDIBuilder = safeDIOverrides.store { safeDIBuilder(shared) } else { FeedStore(shared: shared) }
-				        let service: FeedService = __safeDI_feedServiceBuilder(.service(SafeDIMockScope_FeedService.service_Values(shared: shared, store: store)))
+				        let service: FeedService = __safeDI_feedServiceBuilder.service(SafeDIMockScope_FeedService.service_Values(shared: shared, store: store))
 				        return FeedScreen(shared: shared, store: store, service: service)
 				    }
 				}
 
 				extension FeedScreen {
-				    public enum __safeDI_FeedScreen_mock_502D070780B5872C {}
+				    public enum __safeDI_FeedScreen_mock_C96C0A109CEAE16C {}
 				}
 				#endif
 				""",
@@ -14708,12 +14729,25 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 				#if DEBUG
 				extension FeedScreen {
-				    @frozen public enum SafeDIMockScope_FeedService {
+				    @frozen nonisolated public enum SafeDIMockScope_FeedService {
 				        case service(service_Values)
 
-				        public struct service_Values {
+				        nonisolated public struct service_Values {
 				            public let shared: SharedThing
 				            internal let store: FeedStore
+				        }
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let service: (service_Values) -> __safeDI_Built
+
+				            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+				                self.service = service
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.service = { _ in __safeDI_builder() }
+				            }
 				        }
 				    }
 
@@ -14758,20 +14792,28 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				    }
 
 				    public static func mock(
-				        feedServiceBuilder: @escaping (FeedScreen.SafeDIMockScope_FeedService) -> FeedService,
+				        feedServiceBuilder: @escaping () -> FeedService,
 				        shared: SharedThing? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> FeedScreen {
-				        let __safeDI_feedServiceBuilder = feedServiceBuilder
+				        FeedScreen.__safeDI_mock(feedServiceBuilder: .init(__safeDI_noScope: feedServiceBuilder), shared: shared, safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        feedServiceBuilder __safeDI_feedServiceBuilder: FeedScreen.SafeDIMockScope_FeedService.__safeDI_Builder<FeedService>,
+				        shared: SharedThing? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> FeedScreen {
 				        let shared = if let shared { shared } else if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { SharedThing() }
 				        let store = if let safeDIBuilder = safeDIOverrides.store { safeDIBuilder(shared) } else { FeedStore(shared: shared) }
-				        let service: FeedService = __safeDI_feedServiceBuilder(.service(SafeDIMockScope_FeedService.service_Values(shared: shared, store: store)))
+				        let service: FeedService = __safeDI_feedServiceBuilder.service(SafeDIMockScope_FeedService.service_Values(shared: shared, store: store))
 				        return FeedScreen(shared: shared, store: store, service: service)
 				    }
 				}
 
 				extension FeedScreen {
-				    public enum __safeDI_FeedScreen_mock_502D070780B5872C {}
+				    public enum __safeDI_FeedScreen_mock_C96C0A109CEAE16C {}
 				}
 				#endif
 				""",
