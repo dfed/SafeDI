@@ -550,6 +550,177 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		#expect(result.comparedValues == compileVerificationIsEnabled)
 	}
 
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func generate_takesABuilderForWhatTheFillInstantiates_whenTwinDoes(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		// `Screen` fills both of `Panel`’s `service` places with `DefaultService`, whose `gizmo` nothing in `App` fulfills: the
+		// twin fills them and takes `gizmoBuilder`, which each `DefaultService` calls once, so the mock does too.
+		let result = try await GraphFuzzerCallingMockCheck.run(Self.graph(
+			named: "a fill whose fulfiller instantiates a type nothing fulfills",
+			mock: Self.fillInstantiatingGizmoModules(caller: caller.attribute, callee: calledTypes.attribute),
+			twin: Self.fillInstantiatingGizmoModules(caller: Self.twinCaller, callee: Self.twinCalledTypes),
+			callerTypeName: "Screen",
+			caller: caller,
+			implementationIsVisible: false,
+			expectedPassUpLabels: ["gizmoBuilder"],
+			expectedTwinInitializerLabels: nil,
+			valueProbes: [DifferentialValueProbe(
+				name: "Screen and the number of gizmoBuilder calls",
+				expression: "{ () -> (App.Screen, Int) in var count = 0; let screen = App.Screen.mock(gizmoBuilder: { count += 1; return App.StubGizmo() }); return (screen, count) }()",
+				knownRightExpression: "{ () -> (App.Screen, Int) in var count = 0; let screen = App.Screen(__safeDI_gizmoBuilder: .init(__safeDI_noScope: { count += 1; return App.StubGizmo() })); return (screen, count) }()",
+			)],
+		), seed: 0)
+
+		Self.expectTakesTwinsBuilders(result, labels: ["gizmoBuilder"])
+	}
+
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func generate_takesASendableBuilderForWhatTheFillInstantiates_whenPlaceIsBuiltInsideASendableFunction(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		// `DefaultService` holds `Part` in a `SendableInstantiator`, whose `@Sendable` builder function binds `gizmo`.
+		let result = try await GraphFuzzerCallingMockCheck.run(Self.graph(
+			named: "a fill whose fulfiller instantiates a type nothing fulfills inside a @Sendable function",
+			mock: Self.fillInstantiatingGizmoModules(caller: caller.attribute, callee: calledTypes.attribute, defaultServiceProperties: ["part: SendableInstantiator<Part>"], appDeclarations: Self.part),
+			twin: Self.fillInstantiatingGizmoModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, defaultServiceProperties: ["part: SendableInstantiator<Part>"], appDeclarations: Self.part),
+			callerTypeName: "Screen",
+			caller: caller,
+			implementationIsVisible: false,
+			expectedPassUpLabels: ["gizmoSendableBuilder"],
+			expectedTwinInitializerLabels: nil,
+			valueProbes: [DifferentialValueProbe(
+				name: "Screen",
+				expression: "App.Screen.mock(gizmoSendableBuilder: { App.StubGizmo() })",
+				knownRightExpression: "App.Screen(__safeDI_gizmoSendableBuilder: .init(__safeDI_noScope: { App.StubGizmo() }))",
+			)],
+		), seed: 0)
+
+		Self.expectTakesTwinsBuilders(result, labels: ["gizmoSendableBuilder"])
+	}
+
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func generate_takesTheWrappersBuilderForWhatTheFillInstantiates_whenPlaceIsAnErasedInstantiator(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		// `DefaultService` instantiates `makeGizmo: ErasedInstantiator<Int, any Gizmo>`, fulfilled by `DefaultGizmo`, which is
+		// no `@Instantiable` type, so the builder forwards an `Int`.
+		let declaration = "@Instantiated(fulfilledByType: \"DefaultGizmo\") public let makeGizmo: ErasedInstantiator<Int, any Gizmo>"
+		let result = try await GraphFuzzerCallingMockCheck.run(Self.graph(
+			named: "a fill whose fulfiller instantiates an erased instantiator nothing fulfills",
+			mock: Self.fillInstantiatingGizmoModules(caller: caller.attribute, callee: calledTypes.attribute, defaultServiceProperties: [], defaultServiceDeclarations: [declaration], appDeclarations: Self.defaultGizmo),
+			twin: Self.fillInstantiatingGizmoModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, defaultServiceProperties: [], defaultServiceDeclarations: [declaration], appDeclarations: Self.defaultGizmo),
+			callerTypeName: "Screen",
+			caller: caller,
+			implementationIsVisible: false,
+			expectedPassUpLabels: ["defaultGizmo_GizmoBuilder"],
+			expectedTwinInitializerLabels: nil,
+			valueProbes: [DifferentialValueProbe(
+				name: "Screen",
+				expression: "App.Screen.mock(defaultGizmo_GizmoBuilder: { App.DefaultGizmo(id: $0) })",
+				knownRightExpression: "App.Screen(__safeDI_defaultGizmo_GizmoBuilder: .init(__safeDI_noScope: { App.DefaultGizmo(id: $0) }))",
+			)],
+		), seed: 0)
+
+		Self.expectTakesTwinsBuilders(result, labels: ["defaultGizmo_GizmoBuilder"])
+	}
+
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func generate_takesABuilderForWhatTheFillInstantiates_whenFulfillersChildInstantiatesIt(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		// `DefaultService` instantiates `Part`, which instantiates `gizmo`, one level beneath the fulfiller.
+		let result = try await GraphFuzzerCallingMockCheck.run(Self.graph(
+			named: "a fill whose fulfiller’s child instantiates a type nothing fulfills",
+			mock: Self.fillInstantiatingGizmoModules(caller: caller.attribute, callee: calledTypes.attribute, defaultServiceProperties: ["part: Part"], appDeclarations: Self.part),
+			twin: Self.fillInstantiatingGizmoModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, defaultServiceProperties: ["part: Part"], appDeclarations: Self.part),
+			callerTypeName: "Screen",
+			caller: caller,
+			implementationIsVisible: false,
+			expectedPassUpLabels: ["gizmoBuilder"],
+			expectedTwinInitializerLabels: nil,
+			valueProbes: [DifferentialValueProbe(name: "Screen", expression: "App.Screen.mock(gizmoBuilder: { App.StubGizmo() })", knownRightExpression: "App.Screen(__safeDI_gizmoBuilder: .init(__safeDI_noScope: { App.StubGizmo() }))")],
+		), seed: 0)
+
+		Self.expectTakesTwinsBuilders(result, labels: ["gizmoBuilder"])
+	}
+
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func generate_takesOneBuilder_whenFillInstantiatesTwoPlacesOfOneHoleType(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		let result = try await GraphFuzzerCallingMockCheck.run(Self.graph(
+			named: "a fill whose fulfiller instantiates two places of one hole type",
+			mock: Self.fillInstantiatingGizmoModules(caller: caller.attribute, callee: calledTypes.attribute, defaultServiceProperties: ["first: any Gizmo", "second: any Gizmo"]),
+			twin: Self.fillInstantiatingGizmoModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, defaultServiceProperties: ["first: any Gizmo", "second: any Gizmo"]),
+			callerTypeName: "Screen",
+			caller: caller,
+			implementationIsVisible: false,
+			expectedPassUpLabels: ["gizmoBuilder"],
+			expectedTwinInitializerLabels: nil,
+			valueProbes: [DifferentialValueProbe(name: "Screen", expression: "App.Screen.mock(gizmoBuilder: { App.StubGizmo() })", knownRightExpression: "App.Screen(__safeDI_gizmoBuilder: .init(__safeDI_noScope: { App.StubGizmo() }))")],
+		), seed: 0)
+
+		Self.expectTakesTwinsBuilders(result, labels: ["gizmoBuilder"])
+	}
+
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func generate_takesABuilderForEachHoleType_whenFillInstantiatesTwoHoleTypes(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		let result = try await GraphFuzzerCallingMockCheck.run(Self.graph(
+			named: "a fill whose fulfiller instantiates two hole types",
+			mock: Self.fillInstantiatingGizmoModules(caller: caller.attribute, callee: calledTypes.attribute, defaultServiceProperties: ["gizmo: any Gizmo", "widget: any Widget"]),
+			twin: Self.fillInstantiatingGizmoModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, defaultServiceProperties: ["gizmo: any Gizmo", "widget: any Widget"]),
+			callerTypeName: "Screen",
+			caller: caller,
+			implementationIsVisible: false,
+			expectedPassUpLabels: ["gizmoBuilder", "widgetBuilder"],
+			expectedTwinInitializerLabels: nil,
+			valueProbes: [DifferentialValueProbe(
+				name: "Screen",
+				expression: "App.Screen.mock(gizmoBuilder: { App.StubGizmo() }, widgetBuilder: { App.StubWidget() })",
+				knownRightExpression: "App.Screen(__safeDI_gizmoBuilder: .init(__safeDI_noScope: { App.StubGizmo() }), __safeDI_widgetBuilder: .init(__safeDI_noScope: { App.StubWidget() }))",
+			)],
+		), seed: 0)
+
+		Self.expectTakesTwinsBuilders(result, labels: ["gizmoBuilder", "widgetBuilder"])
+	}
+
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func generate_callsTheBuilderByANameApart_whenFillDeclaresTheBuildersLabel(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		// `DefaultService` also instantiates `gizmoBuilder: GizmoFactory`, which would hide the builder `mock()` takes.
+		let result = try await GraphFuzzerCallingMockCheck.run(Self.graph(
+			named: "a fill that declares the builder’s label",
+			mock: Self.fillInstantiatingGizmoModules(caller: caller.attribute, callee: calledTypes.attribute, defaultServiceProperties: ["gizmo: any Gizmo", "gizmoBuilder: GizmoFactory"], appDeclarations: Self.gizmoFactory),
+			twin: Self.fillInstantiatingGizmoModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, defaultServiceProperties: ["gizmo: any Gizmo", "gizmoBuilder: GizmoFactory"], appDeclarations: Self.gizmoFactory),
+			callerTypeName: "Screen",
+			caller: caller,
+			implementationIsVisible: false,
+			expectedPassUpLabels: ["gizmoBuilder"],
+			expectedTwinInitializerLabels: nil,
+			valueProbes: [DifferentialValueProbe(name: "Screen", expression: "App.Screen.mock(gizmoBuilder: { App.StubGizmo() })", knownRightExpression: "App.Screen(__safeDI_gizmoBuilder: .init(__safeDI_noScope: { App.StubGizmo() }))")],
+		), seed: 0)
+
+		Self.expectTakesTwinsBuilders(result, labels: ["gizmoBuilder"])
+	}
+
+	@Test(arguments: CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func generate_takesABuilderForWhatTheFillInstantiates_whenInternalCallersOwnTreeAlsoInstantiatesIt(calledTypes: CalledTypeDeclaration) async throws {
+		// `Screen` also instantiates `gizmo` outside every fill, which its internal mock takes as a flat parameter, as the
+		// comment at `seamMockBuilders`’ call states; the fill’s places call the builder, as the twin’s do.
+		let result = try await GraphFuzzerCallingMockCheck.run(Self.graph(
+			named: "a fill whose fulfiller instantiates a type the caller instantiates too",
+			mock: Self.fillInstantiatingGizmoModules(caller: CallingMockCaller.internal.attribute, callee: calledTypes.attribute, screenInstantiatesGizmo: true),
+			twin: Self.fillInstantiatingGizmoModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, screenInstantiatesGizmo: true),
+			callerTypeName: "Screen",
+			caller: .internal,
+			flatParameterLabels: ["gizmo"],
+			implementationIsVisible: false,
+			expectedPassUpLabels: ["gizmoBuilder"],
+			expectedTwinInitializerLabels: nil,
+			valueProbes: [DifferentialValueProbe(name: "Screen", expression: "App.Screen.mock(gizmoBuilder: { App.StubGizmo() }, gizmo: App.StubGizmo())", knownRightExpression: "App.Screen(__safeDI_gizmoBuilder: .init(__safeDI_noScope: { App.StubGizmo() }))")],
+		), seed: 0)
+
+		Self.expectTakesTwinsBuilders(result, labels: ["gizmoBuilder"])
+	}
+
 	@Test(arguments: CallingMockCaller.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesTheValueTwoFillsReadInItsRequiredForm_whenTheirTypesAndTheCallerAreDeclaredInAnyOrder(caller: CallingMockCaller) async throws {
@@ -787,6 +958,15 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	private static func expectFillsAsTwin(_ result: GraphFuzzerCallingMockResult, sourceLocation: SourceLocation = #_sourceLocation) {
 		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")", sourceLocation: sourceLocation)
 		#expect(result.passUps.map(\.label) == [], sourceLocation: sourceLocation)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")", sourceLocation: sourceLocation)
+		#expect(result.comparedValues == compileVerificationIsEnabled, sourceLocation: sourceLocation)
+	}
+
+	/// Expects `result`’s twin to have its graph’s intended outcome and the calling mock to take the builders `labels`, as the
+	/// twin does, with no failure, and, where compile verification is on, the twin’s values.
+	private static func expectTakesTwinsBuilders(_ result: GraphFuzzerCallingMockResult, labels: [String], sourceLocation: SourceLocation = #_sourceLocation) {
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")", sourceLocation: sourceLocation)
+		#expect(result.passUps.map(\.label) == labels, sourceLocation: sourceLocation)
 		#expect(result.failure == nil, "\(result.failure?.details ?? "")", sourceLocation: sourceLocation)
 		#expect(result.comparedValues == compileVerificationIsEnabled, sourceLocation: sourceLocation)
 	}
@@ -2781,6 +2961,115 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			], dependencies: ["Feature"]),
 		]
 	}
+
+	/// `Up`’s `Panel`, which builds a `Service` inside `Row` and one beside it, and `App`’s `Screen`, which calls `Panel` and
+	/// fills both places with `DefaultService`, whose tree instantiates types no declaration `App` sees fulfills, by default
+	/// `gizmo: any Gizmo`. `StubGizmo` and `StubWidget` are no SafeDI declarations.
+	private static func fillInstantiatingGizmoModules(
+		caller: String,
+		callee: String,
+		defaultServiceProperties: [String] = ["gizmo: any Gizmo"],
+		defaultServiceDeclarations: [String] = [],
+		appDeclarations: String = "",
+		screenInstantiatesGizmo: Bool = false,
+	) -> [ModuleFixture] {
+		let serviceDeclarations = defaultServiceProperties.map { "@Instantiated public let \($0)" } + defaultServiceDeclarations
+		let serviceParameters = serviceDeclarations.compactMap { $0.components(separatedBy: " let ").last }
+		let serviceLabels = serviceParameters.compactMap { $0.components(separatedBy: ":").first }
+		let screenParameters = ["panel: Panel"] + (screenInstantiatesGizmo ? ["gizmo: any Gizmo"] : [])
+		let screenLabels = screenParameters.compactMap { $0.components(separatedBy: ":").first }
+		return [
+			ModuleFixture(name: "Up", packageName: "Up", swiftFileContentByFilePath: [
+				"UpTypes.swift": """
+				import SafeDI
+
+				public protocol Service: AnyObject {}
+
+				@Instantiable
+				public final class Row: Instantiable {
+				    public init(service: any Service) { self.service = service }
+				    @Instantiated public let service: any Service
+				}
+
+				\(callee)
+				public final class Panel: Instantiable {
+				    init(row: Row, service: any Service) {
+				        self.row = row
+				        self.service = service
+				    }
+
+				    @Instantiated public let row: Row
+				    @Instantiated public let service: any Service
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+				"AppTypes.swift": """
+				import SafeDI
+				import Up
+
+				public protocol Gizmo: AnyObject {}
+				public protocol Widget: AnyObject {}
+
+				public final class StubGizmo: Gizmo {
+				    public init() {}
+				}
+
+				public final class StubWidget: Widget {
+				    public init() {}
+				}
+
+				@Instantiable(fulfillingAdditionalTypes: [Service.self])
+				public final class DefaultService: Instantiable, Service {
+				    public init(\(serviceParameters.joined(separator: ", "))) {
+				\(serviceLabels.map { "        self.\($0) = \($0)" }.joined(separator: "\n"))
+				    }
+
+				\(serviceDeclarations.map { "    \($0)" }.joined(separator: "\n"))
+				}
+				\(appDeclarations)
+				\(caller)
+				public final class Screen: Instantiable {
+				    public init(\(screenParameters.joined(separator: ", "))) {
+				\(screenLabels.map { "        self.\($0) = \($0)" }.joined(separator: "\n"))
+				    }
+
+				\(screenParameters.map { "    @Instantiated public let \($0)" }.joined(separator: "\n"))
+				}
+				""",
+			], dependencies: ["Up"]),
+		]
+	}
+
+	/// A type that instantiates `gizmo`.
+	private static let part = """
+
+	@Instantiable
+	public final class Part: Instantiable {
+	    public init(gizmo: any Gizmo) { self.gizmo = gizmo }
+	    @Instantiated public let gizmo: any Gizmo
+	}
+
+	"""
+
+	/// The type an erased instantiator of `Gizmo` names, which is no SafeDI declaration.
+	private static let defaultGizmo = """
+
+	public final class DefaultGizmo: Gizmo {
+	    public init(id: Int) {}
+	}
+
+	"""
+
+	/// A type a fill builds under the label of the builder `mock()` takes.
+	private static let gizmoFactory = """
+
+	@Instantiable
+	public final class GizmoFactory: Instantiable {
+	    public init() {}
+	}
+
+	"""
 
 	/// A fill whose fulfiller, `GadgetSeam`, is a seam that passes its own hole up, and `StubGadget`, which no SafeDI declaration fulfills `Gadget` with (D3’s shape).
 	private static func fulfilledBySeamModules(caller: String, callee: String) -> [ModuleFixture] {

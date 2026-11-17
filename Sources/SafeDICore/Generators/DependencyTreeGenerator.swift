@@ -1018,8 +1018,9 @@ public actor DependencyTreeGenerator {
 		let inlineTypeDescriptionToScopeMap = typeDescriptionToScopeMap
 		var publicMockCalls = try await publicMockCalls(in: typeDescriptionToScopeMap)
 		let generatesPublicMock = typeDescriptionToFulfillingInstantiableMap.values.contains(where: { $0.generateMock == .public })
-		// A public mock's tree takes a builder for what a fill instantiates that nothing fulfills, where an internal mock's
-		// fill would read a value nothing binds, so the trees of each kind of mock fill their own places.
+		// Each kind of mock takes a builder for what a fill instantiates that nothing fulfills: a public mock through a hole of
+		// its own tree, an internal mock as a seam's internal mock does (`ScopeGenerator.seamMockBuilders`). Only an internal
+		// mock refuses a fill whose tree instantiates, unfulfilled, a spelling no hole can have, so each kind fills its own places.
 		var publicMockCallsOfPublicMocks = publicMockCalls
 		if !publicMockCalls.isEmpty {
 			typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls)
@@ -8571,7 +8572,9 @@ public actor DependencyTreeGenerator {
 	/// there with the caller's, as on every other route.
 	/// - Parameter unfulfilledInstantiationsAreHoles: Whether the fills are a public mock's, whose tree is built with holes,
 	///   so a type a fill's tree instantiates that no declaration the module sees fulfills is a place of the mock's own. An
-	///   internal mock's fill would read a value nothing binds there, so it does not fill the place.
+	///   internal mock's fill binds such a type from a builder `mock()` takes (`ScopeGenerator.seamMockBuilders`), as a
+	///   seam's internal mock binds its hole, where its spelling can be a hole (`canBeHole`), and does not fill the place
+	///   where a spelling cannot be one, which only hand-written code builds, so the place is passed up.
 	private func holesFilled(
 		byCallsOf publicMockCalls: [TypeDescription: PublicMockCall],
 		in typeDescriptionToScopeMap: [TypeDescription: Scope],
@@ -8596,7 +8599,7 @@ public actor DependencyTreeGenerator {
 				      	from: emittingModule,
 				      	extendedTypes: extendedTypeDeclarations,
 				      ).isEmpty,
-				      unfulfilledInstantiationsAreHoles || !Self.instantiatesWhatNothingFulfills(inTreeRootedAt: fulfillingScope)
+				      unfulfilledInstantiationsAreHoles || !Self.instantiatesWhatCannotBeHole(inTreeRootedAt: fulfillingScope)
 				else { continue }
 				// A route on which no level binds a value the fill reads hands the fill the caller's, as production's root
 				// dispatcher does (`PublicMockLevelFunctions`), so the place is filled on every route.
@@ -8607,8 +8610,9 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// Whether a scope of the mock tree rooted at `scope`, in a map built without holes, instantiates a property no scope
-	/// builds: one no declaration the module sees fulfills, which the inline mock takes as a parameter.
-	private static func instantiatesWhatNothingFulfills(inTreeRootedAt scope: Scope) -> Bool {
+	/// builds whose spelling cannot be a hole (`canBeHole`): one no declaration the module sees fulfills, which only
+	/// hand-written code could build.
+	private static func instantiatesWhatCannotBeHole(inTreeRootedAt scope: Scope) -> Bool {
 		var visitedScopes = Set<ObjectIdentifier>()
 		// A stack of its own, since a tree can be as deep as the module has types.
 		var scopesToVisit = [scope]
@@ -8619,7 +8623,7 @@ public actor DependencyTreeGenerator {
 				builtProperties.insert(property)
 				scopesToVisit.append(childScope)
 			}
-			for dependency in visitedScope.instantiable.dependencies where dependency.isInstantiated && !builtProperties.contains(dependency.property) {
+			for dependency in visitedScope.instantiable.dependencies where dependency.isInstantiated && !builtProperties.contains(dependency.property) && !canBeHole(dependency) {
 				return true
 			}
 		}

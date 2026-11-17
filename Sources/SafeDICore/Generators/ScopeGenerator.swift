@@ -2212,12 +2212,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///     declares itself, since that declaration fulfills the receives beneath it.
 	///   - builderFunctionNames: The names this scope's code refers to builder functions by
 	///     (see `builderFunctionNames(for:enclosingFunctionNames:)`).
+	///   - fillPlaceBindings: The bindings of the places inside the fills an internal mock declares (`FillPlaceBindings`).
 	private func generateCode(
 		codeGeneration: CodeGeneration,
 		unavailableProperties: Set<Property>,
 		propertiesGeneratedLater: Set<Property>,
 		builderFunctionNames: BuilderFunctionNames,
 		leadingWhitespace: String,
+		fillPlaceBindings: FillPlaceBindings = .none,
 	) async throws -> String {
 		let generatedCode: String
 		// Mock code is not cached — the context varies per call site.
@@ -2228,6 +2230,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableProperties,
 				propertiesGeneratedLater: propertiesGeneratedLater,
 				builderFunctionNames: builderFunctionNames,
+				fillPlaceBindings: fillPlaceBindings,
 			)
 			if let cachedCode = unavailablePropertiesToGeneratedCode[cacheKey] {
 				generatedCode = cachedCode
@@ -2240,6 +2243,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						unavailableProperties: unavailableProperties,
 						propertiesGeneratedLater: propertiesGeneratedLater,
 						builderFunctionNames: builderFunctionNames,
+						fillPlaceBindings: fillPlaceBindings,
 					)
 					// A task keeps the memory its async frames took until it is released, so the cache keeps the finished code
 					// rather than the task: keeping every finished task held that memory for every scope of the tree until the
@@ -2258,6 +2262,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableProperties,
 				propertiesGeneratedLater: propertiesGeneratedLater,
 				builderFunctionNames: builderFunctionNames,
+				fillPlaceBindings: fillPlaceBindings,
 			)
 		}
 		if leadingWhitespace.isEmpty {
@@ -3929,11 +3934,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// (`fillCode(propertiesGeneratedLater:)`) and cannot throw. A receive inside a fill of a property the scopes
 	/// enclosing the call generate after it is then passed `nil`, as it is outside a fill, rather than a binding declared
 	/// after the fill.
-	func prepareFillCode(propertiesGeneratedLater: Set<Property>) async throws {
+	/// `fillPlaceBindings` are the bindings of the places inside the fills an internal mock declares (`FillPlace`).
+	func prepareFillCode(propertiesGeneratedLater: Set<Property>, fillPlaceBindings: FillPlaceBindings) async throws {
 		fillCodeByPropertiesGeneratedLater[propertiesGeneratedLater] = try await generateProperties(
 			propertiesGeneratedLater: propertiesGeneratedLater,
 			enclosingFunctionNames: [:],
 			leadingMemberWhitespace: "",
+			fillPlaceBindings: fillPlaceBindings,
 		)
 	}
 
@@ -3946,6 +3953,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let unavailableProperties: Set<Property>
 		let propertiesGeneratedLater: Set<Property>
 		let builderFunctionNames: BuilderFunctionNames
+		let fillPlaceBindings: FillPlaceBindings
 	}
 
 	/// The tasks generating this scope's dependency tree code for each context, until each finishes.
@@ -4977,12 +4985,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return unavailableProperties
 	}
 
-	/// - Parameter enclosingFunctionNames: This scope's `BuilderFunctionNames.enclosingFunctionNames`.
+	/// - Parameters:
+	///   - enclosingFunctionNames: This scope's `BuilderFunctionNames.enclosingFunctionNames`.
+	///   - fillPlaceBindings: The bindings of the places inside the fills an internal mock declares, which every scope of
+	///     a fill's tree emits in its builder function.
 	private func generateProperties(
 		codeGeneration: CodeGeneration = .dependencyTree,
 		propertiesGeneratedLater: Set<Property>,
 		enclosingFunctionNames: [BuiltDeclaration: String],
 		leadingMemberWhitespace: String,
+		fillPlaceBindings: FillPlaceBindings = .none,
 	) async throws -> [String] {
 		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
 		// Nearly every body holds no scope of a cycle, and its children keep their names. Every child but a seam
@@ -5150,6 +5162,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				propertiesGeneratedLater: child.propertiesGeneratedLater,
 				builderFunctionNames: builderFunctionNames,
 				leadingWhitespace: leadingMemberWhitespace,
+				fillPlaceBindings: fillPlaceBindings,
 			)
 			if let key = child.generator.fillKey,
 			   inlinableFillKeys.contains(key),
@@ -5159,7 +5172,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			   let inlinedFill = Self.inlinedFill(of: child.generator, code: code, leadingMemberWhitespace: leadingMemberWhitespace),
 			   // A builder struct's member holds the fill's body in a closure, inside which no function is declared: a body that
 			   // declares one, which can be isolated as the code around the closure is, is called by name instead.
-			   !(child.generator.fillDeclaresFunction && (publicMockInlinableFillKeys != nil || callDispatchers.contains { dispatcher in
+			   !(child.generator.fillDeclaresFunction(fillPlaceBindings: fillPlaceBindings) && (publicMockInlinableFillKeys != nil || callDispatchers.contains { dispatcher in
 			   	dispatcher.returnsBuilderStruct && dispatcher.cases.contains { $0.target?.key == key }
 			   }))
 			{
@@ -5239,9 +5252,62 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Whether this fill's body declares a function: the builder function of the property it fills, which a wrapper, a
 	/// constant with children of its own, and a call of a seam or a public mock declare. A constant built in one expression
 	/// declares none.
-	nonisolated private var fillDeclaresFunction: Bool {
+	nonisolated private func fillDeclaresFunction(fillPlaceBindings: FillPlaceBindings) -> Bool {
 		guard let filled = propertiesToGenerate.first, let property = filled.property else { return false }
-		return !property.propertyType.isConstant || !filled.propertiesToGenerate.isEmpty || filled.seamCall != nil || filled.publicMockCall != nil
+		return !property.propertyType.isConstant
+			|| !filled.propertiesToGenerate.isEmpty
+			|| filled.seamCall != nil
+			|| filled.publicMockCall != nil
+			// The builder function of a type that binds a place of an internal mock's fill (`FillPlace`).
+			|| fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(filled)] != nil
+	}
+
+	/// The places inside the fills this scope's call of another module's public mock declares, and inside the fills of the
+	/// calls their trees make (`FillPlace`), in the order the fills and their trees are generated, with every label the types
+	/// of those trees declare, which names a builder of the places apart from the trees' bindings.
+	///
+	/// A deliberate gap from the production twin, which takes one builder for a hole type: an internal mock of a type that
+	/// generates no dependency tree takes a flat parameter for the same type its own tree instantiates outside every fill
+	/// (`MockRootParameters.flatUncoveredParameters`), since flat parameters are its API and its own tree passes one value
+	/// per name, and a builder only for the places inside fills, where its twin's fill calls the builder its seam takes. The
+	/// other site of the gap is the mock root's `seamMockBuilders`.
+	/// - Parameter insideSendableFunction: Whether the call is made inside a `@Sendable` function.
+	nonisolated func fillPlaces(insideSendableFunction: Bool) -> (places: [FillPlace], declaredLabels: Set<String>) {
+		var places = [FillPlace]()
+		var declaredLabels = Set<String>()
+		// A stack of its own, since a tree can be as deep as the module has types. Each scope's children are pushed in
+		// reverse, so they are visited in the order they are generated.
+		var generatorsToVisit = [(generator: ScopeGenerator, isInsideSendableFunction: Bool)]()
+		func pushFills(of call: ScopeGenerator, insideSendableFunction: Bool) {
+			for fill in call.propertiesToGenerate.reversed() where fill.fillHole != nil && fill.fillEmitsCode {
+				let fillIsInsideSendableFunction = insideSendableFunction || call.buildsInSendableFunction(ofFill: fill)
+				for child in fill.propertiesToGenerate.reversed() {
+					generatorsToVisit.append((child, fillIsInsideSendableFunction))
+				}
+			}
+		}
+		pushFills(of: self, insideSendableFunction: insideSendableFunction)
+		while let (generator, enclosingIsInsideSendableFunction) = generatorsToVisit.popLast() {
+			// A scope that closes a cycle builds nothing; an alias builds nothing either.
+			guard case let .property(instantiable, property, _, _, false, _) = generator.scopeData else { continue }
+			declaredLabels.insert(property.label)
+			let isInsideSendableFunction = enclosingIsInsideSendableFunction || generator.buildsInSendableFunction
+			if generator.publicMockCall != nil {
+				pushFills(of: generator, insideSendableFunction: isInsideSendableFunction)
+			} else {
+				let builtLabels = Set(generator.propertiesToGenerate.compactMap(\.property?.label))
+				for dependency in instantiable.dependencies {
+					declaredLabels.insert(dependency.property.label)
+					if case .instantiated = dependency.source, !builtLabels.contains(dependency.property.label), DependencyTreeGenerator.canBeHole(dependency) {
+						places.append(FillPlace(generator: ObjectIdentifier(generator), dependency: dependency, isInsideSendableFunction: isInsideSendableFunction, order: places.count))
+					}
+				}
+				for child in generator.propertiesToGenerate.reversed() {
+					generatorsToVisit.append((child, isInsideSendableFunction))
+				}
+			}
+		}
+		return (places, declaredLabels)
 	}
 
 	/// `code` with each line indented once more.
@@ -5570,6 +5636,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		unavailableProperties: Set<Property>,
 		propertiesGeneratedLater: Set<Property>,
 		builderFunctionNames: BuilderFunctionNames,
+		fillPlaceBindings: FillPlaceBindings,
 	) async throws -> String {
 		switch scopeData {
 		case let .root(instantiable, seamRoot):
@@ -5684,6 +5751,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				[]
 			}
+			// A type inside a fill an internal mock declares binds each place of it nothing builds from the builder `mock()`
+			// takes for the place (`FillPlace`), once per build, before its children, which receive the place's value.
+			let fillPlaceBindingLines = fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(self), default: []].map { "\(Self.standardIndent)\($0.binding)" }
 
 			let propertyType = property.propertyType
 			switch propertyType {
@@ -5742,11 +5812,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				generatedProperties += memberCallLines
 				generatedProperties += rebindingLines
 				generatedProperties += seamGuardLines
+				generatedProperties += fillPlaceBindingLines
 				generatedProperties += try await generateProperties(
 					codeGeneration: codeGeneration,
 					propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater),
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 					leadingMemberWhitespace: Self.standardIndent,
+					fillPlaceBindings: fillPlaceBindings,
 				)
 				// The function a lazy cycle closes on also takes the parameters its cycle-closing scopes pass.
 				let functionParameters = forwardedProperties + (isPropertyCycle ? [] : cycleParameters.map(\.property))
@@ -5863,11 +5935,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				guard !isPropertyCycle else {
 					return "\(valuesBindingLines)let \(property.label) = \(lazilyInstantiatedInstantiation)"
 				}
-				let generatedProperties = try await memberCallLines + seamGuardLines + generateProperties(
+				let generatedProperties = try await memberCallLines + seamGuardLines + fillPlaceBindingLines + generateProperties(
 					codeGeneration: codeGeneration,
 					propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater),
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 					leadingMemberWhitespace: Self.standardIndent,
+					fillPlaceBindings: fillPlaceBindings,
 				)
 				let functionDecorator = if buildsInSendableFunction {
 					sendableFunctionDecorator
@@ -5904,11 +5977,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						"\(valuesBindingLines)let \(property.asSource) = \(call)\n"
 					}
 				}
-				let generatedProperties = try await memberCallLines + seamGuardLines + generateProperties(
+				let generatedProperties = try await memberCallLines + seamGuardLines + fillPlaceBindingLines + generateProperties(
 					codeGeneration: codeGeneration,
 					propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater),
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 					leadingMemberWhitespace: Self.standardIndent,
+					fillPlaceBindings: fillPlaceBindings,
 				)
 				let functionDecorator = if buildsInSendableFunction {
 					sendableFunctionDecorator
@@ -5974,6 +6048,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				codeGeneration: codeGeneration,
 				propertiesGeneratedLater: propertiesGeneratedLater,
 				enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
+				fillPlaceBindings: fillPlaceBindings,
 			)
 		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
 			if Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) {
@@ -6407,6 +6482,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		codeGeneration: CodeGeneration,
 		propertiesGeneratedLater: Set<Property>,
 		enclosingFunctionNames: [BuiltDeclaration: String],
+		fillPlaceBindings: FillPlaceBindings,
 	) async throws -> String {
 		guard let child = propertiesToGenerate.first, let property = child.property else { return "" }
 		// A field is bound where the tree reads it, or where a site inside the fill – one of the seam whose tree the fill
@@ -6430,6 +6506,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			propertiesGeneratedLater: propertiesGeneratedLater,
 			enclosingFunctionNames: enclosingFunctionNames,
 			leadingMemberWhitespace: indent,
+			fillPlaceBindings: fillPlaceBindings,
 		)
 		var body = childCode.joined(separator: "\n").split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 		guard !fillReturnsWrapperBuilder else {
@@ -6878,6 +6955,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let family: Family
 			/// The uncovered dependencies the builder builds, which `mock()` takes no parameter for.
 			let places: [UncoveredParameter]
+			/// The places inside the fills of the tree's calls of other modules' public mocks the builder builds (`FillPlace`).
+			let fillPlaces: [FillPlace]
 			/// The received properties under which the tree's calls of other modules' public mocks pass a builder of the same
 			/// hole type, family and type up, which `mock()` takes no parameter for: the calls are handed this builder.
 			let passedUpProperties: [Property]
@@ -6886,17 +6965,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 			/// The parameter's type, the type a seam's builder of these places takes from a person.
 			var parameterType: TypeDescription {
-				passedUpType ?? Self.parameterType(ofPlaces: places, in: family)
+				passedUpType ?? Self.parameterType(ofPlaceProperties: places.map(\.property) + fillPlaces.map(\.dependency.property), in: family)
 			}
 
-			/// The type a seam's builder of `places` in `family` takes from a person
+			/// The type a seam's builder of the places of `placeProperties` in `family` takes from a person
 			/// (`DependencyTreeGenerator.builderForm(ofPlaceProperties:)`): a closure that takes nothing and returns what the
 			/// builder builds, as the first place spells it, `@Sendable` in the `@Sendable` family, or, where every place is an
 			/// instantiator, the `Builder` of its wrapper.
-			static func parameterType(ofPlaces places: [UncoveredParameter], in family: Family) -> TypeDescription {
+			static func parameterType(ofPlaceProperties placeProperties: [Property], in family: Family) -> TypeDescription {
 				DependencyTreeGenerator.readableBuilderType(
-					of: DependencyTreeGenerator.builderForm(ofPlaceProperties: places.map(\.property)),
-					returning: places.first?.property.typeDescription.builtTypeOfWrapper ?? family.holeType.builtType,
+					of: DependencyTreeGenerator.builderForm(ofPlaceProperties: placeProperties),
+					returning: placeProperties.first?.typeDescription.builtTypeOfWrapper ?? family.holeType.builtType,
 					isSendable: family.isSendable,
 				)
 			}
@@ -6906,6 +6985,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			struct Family: Hashable {
 				let holeType: SeamSignature.HoleType
 				let isSendable: Bool
+
+				init(holeType: SeamSignature.HoleType, isSendable: Bool) {
+					self.holeType = holeType
+					self.isSendable = isSendable
+				}
+
+				/// The family of a place inside a fill (`FillPlace`): the `@Sendable` one where the place is bound inside a
+				/// `@Sendable` function or held in a `Sendable` wrapper, as for a place of the type's own tree.
+				init(of fillPlace: FillPlace) {
+					let property = fillPlace.dependency.property
+					self.init(
+						holeType: SeamSignature.HoleType(instantiatedType: fillPlace.dependency.asInstantiatedType.spelledCanonically, builtType: property.typeDescription.builtTypeOfWrapper.spelledCanonically),
+						isSendable: fillPlace.isInsideSendableFunction || property.propertyType.isSendable,
+					)
+				}
 			}
 		}
 
@@ -6954,7 +7048,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// The internal mock of a type that generates its dependency tree calls each of its builders the same way
 	/// (`MockRootParameters.SeamMockBuilder`), for every place the builder builds.
-	struct SendableAutoclosureParameter {
+	struct SendableAutoclosureParameter: Hashable {
 		init(name: String, localName: String, valueType: TypeDescription? = nil) {
 			self.name = name
 			self.localName = localName
@@ -6981,6 +7075,31 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				"let \(name)\(valueType.map { ": \($0.asSource)" } ?? "") = \(localName)()"
 			}
 		}
+	}
+
+	/// A place of an internal mock inside a fill of its tree's call of another module's public mock: an `@Instantiated`
+	/// dependency of a type the fill's tree builds that no scope builds, nothing the module sees fulfilling it, whose
+	/// spelling can be a hole (`DependencyTreeGenerator.canBeHole`). The mock binds it from a builder it takes
+	/// (`MockRootParameters.SeamMockBuilder`), as a seam's internal mock binds its hole, where the twin's fill calls the
+	/// builder its seam initializer takes.
+	struct FillPlace {
+		/// The generator of the type that instantiates the place, whose builder function binds it.
+		let generator: ObjectIdentifier
+		let dependency: Dependency
+		/// Whether the place is bound inside a `@Sendable` function: the fill's, or a builder function in or around it.
+		let isInsideSendableFunction: Bool
+		/// The place's position in the walk that found it (`fillPlaces(insideSendableFunction:)`), which orders the bindings
+		/// of one type as it declares the places.
+		let order: Int
+	}
+
+	/// The bindings of the places inside the fills an internal mock declares (`FillPlace`), by the generator of the type
+	/// that instantiates them, in the order the type declares them: each calls the builder `mock()` takes for the place's
+	/// hole type and family, once per build of the type.
+	struct FillPlaceBindings: Hashable {
+		let bindingsByGenerator: [ObjectIdentifier: [SendableAutoclosureParameter]]
+
+		static let none = FillPlaceBindings(bindingsByGenerator: [:])
 	}
 
 	/// The names of a mock root's flat parameters, which its `mock()` and a public mock's signature share. See
@@ -7373,10 +7492,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		// A type that generates its dependency tree takes, in its internal mock, a builder for each hole type and family, in
 		// place of its places' parameters and of the builders its calls of other modules' public mocks pass up for it
-		// (`SeamMockBuilder`). Every other internal mock takes one for each hole type and family its calls pass up.
+		// (`SeamMockBuilder`). Every other internal mock takes one for each hole type and family its calls pass up. Every
+		// internal mock also takes one for each hole type and family of the places inside the fills of its calls
+		// (`FillPlace`), where its twin's fill calls the builder its seam takes.
+		//
+		// A deliberate gap from the production twin: an internal mock of a type that generates no dependency tree keeps a
+		// flat parameter for each type its own tree instantiates that nothing fulfills, outside every fill, as for a seam it
+		// builds itself whose hole nothing fills, where the twin takes the seam's builder: flat parameters are its API, and
+		// its own tree passes one value per name. Inside a fill it takes a builder, as its twin does. The other site of the
+		// gap is `fillPlaces(insideSendableFunction:)`.
+		let fillPlaces = instantiable.generateMock != .public ? Self.fillPlaces(in: treePropertyNodes) : (places: [], declaredLabels: [])
 		let seamMockBuilders = instantiable.generateMock != .public
 			? Self.seamMockBuilders(
 				of: instantiable.generatesDependencyTree ? uncoveredParameters : [],
+				fillPlaces: fillPlaces.places,
 				passedUpBuilderFamilies: Self.passedUpBuilderFamilies(
 					in: treePropertyNodes,
 					among: flatReceivedProperties,
@@ -7391,7 +7520,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				capturedBySendableFunctions: parameterTree.passedUpBuildersCapturedBySendableFunctions,
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				treePropertyNodes: treePropertyNodes,
-				namesBoundInTheTree: treeBindingNames.union(namesDeclaredInBuilderFunctions),
+				// The fills' labels name the builders apart only where a fill calls one.
+				namesBoundInTheTree: treeBindingNames.union(namesDeclaredInBuilderFunctions).union(fillPlaces.places.isEmpty ? [] : fillPlaces.declaredLabels),
 			)
 			: []
 		let passedUpPropertiesBuiltBySeamMockBuilders = Set(seamMockBuilders.flatMap(\.passedUpProperties))
@@ -7419,6 +7549,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
+	/// The places inside the fills of the calls of other modules' public mocks in the tree of `treePropertyNodes`
+	/// (`fillPlaces(insideSendableFunction:)`), in the order the calls' nodes are generated, with every label the fills' trees
+	/// declare.
+	private static func fillPlaces(in treePropertyNodes: [MockParameterNode]) -> (places: [FillPlace], declaredLabels: Set<String>) {
+		var places = [FillPlace]()
+		var declaredLabels = Set<String>()
+		// A stack of its own, since a mock tree can be as deep as the module has types. Only a node that calls a public mock
+		// fills a builder (`fillsABuilder`).
+		var nodesToVisit = Array(treePropertyNodes.filter(\.subtreeCallsPublicMock).reversed())
+		while let node = nodesToVisit.popLast() {
+			if let fillingGenerator = node.fillingGenerator {
+				let callPlaces = fillingGenerator.fillPlaces(insideSendableFunction: node.requiresSendable)
+				places += callPlaces.places.map { place in
+					FillPlace(generator: place.generator, dependency: place.dependency, isInsideSendableFunction: place.isInsideSendableFunction, order: places.count + place.order)
+				}
+				declaredLabels.formUnion(callPlaces.declaredLabels)
+			}
+			nodesToVisit.append(contentsOf: node.propertyChildren.filter(\.subtreeCallsPublicMock).reversed())
+		}
+		return (places, declaredLabels)
+	}
+
 	/// The builders an internal mock takes: for `uncoveredParameters`, the `@Instantiated` dependencies the tree of a type
 	/// that generates its dependency tree cannot build, one per hole type and family, as the type's readable initializer
 	/// takes them, and one per hole type and family that the tree's calls of other modules' public mocks pass up, as the
@@ -7436,10 +7588,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// properties it is not). The body calls it by its label, unless a name the tree binds at any level has it
 	/// (`namesBoundInTheTree`): then by a name of its own apart from every builder function of the tree, which `mock()`
 	/// binds first.
+	///
+	/// The places inside the fills of the tree's calls (`fillPlaces`) join the families of the type's own places, so one
+	/// builder serves every place of a hole type and family, and add families of their own.
 	/// - Parameter capturedBySendableFunctions: The builders the calls pass up that a `@Sendable` builder function captures,
 	///   which `mock()` takes `@Sendable`.
 	private static func seamMockBuilders(
 		of uncoveredParameters: [MockRootParameters.UncoveredParameter],
+		fillPlaces: [FillPlace],
 		passedUpBuilderFamilies: [Property: MockRootParameters.SeamMockBuilder.Family],
 		otherParameterLabels: Set<String>,
 		flatReceivedProperties: [Property],
@@ -7460,12 +7616,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			placesByFamily[family, default: []].append(uncovered)
 		}
+		var fillPlacesByFamily = [MockRootParameters.SeamMockBuilder.Family: [FillPlace]]()
+		for fillPlace in fillPlaces {
+			let family = MockRootParameters.SeamMockBuilder.Family(of: fillPlace)
+			if placesByFamily[family] == nil, fillPlacesByFamily[family] == nil {
+				familiesInOrder.append(family)
+			}
+			fillPlacesByFamily[family, default: []].append(fillPlace)
+		}
 		// The builders the calls pass up for a family the mock builds no place of, by family, in the order of the flat received
 		// properties, which is a sorted order.
 		var passedUpOnlyPropertiesByFamily = [MockRootParameters.SeamMockBuilder.Family: [Property]]()
 		var passedUpOnlyFamiliesInOrder = [MockRootParameters.SeamMockBuilder.Family]()
 		for property in flatReceivedProperties {
-			guard let family = passedUpBuilderFamilies[property], placesByFamily[family] == nil else { continue }
+			guard let family = passedUpBuilderFamilies[property], placesByFamily[family] == nil, fillPlacesByFamily[family] == nil else { continue }
 			if passedUpOnlyPropertiesByFamily[family] == nil {
 				passedUpOnlyFamiliesInOrder.append(family)
 			}
@@ -7487,8 +7651,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let stems = DependencyTreeGenerator.stems(of: holeTypes)
 		var passedUpPropertiesByFamily = passedUpOnlyPropertiesByFamily
 		for property in flatReceivedProperties {
-			guard let family = passedUpBuilderFamilies[property], let places = placesByFamily[family] else { continue }
-			if property.typeDescription.strippingEscaping.asSource == MockRootParameters.SeamMockBuilder.parameterType(ofPlaces: places, in: family).strippingEscaping.asSource {
+			guard let family = passedUpBuilderFamilies[property], placesByFamily[family] != nil || fillPlacesByFamily[family] != nil else { continue }
+			let placeProperties = placesByFamily[family, default: []].map(\.property) + fillPlacesByFamily[family, default: []].map(\.dependency.property)
+			if property.typeDescription.strippingEscaping.asSource == MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: placeProperties, in: family).strippingEscaping.asSource {
 				passedUpPropertiesByFamily[family, default: []].append(property)
 			}
 		}
@@ -7503,7 +7668,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let type = capturedBySendableFunctions.contains(property) && !property.typeDescription.isSendableFunction ? property.typeDescription.asSendableFunction : property.typeDescription
 				return type.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 			}
-			return MockRootParameters.SeamMockBuilder(label: label, internalName: label, family: family, places: placesByFamily[family, default: []], passedUpProperties: passedUpPropertiesByFamily[family, default: []], passedUpType: passedUpType)
+			return MockRootParameters.SeamMockBuilder(label: label, internalName: label, family: family, places: placesByFamily[family, default: []], fillPlaces: fillPlacesByFamily[family, default: []], passedUpProperties: passedUpPropertiesByFamily[family, default: []], passedUpType: passedUpType)
 		}
 		builders.sort { $0.label < $1.label }
 		// A builder whose label a name of the tree has is called by a name apart from every builder function of the tree.
@@ -7827,6 +7992,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				sendableAutoclosureParameters[place.property] = SendableAutoclosureParameter(name: place.label, localName: builder.internalName, valueType: place.property.typeDescription)
 			}
 		}
+		// A place inside a fill is bound the same way, under its label, by the type that instantiates it, in the order the type
+		// declares its places (`FillPlace`).
+		var fillPlaceBindingsInOrder = [(order: Int, generator: ObjectIdentifier, binding: SendableAutoclosureParameter)]()
+		for builder in parameters.seamMockBuilders {
+			for place in builder.fillPlaces {
+				fillPlaceBindingsInOrder.append((place.order, place.generator, SendableAutoclosureParameter(name: place.dependency.property.label, localName: builder.internalName, valueType: place.dependency.property.typeDescription)))
+			}
+		}
+		var fillPlaceBindingsByGenerator = [ObjectIdentifier: [SendableAutoclosureParameter]]()
+		for (_, generator, binding) in fillPlaceBindingsInOrder.sorted(by: { $0.order < $1.order }) {
+			fillPlaceBindingsByGenerator[generator, default: []].append(binding)
+		}
+		let fillPlaceBindings = FillPlaceBindings(bindingsByGenerator: fillPlaceBindingsByGenerator)
 		for flatUncovered in flatUncoveredParameters where flatUncovered.isSendableAutoclosure {
 			let parameter = SendableAutoclosureParameter(
 				name: flatUncovered.label,
@@ -7984,7 +8162,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.append(contentsOf: lazilyInstantiatedBindings)
 			lines.append(contentsOf: rootReceiverBindings)
 			for (fillingGenerator, propertiesGeneratedLater) in rootItems.fillingGenerators {
-				try await fillingGenerator.prepareFillCode(propertiesGeneratedLater: propertiesGeneratedLater)
+				try await fillingGenerator.prepareFillCode(propertiesGeneratedLater: propertiesGeneratedLater, fillPlaceBindings: fillPlaceBindings)
 			}
 			let bodyBindings = await Self.generateMockBodyBindings(
 				items: rootItems,
