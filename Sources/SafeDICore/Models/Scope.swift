@@ -1132,6 +1132,7 @@ private struct ScopeGeneratorUnderConstruction {
 			}
 		}
 	}
+
 	/// The identities of `childGenerators`, none of which a child of this scope reuses (see `ConstructionMemo`).
 	private(set) var childGeneratorIdentifiers = Set<ObjectIdentifier>()
 	/// How many scopes this scope's subtree has so far: itself, and every scope created beneath it. An alias or a hole,
@@ -1729,6 +1730,7 @@ private struct ScopeGeneratorUnderConstruction {
 	var builtScope: Scope {
 		scope
 	}
+
 	private let property: Property?
 	/// Whether this scope is in the tree of a fill a mock declares, whose types are built as the mock's tree built
 	/// inline builds them: each with its hand-written mock where `mockReturnTypeIsCompatible` says the mock builds it.
