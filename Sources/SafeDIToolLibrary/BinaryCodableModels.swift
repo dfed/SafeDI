@@ -481,6 +481,8 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("packageName", \.packageName),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
 				BinaryLayoutField("isInsideCompilerDecidedBlock", \.isInsideCompilerDecidedBlock),
+				BinaryLayoutField("dependencyLabelsInUnselectedClauses", \.dependencyLabelsInUnselectedClauses),
+				BinaryLayoutField("dependencyLabelsInsideConditionalBlocks", \.dependencyLabelsInsideConditionalBlocks),
 			],
 			// `declaredName` is what one run makes of the declaration, so no file records it.
 			unwrittenProperties: ["instantiableTypes", "declaredName"],
@@ -520,6 +522,8 @@ extension Instantiable: BinarySchemaMember {
 		)
 		sourceFilePath = try reader.read() as String?
 		isInsideCompilerDecidedBlock = try reader.read()
+		dependencyLabelsInUnselectedClauses = try reader.read()
+		dependencyLabelsInsideConditionalBlocks = try reader.read()
 	}
 
 	/// Every type description a file holds is part of an instantiable, which names the one that nests too deeply.
@@ -554,6 +558,8 @@ extension Instantiable: BinarySchemaMember {
 			writer.write(packageName)
 			writer.write(sourceFilePath)
 			writer.write(isInsideCompilerDecidedBlock)
+			writer.write(dependencyLabelsInUnselectedClauses)
+			writer.write(dependencyLabelsInsideConditionalBlocks)
 		}
 	}
 
@@ -591,6 +597,36 @@ extension Instantiable.DeclarationType: BinarySchemaMember {
 		case actorType
 		case structType
 		case extensionType
+	}
+}
+
+extension Instantiable.DependencyLabelInUnselectedClause: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("label", \.label),
+				BinaryLayoutField("clause", \.clause),
+				BinaryLayoutField("clauseLocation", \.clauseLocation),
+				BinaryLayoutField("isDeclaredDirectlyInClause", \.isDeclaredDirectlyInClause),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			label: reader.read(),
+			clause: reader.read(),
+			clauseLocation: reader.read() as Dependency.DeclarationLocation?,
+			isDeclaredDirectlyInClause: reader.read(),
+		)
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(label)
+		writer.write(clause)
+		writer.write(clauseLocation)
+		writer.write(isDeclaredDirectlyInClause)
 	}
 }
 

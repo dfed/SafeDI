@@ -258,6 +258,14 @@ public struct Initializer: Codable, Hashable, Sendable {
 		return bindings
 	}
 
+	/// The arguments without a default value that none of `dependencies` is passed to, in declaration order: those a call
+	/// generated from `dependencies` cannot pass.
+	func argumentsWithoutDefaultFulfilledByNone(of dependencies: [Dependency]) -> [Argument] {
+		arguments.filter { argument in
+			!argument.hasDefaultValue && !dependencies.contains(where: argument.isFulfilled(by:))
+		}
+	}
+
 	/// - Parameter lazilyInstantiatedInstanceProperties: The received properties that are in scope only as the
 	///   instance of a `LazilyInstantiated` property. Their arguments read that instance.
 	func createInitializerArgumentList(
