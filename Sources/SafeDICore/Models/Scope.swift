@@ -446,7 +446,7 @@ final class Scope: Hashable {
 					startOrderChanged = true
 				}
 			}
-		} while startOrderChanged || scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree || scopeGenerator.receivedBuilderLoopsChangedInTree
+		} while startOrderChanged || scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree || scopeGenerator.receivedBuilderLoopsChangedInTree || scopeGenerator.publicMockRootLevelUpNamesChangedInTree
 		for generator in generatorsToStart ?? [] {
 			ScopeGeneratorUnderConstruction.startCodeGeneration(of: generator)
 		}
@@ -895,11 +895,13 @@ private struct ScopeGeneratorUnderConstruction {
 			enclosingCarriedInnerScopesOfThisCall[dispatcher.key] = dispatcher.carriedInnerScopes
 		}
 		self.enclosingCarriedInnerScopesOfThisCall = enclosingCarriedInnerScopesOfThisCall
+		// A root level function of this call that takes no struct hides an enclosing call's of the same dispatcher; which take
+		// one the pass before decided from the call's level functions (`ScopeGenerator.publicMockRootLevelUpNames`).
 		var enclosingLevelUpNamesOfThisCall = enclosingLevelUpNames
 		if scope.publicMockCall != nil {
-			let upName = PublicMockLevelFunctions.upName(amongLabelsOf: dispatchersOfThisCall)
+			let rootLevelUpNames = previousPassGenerator?.publicMockRootLevelUpNames ?? [:]
 			for dispatcher in dispatchersOfThisCall {
-				enclosingLevelUpNamesOfThisCall[dispatcher.key] = upName
+				enclosingLevelUpNamesOfThisCall[dispatcher.key] = rootLevelUpNames[dispatcher.key]
 			}
 		}
 		self.enclosingLevelUpNamesOfThisCall = enclosingLevelUpNamesOfThisCall
@@ -1329,7 +1331,6 @@ private struct ScopeGeneratorUnderConstruction {
 		// caller passes each builder by the leaf's argument of its label, and passes up the places its builder's routes
 		// reach that it fills on some route only (`PublicMockCall.sitesPassedUpOnSomeRoute`).
 		let isPublicMockCall = scope.publicMockCall != nil
-		let sitesFilledOnEveryRoute = scope.publicMockCall?.sitesFilledOnEveryRoute ?? filledSites
 		return calledBuilders.builders.map { builder in
 			let label = isPublicMockCall ? builder.label : builder.generatedOnlyArgumentLabel
 			let enumKey = builder.enumKey
@@ -1377,11 +1378,11 @@ private struct ScopeGeneratorUnderConstruction {
 			let enclosingFill = enclosingFills[dispatcherKey] == nil ? nil : ScopeGenerator.BuilderCallArgument.EnclosingFill(key: dispatcherKey, name: dispatcher)
 			guard !isPublicMockCall else {
 				// A call inside a fill of an enclosing call of the same builder re-enters the enclosing call's root level function,
-				// handing it the struct this call passes up where a route does, and, for each struct of a level it takes, what the
-				// member of the call's own case of that struct's level returns, as a seam's call does.
+				// handing it the struct this call passes up exactly where the function takes it (`Function.takesUp`, which
+				// `enclosingLevelUpNames` holds the name of), and, for each struct of a level it takes, what the member of the call's
+				// own case of that struct's level returns, as a seam's call does.
 				if let enclosingName = enclosingFills[dispatcherKey] {
-					let passesUp = !reachedSites.isSubset(of: sitesFilledOnEveryRoute)
-					var arguments = passesUp ? ["\((enclosingLevelUpNames[dispatcherKey] ?? "").spelledAsArgumentLabel): \(publicMockUpValue)"] : []
+					var arguments = enclosingLevelUpNames[dispatcherKey].map { ["\($0.spelledAsArgumentLabel): \(publicMockUpValue)"] } ?? []
 					arguments += (enclosingCarriedInnerScopes[dispatcherKey] ?? []).compactMap { carriedInnerScope in
 						seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, carrying: carriedInnerScope.type).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
 					}
@@ -1496,6 +1497,7 @@ private struct ScopeGeneratorUnderConstruction {
 			callSiteLazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties,
 			reboundProperties: reboundProperties,
 			previousPassReceivedBuilderLoops: previousPassGenerator?.receivedBuilderLoops,
+			previousPassPublicMockRootLevelUpNames: previousPassGenerator?.publicMockRootLevelUpNames ?? [:],
 			namesBoundBySeam: GenerationWork.taking(seamHoles.namesBoundBySeam, by: .joiningNamesBoundBySeam),
 			placeHoldingProperties: placeHoldingPropertiesByType.map { $0[scope.instantiable.concreteInstantiable] ?? [] },
 		)
@@ -1646,11 +1648,13 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The structs the level functions a fill of this call can refer to take: those of enclosing calls, and this call's, by
 	/// the level function's key, gathered once for the call.
 	private let enclosingCarriedInnerScopesOfThisCall: [String: [ScopeGenerator.FillDispatcher.CarriedInnerScope]]
-	/// The name each level function of `enclosingFills` of a public mock's call takes the struct its caller passes up under
-	/// (`PublicMockLevelFunctions.upName`), by its key: a call that re-enters it hands it this call's.
+	/// The name each root level function of `enclosingFills` of a public mock's call that takes the struct its caller passes up
+	/// takes it under (`PublicMockLevelFunctions.rootLevelUpNames(amongKeys:)`), by its key: a call that re-enters it hands it
+	/// this call's, and a call that re-enters one it does not hold hands none.
 	private let enclosingLevelUpNames: [String: String]
-	/// The name the level functions a fill of this call can refer to take the struct their caller passes up under: those of
-	/// enclosing calls, and this call's, by the level function's key, gathered once for the call.
+	/// The name each root level function a call inside a fill of this call can re-enter takes the struct its caller passes up
+	/// under, where it takes it: those of enclosing calls, and this call's, by the level function's key, gathered once for the
+	/// call.
 	private let enclosingLevelUpNamesOfThisCall: [String: String]
 	/// The index in `fillsOfThisCall` of the next fill to create a generator for.
 	private var nextFillIndex = 0

@@ -240,6 +240,16 @@ struct PublicMockLevelFunctions: Sendable {
 		}
 	}
 
+	/// The name each root level function of a dispatcher whose key is in `keys` takes the caller's struct under, by the
+	/// dispatcher's key, where the function takes it (`Function.takesUp`): what a call that re-enters the function hands it.
+	func rootLevelUpNames(amongKeys keys: Set<String>) -> [String: String] {
+		var upNames = [String: String]()
+		for (key, index) in rootFunctionIndexByKey where keys.contains(key) && functions[index].takesUp {
+			upNames[key] = upName
+		}
+		return upNames
+	}
+
 	/// The members of the root level function of the dispatcher of `key`, or `nil` where no function is.
 	func rootMembers(ofDispatcherKeyed key: String) -> [Member]? {
 		rootFunctionIndexByKey[key].map { functions[$0].members }
