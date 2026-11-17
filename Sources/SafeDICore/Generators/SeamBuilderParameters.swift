@@ -1313,11 +1313,12 @@ extension DependencyTreeGenerator {
 			}
 			// The fill takes the scope value the inner seam handed it (`Scope.Fill.innerScopeParameter`), which the dispatchers
 			// that lead to the case pass on: a dispatcher both root enums reach could pass only one root enum's value. It takes
-			// that value only where its tree builds a place or a call that passes one up, which the walk finds.
+			// that value where its tree builds a place or a call that passes one up, which the walk finds, whatever kind of place
+			// the call is to the place graph: a fulfilling call made in a `@Sendable` fill is a plain place there
+			// (`SeamDeclarationGraph.placeHolding`), and its fill is reached from both root enums all the same.
 			if let emittingFill = emittingFillByCaseKey[caseKey],
 			   Set(places.map { SeamSignature.ScopeEnum.rootKey(of: $0).isSendable }).count > 1,
-			   let place = firstPlaceBuilt(inFill: emittingFill),
-			   !emittingFill.fillCallerReads.innerScopeParameters.isEmpty
+			   let place = firstPlaceBuilt(inFill: emittingFill)
 			{
 				findings.append(.init(hole: firstPlace, kind: .placeInsideFillOfCaseOfBothRootEnums(place: place, callerModule: callerModule, seamModule: firstPlace.scopeSeamModule)))
 			}
@@ -2044,7 +2045,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				let placeDescription = "`\(place.ownerType.asSource)`’s `\(place.property.asSource)`"
 				let placeRemedy = SeamAccessExplanation.fulfillRemedy(fulfilling: place.instantiatedType, seamModuleName: callerModule.moduleName, effect: nil)
 				return [
-					SourceDiagnostic(severity: .error, location: place.declarationLocation ?? hole.declarationLocation, message: "SafeDI fills every place of \(builderDescription(of: hole)) with one function, whose tree builds \(placeDescription), which no type that \(module(callerModule)) can see fulfills. \(seamName) builds `\(hole.ownerType.asSource)` both inside and outside a `@Sendable` function, so that function is handed a scope of either of \(seamName)’s two root enums, and the case of \(placeDescription) can carry only one. To fill it, \(placeRemedy), or \(fulfillRemedy(seamModule))."),
+					SourceDiagnostic(severity: .error, location: place.declarationLocation ?? hole.declarationLocation, message: "SafeDI fills every place of \(builderDescription(of: hole)) with one function, whose tree builds \(placeDescription), which no type that \(module(callerModule)) can see fulfills. \(seamName) builds `\(hole.ownerType.asSource)` both inside and outside a `@Sendable` function, so that function is handed the values struct of either of \(seamName)’s two builder structs, and the member for \(placeDescription) can carry only one. To fill it, \(placeRemedy), or \(fulfillRemedy(seamModule))."),
 					SourceDiagnostic(severity: .note, location: hole.declarationLocation, message: "`\(hole.ownerType.asSource)` instantiates `\(hole.property.asSource)` here."),
 				]
 			}
