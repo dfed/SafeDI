@@ -134,47 +134,136 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func plainInitializer_handsBuilderEachSeamsOwnValue_whenInnerSeamForwardsLabelOfOuterSeamsValue() async throws {
-		// Both forward `id: Int`. A hand-written builder reads `List`'s `id` at `List`'s own place, `List(id: 1)`'s, and
-		// `Detail`'s at the place `List` passes up, the `2` its instantiator forwards, through the case that holds `Detail`'s
-		// enum alone.
+	mutating func plainInitializer_buildsEachPlaceFromBuilder_whenInnerSeamForwardsLabelOfOuterSeamsValue() async throws {
+		// Both forward `id: Int`. `List`'s generated-only initializer calls the member for the place it passes up inside the
+		// function that builds `Detail`, whose `id` hides `List`'s, so that member's values carry none of `List`'s. A
+		// hand-written builder takes no value: it builds `List`'s own place and the place `List` passes up, once each, and each
+		// seam keeps its own `id`.
 		let modules = Self.innerAndOuterModules(
 			inner: [Self.detail(forwarding: "id: Int")],
 			outer: [
 				seamFixtureType(named: "List", isSeam: true, declarations: ["@Forwarded public let id: Int", "@Instantiated public let api: any Api", "@Instantiated public let detailBuilder: Instantiator<Detail>"]),
-				Self.recorder,
+				Self.countedApi,
 				"""
-				struct Live: Api {}
-
-				func identifiersTheBuilderReads() -> [Int] {
-				    let recorder = Recorder()
-				    let list = List(id: 1, apiBuilder: { scope in
-				        switch scope {
-				        case let .api(list):
-				            recorder.values.append(list.id)
-				        case let .detailBuilder(.api(detail)):
-				            recorder.values.append(detail.id)
-				        }
-				        return Live()
+				func identifiersAndBuildOrder() -> [Int] {
+				    var count = 0
+				    let list = List(id: 1, apiBuilder: {
+				        count += 1
+				        return Live(count: count)
 				    })
-				    _ = list.detailBuilder.instantiate(2)
-				    return recorder.values
+				    let detail = list.detailBuilder.instantiate(2)
+				    return [list.id, (list.api as? Live)?.count ?? 0, detail.id, (detail.api as? Live)?.count ?? 0]
 				}
 				""",
 			],
 		)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Inner"]?.generatedFiles == ["Inner.swift": generatedFileHeader + """
+		extension Detail {
+		    nonisolated public enum SafeDIScope_Api {
+		        nonisolated public struct api_Values {
+		            public let id: Int
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let api: (api_Values) -> __safeDI_Built
+
+		            public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                self.api = api
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.api = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public convenience init(id: Int, apiBuilder: @escaping () -> any Api) {
+		        self.init(__safeDI_id: id, __safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public convenience init(__safeDI_id id: Int, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(id: id))
+		        self.init(id: id, api: api)
+		    }
+		}
+
+		extension Detail {
+		    public enum __safeDI_Detail_4FD7A6651375681C {}
+		}
+		"""])
+		#expect(output.modules["Outer"]?.generatedFiles == ["Outer.swift": generatedFileHeader + """
+		#if canImport(Inner)
+		import Inner
+		#endif
+
+		extension List {
+		    nonisolated public enum SafeDIScope_Api {
+		        nonisolated public struct api_Values {
+		            public let id: Int
+		            public let detailBuilder: Instantiator<Detail>
+		        }
+
+		        nonisolated public struct detailBuilder_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let api: (api_Values) -> __safeDI_Built
+		            public let detailBuilder: (detailBuilder_Values) -> Detail.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
+
+		            public init(api: @escaping (api_Values) -> __safeDI_Built, detailBuilder: @escaping (detailBuilder_Values) -> Detail.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
+		                self.api = api
+		                self.detailBuilder = detailBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.api = { _ in __safeDI_builder() }
+		                self.detailBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public init(id: Int, apiBuilder: @escaping () -> any Api) {
+		        self.init(__safeDI_id: id, __safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public init(__safeDI_id id: Int, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		        func __safeDI_detailBuilder(id: Int) -> Detail {
+		            _ = Detail.__safeDI_Detail_4FD7A6651375681C.self // If this line does not compile, compile the code SafeDI generates for module Inner into Inner: under Bazel, add Inner’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Detail(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_apiBuilder.detailBuilder(SafeDIScope_Api.detailBuilder_Values()))
+		        }
+		        let detailBuilder = Instantiator<Detail> {
+		            __safeDI_detailBuilder(id: $0)
+		        }
+		        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(id: id, detailBuilder: detailBuilder))
+		        self.init(id: id, api: api, detailBuilder: detailBuilder)
+		    }
+		}
+
+		extension List {
+		    public enum __safeDI_List_7E26719CA4BF71AE {}
+		}
+		"""])
 		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(output: output, modules: modules),
-			probes: [DifferentialValueProbe("identifiersTheBuilderReads()")],
+			probes: [DifferentialValueProbe("identifiersAndBuildOrder()")],
 			filesToDelete: &filesToDelete,
 		)
 		if compileVerificationIsEnabled {
 			#expect(description == """
-			probe identifiersTheBuilderReads()
+			probe identifiersAndBuildOrder()
 			Array<Int>
 			  0: Int 1
-			  1: Int 2
+			  1: Int 1
+			  2: Int 2
+			  3: Int 2
 
 			""")
 		}
@@ -182,9 +271,9 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func plainInitializer_handsBuilderEachNodesOwnValue_whenSeamBuildsItselfAgainThroughInstantiator() async throws {
-		// `Node` forwards `id` and builds another `Node` through `nextBuilder`: the place under the second node is handed its
-		// own `id` in the case for `api`, which the case for `nextBuilder` holds alone.
+	mutating func plainInitializer_buildsEachPlaceFromBuilder_whenSeamBuildsItselfAgainThroughInstantiator() async throws {
+		// `Node` forwards `id` and builds another `Node` through `nextBuilder`: the hand-written builder builds the place of
+		// each node, the second's through the level `nextBuilder` reaches, once each, and each node keeps its own `id`.
 		let modules = [
 			ModuleFixture(
 				name: "Feature",
@@ -192,25 +281,16 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 				swiftFileContent: [
 					"public protocol Api {}",
 					seamFixtureType(named: "Node", isSeam: true, isFinalClass: true, declarations: ["@Forwarded public let id: Int", "@Instantiated public let api: any Api", "@Instantiated public let nextBuilder: Instantiator<Node>"]),
-					Self.recorder,
+					Self.countedApi,
 					"""
-					struct Live: Api {}
-
-					func identifiersTheBuilderReads() -> [Int] {
-					    let recorder = Recorder()
-					    let node = Node(id: 1, apiBuilder: { scope in
-					        switch scope {
-					        case let .api(values):
-					            recorder.values.append(values.id)
-					        case let .nextBuilder(.api(inner)):
-					            recorder.values.append(inner.id)
-					        default:
-					            break
-					        }
-					        return Live()
+					func identifiersAndBuildOrder() -> [Int] {
+					    var count = 0
+					    let node = Node(id: 1, apiBuilder: {
+					        count += 1
+					        return Live(count: count)
 					    })
-					    _ = node.nextBuilder.instantiate(2)
-					    return recorder.values
+					    let next = node.nextBuilder.instantiate(2)
+					    return [node.id, (node.api as? Live)?.count ?? 0, next.id, (next.api as? Live)?.count ?? 0]
 					}
 					""",
 				],
@@ -218,17 +298,70 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 			),
 		]
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Node {
+		    nonisolated public enum SafeDIScope_Api {
+		        nonisolated public struct api_Values {
+		            public let id: Int
+		            public let nextBuilder: Instantiator<Node>
+		        }
+
+		        nonisolated public struct nextBuilder_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let api: (api_Values) -> __safeDI_Built
+		            public let nextBuilder: (nextBuilder_Values) -> Node.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
+
+		            public init(api: @escaping (api_Values) -> __safeDI_Built, nextBuilder: @escaping (nextBuilder_Values) -> Node.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
+		                self.api = api
+		                self.nextBuilder = nextBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.api = { _ in __safeDI_builder() }
+		                self.nextBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public convenience init(id: Int, apiBuilder: @escaping () -> any Api) {
+		        self.init(__safeDI_id: id, __safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public convenience init(__safeDI_id id: Int, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		        func __safeDI_nextBuilder(id: Int) -> Node {
+		            _ = Node.__safeDI_Node_DD5EE0BBCEB980F4.self
+		            return Node(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_apiBuilder.nextBuilder(SafeDIScope_Api.nextBuilder_Values()))
+		        }
+		        let nextBuilder = Instantiator<Node> {
+		            __safeDI_nextBuilder(id: $0)
+		        }
+		        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(id: id, nextBuilder: nextBuilder))
+		        self.init(id: id, api: api, nextBuilder: nextBuilder)
+		    }
+		}
+
+		extension Node {
+		    public enum __safeDI_Node_DD5EE0BBCEB980F4 {}
+		}
+		"""])
 		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(output: output, modules: modules),
-			probes: [DifferentialValueProbe("identifiersTheBuilderReads()")],
+			probes: [DifferentialValueProbe("identifiersAndBuildOrder()")],
 			filesToDelete: &filesToDelete,
 		)
 		if compileVerificationIsEnabled {
 			#expect(description == """
-			probe identifiersTheBuilderReads()
+			probe identifiersAndBuildOrder()
 			Array<Int>
 			  0: Int 1
-			  1: Int 2
+			  1: Int 1
+			  2: Int 2
+			  3: Int 2
 
 			""")
 		}
@@ -264,7 +397,7 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 				func homeIsFreedWithItsNavigator() -> Bool {
 				    weak var weakNavigator: Navigator?
 				    do {
-				        let home = \(fillsWithGeneratedCode ? "Root().home" : "Home(apiBuilder: { _ in Live() })")
+				        let home = \(fillsWithGeneratedCode ? "Root().home" : "Home(apiBuilder: { Live() })")
 				        weakNavigator = home.navigator
 				        home.navigator.stack.append(home.detailBuilder.instantiate())
 				    }
@@ -297,10 +430,10 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		seamFixtureType(named: "Detail", isSeam: true, isFinalClass: true, declarations: ["@Forwarded public let \(forwarded)", "@Instantiated public let api: any Api"])
 	}
 
-	/// A box a hand-written builder records what it reads in.
-	private static let recorder = """
-	final class Recorder {
-	    var values = [Int]()
+	/// The `Api` a hand-written builder builds, numbered in the order the builder is called.
+	private static let countedApi = """
+	struct Live: Api {
+	    let count: Int
 	}
 	"""
 
