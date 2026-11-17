@@ -927,17 +927,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		/// The name of the guard enum `Host` generates.
 		var guardName: String {
 			switch self {
-			case .generic: "__safeDI_Host_181E655918D95068"
-			case .nested: "__safeDI_Host_62977D47F63CFE04"
-			case .optional: "__safeDI_Host_464D7546A32038EB"
-			case .array: "__safeDI_Host_AE86E26DF0F168F6"
-			case .dictionary: "__safeDI_Host_7918D46048698915"
-			case .tuple: "__safeDI_Host_ECC408FE814B1C54"
-			case .closure: "__safeDI_Host_8D59C8B92F9146B1"
-			case .attributed: "__safeDI_Host_CE877C9F39C27D46"
-			case .metatype: "__safeDI_Host_52760A16C394E675"
-			case .variadic: "__safeDI_Host_373D608B0E439CFB"
-			case .void: "__safeDI_Host_B318BCEF75FF1C14"
+			case .generic: "__safeDI_Host_E1170440F4B74758"
+			case .nested: "__safeDI_Host_F8AF2BAE4D0374F4"
+			case .optional: "__safeDI_Host_93DEBCEF1294737B"
+			case .array: "__safeDI_Host_34BCB40F6DF67C46"
+			case .dictionary: "__safeDI_Host_95130D8D9F521585"
+			case .tuple: "__safeDI_Host_F88C6A6E594C3D64"
+			case .closure: "__safeDI_Host_3C36E801CBE65B81"
+			case .attributed: "__safeDI_Host_42B662CC019A9A96"
+			case .metatype: "__safeDI_Host_60B46C0B5D56F5E5"
+			case .variadic: "__safeDI_Host_815AF2D9F2C3F36B"
+			case .void: "__safeDI_Host_D2635C12C90786D1"
 			}
 		}
 	}
@@ -945,6 +945,8 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 	@Test(arguments: OneHoleTypeSpelledTwoWays.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_namesOneHoleTypeByItsCanonicalSpelling_whenPlacesSpellItTwoWaysInsideAType(spelling: OneHoleTypeSpelledTwoWays) async throws {
+		// The builder's struct is over the most explicit of the two spellings: `Void` is longer than `()`, and of two orders of a
+		// composition, one shape, the one whose spelling sorts first (`TypeDescription.mostExplicitSpelling(among:)`).
 		let feature = [
 			"public protocol P {}",
 			"public protocol Q {}",
@@ -981,7 +983,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_\(spelling.label): SafeDIScope_\(spelling.stem).__safeDI_Builder<\(spelling.spelledFirst)>) {
+		    public init(__safeDI_\(spelling.label): SafeDIScope_\(spelling.stem).__safeDI_Builder<\(spelling.spelledSecond)>) {
 		        let first: \(spelling.spelledFirst) = __safeDI_\(spelling.label).first(SafeDIScope_\(spelling.stem).first_Values())
 		        let second: \(spelling.spelledSecond) = __safeDI_\(spelling.label).second(SafeDIScope_\(spelling.stem).second_Values(first: first))
 		        self.init(first: first, second: second)
