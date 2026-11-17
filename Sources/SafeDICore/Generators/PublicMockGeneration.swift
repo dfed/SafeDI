@@ -546,7 +546,7 @@ extension ScopeGenerator {
 		} else {
 			node.typeDescription
 		}
-		return Property(label: node.propertyLabel, typeDescription: .optional(valueType.unwrapped))
+		return Property(label: node.propertyLabel, typeDescription: .optional(valueType.implicitlyUnwrappedOptionalSpelledAsOptional.unwrapped))
 	}
 }
 
