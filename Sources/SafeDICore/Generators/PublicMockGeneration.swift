@@ -133,6 +133,8 @@ extension ScopeGenerator {
 	/// each member it omits to its `omittedValue`. The members are in the struct's storage (`ConfigurationStorage`),
 	/// which is not `Sendable`, since a public struct is not `Sendable` unless it declares it, which none of these does.
 	static func publicStructBody(members: [PublicStructMember], indent: String) -> [String] {
+		// A mock's `SafeDIOverrides` whose only member was a closure its call cannot be handed keeps its initializer.
+		guard !members.isEmpty else { return ["\(indent)public init() {}"] }
 		let memberIndent = "\(indent)\(standardIndent)"
 		let storage = ConfigurationStorage(fields: members.map { member in
 			ConfigurationStorage.Field(
@@ -198,7 +200,9 @@ extension ScopeGenerator {
 			!cycleEdges.contains(CycleEdge(parent: concreteType.asSource, child: child.concreteType.asSource))
 		}
 		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
-		for child in nonCycleChildren {
+		// A child whose call can hand its override closure no builder a person writes has no member
+		// (`MockParameterNode.offersOverrideClosure`).
+		for child in nonCycleChildren where child.offersOverrideClosure {
 			members.append(publicMember(
 				for: child,
 				named: disambiguatedLabel(for: child, labelMap: childLabelMap),
@@ -1277,7 +1281,9 @@ extension ScopeGenerator {
 		context: PublicMockContext,
 		indent: String,
 	) -> String {
-		let members = rootChildren.map { child in
+		// A child whose call can hand its override closure no builder a person writes has no member
+		// (`MockParameterNode.offersOverrideClosure`).
+		let members = rootChildren.filter(\.offersOverrideClosure).map { child in
 			publicMember(
 				for: child,
 				named: disambiguatedLabel(for: child, labelMap: rootLabelMap),

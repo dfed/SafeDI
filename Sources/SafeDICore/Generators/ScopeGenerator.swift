@@ -1110,13 +1110,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// What a seam call passes one builder: the label it takes it under and the expression passed.
 	struct BuilderCallArgument: Sendable {
-		init(label: String, value: String, declarations: [String] = [], enclosingFill: EnclosingFill? = nil, isSendable: Bool = false, builderStruct: PublicMockBuilderStruct? = nil) {
+		init(label: String, value: String, declarations: [String] = [], enclosingFill: EnclosingFill? = nil, isSendable: Bool = false, builderStruct: PublicMockBuilderStruct? = nil, overrideHanding: OverrideHanding = .none) {
 			self.label = label
 			self.value = value
 			self.declarations = declarations
 			self.enclosingFill = enclosingFill
 			self.isSendable = isSendable
 			self.builderStruct = builderStruct
+			self.overrideHanding = overrideHanding
+		}
+
+		/// What a call of another module's public mock can hand an override closure that builds the called mock for one of
+		/// its builders, which the closure passes on to the called `mock()`: a builder a person writes.
+		enum OverrideHanding: Sendable {
+			/// Nothing a person writes: the call is made in a public mock's body, which holds only the builder struct its
+			/// caller built, and passes a place of the builder up; or it fills some places of the builder and passes others up.
+			case none
+			/// The builder the calling internal mock takes, `value`, which it passes up whole.
+			case callersBuilder
+			/// A function over the call's fill: the call fills every place the builder reaches.
+			case fills
 		}
 
 		/// What a call passes a public mock's builder whose places it fills: the call of the root level function of the
@@ -1149,6 +1162,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let isSendable: Bool
 		/// For a builder of a public mock that takes a builder struct, what the call passes in place of `value`.
 		let builderStruct: PublicMockBuilderStruct?
+		/// For a builder of another module's public mock, what an override closure of the call can be handed for it.
+		let overrideHanding: OverrideHanding
 	}
 
 	/// The function a caller generates over a seam's or a public mock's scope enum, which hands each case to the fill of its
@@ -1989,7 +2004,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			routePlan: RoutePlan? = nil,
 			typesDeclaredEscaping: Set<TypeDescription> = [],
 			readers: InnerScopeReaders? = nil,
-			fillsReturningWrapperBuilders: Set<String> = [],
+			fillsTakingPayloadFields: Set<String> = [],
 		) -> String {
 			let caseIndent = indent + ScopeGenerator.standardIndent
 			// What this function hands on of a value no case carries: its own parameter, or, for the root dispatcher, which
@@ -2049,7 +2064,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					isSendable: isSendable,
 					indent: indent,
 					inlinedFills: inlinedFills,
-					fillsReturningWrapperBuilders: fillsReturningWrapperBuilders,
+					fillsTakingPayloadFields: fillsTakingPayloadFields,
 					parameters: parameters,
 					parametersByKey: parametersByKey,
 					ownValue: ownValue(of:),
@@ -2214,7 +2229,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			isSendable: Bool,
 			indent: String,
 			inlinedFills: [String: InlinedFill],
-			fillsReturningWrapperBuilders: Set<String>,
+			fillsTakingPayloadFields: Set<String>,
 			parameters: [SeamSignature.Hole.Field],
 			parametersByKey: [String: [SeamSignature.Hole.Field]],
 			ownValue: (String) -> String,
@@ -2258,7 +2273,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// inside the closure the struct stores (`ScopeGenerator.declaresFunction(inFillBody:)`).
 					let binding = inlinedFill.carriesPayload && inlinedFill.readsScope ? "scope" : "_"
 					members.append((dispatcherCase.name, ["\(dispatcherCase.name.spelledAsArgumentLabel): { \(binding) in"] + inlinedFill.body.map { String($0.dropFirst(memberIndent.count)) } + ["}"]))
-				} else if fillsReturningWrapperBuilders.contains(target.key) || !Self.isFill(target) {
+				} else if fillsTakingPayloadFields.contains(target.key) || !Self.isFill(target) {
 					// A fill that returns a wrapper's builder takes each field of the payload it reads, from the payload, and each
 					// value it reads that the payload does not carry, under its label: the builder it returns captures no payload.
 					// The next level's function likewise takes what it reads from this case's payload where it carries one.
@@ -3986,7 +4001,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// returns a wrapper's builder (`fillReturnsWrapperBuilder`), first the fields of the payload it binds, each by itself:
 	/// the builder it returns then captures what it reads, never the payload struct.
 	nonisolated var fillMemberParameterFields: [SeamSignature.Hole.Field] {
-		guard fillReturnsWrapperBuilder, let enumPlace = fillHole?.enumPlace, let child = propertiesToGenerate.first else { return fillParameterFields }
+		fillMemberParameterFields(takingPayloadFields: fillReturnsWrapperBuilder)
+	}
+
+	/// What a level function's member hands a fill beside its case's payload (`fillParameterFields`), first, where
+	/// `takingPayloadFields`, the fields of the payload it binds, each by itself.
+	nonisolated func fillMemberParameterFields(takingPayloadFields: Bool) -> [SeamSignature.Hole.Field] {
+		guard takingPayloadFields, let enumPlace = fillHole?.enumPlace, let child = propertiesToGenerate.first else { return fillParameterFields }
 		// Each is the fill's own field of the payload's label, which says how the fill binds it, as its body reads it: a
 		// deferred parameter's memo where it `bindsMemo`, which the member hands it in place of the value.
 		let boundFields = fillBoundFields
@@ -4211,6 +4232,78 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			valuesByLabel[builderCallArgument.label] = builderCallArgument.value
 		}
 		return valuesByLabel
+	}
+
+	/// What an override closure that builds the public mock of another module this scope calls is handed for each builder the
+	/// called `mock()` takes, by label, or `nil` where the call holds no builder a person writes for some builder, and its node
+	/// then offers no closure: the closure passes what it is handed on to `mock()`, and written code is handed nothing
+	/// generated. Only for a call whose called mock takes no `SafeDIOverrides`, whose node's member is that closure; such a
+	/// mock builds nothing itself, so it has one level, which binds its parameters and holds its places.
+	///
+	/// A builder an internal mock passes up whole is handed as the mock takes it. A builder whose every place the call fills is
+	/// handed a function over the fill of its first place, which takes each value the fill reads (`fillTakesPayloadFields`),
+	/// handed the value the call passes the called mock's parameter of that label: where a value the fill reads is no such
+	/// parameter of that type, being another of the called mock's places or a value it renames, the call can hand no builder.
+	/// A public mock's body holds only the struct its caller built, so where it passes a place up, nothing can be handed
+	/// either (`BuilderCallArgument.OverrideHanding`). Decided when the tree is built, for the whole call: the struct that
+	/// holds the member is shared by every node of its type in the module's mocks of one access, which all decide alike, since
+	/// a call fills or passes up a place whatever mock's tree makes it.
+	///
+	/// A deliberate gap, commented where the member is typed (`MockParameterNode.offersOverrideClosure`): the closure could be
+	/// offered there by unwrapping the called mock's struct in generated code, a later addition that breaks nothing.
+	nonisolated var publicMockOverrideBuilders: [String: PublicMockOverrideBuilder]? {
+		guard let publicMockCall, !publicMockCall.takesOverrides else { return nil }
+		let builderLabels = Set(builderCallArguments.map(\.label))
+		let parameterTypesByLabel = Dictionary(
+			(builtInstantiable?.mockInitializer?.arguments ?? []).filter { !builderLabels.contains($0.innerLabel) }.map { ($0.innerLabel, $0.typeDescription) },
+			uniquingKeysWith: { first, _ in first },
+		)
+		var buildersByLabel = [String: PublicMockOverrideBuilder]()
+		for builderCallArgument in builderCallArguments {
+			switch builderCallArgument.overrideHanding {
+			case .none:
+				return nil
+			case .callersBuilder:
+				buildersByLabel[builderCallArgument.label] = .callersBuilder(builderCallArgument.value)
+			case .fills:
+				// The called mock's one level holds every place the builder reaches, so its root level function's every member is a
+				// fill, which takes no value beside its payload.
+				let members = builderCallArgument.builderStruct.flatMap { publicMockLevelFunctions?.rootMembers(ofDispatcherKeyed: $0.rootDispatcherKey) } ?? []
+				let fillTargets = members.compactMap(\.fillTakingOnlyItsPayload)
+				guard fillTargets.count == members.count, let target = fillTargets.first, let fill = propertiesToGenerate.first(where: { $0.fillKey == target.key && $0.fillEmitsCode }), fill.fillHole?.forwardedType == nil || fill.fillReturnsWrapperBuilder else { return nil }
+				let fields = fill.fillMemberParameterFields(takingPayloadFields: true)
+				guard fields.allSatisfy({ parameterTypesByLabel[$0.property.label] == $0.property.typeDescription }) else { return nil }
+				buildersByLabel[builderCallArgument.label] = .fill(
+					key: target.key,
+					functionName: target.name,
+					parameterLabels: fields.map(\.property.label),
+					returnsWrapperBuilder: fill.fillReturnsWrapperBuilder,
+				)
+			}
+		}
+		return buildersByLabel
+	}
+
+	/// What an override closure of a call of another module's public mock is handed for one builder
+	/// (`publicMockOverrideBuilders`).
+	enum PublicMockOverrideBuilder: Sendable {
+		/// The builder the calling internal mock takes, which it passes up whole.
+		case callersBuilder(String)
+		/// A function over the fill of `key`, `functionName`, which takes the values of `parameterLabels`. A fill that returns
+		/// a wrapper's builder is handed as its call, which returns the builder.
+		case fill(key: String, functionName: String, parameterLabels: [String], returnsWrapperBuilder: Bool)
+
+		/// The expression handed, given the expression the call passes the called mock's parameter of each label.
+		func expression(argumentByLabel: [String: String]) -> String {
+			switch self {
+			case let .callersBuilder(value):
+				return value
+			case let .fill(_, functionName, parameterLabels, returnsWrapperBuilder):
+				let arguments = parameterLabels.map { "\($0.spelledAsArgumentLabel): \(argumentByLabel[$0] ?? $0)" }.joined(separator: ", ")
+				let call = "\(functionName)(\(arguments))"
+				return returnsWrapperBuilder ? call : "{ \(call) }"
+			}
+		}
 	}
 
 	/// Whether this scope's call of another module's public mock passes a fill or a dispatcher, its own or an enclosing
@@ -5384,14 +5477,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// fill reads it only if available and this scope declares none, or builds it later. A value one fill reads where
 		// another reads it too is passed as the fill that finds it available reads it.
 		var callerArgumentsByLabel = [String: Set<String>]()
-		// The fills a level function's member hands each field of its payload they read, rather than the payload.
-		var fillsReturningWrapperBuilders = Set<String>()
+		// The fills a level function's member hands each field of its payload they read, rather than the payload: those that
+		// return a wrapper's builder, and those an override closure of the call is handed a function over, which the closure
+		// calls with the caller's values.
+		var fillsTakingPayloadFields = Set<String>()
+		var overrideFillKeys = Set<String>()
+		for builder in (publicMockOverrideBuilders ?? [:]).values {
+			if case let .fill(key, _, _, _) = builder {
+				overrideFillKeys.insert(key)
+			}
+		}
 		if !fillDispatchers.isEmpty {
 			for child in orderedChildren {
 				if let key = child.generator.fillKey, child.generator.fillEmitsCode {
-					fillParametersByKey[key] = child.generator.fillMemberParameterFields
-					if child.generator.fillReturnsWrapperBuilder {
-						fillsReturningWrapperBuilders.insert(key)
+					let takesPayloadFields = child.generator.fillReturnsWrapperBuilder || overrideFillKeys.contains(key)
+					fillParametersByKey[key] = child.generator.fillMemberParameterFields(takingPayloadFields: takesPayloadFields)
+					if takesPayloadFields {
+						fillsTakingPayloadFields.insert(key)
 					}
 					let callerReads = child.generator.fillCallerReads
 					for (label, argument) in callerReads.argumentByLabel {
@@ -5427,6 +5529,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for (index, child) in orderedChildren.enumerated() where child.generator.fillEmitsCode {
 			var builderFunctionNames = childBuilderFunctionNames?[index].flatMap(\.self)
 				?? BuilderFunctionNames(fillIsSendable: buildsInSendableFunction(ofFill: child.generator))
+			builderFunctionNames.fillTakesPayloadFields = child.generator.fillKey.map(overrideFillKeys.contains) ?? false
 			if !loopMemberDeclarationsByLoop.isEmpty,
 			   let childIndex = propertiesToGenerate.firstIndex(where: { $0 === child.generator }),
 			   let loop = receivedBuilderLoops.loopByChildIndex[childIndex]
@@ -5448,6 +5551,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if let key = child.generator.fillKey,
 			   inlinableFillKeys.contains(key),
 			   publicMockInlinableFillKeys?.contains(key) ?? true,
+			   // An override closure calls the fill's function.
+			   !overrideFillKeys.contains(key),
 			   let inlinedFill = Self.inlinedFill(of: child.generator, code: code, leadingMemberWhitespace: leadingMemberWhitespace),
 			   // A builder struct's member holds the fill's body in a closure, inside which no function is declared: a body that
 			   // declares one, which can be isolated as the code around the closure is, is called by name instead.
@@ -5476,7 +5581,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				callerArgumentByLabel: callerArgumentByLabel,
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				readers: readers,
-				fillsReturningWrapperBuilders: fillsReturningWrapperBuilders,
+				fillsTakingPayloadFields: fillsTakingPayloadFields,
 			))
 			if let readers {
 				let requests = dispatcher.readerRequests(parametersByKey: parametersByKey, routePlan: nil, readers: readers)
@@ -5494,7 +5599,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				indent: leadingMemberWhitespace,
 				sendableKeys: sendableFillKeys,
 				inlinedFills: inlinedFills,
-				fillsReturningWrapperBuilders: fillsReturningWrapperBuilders,
+				fillsTakingPayloadFields: fillsTakingPayloadFields,
 				fillMemberParameterFieldsByKey: fillParametersByKey,
 				typesDeclaredEscaping: typesDeclaredEscaping,
 			)
@@ -5885,6 +5990,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var enclosingFunctionNames = [BuiltDeclaration: String]()
 		/// For a fill, whether its function is `@Sendable` (see `buildsInSendableFunction(ofFill:)`).
 		var fillIsSendable = false
+		/// For a fill an override closure of its call is handed a function over (`publicMockOverrideBuilders`), whether its
+		/// function takes each field of its case's payload it reads by itself, never the payload, which no other module can make.
+		var fillTakesPayloadFields = false
 		/// For a member of a loop of builders, the declarations with which the members of its loop are wrapped again, by
 		/// their property: its builder function rebinds those its tree receives, and its `__safeDI_<label>_received`
 		/// function those it passes as parameters a lazy cycle needs (see `ReceivedBuilderLoops`).
@@ -6486,6 +6594,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				of: hole,
 				functionName: functionName,
 				isSendable: builderFunctionNames.fillIsSendable,
+				takesPayloadFields: builderFunctionNames.fillTakesPayloadFields,
 				codeGeneration: codeGeneration,
 				propertiesGeneratedLater: propertiesGeneratedLater,
 				enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
@@ -6979,6 +7088,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		of hole: SeamSignature.Hole,
 		functionName: String,
 		isSendable: Bool,
+		takesPayloadFields: Bool,
 		codeGeneration: CodeGeneration,
 		propertiesGeneratedLater: Set<Property>,
 		enclosingFunctionNames: [BuiltDeclaration: String],
@@ -7047,6 +7157,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A wrapper's scope returns what its builder function builds, and a constant's has bound it.
 		if property.propertyType.isConstant {
 			body.append(indent + "return \(property.label)")
+		}
+		guard !takesPayloadFields else {
+			// An override closure of the call calls the fill with the values the call passes the called mock, and a level
+			// function's member with its payload's, each by itself: no other module can make the payload.
+			let parameters = fillMemberParameterFields(takingPayloadFields: true).map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
+			return (["\(isSendable ? "@Sendable " : "")func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {"]
+				+ body
+				+ ["}"]).joined(separator: "\n")
 		}
 		// A fill of a place nested by type binds what its case's payload holds, and takes what a type further out binds.
 		let nestedByTypeValues = hole.enumPlace?.values
@@ -8954,6 +9072,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// by label (`ScopeGenerator.publicMockBuilderStructValuesByLabel`), where an override closure of the node is handed
 		/// `holeArgumentValuesByLabel`'s value.
 		let publicMockBuilderStructValuesByLabel: [String: String]
+		/// For a node that calls another module's public mock that takes no `SafeDIOverrides`, what its override closure is
+		/// handed for each builder (`ScopeGenerator.publicMockOverrideBuilders`), or `nil` where the call can hand none.
+		let publicMockOverrideBuilders: [String: ScopeGenerator.PublicMockOverrideBuilder]?
+
+		/// Whether the struct that configures this node holds a member for it. A node that calls another module's public mock
+		/// that takes no `SafeDIOverrides` offers its closure only where its call can hand the called `mock()` a builder a person
+		/// writes for every builder it takes (`ScopeGenerator.publicMockOverrideBuilders`); the struct that holds it, and the
+		/// mock's `safeDIOverrides:` parameter, stay where it does not, so adding the closure later breaks no caller.
+		///
+		/// A deliberate gap, commented where the call is emitted (`generateMockBodyBindings`): see
+		/// `ScopeGenerator.publicMockOverrideBuilders`.
+		var offersOverrideClosure: Bool {
+			guard let publicMockCall, !publicMockCall.takesOverrides else { return true }
+			return publicMockOverrideBuilders != nil
+		}
 		/// The `propertiesGeneratedLater` of the body of this node's builder function, which declares the fills of
 		/// `fillingGenerator` beside the node's children: the fills are generated with them, as production generates a
 		/// seam call's fills, so a receive inside one of a property generated after the call is passed `nil`. Read only
@@ -9042,6 +9175,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			fillingGenerator: ScopeGenerator?,
 			holeArgumentValuesByLabel: [String: String],
 			publicMockBuilderStructValuesByLabel: [String: String] = [:],
+			publicMockOverrideBuilders: [String: ScopeGenerator.PublicMockOverrideBuilder]? = nil,
 			fillPropertiesGeneratedLater: Set<Property>,
 			referencedFillNames: Set<String>,
 			forwardedProperties: Set<Property>,
@@ -9084,6 +9218,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			self.fillingGenerator = fillingGenerator
 			self.holeArgumentValuesByLabel = holeArgumentValuesByLabel
 			self.publicMockBuilderStructValuesByLabel = publicMockBuilderStructValuesByLabel
+			self.publicMockOverrideBuilders = publicMockOverrideBuilders
 			self.fillPropertiesGeneratedLater = fillPropertiesGeneratedLater
 			self.referencedFillNames = referencedFillNames
 			self.forwardedProperties = forwardedProperties
@@ -9426,13 +9561,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				return defaultConstruction
 			}
 			let overrideName = ReservedName.configurationBuilderPropertyName
-			let overrideCall = "\(overrideName)(\(arguments.joined(separator: ", ")))"
+			let overrideCall = "\(overrideName)(\(overrideArguments(arguments, overrideReachable: overrideReachable, handWrittenMockDefaultParameters: handWrittenMockDefaultParameters).joined(separator: ", ")))"
 			let overrideConstruction = if erasedToConcreteExistential, needsConfigurationStruct {
 				"\(concreteExistentialType.asSource)(\(overrideCall))"
 			} else {
 				overrideCall
 			}
 			return "if let \(overrideName) = \(overrideExpression) { \(overrideConstruction) } else { \(defaultConstruction) }"
+		}
+
+		/// `arguments`, those of the call site, as this node's override closure is handed them: each builder of a call of another
+		/// module's public mock as `publicMockOverrideBuilders` says, which reads the values the call passes the called mock.
+		private func overrideArguments(_ arguments: [String], overrideReachable: Bool, handWrittenMockDefaultParameters: [DefaultParameter]) -> [String] {
+			guard let publicMockOverrideBuilders, !publicMockOverrideBuilders.isEmpty else { return arguments }
+			let surfacedArguments = surfacedCallSiteArguments(
+				overrideReachable: overrideReachable,
+				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+			)
+			let argumentByLabel = Dictionary(zip(surfacedArguments.map(\.innerLabel), arguments), uniquingKeysWith: { first, _ in first })
+			return zip(surfacedArguments, arguments).map { argument, value in
+				publicMockOverrideBuilders[argument.innerLabel]?.expression(argumentByLabel: argumentByLabel) ?? value
+			}
 		}
 
 		/// A direct call expression using the default builder with labeled arguments.
@@ -9954,6 +10103,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					fillingGenerator: childGenerator.fillsABuilder ? childGenerator : nil,
 					holeArgumentValuesByLabel: childGenerator.holeArgumentValuesByLabel,
 					publicMockBuilderStructValuesByLabel: childGenerator.publicMockBuilderStructValuesByLabel,
+					publicMockOverrideBuilders: childGenerator.publicMockOverrideBuilders,
 					fillPropertiesGeneratedLater: childBodyPropertiesGeneratedLater,
 					referencedFillNames: Set(childGenerator.referencedFillNamesByKey.values),
 					forwardedProperties: forwardedProperties,
@@ -10569,6 +10719,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(indent)/// Overrides for the mock dependency tree.")
 		lines.append("\(indent)struct \(ReservedName.mockOverridesTypeName) {")
 
+		// A child whose call can hand its override closure no builder a person writes has no member
+		// (`MockParameterNode.offersOverrideClosure`); the struct stays, with an initializer that takes nothing where it has
+		// no other member.
+		let rootChildren = rootChildren.filter(\.offersOverrideClosure)
+		guard !rootChildren.isEmpty || !onlyIfAvailableOverrides.isEmpty else {
+			lines.append("\(innerIndent)init() {}")
+			lines.append("\(indent)}")
+			return lines.joined(separator: "\n")
+		}
+
 		// Generate SafeDIOverrides init with root-level children and onlyIfAvailable entries.
 		let childFields = rootChildren.map { child in
 			configurationField(
@@ -10711,7 +10871,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			))
 		}
 		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
-		for child in nonCycleChildren {
+		// A child whose call can hand its override closure no builder a person writes has no member
+		// (`MockParameterNode.offersOverrideClosure`).
+		for child in nonCycleChildren where child.offersOverrideClosure {
 			let (field, defaultValue) = configurationField(
 				of: child,
 				named: disambiguatedLabel(for: child, labelMap: childLabelMap),
@@ -11105,7 +11267,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// `SafeDIMockConfiguration` has no override slot to read. Inside a
 				// `@Sendable` function the override is read into a local outside
 				// that function, so reference that local instead.
-				let overrideExpression: String? = if isCycleNode || !thisOverrideReachable {
+				// A node whose call of another module's public mock can hand no builder a person writes offers no closure, a
+				// deliberate gap commented where the member is typed (`MockParameterNode.offersOverrideClosure`).
+				let overrideExpression: String? = if isCycleNode || !thisOverrideReachable || !node.offersOverrideClosure {
 					nil
 				} else if let sendableOverrideExtractor {
 					sendableOverrideExtractor.extract(
