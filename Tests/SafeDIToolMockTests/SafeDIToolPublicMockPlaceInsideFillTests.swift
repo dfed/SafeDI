@@ -67,7 +67,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 				Self.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received public let tag: Tag", "@Received(onlyIfAvailable: true) public let id: Int?"]),
 				Self.mockedRoot(declarations: ["@Instantiated public let outer: Outer"]),
 			],
-			probes: [Self.probe(".outer.inner.screenBuilder.instantiate(7)", builders: "gadgetBuilder: { _ in PassedUpGadget() }")],
+			probes: [Self.probe(".outer.inner.screenBuilder.instantiate(7)", builders: "gadgetBuilder: { PassedUpGadget() }")],
 			expectedMiddle: """
 			#if canImport(Feature)
 			import Feature
@@ -457,7 +457,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 				Self.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received public let id: Int"]),
 				Self.mockedRoot(declarations: ["@Instantiated public let outer: Outer"]),
 			],
-			probes: [Self.probe(".outer.inner.screenBuilder.instantiate(7)", builders: "gadgetBuilder: { _ in PassedUpGadget() }", knownRightArguments: "id: 0")],
+			probes: [Self.probe(".outer.inner.screenBuilder.instantiate(7)", builders: "gadgetBuilder: { PassedUpGadget() }", knownRightArguments: "id: 0")],
 			expectedMiddle: """
 			#if canImport(Feature)
 			import Feature
@@ -850,7 +850,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 				Self.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received public let token: Token"]),
 				Self.mockedRoot(declarations: ["@Instantiated public let outer: Outer"]),
 			],
-			probes: [Self.probe(".outer.inner.page", builders: "gadgetBuilder: { _ in PassedUpGadget() }")],
+			probes: [Self.probe(".outer.inner.page", builders: "gadgetBuilder: { PassedUpGadget() }")],
 			expectedMiddle: """
 			#if canImport(Feature)
 			import Feature
@@ -1046,7 +1046,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 				Self.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received public let tag: Tag"], conformances: ", Sendable"),
 				Self.mockedRoot(declarations: ["@Instantiated public let outer: Outer"]),
 			],
-			probes: [Self.probe(".outer.inner.service", builders: "gadgetSendableBuilder: { _ in PassedUpGadget() }")],
+			probes: [Self.probe(".outer.inner.service", builders: "gadgetSendableBuilder: { PassedUpGadget() }")],
 			expectedMiddle: """
 			#if canImport(Feature)
 			import Feature
@@ -1238,7 +1238,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 				Self.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received public let tag: Tag"], conformances: ", Sendable"),
 				Self.mockedRoot(declarations: ["@Instantiated public let outer: Outer"]),
 			],
-			probes: [Self.probe(".outer.inner.service", builders: "gadgetSendableBuilder: { _ in PassedUpGadget() }")],
+			probes: [Self.probe(".outer.inner.service", builders: "gadgetSendableBuilder: { PassedUpGadget() }")],
 			expectedMiddle: """
 			#if canImport(Feature)
 			import Feature
@@ -1476,7 +1476,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 				Self.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received public let tag: Tag", "@Received public let tool: Tool", "@Received(onlyIfAvailable: true) public let id: Int?"]),
 				Self.mockedRoot(declarations: ["@Instantiated public let outer: Outer"]),
 			],
-			probes: [Self.probe(".outer.inner.screenBuilder.instantiate(3)", builders: "gadgetBuilder: { _ in PassedUpGadget() }")],
+			probes: [Self.probe(".outer.inner.screenBuilder.instantiate(3)", builders: "gadgetBuilder: { PassedUpGadget() }")],
 			expectedMiddle: """
 			#if canImport(Feature)
 			import Feature
@@ -1705,7 +1705,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 				Self.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received public let label: Label", "@Received(onlyIfAvailable: true) public let id: Int?"]),
 				Self.mockedRoot(declarations: ["@Instantiated public let outer: Outer"]),
 			],
-			probes: [Self.probe(".outer.inner.screenBuilder.instantiate(5)", builders: "gadgetBuilder: { _ in PassedUpGadget() }")],
+			probes: [Self.probe(".outer.inner.screenBuilder.instantiate(5)", builders: "gadgetBuilder: { PassedUpGadget() }")],
 			expectedMiddle: """
 			#if canImport(Feature)
 			import Feature
@@ -1941,7 +1941,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 				Self.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received(onlyIfAvailable: true) public let id: Int?"], conformances: ", Sendable"),
 				Self.mockedRoot(declarations: ["@Instantiated public let outer: Outer"]),
 			],
-			probes: [Self.probe(".outer.inner.screenBuilder.instantiate(7)", builders: "gadgetBuilder: { _ in PassedUpGadget() }")],
+			probes: [Self.probe(".outer.inner.screenBuilder.instantiate(7)", builders: "gadgetBuilder: { PassedUpGadget() }")],
 			expectedMiddle: """
 			#if canImport(Feature)
 			import Feature
