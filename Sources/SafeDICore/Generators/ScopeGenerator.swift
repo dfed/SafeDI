@@ -6212,6 +6212,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		guard let ownType = builders.first?.enumKey.seamType else { return [] }
 		let holesBySite = Dictionary(holes.map { ($0.site, $0) }, uniquingKeysWith: { first, _ in first })
 		let calledRootsTakingValue = calledRootsTakingValue(amongEnumsOf: scopeEnums, filledBy: scopeEnums.filter { $0.key.seamType == ownType && $0.declaresBuilderStruct })
+		// Each level's form is computed once per hole type: the builder structs ask for the form of a level once for every case
+		// that holds it.
+		var levelFormsByHoleType = [SeamSignature.HoleType: LevelBuilderForms]()
 		return scopeEnums.filter { $0.rootTypeName == nil && $0.key.seamType == ownType }.map { scopeEnum in
 			let key = scopeEnum.key
 			// A root enum declares the enums of its family's types other than the seam's own, nested inside it; a case spells the
@@ -6229,7 +6232,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					break
 				}
 			}
-			let declaration = scopeEnumDeclaration(of: scopeEnum, nestedEnums: nestedEnums, holesBySite: holesBySite, typesDeclaredEscaping: typesDeclaredEscaping, enumsOfHoleType: scopeEnums.filter { $0.key.holeType == key.holeType }, calledRootsTakingValue: calledRootsTakingValue, isSeam: isSeam)
+			var levelForms = levelFormsByHoleType[key.holeType] ?? LevelBuilderForms(enumsOfHoleType: scopeEnums.filter { $0.key.holeType == key.holeType }, holesBySite: holesBySite)
+			let declaration = scopeEnumDeclaration(of: scopeEnum, nestedEnums: nestedEnums, holesBySite: holesBySite, typesDeclaredEscaping: typesDeclaredEscaping, levelForms: &levelForms, calledRootsTakingValue: calledRootsTakingValue, isSeam: isSeam)
+			levelFormsByHoleType[key.holeType] = levelForms
 			guard let marker = unreadTypeComment?.markerLine(namedBy: namedTypes, indent: standardIndent) else { return declaration }
 			return "\(marker)\n\(declaration)"
 		}
@@ -6265,14 +6270,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// caller can switch over it without a default in any module, and so its access is the seam's. A case that holds an enum
 	/// of the seam spells it as its kind gives it: from its root, or the root itself.
 	/// - Parameters:
-	///   - enumsOfHoleType: Every enum of the hole type of `scopeEnum`, both families', which decide the type each level's
-	///     builder struct takes from the builder a person writes.
+	///   - levelForms: The forms of the levels of every enum of the hole type of `scopeEnum`, both families', which decide
+	///     the type each level's builder struct takes from the builder a person writes.
 	///   - calledRootsTakingValue: The called seams' root enums whose struct takes a builder that takes a value from its
 	///     no-scope initializer, which decide what the struct of such a root that a case for a builder the seam fills returns
 	///     takes from its builder (`calledRootsTakingValue(amongEnumsOf:filledBy:)`).
 	///   - isSeam: Whether the enum is a seam's, which declares no case where it declares a builder struct; a public mock's keeps
 	///     its cases and `@frozen`.
-	static func scopeEnumDeclaration(of scopeEnum: SeamSignature.ScopeEnum, nestedEnums: [SeamSignature.ScopeEnum] = [], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole], typesDeclaredEscaping: Set<TypeDescription>, enumsOfHoleType: [SeamSignature.ScopeEnum] = [], calledRootsTakingValue: Set<SeamSignature.ScopeEnum.Key> = [], isSeam: Bool, indent: String = standardIndent) -> String {
+	static func scopeEnumDeclaration(of scopeEnum: SeamSignature.ScopeEnum, nestedEnums: [SeamSignature.ScopeEnum] = [], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole], typesDeclaredEscaping: Set<TypeDescription>, levelForms: inout LevelBuilderForms, calledRootsTakingValue: Set<SeamSignature.ScopeEnum.Key> = [], isSeam: Bool, indent: String = standardIndent) -> String {
 		let caseIndent = indent + standardIndent
 		var caseLines = [String]()
 		var payloadStructs = [String]()
@@ -6324,13 +6329,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Only the root declares the enums nested in it; a nested enum's cases spell them from the root.
 		if scopeEnum.rootTypeName == nil {
 			for nestedEnum in nestedEnums {
-				body += (body.isEmpty ? "" : "\n\n") + scopeEnumDeclaration(of: nestedEnum, holesBySite: holesBySite, typesDeclaredEscaping: typesDeclaredEscaping, enumsOfHoleType: enumsOfHoleType, calledRootsTakingValue: calledRootsTakingValue, isSeam: isSeam, indent: caseIndent)
+				body += (body.isEmpty ? "" : "\n\n") + scopeEnumDeclaration(of: nestedEnum, holesBySite: holesBySite, typesDeclaredEscaping: typesDeclaredEscaping, levelForms: &levelForms, calledRootsTakingValue: calledRootsTakingValue, isSeam: isSeam, indent: caseIndent)
 			}
 		}
 		// A root of the plain family with no case of its own, a namespace for the enums its `@Sendable` root's cases hold,
 		// declares no struct: no builder is handed one.
 		if declaresBuilderStruct, !scopeEnum.cases.isEmpty {
-			body += (body.isEmpty ? "" : "\n\n") + builderStructDeclaration(of: scopeEnum, holesBySite: holesBySite, enumsOfHoleType: enumsOfHoleType, calledRootsTakingValue: calledRootsTakingValue, indent: caseIndent)
+			body += (body.isEmpty ? "" : "\n\n") + builderStructDeclaration(of: scopeEnum, holesBySite: holesBySite, levelForms: &levelForms, calledRootsTakingValue: calledRootsTakingValue, indent: caseIndent)
 		}
 		// A hole type that keeps its closure over the enum gets no `nonisolated`, a deliberate gap: its generated code is
 		// unchanged until it takes the struct.
@@ -6339,6 +6344,93 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		\(body)
 		\(indent)}
 		"""
+	}
+
+	/// The forms of the builders a person writes for the levels of one hole type's enums, each computed the first time a
+	/// builder struct asks for it, since a level's form is asked for once for every case that holds the level.
+	/// `DependencyTreeGenerator.builderForm(ofPlaces:)` reads of its places only the spellings of their wrappers and of the
+	/// values they forward, never their order or how many share a spelling, so a level is handed one place per spelling its
+	/// places have: reading every place of every level beneath, sorted, made the cost of a seam's enums grow with the
+	/// square of its places.
+	struct LevelBuilderForms {
+		init(enumsOfHoleType: [SeamSignature.ScopeEnum], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) {
+			enumsByKey = Dictionary(enumsOfHoleType.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+			self.holesBySite = holesBySite
+		}
+
+		/// The form of the builder a person writes for the places at and beneath the level of `key`, in that level's family.
+		mutating func form(ofLevel key: SeamSignature.ScopeEnum.Key) -> DependencyTreeGenerator.BuilderForm {
+			if let form = formByKey[key] {
+				return form
+			} else {
+				var placeBySpelling = [PlaceSpelling: SeamSignature.Hole]()
+				var visitedKeys = Set<SeamSignature.ScopeEnum.Key>()
+				var keysToVisit = [key]
+				while let visitedKey = keysToVisit.popLast() {
+					guard visitedKeys.insert(visitedKey).inserted, let scopeEnum = enumsByKey[visitedKey] else { continue }
+					placeBySpelling.merge(ownPlaces(of: scopeEnum), uniquingKeysWith: { first, _ in first })
+					for enumCase in scopeEnum.cases {
+						switch enumCase.kind {
+						case .place:
+							break
+						case let .nested(innerKey, _, _),
+						     let .inner(innerKey, _, _),
+						     let .fill(_, _, innerKey, _, _):
+							keysToVisit.append(innerKey)
+						}
+					}
+				}
+				let form = DependencyTreeGenerator.builderForm(ofPlaces: placeBySpelling.sorted { $0.key < $1.key }.map(\.value))
+				formByKey[key] = form
+				return form
+			}
+		}
+
+		/// What `DependencyTreeGenerator.builderForm(ofPlaces:)` reads of a place: whether it is held in an instantiator, and
+		/// then the wrapper's spelling and that of the value it forwards.
+		private struct PlaceSpelling: Hashable, Comparable {
+			init(of place: SeamSignature.Hole) {
+				let isAnyInstantiator = place.property.propertyType.isAnyInstantiator
+				self.isAnyInstantiator = isAnyInstantiator
+				wrapper = isAnyInstantiator ? place.property.typeDescription.unwrapped.strippingEscaping.asSource : ""
+				forwarded = isAnyInstantiator ? place.forwardedType?.strippingEscaping.asSource : nil
+			}
+
+			let isAnyInstantiator: Bool
+			let wrapper: String
+			let forwarded: String?
+
+			static func < (lhs: PlaceSpelling, rhs: PlaceSpelling) -> Bool {
+				(lhs.isAnyInstantiator ? 1 : 0, lhs.wrapper, lhs.forwarded ?? "") < (rhs.isAnyInstantiator ? 1 : 0, rhs.wrapper, rhs.forwarded ?? "")
+			}
+		}
+
+		/// One place of each spelling among the places of `scopeEnum`'s own cases.
+		private mutating func ownPlaces(of scopeEnum: SeamSignature.ScopeEnum) -> [PlaceSpelling: SeamSignature.Hole] {
+			if let places = ownPlacesByKey[scopeEnum.key] {
+				return places
+			} else {
+				var places = [PlaceSpelling: SeamSignature.Hole]()
+				for enumCase in scopeEnum.cases {
+					switch enumCase.kind {
+					case let .place(sites):
+						for place in sites.compactMap({ holesBySite[$0] }) {
+							let spelling = PlaceSpelling(of: place)
+							places[spelling] = places[spelling] ?? place
+						}
+					case .nested, .inner, .fill:
+						break
+					}
+				}
+				ownPlacesByKey[scopeEnum.key] = places
+				return places
+			}
+		}
+
+		private let enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]
+		private let holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
+		private var formByKey = [SeamSignature.ScopeEnum.Key: DependencyTreeGenerator.BuilderForm]()
+		private var ownPlacesByKey = [SeamSignature.ScopeEnum.Key: [PlaceSpelling: SeamSignature.Hole]]()
 	}
 
 	/// The builder struct of `scopeEnum`, `__safeDI_Builder<Built>`, indented by `indent`: one stored function per case, its
@@ -6355,7 +6447,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func builderStructDeclaration(
 		of scopeEnum: SeamSignature.ScopeEnum,
 		holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole],
-		enumsOfHoleType: [SeamSignature.ScopeEnum],
+		levelForms: inout LevelBuilderForms,
 		calledRootsTakingValue: Set<SeamSignature.ScopeEnum.Key>,
 		indent: String,
 	) -> String {
@@ -6366,13 +6458,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let builtTypeName = ReservedName.builderStructGenericParameterName
 		let builtType = TypeDescription.simple(name: builtTypeName, generics: [])
 		let builderParameter = ReservedName.noScopeParameterName
-		let enumsByKey = Dictionary(([scopeEnum] + enumsOfHoleType).map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
-		/// The form of the builder a person writes for the places at and beneath the level of `key`, in that level's family.
-		func form(ofLevel key: SeamSignature.ScopeEnum.Key) -> DependencyTreeGenerator.BuilderForm {
-			let reachedSites = SeamSignature.ScopeEnum.sitesReached(from: key, in: enumsByKey)
-			return DependencyTreeGenerator.builderForm(ofPlaces: reachedSites.sorted { $0.sortKey < $1.sortKey }.compactMap { holesBySite[$0] })
-		}
-		let levelForm = form(ofLevel: scopeEnum.key)
+		let levelForm = levelForms.form(ofLevel: scopeEnum.key)
 		let noScopeType: TypeDescription = if let forwarded = levelForm.forwardedValue {
 			DependencyTreeGenerator.erasedBuilderType(forwarding: forwarded, returning: builtType, isSendable: isSendable)
 		} else if isSendable {
@@ -6409,12 +6495,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// A call's case for a builder it fills returns the called seam's struct over the struct of the fill's own level:
 				// its places, wherever on the called seam's levels, build the level of what the fill builds.
 				returnType = "\(innerEnumType.asSource).\(ReservedName.builderStructTypeName)<\(enumType.asSource).\(ReservedName.builderStructTypeName)<\(builtTypeName)>>"
-				noScopeValue = ".init(\(ReservedName.noScopeArgumentLabel): { \(calledRootsTakingValue.contains(innerKey) ? "_ in " : "").init(\(ReservedName.noScopeArgumentLabel): \(builder(adaptedTo: form(ofLevel: enumKey).forwardedValue))) })"
+				noScopeValue = ".init(\(ReservedName.noScopeArgumentLabel): { \(calledRootsTakingValue.contains(innerKey) ? "_ in " : "").init(\(ReservedName.noScopeArgumentLabel): \(builder(adaptedTo: levelForms.form(ofLevel: enumKey).forwardedValue))) })"
 			case let .nested(enumKey, enumType, _),
 			     let .inner(enumKey, enumType, _),
 			     let .fill(_, _, enumKey, enumType, _):
 				returnType = "\(enumType.asSource).\(ReservedName.builderStructTypeName)<\(builtTypeName)>"
-				noScopeValue = ".init(\(ReservedName.noScopeArgumentLabel): \(builder(adaptedTo: form(ofLevel: enumKey).forwardedValue)))"
+				noScopeValue = ".init(\(ReservedName.noScopeArgumentLabel): \(builder(adaptedTo: levelForms.form(ofLevel: enumKey).forwardedValue)))"
 			}
 			members.append((enumCase.name, "\(sendableAttribute)(\(enumCase.memberValuesTypeName ?? "")) -> \(returnType)", noScopeValue))
 		}
