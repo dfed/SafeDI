@@ -2498,6 +2498,7 @@ enum GraphFuzzerGenerator {
 			retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionRandomSeedMask)
 			retentionLoopRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionLoopRandomSeedMask)
 			builderReceivedBesideReceiveLeftNilRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.builderReceivedBesideReceiveLeftNilRandomSeedMask)
+			implicitlyUnwrappedDefaultRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.implicitlyUnwrappedDefaultRandomSeedMask)
 			keywordLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.keywordLabelRandomSeedMask)
 
 			fillCallRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.fillCallRandomSeedMask)
@@ -2759,9 +2760,28 @@ enum GraphFuzzerGenerator {
 					owner.additionalConformances.append("@unchecked Sendable")
 					leaf.additionalConformances.append("@unchecked Sendable")
 				}
-				declarations.append(motifType(7, arguments: ["generateMock: true"], properties: [
+				var mocked = motifType(7, arguments: ["generateMock: true"], properties: [
 					PropertyDeclaration(attribute: "@Instantiated", label: "t8Builder", type: "SendableInstantiator<\(typeName(8))>"),
-				]))
+				])
+				// Now and then an implicitly unwrapped default-valued initializer parameter, `String! = nil`, which a mock's
+				// builder closure and configuration spell `String?`: on the owner, built through the `SendableInstantiator`, so
+				// the mock stores its default behind a `@Sendable` closure, or on `T10`, a type the mocked type builds by
+				// value. From a stream of its own, so every other draw is as before.
+				let drawsImplicitlyUnwrappedDefault = implicitlyUnwrappedDefaultRandom.percentChance(60)
+				let implicitlyUnwrappedDefaultOnOwner = implicitlyUnwrappedDefaultRandom.percentChance(50)
+				var named: TypeDeclaration?
+				if drawsImplicitlyUnwrappedDefault, implicitlyUnwrappedDefaultOnOwner {
+					owner.defaultValuedParameters.append(ParameterDeclaration(name: "displayName", type: "String!", defaultValue: "nil"))
+				} else if drawsImplicitlyUnwrappedDefault {
+					var declaration = motifType(10, properties: [])
+					declaration.defaultValuedParameters = [ParameterDeclaration(name: "nickname", type: "String!", defaultValue: "nil")]
+					mocked.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "t10", type: typeName(10)))
+					named = declaration
+				}
+				declarations.append(mocked)
+				if let named {
+					declarations.append(named)
+				}
 				declarations.append(owner)
 				declarations.append(leaf)
 				sendableBuilderMotifMockedTypeName = typeName(7)
@@ -2856,6 +2876,7 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let builderReceivedBesideReceiveLeftNilRandomSeedMask: UInt64 = 0x73656C6652656376
+		private static let implicitlyUnwrappedDefaultRandomSeedMask: UInt64 = 0x49554F4465666C74
 
 		/// The name of a helper type the `Sendable` builder motif declares, which is never `Sendable`.
 		private func nonSendableHelperTypeName(_ name: String) -> String {
@@ -2964,6 +2985,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `appendBuilderReceivedBesideReceiveLeftNilMotif`'s choices: whether a graph without another motif
 		/// ends with it, and its shapes.
 		private var builderReceivedBesideReceiveLeftNilRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether the `Sendable` builder motif gains an implicitly unwrapped default-valued initializer parameter,
+		/// and where.
+		private var implicitlyUnwrappedDefaultRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `labelingHoleOwnersAsKeywords`' choices: whether a graph's seam builds `HoleOwner` under keyword labels,
 		/// and which.
 		private var keywordLabelRandom: GraphFuzzerRandomNumberGenerator
@@ -8750,6 +8774,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// A type built through a `Sendable` wrapper whose subtree has a labeled default-valued initializer parameter and
 	/// a dependency the mock cannot build, both of types that are not `Sendable`.
 	case nonSendableValuesInsideSendableBuilder
+	/// An implicitly unwrapped default-valued initializer parameter (`nickname: String! = nil`) of a type a mocked type
+	/// builds by value.
+	case implicitlyUnwrappedDefaultValuedParameter
+	/// An implicitly unwrapped default-valued initializer parameter (`displayName: String! = nil`) of a type a mocked
+	/// type builds through a `SendableInstantiator`, whose default the mock stores behind a `@Sendable` closure.
+	case implicitlyUnwrappedDefaultValuedParameterInSendableBuilder
 	/// A hand-written `mock` a type declares in its body under `#if DEBUG`, which generated mocks call to build it.
 	case handWrittenMockUnderMockCondition
 	/// A type with `generateMock: true` whose hand-written mock `customMockName` names, which its generated `mock()`
@@ -9065,6 +9095,13 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 
 	static func features(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerFeature> {
 		var features = Set<GraphFuzzerFeature>()
+		// Only the `Sendable` builder motif declares these parameters.
+		if fixture.swiftFileContent.contains(where: { $0.contains("nickname: String! = nil") }) {
+			features.insert(.implicitlyUnwrappedDefaultValuedParameter)
+		}
+		if fixture.swiftFileContent.contains(where: { $0.contains("displayName: String! = nil") }) {
+			features.insert(.implicitlyUnwrappedDefaultValuedParameterInSendableBuilder)
+		}
 		var rootCount = 0
 		var typesByLabel = [String: Set<String>]()
 		var lazilyInstantiatedInstanceTypesByLabel = [String: Set<String>]()
