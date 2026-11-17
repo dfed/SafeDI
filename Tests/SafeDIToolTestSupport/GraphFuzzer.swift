@@ -5276,20 +5276,22 @@ enum GraphFuzzerGenerator {
 			// Where the base draw passes nothing up, `HoleOuter` passes the forwarding place up now and then, so that a kept seam
 			// rebuilds its case around the value it forwards (`holeForwardingPlacePassedUp`).
 			let passesUpForwardingPlace = holeRolls.forwardingPlaceShapes.percentChance(40)
-			let drawsInstantiatorPlace = holeRolls.instantiatorPlace.percentChance(80)
-			let handedForwardsRoll = holeRolls.instantiatorPlace.integer(in: 0...4)
+			// Nineteen times in twenty, and its rolls beside other places mostly, so that each of them is judged in ten graphs
+			// after acceptance.
+			let drawsInstantiatorPlace = holeRolls.instantiatorPlace.percentChance(95)
+			let handedForwardsRoll = holeRolls.instantiatorPlace.integer(in: 0...9)
 			let handedWrapper = holeRolls.instantiatorPlace.element(of: instantiators)
-			let handedHolderAlsoSendable = holeRolls.instantiatorPlace.percentChance(90)
-			let drawsErasedBesideInstantiator = holeRolls.instantiatorPlace.percentChance(50)
+			let handedHolderAlsoSendable = holeRolls.instantiatorPlace.percentChance(95)
+			let drawsErasedBesideInstantiator = holeRolls.instantiatorPlace.percentChance(85)
 			let handedErasedWrapper = holeRolls.instantiatorPlace.element(of: erasedInstantiators)
-			let drawsPlainBesideInstantiator = holeRolls.instantiatorPlace.percentChance(90)
+			let drawsPlainBesideInstantiator = holeRolls.instantiatorPlace.percentChance(95)
 			let drawsNothingForwardedPlace = holeRolls.nothingForwardedPlace.percentChance(95)
 			let nothingForwardedPlacement = holeRolls.nothingForwardedPlace.integer(in: 0...9)
 			let nothingForwardedSpelling = holeRolls.nothingForwardedPlace.element(of: ["()", "Void"])
 			let nothingForwardedWrapper = holeRolls.nothingForwardedPlace.element(of: erasedInstantiators)
-			// Six in ten, so that the second erasure lands in enough accepted graphs for the builder surface's floor of its pair
-			// (`secondErasureOfFillingType`).
-			let secondHoleTypeCollides = holeRolls.secondHoleType.percentChance(60)
+			// Nineteen in twenty, so that the second erasure lands in enough accepted graphs for the builder surface's floor of its
+			// pair (`secondErasureOfFillingType`).
+			let secondHoleTypeCollides = holeRolls.secondHoleType.percentChance(95)
 			let drawsInnerSeamRoutes = holeRolls.innerSeamRoutes.percentChance(25)
 			let innerSeamRoutesBeneathOuterSeam = holeRolls.innerSeamRoutes.percentChance(50)
 			let drawsTwoSeamCycle = holeRolls.twoSeamCycle.percentChance(20)
@@ -5699,12 +5701,12 @@ enum GraphFuzzerGenerator {
 			// by value, and also through a `SendableInstantiator` now and then. Beside it, an erased place of
 			// `HoleHanded.ForwardedProperties` on the seam, and, where it forwards nothing, a plain place of `HoleHanded` on the
 			// seam, a level above (`holeInstantiatorPlace` and its rolls).
-			// Three times in five it forwards nothing, so that the plain place and the place that forwards nothing are drawn beside
-			// it.
+			// Four times in five it forwards nothing, so that the plain place and the place that forwards nothing are drawn beside
+			// it in ten judged graphs each.
 			let handedForwardedType: String? = switch handedForwardsRoll {
-			case 0, 1, 2:
+			case 0 ... 7:
 				nil
-			case 3:
+			case 8:
 				"Int"
 			default:
 				"(holeHandedId: Int, holeHandedName: String)"
@@ -5719,7 +5721,7 @@ enum GraphFuzzerGenerator {
 				if handedForwardedType != nil {
 					forwardedProperties.append((label: "holeHandedId", type: "Int"))
 				}
-				if handedForwardsRoll == 4 {
+				if handedForwardsRoll == 9 {
 					forwardedProperties.append((label: "holeHandedName", type: "String"))
 				}
 				let parameters = forwardedProperties.map { "\($0.label): \($0.type)" }.joined(separator: ", ")
