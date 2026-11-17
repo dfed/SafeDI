@@ -1596,9 +1596,10 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesPlaceUp_whenPlaceIsBuiltInsideSendableFunction() async throws {
+	mutating func generate_fillsPlaceWithCallersValue_whenPlaceIsBuiltInsideSendableFunction() async throws {
 		// `api` is built inside `panelBuilder`'s `@Sendable` function, whose case carries no value of the root level: `Root`
-		// passes the place up, and a builder that captures the value fills it.
+		// fills the place with the `id` it forwards to `Detail`, which its `@Sendable` builder function captures, as inline
+		// does.
 		try await expectPublicMock(
 			feature: [
 				"public protocol Api: Sendable {}",
@@ -1609,11 +1610,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 				Self.fulfillingType(named: "Live", declarations: ["@Received public let id: Int"]),
 				Self.mockedRoot(declarations: ["@Instantiated public let detailBuilder: Instantiator<Detail>"]),
 			],
-			probes: [DifferentialValueProbe(
-				name: "panel",
-				expression: "Root.mock(apiSendableBuilder: { Live(id: 7) }).detailBuilder.instantiate(7).panelBuilder.instantiate()",
-				knownRightExpression: "Root.mock().detailBuilder.instantiate(7).panelBuilder.instantiate()",
-			)],
+			probes: [DifferentialValueProbe(name: "panel", expression: "Root.mock().detailBuilder.instantiate(7).panelBuilder.instantiate()")],
 			expectedFeature: """
 			#if DEBUG
 			extension Detail {

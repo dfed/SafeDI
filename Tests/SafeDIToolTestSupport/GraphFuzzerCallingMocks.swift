@@ -644,6 +644,15 @@ extension String {
 	}
 }
 
+/// `source` as a hand-written test's production twin declares it: each `@Instantiable(generateMock: true)` a seam, and
+/// each `@Instantiable(generateMock: .public)` a seam that keeps its public mock, so the twin of a calling mock calls the
+/// same types' seams.
+func callingMockProductionTwin(of source: String) -> String {
+	source
+		.replacingOccurrences(of: "@Instantiable(generateMock: true)", with: "@Instantiable(generateDependencyTree: true)")
+		.replacingOccurrences(of: "@Instantiable(generateMock: .public)", with: "@Instantiable(generateDependencyTree: true, generateMock: .public)")
+}
+
 // MARK: - Graph
 
 /// A graph whose caller's generated `mock()` calls another module's public mock, in its two forms, with the facts the check

@@ -432,16 +432,15 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		}
 	}
 
-	// MARK: Tests – a caller that passes a place up beside a place it fills
+	// MARK: Tests – a caller that fills one place on two routes
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_freesWhatKnownRightFrees_whenPublicCallerFillsOneRouteAndPassesTheOtherUp() async throws {
-		// `Shell`, a public mock in `Mid`, fills the route through `Page`, which binds `token`, and passes the route beside
-		// `Page` up under its own member; `Root` passes it up to the probe. Everything the probe built is freed when it drops
-		// it, as when the same declarations are built in one module. Before, the closure over the enum held the page’s values,
-		// and the navigator’s stack held the closure, so nothing was freed.
-		let modules = Self.chainModules(app: [Self.root(holding: "shell: Shell"), Self.stubApi, Self.aliveAfterUse(hub: "Root.mock(apiBuilder: { StubApi() }).shell.hub")])
+	mutating func generate_freesWhatKnownRightFrees_whenPublicCallerFillsEachRouteWithItsNearestToken() async throws {
+		// `Shell`, a public mock in `Mid`, fills the route through `Page`, which binds `token`, with `Page`’s `token`, and the
+		// route beside `Page` with the `token` its mock takes, which `Root` builds. Everything the probe built is freed when it
+		// drops it, as when the same declarations are built in one module.
+		let modules = Self.chainModules(app: [Self.root(holding: "shell: Shell"), Self.aliveAfterUse(hub: "Root.mock().shell.hub")])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		let probe = DifferentialValueProbe("aliveAfterUse()")
 		let feature = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [probe], filesToDelete: &filesToDelete)
@@ -454,9 +453,9 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_freesEverythingItBuilt_whenInternalCallerFillsRouteAPublicCallerPassesUp() async throws {
-		// `Root` fills the route `Shell` passes up with `AppApi`, which receives `Hub`’s navigator, through level functions
-		// over `Shell`’s struct. Everything the probe built is freed when it drops it. No one-module build of these
+	mutating func generate_freesEverythingItBuilt_whenPublicCallerFillsThePlaceItsCallersModuleCouldFillToo() async throws {
+		// `Shell` fills both routes with `LiveToken`, which `Mid` sees, as its production twin does, though `App` sees `AppApi`,
+		// which receives `Hub`’s navigator. Everything the probe built is freed when it drops it. No one-module build of these
 		// declarations exists: `LiveToken` and `AppApi` both fulfill `Api`.
 		let modules = Self.chainModules(app: [Self.appApi, Self.root(holding: "shell: Shell"), Self.aliveAfterUse(hub: "Root.mock().shell.hub", pushesModelBesidePage: false)])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -468,26 +467,29 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_freesEverythingItBuilt_whenPublicCallerPassesUpPlaceBuiltInSendableFunction() async throws {
+	mutating func generate_freesWhatKnownRightFrees_whenPublicCallerFillsEachRouteOfPlaceBuiltInSendableFunction() async throws {
 		// `Hub` builds `Page` and `Model` in `SendableInstantiator`s, so its builder and `Shell`’s are of the `@Sendable`
-		// family; `Shell` fills the route through `Page` and passes the other up, and `Root` passes it up to the probe, which
-		// writes a `@Sendable` closure that takes nothing. Everything the probe built is freed when it drops it. The same
-		// declarations built in one module do not compile, apart from this change.
-		let modules = Self.chainModules(sendable: true, app: [Self.root(holding: "shell: Shell"), Self.stubApi, Self.aliveAfterUse(hub: "Root.mock(apiSendableBuilder: { StubApi() }).shell.hub")])
+		// family; `Shell` fills the route through `Page` with `Page`’s `token`, and the other with the `token` its mock takes,
+		// which its `@Sendable` builder function captures. Everything the probe built is freed when it drops it, as when the
+		// same declarations are built in one module.
+		let modules = Self.chainModules(sendable: true, app: [Self.root(holding: "shell: Shell"), Self.aliveAfterUse(hub: "Root.mock().shell.hub")])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		let feature = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("aliveAfterUse()")], filesToDelete: &filesToDelete)
+		let probe = DifferentialValueProbe("aliveAfterUse()")
+		let feature = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [probe], filesToDelete: &filesToDelete)
+		let knownRight = try await knownRightDescription(of: modules, keeping: ["Core", "Feed", "Mid"], probeSource: Self.root(holding: "shell: Shell") + "\n\n" + Self.aliveAfterUse(hub: "Root.mock().shell.hub"), probe: probe)
 		if compileVerificationIsEnabled {
-			#expect(feature == "probe aliveAfterUse()\nString \"\"\n")
+			#expect(knownRight == "probe aliveAfterUse()\nString \"\"\n")
+			#expect(feature == knownRight)
 		}
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_freesWhatKnownRightFrees_whenTwoPublicCallersPassThePlaceUpInTurn() async throws {
-		// `Outer`, a public mock in `Top`, builds `Shell` and passes the place `Shell` passes up under its own member, so the
-		// place crosses three mocks to reach `Root`. Everything the probe built is freed when it drops it, as when the same
-		// declarations are built in one module.
-		let modules = Self.chainModules(outer: true, app: [Self.root(holding: "outer: Outer"), Self.stubApi, Self.aliveAfterUse(hub: "Root.mock(apiBuilder: { StubApi() }).outer.shell.hub")])
+	mutating func generate_freesWhatKnownRightFrees_whenPublicMockCallsPublicCallerThatFillsEachRoute() async throws {
+		// `Outer`, a public mock in `Top`, builds `Shell`, which fills both routes, and hands it the `token` its own mock takes,
+		// which `Root` builds. Everything the probe built is freed when it drops it, as when the same declarations are built in
+		// one module.
+		let modules = Self.chainModules(outer: true, app: [Self.root(holding: "outer: Outer"), Self.aliveAfterUse(hub: "Root.mock().outer.shell.hub")])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		let probe = DifferentialValueProbe("aliveAfterUse()")
 		let feature = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [probe], filesToDelete: &filesToDelete)
@@ -4110,9 +4112,9 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 	"""
 
 	/// One place on two routes: `Model`’s `any Api` is reached through `Page`, which binds `token`, and straight from `Hub`,
-	/// a public mock in `Feed`, which does not. `Shell`, a public mock in `Mid`, fills the first route with `LiveToken` and
-	/// passes the second up. With `sendable`, `Hub` builds both in `SendableInstantiator`s. With `outer`, `Outer`, a public
-	/// mock in `Top`, builds `Shell`. Then `App`.
+	/// a public mock in `Feed`, which does not. `Shell`, a public mock in `Mid`, fills both routes with `LiveToken`, the
+	/// second with the `token` its mock takes. With `sendable`, `Hub` builds both in `SendableInstantiator`s. With `outer`,
+	/// `Outer`, a public mock in `Top`, builds `Shell`. Then `App`.
 	private static func chainModules(sendable: Bool = false, outer: Bool = false, app: [String]) -> [ModuleFixture] {
 		let instantiator = sendable ? "SendableInstantiator" : "Instantiator"
 		// A `@Sendable` builder function captures the `token` a fill reads of its caller, so it must be `Sendable`.
