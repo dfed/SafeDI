@@ -9,3 +9,5 @@ codesign/
 
 # Bazel
 bazel-*
+# Python caches of the scripts under Scripts/ and .claude/skills/
+__pycache__/
