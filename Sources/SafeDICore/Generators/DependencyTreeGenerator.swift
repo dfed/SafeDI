@@ -329,6 +329,8 @@ public actor DependencyTreeGenerator {
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
+		// The scopes of both mock scope maps outlive every mock root's tree, so the memo may be shared between them.
+		var constructionMemo = ConstructionMemo(sharing: ConstructionMemo.sharingBetweenTrees)
 		var mockRootErrors = [DependencyTreeGeneratorError]()
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
 			.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
@@ -368,6 +370,7 @@ public actor DependencyTreeGenerator {
 					childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 					promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 					scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+					constructionMemo: &constructionMemo,
 				)
 				if instantiable.generateMock == .public, let publicMockContext {
 					var findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: flatParameterMockDefaults)
@@ -757,6 +760,7 @@ public actor DependencyTreeGenerator {
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
+		var constructionMemo = ConstructionMemo()
 		let mockRoot = try await createMockRoot(
 			for: instantiable,
 			scope: scope,
@@ -771,6 +775,7 @@ public actor DependencyTreeGenerator {
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+			constructionMemo: &constructionMemo,
 		)
 		// Whether a public mock can be generated is decided for one root and needs no emitting module, as
 		// `generateMockCode` decides it, so the query reports it too.
@@ -1175,6 +1180,7 @@ public actor DependencyTreeGenerator {
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
+		constructionMemo: inout ConstructionMemo,
 	) async throws -> ScopeGenerator {
 		// A hand-written method also named `mock` can be confused with the
 		// generated `mock()`: identical signatures redeclare, overlapping ones
@@ -1228,6 +1234,7 @@ public actor DependencyTreeGenerator {
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+			constructionMemo: &constructionMemo,
 		)
 	}
 
@@ -3204,6 +3211,7 @@ public actor DependencyTreeGenerator {
 							typeDescriptionToScopeMap[typeDescription].map { (typeDescription: typeDescription, scope: $0) }
 						},
 					)
+					var constructionMemo = ConstructionMemo(sharing: ConstructionMemo.sharingBetweenTrees)
 					return try rootScopesToGenerate.map { typeDescription, scope in
 						try RootScopeInfo(
 							typeDescription: typeDescription,
@@ -3214,6 +3222,7 @@ public actor DependencyTreeGenerator {
 								lazilyInstantiatedInstanceProperties: [],
 								erasedToConcreteExistential: false,
 								declaredTypeNames: declaredTypeNames,
+								constructionMemo: &constructionMemo,
 							),
 						)
 					}
@@ -3921,6 +3930,7 @@ public actor DependencyTreeGenerator {
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
+		var constructionMemo = ConstructionMemo()
 		let mockRoot = try await createMockRoot(
 			for: instantiable,
 			scope: scope,
@@ -3932,6 +3942,7 @@ public actor DependencyTreeGenerator {
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+			constructionMemo: &constructionMemo,
 		)
 		let context = publicMockContext
 		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults)
@@ -4491,6 +4502,7 @@ public actor DependencyTreeGenerator {
 			},
 			checkingSeamTrees: generatedSeams.map { (instantiable: $0.seam, scope: $0.rootScope) },
 		)
+		var constructionMemo = ConstructionMemo(sharing: ConstructionMemo.sharingBetweenTrees)
 		var rootScopeGenerators = try rootScopesToGenerate.map { typeDescription, scope in
 			try RootScopeInfo(
 				typeDescription: typeDescription,
@@ -4501,6 +4513,7 @@ public actor DependencyTreeGenerator {
 					lazilyInstantiatedInstanceProperties: [],
 					erasedToConcreteExistential: false,
 					declaredTypeNames: declaredTypeNames,
+					constructionMemo: &constructionMemo,
 				),
 			)
 		}
@@ -5159,6 +5172,8 @@ public actor DependencyTreeGenerator {
 				lazilyInstantiatedInstanceProperties.insert(property.asUnwrappedProperty)
 			}
 		}
+		// A seam's tree has holes, whose places no memo holds.
+		var constructionMemo = ConstructionMemo()
 		return try rootScope.createScopeGenerator(
 			for: nil,
 			nearestDeclarations: nearestDeclarations,
@@ -5167,6 +5182,7 @@ public actor DependencyTreeGenerator {
 			erasedToConcreteExistential: false,
 			startsCodeGeneration: startsCodeGeneration,
 			declaredTypeNames: declaredTypeNames,
+			constructionMemo: &constructionMemo,
 		)
 	}
 
@@ -5921,6 +5937,7 @@ public actor DependencyTreeGenerator {
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
+		constructionMemo: inout ConstructionMemo,
 	) async throws -> ScopeGenerator {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
@@ -6307,7 +6324,9 @@ public actor DependencyTreeGenerator {
 		// Build the final ScopeGenerator once. The mock root binds every received
 		// property it does not promote — as a `mock()` parameter or a `SafeDIOverrides`
 		// entry — so each is receivable throughout the tree.
-		func mockRootGenerator(builders: ShapedBuilders?) throws -> ScopeGenerator {
+		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
+		// them shares the mock roots' memo.
+		func mockRootGenerator(builders: ShapedBuilders?, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
 			try mockRootScope.createScopeGenerator(
 				for: nil,
 				// The mock root binds every received property it does not promote, which encloses its whole tree.
@@ -6317,9 +6336,14 @@ public actor DependencyTreeGenerator {
 				erasedToConcreteExistential: false,
 				forMockGeneration: true,
 				declaredTypeNames: declaredTypeNames,
+				constructionMemo: &constructionMemo,
 			)
 		}
-		let generator = try mockRootGenerator(builders: nil)
+		func mockRootGeneratorWithHoles(builders: ShapedBuilders) throws -> ScopeGenerator {
+			var memoOfTreeWithHoles = ConstructionMemo()
+			return try mockRootGenerator(builders: builders, constructionMemo: &memoOfTreeWithHoles)
+		}
+		let generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
 		// A public mock's tree holds a site for each hole (see `createMockTypeDescriptionToScopeMapping`), and a call of
 		// another module's public mock passes up the places it cannot fill: `mock()` takes builders for them, shaped as a
@@ -6363,7 +6387,7 @@ public actor DependencyTreeGenerator {
 			)
 		}
 		let builders = shapedBuilders(namedApartFrom: [])
-		let builtGenerator = try mockRootGenerator(builders: builders)
+		let builtGenerator = try mockRootGeneratorWithHoles(builders: builders)
 		// The builders follow every other parameter, and each tier's are named apart from the parameters it takes as a seam's
 		// are. A builder's name changes no other parameter's, so the tree is built again only when a builder takes another
 		// name in some tier.
@@ -6376,7 +6400,7 @@ public actor DependencyTreeGenerator {
 		).parameters.filter { $0.builder == nil }.map { (label: $0.name, access: $0.access) }
 		let buildersNamedApart = shapedBuilders(namedApartFrom: otherParameters)
 		guard buildersNamedApart.builders.map(SeamSignature.CallShape.Builder.init) != builders.builders.map(SeamSignature.CallShape.Builder.init) else { return builtGenerator }
-		return try mockRootGenerator(builders: buildersNamedApart)
+		return try mockRootGeneratorWithHoles(builders: buildersNamedApart)
 	}
 
 	/// What a public mock's root level holds beside the root's children: the payload of every case of its root enums, and the
@@ -9149,7 +9173,8 @@ public actor DependencyTreeGenerator {
 	/// in a form no one parameter carries together with the forms the seam's tree receives is rejected as its inline build
 	/// is, with the same error. A hole this module does not fill has no scope, and its tree ends there.
 	private func inlineTreesOfForeignSeamsWithHoles(in typeDescriptionToScopeMap: [TypeDescription: Scope]) throws -> [ScopeGenerator] {
-		try foreignSeamTypesWithHoles().compactMap { typeDescriptionToScopeMap[$0] }.map { scope in
+		var constructionMemo = ConstructionMemo(sharing: ConstructionMemo.sharingBetweenTrees)
+		return try foreignSeamTypesWithHoles().compactMap { typeDescriptionToScopeMap[$0] }.map { scope in
 			try scope.createScopeGenerator(
 				for: nil,
 				lazilyInstantiatedInstanceProperties: [],
@@ -9157,6 +9182,7 @@ public actor DependencyTreeGenerator {
 				startsCodeGeneration: false,
 				validatesForwardedProperties: false,
 				declaredTypeNames: declaredTypeNames,
+				constructionMemo: &constructionMemo,
 			)
 		}
 	}

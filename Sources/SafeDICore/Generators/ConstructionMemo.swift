@@ -34,7 +34,51 @@
 /// with holes (a seam's tree, or a public mock's), which read context this log does not cover. The memo lives for one
 /// pass, so what is constant in a pass (the order a seam's places start in, the declared type names) is equal for every
 /// place it compares. Only completed builds are stored: a pass that throws throws away its memo.
+///
+/// A memo shared across trees (`Sharing.acrossTrees`) carries the first pass of each tree that finished to the trees
+/// created after it with the same memo. A first pass's keys name no generator of a pass before, so no key names an object
+/// that can be freed while the memo lives: each scope a child is built from belongs to a scope map that outlives the trees
+/// created from it, and a root's own scope is never a child's. A first pass starts each generator's code as it creates it,
+/// so every generator a later tree reuses has started. What is constant in a pass of one tree and not across trees is
+/// either in the key (the flags) or excluded (a tree with holes, which alone has a start order of its own).
 struct ConstructionMemo {
+	/// Which trees a memo carries generators between.
+	enum Sharing {
+		/// Each tree's passes start empty, and nothing is kept once the tree is created.
+		case perTree
+		/// Each tree's first pass starts from what the trees created before it with this memo kept.
+		case acrossTrees
+	}
+
+	/// How `DependencyTreeGenerator` shares the memo between the trees it creates. The memo oracle sets each value.
+	@TaskLocal static var sharingBetweenTrees = Sharing.acrossTrees
+
+	init(sharing: Sharing = .perTree) {
+		self.sharing = sharing
+	}
+
+	let sharing: Sharing
+
+	/// The memo a tree's first pass starts from.
+	var memoForFirstPass: ConstructionMemo {
+		switch sharing {
+		case .perTree:
+			ConstructionMemo()
+		case .acrossTrees:
+			self
+		}
+	}
+
+	/// Keeps what the first pass of a tree that finished stored, when the memo is shared across trees.
+	mutating func keepEntries(ofFirstPass firstPassMemo: ConstructionMemo) {
+		switch sharing {
+		case .perTree:
+			break
+		case .acrossTrees:
+			entriesByKey = firstPassMemo.entriesByKey
+		}
+	}
+
 	/// What a place is built from besides the context it reads: compared whole.
 	struct Key: Hashable {
 		/// The scope the place builds.

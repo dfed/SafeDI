@@ -383,6 +383,9 @@ final class Scope: Hashable {
 	///   - mockBuilders: For a public mock's root, the builders its `mock()` takes, which each site of the tree calls and
 	///     each call of another module's public mock hands its places up to, as a seam's tree calls the builders of
 	///     `seamRoot`'s signature.
+	///   - constructionMemo: The memo of the trees created before this one, whose generators the tree's first pass may
+	///     reuse when it is shared across trees, and which then keeps that pass's generators once the tree is created
+	///     (see `ConstructionMemo.Sharing`).
 	///
 	/// The tree is created again while a scope that a lazy cycle closes on finds other parameters for its builder
 	/// function than it was created with (see `CycleParameter`): its cycle-closing scopes, created before it, pass
@@ -410,8 +413,10 @@ final class Scope: Hashable {
 		startsCodeGeneration: Bool = true,
 		validatesForwardedProperties: Bool = true,
 		declaredTypeNames: DeclaredTypeNames,
+		constructionMemo: inout ConstructionMemo,
 	) throws -> ScopeGenerator {
 		var previousPassGenerator: ScopeGenerator?
+		var firstPassMemo: ConstructionMemo?
 		var placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?
 		var scopeGenerator: ScopeGenerator
 		var generatorsToStart: [ScopeGenerator]?
@@ -422,6 +427,7 @@ final class Scope: Hashable {
 			if previousPassGenerator != nil {
 				generatorsToStart = []
 			}
+			var passMemo = previousPassGenerator == nil ? constructionMemo.memoForFirstPass : ConstructionMemo()
 			scopeGenerator = try createScopeGenerator(
 				for: property,
 				nearestDeclarations: nearestDeclarations,
@@ -436,7 +442,11 @@ final class Scope: Hashable {
 				previousPassGenerator: previousPassGenerator,
 				generatorsToStart: &generatorsToStart,
 				placeHoldingPropertiesByType: placeHoldingPropertiesByType,
+				memo: &passMemo,
 			)
+			if previousPassGenerator == nil {
+				firstPassMemo = passMemo
+			}
 			previousPassGenerator = scopeGenerator
 			startOrderChanged = false
 			if placeHoldingPropertiesByType == nil, scopeGenerator.containsBuildSite {
@@ -450,6 +460,9 @@ final class Scope: Hashable {
 		for generator in generatorsToStart ?? [] {
 			ScopeGeneratorUnderConstruction.startCodeGeneration(of: generator)
 		}
+		if let firstPassMemo {
+			constructionMemo.keepEntries(ofFirstPass: firstPassMemo)
+		}
 		return scopeGenerator
 	}
 
@@ -457,6 +470,8 @@ final class Scope: Hashable {
 	/// from `previousPassGenerator`, the tree the pass before created, or finds none when there is no pass before.
 	/// - Parameter generatorsToStart: `nil` to start each generator's code as it is created, or where to collect the
 	///   generators whose code to start, in the order they are created.
+	/// - Parameter memo: The generators already finished, which a later place of the same key whose context answers their
+	///   reads alike reuses, and where this pass stores the generators it finishes (see `ConstructionMemo`).
 	private func createScopeGenerator(
 		for property: Property?,
 		nearestDeclarations: NearestDeclarations,
@@ -471,6 +486,7 @@ final class Scope: Hashable {
 		previousPassGenerator: ScopeGenerator?,
 		generatorsToStart: inout [ScopeGenerator]?,
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?,
+		memo: inout ConstructionMemo,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: self,
@@ -496,9 +512,6 @@ final class Scope: Hashable {
 			cycleParameterContexts: [:],
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 		)]
-		// The generators this pass has finished, which a later place of the same key whose context answers their reads alike
-		// reuses (see `ConstructionMemo`).
-		var memo = ConstructionMemo()
 		let reusesGenerators = ConstructionMemo.isEnabled
 		// The generators whose code this pass started or collected, each of which a place that reuses it does not start again.
 		var startedGenerators = Set<ObjectIdentifier>()
