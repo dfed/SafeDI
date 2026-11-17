@@ -71,17 +71,12 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			expectedFeature: """
 			#if DEBUG
 			extension Flow {
-			    @frozen nonisolated public enum SafeDIMockScope_Widget {
-			        case aBuilder(aBuilder_Values, SafeDIMockScope_Widget.A_Scope)
-			        case bBuilder(bBuilder_Values, SafeDIMockScope_Widget.B_Scope)
-
+			    nonisolated public enum SafeDIMockScope_Widget {
 			        nonisolated public struct aBuilder_Values {}
 
 			        nonisolated public struct bBuilder_Values {}
 
-			        @frozen nonisolated public enum A_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum A_Scope {
 			            nonisolated public struct widget_Values {
 			                public let bBuilder: Instantiator<B>
 			                public let mark: Mark
@@ -101,9 +96,7 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum B_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum B_Scope {
 			            nonisolated public struct widget_Values {
 			                public let aBuilder: Instantiator<A>
 			                public let mark: Mark
@@ -265,10 +258,7 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			expectedFeature: """
 			#if DEBUG
 			extension Hub {
-			    @frozen nonisolated public enum SafeDIMockScope_Widget {
-			        case flow(flow_Values, SafeDIMockScope_Widget.Flow_Scope)
-			        case a(a_Values, SafeDIMockScope_Widget.A_Scope)
-
+			    nonisolated public enum SafeDIMockScope_Widget {
 			        nonisolated public struct flow_Values {
 			            public let bBuilder: Instantiator<B>?
 			        }
@@ -278,9 +268,7 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			            public let flow: Flow
 			        }
 
-			        @frozen nonisolated public enum Flow_Scope {
-			            case aBuilder(aBuilder_Values, SafeDIMockScope_Widget.A_Scope)
-
+			        nonisolated public enum Flow_Scope {
 			            nonisolated public struct aBuilder_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -297,9 +285,7 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum A_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum A_Scope {
 			            nonisolated public struct widget_Values {
 			                public let bBuilder: Instantiator<B>?
 			                public let mark: Mark
@@ -472,19 +458,14 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			expectedFeature: """
 			#if DEBUG
 			extension Hub {
-			    @frozen nonisolated public enum SafeDIMockScope_Api {
-			        case a(a_Values, SafeDIMockScope_Api.A_Scope)
-			        case b(b_Values, SafeDIMockScope_Api.B_Scope)
-
+			    nonisolated public enum SafeDIMockScope_Api {
 			        nonisolated public struct a_Values {}
 
 			        nonisolated public struct b_Values {
 			            public let a: A
 			        }
 
-			        @frozen nonisolated public enum A_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum A_Scope {
 			            nonisolated public struct api_Values {
 			                public let user: User
 			            }
@@ -503,9 +484,7 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum B_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum B_Scope {
 			            nonisolated public struct api_Values {
 			                public let user: Draft
 			            }
@@ -627,14 +606,10 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			expectedFeature: """
 			#if DEBUG
 			extension Hub {
-			    @frozen nonisolated public enum SafeDIMockScope_Api {
-			        case bBuilder(bBuilder_Values, SafeDIMockScope_Api.B_Scope)
-
+			    nonisolated public enum SafeDIMockScope_Api {
 			        nonisolated public struct bBuilder_Values {}
 
-			        @frozen nonisolated public enum B_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum B_Scope {
 			            nonisolated public struct api_Values {
 			                public let user: Draft
 			            }
@@ -740,17 +715,13 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			expectedFeature: """
 			#if DEBUG
 			extension Hub {
-			    @frozen nonisolated public enum SafeDIMockScope_Api {
-			        case middle(middle_Values, SafeDIMockScope_Api.Middle_Scope)
-
+			    nonisolated public enum SafeDIMockScope_Api {
 			        nonisolated public struct middle_Values {
 			            public let user: User
 			            public let promoted: Promoted
 			        }
 
-			        @frozen nonisolated public enum Middle_Scope {
-			            case child(child_Values, SafeDIMockScope_Api.Child_Scope)
-
+			        nonisolated public enum Middle_Scope {
 			            nonisolated public struct child_Values {
 			                public let user: Draft?
 			            }
@@ -769,9 +740,7 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum Child_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum Child_Scope {
 			            nonisolated public struct api_Values {
 			                public let user: User?
 			            }
@@ -903,17 +872,13 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			expectedFeature: """
 			#if DEBUG
 			extension Hub {
-			    @frozen nonisolated public enum SafeDIMockScope_Api {
-			        case middleBuilder(middleBuilder_Values, SafeDIMockScope_Api.Middle_Scope)
-
+			    nonisolated public enum SafeDIMockScope_Api {
 			        nonisolated public struct middleBuilder_Values {
 			            public let user: User
 			            public let promoted: Promoted
 			        }
 
-			        @frozen nonisolated public enum Middle_Scope {
-			            case childBuilder(childBuilder_Values, SafeDIMockScope_Api.Child_Scope)
-
+			        nonisolated public enum Middle_Scope {
 			            nonisolated public struct childBuilder_Values {
 			                public let user: Draft?
 			            }
@@ -932,9 +897,7 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum Child_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum Child_Scope {
 			            nonisolated public struct api_Values {
 			                public let user: User?
 			            }

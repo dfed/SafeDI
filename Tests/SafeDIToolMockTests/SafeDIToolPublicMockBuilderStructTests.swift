@@ -79,17 +79,13 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Page {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case detailBuilder(detailBuilder_Values, SafeDIMockScope_Api.Detail_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct detailBuilder_Values {
 		            public let navigator: Navigator
 		            public let logger: Logger
 		        }
 
-		        @frozen nonisolated public enum Detail_Scope {
-		            case leafBuilder(leafBuilder_Values, SafeDIMockScope_Api.Leaf_Scope)
-
+		        nonisolated public enum Detail_Scope {
 		            nonisolated public struct leafBuilder_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -106,9 +102,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Leaf_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Leaf_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -296,17 +290,13 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Page {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case detailBuilder(detailBuilder_Values, SafeDIMockScope_Api.Detail_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct detailBuilder_Values {
 		            public let navigator: Navigator
 		            public let logger: Logger
 		        }
 
-		        @frozen nonisolated public enum Detail_Scope {
-		            case leafBuilder(leafBuilder_Values, SafeDIMockScope_Api.Leaf_Scope)
-
+		        nonisolated public enum Detail_Scope {
 		            nonisolated public struct leafBuilder_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -323,9 +313,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Leaf_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Leaf_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -533,10 +521,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Hub {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case pageBuilder(pageBuilder_Values, SafeDIMockScope_Api.Page_Scope)
-		        case modelBuilder(modelBuilder_Values, SafeDIMockScope_Api.Model_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct pageBuilder_Values {
 		            public let navigator: Navigator
 		        }
@@ -546,9 +531,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            public let pageBuilder: Instantiator<Page>
 		        }
 
-		        @frozen nonisolated public enum Page_Scope {
-		            case modelBuilder(modelBuilder_Values, SafeDIMockScope_Api.Model_Scope)
-
+		        nonisolated public enum Page_Scope {
 		            nonisolated public struct modelBuilder_Values {
 		                public let token: Token
 		            }
@@ -567,9 +550,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Model_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Model_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -805,17 +786,13 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Page {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case detailBuilder(detailBuilder_Values, SafeDIMockScope_Api.Detail_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct detailBuilder_Values {
 		            public let navigator: Navigator
 		            public let logger: Logger
 		        }
 
-		        @frozen nonisolated public enum Detail_Scope {
-		            case leafBuilder(leafBuilder_Values, SafeDIMockScope_Api.Leaf_Scope)
-
+		        nonisolated public enum Detail_Scope {
 		            nonisolated public struct leafBuilder_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -832,9 +809,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Leaf_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Leaf_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1031,10 +1006,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Hub {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case pageBuilder(pageBuilder_Values, SafeDIMockScope_Api.Page_Scope)
-		        case modelBuilder(modelBuilder_Values, SafeDIMockScope_Api.Model_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct pageBuilder_Values {
 		            public let navigator: Navigator
 		        }
@@ -1044,9 +1016,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            public let pageBuilder: Instantiator<Page>
 		        }
 
-		        @frozen nonisolated public enum Page_Scope {
-		            case modelBuilder(modelBuilder_Values, SafeDIMockScope_Api.Model_Scope)
-
+		        nonisolated public enum Page_Scope {
 		            nonisolated public struct modelBuilder_Values {
 		                public let token: Token
 		            }
@@ -1065,9 +1035,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Model_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Model_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1369,10 +1337,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Hub {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case pageBuilder(pageBuilder_Values, SafeDIMockScope_Api.Page_Scope)
-		        case modelBuilder(modelBuilder_Values, SafeDIMockScope_Api.Model_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct pageBuilder_Values {
 		            public let navigator: Navigator
 		        }
@@ -1382,9 +1347,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            public let pageBuilder: Instantiator<Page>
 		        }
 
-		        @frozen nonisolated public enum Page_Scope {
-		            case modelBuilder(modelBuilder_Values, SafeDIMockScope_Api.Model_Scope)
-
+		        nonisolated public enum Page_Scope {
 		            nonisolated public struct modelBuilder_Values {
 		                public let token: Token
 		            }
@@ -1403,9 +1366,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Model_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Model_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1661,17 +1622,13 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Page {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case detailBuilder(detailBuilder_Values, SafeDIMockScope_Api.Detail_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct detailBuilder_Values {
 		            public let navigator: Navigator
 		            public let logger: Logger
 		        }
 
-		        @frozen nonisolated public enum Detail_Scope {
-		            case leafBuilder(leafBuilder_Values, SafeDIMockScope_Api.Leaf_Scope)
-
+		        nonisolated public enum Detail_Scope {
 		            nonisolated public struct leafBuilder_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1688,9 +1645,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Leaf_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Leaf_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1889,17 +1844,13 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Page {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case detailBuilder(detailBuilder_Values, SafeDIMockScope_Api.Detail_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct detailBuilder_Values {
 		            public let navigator: Navigator
 		            public let logger: Logger
 		        }
 
-		        @frozen nonisolated public enum Detail_Scope {
-		            case leafBuilder(leafBuilder_Values, SafeDIMockScope_Api.Leaf_Scope)
-
+		        nonisolated public enum Detail_Scope {
 		            nonisolated public struct leafBuilder_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1916,9 +1867,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Leaf_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Leaf_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2346,9 +2295,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Board {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case api(api_Values)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct api_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2388,9 +2335,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Screen {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case api(api_Values)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct api_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2453,9 +2398,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Card {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case api(api_Values)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct api_Values {
 		            public let logger: Logger
 		        }
@@ -2514,14 +2457,10 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Deck {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case card(card_Values, SafeDIMockScope_Api.Card_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct card_Values {}
 
-		        @frozen nonisolated public enum Card_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Card_Scope {
 		            nonisolated public struct api_Values {
 		                public let logger: Logger
 		            }
@@ -2646,9 +2585,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Card {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case api(api_Values)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct api_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2691,14 +2628,10 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Deck {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case card(card_Values, SafeDIMockScope_Api.Card_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct card_Values {}
 
-		        @frozen nonisolated public enum Card_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Card_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3135,9 +3068,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Board {
-		    @frozen nonisolated public enum SafeDIMockScope_Gadget {
-		        case gadget(gadget_Values)
-
+		    nonisolated public enum SafeDIMockScope_Gadget {
 		        nonisolated public struct gadget_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3422,19 +3353,14 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 			"Panel+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Panel {
-			    @frozen nonisolated public enum SafeDIMockScope_LiveGadget_AnyGadget {
-			        case gadgetBuilder(gadgetBuilder_Values)
-			        case row(row_Values, SafeDIMockScope_LiveGadget_AnyGadget.Row_Scope)
-
+			    nonisolated public enum SafeDIMockScope_LiveGadget_AnyGadget {
 			        nonisolated public struct gadgetBuilder_Values {}
 
 			        nonisolated public struct row_Values {
 			            public let gadgetBuilder: ErasedInstantiator<(), AnyGadget>
 			        }
 
-			        @frozen nonisolated public enum Row_Scope {
-			            case gadgetBuilder(gadgetBuilder_Values)
-
+			        nonisolated public enum Row_Scope {
 			            nonisolated public struct gadgetBuilder_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3591,9 +3517,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct service_Values {
 		            internal let memo: Memo?
 		            package let serviceBuilder: Thing?
@@ -3759,17 +3683,13 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Page {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case detailBuilder(detailBuilder_Values, SafeDIMockScope_Api.Detail_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct detailBuilder_Values {
 		            public let navigator: Navigator
 		            public let logger: Logger
 		        }
 
-		        @frozen nonisolated public enum Detail_Scope {
-		            case leafBuilder(leafBuilder_Values, SafeDIMockScope_Api.Leaf_Scope)
-
+		        nonisolated public enum Detail_Scope {
 		            nonisolated public struct leafBuilder_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3786,9 +3706,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Leaf_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Leaf_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4006,10 +3924,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Hub {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case pageBuilder(pageBuilder_Values, SafeDIMockScope_Api.Page_Scope)
-		        case modelBuilder(modelBuilder_Values, SafeDIMockScope_Api.Model_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct pageBuilder_Values {
 		            public let navigator: Navigator
 		        }
@@ -4019,9 +3934,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            public let pageBuilder: Instantiator<Page>
 		        }
 
-		        @frozen nonisolated public enum Page_Scope {
-		            case modelBuilder(modelBuilder_Values, SafeDIMockScope_Api.Model_Scope)
-
+		        nonisolated public enum Page_Scope {
 		            nonisolated public struct modelBuilder_Values {
 		                public let token: Token
 		            }
@@ -4040,9 +3953,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Model_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Model_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4236,9 +4147,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct service_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4336,9 +4245,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct service_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4472,10 +4379,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Hub {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case pageBuilder(pageBuilder_Values, SafeDIMockScope_Api.Page_Scope)
-		        case modelBuilder(modelBuilder_Values, SafeDIMockScope_Api.Model_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct pageBuilder_Values {
 		            public let navigator: Navigator
 		        }
@@ -4485,9 +4389,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            public let pageBuilder: Instantiator<Page>
 		        }
 
-		        @frozen nonisolated public enum Page_Scope {
-		            case modelBuilder(modelBuilder_Values, SafeDIMockScope_Api.Model_Scope)
-
+		        nonisolated public enum Page_Scope {
 		            nonisolated public struct modelBuilder_Values {
 		                public let token: Token
 		            }
@@ -4506,9 +4408,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Model_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Model_Scope {
 		            nonisolated public struct api_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -4808,14 +4708,10 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Home {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case screen(screen_Values, SafeDIMockScope_Api.Screen_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct screen_Values {}
 
-		        @frozen nonisolated public enum Screen_Scope {
-		            case stepBuilder(stepBuilder_Values, SafeDIMockScope_Api.Step_Scope)
-
+		        nonisolated public enum Screen_Scope {
 		            nonisolated public struct stepBuilder_Values {
 		                public let cache: Cache
 		            }
@@ -4834,9 +4730,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Step_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Step_Scope {
 		            nonisolated public struct api_Values {
 		                public let screenBuilder: Instantiator<Screen>
 		            }
@@ -5062,14 +4956,10 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Home {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case screen(screen_Values, SafeDIMockScope_Api.Screen_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct screen_Values {}
 
-		        @frozen nonisolated public enum Screen_Scope {
-		            case stepBuilder(stepBuilder_Values, SafeDIMockScope_Api.Step_Scope)
-
+		        nonisolated public enum Screen_Scope {
 		            nonisolated public struct stepBuilder_Values {
 		                public let cache: Cache
 		            }
@@ -5088,9 +4978,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Step_Scope {
-		            case api(api_Values)
-
+		        nonisolated public enum Step_Scope {
 		            nonisolated public struct api_Values {
 		                public let screenBuilder: Instantiator<Screen>
 		            }
@@ -5451,15 +5339,10 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		#if DEBUG
 		extension Home {
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case screenBuilder(screenBuilder_Values, SafeDIMockScope_Api.Screen_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct screenBuilder_Values {}
 
-		        @frozen nonisolated public enum Screen_Scope {
-		            case api(api_Values)
-		            indirect case next(next_Values, SafeDIMockScope_Api.Screen_Scope)
-
+		        nonisolated public enum Screen_Scope {
 		            nonisolated public struct api_Values {
 		                public let cache: Cache
 		            }

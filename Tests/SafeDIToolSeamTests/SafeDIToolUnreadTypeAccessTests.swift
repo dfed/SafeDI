@@ -2636,14 +2636,10 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    // SafeDI counts `Brush` and `Image` as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
-		    @frozen nonisolated public enum SafeDIMockScope_Brush {
-		        case badgeBuilder(badgeBuilder_Values, SafeDIMockScope_Brush.Badge_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Brush {
 		        nonisolated public struct badgeBuilder_Values {}
 
-		        @frozen nonisolated public enum Badge_Scope {
-		            case brush(brush_Values)
-
+		        nonisolated public enum Badge_Scope {
 		            nonisolated public struct brush_Values {
 		                public let image: Image
 		            }

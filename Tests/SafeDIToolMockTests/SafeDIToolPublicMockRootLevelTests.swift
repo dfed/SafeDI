@@ -96,16 +96,12 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			expectedFeature: """
 			#if DEBUG
 			extension Detail {
-			    @frozen nonisolated public enum SafeDIMockScope_Api {
-			        case panel(panel_Values, SafeDIMockScope_Api.Panel_Scope)
-
+			    nonisolated public enum SafeDIMockScope_Api {
 			        nonisolated public struct panel_Values {
 			            public let id: Int
 			        }
 
-			        @frozen nonisolated public enum Panel_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum Panel_Scope {
 			            nonisolated public struct api_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -286,16 +282,12 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			expectedFeature: """
 			#if DEBUG
 			extension Detail {
-			    @frozen nonisolated public enum SafeDIMockScope_Api {
-			        case first(first_Values, SafeDIMockScope_Api.Child_Scope)
-
+			    nonisolated public enum SafeDIMockScope_Api {
 			        nonisolated public struct first_Values {
 			            public let id: Int
 			        }
 
-			        @frozen nonisolated public enum Child_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum Child_Scope {
 			            nonisolated public struct api_Values {
 			                public let id: Token
 			            }
@@ -430,14 +422,10 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			expectedFeature: """
 			#if DEBUG
 			extension Detail {
-			    @frozen nonisolated public enum SafeDIMockScope_Api {
-			        case first(first_Values, SafeDIMockScope_Api.Child_Scope)
-
+			    nonisolated public enum SafeDIMockScope_Api {
 			        nonisolated public struct first_Values {}
 
-			        @frozen nonisolated public enum Child_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum Child_Scope {
 			            nonisolated public struct api_Values {
 			                public let id: Token
 			            }
@@ -470,16 +458,12 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDIMockScope_Gadget {
-			        case second(second_Values, SafeDIMockScope_Gadget.Other_Scope)
-
+			    nonisolated public enum SafeDIMockScope_Gadget {
 			        nonisolated public struct second_Values {
 			            public let first: Child
 			        }
 
-			        @frozen nonisolated public enum Other_Scope {
-			            case gadget(gadget_Values)
-
+			        nonisolated public enum Other_Scope {
 			            nonisolated public struct gadget_Values {
 			                public let id: Badge
 			            }
@@ -674,9 +658,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			expectedFeature: """
 			#if DEBUG
 			extension Detail {
-			    @frozen nonisolated public enum SafeDIMockScope_Api {
-			        case api(api_Values)
-
+			    nonisolated public enum SafeDIMockScope_Api {
 			        nonisolated public struct api_Values {
 			            package let token: Token?
 			        }
@@ -1179,9 +1161,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			expectedFeature: """
 			#if DEBUG
 			extension Detail {
-			    @frozen nonisolated public enum SafeDIMockScope_Api {
-			        case api(api_Values)
-
+			    nonisolated public enum SafeDIMockScope_Api {
 			        nonisolated public struct api_Values {
 			            public let format: (Int) -> String
 			        }
@@ -1283,9 +1263,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			expectedFeature: """
 			#if DEBUG
 			extension Detail {
-			    @frozen nonisolated public enum SafeDIMockScope_Api {
-			        case api(api_Values)
-
+			    nonisolated public enum SafeDIMockScope_Api {
 			        nonisolated public struct api_Values {
 			            public let id: Int
 			        }
@@ -1749,9 +1727,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			expectedFeature: """
 			#if DEBUG
 			extension Detail {
-			    @frozen nonisolated public enum SafeDIMockScope_Api {
-			        case api(api_Values)
-
+			    nonisolated public enum SafeDIMockScope_Api {
 			        nonisolated public struct api_Values {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1983,9 +1959,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 
 				#if DEBUG
 				extension Detail {
-				    @frozen nonisolated public enum SafeDIMockScope_Api {
-				        case api(api_Values)
-
+				    nonisolated public enum SafeDIMockScope_Api {
 				        nonisolated public struct api_Values {
 				            public let id: Int
 				        }
@@ -2062,9 +2036,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 
 				#if DEBUG
 				extension Detail {
-				    @frozen nonisolated public enum SafeDIMockScope_Api {
-				        case api(api_Values)
-
+				    nonisolated public enum SafeDIMockScope_Api {
 				        nonisolated public struct api_Values {
 				            public let session: Session
 				        }
@@ -2141,9 +2113,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 
 				#if DEBUG
 				extension Detail {
-				    @frozen nonisolated public enum SafeDIMockScope_Api {
-				        case api(api_Values)
-
+				    nonisolated public enum SafeDIMockScope_Api {
 				        nonisolated public struct api_Values {
 				            public let token: Token?
 				        }
