@@ -4709,6 +4709,21 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func difference_isNil_whenDiagnosticsNameTheSameTypesDeclaringACapturedWrapperInAnotherOrder() {
+		// SafeDI lists the types whose declarations of a wrapper a `@Sendable` builder function captures at one receive in
+		// source order, which a file-name reversal reverses (base corpus seeds 58, 112 and 225); the same types in another
+		// order are the same diagnostic, and another type is not.
+		func diagnostics(types: String, receivesWrapper: Bool) -> GraphFuzzerToolOutcome {
+			let receive = receivesWrapper ? ", and this property," : ""
+			return .rejected(diagnostics: "/a/<fixture-directory>/S1_Settings.swift:7:2: error: @Received property `childBuilder: Instantiator<S1_Child>` cannot be received inside a `@Sendable` function in chain: S1_Root0 -> S1_Settings. SafeDI builds `settingsBuilder: SendableInstantiator<S1_Settings>` on `S1_Root0` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<S1_Child>` on `S1_Root0`, because `Instantiator<S1_Child>` is not `Sendable`. Declare `childBuilder` on \(types)\(receive) as `SendableInstantiator<S1_Child>` to fix. `SendableInstantiator<S1_Child>` builds `S1_Child` in a `@Sendable` function, so what the tree of `S1_Child` receives from outside that function must be `Sendable` too.\n/a/<fixture-directory>/S1_Root0.swift:7:2: note: `childBuilder: Instantiator<S1_Child>` is declared here")
+		}
+
+		#expect(GraphFuzzerToolOutcome.difference(between: diagnostics(types: "`S1_Root0`, `S1_Root1`, and `S1_Root2`", receivesWrapper: true), and: diagnostics(types: "`S1_Root2`, `S1_Root1`, and `S1_Root0`", receivesWrapper: true)) == nil)
+		#expect(GraphFuzzerToolOutcome.difference(between: diagnostics(types: "`S1_Root0` and `S1_Root1`", receivesWrapper: false), and: diagnostics(types: "`S1_Root1` and `S1_Root0`", receivesWrapper: false)) == nil)
+		#expect(GraphFuzzerToolOutcome.difference(between: diagnostics(types: "`S1_Root0` and `S1_Root1`", receivesWrapper: true), and: diagnostics(types: "`S1_Root0` and `S1_Root2`", receivesWrapper: true)) == "its diagnostics")
+	}
+
+	@Test
 	func difference_isNil_whenDiagnosticsNameTheSamePlacesOfAFillFindingInAnotherOrder() {
 		// SafeDI lists the places one fill finding holds for in the order of their types' names, then their labels, which a
 		// renaming that moves type names across wrapper names reorders (seam corpus seed 566); the same places in another

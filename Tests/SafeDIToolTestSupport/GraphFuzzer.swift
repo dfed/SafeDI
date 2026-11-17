@@ -10484,9 +10484,12 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// and `x: LazilyInstantiated<X>?` under different labels to fix.", `unpassableCycleLabel`), and of each list of the
 	/// places one fill finding holds for ("the builders for `A`’s `x: X` (case `A_Scope.x` of `xBuilder`) and `B`’s `y: Y`",
 	/// "the builder `Seam` takes for `A`’s `x: X`, `B`’s `y: Y`, and `B`’s `z: Z` on unchanged", `FillFinding`), each of
-	/// which SafeDI lists in the order of their types' names – sorted as text, each item in its place among the list's
-	/// separators, so two diagnostics that list the same items in another order compare equal, and any other difference,
-	/// including an item added, removed or changed, still tells them apart.
+	/// which SafeDI lists in the order of their types' names, and of each list of the types a `@Sendable` capture error
+	/// tells to declare a wrapper `Sendable` ("Declare `x` on `A`, `B`, and `C`, and this property, as
+	/// `SendableInstantiator<X>` to fix."), which SafeDI lists in source order, so a file-name reversal reorders them –
+	/// sorted as text, each item in its place among the list's separators, so two diagnostics that list the same items in
+	/// another order compare equal, and any other difference, including an item added, removed or changed, still tells
+	/// them apart.
 	private static func sortingSuggestions(in diagnostic: String) -> String {
 		// Each item is a property's or a declaration's source between backticks, and no fuzzer label or type contains one.
 		let backtickedItem = "`[^`]*`"
@@ -10500,6 +10503,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 			("(?<= as )`[^`]*`(?:(?:, and |, | and )`[^`]*`)+(?=, which one value cannot carry together\\.)", backtickedItem),
 			("(?<=which one value cannot carry together\\. Receive )`[^`]*`(?:(?:, and |, | and )`[^`]*`)+(?= under different labels to fix\\.)", backtickedItem),
 			("(?<=builder for |builders for |takes for )\(place)(?:(?:, and |, | and )\(place))+", place),
+			("(?<=` on )`[^`]*`(?:(?:, and |, | and )`[^`]*`)+(?=(?:, and this property,)? as `Sendable[^`]*` to fix\\.)", backtickedItem),
 		] {
 			diagnostic = sortingItems(ofListsMatching: try! NSRegularExpression(pattern: list), item: try! NSRegularExpression(pattern: item), in: diagnostic)
 		}
