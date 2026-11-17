@@ -785,7 +785,7 @@ private struct ScopeGeneratorUnderConstruction {
 			// A place inside a fill of an inner seam's builder reads, through the scope value the inner seam handed that fill, a
 			// label that some route of the inner seam's enum holds and another does not: on that other route inline reads the
 			// caller's declaration, as for a label one place of the case carries and another does not.
-			let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey, nameByKey: [:]) }
+			let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
 			var caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
 				var caseFields = ScopeGenerator.caseFields(of: places)
 				if let innerScopeReaders {
@@ -911,30 +911,6 @@ private struct ScopeGeneratorUnderConstruction {
 			GenerationWork.record(enclosingFillsOfThisCall.count, by: .gatheringFillsOfACall)
 		}
 		childGenerators.reserveCapacity(propertiesToGenerate.count + fillsOfThisCall.count)
-	}
-
-	/// The keys of the root enums of the builders the calls of other modules' public mocks inside the trees of
-	/// `holeArguments`' fills pass, whose dispatchers such a call reuses where an enclosing call declares them.
-	private static func publicMockEnumKeys(calledInside holeArguments: [Scope.HoleArgument]) -> Set<SeamSignature.ScopeEnum.Key> {
-		var keys = Set<SeamSignature.ScopeEnum.Key>()
-		var visited = Set<ObjectIdentifier>()
-		var scopesToVisit = holeArguments.compactMap { argument -> Scope? in
-			guard case let .fill(_, scope) = argument else { return nil }
-			return scope
-		}
-		while let scope = scopesToVisit.popLast() {
-			guard visited.insert(ObjectIdentifier(scope)).inserted else { continue }
-			if scope.publicMockCall != nil, let calledBuilders = scope.calledBuilders {
-				keys.formUnion(calledBuilders.builders.map(\.enumKey))
-				for case let .fill(_, fillScope) in scope.holeArguments {
-					scopesToVisit.append(fillScope)
-				}
-			}
-			for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
-				scopesToVisit.append(childScope)
-			}
-		}
-		return keys
 	}
 
 	/// A fill of a seam call: the hole it fills, its key (see `ScopeGenerator.fillKey(of:)`), and its function's name.
@@ -1349,17 +1325,12 @@ private struct ScopeGeneratorUnderConstruction {
 		guard let calledBuilders = scope.calledBuilders, !holeArguments.isEmpty else { return [] }
 		let filledSites = Self.filledSites(of: holeArguments)
 		let enumsByKey = calledBuilders.enumsByKey
-		let holesBySite = Dictionary(calledBuilders.holes.map { ($0.site, $0) }, uniquingKeysWith: { first, _ in first })
 		// A seam's caller calls the initializer only generated code calls, under its prefixed labels; a public mock's
 		// caller passes each builder by the leaf's argument of its label, and passes up the places its builder's routes
 		// reach that it fills on some route only (`PublicMockCall.sitesPassedUpOnSomeRoute`).
 		let isPublicMockCall = scope.publicMockCall != nil
 		let sitesFilledOnEveryRoute = scope.publicMockCall?.sitesFilledOnEveryRoute ?? filledSites
-		// A builder struct's levels a call converts through are functions named apart from the call's fills and dispatchers.
-		var names = namesOfThisCall
-		let builtTypeByHoleType = calledBuilders.holes.builtTypeByHoleType
 		return calledBuilders.builders.map { builder in
-			let builtType = builtTypeByHoleType[builder.enumKey.holeType] ?? builder.enumKey.holeType.builtType
 			let label = isPublicMockCall ? builder.label : builder.generatedOnlyArgumentLabel
 			let enumKey = builder.enumKey
 			let reachedSites = isPublicMockCall
@@ -1372,19 +1343,12 @@ private struct ScopeGeneratorUnderConstruction {
 			let receivedLabel = scope.publicMockCall?.passedParameters.first { $0.builder?.enumKey == enumKey }?.dependency.property.label ?? builder.label
 			let publicMockUpValue = route.map { $0.memberCall ?? "" } ?? ".init(\(ReservedName.noScopeArgumentLabel): \(receivedLabel))"
 			guard !reachedSites.isDisjoint(with: filledSites) else {
-				// Where this seam's enum declares a builder struct too, the call hands on what the call's own member returns.
+				// The call hands on what the call's own member of the seam's or public mock's struct returns.
 				if let memberCall = route?.memberCall {
 					return .init(label: label, value: memberCall)
 				}
-				// A seam that takes a builder struct is handed one whose members hand this seam's builder the case of this seam's
-				// enum that carries the called seam's, as the closure over the called seam's enum does.
-				guard builder.takesBuilderStruct else {
-					return .init(label: label, value: route.map { route in "{ \(route.call(handing: "$0")) }" } ?? "")
-				}
 				guard isPublicMockCall else {
-					guard let route else { return .init(label: label, value: "") }
-					let conversion = ScopeGenerator.builderStructConversion(ofEnumOf: enumKey, enumsByKey: enumsByKey, holesBySite: holesBySite, builtType: builtType, reservedNames: seamHoles.namesBoundForBuilders, names: &names, handing: route.call(handing:))
-					return .init(label: label, value: conversion.value, declarations: conversion.declarations)
+					return .init(label: label, value: "")
 				}
 				// A public mock's caller that fills no place of the builder passes up the struct it is handed: the member of its own
 				// struct for the call, or, as an internal mock, the struct of the builder it takes.
@@ -1400,9 +1364,8 @@ private struct ScopeGeneratorUnderConstruction {
 			// A seam that takes a builder struct is handed the struct its root level's function returns, but where a case of the
 			// seam whose tree makes the call carries the scope value the call hands its fills, whose dispatchers keep their enum
 			// form to pass it on, or an enclosing call declares those dispatchers in that form, which this call reuses: it is
-			// then handed a struct whose members hand the dispatcher the case. A public mock's caller keeps its dispatchers over
-			// the enum where the tree is built, and turns them into the struct's levels once its code is generated, where it
-			// can (`ScopeGenerator.staticPublicMockCallKeys`).
+			// then handed a struct whose members hand the dispatcher the case. A public mock's caller declares level functions of
+			// its own (`PublicMockLevelFunctions`).
 			let returnsBuilderStruct = builder.takesBuilderStruct && !isPublicMockCall && !calledBuilders.builders.contains { calledBuilder in
 				calledBuilder.enumKey.holeType == enumKey.holeType
 					&& ((seamHoles.innerScope(at: sitePath, innerKey: calledBuilder.enumKey) != nil && !seamHoles.carriesStruct(at: sitePath, innerKey: calledBuilder.enumKey))
@@ -1442,33 +1405,20 @@ private struct ScopeGeneratorUnderConstruction {
 					overrideHanding: passesUp ? .none : .fills,
 				)
 			}
-			guard reachedSites.isSubset(of: filledSites) else {
-				// The whole scope the call was given goes up, under the route's case.
-				let passUp = route.map { route in route.call(handing: "scope") } ?? "\(builder.label)(scope)"
-				let closure = "{ scope in \(dispatcher)(scope, \(ScopeGenerator.FillDispatcher.passUpParameterName): { \(passUp) }) }"
-				return .init(label: label, value: closure, enclosingFill: enclosingFill, isSendable: enumKey.isSendable)
+			// A seam's caller fills every place the builder reaches. The root level's function of a route to a place inside a fill
+			// is handed the struct the case of this seam's enum for the call returns. A call that re-enters an enclosing call's
+			// level function hands it, for each struct it takes, what the member of the call's own case of that struct's level
+			// returns.
+			let upArgument = if let carriedInnerScopes = enclosingFill == nil ? nil : enclosingCarriedInnerScopes[dispatcherKey] {
+				carriedInnerScopes.compactMap { carriedInnerScope in
+					seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, carrying: carriedInnerScope.type).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
+				}.joined(separator: ", ")
+			} else {
+				(dispatchersOfThisCall.first { $0.key == dispatcherKey }?.carriedInnerScopes ?? []).compactMap { carriedInnerScope in
+					seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, innerScopeName: carriedInnerScope.name).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
+				}.joined(separator: ", ")
 			}
-			guard builder.takesBuilderStruct else {
-				return .init(label: label, value: dispatcher, enclosingFill: enclosingFill, isSendable: enumKey.isSendable)
-			}
-			guard !returnsBuilderStruct else {
-				// The root level's function of a route to a place inside a fill is handed the struct the case of this seam's enum for
-				// the call returns.
-				// A call that re-enters an enclosing call's level function hands it, for each struct it takes, what the member of the
-				// call's own case of that struct's level returns.
-				let upArgument = if let carriedInnerScopes = enclosingFill == nil ? nil : enclosingCarriedInnerScopes[dispatcherKey] {
-					carriedInnerScopes.compactMap { carriedInnerScope in
-						seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, carrying: carriedInnerScope.type).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
-					}.joined(separator: ", ")
-				} else {
-					(dispatchersOfThisCall.first { $0.key == dispatcherKey }?.carriedInnerScopes ?? []).compactMap { carriedInnerScope in
-						seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, innerScopeName: carriedInnerScope.name).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
-					}.joined(separator: ", ")
-				}
-				return .init(label: label, value: "\(dispatcher)(\(upArgument))", enclosingFill: enclosingFill, isSendable: enumKey.isSendable)
-			}
-			let conversion = ScopeGenerator.builderStructConversion(ofEnumOf: enumKey, enumsByKey: enumsByKey, holesBySite: holesBySite, builtType: builtType, reservedNames: seamHoles.namesBoundForBuilders.union([dispatcher]), names: &names) { "\(dispatcher)(\($0))" }
-			return .init(label: label, value: conversion.value, declarations: conversion.declarations, enclosingFill: enclosingFill, isSendable: enumKey.isSendable)
+			return .init(label: label, value: "\(dispatcher)(\(upArgument))", enclosingFill: enclosingFill, isSendable: enumKey.isSendable)
 		}
 	}
 
