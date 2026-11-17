@@ -89,12 +89,34 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func mockFindings_reportScopeBuilder_whenPublicMockCorpusGraphHasHole() async throws {
+	func mockFindings_reportNothing_whenPublicMockCorpusGraphHasHole() async throws {
+		// Public mock corpus seed 2: a mock with a hole takes its builder struct only in `__safeDI_mock`, which only
+		// generated code calls, and its `mock()` takes closures that name no type SafeDI generates.
 		guard case let .accepted(generatedFiles, _) = try await GraphFuzzerOracle.toolOutcome(of: GraphFuzzerGenerator.fixture(forSeed: 2, features: [.generateMockPublic])) else {
 			Issue.record("Public mock corpus seed 2 is no longer accepted")
 			return
 		}
-		#expect(GraphFuzzerBuilderSurface.mockFindings(in: generatedFiles).contains { $0.reason.contains("SafeDIMockScope_") || $0.reason.contains("SafeDISendableMockScope_") })
+		#expect(generatedFiles.values.contains { $0.contains("static func __safeDI_mock(") && $0.contains(".__safeDI_Builder<") })
+		#expect(GraphFuzzerBuilderSurface.mockFindings(in: generatedFiles) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func mockFindings_reportScopeBuilder_whenMockParameterNamesScopeEnum() {
+		let generatedFiles = ["FuzzFeature/Panel+SafeDIMock.swift": """
+		extension Panel {
+		    public static func mock(
+		        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service
+		    ) -> Panel {
+		        Panel(service: serviceBuilder(.service))
+		    }
+		}
+		"""]
+		#expect(GraphFuzzerBuilderSurface.mockFindings(in: generatedFiles) == [GraphFuzzerBuilderSurface.Finding(
+			declaration: "FuzzFeature/Panel+SafeDIMock.swift: Panel.mock(…)",
+			parameter: "serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service",
+			reason: "names the generated type `SafeDIMockScope_Service`",
+		)])
 	}
 
 	@Test
@@ -126,13 +148,19 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func labelFindings_reportNothing_whenSeamCorpusMockTakesReceivedInstantiatorAsAutoclosure() async throws {
-		// Seam corpus seed 3855: `HoleSeam.mock` takes `holeTicketBuilder`, a received erased instantiator it cannot build,
-		// as an `@autoclosure`, which the label oracle read as a builder the contract would label otherwise.
-		guard case let .accepted(generatedFiles, _) = try await GraphFuzzerOracle.toolOutcome(of: GraphFuzzerGenerator.fixture(forSeed: 3_855, features: [.generateDependencyTree])) else {
-			Issue.record("Seam corpus seed 3855 is no longer accepted")
-			return
+	func labelFindings_reportNothing_whenMockTakesReceivedInstantiatorAsAutoclosure() {
+		// A mock that takes `holeTicketBuilder`, a received erased instantiator it cannot build, as an `@autoclosure`, which
+		// the label oracle read as a builder the contract would label otherwise. Seam corpus seed 3855 drew this until a
+		// seam's own mock took its hole's builder, so the mock is written here.
+		let generatedFiles = ["FuzzFeature/HoleSeam+SafeDIMock.swift": """
+		extension HoleSeam {
+		    static func mock(
+		        holeTicketBuilder: @autoclosure @escaping () -> ErasedInstantiator<Int, any HoleTicketService>
+		    ) -> HoleSeam {
+		        HoleSeam(holeTicketBuilder: holeTicketBuilder())
+		    }
 		}
+		"""]
 		let autoclosureParameters = GraphFuzzerBuilderSurface.callables(in: generatedFiles).flatMap(\.parameters).filter { $0.label == "holeTicketBuilder" && $0.type.hasPrefix("@autoclosure ") }
 		#expect(!autoclosureParameters.isEmpty)
 		#expect(GraphFuzzerBuilderSurface.labelFindings(in: generatedFiles) == [])
