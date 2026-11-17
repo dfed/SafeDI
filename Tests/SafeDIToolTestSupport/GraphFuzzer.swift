@@ -11662,7 +11662,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// file-name reversal reorders them – and of the two lists of the forms of a label one cycle parameter cannot carry
 	/// ("receive `x` as `x: X?` and `x: LazilyInstantiated<X>?`, which one value cannot carry together. Receive `x: X?`
 	/// and `x: LazilyInstantiated<X>?` under different labels to fix.", `unpassableCycleLabel`), and of each list of the
-	/// places one fill finding holds for ("the builders for `A`’s `x: X` (member `A_Scope.x` of `xBuilder`) and `B`’s `y: Y`",
+	/// places one fill finding holds for ("the builders for `A`’s `x: X` (`x` of `xBuilder`) and `B`’s `y: Y`",
 	/// "the builder `Seam` takes for `A`’s `x: X`, `B`’s `y: Y`, and `B`’s `z: Z` on unchanged", `FillFinding`), each of
 	/// which SafeDI lists in the order of their types' names, and of the lists a merged fill finding prints, also in name
 	/// order: the seams whose calls present its places ("which `Mid` builds where it calls `Hub` and `Hub2`, but"), the
@@ -11671,7 +11671,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// SafeDI dependencies, so `Mid` fills the builders itself, and declare … that fulfills `Gadget` …", `boundByPassingUpSeam`),
 	/// and, where a declaration hides a value on the paths to a call that re-enters a seam
 	/// (`declarationBoundOnPathToReenteringCall`), its clauses ("which `MiddleAlpha` declares on the path from the builder
-	/// for `Profile`’s `router: any Router` (member `Profile_Scope.router` of `routerBuilder`) to the call by which
+	/// for `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which
 	/// `MiddleAlpha` instantiates `Flow` again (`flowBuilder`) and `MiddleZed` declares …, but"), each clause's places, and
 	/// its declaring types ("cannot hand it `MiddleAlpha`’s and `MiddleZed`’s values"), and, where a fill's seam opened again
 	/// loses a value (`fieldOfReenteringPlace`), the types the places carry it from ("carries from `AScreen` and `BScreen`,
@@ -11689,7 +11689,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 		let backtickedItem = "`[^`]*`"
 		// A place is the type that declares it and its property, then the member of the builder that holds it
 		// and the seam whose tree holds it, where the message names them.
-		let place = "`[^`]*`’s `[^`]*`(?: \\(member `[^`]*` of `[^`]*`\\))?(?: in `[^`]*`’s tree)?"
+		let place = "`[^`]*`’s `[^`]*`(?: \\(`[^`]*` of `[^`]*`\\))?(?: in `[^`]*`’s tree)?"
 		let separator = "(?:, and |, | and )"
 		// A remedy that fulfills one type of a merged fill finding's places.
 		let fulfillRemedy = "declare an @Instantiable type that fulfills `[^`]*` in (?:module `[^`]*`|this module) or a module it lists among its SafeDI dependencies, so `[^`]*` fills the builders? itself"
