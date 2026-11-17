@@ -708,7 +708,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_37EDBDE082B78566.self\(seamCallComment(seam: "Host", module: "Middle"))
 		            func __safeDI_gadgetBuilder_Host() -> Host.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
-		                .init(top_firstBuilder: { _ in __safeDI_gadgetBuilder_Host_Top() }, top_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_() })
+		                .init(top_firstBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDIScope_First() }, top_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDIScope_Second() })
 		            }
 		            func __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() -> Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget> {
 		                .init(subB_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_SubB() })
@@ -719,13 +719,13 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                    return gadget
 		                })
 		            }
-		            func __safeDI_gadgetBuilder_Host_Top() -> Top.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
+		            func __safeDI_gadgetBuilder_Host_Top_SafeDIScope_First() -> Top.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
 		                .init(subA: { _ in __safeDI_gadgetBuilder_Host_SubA() })
 		            }
 		            func __safeDI_gadgetBuilder_Host_SubA() -> SubA.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
 		                .init(first: { _ in __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() })
 		            }
-		            func __safeDI_gadgetBuilder_Host_Top_() -> Top.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		            func __safeDI_gadgetBuilder_Host_Top_SafeDIScope_Second() -> Top.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
 		                .init(subB: { _ in __safeDI_gadgetBuilder_Host_SubB() })
 		            }
 		            func __safeDI_gadgetBuilder_Host_SubB() -> SubB.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
@@ -1646,6 +1646,31 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
+	// MARK: Level functions of root enums under one builder
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesLevelFunctionsByTheirEnums_whenTwoRootEnumsAreLevelsOfOneBuilder() async throws {
+		// `Host`'s fill of `gadget` leads through both of `Top`'s root enums, `SafeDIScope_First` and `SafeDIScope_Second`, each a
+		// level of `gadgetBuilder` whose function would be named `__safeDI_gadgetBuilder_Host_Top`: each takes its enum's name, so
+		// swapping the names `First` and `Second`, which swaps the order of `Top`'s builder labels, names each level's function
+		// as before once the swap is undone. A label sort of the declarations is no difference, so each function's declaration
+		// is compared by itself.
+		let fixture = Fixture()
+		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let swappedModules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: fixture.feature.map(Self.swappingFirstAndSecond)),
+			ModuleFixture(name: "Middle", packageName: "Mid", swiftFileContent: fixture.middle.map { "import Feature\n\n" + Self.swappingFirstAndSecond($0) }, dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: (fixture.app + [fixture.root]).map { "import Feature\nimport Middle\n\n" + Self.swappingFirstAndSecond($0) }, dependencies: ["Feature", "Middle"]),
+		]
+		let swappedOutput = try await executeSafeDIToolMultiModuleTest(modules: swappedModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let functions = Self.functionDeclarations(in: output.modules["App"]?.generatedFiles["App.swift"] ?? "")
+		let swappedFunctions = Self.functionDeclarations(in: Self.swappingFirstAndSecond(swappedOutput.modules["App"]?.generatedFiles["App.swift"] ?? ""))
+		#expect(functions == swappedFunctions)
+		#expect(functions.contains("func __safeDI_gadgetBuilder_Host_Top_SafeDIScope_First() -> Top.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {"))
+		#expect(functions.contains("func __safeDI_gadgetBuilder_Host_Top_SafeDIScope_Second() -> Top.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {"))
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -1714,6 +1739,23 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [root].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
 			]
 		}
+	}
+
+	/// `text` with `First` and `Second`, and `first` and `second`, in each other's places.
+	private static func swappingFirstAndSecond(_ text: String) -> String {
+		text
+			.replacingOccurrences(of: "First", with: "\u{0}F")
+			.replacingOccurrences(of: "first", with: "\u{0}f")
+			.replacingOccurrences(of: "Second", with: "First")
+			.replacingOccurrences(of: "second", with: "first")
+			.replacingOccurrences(of: "\u{0}F", with: "Second")
+			.replacingOccurrences(of: "\u{0}f", with: "second")
+	}
+
+	/// The lines of `code` that declare a function, trimmed, as a set: what each function is named, takes and returns,
+	/// whatever order they are declared in.
+	private static func functionDeclarations(in code: String) -> Set<String> {
+		Set(code.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { $0.hasPrefix("func ") })
 	}
 
 	/// Expects `generatedFiles` to equal `expected`, recording the files generated when they do not, so a failure shows

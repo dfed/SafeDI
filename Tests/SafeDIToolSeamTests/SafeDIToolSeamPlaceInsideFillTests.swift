@@ -957,7 +957,7 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			        func __safeDI_outer() -> Outer {
 			            _ = Outer.__safeDI_Outer_0601553D51A9035D.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
-			                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner(id: nil) })
+			                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner_SafeDIScope_Service(id: nil) })
 			            }
 			            @Sendable nonisolated func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: Int?) -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
 			                .init(gadget: { _ in
@@ -966,12 +966,12 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			                })
 			            }
 			            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Outer() -> Outer.SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget> {
-			                .init(inner_serviceSendableBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner_() })
+			                .init(inner_serviceSendableBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner_SafeDISendableScope_Service() })
 			            }
-			            func __safeDI_gadgetBuilder_Outer_Inner(id: Int?) -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+			            func __safeDI_gadgetBuilder_Outer_Inner_SafeDIScope_Service(id: Int?) -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
 			                .init(service: { _ in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: id) })
 			            }
-			            @Sendable nonisolated func __safeDI_gadgetBuilder_Outer_Inner_() -> Inner.SafeDISendableScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+			            @Sendable nonisolated func __safeDI_gadgetBuilder_Outer_Inner_SafeDISendableScope_Service() -> Inner.SafeDISendableScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
 			                .init(screenBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope() })
 			            }
 			            @Sendable nonisolated func __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope() -> Inner.SafeDIScope_Service.Screen_Scope.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
