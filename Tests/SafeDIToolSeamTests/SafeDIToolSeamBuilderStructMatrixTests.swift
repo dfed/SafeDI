@@ -1604,9 +1604,11 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_leavesPublicMocksAsTheyWere_whenKeptSeamWithPublicMockCallsSeamTakingBuilderStruct() async throws {
-		// `Inner`'s seam side hands `Innermost` a struct; its public mock builds `Innermost`'s tree itself, and `Screen`'s mock
-		// calls `Inner`'s, both as they did when every seam took a closure over its enum.
+	mutating func generate_handsLevelFunctionsToPublicMockThatBuildsSeamInline_whenCallerFillsPlaceReadingLevelValue() async throws {
+		// `Inner`'s public mock builds `Innermost`'s tree inline as a nested level, and takes `Service`'s builder struct, since
+		// no place of `Service` forwards a value, is lazy or is built in a `@Sendable` function, and no case holds another
+		// scope. `Screen`'s mock fills the place, which reads `logger` from `detailBuilder_Values`, so it calls
+		// `Inner.__safeDI_mock` with level functions.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["mockBeside"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Inner {
@@ -1701,25 +1703,64 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		#if DEBUG
 		extension Inner {
-		    @frozen public enum SafeDIMockScope_Service {
+		    @frozen nonisolated public enum SafeDIMockScope_Service {
 		        case innermost(innermost_Values, SafeDIMockScope_Service.Innermost_Scope)
 
-		        public struct innermost_Values {
+		        nonisolated public struct innermost_Values {
 		            public let navigator: Navigator
 		        }
 
-		        @frozen public enum Innermost_Scope {
+		        @frozen nonisolated public enum Innermost_Scope {
 		            case detailBuilder(detailBuilder_Values, SafeDIMockScope_Service.Detail_Scope)
 
-		            public struct detailBuilder_Values {
+		            nonisolated public struct detailBuilder_Values {
 		                public let logger: Logger
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let detailBuilder: (detailBuilder_Values) -> SafeDIMockScope_Service.Detail_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(detailBuilder: @escaping (detailBuilder_Values) -> SafeDIMockScope_Service.Detail_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.detailBuilder = detailBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.detailBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
 		            }
 		        }
 
-		        @frozen public enum Detail_Scope {
+		        @frozen nonisolated public enum Detail_Scope {
 		            case service(service_Values)
 
-		            public struct service_Values {}
+		            nonisolated public struct service_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let service: (service_Values) -> __safeDI_Built
+
+		                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                    self.service = service
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.service = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let innermost: (innermost_Values) -> SafeDIMockScope_Service.Innermost_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(innermost: @escaping (innermost_Values) -> SafeDIMockScope_Service.Innermost_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.innermost = innermost
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.innermost = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
 		        }
 		    }
 
@@ -1755,17 +1796,24 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        serviceBuilder: @escaping (Inner.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Inner {
-		        let __safeDI_serviceBuilder = serviceBuilder
+		        Inner.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        serviceBuilder __safeDI_serviceBuilder: Inner.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Inner {
 		        let navigator = if let safeDIBuilder = safeDIOverrides.navigator { safeDIBuilder() } else { Navigator() }
-		        let __safeDI_serviceValues_innermost = SafeDIMockScope_Service.innermost_Values(navigator: navigator)
+		        let __safeDI_serviceBuilder_innermost = __safeDI_serviceBuilder.innermost(SafeDIMockScope_Service.innermost_Values(navigator: navigator))
 		        func __safeDI_innermost() -> Innermost {
 		            let logger = if let safeDIBuilder = safeDIOverrides.innermost.logger { safeDIBuilder() } else { Logger() }
-		            let __safeDI_serviceValues_detailBuilder = SafeDIMockScope_Service.Innermost_Scope.detailBuilder_Values(logger: logger)
+		            let __safeDI_serviceBuilder_detailBuilder = __safeDI_serviceBuilder_innermost.detailBuilder(SafeDIMockScope_Service.Innermost_Scope.detailBuilder_Values(logger: logger))
 		            func __safeDI_detailBuilder() -> Detail {
-		                let service: any Service = __safeDI_serviceBuilder(.innermost(__safeDI_serviceValues_innermost, .detailBuilder(__safeDI_serviceValues_detailBuilder, .service(SafeDIMockScope_Service.Detail_Scope.service_Values()))))
+		                let service: any Service = __safeDI_serviceBuilder_detailBuilder.service(SafeDIMockScope_Service.Detail_Scope.service_Values())
 		                return if let safeDIBuilder = safeDIOverrides.innermost.detailBuilder { safeDIBuilder(service) } else { Detail(service: service) }
 		            }
 		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -1777,7 +1825,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		}
 
 		extension Inner {
-		    public enum __safeDI_Inner_mock_9FA10D26840C5B18 {}
+		    public enum __safeDI_Inner_mock_DA6A3DB1524E7958 {}
 		}
 		#endif
 
@@ -1891,25 +1939,20 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_inner() -> Inner {
-		            func __safeDI_serviceBuilder_Inner(_ scope: Inner.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .innermost(_, scope): return __safeDI_serviceBuilder_Inner_Innermost_Scope(scope)
-		                }
+		            func __safeDI_serviceBuilder_Inner() -> Inner.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(innermost: { _ in __safeDI_serviceBuilder_Inner_Innermost_Scope() })
 		            }
-		            func __safeDI_serviceBuilder_Inner_Innermost_Scope(_ scope: Inner.SafeDIMockScope_Service.Innermost_Scope) -> any Service {
-		                switch scope {
-		                case let .detailBuilder(values, scope): return __safeDI_serviceBuilder_Inner_Detail_Scope(scope, logger: values.logger)
-		                }
+		            func __safeDI_serviceBuilder_Inner_Innermost_Scope() -> Inner.SafeDIMockScope_Service.Innermost_Scope.__safeDI_Builder<any Service> {
+		                .init(detailBuilder: { values in __safeDI_serviceBuilder_Inner_Detail_Scope(logger: values.logger) })
 		            }
-		            func __safeDI_serviceBuilder_Inner_Detail_Scope(_ scope: Inner.SafeDIMockScope_Service.Detail_Scope, logger: Logger) -> any Service {
-		                switch scope {
-		                case .service:
+		            func __safeDI_serviceBuilder_Inner_Detail_Scope(logger: Logger) -> Inner.SafeDIMockScope_Service.Detail_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { _ in
 		                    let service: any Service = DefaultService(logger: logger)
 		                    return service
-		                }
+		                })
 		            }
-		            _ = Inner.__safeDI_Inner_mock_9FA10D26840C5B18.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner, safeDIOverrides: safeDIOverrides.inner)
+		            _ = Inner.__safeDI_Inner_mock_DA6A3DB1524E7958.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Inner.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Inner(), safeDIOverrides: safeDIOverrides.inner)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        return Screen(inner: inner)
@@ -1918,6 +1961,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		#endif
 		"""])
 		try Self.expectCompiles(output)
+		try await expectValuesEqualInlineBuild(modules: Self.fixtures["mockBeside"] ?? [], probes: [DifferentialValueProbe("Screen.mock().inner.innermost.detailBuilder.instantiate().service")])
 	}
 
 	@Test
