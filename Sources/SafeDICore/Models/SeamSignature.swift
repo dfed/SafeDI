@@ -380,7 +380,7 @@ public struct SeamSignature: Sendable {
 					property = hole.property
 					instantiatedType = hole.instantiatedType
 					builderLabel = hole.builderLabel
-					caseName = hole.enumPlace?.describedCase
+					caseName = hole.enumPlace?.caseName
 					isBuiltBySendableBuilder = hole.enumPlace?.isBuiltBySendableBuilder ?? false
 				}
 
@@ -389,7 +389,8 @@ public struct SeamSignature: Sendable {
 				public let ownerType: TypeDescription
 				public let property: Property
 				public let instantiatedType: TypeDescription
-				/// The label of the builder the place's seam takes, and the place's case in that builder's enum, if it has one.
+				/// The label of the builder the place's seam takes, and the name of the place's case in that builder's enum, if it has
+				/// one, unqualified: a diagnostic names no generated type.
 				public let builderLabel: String
 				public let caseName: String?
 				/// Whether a `@Sendable` function builds the place, which is then handed only what that function binds.
