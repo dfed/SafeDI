@@ -339,7 +339,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		// consumer's overrides hold the closure, and passes when they do not; a graph that does not draw the call passes either
 		// way.
 		let seed = try #require((UInt64(0)..<1_000).first { !GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateMockPublic])).isDisjoint(with: GraphFuzzerPublicMockDrawFeature.overrideClosureCannotHandShapes) })
-		let member = "public let overriddenDetailBuilder: ((S\(seed)_OverriddenSession, @escaping () -> any S\(seed)_OverriddenApi) -> S\(seed)_OverriddenDetail)?"
+		let member = "public let overriddenDetailBuilder: ((S\(seed)_OverriddenSession, @escaping () -> any S\(seed)_OverriddenPlace1Api) -> S\(seed)_OverriddenDetail)?"
 		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: [member])).publicMockOverrideClosureFailure?.kind == .publicMockOffersOverrideClosureItsCallCannotHand)
 		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: [])).publicMockOverrideClosureFailure == nil)
 		let otherSeed = try #require((UInt64(0)..<1_000).first { !GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateMockPublic])).contains(.overrideClosureCall) })
@@ -352,8 +352,8 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		// when the consumer's overrides hold no closure, and passes when they hold one, by value or through an instantiator.
 		let seed = try #require((UInt64(0)..<1_000).first { GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateMockPublic])).contains(.overrideClosureCallCanHand) })
 		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: [])).publicMockOverrideClosureFailure?.kind == .publicMockDropsOverrideClosureItsCallCanHand)
-		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["public let overriddenDetail: ((@escaping () -> any S\(seed)_OverriddenApi) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure == nil)
-		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["let overriddenDetailBuilder: ((@escaping () -> any S\(seed)_OverriddenApi) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure == nil)
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["public let overriddenDetail: ((@escaping () -> any S\(seed)_OverriddenPlace1Api) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure == nil)
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["let overriddenDetailBuilder: ((@escaping () -> any S\(seed)_OverriddenPlace1Api) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure == nil)
 	}
 
 	// MARK: Builder structs
