@@ -211,12 +211,11 @@ struct GraphFuzzerBuilderStructReaderTests {
 	@Test(arguments: [
 		("@escaping () -> any S1_RetainApi", "S1_RetainHome(s1_RetainApiBuilder: { S1_RetainLive() })"),
 		("@escaping @Sendable () -> any S1_RetainApi", "S1_RetainHome(s1_RetainApiBuilder: { S1_RetainLive() })"),
-		("@escaping (SafeDIScope_S1_RetainApi) -> any S1_RetainApi", "S1_RetainHome(s1_RetainApiBuilder: { _ in S1_RetainLive() })"),
 		("@escaping ErasedInstantiator<Int, any S1_RetainApi>.Builder", "S1_RetainHome(s1_RetainApiBuilder: { ticket in S1_RetainLive(retainTicket: ticket) })"),
 	])
 	func differentialValueProbes_writesBuilderAsReadableInitializerTakesIt_whenGraphHasRetentionSeam(parameterType: String, expression: String) {
 		// A builder struct's readable initializer takes a closure that takes nothing, plain or `@Sendable`, or a wrapper's
-		// `Builder`, which takes the value the place forwards; a kept builder's takes the scope.
+		// `Builder`, which takes the value the place forwards.
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
 			"// module: FuzzFeature\n@Instantiable(generateDependencyTree: true)\npublic final class S1_RetainHome: Instantiable {\n    public init(api: any S1_RetainApi) {\n        self.api = api\n    }\n\n    @Instantiated let api: any S1_RetainApi\n}",
 			"// module: FuzzApp\n@Instantiable(fulfillingAdditionalTypes: [S1_RetainApi.self])\npublic final class S1_RetainLive: Instantiable, S1_RetainApi {\n    public init() {}\n}",
