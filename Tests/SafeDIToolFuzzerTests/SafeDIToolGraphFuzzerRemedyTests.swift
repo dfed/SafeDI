@@ -621,6 +621,841 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_keepEachFulfillerInTurnAndLeaveNoErrorAtItsDeclaration_whenTwoDeclarationsFulfillOneType() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t7: S1_T7, t8: S1_T8) {
+					self.t7 = t7
+					self.t8 = t8
+				}
+
+				@Instantiated let t7: S1_T7
+				@Instantiated let t8: S1_T8
+			}
+			""",
+			"""
+			@Instantiable(fulfillingAdditionalTypes: [S1_T7Protocol.self])
+			public final class S1_T7: Instantiable, S1_T7Protocol {
+				public init() {}
+			}
+
+			public protocol S1_T7Protocol: AnyObject {}
+
+			public final class S1_AnyT7 {
+				public init(_ value: S1_T7) {
+					self.value = value
+				}
+
+				public let value: S1_T7
+			}
+			""",
+			"""
+			@Instantiable(fulfillingAdditionalTypes: [S1_T7Protocol.self])
+			public final class S1_T8: Instantiable, S1_T8Protocol, S1_T7Protocol {
+				public init() {}
+			}
+
+			public protocol S1_T8Protocol: AnyObject {}
+
+			public final class S1_AnyT8 {
+				public init(_ value: S1_T8) {
+					self.value = value
+				}
+
+				public let value: S1_T8
+			}
+			""",
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.keepOneFulfiller, .keepOneFulfiller])
+		#expect(runs.map(\.remedy.site.typeName) == ["S1_T7", "S1_T8"])
+		#expect(runs.first?.remedy.fixture.swiftFileContent.dropFirst() == [
+			"""
+			@Instantiable(fulfillingAdditionalTypes: [S1_T7Protocol.self])
+			public final class S1_T7: Instantiable, S1_T7Protocol {
+				public init() {}
+			}
+
+			public protocol S1_T7Protocol: AnyObject {}
+
+			public final class S1_AnyT7 {
+				public init(_ value: S1_T7) {
+					self.value = value
+				}
+
+				public let value: S1_T7
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T8: Instantiable, S1_T8Protocol, S1_T7Protocol {
+				public init() {}
+			}
+
+			public protocol S1_T8Protocol: AnyObject {}
+
+			public final class S1_AnyT8 {
+				public init(_ value: S1_T8) {
+					self.value = value
+				}
+
+				public let value: S1_T8
+			}
+			""",
+		])
+		#expect(runs.last?.remedy.fixture.swiftFileContent.dropFirst() == [
+			"""
+			@Instantiable
+			public final class S1_T7: Instantiable, S1_T7Protocol {
+				public init() {}
+			}
+
+			public protocol S1_T7Protocol: AnyObject {}
+
+			public final class S1_AnyT7 {
+				public init(_ value: S1_T7) {
+					self.value = value
+				}
+
+				public let value: S1_T7
+			}
+			""",
+			"""
+			@Instantiable(fulfillingAdditionalTypes: [S1_T7Protocol.self])
+			public final class S1_T8: Instantiable, S1_T8Protocol, S1_T7Protocol {
+				public init() {}
+			}
+
+			public protocol S1_T8Protocol: AnyObject {}
+
+			public final class S1_AnyT8 {
+				public init(_ value: S1_T8) {
+					self.value = value
+				}
+
+				public let value: S1_T8
+			}
+			""",
+		])
+		#expect(runs.map(\.errorsAtSite) == [[], []])
+		#expect(runs.map {
+			if case .accepted = $0.outcome {
+				true
+			} else {
+				false
+			}
+		} == [true, true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_decorateTheTypeAndLeaveNoErrorAtTheProperty_whenNoDeclarationFulfillsAnInstantiatedType() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(missing0: S1_Missing0) {
+					self.missing0 = missing0
+				}
+
+				@Instantiated let missing0: S1_Missing0
+			}
+
+			public final class S1_Missing0 {}
+			""",
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.decorateType])
+		#expect(runs.first?.remedy.fixture.swiftFileContent == [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(missing0: S1_Missing0) {
+					self.missing0 = missing0
+				}
+
+				@Instantiated let missing0: S1_Missing0
+			}
+
+			@Instantiable
+			public final class S1_Missing0: Instantiable {
+				public init() {}
+			}
+			""",
+		])
+		#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(runs.map {
+			if case .accepted = $0.outcome {
+				true
+			} else {
+				false
+			}
+		} == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_declareTheBuilderAndItsReceiveAsTheSendableWrapperAndLeaveNoErrorAtTheReceive_whenASendableBuilderFunctionCapturesABuilderThatIsNotSendable() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1Builder: SendableInstantiator<S1_T1>, t2Builder: Instantiator<S1_T2>) {
+					self.t1Builder = t1Builder
+					self.t2Builder = t2Builder
+				}
+
+				@Instantiated let t1Builder: SendableInstantiator<S1_T1>
+				@Instantiated let t2Builder: Instantiator<S1_T2>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2Builder: Instantiator<S1_T2>) {
+					self.t2Builder = t2Builder
+				}
+
+				@Received let t2Builder: Instantiator<S1_T2>
+			}
+			""",
+			Self.leaf("S1_T2"),
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.declareAsSendableWrapper])
+		#expect(runs.first?.remedy.fixture.swiftFileContent.dropLast() == [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1Builder: SendableInstantiator<S1_T1>, t2Builder: SendableInstantiator<S1_T2>) {
+					self.t1Builder = t1Builder
+					self.t2Builder = t2Builder
+				}
+
+				@Instantiated let t1Builder: SendableInstantiator<S1_T1>
+				@Instantiated let t2Builder: SendableInstantiator<S1_T2>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2Builder: SendableInstantiator<S1_T2>) {
+					self.t2Builder = t2Builder
+				}
+
+				@Received let t2Builder: SendableInstantiator<S1_T2>
+			}
+			""",
+		])
+		#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(runs.map {
+			if case .accepted = $0.outcome {
+				true
+			} else {
+				false
+			}
+		} == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_declareOnlyTheLazyPropertyAsTheSendableWrapperAndLeaveNoErrorAtTheReceive_whenASendableBuilderFunctionCapturesItsInstance() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1Builder: SendableInstantiator<S1_T1>, t2: LazilyInstantiated<S1_T2>) {
+					self.t1Builder = t1Builder
+					self.t2 = t2
+				}
+
+				@Instantiated let t1Builder: SendableInstantiator<S1_T1>
+				@Instantiated let t2: LazilyInstantiated<S1_T2>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_T2) {
+					self.t2 = t2
+				}
+
+				@Received let t2: S1_T2
+			}
+			""",
+			Self.leaf("S1_T2"),
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.declareAsSendableWrapper])
+		#expect(runs.first?.remedy.fixture.swiftFileContent.dropLast() == [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1Builder: SendableInstantiator<S1_T1>, t2: SendableLazilyInstantiated<S1_T2>) {
+					self.t1Builder = t1Builder
+					self.t2 = t2
+				}
+
+				@Instantiated let t1Builder: SendableInstantiator<S1_T1>
+				@Instantiated let t2: SendableLazilyInstantiated<S1_T2>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_T2) {
+					self.t2 = t2
+				}
+
+				@Received let t2: S1_T2
+			}
+			""",
+		])
+		#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(runs.map {
+			if case .accepted = $0.outcome {
+				true
+			} else {
+				false
+			}
+		} == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_forwardTheReceiveAndLeaveNoErrorAtIt_whenAnInstantiatorBuildsTheReceiverOfATypeOnlyAnInstantiatorBuilds() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1Builder: Instantiator<S1_T1>) {
+					self.t1Builder = t1Builder
+				}
+
+				@Instantiated let t1Builder: Instantiator<S1_T1>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_T2) {
+					self.t2 = t2
+				}
+
+				@Received let t2: S1_T2
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable {
+				public init(seed: Int) {
+					self.seed = seed
+				}
+
+				@Forwarded let seed: Int
+			}
+			""",
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.forwardReceive])
+		#expect(runs.first?.remedy.fixture.swiftFileContent == [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1Builder: Instantiator<S1_T1>) {
+					self.t1Builder = t1Builder
+				}
+
+				@Instantiated let t1Builder: Instantiator<S1_T1>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_T2) {
+					self.t2 = t2
+				}
+
+				@Forwarded let t2: S1_T2
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable {
+				public init(seed: Int) {
+					self.seed = seed
+				}
+
+				@Forwarded let seed: Int
+			}
+			""",
+		])
+		#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(runs.map {
+			if case .accepted = $0.outcome {
+				true
+			} else {
+				false
+			}
+		} == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_forwardTheReceiveAndDeclareTheReceiverAsTheInstantiatorTheNextErrorStates_whenAConstantBuildsTheReceiver() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1: S1_T1) {
+					self.t1 = t1
+				}
+
+				@Instantiated let t1: S1_T1
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_T2) {
+					self.t2 = t2
+				}
+
+				@Received let t2: S1_T2
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable {
+				public init(seed: Int) {
+					self.seed = seed
+				}
+
+				@Forwarded let seed: Int
+			}
+			""",
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.forwardReceive])
+		#expect(runs.first?.remedy.fixture.swiftFileContent == [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1: Instantiator<S1_T1>) {
+					self.t1 = t1
+				}
+
+				@Instantiated let t1: Instantiator<S1_T1>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_T2) {
+					self.t2 = t2
+				}
+
+				@Forwarded let t2: S1_T2
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable {
+				public init(seed: Int) {
+					self.seed = seed
+				}
+
+				@Forwarded let seed: Int
+			}
+			""",
+		])
+		#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(runs.map {
+			if case .accepted = $0.outcome {
+				true
+			} else {
+				false
+			}
+		} == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_forwardTheReceiveAndDeclareTheErasedInstantiatorTheNextErrorStates_whenAnErasedInstantiatorThatTakesNothingBuildsTheReceiver() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1Builder: ErasedInstantiator<(), S1_AnyT1>) {
+					self.t1Builder = t1Builder
+				}
+
+				@Instantiated(fulfilledByType: "S1_T1", erasedToConcreteExistential: true) let t1Builder: ErasedInstantiator<(), S1_AnyT1>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_T2) {
+					self.t2 = t2
+				}
+
+				@Received let t2: S1_T2
+			}
+
+			public final class S1_AnyT1 {
+				public init(_ value: S1_T1) {
+					self.value = value
+				}
+
+				public let value: S1_T1
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable {
+				public init(seed: Int) {
+					self.seed = seed
+				}
+
+				@Forwarded let seed: Int
+			}
+			""",
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.forwardReceive])
+		#expect(runs.first?.remedy.fixture.swiftFileContent == [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1Builder: ErasedInstantiator<S1_T2, S1_AnyT1>) {
+					self.t1Builder = t1Builder
+				}
+
+				@Instantiated(fulfilledByType: "S1_T1", erasedToConcreteExistential: true) let t1Builder: ErasedInstantiator<S1_T2, S1_AnyT1>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_T2) {
+					self.t2 = t2
+				}
+
+				@Forwarded let t2: S1_T2
+			}
+
+			public final class S1_AnyT1 {
+				public init(_ value: S1_T1) {
+					self.value = value
+				}
+
+				public let value: S1_T1
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable {
+				public init(seed: Int) {
+					self.seed = seed
+				}
+
+				@Forwarded let seed: Int
+			}
+			""",
+		])
+		#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(runs.map {
+			if case .accepted = $0.outcome {
+				true
+			} else {
+				false
+			}
+		} == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_declareEveryPropertyOfTheLabelAsTheSendableWrapperAndLeaveNoErrorAtTheReceive_whenAMocksTreeReceivesTheBuilderFromOutsideIt() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t0: S1_T0) {
+					self.t0 = t0
+				}
+
+				@Instantiated let t0: S1_T0
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T0: Instantiable, @unchecked Sendable {
+				public init() {}
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public final class S1_T1: Instantiable, @unchecked Sendable {
+				public init(t2Builder: SendableInstantiator<S1_T2>, t0Builder: Instantiator<S1_T0>) {
+					self.t2Builder = t2Builder
+					self.t0Builder = t0Builder
+				}
+
+				@Instantiated let t2Builder: SendableInstantiator<S1_T2>
+				@Received let t0Builder: Instantiator<S1_T0>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable, @unchecked Sendable {
+				public init(t0Builder: Instantiator<S1_T0>) {
+					self.t0Builder = t0Builder
+				}
+
+				@Received let t0Builder: Instantiator<S1_T0>
+			}
+			""",
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.declareAsSendableWrapper])
+		#expect(runs.first?.remedy.fixture.swiftFileContent == [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t0: S1_T0) {
+					self.t0 = t0
+				}
+
+				@Instantiated let t0: S1_T0
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T0: Instantiable, @unchecked Sendable {
+				public init() {}
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public final class S1_T1: Instantiable, @unchecked Sendable {
+				public init(t2Builder: SendableInstantiator<S1_T2>, t0Builder: SendableInstantiator<S1_T0>) {
+					self.t2Builder = t2Builder
+					self.t0Builder = t0Builder
+				}
+
+				@Instantiated let t2Builder: SendableInstantiator<S1_T2>
+				@Received let t0Builder: SendableInstantiator<S1_T0>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable, @unchecked Sendable {
+				public init(t0Builder: SendableInstantiator<S1_T0>) {
+					self.t0Builder = t0Builder
+				}
+
+				@Received let t0Builder: SendableInstantiator<S1_T0>
+			}
+			""",
+		])
+		#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(runs.map {
+			if case .accepted = $0.outcome {
+				true
+			} else {
+				false
+			}
+		} == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_forwardTheReceiveAndLeaveNoErrorAtIt_whenNoDeclarationFulfillsTheReceivedType() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1Builder: Instantiator<S1_T1>) {
+					self.t1Builder = t1Builder
+				}
+
+				@Instantiated let t1Builder: Instantiator<S1_T1>
+			}
+
+			public final class S1_Unbuildable0 {}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_Unbuildable0) {
+					self.t2 = t2
+				}
+
+				@Received let t2: S1_Unbuildable0
+			}
+			""",
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.forwardReceive])
+		#expect(runs.first?.remedy.fixture.swiftFileContent == [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1Builder: Instantiator<S1_T1>) {
+					self.t1Builder = t1Builder
+				}
+
+				@Instantiated let t1Builder: Instantiator<S1_T1>
+			}
+
+			public final class S1_Unbuildable0 {}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_Unbuildable0) {
+					self.t2 = t2
+				}
+
+				@Forwarded let t2: S1_Unbuildable0
+			}
+			""",
+		])
+		#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(runs.map {
+			if case .accepted = $0.outcome {
+				true
+			} else {
+				false
+			}
+		} == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_decorateTheTypeKeepingItsSendableConformance_whenTheTypeNoDeclarationFulfillsIsSendable() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(missing0: S1_Missing0) {
+					self.missing0 = missing0
+				}
+
+				@Instantiated let missing0: S1_Missing0
+			}
+
+			public final class S1_Missing0: Sendable {}
+			""",
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.decorateType])
+		#expect(runs.first?.remedy.fixture.swiftFileContent == [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(missing0: S1_Missing0) {
+					self.missing0 = missing0
+				}
+
+				@Instantiated let missing0: S1_Missing0
+			}
+
+			@Instantiable
+			public final class S1_Missing0: Instantiable, Sendable {
+				public init() {}
+			}
+			""",
+		])
+		#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(runs.map {
+			if case .accepted = $0.outcome {
+				true
+			} else {
+				false
+			}
+		} == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_leaveNoErrorAtTheReceive_whenAnotherRootDeclaresThePropertyTheSendableBuilderCannotCapture() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1Builder: SendableInstantiator<S1_T1>, t2Builder: Instantiator<S1_T2>) {
+					self.t1Builder = t1Builder
+					self.t2Builder = t2Builder
+				}
+
+				@Instantiated let t1Builder: SendableInstantiator<S1_T1>
+				@Instantiated let t2Builder: Instantiator<S1_T2>
+			}
+			""",
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root1: Instantiable {
+				public init(t1: S1_T1, t2Builder: Instantiator<S1_T2>) {
+					self.t1 = t1
+					self.t2Builder = t2Builder
+				}
+
+				@Instantiated let t1: S1_T1
+				@Instantiated let t2Builder: Instantiator<S1_T2>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable, @unchecked Sendable {
+				public init(t2Builder: Instantiator<S1_T2>) {
+					self.t2Builder = t2Builder
+				}
+
+				@Received let t2Builder: Instantiator<S1_T2>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable, @unchecked Sendable {
+				public init() {}
+			}
+			""",
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.declareAsSendableWrapper])
+		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedySendableWrapperNamesOneDeclarationReason)") {
+			#expect(runs.map(\.errorsAtSite) == [[]])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func remedyRuns_leaveNoErrorAtTheReceive_whenTheSuggestedOnlyIfAvailableReceiveIsInsideASendableBuilder() async throws {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
 			"""
@@ -938,6 +1773,81 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 		#expect(GraphFuzzerRemedies.remedies(of: fixture, diagnostics: "\(declare)\n\(suggest)").isEmpty)
 		#expect(GraphFuzzerRemedies.unremediedSiteCount(of: fixture, diagnostics: "\(declare)\n\(suggest)") == 1)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func errorsAtSite_listTheErrorForwardingIntroducedAtTheReceiversBuilder_whenTheFollowingRunsLeaveIt() throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1: S1_T1) {
+					self.t1 = t1
+				}
+
+				@Instantiated let t1: S1_T1
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_T2) {
+					self.t2 = t2
+				}
+
+				@Received let t2: S1_T2
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable {
+				public init(seed: Int) {
+					self.seed = seed
+				}
+
+				@Forwarded let seed: Int
+			}
+			""",
+		])
+		let original = "/x/<fixture-directory>/S1_T1.swift:7:2: error: @Received property `t2: S1_T2` is not @Instantiated or @Forwarded in chain: S1_Root0 -> S1_T1. `S1_T2` has @Forwarded properties, so SafeDI builds it only through an `Instantiator`, never as an @Instantiated constant. Declare `@Forwarded let t2: S1_T2` on a type below `S1_Root0` in the chain, and pass the value to the `Instantiator` that builds that type, to fix."
+		let remedy = try #require(GraphFuzzerRemedies.remedies(of: fixture, diagnostics: original).first)
+		let introduced = "`t1: S1_T1` on `S1_Root0` cannot build `S1_T1`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<S1_T1>`."
+		// An error about a builder of another type is not the remedy’s to answer for.
+		let unrelated = "`t3: S1_T3` on `S1_Root0` cannot build `S1_T3`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<S1_T3>`."
+		let outcome = GraphFuzzerToolOutcome.rejected(diagnostics: "/x/<fixture-directory>/S1_Root0.swift:7:2: error: \(introduced)\n/x/<fixture-directory>/S1_Root0.swift:7:2: error: \(unrelated)")
+
+		let introducedErrors = GraphFuzzerRemedies.errorsIntroducedByForwarding(remedy, outcome: outcome, originalDiagnostics: original)
+		let run = GraphFuzzerRemedyRun(remedy: remedy, outcome: outcome, introducedErrors: introducedErrors)
+
+		#expect(remedy.kind == .forwardReceive)
+		#expect(run.errorsAtSite == [introduced])
+		#expect(run.failureLine == "The forward-receive remedy, which receives `t2` with `@Forwarded`, leaves at `S1_T1.t2` in S1_T1.swift: \(introduced)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func unremediedSiteCount_countsAnErrorOfAFamilyTheOracleReads_whenItIsAtALineThatIsNoPropertyOfAFinalClass() {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(missing0: S1_Missing0) {
+					self.missing0 = missing0
+				}
+
+				@Instantiated let missing0: S1_Missing0
+			}
+
+			public final class S1_Missing0 {}
+			""",
+		])
+		// The error is at the type's attribute, where the oracle reads no site for its family.
+		let unplaced = "/x/<fixture-directory>/S1_Root0.swift:1:1: error: No @Instantiable type or extension fulfills `S1_Missing0`, which @Instantiated property `missing0: S1_Missing0` instantiates. Decorate `S1_Missing0`, or an extension of it, with @Instantiable to fix."
+		let otherFamily = "/x/<fixture-directory>/S1_Root0.swift:1:1: error: Another error at no property."
+
+		#expect(GraphFuzzerRemedies.remedies(of: fixture, diagnostics: "\(unplaced)\n\(otherFamily)").isEmpty)
+		#expect(GraphFuzzerRemedies.unremediedSiteCount(of: fixture, diagnostics: "\(unplaced)\n\(otherFamily)") == 1)
 	}
 
 	// MARK: Helpers

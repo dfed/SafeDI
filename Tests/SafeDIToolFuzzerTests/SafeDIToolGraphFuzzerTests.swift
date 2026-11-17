@@ -6200,7 +6200,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
-	static let smokeRemedyKinds: [GraphFuzzerRemedyKind] = [.defaultMockParameter, .instantiateOnRoot, .instantiateOnRootAndReceiveOnlyIfAvailable, .moveMockIntoClause, .receiveOptionallyIfAvailable, .receiveSuggestedProperty, .removeReceive]
+	static let smokeRemedyKinds: [GraphFuzzerRemedyKind] = [.decorateType, .defaultMockParameter, .instantiateOnRoot, .instantiateOnRootAndReceiveOnlyIfAvailable, .moveMockIntoClause, .receiveOptionallyIfAvailable, .receiveSuggestedProperty, .removeReceive]
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
@@ -8445,6 +8445,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 	static let compileTimeAssertionsDifferBetweenIntegrationsReason = "The two multi-module integrations emit other compile-time assertions for a module whose declarations sit inside `#if` blocks, in a build that reports its conditions (the graphs `addingGuardedMockParameterShapes` draws, the first the fuzzer runs with conditions): a module that generates nothing else gets its assertions from the module-info flow and no generate run from the SwiftPM plugin flow (seed 4880: Alpha holds `Guarded` alone, and only the module-info flow emits `#if !(!FUZZ_GUARD)` `#error`), and a condition two blocks of one declaration test is asserted twice by the plugin flow and once by the module-info flow (seed 2915: `FUZZ_OTHER`). Left as it is: the flows differ in assertions only, never in code that does not compile or in a value; the first loses a check only in a module that generates nothing depending on it, and the second states one check twice. Revisit if an adopter reports a condition SwiftPM missed"
 
+	static let remedySendableWrapperNamesOneDeclarationReason = "An error at a receive inside a `@Sendable` function advises declaring the captured property as its `Sendable` wrapper on the one root its chain starts at, and at the receive, where another root declares the property, or another type receives it, as the wrapper that is not `Sendable`: the receive is then unfulfilled beneath the other root, or hidden beneath the other receiver (remedyRuns_leaveNoErrorAtTheReceive_whenAnotherRootDeclaresThePropertyTheSendableBuilderCannotCapture: Root0 builds T1 through `SendableInstantiator<T1>` and Root1 as a constant, each declares `t2Builder: Instantiator<T2>`, and T1 receives it). The fix, on the branch claude/sendable-remedy-names-all, names every declaration; its roll is seed 1436"
+
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
 	static let knownIssues = addingReportedIssueShapes(to: knownIssuesBesideReportedIssueShapes)
@@ -8573,6 +8575,14 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: remedyDeclarationClosesCycleThroughRootReason,
 			signatures: [.remedyLeavesErrorAtSite(.instantiateOnRoot, containing: "Dependency cycle: ")],
 			seeds: [984, 3_493, 4_375, 4_864],
+		),
+		GraphFuzzerKnownIssue(
+			reason: remedySendableWrapperNamesOneDeclarationReason,
+			signatures: [
+				.remedyLeavesErrorAtSite(.declareAsSendableWrapper, containing: "` is not @Instantiated or @Forwarded in chain: "),
+				.remedyLeavesErrorAtSite(.declareAsSendableWrapper, containing: "is hidden in chain"),
+			],
+			seeds: [1_436, 4_829],
 		),
 		GraphFuzzerKnownIssue(
 			reason: compileTimeAssertionsDifferBetweenIntegrationsReason,
