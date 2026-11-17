@@ -1906,7 +1906,7 @@ Each of these errors says what to change.
 
 #### Trees a seam builds differently
 
-A hand-written call of a seam’s initializer creates every argument at the call. A generated call passes each value so that it is created where it would be inline, with one exception. Say a hole’s implementation reads a value a generated call defers, and the implementation’s own tree builds the seam again beneath another declaration of that value’s label. The implementation then reads the value when the implementation is built, where inline its receiver reads it when that receiver is built.
+A hand-written call of a seam’s initializer creates every argument at the call. A generated call passes each value so that it is created where it would be inline, with two exceptions. First, say a hole’s implementation reads a value a generated call defers, and the implementation’s own tree builds the seam again beneath another declaration of that value’s label. The implementation then reads the value when the implementation is built, where inline its receiver reads it when that receiver is built. Second, where the implementation reads such a value inside a `@Sendable` function, or hands it to a seam that takes it `@Sendable`, the value is created when the implementation’s builder is called, since a `@Sendable` function cannot capture the deferred value.
 
 ### Generated imports
 
