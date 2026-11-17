@@ -2667,14 +2667,14 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 	}
 
-	@Test(arguments: [UInt64(59), 80, 196])
+	@Test(arguments: [UInt64(69), 80, 233])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_rejectBothBuildsWithFieldOfReenteringPlace_whenCallerFillsPlaceInsideFillBuiltAgainUnremedied(seed: UInt64) async throws {
 		// `ReenteredSubA` binds `reenteredTag` before `reenteredFirst`, whose fill `ReenteredFirstImpl` builds `ReenteredSubB`
 		// again, and `ReenteredGadgetImpl`, which fills from the roots' module a place inside the fill of `reenteredSecond`
 		// that `ReenteredHost` passes up, reads it, so only the place whose fill builds the seam again carries it: only if
-		// available in seed 196, also beside `ReenteredHost`'s binding of the label above its call of `ReenteredTop` in seed
-		// 59, and required in seed 80. The build that fills the place from the roots' module, which reads what
+		// available in seed 233, also beside `ReenteredHost`'s binding of the label above its call of `ReenteredTop` in seed
+		// 69, and required in seed 80. The build that fills the place from the roots' module, which reads what
 		// `ReenteredHost`'s module records on the place, and the visible build, which fills it in the seam's module, both
 		// reject the read with `fieldOfReenteringPlace`, in the same words.
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
