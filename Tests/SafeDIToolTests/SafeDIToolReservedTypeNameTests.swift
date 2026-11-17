@@ -310,6 +310,84 @@ struct SafeDIToolReservedTypeNameTests: ~Copyable {
 		#expect(output.generatedFiles?.keys.sorted() == ["Root+SafeDI.swift"])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtEachDeclaration_whenProtocolsDeclareAssociatedTypesWithReservedNames() async {
+		// An associated type is declared directly in a protocol's body, in each clause of an `#if` block in that body,
+		// and in a protocol inside an outermost `#if` block, which a walk of the block's clauses records.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Root.swift"]):7:20: error: The type name `SafeDIScope_Value` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.
+			\(fixtures["Root.swift"]):9:20: error: The type name `SafeDIMockScope_Element` begins with `SafeDIMockScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIMockScope_`.
+			\(fixtures["Root.swift"]):11:20: error: The type name `__safeDI_Element` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `__safeDI_`.
+			\(fixtures["Root.swift"]):17:20: error: The type name `SafeDISendableScope_Item` begins with `SafeDISendableScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDISendableScope_`.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init() {}
+					}
+
+					protocol Holder {
+					    associatedtype SafeDIScope_Value
+					    #if DEBUG
+					    associatedtype SafeDIMockScope_Element
+					    #else
+					    associatedtype __safeDI_Element
+					    #endif
+					}
+
+					#if FOO
+					protocol Store {
+					    associatedtype SafeDISendableScope_Item
+					}
+					#endif
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesRoot_whenProtocolsDeclareRenamedAssociatedTypes() async throws {
+		// The remedy: each associated type renamed so that its name begins with no reserved prefix.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init() {}
+				}
+
+				protocol Holder {
+				    associatedtype Value
+				    #if DEBUG
+				    associatedtype MockElement
+				    #else
+				    associatedtype Element
+				    #endif
+				}
+
+				#if FOO
+				protocol Store {
+				    associatedtype Item
+				}
+				#endif
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles?.keys.sorted() == ["Root+SafeDI.swift"])
+	}
+
 	@Test(arguments: ReservedTypeNameRun.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorAtDeclaration_whenFileWithoutSafeDIMarkerDeclaresReservedNameInPlainExtension(run: ReservedTypeNameRun) async {
@@ -358,6 +436,63 @@ struct SafeDIToolReservedTypeNameTests: ~Copyable {
 				"Panel+Scope.swift": """
 				extension Panel {
 				    enum MockScopeX {}
+				}
+				""",
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.warnings.isEmpty)
+	}
+
+	@Test(arguments: ReservedTypeNameRun.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtDeclaration_whenFileWithoutSafeDIMarkerDeclaresAssociatedTypeWithReservedName(run: ReservedTypeNameRun) async {
+		// The file holds no SafeDI marker, and names no type the module keeps after a type keyword, so only the reserved
+		// name of the associated type gets it parsed.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(run.path(in: fixtures, of: "Holder.swift")):2:20: error: The type name `SafeDIScope_Value` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.
+			"""
+		}) {
+			try await run.generate(
+				swiftFileContent: [
+					"""
+					@Instantiable
+					public final class Panel: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				swiftFileContentByFilePath: [
+					"Holder.swift": """
+					protocol Holder {
+					    associatedtype SafeDIScope_Value
+					}
+					""",
+				],
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: ReservedTypeNameRun.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_succeeds_whenFileWithoutSafeDIMarkerDeclaresRenamedAssociatedType(run: ReservedTypeNameRun) async throws {
+		// The remedy: the associated type renamed so that its name begins with no reserved prefix.
+		let output = try await run.generate(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Panel: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			swiftFileContentByFilePath: [
+				"Holder.swift": """
+				protocol Holder {
+				    associatedtype Value
 				}
 				""",
 			],

@@ -208,23 +208,25 @@ public struct ReservedTypeNameDeclaration: Codable, Hashable, Sendable {
 		}
 	}
 
-	/// The records of the type aliases among the members of `protocolDeclaration`, in every clause of each `#if` block
-	/// among them, in source order: a protocol's body declares no other type.
+	/// The records of the type aliases and associated types among the members of `protocolDeclaration`, in every clause of
+	/// each `#if` block among them, in source order: a protocol's body declares no other type.
 	static func declaredAmongMembers(of protocolDeclaration: ProtocolDeclSyntax, sourceLocationConverter: SourceLocationConverter?) -> [ReservedTypeNameDeclaration] {
-		func typeAliasNames(in members: MemberBlockItemListSyntax) -> [TokenSyntax] {
+		func typeNames(in members: MemberBlockItemListSyntax) -> [TokenSyntax] {
 			members.flatMap { member -> [TokenSyntax] in
 				if let typeAlias = TypeAliasDeclSyntax(member.decl) {
 					[typeAlias.name]
+				} else if let associatedType = AssociatedTypeDeclSyntax(member.decl) {
+					[associatedType.name]
 				} else if let ifConfigDeclaration = IfConfigDeclSyntax(member.decl) {
 					ifConfigDeclaration.clauses.flatMap { clause in
-						MemberBlockItemListSyntax(clause.elements).map(typeAliasNames(in:)) ?? []
+						MemberBlockItemListSyntax(clause.elements).map(typeNames(in:)) ?? []
 					}
 				} else {
 					[]
 				}
 			}
 		}
-		return typeAliasNames(in: protocolDeclaration.memberBlock.members).compactMap {
+		return typeNames(in: protocolDeclaration.memberBlock.members).compactMap {
 			declaredBy($0, sourceLocationConverter: sourceLocationConverter)
 		}
 	}
