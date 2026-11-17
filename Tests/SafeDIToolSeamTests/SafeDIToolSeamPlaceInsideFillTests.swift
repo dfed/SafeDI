@@ -1745,11 +1745,11 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 		            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(up: Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<SafeDIScope_Gizmo.DefaultGadget_Scope.__safeDI_Builder<any Gizmo>>) -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
 		                .init(gadget: { scope in __safeDI_gadgetBuilder_Outer_DefaultService_Scope_gadget(scope, __safeDI_outer_gadgetBuilder: up.gadget(scope)) })
 		            }
-		            func __safeDI_gadgetBuilder_Outer_Inner(__safeDI_outer_gadgetBuilder: SafeDIScope_Gizmo.DefaultGadget_Scope.__safeDI_Builder<any Gizmo>) -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(screenBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(__safeDI_outer_gadgetBuilder: __safeDI_outer_gadgetBuilder) }, service: { _ in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(__safeDI_outer_gadgetBuilder: __safeDI_outer_gadgetBuilder) })
+		            func __safeDI_gadgetBuilder_Outer_Inner(up: Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<SafeDIScope_Gizmo.DefaultGadget_Scope.__safeDI_Builder<any Gizmo>>>) -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(screenBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(up: up.screenBuilder(values)) }, service: { values in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(up: up.service(values)) })
 		            }
-		            func __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(__safeDI_outer_gadgetBuilder: SafeDIScope_Gizmo.DefaultGadget_Scope.__safeDI_Builder<any Gizmo>) -> Inner.SafeDIScope_Service.Screen_Scope.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(service: { _ in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(__safeDI_outer_gadgetBuilder: __safeDI_outer_gadgetBuilder) })
+		            func __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(up: Inner.SafeDIScope_Service.Screen_Scope.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<SafeDIScope_Gizmo.DefaultGadget_Scope.__safeDI_Builder<any Gizmo>>>) -> Inner.SafeDIScope_Service.Screen_Scope.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(service: { values in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(up: up.service(values)) })
 		            }
 		            return Outer(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Outer(up: __safeDI_gizmoBuilder_outer_gadgetBuilder))
 		        }
@@ -1777,7 +1777,7 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 		        func __safeDI_top() -> Top {
 		            _ = Top.__safeDI_Top_62F02F09D92909EE.self // If this line does not compile, compile the code SafeDI generates for module Upper into Upper: under Bazel, add Upper’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_gizmoBuilder_Top() -> Top.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
-		                .init(outer_gadgetBuilder: { _ in __safeDI_gizmoBuilder_Top_Outer() })
+		                .init(outer_gadgetBuilder: { _ in __safeDI_gizmoBuilder_Top_Outer(id: nil) })
 		            }
 		            func __safeDI_gizmoBuilder_Top_DefaultGadget_Scope(id: Int?) -> Top.SafeDIScope_Gizmo.DefaultGadget_Scope.__safeDI_Builder<any Gizmo> {
 		                .init(gizmo: { _ in
@@ -1785,8 +1785,17 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 		                    return gizmo
 		                })
 		            }
-		            func __safeDI_gizmoBuilder_Top_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<Top.SafeDIScope_Gizmo.DefaultGadget_Scope.__safeDI_Builder<any Gizmo>> {
-		                .init()
+		            func __safeDI_gizmoBuilder_Top_Outer(id: Int?) -> Outer.SafeDIScope_Gadget.__safeDI_Builder<Top.SafeDIScope_Gizmo.DefaultGadget_Scope.__safeDI_Builder<any Gizmo>> {
+		                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner(id: id) })
+		            }
+		            func __safeDI_gadgetBuilder_Outer_Inner(id: Int?) -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.DefaultGadget_Scope.__safeDI_Builder<any Gizmo>>> {
+		                .init(screenBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope() }, service: { _ in __safeDI_gizmoBuilder_Top_Outer_DefaultService_Scope(id: id) })
+		            }
+		            func __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope() -> Inner.SafeDIScope_Service.Screen_Scope.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.DefaultGadget_Scope.__safeDI_Builder<any Gizmo>>> {
+		                .init(service: { values in __safeDI_gizmoBuilder_Top_Outer_DefaultService_Scope(id: values.id) })
+		            }
+		            func __safeDI_gizmoBuilder_Top_Outer_DefaultService_Scope(id: Int?) -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.DefaultGadget_Scope.__safeDI_Builder<any Gizmo>> {
+		                .init(gadget: { _ in __safeDI_gizmoBuilder_Top_DefaultGadget_Scope(id: id) })
 		            }
 		            return Top(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Top())
 		        }
