@@ -3957,6 +3957,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The fills of enclosing calls that calls in this subtree refer to by name, each by its key with its function's
 	/// name, which no builder function declared between such a call and the fill may share (see `builderFunctionNames`).
+	/// A call refers to such a fill when it passes it as an argument, and to a level function of the enclosing call that it
+	/// reuses when a case of one of its own dispatchers calls that function (`FillDispatcher.Case.Target.reusedCarriedInnerScopes`).
 	let referencedFillNamesByKey: [String: String]
 	/// The keys of `referencedFillNamesByKey` referred to from inside a `@Sendable` builder function that does not
 	/// enclose the fill, or passed to a seam that takes the fill `@Sendable`.
