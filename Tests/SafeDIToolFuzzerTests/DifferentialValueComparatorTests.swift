@@ -2811,17 +2811,23 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func differentialValueProbes_buildNoRetainHomeThroughHandWrittenBuilder_whenRetainHomeKeepsScopeOfPlaceThatForwards() async throws {
+	func differentialValueProbes_buildRetainHomeThroughBuilderTakingForwardedValue_whenRetainHomeHoldsInnerSeamPassingUpPlaceThatForwards() async throws {
 		// Seed 24's `RetainHome` holds `RetainInnerDetail`, a seam that passes up its place, which forwards `retainTicket`:
-		// `RetainHome`'s builder keeps its closure over the scope, whose case carries the ticket no builder that reads nothing
-		// can take.
+		// `RetainHome`'s readable initializer takes the wrapper's `Builder` for the place, in the builder struct every place of
+		// a seam is handed through, so the probe's builder takes the ticket.
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: 24, features: [.generateDependencyTree])
 		#expect(GraphFuzzerFeature.seamDrawFeatures(of: fixture).isSuperset(of: [.retentionSeamValueBeforeBuilderForwardingPlace, .retentionSeamValueBeforeBuilderInnerSeam]))
 
 		let generatedFiles = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: []).generatedFiles
 
 		#expect(!generatedFiles.isEmpty, "Seed 24 is expected to be accepted")
-		#expect(fixture.differentialValueProbes(generatedFiles: generatedFiles).filter { $0.name.hasSuffix(GraphFuzzerFixture.handWrittenBuilderProbeNameSuffix) } == [])
+		#expect(fixture.differentialValueProbes(generatedFiles: generatedFiles).filter { $0.name.hasSuffix(GraphFuzzerFixture.handWrittenBuilderProbeNameSuffix) } == [
+			DifferentialValueProbe(
+				name: "S24_RetainHome built through a hand-written builder",
+				expression: "S24_RetainHome(s24_RetainLive_S24_RetainApiSendableBuilder: { ticket in S24_RetainLive(retainTicket: ticket) })",
+				knownRightExpression: "S24_RetainRoot().retainHome",
+			),
+		])
 	}
 
 	// MARK: Private
