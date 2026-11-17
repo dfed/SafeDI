@@ -293,16 +293,11 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			    }
 
 			    static func mock(
-			        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+			        serviceBuilder: @escaping () -> any Service,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			        let panel = Panel.__safeDI_mock(serviceBuilder: .init(
-			            row: { __safeDI_rowValues in
-			                .init(service: { __safeDI_serviceValues in serviceBuilder(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-			            },
-			            service: { __safeDI_serviceValues in serviceBuilder(.service(__safeDI_serviceValues)) }
-			        ), safeDIOverrides: safeDIOverrides.panel)
+			        let panel = Panel.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides.panel)
 			        return Screen(panel: panel)
 			    }
 			}
@@ -318,32 +313,22 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		\(Self.screenPrelude)
 		    static func mock(
-		        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_panel() -> Panel {
-		            func __safeDI_serviceBuilder_Panel(_ scope: Panel.SafeDIMockScope_Service, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .row(_, scope): return __safeDI_serviceBuilder_Panel_Row_Scope(scope)
-		                case .service: return passUp()
-		                }
+		            func __safeDI_serviceBuilder_Panel(up: Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service>) -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(row: { _ in __safeDI_serviceBuilder_Panel_Row_Scope() }, service: up.service)
 		            }
-		            func __safeDI_serviceBuilder_Panel_Row_Scope(_ scope: Panel.SafeDIMockScope_Service.Row_Scope) -> any Service {
-		                switch scope {
-		                case let .service(scope):
+		            func __safeDI_serviceBuilder_Panel_Row_Scope() -> Panel.SafeDIMockScope_Service.Row_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in
 		                    let token = scope.token
 		                    let service: any Service = DefaultService(token: token)
 		                    return service
-		                }
+		                })
 		            }
-		            let __safeDI_serviceBuilder_Panel_scope: (Panel.SafeDIMockScope_Service) -> any Service = { scope in __safeDI_serviceBuilder_Panel(scope, passUp: { serviceBuilder(scope) }) }
 		            _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Panel.__safeDI_mock(serviceBuilder: .init(
-		                row: { __safeDI_rowValues in
-		                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Panel_scope(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-		                },
-		                service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Panel_scope(.service(__safeDI_serviceValues)) }
-		            ), safeDIOverrides: safeDIOverrides.panel)
+		            return Panel.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Panel(up: .init(__safeDI_noScope: serviceBuilder)), safeDIOverrides: safeDIOverrides.panel)
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        return Screen(panel: panel)
@@ -716,7 +701,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceBuilder: @escaping (Hub.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> HubScreen {
 		        func __safeDI_hub() -> Hub {
@@ -724,36 +709,20 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                let service: any Service = DefaultService(token: token)
 		                return service
 		            }
-		            func __safeDI_serviceBuilder_Hub(_ scope: Hub.SafeDIMockScope_Service, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .page(_, scope): return __safeDI_serviceBuilder_Hub_Page_Scope(scope, passUp: passUp)
-		                case let .model(_, scope): return __safeDI_serviceBuilder_Hub_Model_Scope(scope, token: nil, passUp: passUp)
-		                }
+		            func __safeDI_serviceBuilder_Hub(up: Hub.SafeDIMockScope_Service.__safeDI_Builder<any Service>) -> Hub.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(page: { _ in __safeDI_serviceBuilder_Hub_Page_Scope() }, model: { values in __safeDI_serviceBuilder_Hub_Model_Scope_(up: up.model(values)) })
 		            }
-		            func __safeDI_serviceBuilder_Hub_Page_Scope(_ scope: Hub.SafeDIMockScope_Service.Page_Scope, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .model(values, scope): return __safeDI_serviceBuilder_Hub_Model_Scope(scope, token: values.token, passUp: passUp)
-		                }
+		            func __safeDI_serviceBuilder_Hub_Page_Scope() -> Hub.SafeDIMockScope_Service.Page_Scope.__safeDI_Builder<any Service> {
+		                .init(model: { values in __safeDI_serviceBuilder_Hub_Model_Scope(token: values.token) })
 		            }
-		            func __safeDI_serviceBuilder_Hub_Model_Scope(_ scope: Hub.SafeDIMockScope_Service.Model_Scope, token: Token?, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .service(scope): if let token { return __safeDI_serviceBuilder_Hub_Model_Scope_service(scope, token: token) } else { return passUp() }
-		                }
+		            func __safeDI_serviceBuilder_Hub_Model_Scope(token: Token) -> Hub.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Hub_Model_Scope_service(scope, token: token) })
 		            }
-		            let __safeDI_serviceBuilder_Hub_scope: (Hub.SafeDIMockScope_Service) -> any Service = { scope in __safeDI_serviceBuilder_Hub(scope, passUp: { serviceBuilder(scope) }) }
+		            func __safeDI_serviceBuilder_Hub_Model_Scope_(up: Hub.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service>) -> Hub.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: up.service)
+		            }
 		            _ = Hub.__safeDI_Hub_mock_CB4845364B55B503.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(serviceBuilder: .init(
-		                page: { __safeDI_pageValues in
-		                    .init(
-		                        model: { __safeDI_modelValues in
-		                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Hub_scope(.page(__safeDI_pageValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
-		                        }
-		                    )
-		                },
-		                model: { __safeDI_modelValues in
-		                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Hub_scope(.model(__safeDI_modelValues, .service(__safeDI_serviceValues))) })
-		                }
-		            ), safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Hub(up: .init(__safeDI_noScope: serviceBuilder)), safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return HubScreen(hub: hub)
@@ -763,7 +732,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		"""])
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe(
 			name: "HubScreen.mock()",
-			expression: "HubScreen.mock(serviceBuilder: { _ in PassedUpService() })",
+			expression: "HubScreen.mock(serviceBuilder: { PassedUpService() })",
 			knownRightExpression: "HubScreen.mock(safeDIOverrides: .init(hub: .init(model: .init({ _ in Model(service: PassedUpService()) }))))",
 		)])
 	}
@@ -1055,16 +1024,11 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			    }
 
 			    static func mock(
-			        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+			        serviceBuilder: @escaping () -> any Service,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			        let panel = Panel.__safeDI_mock(serviceBuilder: .init(
-			            row: { __safeDI_rowValues in
-			                .init(service: { __safeDI_serviceValues in serviceBuilder(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-			            },
-			            service: { __safeDI_serviceValues in serviceBuilder(.service(__safeDI_serviceValues)) }
-			        ), safeDIOverrides: safeDIOverrides.panel)
+			        let panel = Panel.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides.panel)
 			        return Screen(panel: panel)
 			    }
 			}
@@ -1082,33 +1046,25 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		#expect(output.modules["Mid"]?.generatedFiles == ["Mid.swift": generatedFileHeader + """
 		\(Self.boardPrelude)
 		    public static func mock(
-		        serviceBuilder: @escaping (Board.SafeDIMockScope_Service) -> any Service,
-		        serviceSendableBuilder: @escaping @Sendable (Board.SafeDISendableMockScope_Service) -> any Service,
+		        serviceBuilder: @escaping () -> any Service,
+		        serviceSendableBuilder: @escaping @Sendable () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Board {
-		        let __safeDI_serviceBuilder = serviceBuilder
-		        let __safeDI_serviceSendableBuilder = serviceSendableBuilder
-		        func __safeDI_panel() -> Panel {
-		            let __safeDI_serviceBuilder_Panel_scope: (Panel.SafeDIMockScope_Service) -> any Service = { __safeDI_serviceBuilder(.panel($0)) }
-		            _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Panel.__safeDI_mock(serviceBuilder: .init(
-		                row: { __safeDI_rowValues in
-		                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Panel_scope(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-		                },
-		                service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Panel_scope(.service(__safeDI_serviceValues)) }
-		            ), safeDIOverrides: safeDIOverrides.panel)
-		        }
-		        let panel: Panel = __safeDI_panel()
+		        Board.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), serviceSendableBuilder: .init(__safeDI_noScope: serviceSendableBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        serviceBuilder __safeDI_serviceBuilder: Board.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
+		        serviceSendableBuilder __safeDI_serviceSendableBuilder: Board.SafeDISendableMockScope_Service.__safeDI_Builder<any Service>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Board {
+		        _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let panel = Panel.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.panel(SafeDIMockScope_Service.panel_Values()), safeDIOverrides: safeDIOverrides.panel)
+		        _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let __safeDI_held__safeDIBuilder = safeDIOverrides.held
 		        @Sendable func __safeDI_held() -> Panel {
-		            let __safeDI_serviceBuilder_Panel_scope: (Panel.SafeDIMockScope_Service) -> any Service = { __safeDI_serviceSendableBuilder(.held($0)) }
-		            _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Panel.__safeDI_mock(serviceBuilder: .init(
-		                row: { __safeDI_rowValues in
-		                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Panel_scope(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-		                },
-		                service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Panel_scope(.service(__safeDI_serviceValues)) }
-		            ), safeDIOverrides: __safeDI_held__safeDIBuilder?() ?? .init())
+		            Panel.__safeDI_mock(serviceBuilder: __safeDI_serviceSendableBuilder.held(SafeDISendableMockScope_Service.held_Values()), safeDIOverrides: __safeDI_held__safeDIBuilder?() ?? .init())
 		        }
 		        let held = SendableInstantiator<Panel>(__safeDI_held)
 		        return Board(panel: panel, held: held)
@@ -1116,7 +1072,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 
 		extension Board {
-		    public enum __safeDI_Board_mock_4662ED7FC5EFB391 {}
+		    public enum __safeDI_Board_mock_A0691DACD6EAFFC3 {}
 		}
 		#endif
 		"""])
@@ -1182,14 +1138,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceBuilder: @escaping @Sendable (Board.SafeDIMockScope_Service) -> any Service,
-		        serviceSendableBuilder: @escaping @Sendable (Board.SafeDISendableMockScope_Service) -> any Service,
+		        serviceBuilder: @escaping @Sendable () -> any Service,
+		        serviceSendableBuilder: @escaping @Sendable () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> BoardScreen {
-		        _ = Board.__safeDI_Board_mock_4662ED7FC5EFB391.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        _ = Board.__safeDI_Board_mock_A0691DACD6EAFFC3.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let __safeDI_board__safeDIBuilder = safeDIOverrides.board
 		        @Sendable func __safeDI_board() -> Board {
-		            Board.mock(serviceBuilder: serviceBuilder, serviceSendableBuilder: serviceSendableBuilder, safeDIOverrides: __safeDI_board__safeDIBuilder?() ?? .init())
+		            Board.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), serviceSendableBuilder: .init(__safeDI_noScope: serviceSendableBuilder), safeDIOverrides: __safeDI_board__safeDIBuilder?() ?? .init())
 		        }
 		        let board = SendableInstantiator<Board>(__safeDI_board)
 		        return BoardScreen(board: board)
@@ -1246,33 +1202,29 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> BoardScreen {
 		        func __safeDI_board() -> Board {
-		            func __safeDI_serviceBuilder_Board(_ scope: Board.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .panel(scope): return __safeDI_serviceBuilder_Panel(scope)
-		                }
+		            func __safeDI_serviceBuilder_Board() -> Board.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(panel: { _ in __safeDI_serviceBuilder_Panel() })
 		            }
-		            @Sendable func __safeDI_serviceBuilder_Panel(_ scope: Panel.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .row(_, scope): return __safeDI_serviceBuilder_Panel_Row_Scope(scope)
-		                case .service:
+		            @Sendable nonisolated func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(
+		                    row: { _ in __safeDI_serviceBuilder_Panel_Row_Scope() },
+		                    service: { _ in
+		                        let service: any Service = DefaultService()
+		                        return service
+		                    }
+		                )
+		            }
+		            @Sendable nonisolated func __safeDI_serviceBuilder_Panel_Row_Scope() -> Panel.SafeDIMockScope_Service.Row_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { _ in
 		                    let service: any Service = DefaultService()
 		                    return service
-		                }
+		                })
 		            }
-		            @Sendable func __safeDI_serviceBuilder_Panel_Row_Scope(_ scope: Panel.SafeDIMockScope_Service.Row_Scope) -> any Service {
-		                switch scope {
-		                case .service:
-		                    let service: any Service = DefaultService()
-		                    return service
-		                }
+		            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Board() -> Board.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(held: { _ in __safeDI_serviceBuilder_Panel() })
 		            }
-		            @Sendable func __safeDI_serviceSendableBuilder_Board(_ scope: Board.SafeDISendableMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .held(scope): return __safeDI_serviceBuilder_Panel(scope)
-		                }
-		            }
-		            _ = Board.__safeDI_Board_mock_4662ED7FC5EFB391.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Board.mock(serviceBuilder: __safeDI_serviceBuilder_Board, serviceSendableBuilder: __safeDI_serviceSendableBuilder_Board, safeDIOverrides: safeDIOverrides.board)
+		            _ = Board.__safeDI_Board_mock_A0691DACD6EAFFC3.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Board.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Board(), serviceSendableBuilder: __safeDI_serviceSendableBuilder_Board(), safeDIOverrides: safeDIOverrides.board)
 		        }
 		        let board: Board = __safeDI_board()
 		        return BoardScreen(board: board)
@@ -1291,61 +1243,48 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		#expect(output.modules["Mid"]?.generatedFiles == ["Mid.swift": generatedFileHeader + """
 		\(Self.boardPrelude)
 		    public static func mock(
-		        serviceBuilder: @escaping (Board.SafeDIMockScope_Service) -> any Service,
-		        serviceSendableBuilder: @escaping @Sendable (Board.SafeDISendableMockScope_Service) -> any Service,
+		        serviceBuilder: @escaping () -> any Service,
+		        serviceSendableBuilder: @escaping @Sendable () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Board {
-		        let __safeDI_serviceBuilder = serviceBuilder
-		        let __safeDI_serviceSendableBuilder = serviceSendableBuilder
+		        Board.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), serviceSendableBuilder: .init(__safeDI_noScope: serviceSendableBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        serviceBuilder __safeDI_serviceBuilder: Board.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
+		        serviceSendableBuilder __safeDI_serviceSendableBuilder: Board.SafeDISendableMockScope_Service.__safeDI_Builder<any Service>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Board {
 		        func __safeDI_panel() -> Panel {
-		            func __safeDI_serviceBuilder_Panel(_ scope: Panel.SafeDIMockScope_Service, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .row(_, scope): return __safeDI_serviceBuilder_Panel_Row_Scope(scope)
-		                case .service: return passUp()
-		                }
+		            func __safeDI_serviceBuilder_Panel(up: Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service>) -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(row: { _ in __safeDI_serviceBuilder_Panel_Row_Scope() }, service: up.service)
 		            }
-		            func __safeDI_serviceBuilder_Panel_Row_Scope(_ scope: Panel.SafeDIMockScope_Service.Row_Scope) -> any Service {
-		                switch scope {
-		                case let .service(scope):
+		            func __safeDI_serviceBuilder_Panel_Row_Scope() -> Panel.SafeDIMockScope_Service.Row_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in
 		                    let token = scope.token
 		                    let service: any Service = DefaultService(token: token)
 		                    return service
-		                }
+		                })
 		            }
-		            let __safeDI_serviceBuilder_Panel_scope: (Panel.SafeDIMockScope_Service) -> any Service = { scope in __safeDI_serviceBuilder_Panel(scope, passUp: { __safeDI_serviceBuilder(.panel(scope)) }) }
 		            _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Panel.__safeDI_mock(serviceBuilder: .init(
-		                row: { __safeDI_rowValues in
-		                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Panel_scope(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-		                },
-		                service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Panel_scope(.service(__safeDI_serviceValues)) }
-		            ), safeDIOverrides: safeDIOverrides.panel)
+		            return Panel.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Panel(up: __safeDI_serviceBuilder.panel(SafeDIMockScope_Service.panel_Values())), safeDIOverrides: safeDIOverrides.panel)
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        let __safeDI_held__safeDIBuilder = safeDIOverrides.held
 		        @Sendable func __safeDI_held() -> Panel {
-		            func __safeDI_serviceBuilder_Panel(_ scope: Panel.SafeDIMockScope_Service, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .row(_, scope): return __safeDI_serviceBuilder_Panel_Row_Scope(scope)
-		                case .service: return passUp()
-		                }
+		            func __safeDI_serviceBuilder_Panel(up: Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service>) -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(row: { _ in __safeDI_serviceBuilder_Panel_Row_Scope() }, service: up.service)
 		            }
-		            func __safeDI_serviceBuilder_Panel_Row_Scope(_ scope: Panel.SafeDIMockScope_Service.Row_Scope) -> any Service {
-		                switch scope {
-		                case let .service(scope):
+		            func __safeDI_serviceBuilder_Panel_Row_Scope() -> Panel.SafeDIMockScope_Service.Row_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in
 		                    let token = scope.token
 		                    let service: any Service = DefaultService(token: token)
 		                    return service
-		                }
+		                })
 		            }
-		            let __safeDI_serviceBuilder_Panel_scope: (Panel.SafeDIMockScope_Service) -> any Service = { scope in __safeDI_serviceBuilder_Panel(scope, passUp: { __safeDI_serviceSendableBuilder(.held(scope)) }) }
 		            _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Panel.__safeDI_mock(serviceBuilder: .init(
-		                row: { __safeDI_rowValues in
-		                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Panel_scope(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-		                },
-		                service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Panel_scope(.service(__safeDI_serviceValues)) }
-		            ), safeDIOverrides: __safeDI_held__safeDIBuilder?() ?? .init())
+		            return Panel.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Panel(up: __safeDI_serviceSendableBuilder.held(SafeDISendableMockScope_Service.held_Values())), safeDIOverrides: __safeDI_held__safeDIBuilder?() ?? .init())
 		        }
 		        let held = SendableInstantiator<Panel>(__safeDI_held)
 		        return Board(panel: panel, held: held)
@@ -1353,7 +1292,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 
 		extension Board {
-		    public enum __safeDI_Board_mock_4662ED7FC5EFB391 {}
+		    public enum __safeDI_Board_mock_A0691DACD6EAFFC3 {}
 		}
 		#endif
 		"""])
@@ -1427,8 +1366,21 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Shelf {
-		    @frozen public enum SafeDISendableMockScope_Service {
-		        case crate_Sendable(Crate.SafeDISendableMockScope_Service)
+		    nonisolated public enum SafeDISendableMockScope_Service {
+		        nonisolated public struct crate_Sendable_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let crate_Sendable: @Sendable (crate_Sendable_Values) -> Crate.SafeDISendableMockScope_Service.__safeDI_Builder<__safeDI_Built>
+
+		            public init(crate_Sendable: @escaping @Sendable (crate_Sendable_Values) -> Crate.SafeDISendableMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		                self.crate_Sendable = crate_Sendable
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.crate_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
 		    }
 
 		    /// Overrides for the mock dependency tree.
@@ -1457,18 +1409,25 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        serviceSendableBuilder: @escaping @Sendable (Shelf.SafeDISendableMockScope_Service) -> any Service,
+		        serviceSendableBuilder: @escaping @Sendable () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Shelf {
-		        let __safeDI_serviceSendableBuilder = serviceSendableBuilder
-		        _ = Crate.__safeDI_Crate_mock_3372858E7D21EED6.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let crate = Crate.mock(serviceSendableBuilder: { __safeDI_serviceSendableBuilder(.crate_Sendable($0)) }, safeDIOverrides: safeDIOverrides.crate)
+		        Shelf.__safeDI_mock(serviceSendableBuilder: .init(__safeDI_noScope: serviceSendableBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        serviceSendableBuilder __safeDI_serviceSendableBuilder: Shelf.SafeDISendableMockScope_Service.__safeDI_Builder<any Service>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Shelf {
+		        _ = Crate.__safeDI_Crate_mock_8ACF7D7D62F52A60.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let crate = Crate.__safeDI_mock(serviceSendableBuilder: __safeDI_serviceSendableBuilder.crate_Sendable(SafeDISendableMockScope_Service.crate_Sendable_Values()), safeDIOverrides: safeDIOverrides.crate)
 		        return Shelf(crate: crate)
 		    }
 		}
 
 		extension Shelf {
-		    public enum __safeDI_Shelf_mock_1152AC0C95C6F302 {}
+		    public enum __safeDI_Shelf_mock_B904C3F4C805C0B4 {}
 		}
 		#endif
 		"""])
@@ -1511,11 +1470,11 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceSendableBuilder: @escaping @Sendable (Shelf.SafeDISendableMockScope_Service) -> any Service,
+		        serviceSendableBuilder: @escaping @Sendable () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> ShelfScreen {
-		        _ = Shelf.__safeDI_Shelf_mock_1152AC0C95C6F302.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let shelf = Shelf.mock(serviceSendableBuilder: serviceSendableBuilder, safeDIOverrides: safeDIOverrides.shelf)
+		        _ = Shelf.__safeDI_Shelf_mock_B904C3F4C805C0B4.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let shelf = Shelf.__safeDI_mock(serviceSendableBuilder: .init(__safeDI_noScope: serviceSendableBuilder), safeDIOverrides: safeDIOverrides.shelf)
 		        return ShelfScreen(shelf: shelf)
 		    }
 		}
@@ -1535,28 +1494,26 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> BoardScreen {
 		        func __safeDI_board() -> Board {
-		            func __safeDI_serviceBuilder_Board(_ scope: Board.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .panel(scope): return __safeDI_serviceBuilder_Panel(scope)
-		                }
+		            func __safeDI_serviceBuilder_Board() -> Board.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(panel: { _ in __safeDI_serviceBuilder_Panel() })
 		            }
-		            func __safeDI_serviceBuilder_Panel(_ scope: Panel.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .row(_, scope): return __safeDI_serviceBuilder_Panel_Row_Scope(scope)
-		                case .service:
+		            func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(
+		                    row: { _ in __safeDI_serviceBuilder_Panel_Row_Scope() },
+		                    service: { _ in
+		                        let service: any Service = FakeService.mock()
+		                        return service
+		                    }
+		                )
+		            }
+		            func __safeDI_serviceBuilder_Panel_Row_Scope() -> Panel.SafeDIMockScope_Service.Row_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { _ in
 		                    let service: any Service = FakeService.mock()
 		                    return service
-		                }
+		                })
 		            }
-		            func __safeDI_serviceBuilder_Panel_Row_Scope(_ scope: Panel.SafeDIMockScope_Service.Row_Scope) -> any Service {
-		                switch scope {
-		                case .service:
-		                    let service: any Service = FakeService.mock()
-		                    return service
-		                }
-		            }
-		            _ = Board.__safeDI_Board_mock_A4B4C82FC2CF18AD.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Board.mock(serviceBuilder: __safeDI_serviceBuilder_Board, safeDIOverrides: safeDIOverrides.board)
+		            _ = Board.__safeDI_Board_mock_BA4502B330EF6045.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Board.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Board(), safeDIOverrides: safeDIOverrides.board)
 		        }
 		        let board: Board = __safeDI_board()
 		        return BoardScreen(board: board)
@@ -1576,33 +1533,29 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> BoardScreen {
 		        func __safeDI_board() -> Board {
-		            func __safeDI_serviceBuilder_Board(_ scope: Board.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .panel(scope): return __safeDI_serviceBuilder_Panel(scope)
-		                }
+		            func __safeDI_serviceBuilder_Board() -> Board.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(panel: { _ in __safeDI_serviceBuilder_Panel() })
 		            }
-		            @Sendable func __safeDI_serviceBuilder_Panel(_ scope: Panel.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .row(_, scope): return __safeDI_serviceBuilder_Panel_Row_Scope(scope)
-		                case .service:
+		            @Sendable nonisolated func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(
+		                    row: { _ in __safeDI_serviceBuilder_Panel_Row_Scope() },
+		                    service: { _ in
+		                        let service: any Service = FakeService.mock()
+		                        return service
+		                    }
+		                )
+		            }
+		            @Sendable nonisolated func __safeDI_serviceBuilder_Panel_Row_Scope() -> Panel.SafeDIMockScope_Service.Row_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { _ in
 		                    let service: any Service = FakeService.mock()
 		                    return service
-		                }
+		                })
 		            }
-		            @Sendable func __safeDI_serviceBuilder_Panel_Row_Scope(_ scope: Panel.SafeDIMockScope_Service.Row_Scope) -> any Service {
-		                switch scope {
-		                case .service:
-		                    let service: any Service = FakeService.mock()
-		                    return service
-		                }
+		            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Board() -> Board.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(held: { _ in __safeDI_serviceBuilder_Panel() })
 		            }
-		            @Sendable func __safeDI_serviceSendableBuilder_Board(_ scope: Board.SafeDISendableMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .held(scope): return __safeDI_serviceBuilder_Panel(scope)
-		                }
-		            }
-		            _ = Board.__safeDI_Board_mock_4662ED7FC5EFB391.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Board.mock(serviceBuilder: __safeDI_serviceBuilder_Board, serviceSendableBuilder: __safeDI_serviceSendableBuilder_Board, safeDIOverrides: safeDIOverrides.board)
+		            _ = Board.__safeDI_Board_mock_A0691DACD6EAFFC3.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Board.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Board(), serviceSendableBuilder: __safeDI_serviceSendableBuilder_Board(), safeDIOverrides: safeDIOverrides.board)
 		        }
 		        let board: Board = __safeDI_board()
 		        return BoardScreen(board: board)
@@ -1653,16 +1606,11 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			    }
 
 			    static func mock(
-			        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+			        serviceBuilder: @escaping () -> any Service,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			        let panel = Panel.__safeDI_mock(serviceBuilder: .init(
-			            row: { __safeDI_rowValues in
-			                .init(service: { __safeDI_serviceValues in serviceBuilder(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-			            },
-			            service: { __safeDI_serviceValues in serviceBuilder(.service(__safeDI_serviceValues)) }
-			        ), safeDIOverrides: safeDIOverrides.panel)
+			        let panel = Panel.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides.panel)
 			        return Screen(panel: panel)
 			    }
 			}
@@ -1686,15 +1634,37 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Board {
-		    @frozen public enum SafeDIMockScope_Gizmo {
-		        case panel_serviceBuilder(panel_serviceBuilder_Values, Panel.SafeDIMockScope_Service, SafeDIMockScope_Gizmo.DefaultService_Scope)
+		    nonisolated public enum SafeDIMockScope_Gizmo {
+		        nonisolated public struct panel_serviceBuilder_Values {}
 
-		        public struct panel_serviceBuilder_Values {}
+		        nonisolated public enum DefaultService_Scope {
+		            nonisolated public struct gizmo_Values {}
 
-		        @frozen public enum DefaultService_Scope {
-		            case gizmo(gizmo_Values)
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let gizmo: (gizmo_Values) -> __safeDI_Built
 
-		            public struct gizmo_Values {}
+		                public init(gizmo: @escaping (gizmo_Values) -> __safeDI_Built) {
+		                    self.gizmo = gizmo
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.gizmo = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let panel_serviceBuilder: (panel_serviceBuilder_Values) -> Panel.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Gizmo.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>
+
+		            public init(panel_serviceBuilder: @escaping (panel_serviceBuilder_Values) -> Panel.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Gizmo.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
+		                self.panel_serviceBuilder = panel_serviceBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.panel_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		            }
 		        }
 		    }
 
@@ -1724,42 +1694,43 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        gizmoBuilder: @escaping (Board.SafeDIMockScope_Gizmo) -> any Gizmo,
+		        gizmoBuilder: @escaping () -> any Gizmo,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Board {
-		        let __safeDI_gizmoBuilder = gizmoBuilder
-		        let __safeDI_gizmoValues_panel_serviceBuilder = SafeDIMockScope_Gizmo.panel_serviceBuilder_Values()
+		        Board.__safeDI_mock(gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        gizmoBuilder __safeDI_gizmoBuilder: Board.SafeDIMockScope_Gizmo.__safeDI_Builder<any Gizmo>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Board {
+		        let __safeDI_gizmoBuilder_panel_serviceBuilder = __safeDI_gizmoBuilder.panel_serviceBuilder(SafeDIMockScope_Gizmo.panel_serviceBuilder_Values())
 		        func __safeDI_panel() -> Panel {
-		            func __safeDI_serviceBuilder_Panel(_ __safeDI_panel_serviceBuilder: Panel.SafeDIMockScope_Service) -> any Service {
-		                switch __safeDI_panel_serviceBuilder {
-		                case let .row(_, scope): return __safeDI_serviceBuilder_Panel_Row_Scope(scope, __safeDI_panel_serviceBuilder: __safeDI_panel_serviceBuilder)
-		                case .service:
-		                    func __safeDI_service() -> DefaultService {
-		                        let gizmo: any Gizmo = __safeDI_gizmoBuilder(.panel_serviceBuilder(__safeDI_gizmoValues_panel_serviceBuilder, __safeDI_panel_serviceBuilder, .gizmo(SafeDIMockScope_Gizmo.DefaultService_Scope.gizmo_Values())))
-		                        return DefaultService(gizmo: gizmo)
-		                    }
-		                    let service: any Service = __safeDI_service()
-		                    return service
+		            func __safeDI_serviceBuilder_Panel_service(_ scope: Panel.SafeDIMockScope_Service.service_Values, __safeDI_panel_serviceBuilder: SafeDIMockScope_Gizmo.DefaultService_Scope.__safeDI_Builder<any Gizmo>) -> any Service {
+		                func __safeDI_service() -> DefaultService {
+		                    let gizmo: any Gizmo = __safeDI_panel_serviceBuilder.gizmo(SafeDIMockScope_Gizmo.DefaultService_Scope.gizmo_Values())
+		                    return DefaultService(gizmo: gizmo)
 		                }
+		                let service: any Service = __safeDI_service()
+		                return service
 		            }
-		            func __safeDI_serviceBuilder_Panel_Row_Scope(_ scope: Panel.SafeDIMockScope_Service.Row_Scope, __safeDI_panel_serviceBuilder: Panel.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case .service:
-		                    func __safeDI_service() -> DefaultService {
-		                        let gizmo: any Gizmo = __safeDI_gizmoBuilder(.panel_serviceBuilder(__safeDI_gizmoValues_panel_serviceBuilder, __safeDI_panel_serviceBuilder, .gizmo(SafeDIMockScope_Gizmo.DefaultService_Scope.gizmo_Values())))
-		                        return DefaultService(gizmo: gizmo)
-		                    }
-		                    let service: any Service = __safeDI_service()
-		                    return service
+		            func __safeDI_serviceBuilder_Panel_Row_Scope_service(_ scope: Panel.SafeDIMockScope_Service.Row_Scope.service_Values, __safeDI_panel_serviceBuilder: SafeDIMockScope_Gizmo.DefaultService_Scope.__safeDI_Builder<any Gizmo>) -> any Service {
+		                func __safeDI_service() -> DefaultService {
+		                    let gizmo: any Gizmo = __safeDI_panel_serviceBuilder.gizmo(SafeDIMockScope_Gizmo.DefaultService_Scope.gizmo_Values())
+		                    return DefaultService(gizmo: gizmo)
 		                }
+		                let service: any Service = __safeDI_service()
+		                return service
+		            }
+		            func __safeDI_serviceBuilder_Panel(up: Panel.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Gizmo.DefaultService_Scope.__safeDI_Builder<any Gizmo>>) -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(row: { values in __safeDI_serviceBuilder_Panel_Row_Scope(up: up.row(values)) }, service: { scope in __safeDI_serviceBuilder_Panel_service(scope, __safeDI_panel_serviceBuilder: up.service(scope)) })
+		            }
+		            func __safeDI_serviceBuilder_Panel_Row_Scope(up: Panel.SafeDIMockScope_Service.Row_Scope.__safeDI_Builder<SafeDIMockScope_Gizmo.DefaultService_Scope.__safeDI_Builder<any Gizmo>>) -> Panel.SafeDIMockScope_Service.Row_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Panel_Row_Scope_service(scope, __safeDI_panel_serviceBuilder: up.service(scope)) })
 		            }
 		            _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Panel.__safeDI_mock(serviceBuilder: .init(
-		                row: { __safeDI_rowValues in
-		                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Panel(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-		                },
-		                service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Panel(.service(__safeDI_serviceValues)) }
-		            ), safeDIOverrides: safeDIOverrides.panel)
+		            return Panel.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Panel(up: __safeDI_gizmoBuilder_panel_serviceBuilder), safeDIOverrides: safeDIOverrides.panel)
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        return Board(panel: panel)
@@ -1767,7 +1738,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 
 		extension Board {
-		    public enum __safeDI_Board_mock_4CB79D4B18E4B519 {}
+		    public enum __safeDI_Board_mock_0FDD40588E5FAA19 {}
 		}
 		#endif
 		"""])
@@ -2128,19 +2099,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceBuilder_Panel: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder_Panel: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let serviceBuilder = if let safeDIBuilder = safeDIOverrides.serviceBuilder { safeDIBuilder() } else { Thing() }
 		        _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_panel() -> Panel {
-		            let serviceBuilder: (Panel.SafeDIMockScope_Service) -> any Service = serviceBuilder_Panel
-		            return Panel.__safeDI_mock(serviceBuilder: .init(
-		                row: { __safeDI_rowValues in
-		                    .init(service: { __safeDI_serviceValues in serviceBuilder(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-		                },
-		                service: { __safeDI_serviceValues in serviceBuilder(.service(__safeDI_serviceValues)) }
-		            ), safeDIOverrides: safeDIOverrides.panel)
+		            let serviceBuilder: () -> any Service = serviceBuilder_Panel
+		            return Panel.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides.panel)
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        return Screen(serviceBuilder: serviceBuilder, panel: panel)
@@ -2180,20 +2146,15 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		\(Self.screenPrelude)
 		    static func mock(
-		        serviceBuilder_Panel: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder_Panel: @escaping () -> any Service,
 		        serviceBuilder_Thing: Thing,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let serviceBuilder: Thing = serviceBuilder_Thing
 		        _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_panel() -> Panel {
-		            let serviceBuilder: (Panel.SafeDIMockScope_Service) -> any Service = serviceBuilder_Panel
-		            return Panel.__safeDI_mock(serviceBuilder: .init(
-		                row: { __safeDI_rowValues in
-		                    .init(service: { __safeDI_serviceValues in serviceBuilder(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-		                },
-		                service: { __safeDI_serviceValues in serviceBuilder(.service(__safeDI_serviceValues)) }
-		            ), safeDIOverrides: safeDIOverrides.panel)
+		            let serviceBuilder: () -> any Service = serviceBuilder_Panel
+		            return Panel.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides.panel)
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        return Screen(serviceBuilder: serviceBuilder, panel: panel)
@@ -2273,20 +2234,15 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceBuilder_Panel: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder_Panel: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_middle() -> Middle {
 		            let serviceBuilder = if let safeDIBuilder = safeDIOverrides.middle.serviceBuilder { safeDIBuilder() } else { Thing() }
 		            _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_panel() -> Panel {
-		                let serviceBuilder: (Panel.SafeDIMockScope_Service) -> any Service = serviceBuilder_Panel
-		                return Panel.__safeDI_mock(serviceBuilder: .init(
-		                    row: { __safeDI_rowValues in
-		                        .init(service: { __safeDI_serviceValues in serviceBuilder(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-		                    },
-		                    service: { __safeDI_serviceValues in serviceBuilder(.service(__safeDI_serviceValues)) }
-		                ), safeDIOverrides: safeDIOverrides.middle.panel)
+		                let serviceBuilder: () -> any Service = serviceBuilder_Panel
+		                return Panel.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides.middle.panel)
 		            }
 		            let panel: Panel = __safeDI_panel()
 		            return if let safeDIBuilder = safeDIOverrides.middle.safeDIBuilder { safeDIBuilder(serviceBuilder, panel) } else { Middle(serviceBuilder: serviceBuilder, panel: panel) }
@@ -2389,7 +2345,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            panel: Panel.SafeDIOverrides = .init(),
-		            deck: ((@escaping (Deck.SafeDIMockScope_Service) -> any Service) -> Deck)? = nil
+		            deck: ((@escaping () -> any Service) -> Deck)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                panel: panel,
@@ -2398,46 +2354,32 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        }
 
 		        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
-		        var deck: ((@escaping (Deck.SafeDIMockScope_Service) -> any Service) -> Deck)? { __safeDI_storage.deck }
+		        var deck: ((@escaping () -> any Service) -> Deck)? { __safeDI_storage.deck }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
 		                panel: Panel.SafeDIOverrides,
-		                deck: ((@escaping (Deck.SafeDIMockScope_Service) -> any Service) -> Deck)?
+		                deck: ((@escaping () -> any Service) -> Deck)?
 		            ) {
 		                self.panel = panel
 		                self.deck = deck
 		            }
 
 		            let panel: Panel.SafeDIOverrides
-		            let deck: ((@escaping (Deck.SafeDIMockScope_Service) -> any Service) -> Deck)?
+		            let deck: ((@escaping () -> any Service) -> Deck)?
 		        }
 		    }
 
 		    static func mock(
-		        serviceBuilder_Deck: @escaping (Deck.SafeDIMockScope_Service) -> any Service,
-		        serviceBuilder_Panel: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        func __safeDI_panel() -> Panel {
-		            let serviceBuilder: (Panel.SafeDIMockScope_Service) -> any Service = serviceBuilder_Panel
-		            return Panel.__safeDI_mock(serviceBuilder: .init(
-		                row: { __safeDI_rowValues in
-		                    .init(service: { __safeDI_serviceValues in serviceBuilder(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-		                },
-		                service: { __safeDI_serviceValues in serviceBuilder(.service(__safeDI_serviceValues)) }
-		            ), safeDIOverrides: safeDIOverrides.panel)
-		        }
-		        let panel: Panel = __safeDI_panel()
+		        let panel = Panel.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides.panel)
 		        _ = Deck.__safeDI_Deck_mock_5D1497ABC5C963A0.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        func __safeDI_deck() -> Deck {
-		            let serviceBuilder: (Deck.SafeDIMockScope_Service) -> any Service = serviceBuilder_Deck
-		            return if let safeDIBuilder = safeDIOverrides.deck { safeDIBuilder(serviceBuilder) } else { Deck.__safeDI_mock(serviceBuilder: .init(service: { __safeDI_serviceValues in serviceBuilder(.service(__safeDI_serviceValues)) })) }
-		        }
-		        let deck: Deck = __safeDI_deck()
+		        let deck = if let safeDIBuilder = safeDIOverrides.deck { safeDIBuilder(serviceBuilder) } else { Deck.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder)) }
 		        return Screen(panel: panel, deck: deck)
 		    }
 		}
@@ -2516,20 +2458,15 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceBuilder_Panel_SafeDIMockScope_Service_to_any_Service: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder_Void_to_any_Service: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let serviceBuilder = if let safeDIBuilder = safeDIOverrides.serviceBuilder { safeDIBuilder() } else { Thing() }
 		        let serviceBuilder_Panel = if let safeDIBuilder = safeDIOverrides.serviceBuilder_Panel { safeDIBuilder() } else { Thing() }
 		        _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_panel() -> Panel {
-		            let serviceBuilder: (Panel.SafeDIMockScope_Service) -> any Service = serviceBuilder_Panel_SafeDIMockScope_Service_to_any_Service
-		            return Panel.__safeDI_mock(serviceBuilder: .init(
-		                row: { __safeDI_rowValues in
-		                    .init(service: { __safeDI_serviceValues in serviceBuilder(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-		                },
-		                service: { __safeDI_serviceValues in serviceBuilder(.service(__safeDI_serviceValues)) }
-		            ), safeDIOverrides: safeDIOverrides.panel)
+		            let serviceBuilder: () -> any Service = serviceBuilder_Void_to_any_Service
+		            return Panel.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides.panel)
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        return Screen(serviceBuilder: serviceBuilder, serviceBuilder_Panel: serviceBuilder_Panel, panel: panel)
@@ -2570,8 +2507,21 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Board {
-		    @frozen public enum SafeDIMockScope_Service {
-		        case panel(Panel.SafeDIMockScope_Service)
+		    nonisolated public enum SafeDIMockScope_Service {
+		        nonisolated public struct panel_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let panel: (panel_Values) -> Panel.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+
+		            public init(panel: @escaping (panel_Values) -> Panel.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		                self.panel = panel
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
 		    }
 
 		    /// Overrides for the mock dependency tree.
@@ -2606,28 +2556,26 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        serviceBuilder: @escaping (Board.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Board {
-		        let __safeDI_serviceBuilder_ = serviceBuilder
+		        Board.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        serviceBuilder __safeDI_serviceBuilder_: Board.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Board {
 		        let serviceBuilder = if let safeDIBuilder = safeDIOverrides.serviceBuilder { safeDIBuilder() } else { Thing() }
-		        func __safeDI_panel() -> Panel {
-		            let __safeDI_serviceBuilder_Panel_scope: (Panel.SafeDIMockScope_Service) -> any Service = { __safeDI_serviceBuilder_(.panel($0)) }
-		            _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Panel.__safeDI_mock(serviceBuilder: .init(
-		                row: { __safeDI_rowValues in
-		                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Panel_scope(.row(__safeDI_rowValues, .service(__safeDI_serviceValues))) })
-		                },
-		                service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Panel_scope(.service(__safeDI_serviceValues)) }
-		            ), safeDIOverrides: safeDIOverrides.panel)
-		        }
-		        let panel: Panel = __safeDI_panel()
+		        _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let panel = Panel.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_.panel(SafeDIMockScope_Service.panel_Values()), safeDIOverrides: safeDIOverrides.panel)
 		        return Board(serviceBuilder: serviceBuilder, panel: panel)
 		    }
 		}
 
 		extension Board {
-		    public enum __safeDI_Board_mock_A4B4C82FC2CF18AD {}
+		    public enum __safeDI_Board_mock_BA4502B330EF6045 {}
 		}
 		#endif
 		"""])
@@ -2700,34 +2648,60 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Host {
-		    @frozen public enum SafeDIMockScope_TapService_AnyService {
-		        case maker(maker_Values, OnTap)
+		    nonisolated public enum SafeDIMockScope_TapService_AnyService {
+		        nonisolated public struct maker_Values {}
 
-		        public struct maker_Values {}
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let maker: (maker_Values) -> ErasedInstantiator<OnTap, __safeDI_Built>.Builder
+
+		            public init(maker: @escaping (maker_Values) -> ErasedInstantiator<OnTap, __safeDI_Built>.Builder) {
+		                self.maker = maker
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<OnTap, __safeDI_Built>.Builder) {
+		                self.maker = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
-		    @frozen public enum SafeDISendableMockScope_TapService_AnyService {
-		        case sendableMaker(OnTap)
+		    nonisolated public enum SafeDISendableMockScope_TapService_AnyService {
+		        nonisolated public struct sendableMaker_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let sendableMaker: @Sendable (sendableMaker_Values) -> SendableErasedInstantiator<OnTap, __safeDI_Built>.Builder
+
+		            public init(sendableMaker: @escaping @Sendable (sendableMaker_Values) -> SendableErasedInstantiator<OnTap, __safeDI_Built>.Builder) {
+		                self.sendableMaker = sendableMaker
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<OnTap, __safeDI_Built>.Builder) {
+		                self.sendableMaker = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    public static func mock(
-		        tapService_AnyServiceBuilder: @escaping (Host.SafeDIMockScope_TapService_AnyService) -> AnyService,
-		        tapService_AnyServiceSendableBuilder: @escaping @Sendable (Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService
+		        tapService_AnyServiceBuilder: @escaping ErasedInstantiator<OnTap, AnyService>.Builder,
+		        tapService_AnyServiceSendableBuilder: @escaping SendableErasedInstantiator<OnTap, AnyService>.Builder
 		    ) -> Host {
-		        let __safeDI_tapService_AnyServiceBuilder = tapService_AnyServiceBuilder
-		        let __safeDI_tapService_AnyServiceSendableBuilder = tapService_AnyServiceSendableBuilder
-		        let maker = ErasedInstantiator<OnTap, AnyService> {
-		            __safeDI_tapService_AnyServiceBuilder(.maker(SafeDIMockScope_TapService_AnyService.maker_Values(), $0))
-		        }
-		        let sendableMaker = SendableErasedInstantiator<OnTap, AnyService> {
-		            __safeDI_tapService_AnyServiceSendableBuilder(.sendableMaker($0))
-		        }
+		        Host.__safeDI_mock(tapService_AnyServiceBuilder: .init(__safeDI_noScope: tapService_AnyServiceBuilder), tapService_AnyServiceSendableBuilder: .init(__safeDI_noScope: tapService_AnyServiceSendableBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        tapService_AnyServiceBuilder __safeDI_tapService_AnyServiceBuilder: Host.SafeDIMockScope_TapService_AnyService.__safeDI_Builder<AnyService>,
+		        tapService_AnyServiceSendableBuilder __safeDI_tapService_AnyServiceSendableBuilder: Host.SafeDISendableMockScope_TapService_AnyService.__safeDI_Builder<AnyService>
+		    ) -> Host {
+		        let maker = ErasedInstantiator<OnTap, AnyService>(__safeDI_tapService_AnyServiceBuilder.maker(SafeDIMockScope_TapService_AnyService.maker_Values()))
+		        let sendableMaker = SendableErasedInstantiator<OnTap, AnyService>(__safeDI_tapService_AnyServiceSendableBuilder.sendableMaker(SafeDISendableMockScope_TapService_AnyService.sendableMaker_Values()))
 		        return Host(maker: maker, sendableMaker: sendableMaker)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_mock_9A0ECB97490E4B0C {}
+		    public enum __safeDI_Host_mock_7BE7BA53778E487E {}
 		}
 		#endif
 		"""])
@@ -2744,25 +2718,25 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            host: ((@escaping (Host.SafeDIMockScope_TapService_AnyService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService) -> Host)? = nil
+		            host: ((ErasedInstantiator<OnTap, AnyService>.Builder, SendableErasedInstantiator<OnTap, AnyService>.Builder) -> Host)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                host: host
 		            )
 		        }
 
-		        var host: ((@escaping (Host.SafeDIMockScope_TapService_AnyService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService) -> Host)? { __safeDI_storage.host }
+		        var host: ((@escaping () -> AnyService, @escaping @Sendable () -> AnyService) -> Host)? { __safeDI_storage.host }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
-		                host: ((@escaping (Host.SafeDIMockScope_TapService_AnyService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService) -> Host)?
+		                host: ((@escaping () -> AnyService, @escaping @Sendable () -> AnyService) -> Host)?
 		            ) {
 		                self.host = host
 		            }
 
-		            let host: ((@escaping (Host.SafeDIMockScope_TapService_AnyService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService) -> Host)?
+		            let host: ((@escaping () -> AnyService, @escaping @Sendable () -> AnyService) -> Host)?
 		        }
 		    }
 
@@ -2770,26 +2744,26 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> HostScreen {
 		        func __safeDI_host() -> Host {
-		            func __safeDI_tapService_AnyServiceBuilder_Host(_ scope: Host.SafeDIMockScope_TapService_AnyService) -> AnyService {
-		                switch scope {
-		                case let .maker(_, __safeDI_forwarded):
-		                    func __safeDI_maker(onTap: @escaping OnTap) -> TapService {
-		                        TapService(onTap: onTap)
-		                    }
-		                    return AnyService(__safeDI_maker(onTap: __safeDI_forwarded))
+		            func __safeDI_tapService_AnyServiceBuilder_Host_maker() -> ErasedInstantiator<OnTap, AnyService>.Builder {
+		                func __safeDI_maker(onTap: @escaping OnTap) -> TapService {
+		                    TapService(onTap: onTap)
 		                }
+		                return { forwarded in AnyService(__safeDI_maker(onTap: forwarded)) }
 		            }
-		            @Sendable func __safeDI_tapService_AnyServiceSendableBuilder_Host(_ scope: Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService {
-		                switch scope {
-		                case let .sendableMaker(__safeDI_forwarded):
-		                    @Sendable func __safeDI_sendableMaker(onTap: @escaping OnTap) -> TapService {
-		                        TapService(onTap: onTap)
-		                    }
-		                    return AnyService(__safeDI_sendableMaker(onTap: __safeDI_forwarded))
+		            @Sendable nonisolated func __safeDI_tapService_AnyServiceSendableBuilder_Host_sendableMaker() -> SendableErasedInstantiator<OnTap, AnyService>.Builder {
+		                @Sendable nonisolated func __safeDI_sendableMaker(onTap: @escaping OnTap) -> TapService {
+		                    TapService(onTap: onTap)
 		                }
+		                return { forwarded in AnyService(__safeDI_sendableMaker(onTap: forwarded)) }
 		            }
-		            _ = Host.__safeDI_Host_mock_9A0ECB97490E4B0C.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return if let safeDIBuilder = safeDIOverrides.host { safeDIBuilder(__safeDI_tapService_AnyServiceBuilder_Host, __safeDI_tapService_AnyServiceSendableBuilder_Host) } else { Host.mock(tapService_AnyServiceBuilder: __safeDI_tapService_AnyServiceBuilder_Host, tapService_AnyServiceSendableBuilder: __safeDI_tapService_AnyServiceSendableBuilder_Host) }
+		            func __safeDI_tapService_AnyServiceBuilder_Host() -> Host.SafeDIMockScope_TapService_AnyService.__safeDI_Builder<AnyService> {
+		                .init(maker: { _ in __safeDI_tapService_AnyServiceBuilder_Host_maker() })
+		            }
+		            @Sendable nonisolated func __safeDI_tapService_AnyServiceSendableBuilder_Host() -> Host.SafeDISendableMockScope_TapService_AnyService.__safeDI_Builder<AnyService> {
+		                .init(sendableMaker: { _ in __safeDI_tapService_AnyServiceSendableBuilder_Host_sendableMaker() })
+		            }
+		            _ = Host.__safeDI_Host_mock_7BE7BA53778E487E.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return if let safeDIBuilder = safeDIOverrides.host { safeDIBuilder(__safeDI_tapService_AnyServiceBuilder_Host_maker(), __safeDI_tapService_AnyServiceSendableBuilder_Host_sendableMaker()) } else { Host.__safeDI_mock(tapService_AnyServiceBuilder: __safeDI_tapService_AnyServiceBuilder_Host(), tapService_AnyServiceSendableBuilder: __safeDI_tapService_AnyServiceSendableBuilder_Host()) }
 		        }
 		        let host: Host = __safeDI_host()
 		        return HostScreen(host: host)
@@ -2806,68 +2780,47 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	mutating func generate_fillsAndPassesUpTheSameRoutes_whenThreeRoutesBindTheTokenAsTokenAsOptionalTokenAndNotAtAllInEveryOrder() async throws {
 		// `Lobby` forwards a `Token?` and `Desk` binds a `Token`, each of which provides the `Token?` the fill reads, so their
 		// places are filled; nothing binds one beside them, so that place is passed up. The order of `Office`'s properties
-		// orders the cases and the dispatchers, and changes nothing else.
+		// orders the members of the root's builder struct and the level functions, and changes nothing else.
 		let properties = [
 			"lobbyBuilder": "@Instantiated let lobbyBuilder: Instantiator<Lobby>",
 			"desk": "@Instantiated let desk: Desk",
 			"model": "@Instantiated let model: Model",
 		]
-		let rootCases = [
-			"lobbyBuilder": "case let .lobbyBuilder(_, scope): return __safeDI_serviceBuilder_Office_Lobby_Scope(scope, passUp: passUp)",
-			"desk": "case let .desk(_, scope): return __safeDI_serviceBuilder_Office_Desk_Scope(scope, passUp: passUp)",
-			"model": "case let .model(_, scope): return __safeDI_serviceBuilder_Office_Model_Scope(scope, token: nil, passUp: passUp)",
+		// Each route's `Model` level function is named apart by the position of the route's member.
+		let rootMembers: [String: (String) -> String] = [
+			"lobbyBuilder": { _ in "lobbyBuilder: { _ in __safeDI_serviceBuilder_Office_Lobby_Scope() }" },
+			"desk": { _ in "desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() }" },
+			"model": { suffix in "model: { values in __safeDI_serviceBuilder_Office_Model_Scope\(suffix)(up: up.model(values)) }" },
 		]
-		let dispatchers = [
-			"Lobby": """
-			            func __safeDI_serviceBuilder_Office_Lobby_Scope(_ scope: Office.SafeDIMockScope_Service.Lobby_Scope, passUp: () -> any Service) -> any Service {
-			                switch scope {
-			                case let .model(values, scope): return __safeDI_serviceBuilder_Office_Model_Scope(scope, token: values.token, passUp: passUp)
-			                }
-			            }
-			""",
-			"Desk": """
-			            func __safeDI_serviceBuilder_Office_Desk_Scope(_ scope: Office.SafeDIMockScope_Service.Desk_Scope, passUp: () -> any Service) -> any Service {
-			                switch scope {
-			                case let .model(values, scope): return __safeDI_serviceBuilder_Office_Model_Scope(scope, token: values.token, passUp: passUp)
-			                }
-			            }
-			""",
-			"Model": """
-			            func __safeDI_serviceBuilder_Office_Model_Scope(_ scope: Office.SafeDIMockScope_Service.Model_Scope, token: Token??, passUp: () -> any Service) -> any Service {
-			                switch scope {
-			                case let .service(scope): if let token { return __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) } else { return passUp() }
-			                }
-			            }
-			""",
-		]
-		// Each dispatcher follows the root's in the order the root's cases first reach it.
-		let dispatchersReached = ["lobbyBuilder": ["Lobby", "Model"], "desk": ["Desk", "Model"], "model": ["Model"]]
-		// The call passes up a place, so it hands `Office`'s mock the builder struct whose members rebuild each case, in the
-		// order of the root's cases.
-		let conversionMembers = [
-			"lobbyBuilder": """
-			                lobbyBuilder: { __safeDI_lobbyBuilderValues in
-			                    .init(
-			                        model: { __safeDI_modelValues in
-			                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Office_scope(.lobbyBuilder(__safeDI_lobbyBuilderValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
-			                        }
-			                    )
-			                }
-			""",
-			"desk": """
-			                desk: { __safeDI_deskValues in
-			                    .init(
-			                        model: { __safeDI_modelValues in
-			                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Office_scope(.desk(__safeDI_deskValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
-			                        }
-			                    )
-			                }
-			""",
-			"model": """
-			                model: { __safeDI_modelValues in
-			                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Office_scope(.model(__safeDI_modelValues, .service(__safeDI_serviceValues))) })
-			                }
-			""",
+		// After the root's, each route's level functions follow in the order of the root's members.
+		let levelFunctions: [String: (String) -> String] = [
+			"lobbyBuilder": { suffix in
+				"""
+				            func __safeDI_serviceBuilder_Office_Lobby_Scope() -> Office.SafeDIMockScope_Service.Lobby_Scope.__safeDI_Builder<any Service> {
+				                .init(model: { values in __safeDI_serviceBuilder_Office_Model_Scope\(suffix)(token: values.token) })
+				            }
+				            func __safeDI_serviceBuilder_Office_Model_Scope\(suffix)(token: Token?) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+				                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) })
+				            }
+				"""
+			},
+			"desk": { suffix in
+				"""
+				            func __safeDI_serviceBuilder_Office_Desk_Scope() -> Office.SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<any Service> {
+				                .init(model: { values in __safeDI_serviceBuilder_Office_Model_Scope\(suffix)(token: values.token) })
+				            }
+				            func __safeDI_serviceBuilder_Office_Model_Scope\(suffix)(token: Token) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+				                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) })
+				            }
+				"""
+			},
+			"model": { suffix in
+				"""
+				            func __safeDI_serviceBuilder_Office_Model_Scope\(suffix)(up: Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+				                .init(service: up.service)
+				            }
+				"""
+			},
 		]
 		for order in Self.permutations(of: ["lobbyBuilder", "desk", "model"]) {
 			let modules = Self.modules(core: [Self.officeOfThreeRoutes(order: order.map { properties[$0] ?? "" })], app: [Self.officeScreen, Self.defaultServiceReceivingTokenIfAvailable])
@@ -2875,11 +2828,12 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			let coreFile = try #require(output.modules["Core"]?.generatedFiles["Core.swift"])
 			let guardDeclaration = try #require(coreFile.components(separatedBy: "\n").first { $0.hasPrefix("    public enum __safeDI_Office_mock_") })
 			let guardTypeName = guardDeclaration.dropFirst("    public enum ".count).prefix { $0 != " " }
-			var declaredDispatchers = [String]()
-			for label in order {
-				for dispatcher in dispatchersReached[label] ?? [] where !declaredDispatchers.contains(dispatcher) {
-					declaredDispatchers.append(dispatcher)
-				}
+			var members = [String]()
+			var functions = [String]()
+			for (position, label) in order.enumerated() {
+				let suffix = String(repeating: "_", count: position)
+				members.append(rootMembers[label]?(suffix) ?? "")
+				functions.append(levelFunctions[label]?(suffix) ?? "")
 			}
 			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 			#if canImport(Core)
@@ -2917,7 +2871,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			    }
 
 			    static func mock(
-			        serviceBuilder: @escaping (Office.SafeDIMockScope_Service) -> any Service,
+			        serviceBuilder: @escaping () -> any Service,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> OfficeScreen {
 			        func __safeDI_office() -> Office {
@@ -2925,17 +2879,12 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			                let service: any Service = DefaultService(token: token)
 			                return service
 			            }
-			            func __safeDI_serviceBuilder_Office(_ scope: Office.SafeDIMockScope_Service, passUp: () -> any Service) -> any Service {
-			                switch scope {
-			\(order.map { "                \(rootCases[$0] ?? "")" }.joined(separator: "\n"))
-			                }
+			            func __safeDI_serviceBuilder_Office(up: Office.SafeDIMockScope_Service.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+			                .init(\(members.joined(separator: ", ")))
 			            }
-			\(declaredDispatchers.map { dispatchers[$0] ?? "" }.joined(separator: "\n"))
-			            let __safeDI_serviceBuilder_Office_scope: (Office.SafeDIMockScope_Service) -> any Service = { scope in __safeDI_serviceBuilder_Office(scope, passUp: { serviceBuilder(scope) }) }
+			\(functions.joined(separator: "\n"))
 			            _ = Office.\(guardTypeName).self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Office.__safeDI_mock(serviceBuilder: .init(
-			\(order.map { conversionMembers[$0] ?? "" }.joined(separator: ",\n"))
-			            ), safeDIOverrides: safeDIOverrides.office)
+			            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(up: .init(__safeDI_noScope: serviceBuilder)), safeDIOverrides: safeDIOverrides.office)
 			        }
 			        let office: Office = __safeDI_office()
 			        return OfficeScreen(office: office)
@@ -2950,14 +2899,15 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_declaresOneEnumPerTypeAndCallerCompiles_whenPublicMocksTwentyFourScreensReachEachOtherInLayers() async throws {
 		// Shape E: `Home` opens four screens, each screen opens three of the next layer's four, six layers deep, and each
-		// screen of the last layer builds a model whose `api` only `App` can build. By type the enum has a case per property:
-		// 4 + 20 × 3 + 4 + 4. The screens are internal, so `App` calls `Home`'s public mock rather than building its tree.
+		// screen of the last layer builds a model whose `api` only `App` can build. By type the enum has a values struct per
+		// property: 4 + 20 × 3 + 4 + 4. The screens are internal, so `App` calls `Home`'s public mock rather than building its
+		// tree.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.publicShapeEModules(screenCount: 24), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		let coreFile = try #require(output.modules["Core"]?.generatedFiles["Core.swift"])
 		let enumDeclaration = try #require(coreFile.components(separatedBy: "    /// Overrides for the mock dependency tree.").first)
-		let caseCount = enumDeclaration.components(separatedBy: "\n").filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("case ") }.count
-		let enumCount = enumDeclaration.components(separatedBy: "@frozen nonisolated public enum ").count - 1
-		#expect(caseCount == 72)
+		let valuesCount = enumDeclaration.components(separatedBy: "\n").filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("nonisolated public struct ") && $0.contains("_Values") }.count
+		let enumCount = enumDeclaration.components(separatedBy: "nonisolated public enum ").count - 1
+		#expect(valuesCount == 72)
 		#expect(enumCount == 29)
 		// `App` fills every place, so it declares one level function per enum, each returning its level's struct: the caller
 		// compiled above.
@@ -3336,37 +3286,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
 		        func __safeDI_office() -> Office {
-		            func __safeDI_serviceBuilder_Office(_ scope: Office.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .lobbyBuilder(_, scope): return __safeDI_serviceBuilder_Office_Lobby_Scope(scope)
-		                case let .model(values, scope): return __safeDI_serviceBuilder_Office_Model_Scope(scope, token: values.token)
-		                }
+		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token?) -> any Service {
+		                let service: any Service = DefaultService(token: token)
+		                return service
 		            }
-		            func __safeDI_serviceBuilder_Office_Lobby_Scope(_ scope: Office.SafeDIMockScope_Service.Lobby_Scope) -> any Service {
-		                switch scope {
-		                case let .model(values, scope): return __safeDI_serviceBuilder_Office_Model_Scope(scope, token: values.token)
-		                }
+		            func __safeDI_serviceBuilder_Office() -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(lobbyBuilder: { _ in __safeDI_serviceBuilder_Office_Lobby_Scope() }, model: { values in __safeDI_serviceBuilder_Office_Model_Scope_(token: values.token) })
 		            }
-		            func __safeDI_serviceBuilder_Office_Model_Scope(_ scope: Office.SafeDIMockScope_Service.Model_Scope, token: Token?) -> any Service {
-		                switch scope {
-		                case .service:
-		                    let service: any Service = DefaultService(token: token)
-		                    return service
-		                }
+		            func __safeDI_serviceBuilder_Office_Lobby_Scope() -> Office.SafeDIMockScope_Service.Lobby_Scope.__safeDI_Builder<any Service> {
+		                .init(model: { values in __safeDI_serviceBuilder_Office_Model_Scope(token: values.token) })
+		            }
+		            func __safeDI_serviceBuilder_Office_Model_Scope(token: Token?) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) })
+		            }
+		            func __safeDI_serviceBuilder_Office_Model_Scope_(token: Token) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) })
 		            }
 		            _ = Office.__safeDI_Office_mock_0EA6B4982010697F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Office.__safeDI_mock(serviceBuilder: .init(
-		                lobbyBuilder: { __safeDI_lobbyBuilderValues in
-		                    .init(
-		                        model: { __safeDI_modelValues in
-		                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Office(.lobbyBuilder(__safeDI_lobbyBuilderValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
-		                        }
-		                    )
-		                },
-		                model: { __safeDI_modelValues in
-		                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Office(.model(__safeDI_modelValues, .service(__safeDI_serviceValues))) })
-		                }
-		            ), safeDIOverrides: safeDIOverrides.office)
+		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(), safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
 		        return OfficeScreen(office: office)
@@ -3811,46 +3748,27 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
 		        func __safeDI_office() -> Office {
-		            func __safeDI_serviceBuilder_Office(_ scope: Office.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .lobbyBuilder(_, scope): return __safeDI_serviceBuilder_Office_Lobby_Scope(scope)
-		                case let .desk(_, scope): return __safeDI_serviceBuilder_Office_Desk_Scope(scope)
-		                }
+		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token?) -> any Service {
+		                let service: any Service = DefaultService(token: token)
+		                return service
 		            }
-		            func __safeDI_serviceBuilder_Office_Lobby_Scope(_ scope: Office.SafeDIMockScope_Service.Lobby_Scope) -> any Service {
-		                switch scope {
-		                case let .model(values, scope): return __safeDI_serviceBuilder_Office_Model_Scope(scope, token: values.token)
-		                }
+		            func __safeDI_serviceBuilder_Office() -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(lobbyBuilder: { _ in __safeDI_serviceBuilder_Office_Lobby_Scope() }, desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() })
 		            }
-		            func __safeDI_serviceBuilder_Office_Model_Scope(_ scope: Office.SafeDIMockScope_Service.Model_Scope, token: Token?) -> any Service {
-		                switch scope {
-		                case .service:
-		                    let service: any Service = DefaultService(token: token)
-		                    return service
-		                }
+		            func __safeDI_serviceBuilder_Office_Lobby_Scope() -> Office.SafeDIMockScope_Service.Lobby_Scope.__safeDI_Builder<any Service> {
+		                .init(model: { values in __safeDI_serviceBuilder_Office_Model_Scope(token: values.token) })
 		            }
-		            func __safeDI_serviceBuilder_Office_Desk_Scope(_ scope: Office.SafeDIMockScope_Service.Desk_Scope) -> any Service {
-		                switch scope {
-		                case let .model(values, scope): return __safeDI_serviceBuilder_Office_Model_Scope(scope, token: values.token)
-		                }
+		            func __safeDI_serviceBuilder_Office_Model_Scope(token: Token?) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) })
+		            }
+		            func __safeDI_serviceBuilder_Office_Desk_Scope() -> Office.SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<any Service> {
+		                .init(model: { values in __safeDI_serviceBuilder_Office_Model_Scope_(token: values.token) })
+		            }
+		            func __safeDI_serviceBuilder_Office_Model_Scope_(token: Token) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) })
 		            }
 		            _ = Office.__safeDI_Office_mock_B1E33A311A11F6C1.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Office.__safeDI_mock(serviceBuilder: .init(
-		                lobbyBuilder: { __safeDI_lobbyBuilderValues in
-		                    .init(
-		                        model: { __safeDI_modelValues in
-		                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Office(.lobbyBuilder(__safeDI_lobbyBuilderValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
-		                        }
-		                    )
-		                },
-		                desk: { __safeDI_deskValues in
-		                    .init(
-		                        model: { __safeDI_modelValues in
-		                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Office(.desk(__safeDI_deskValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
-		                        }
-		                    )
-		                }
-		            ), safeDIOverrides: safeDIOverrides.office)
+		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(), safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
 		        return OfficeScreen(office: office)
@@ -4333,57 +4251,34 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
 		        func __safeDI_office() -> Office {
-		            func __safeDI_serviceBuilder_Office(_ scope: Office.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .lobbyBuilder(_, scope): return __safeDI_serviceBuilder_Office_Lobby_Scope(scope)
-		                case let .wing(values, scope): return __safeDI_serviceBuilder_Office_Wing_Scope(scope, token: values.token)
-		                }
+		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token?) -> any Service {
+		                let service: any Service = DefaultService(token: token)
+		                return service
 		            }
-		            func __safeDI_serviceBuilder_Office_Lobby_Scope(_ scope: Office.SafeDIMockScope_Service.Lobby_Scope) -> any Service {
-		                switch scope {
-		                case let .model(values, scope): return __safeDI_serviceBuilder_Office_Model_Scope(scope, token: values.token)
-		                }
+		            func __safeDI_serviceBuilder_Office_Gauge_Scope_service(_ scope: Office.SafeDIMockScope_Service.Gauge_Scope.service_Values, token: Token?) -> any Service {
+		                let service: any Service = DefaultService(token: token)
+		                return service
 		            }
-		            func __safeDI_serviceBuilder_Office_Model_Scope(_ scope: Office.SafeDIMockScope_Service.Model_Scope, token: Token?) -> any Service {
-		                switch scope {
-		                case .service:
-		                    let service: any Service = DefaultService(token: token)
-		                    return service
-		                }
+		            func __safeDI_serviceBuilder_Office() -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(lobbyBuilder: { _ in __safeDI_serviceBuilder_Office_Lobby_Scope() }, wing: { values in __safeDI_serviceBuilder_Office_Wing_Scope(token: values.token) })
 		            }
-		            func __safeDI_serviceBuilder_Office_Wing_Scope(_ scope: Office.SafeDIMockScope_Service.Wing_Scope, token: Token?) -> any Service {
-		                switch scope {
-		                case let .model(_, scope): return __safeDI_serviceBuilder_Office_Model_Scope(scope, token: token)
-		                case let .gauge(_, scope): return __safeDI_serviceBuilder_Office_Gauge_Scope(scope, token: token)
-		                }
+		            func __safeDI_serviceBuilder_Office_Lobby_Scope() -> Office.SafeDIMockScope_Service.Lobby_Scope.__safeDI_Builder<any Service> {
+		                .init(model: { values in __safeDI_serviceBuilder_Office_Model_Scope(token: values.token) })
 		            }
-		            func __safeDI_serviceBuilder_Office_Gauge_Scope(_ scope: Office.SafeDIMockScope_Service.Gauge_Scope, token: Token?) -> any Service {
-		                switch scope {
-		                case .service:
-		                    let service: any Service = DefaultService(token: token)
-		                    return service
-		                }
+		            func __safeDI_serviceBuilder_Office_Model_Scope(token: Token?) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) })
+		            }
+		            func __safeDI_serviceBuilder_Office_Wing_Scope(token: Token) -> Office.SafeDIMockScope_Service.Wing_Scope.__safeDI_Builder<any Service> {
+		                .init(model: { _ in __safeDI_serviceBuilder_Office_Model_Scope_(token: token) }, gauge: { _ in __safeDI_serviceBuilder_Office_Gauge_Scope(token: token) })
+		            }
+		            func __safeDI_serviceBuilder_Office_Model_Scope_(token: Token) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) })
+		            }
+		            func __safeDI_serviceBuilder_Office_Gauge_Scope(token: Token) -> Office.SafeDIMockScope_Service.Gauge_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Office_Gauge_Scope_service(scope, token: token) })
 		            }
 		            _ = Office.__safeDI_Office_mock_06FC4B2D8AF9D380.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Office.__safeDI_mock(serviceBuilder: .init(
-		                lobbyBuilder: { __safeDI_lobbyBuilderValues in
-		                    .init(
-		                        model: { __safeDI_modelValues in
-		                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Office(.lobbyBuilder(__safeDI_lobbyBuilderValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
-		                        }
-		                    )
-		                },
-		                wing: { __safeDI_wingValues in
-		                    .init(
-		                        model: { __safeDI_modelValues in
-		                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Office(.wing(__safeDI_wingValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
-		                        },
-		                        gauge: { __safeDI_gaugeValues in
-		                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Office(.wing(__safeDI_wingValues, .gauge(__safeDI_gaugeValues, .service(__safeDI_serviceValues)))) })
-		                        }
-		                    )
-		                }
-		            ), safeDIOverrides: safeDIOverrides.office)
+		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(), safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
 		        return OfficeScreen(office: office)
@@ -4821,7 +4716,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceBuilder: @escaping (Hub.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> HubScreen {
 		        func __safeDI_hub() -> Hub {
@@ -4829,45 +4724,23 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                let service: any Service = DefaultService(token: token)
 		                return service
 		            }
-		            func __safeDI_serviceBuilder_Hub(_ scope: Hub.SafeDIMockScope_Service, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .page(_, scope): return __safeDI_serviceBuilder_Hub_Page_Scope(scope, passUp: passUp)
-		                case let .hall(_, scope): return __safeDI_serviceBuilder_Hub_Hall_Scope(scope, token: nil, passUp: passUp)
-		                }
+		            func __safeDI_serviceBuilder_Hub(up: Hub.SafeDIMockScope_Service.__safeDI_Builder<any Service>) -> Hub.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(page: { _ in __safeDI_serviceBuilder_Hub_Page_Scope() }, hall: { values in __safeDI_serviceBuilder_Hub_Hall_Scope(up: up.hall(values)) })
 		            }
-		            func __safeDI_serviceBuilder_Hub_Page_Scope(_ scope: Hub.SafeDIMockScope_Service.Page_Scope, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .model(values, scope): return __safeDI_serviceBuilder_Hub_Model_Scope(scope, token: values.token, passUp: passUp)
-		                }
+		            func __safeDI_serviceBuilder_Hub_Page_Scope() -> Hub.SafeDIMockScope_Service.Page_Scope.__safeDI_Builder<any Service> {
+		                .init(model: { values in __safeDI_serviceBuilder_Hub_Model_Scope(token: values.token) })
 		            }
-		            func __safeDI_serviceBuilder_Hub_Model_Scope(_ scope: Hub.SafeDIMockScope_Service.Model_Scope, token: Token?, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .service(scope): if let token { return __safeDI_serviceBuilder_Hub_Model_Scope_service(scope, token: token) } else { return passUp() }
-		                }
+		            func __safeDI_serviceBuilder_Hub_Model_Scope(token: Token) -> Hub.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Hub_Model_Scope_service(scope, token: token) })
 		            }
-		            func __safeDI_serviceBuilder_Hub_Hall_Scope(_ scope: Hub.SafeDIMockScope_Service.Hall_Scope, token: Token?, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .model(_, scope): return __safeDI_serviceBuilder_Hub_Model_Scope(scope, token: token, passUp: passUp)
-		                }
+		            func __safeDI_serviceBuilder_Hub_Hall_Scope(up: Hub.SafeDIMockScope_Service.Hall_Scope.__safeDI_Builder<any Service>) -> Hub.SafeDIMockScope_Service.Hall_Scope.__safeDI_Builder<any Service> {
+		                .init(model: { values in __safeDI_serviceBuilder_Hub_Model_Scope_(up: up.model(values)) })
 		            }
-		            let __safeDI_serviceBuilder_Hub_scope: (Hub.SafeDIMockScope_Service) -> any Service = { scope in __safeDI_serviceBuilder_Hub(scope, passUp: { serviceBuilder(scope) }) }
+		            func __safeDI_serviceBuilder_Hub_Model_Scope_(up: Hub.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service>) -> Hub.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: up.service)
+		            }
 		            _ = Hub.__safeDI_Hub_mock_002BD72DF05A9136.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(serviceBuilder: .init(
-		                page: { __safeDI_pageValues in
-		                    .init(
-		                        model: { __safeDI_modelValues in
-		                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Hub_scope(.page(__safeDI_pageValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
-		                        }
-		                    )
-		                },
-		                hall: { __safeDI_hallValues in
-		                    .init(
-		                        model: { __safeDI_modelValues in
-		                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Hub_scope(.hall(__safeDI_hallValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
-		                        }
-		                    )
-		                }
-		            ), safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Hub(up: .init(__safeDI_noScope: serviceBuilder)), safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return HubScreen(hub: hub)
@@ -4877,7 +4750,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		"""])
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe(
 			name: "HubScreen.mock()",
-			expression: "HubScreen.mock(serviceBuilder: { _ in PassedUpService() })",
+			expression: "HubScreen.mock(serviceBuilder: { PassedUpService() })",
 			knownRightExpression: "HubScreen.mock(safeDIOverrides: .init(hub: .init(hall: .init(model: .init({ _ in Model(service: PassedUpService()) })))))",
 		)])
 	}
@@ -5275,7 +5148,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceBuilder: @escaping (Hub.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> HubScreen {
 		        func __safeDI_hub() -> Hub {
@@ -5284,29 +5157,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                let service: any Service = DefaultService(token: token)
 		                return service
 		            }
-		            func __safeDI_serviceBuilder_Hub(_ scope: Hub.SafeDIMockScope_Service, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .model(_, scope): return __safeDI_serviceBuilder_Hub_Model_Scope(scope, passUp: passUp)
-		                }
+		            func __safeDI_serviceBuilder_Hub(up: Hub.SafeDIMockScope_Service.__safeDI_Builder<any Service>) -> Hub.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(model: { values in __safeDI_serviceBuilder_Hub_Model_Scope(up: up.model(values)) })
 		            }
-		            func __safeDI_serviceBuilder_Hub_Model_Scope(_ scope: Hub.SafeDIMockScope_Service.Model_Scope, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .service(scope): return __safeDI_serviceBuilder_Hub_Model_Scope_service(scope)
-		                case .bench: return passUp()
-		                }
+		            func __safeDI_serviceBuilder_Hub_Model_Scope(up: Hub.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service>) -> Hub.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Hub_Model_Scope_service(scope) }, bench: up.bench)
 		            }
-		            let __safeDI_serviceBuilder_Hub_scope: (Hub.SafeDIMockScope_Service) -> any Service = { scope in __safeDI_serviceBuilder_Hub(scope, passUp: { serviceBuilder(scope) }) }
 		            _ = Hub.__safeDI_Hub_mock_CD315283B4F0A2A4.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(serviceBuilder: .init(
-		                model: { __safeDI_modelValues in
-		                    .init(
-		                        service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Hub_scope(.model(__safeDI_modelValues, .service(__safeDI_serviceValues))) },
-		                        bench: { __safeDI_benchValues in
-		                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Hub_scope(.model(__safeDI_modelValues, .bench(__safeDI_benchValues, .service(__safeDI_serviceValues)))) })
-		                        }
-		                    )
-		                }
-		            ), safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Hub(up: .init(__safeDI_noScope: serviceBuilder)), safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return HubScreen(hub: hub)
@@ -5327,28 +5185,63 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Hub {
-		    @frozen public enum SafeDIMockScope_DefaultPart_Part {
-		        case page(page_Values, SafeDIMockScope_DefaultPart_Part.Page_Scope)
-		        case model(model_Values, SafeDIMockScope_DefaultPart_Part.Model_Scope)
+		    nonisolated public enum SafeDIMockScope_DefaultPart_Part {
+		        nonisolated public struct page_Values {}
 
-		        public struct page_Values {}
-
-		        public struct model_Values {
+		        nonisolated public struct model_Values {
 		            public let page: Page
 		        }
 
-		        @frozen public enum Page_Scope {
-		            case model(model_Values, SafeDIMockScope_DefaultPart_Part.Model_Scope)
-
-		            public struct model_Values {
+		        nonisolated public enum Page_Scope {
+		            nonisolated public struct model_Values {
 		                public let token: Token
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let model: (model_Values) -> SafeDIMockScope_DefaultPart_Part.Model_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(model: @escaping (model_Values) -> SafeDIMockScope_DefaultPart_Part.Model_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.model = model
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                    self.model = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
 		            }
 		        }
 
-		        @frozen public enum Model_Scope {
-		            case part(part_Values, String)
+		        nonisolated public enum Model_Scope {
+		            nonisolated public struct part_Values {}
 
-		            public struct part_Values {}
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let part: (part_Values) -> ErasedInstantiator<String, __safeDI_Built>.Builder
+
+		                public init(part: @escaping (part_Values) -> ErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                    self.part = part
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                    self.part = { _ in __safeDI_builder }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let page: (page_Values) -> SafeDIMockScope_DefaultPart_Part.Page_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let model: (model_Values) -> SafeDIMockScope_DefaultPart_Part.Model_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(page: @escaping (page_Values) -> SafeDIMockScope_DefaultPart_Part.Page_Scope.__safeDI_Builder<__safeDI_Built>, model: @escaping (model_Values) -> SafeDIMockScope_DefaultPart_Part.Model_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.page = page
+		                self.model = model
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
+		                self.page = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.model = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
 		        }
 		    }
 
@@ -5384,29 +5277,32 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        defaultPart_PartBuilder: @escaping (Hub.SafeDIMockScope_DefaultPart_Part) -> any Part,
+		        defaultPart_PartBuilder: @escaping ErasedInstantiator<String, any Part>.Builder,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Hub {
-		        let __safeDI_defaultPart_PartBuilder = defaultPart_PartBuilder
-		        let __safeDI_defaultPart_PartValues_page = SafeDIMockScope_DefaultPart_Part.page_Values()
+		        Hub.__safeDI_mock(defaultPart_PartBuilder: .init(__safeDI_noScope: defaultPart_PartBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        defaultPart_PartBuilder __safeDI_defaultPart_PartBuilder: Hub.SafeDIMockScope_DefaultPart_Part.__safeDI_Builder<any Part>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Hub {
+		        let __safeDI_defaultPart_PartBuilder_page = __safeDI_defaultPart_PartBuilder.page(SafeDIMockScope_DefaultPart_Part.page_Values())
 		        func __safeDI_page() -> Page {
 		            let token = if let safeDIBuilder = safeDIOverrides.page.token { safeDIBuilder() } else { Token() }
-		            let __safeDI_defaultPart_PartValues_model = SafeDIMockScope_DefaultPart_Part.Page_Scope.model_Values(token: token)
+		            let __safeDI_defaultPart_PartBuilder_model = __safeDI_defaultPart_PartBuilder_page.model(SafeDIMockScope_DefaultPart_Part.Page_Scope.model_Values(token: token))
 		            func __safeDI_model() -> Model {
-		                let part = ErasedInstantiator<String, any Part> {
-		                    __safeDI_defaultPart_PartBuilder(.page(__safeDI_defaultPart_PartValues_page, .model(__safeDI_defaultPart_PartValues_model, .part(SafeDIMockScope_DefaultPart_Part.Model_Scope.part_Values(), $0))))
-		                }
+		                let part = ErasedInstantiator<String, any Part>(__safeDI_defaultPart_PartBuilder_model.part(SafeDIMockScope_DefaultPart_Part.Model_Scope.part_Values()))
 		                return if let safeDIBuilder = safeDIOverrides.page.model { safeDIBuilder(part) } else { Model(part: part) }
 		            }
 		            let model: Model = __safeDI_model()
 		            return Page.__safeDI_init(token: token, model: model, safeDIBuilder: safeDIOverrides.page.safeDIBuilder)
 		        }
 		        let page: Page = __safeDI_page()
-		        let __safeDI_defaultPart_PartValues_model = SafeDIMockScope_DefaultPart_Part.model_Values(page: page)
+		        let __safeDI_defaultPart_PartBuilder_model = __safeDI_defaultPart_PartBuilder.model(SafeDIMockScope_DefaultPart_Part.model_Values(page: page))
 		        func __safeDI_model() -> Model {
-		            let part = ErasedInstantiator<String, any Part> {
-		                __safeDI_defaultPart_PartBuilder(.model(__safeDI_defaultPart_PartValues_model, .part(SafeDIMockScope_DefaultPart_Part.Model_Scope.part_Values(), $0)))
-		            }
+		            let part = ErasedInstantiator<String, any Part>(__safeDI_defaultPart_PartBuilder_model.part(SafeDIMockScope_DefaultPart_Part.Model_Scope.part_Values()))
 		            return if let safeDIBuilder = safeDIOverrides.model { safeDIBuilder(part) } else { Model(part: part) }
 		        }
 		        let model: Model = __safeDI_model()
@@ -5415,25 +5311,20 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 
 		extension Hub {
-		    public enum __safeDI_Hub_mock_A208715AB7923E3F {}
+		    public enum __safeDI_Hub_mock_2D12229128E94215 {}
 		}
 		#endif
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case row(row_Values, SafeDIMockScope_Service.Row_Scope)
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct row_Values {}
 
 		        nonisolated public struct service_Values {
 		            public let row: Row
 		        }
 
-		        @frozen nonisolated public enum Row_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Row_Scope {
 		            nonisolated public struct service_Values {
 		                public let token: Token
 		            }
@@ -5644,34 +5535,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        defaultPart_PartBuilder: @escaping (Hub.SafeDIMockScope_DefaultPart_Part) -> any Part,
+		        defaultPart_PartBuilder: @escaping ErasedInstantiator<String, any Part>.Builder,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> HubScreen {
 		        func __safeDI_hub() -> Hub {
-		            func __safeDI_defaultPart_PartBuilder_Hub_Model_Scope_part(_ scope: Hub.SafeDIMockScope_DefaultPart_Part.Model_Scope.part_Values, _ __safeDI_forwarded: String, token: Token) -> any Part {
+		            func __safeDI_defaultPart_PartBuilder_Hub_Model_Scope_part(token: Token) -> ErasedInstantiator<String, any Part>.Builder {
 		                func __safeDI_part(name: String) -> DefaultPart {
 		                    DefaultPart(name: name, token: token)
 		                }
-		                return __safeDI_part(name: __safeDI_forwarded)
+		                return { forwarded in __safeDI_part(name: forwarded) }
 		            }
-		            func __safeDI_defaultPart_PartBuilder_Hub(_ scope: Hub.SafeDIMockScope_DefaultPart_Part, passUp: () -> any Part) -> any Part {
-		                switch scope {
-		                case let .page(_, scope): return __safeDI_defaultPart_PartBuilder_Hub_Page_Scope(scope, passUp: passUp)
-		                case let .model(_, scope): return __safeDI_defaultPart_PartBuilder_Hub_Model_Scope(scope, token: nil, passUp: passUp)
-		                }
+		            func __safeDI_defaultPart_PartBuilder_Hub(up: Hub.SafeDIMockScope_DefaultPart_Part.__safeDI_Builder<any Part>) -> Hub.SafeDIMockScope_DefaultPart_Part.__safeDI_Builder<any Part> {
+		                .init(page: { _ in __safeDI_defaultPart_PartBuilder_Hub_Page_Scope() }, model: { values in __safeDI_defaultPart_PartBuilder_Hub_Model_Scope_(up: up.model(values)) })
 		            }
-		            func __safeDI_defaultPart_PartBuilder_Hub_Page_Scope(_ scope: Hub.SafeDIMockScope_DefaultPart_Part.Page_Scope, passUp: () -> any Part) -> any Part {
-		                switch scope {
-		                case let .model(values, scope): return __safeDI_defaultPart_PartBuilder_Hub_Model_Scope(scope, token: values.token, passUp: passUp)
-		                }
+		            func __safeDI_defaultPart_PartBuilder_Hub_Page_Scope() -> Hub.SafeDIMockScope_DefaultPart_Part.Page_Scope.__safeDI_Builder<any Part> {
+		                .init(model: { values in __safeDI_defaultPart_PartBuilder_Hub_Model_Scope(token: values.token) })
 		            }
-		            func __safeDI_defaultPart_PartBuilder_Hub_Model_Scope(_ scope: Hub.SafeDIMockScope_DefaultPart_Part.Model_Scope, token: Token?, passUp: () -> any Part) -> any Part {
-		                switch scope {
-		                case let .part(scope, __safeDI_forwarded): if let token { return __safeDI_defaultPart_PartBuilder_Hub_Model_Scope_part(scope, __safeDI_forwarded, token: token) } else { return passUp() }
-		                }
+		            func __safeDI_defaultPart_PartBuilder_Hub_Model_Scope(token: Token) -> Hub.SafeDIMockScope_DefaultPart_Part.Model_Scope.__safeDI_Builder<any Part> {
+		                .init(part: { _ in __safeDI_defaultPart_PartBuilder_Hub_Model_Scope_part(token: token) })
 		            }
-		            _ = Hub.__safeDI_Hub_mock_A208715AB7923E3F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.mock(defaultPart_PartBuilder: { scope in __safeDI_defaultPart_PartBuilder_Hub(scope, passUp: { defaultPart_PartBuilder(scope) }) }, safeDIOverrides: safeDIOverrides.hub)
+		            func __safeDI_defaultPart_PartBuilder_Hub_Model_Scope_(up: Hub.SafeDIMockScope_DefaultPart_Part.Model_Scope.__safeDI_Builder<any Part>) -> Hub.SafeDIMockScope_DefaultPart_Part.Model_Scope.__safeDI_Builder<any Part> {
+		                .init(part: up.part)
+		            }
+		            _ = Hub.__safeDI_Hub_mock_2D12229128E94215.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Hub.__safeDI_mock(defaultPart_PartBuilder: __safeDI_defaultPart_PartBuilder_Hub(up: .init(__safeDI_noScope: defaultPart_PartBuilder)), safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return HubScreen(hub: hub)
@@ -6051,7 +5938,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceBuilder: @escaping (Office.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
 		        func __safeDI_office() -> Office {
@@ -6059,36 +5946,20 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                let service: any Service = DefaultService(token: token)
 		                return service
 		            }
-		            func __safeDI_serviceBuilder_Office(_ scope: Office.SafeDIMockScope_Service, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .desk(_, scope): return __safeDI_serviceBuilder_Office_Desk_Scope(scope, passUp: passUp)
-		                case let .model(values, scope): return __safeDI_serviceBuilder_Office_Model_Scope(scope, token: values.token, passUp: passUp)
-		                }
+		            func __safeDI_serviceBuilder_Office(up: Office.SafeDIMockScope_Service.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(desk: { values in __safeDI_serviceBuilder_Office_Desk_Scope(up: up.desk(values)) }, model: { values in __safeDI_serviceBuilder_Office_Model_Scope_(token: values.token) })
 		            }
-		            func __safeDI_serviceBuilder_Office_Desk_Scope(_ scope: Office.SafeDIMockScope_Service.Desk_Scope, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .model(_, scope): return __safeDI_serviceBuilder_Office_Model_Scope(scope, token: nil, passUp: passUp)
-		                }
+		            func __safeDI_serviceBuilder_Office_Desk_Scope(up: Office.SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<any Service> {
+		                .init(model: { values in __safeDI_serviceBuilder_Office_Model_Scope(up: up.model(values)) })
 		            }
-		            func __safeDI_serviceBuilder_Office_Model_Scope(_ scope: Office.SafeDIMockScope_Service.Model_Scope, token: Token?, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .service(scope): if let token { return __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) } else { return passUp() }
-		                }
+		            func __safeDI_serviceBuilder_Office_Model_Scope(up: Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: up.service)
 		            }
-		            let __safeDI_serviceBuilder_Office_scope: (Office.SafeDIMockScope_Service) -> any Service = { scope in __safeDI_serviceBuilder_Office(scope, passUp: { serviceBuilder(scope) }) }
+		            func __safeDI_serviceBuilder_Office_Model_Scope_(token: Token) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) })
+		            }
 		            _ = Office.__safeDI_Office_mock_09C416165022B404.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Office.__safeDI_mock(serviceBuilder: .init(
-		                desk: { __safeDI_deskValues in
-		                    .init(
-		                        model: { __safeDI_modelValues in
-		                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Office_scope(.desk(__safeDI_deskValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
-		                        }
-		                    )
-		                },
-		                model: { __safeDI_modelValues in
-		                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Office_scope(.model(__safeDI_modelValues, .service(__safeDI_serviceValues))) })
-		                }
-		            ), safeDIOverrides: safeDIOverrides.office)
+		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(up: .init(__safeDI_noScope: serviceBuilder)), safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
 		        return OfficeScreen(office: office)
@@ -6470,7 +6341,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceBuilder: @escaping (Office.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
 		        func __safeDI_office() -> Office {
@@ -6478,36 +6349,20 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                let service: any Service = DefaultService(token: token)
 		                return service
 		            }
-		            func __safeDI_serviceBuilder_Office(_ scope: Office.SafeDIMockScope_Service, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .bench(_, scope): return __safeDI_serviceBuilder_Office_Bench_Scope(scope, passUp: passUp)
-		                case let .model(values, scope): return __safeDI_serviceBuilder_Office_Model_Scope(scope, token: values.token, passUp: passUp)
-		                }
+		            func __safeDI_serviceBuilder_Office(up: Office.SafeDIMockScope_Service.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(bench: { values in __safeDI_serviceBuilder_Office_Bench_Scope(up: up.bench(values)) }, model: { values in __safeDI_serviceBuilder_Office_Model_Scope_(token: values.token) })
 		            }
-		            func __safeDI_serviceBuilder_Office_Bench_Scope(_ scope: Office.SafeDIMockScope_Service.Bench_Scope, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .model(_, scope): return __safeDI_serviceBuilder_Office_Model_Scope(scope, token: nil, passUp: passUp)
-		                }
+		            func __safeDI_serviceBuilder_Office_Bench_Scope(up: Office.SafeDIMockScope_Service.Bench_Scope.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.Bench_Scope.__safeDI_Builder<any Service> {
+		                .init(model: { values in __safeDI_serviceBuilder_Office_Model_Scope(up: up.model(values), token: values.token) })
 		            }
-		            func __safeDI_serviceBuilder_Office_Model_Scope(_ scope: Office.SafeDIMockScope_Service.Model_Scope, token: Token?, passUp: () -> any Service) -> any Service {
-		                switch scope {
-		                case let .service(scope): if let token { return __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) } else { return passUp() }
-		                }
+		            func __safeDI_serviceBuilder_Office_Model_Scope(up: Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service>, token: Badge) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: up.service)
 		            }
-		            let __safeDI_serviceBuilder_Office_scope: (Office.SafeDIMockScope_Service) -> any Service = { scope in __safeDI_serviceBuilder_Office(scope, passUp: { serviceBuilder(scope) }) }
+		            func __safeDI_serviceBuilder_Office_Model_Scope_(token: Token) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) })
+		            }
 		            _ = Office.__safeDI_Office_mock_0A554E6D48F21740.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Office.__safeDI_mock(serviceBuilder: .init(
-		                bench: { __safeDI_benchValues in
-		                    .init(
-		                        model: { __safeDI_modelValues in
-		                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Office_scope(.bench(__safeDI_benchValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
-		                        }
-		                    )
-		                },
-		                model: { __safeDI_modelValues in
-		                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Office_scope(.model(__safeDI_modelValues, .service(__safeDI_serviceValues))) })
-		                }
-		            ), safeDIOverrides: safeDIOverrides.office)
+		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(up: .init(__safeDI_noScope: serviceBuilder)), safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
 		        return OfficeScreen(office: office)
@@ -6914,15 +6769,37 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Board {
-		    @frozen public enum SafeDIMockScope_Gizmo {
-		        case hub_serviceBuilder(hub_serviceBuilder_Values, Hub.SafeDIMockScope_Service, SafeDIMockScope_Gizmo.DefaultService_Scope)
+		    nonisolated public enum SafeDIMockScope_Gizmo {
+		        nonisolated public struct hub_serviceBuilder_Values {}
 
-		        public struct hub_serviceBuilder_Values {}
+		        nonisolated public enum DefaultService_Scope {
+		            nonisolated public struct gizmo_Values {}
 
-		        @frozen public enum DefaultService_Scope {
-		            case gizmo(gizmo_Values)
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let gizmo: (gizmo_Values) -> __safeDI_Built
 
-		            public struct gizmo_Values {}
+		                public init(gizmo: @escaping (gizmo_Values) -> __safeDI_Built) {
+		                    self.gizmo = gizmo
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.gizmo = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let hub_serviceBuilder: (hub_serviceBuilder_Values) -> Hub.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Gizmo.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>
+
+		            public init(hub_serviceBuilder: @escaping (hub_serviceBuilder_Values) -> Hub.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Gizmo.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
+		                self.hub_serviceBuilder = hub_serviceBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.hub_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		            }
 		        }
 		    }
 
@@ -6952,47 +6829,38 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        gizmoBuilder: @escaping (Board.SafeDIMockScope_Gizmo) -> any Gizmo,
+		        gizmoBuilder: @escaping () -> any Gizmo,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Board {
-		        let __safeDI_gizmoBuilder = gizmoBuilder
-		        let __safeDI_gizmoValues_hub_serviceBuilder = SafeDIMockScope_Gizmo.hub_serviceBuilder_Values()
+		        Board.__safeDI_mock(gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        gizmoBuilder __safeDI_gizmoBuilder: Board.SafeDIMockScope_Gizmo.__safeDI_Builder<any Gizmo>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Board {
+		        let __safeDI_gizmoBuilder_hub_serviceBuilder = __safeDI_gizmoBuilder.hub_serviceBuilder(SafeDIMockScope_Gizmo.hub_serviceBuilder_Values())
 		        func __safeDI_hub() -> Hub {
-		            func __safeDI_serviceBuilder_Hub(_ __safeDI_hub_serviceBuilder: Hub.SafeDIMockScope_Service) -> any Service {
-		                switch __safeDI_hub_serviceBuilder {
-		                case let .page(_, scope): return __safeDI_serviceBuilder_Hub_Page_Scope(scope, __safeDI_hub_serviceBuilder: __safeDI_hub_serviceBuilder)
-		                case let .model(_, scope): return __safeDI_serviceBuilder_Hub_Model_Scope(scope, __safeDI_hub_serviceBuilder: __safeDI_hub_serviceBuilder)
+		            func __safeDI_serviceBuilder_Hub_Model_Scope_service(_ scope: Hub.SafeDIMockScope_Service.Model_Scope.service_Values, __safeDI_hub_serviceBuilder: SafeDIMockScope_Gizmo.DefaultService_Scope.__safeDI_Builder<any Gizmo>) -> any Service {
+		                func __safeDI_service() -> DefaultService {
+		                    let gizmo: any Gizmo = __safeDI_hub_serviceBuilder.gizmo(SafeDIMockScope_Gizmo.DefaultService_Scope.gizmo_Values())
+		                    return DefaultService(gizmo: gizmo)
 		                }
+		                let service: any Service = __safeDI_service()
+		                return service
 		            }
-		            func __safeDI_serviceBuilder_Hub_Page_Scope(_ scope: Hub.SafeDIMockScope_Service.Page_Scope, __safeDI_hub_serviceBuilder: Hub.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .model(_, scope): return __safeDI_serviceBuilder_Hub_Model_Scope(scope, __safeDI_hub_serviceBuilder: __safeDI_hub_serviceBuilder)
-		                }
+		            func __safeDI_serviceBuilder_Hub(up: Hub.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Gizmo.DefaultService_Scope.__safeDI_Builder<any Gizmo>>) -> Hub.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(page: { values in __safeDI_serviceBuilder_Hub_Page_Scope(up: up.page(values)) }, model: { values in __safeDI_serviceBuilder_Hub_Model_Scope(up: up.model(values)) })
 		            }
-		            func __safeDI_serviceBuilder_Hub_Model_Scope(_ scope: Hub.SafeDIMockScope_Service.Model_Scope, __safeDI_hub_serviceBuilder: Hub.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case .service:
-		                    func __safeDI_service() -> DefaultService {
-		                        let gizmo: any Gizmo = __safeDI_gizmoBuilder(.hub_serviceBuilder(__safeDI_gizmoValues_hub_serviceBuilder, __safeDI_hub_serviceBuilder, .gizmo(SafeDIMockScope_Gizmo.DefaultService_Scope.gizmo_Values())))
-		                        return DefaultService(gizmo: gizmo)
-		                    }
-		                    let service: any Service = __safeDI_service()
-		                    return service
-		                }
+		            func __safeDI_serviceBuilder_Hub_Page_Scope(up: Hub.SafeDIMockScope_Service.Page_Scope.__safeDI_Builder<SafeDIMockScope_Gizmo.DefaultService_Scope.__safeDI_Builder<any Gizmo>>) -> Hub.SafeDIMockScope_Service.Page_Scope.__safeDI_Builder<any Service> {
+		                .init(model: { values in __safeDI_serviceBuilder_Hub_Model_Scope(up: up.model(values)) })
+		            }
+		            func __safeDI_serviceBuilder_Hub_Model_Scope(up: Hub.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<SafeDIMockScope_Gizmo.DefaultService_Scope.__safeDI_Builder<any Gizmo>>) -> Hub.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Hub_Model_Scope_service(scope, __safeDI_hub_serviceBuilder: up.service(scope)) })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_CB4845364B55B503.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(serviceBuilder: .init(
-		                page: { __safeDI_pageValues in
-		                    .init(
-		                        model: { __safeDI_modelValues in
-		                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Hub(.page(__safeDI_pageValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
-		                        }
-		                    )
-		                },
-		                model: { __safeDI_modelValues in
-		                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Hub(.model(__safeDI_modelValues, .service(__safeDI_serviceValues))) })
-		                }
-		            ), safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Hub(up: __safeDI_gizmoBuilder_hub_serviceBuilder), safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Board(hub: hub)
@@ -7000,7 +6868,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 
 		extension Board {
-		    public enum __safeDI_Board_mock_5747D6E3CE55A7DA {}
+		    public enum __safeDI_Board_mock_FCC1B82DBEFC6EDA {}
 		}
 		#endif
 		"""])
@@ -7043,11 +6911,11 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        gizmoBuilder: @escaping (Board.SafeDIMockScope_Gizmo) -> any Gizmo,
+		        gizmoBuilder: @escaping () -> any Gizmo,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> BoardScreen {
-		        _ = Board.__safeDI_Board_mock_5747D6E3CE55A7DA.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let board = Board.mock(gizmoBuilder: gizmoBuilder, safeDIOverrides: safeDIOverrides.board)
+		        _ = Board.__safeDI_Board_mock_FCC1B82DBEFC6EDA.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let board = Board.__safeDI_mock(gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder), safeDIOverrides: safeDIOverrides.board)
 		        return BoardScreen(board: board)
 		    }
 		}
@@ -7208,11 +7076,11 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceBuilder_: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder_: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        _ = Panel.__safeDI_Panel_mock_68173143F8AFF57A.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let panel = Panel.__safeDI_mock(serviceBuilder_: .init(service: { __safeDI_serviceValues in serviceBuilder_(.service(__safeDI_serviceValues)) }), serviceBuilder: nil, safeDIOverrides: safeDIOverrides.panel)
+		        let panel = Panel.__safeDI_mock(serviceBuilder_: .init(__safeDI_noScope: serviceBuilder_), serviceBuilder: nil, safeDIOverrides: safeDIOverrides.panel)
 		        return Screen(panel: panel)
 		    }
 		}
@@ -7254,11 +7122,11 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        _ = Panel.__safeDI_Panel_mock_68173143F8AFF57A.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let panel = Panel.__safeDI_mock(serviceBuilder: .init(service: { __safeDI_serviceValues in serviceBuilder(.service(__safeDI_serviceValues)) }), safeDIOverrides: safeDIOverrides.panel)
+		        let panel = Panel.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides.panel)
 		        return Screen(panel: panel)
 		    }
 		}
@@ -7349,12 +7217,38 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	#if DEBUG
 	extension Board {
-	    @frozen public enum SafeDIMockScope_Service {
-	        case panel(Panel.SafeDIMockScope_Service)
+	    nonisolated public enum SafeDIMockScope_Service {
+	        nonisolated public struct panel_Values: Sendable {}
+
+	        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+	            public let panel: (panel_Values) -> Panel.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+
+	            public init(panel: @escaping (panel_Values) -> Panel.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+	                self.panel = panel
+	            }
+
+	            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+	                self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+	            }
+	        }
 	    }
 
-	    @frozen public enum SafeDISendableMockScope_Service {
-	        case held(Panel.SafeDIMockScope_Service)
+	    nonisolated public enum SafeDISendableMockScope_Service {
+	        nonisolated public struct held_Values: Sendable {}
+
+	        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+	            public let held: @Sendable (held_Values) -> Panel.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+
+	            public init(held: @escaping @Sendable (held_Values) -> Panel.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+	                self.held = held
+	            }
+
+	            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+	                self.held = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+	            }
+	        }
 	    }
 
 	    /// Overrides for the mock dependency tree.
