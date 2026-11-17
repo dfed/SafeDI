@@ -1413,17 +1413,8 @@ extension DependencyTreeGenerator {
 				case .receivesPathScopeOnlyIfAvailable, .requiresOtherCarrier, .other, .boundOutsideSendableFunction:
 					findings.append(.init(hole: hole, kind: .declarationBoundAfterSite(reader: reader, declaration: declaration, seamModule: seamModule)))
 				}
-			} else if sameLabelFields.isEmpty, let hiding = hidden.pathDeclarations[property.label] {
-				findings.append(.init(hole: hole, kind: .declarationBoundOnPathToReenteringCall(
-					reader: reader,
-					declaration: hiding.declaration,
-					pathHole: hiding.pathHole,
-					callingType: hiding.callingType,
-					callProperty: hiding.callProperty,
-					calledSeam: hiding.calledSeam,
-					callerModule: callerModule,
-					seamModule: seamModule,
-				)))
+			} else if sameLabelFields.isEmpty, let hidings = hidden.pathDeclarations[property.label] {
+				findings.append(.init(hole: hole, kind: .declarationBoundOnPathToReenteringCall(reader: reader, hidings: hidings, callerModule: callerModule, seamModule: seamModule)))
 			}
 			// A field of the label with another type is the inline hidden-label error, which validation reported.
 		}
@@ -1493,8 +1484,9 @@ extension DependencyTreeGenerator {
 	/// one function, reads the outer call's values.
 	struct FillReentryHidings {
 		/// The declarations of the scopes on the paths from a fill's root to each call inside it that passes this fill on,
-		/// by label, the first met for each.
-		var pathDeclarations = [String: DeclarationOnPathToReenteringCall]()
+		/// by label: of each path, the first it declares of the label. Every path's, since which path a walk meets first
+		/// follows the order of the files that declare the fills' places.
+		var pathDeclarations = [String: [DeclarationOnPathToReenteringCall]]()
 		/// The declarations the copies of this fill's hole that those calls' seams take do not carry, by label, the first
 		/// met for each.
 		var calledCopyDeclarations = [String: SeamSignature.Hole.UncarriedDeclaration]()
@@ -1530,8 +1522,9 @@ extension DependencyTreeGenerator {
 					}
 					// The fill's root declares what is on every path, so a call that is the root itself has no scope above it.
 					if let callingType, let callProperty = generator.property, let calledSeam = generator.builtInstantiable?.concreteInstantiable {
-						for declaration in pathDeclarations where hidden.pathDeclarations[declaration.property.label] == nil {
-							hidden.pathDeclarations[declaration.property.label] = DeclarationOnPathToReenteringCall(declaration: declaration, pathHole: pathHole, callingType: callingType, callProperty: callProperty, calledSeam: calledSeam)
+						var labelsOfThisPath = Set<String>()
+						for declaration in pathDeclarations where labelsOfThisPath.insert(declaration.property.label).inserted {
+							hidden.pathDeclarations[declaration.property.label, default: []].append(DeclarationOnPathToReenteringCall(declaration: declaration, pathHole: pathHole, callingType: callingType, callProperty: callProperty, calledSeam: calledSeam))
 						}
 					}
 					hiddenByFillKey[fillKey] = hidden
@@ -1607,19 +1600,11 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			/// one that builds a scope on the site's path. Inline, the reader would get a wrapper made again of the function the
 			/// seam's initializer declares, which code generated outside the seam's module cannot refer to.
 			case receivesInstantiatorBuildingSite(reader: Reader, declaration: SeamSignature.Hole.UncarriedDeclaration, seamModule: ModuleIdentity)
-			/// A scope of the fill of `pathHole` – this fill, or another of the same seam call – declares the reader's label on
-			/// the path from that fill's root to `callingType`'s call of `calledSeam` (`callProperty`), which passes this fill
-			/// on: inline, the re-entered seam would read that declaration, and the fill reads the outer call's value.
-			case declarationBoundOnPathToReenteringCall(
-				reader: Reader,
-				declaration: SeamSignature.Hole.UncarriedDeclaration,
-				pathHole: SeamSignature.Hole,
-				callingType: TypeDescription,
-				callProperty: Property,
-				calledSeam: TypeDescription,
-				callerModule: ModuleIdentity,
-				seamModule: ModuleIdentity,
-			)
+			/// For each of `hidings`, a scope of the fill of its `pathHole` – this fill, or another of the same seam call –
+			/// declares the reader's label on the path from that fill's root to its `callingType`'s call of its `calledSeam`
+			/// (`callProperty`), which passes this fill on: inline, the re-entered seam would read that declaration, and the
+			/// fill reads the outer call's value. The message names every path, so none is picked by where its place is declared.
+			case declarationBoundOnPathToReenteringCall(reader: Reader, hidings: [DependencyTreeGenerator.DeclarationOnPathToReenteringCall], callerModule: ModuleIdentity, seamModule: ModuleIdentity)
 			/// A scope in the fill closes a cycle on `closingProperty`, a property of the seam's path, declared by
 			/// `closingType` beneath `fillAncestors`.
 			/// `closedOnDeclaration` is the declaration of the seam's path it repeats, and `closesOnOwnerOfHole` says that
@@ -1969,12 +1954,50 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(seamName)’s tree is building where it calls \(namedBuilders). Inline, `\(reader.type.asSource)` can get an instantiator of its own, made from the function \(seamName)’s initializer declares for `\(declaration.property.label)`, which code generated outside \(module(seamModule)) cannot refer to. \(SeamAccessExplanation.joined(remedies))"),
 					SourceDiagnostic(severity: .note, location: declaration.declarationLocation, message: "`\(declaration.declaringType.asSource)` instantiates `\(declaration.property.asSource)` here."),
 				]
-			case let .declarationBoundOnPathToReenteringCall(reader, declaration, pathHole, callingType, callProperty, calledSeam, callerModule, seamModule):
-				let declaringType = "`\(declaration.declaringType.asSource)`"
+			case let .declarationBoundOnPathToReenteringCall(reader, hidings, callerModule, seamModule):
+				// One clause per declaration and call, naming the places of every path that reaches that call from that
+				// declaration, in the order of the declaring type, then the call, then the places: which path a walk meets first
+				// follows the order of the files that declare the fills' places, so none is picked.
+				struct Clause {
+					let declaration: SeamSignature.Hole.UncarriedDeclaration
+					let callingType: TypeDescription
+					let callProperty: Property
+					let calledSeam: TypeDescription
+					var places: [SeamSignature.Hole.UncarriedDeclaration.PresentedPlace]
+
+					var order: [String] {
+						[declaration.declaringType.asSource, declaration.property.asSource, callingType.asSource, calledSeam.asSource, callProperty.asSource]
+					}
+				}
+				var clauses = [Clause]()
+				for hiding in hidings {
+					let clause = Clause(declaration: hiding.declaration, callingType: hiding.callingType, callProperty: hiding.callProperty, calledSeam: hiding.calledSeam, places: [SeamSignature.Hole.UncarriedDeclaration.PresentedPlace(hiding.pathHole)])
+					if let index = clauses.firstIndex(where: { $0.order == clause.order }) {
+						clauses[index].places += clause.places
+					} else {
+						clauses.append(clause)
+					}
+				}
+				clauses.sort { $0.order.lexicographicallyPrecedes($1.order) }
+				let clauseTexts = clauses.map { clause in
+					let places = clause.places.sorted { $0.nameOrder.lexicographicallyPrecedes($1.nameOrder) }
+					let namesSeveralPlaces = Set(places.map(\.nameOrder)).count > 1
+					let namesSeveralBuilders = Set(places.map { "\($0.seamType.asSource) \($0.builderLabel)" }).count > 1
+					return "`\(clause.declaration.declaringType.asSource)` declares on the path\(namesSeveralPlaces ? "s" : "") from the builder\(namesSeveralBuilders ? "s" : "") for \(listed(places.map { placeDescription(of: $0, namingSeam: false) })) to the call by which `\(clause.callingType.asSource)` instantiates `\(clause.calledSeam.asSource)` again (`\(clause.callProperty.label)`)"
+				}
+				let callsAreSeveral = Set(clauses.map { [$0.callingType.asSource, $0.calledSeam.asSource, $0.callProperty.label] }).count > 1
+				// A declaration two calls hide from is noted once.
+				var notes = [SourceDiagnostic]()
+				for clause in clauses {
+					let note = SourceDiagnostic(severity: .note, location: clause.declaration.declarationLocation, message: "`\(clause.declaration.declaringType.asSource)` declares `\(clause.declaration.property.asSource)` here.")
+					if !notes.contains(note) {
+						notes.append(note)
+					}
+				}
+				let declaringTypes = listed(clauses.map { "`\($0.declaration.declaringType.asSource)`’s" })
 				return [
-					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(declaringType) declares on the path from \(builderDescription(of: pathHole)) to the call by which `\(callingType.asSource)` instantiates `\(calledSeam.asSource)` again (`\(callProperty.label)`), but that call passes the builder on as \(module(callerModule)) fills it, which cannot hand it \(declaringType)’s values. Declare `@\(Dependency.Source.receivedRawValue) let \(reader.property.asSource)` on \(seamName), so the builder’s scope carries it, or \(fulfillRemedy(seamModule))."),
-					SourceDiagnostic(severity: .note, location: declaration.declarationLocation, message: "\(declaringType) declares `\(declaration.property.asSource)` here."),
-				]
+					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(listed(clauseTexts)), but \(callsAreSeveral ? "those calls pass" : "that call passes") the builder on as \(module(callerModule)) fills it, which cannot hand it \(declaringTypes) values. Declare `@\(Dependency.Source.receivedRawValue) let \(reader.property.asSource)` on \(seamName), so the builder’s scope carries it, or \(fulfillRemedy(seamModule))."),
+				] + notes
 			case let .closesCycleInSeamTree(closingProperty, closingType, declarationLocation, fillAncestors, closedOnDeclaration, closesOnOwnerOfHole, seamModule):
 				let closingTypeName = "`\(closingType.asSource)`"
 				// The type that fills the builder is the fill's root; a closer beneath it is named beneath it.
