@@ -214,11 +214,41 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		// `LivePayments` fills `Checkout`’s `payments` and builds `Checkout` again, from inside the fill of the `payments`
 		// place `CartScreen` holds, where inline reads `CartScreen`’s `cart`. The call inside the fill re-enters the root level
 		// function of the call that encloses it, and hands it its own `cart`, so the re-entered `Checkout`’s top place gets
-		// `CartScreen`’s `cart`, as inline’s does, never the enclosing caller’s, which has none.
+		// `CartScreen`’s `cart`, as inline’s does, never the enclosing caller’s, which has none. The seam form passes the
+		// builder on as module `App` fills it, whose scope there does not carry `cart`, so the twin reports it.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePayments` receives `cart: Cart?`, which the builder for `CartScreen`’s `payments: any Payments` (`payments` of `paymentsBuilder`) carries from `CartScreen`, and that builder’s fill instantiates `Checkout` again (`retryBuilder`). Inline, `LivePayments` would read `CartScreen`’s `cart` inside that `Checkout`, but the call passes the builder on as module `App` fills it, whose scope there does not carry `cart`, so `LivePayments` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let cart: Cart?` on `Checkout`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Payments` in module `Shared` or a module it lists among its SafeDI dependencies.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.reenteringFillModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
 		try await expectValuesEqualInline(
 			mock: Self.reenteringFillModules(caller: caller.attribute, callee: calledTypes.attribute),
 			inline: Self.reenteringFillInlineModules,
 			caller: caller,
+			handWrittenCall: "import Shared\n\nfunc callMock() {\n    _ = Holder.mock()\n}\n",
+			probes: [
+				DifferentialValueProbe(name: "Holder", expression: "Holder.mock()", knownRightExpression: "Holder()"),
+				DifferentialValueProbe(
+					name: "retried payments’ cart",
+					expression: "{ let cart = Cart(); let screen = Holder.mock().checkout.cartScreenBuilder.instantiate(cart); return ((screen.payments as! LivePayments).retryBuilder.instantiate().payments as! LivePayments).cart === cart }()",
+					knownRightExpression: "{ let cart = Cart(); let screen = Holder().checkout.cartScreenBuilder.instantiate(cart); return ((screen.payments as! LivePayments).retryBuilder.instantiate().payments as! LivePayments).cart === cart }()",
+				),
+			],
+			samples: [DifferentialValueSample(type: "Cart", expression: "Cart()")],
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsReenteredPlaceTheScreensCart_whenListedCallersCallInsideFillReentersCalledTypesRootLevel(calledTypes: CalledTypeDeclaration) async throws {
+		// `Holder` has no `generateMock`: its module lists it in `additionalMocksToGenerate`, whose mock is internal. As for the
+		// callers above, the call inside the fill hands the re-entered `Checkout`’s top place `CartScreen`’s `cart`.
+		try await expectValuesEqualInline(
+			mock: Self.reenteringFillModules(caller: "@Instantiable", callee: calledTypes.attribute, listsCaller: true),
+			inline: Self.reenteringFillInlineModules,
+			caller: .internal,
 			handWrittenCall: "import Shared\n\nfunc callMock() {\n    _ = Holder.mock()\n}\n",
 			probes: [
 				DifferentialValueProbe(name: "Holder", expression: "Holder.mock()", knownRightExpression: "Holder()"),
@@ -1184,9 +1214,39 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	]
 
 	/// D1’s shape for a calling mock: `LivePayments` fills both of `Checkout`’s `payments` places, receives `cart` only if
-	/// available, which only `CartScreen`, beneath the second place, holds, and builds `Checkout` again.
-	private static func reenteringFillModules(caller: String, callee: String) -> [ModuleFixture] {
-		[
+	/// available, which only `CartScreen`, beneath the second place, holds, and builds `Checkout` again. Where `listsCaller`,
+	/// module `App` lists `Holder` in `additionalMocksToGenerate`.
+	private static func reenteringFillModules(caller: String, callee: String, listsCaller: Bool = false) -> [ModuleFixture] {
+		var appFiles = [
+			"AppTypes.swift": """
+			import SafeDI
+			import Shared
+
+			@Instantiable(fulfillingAdditionalTypes: [(any Payments).self])
+			public final class LivePayments: Payments, Instantiable {
+			    public init(cart: Cart?, retryBuilder: Instantiator<Checkout>) {
+			        self.cart = cart
+			        self.retryBuilder = retryBuilder
+			    }
+
+			    @Received(onlyIfAvailable: true) public let cart: Cart?
+			    @Instantiated public let retryBuilder: Instantiator<Checkout>
+			}
+
+			\(caller)
+			public struct Holder: Instantiable {
+			    public init(checkout: Checkout) {
+			        self.checkout = checkout
+			    }
+
+			    @Instantiated public let checkout: Checkout
+			}
+			""",
+		]
+		if listsCaller {
+			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Holder\"])\n"
+		}
+		return [
 			ModuleFixture(name: "Shared", packageName: "Shared", swiftFileContentByFilePath: [
 				"SharedTypes.swift": """
 				import SafeDI
@@ -1220,32 +1280,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				}
 				""",
 			]),
-			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
-				"AppTypes.swift": """
-				import SafeDI
-				import Shared
-
-				@Instantiable(fulfillingAdditionalTypes: [(any Payments).self])
-				public final class LivePayments: Payments, Instantiable {
-				    public init(cart: Cart?, retryBuilder: Instantiator<Checkout>) {
-				        self.cart = cart
-				        self.retryBuilder = retryBuilder
-				    }
-
-				    @Received(onlyIfAvailable: true) public let cart: Cart?
-				    @Instantiated public let retryBuilder: Instantiator<Checkout>
-				}
-
-				\(caller)
-				public struct Holder: Instantiable {
-				    public init(checkout: Checkout) {
-				        self.checkout = checkout
-				    }
-
-				    @Instantiated public let checkout: Checkout
-				}
-				""",
-			], dependencies: ["Shared"]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Shared"]),
 		]
 	}
 
