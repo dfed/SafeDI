@@ -1073,9 +1073,12 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>) {
-			        let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder.aBuilder(SafeDIScope_Widget.aBuilder_Values())
-			        let __safeDI_widgetBuilder_bBuilder = __safeDI_widgetBuilder.bBuilder(SafeDIScope_Widget.bBuilder_Values())
+			        let __safeDI_aBuilder_loopLevels = __safeDI_LoopLevels_01862F7E5AE3CC3D(
+			            __safeDI_widgetBuilder_aBuilder: __safeDI_widgetBuilder.aBuilder(SafeDIScope_Widget.aBuilder_Values()),
+			            __safeDI_widgetBuilder_bBuilder: __safeDI_widgetBuilder.bBuilder(SafeDIScope_Widget.bBuilder_Values())
+			        )
 			        func __safeDI_aBuilder() -> A {
+			            let __safeDI_widgetBuilder_aBuilder = __safeDI_aBuilder_loopLevels.__safeDI_widgetBuilder_aBuilder
 			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			            let mark = Mark()
 			            let widget: any Widget = __safeDI_widgetBuilder_aBuilder.widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder, mark: mark))
@@ -1083,6 +1086,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        }
 			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			        func __safeDI_bBuilder() -> B {
+			            let __safeDI_widgetBuilder_bBuilder = __safeDI_aBuilder_loopLevels.__safeDI_widgetBuilder_bBuilder
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			            let mark = Mark()
 			            let widget: any Widget = __safeDI_widgetBuilder_bBuilder.widget(SafeDIScope_Widget.B_Scope.widget_Values(aBuilder: aBuilder, mark: mark))
@@ -1090,6 +1094,20 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        }
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
+			    }
+
+			    /// Holds the payloads of a loop of builders, so that each builder function of the loop captures one reference.
+			    nonisolated private final class __safeDI_LoopLevels_01862F7E5AE3CC3D {
+			        init(
+			            __safeDI_widgetBuilder_aBuilder: SafeDIScope_Widget.A_Scope.__safeDI_Builder<any Widget>,
+			            __safeDI_widgetBuilder_bBuilder: SafeDIScope_Widget.B_Scope.__safeDI_Builder<any Widget>
+			        ) {
+			            self.__safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder_aBuilder
+			            self.__safeDI_widgetBuilder_bBuilder = __safeDI_widgetBuilder_bBuilder
+			        }
+
+			        let __safeDI_widgetBuilder_aBuilder: SafeDIScope_Widget.A_Scope.__safeDI_Builder<any Widget>
+			        let __safeDI_widgetBuilder_bBuilder: SafeDIScope_Widget.B_Scope.__safeDI_Builder<any Widget>
 			    }
 			}
 
@@ -1367,9 +1385,12 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>) {
-			        let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder.aBuilder(SafeDIScope_Widget.aBuilder_Values())
-			        let __safeDI_widgetBuilder_bBuilder = __safeDI_widgetBuilder.bBuilder(SafeDIScope_Widget.bBuilder_Values())
+			        let __safeDI_aBuilder_loopLevels = __safeDI_LoopLevels_01862F7E5AE3CC3D(
+			            __safeDI_widgetBuilder_aBuilder: __safeDI_widgetBuilder.aBuilder(SafeDIScope_Widget.aBuilder_Values()),
+			            __safeDI_widgetBuilder_bBuilder: __safeDI_widgetBuilder.bBuilder(SafeDIScope_Widget.bBuilder_Values())
+			        )
 			        func __safeDI_aBuilder() -> A {
+			            let __safeDI_widgetBuilder_aBuilder = __safeDI_aBuilder_loopLevels.__safeDI_widgetBuilder_aBuilder
 			            let cBuilder = Instantiator<C> {
 			                __safeDI_cBuilder(id: $0)
 			            }
@@ -1385,6 +1406,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        }
 			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			        func __safeDI_bBuilder() -> B {
+			            let __safeDI_widgetBuilder_bBuilder = __safeDI_aBuilder_loopLevels.__safeDI_widgetBuilder_bBuilder
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			            let cBuilder = Instantiator<C> {
 			                __safeDI_cBuilder(id: $0)
@@ -1412,6 +1434,20 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        }
 			        let leaf: Leaf = __safeDI_leaf()
 			        self.init(aBuilder: aBuilder, bBuilder: bBuilder, cBuilder: cBuilder, leaf: leaf)
+			    }
+
+			    /// Holds the payloads of a loop of builders, so that each builder function of the loop captures one reference.
+			    nonisolated private final class __safeDI_LoopLevels_01862F7E5AE3CC3D {
+			        init(
+			            __safeDI_widgetBuilder_aBuilder: SafeDIScope_Widget.A_Scope.__safeDI_Builder<any Widget>,
+			            __safeDI_widgetBuilder_bBuilder: SafeDIScope_Widget.B_Scope.__safeDI_Builder<any Widget>
+			        ) {
+			            self.__safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder_aBuilder
+			            self.__safeDI_widgetBuilder_bBuilder = __safeDI_widgetBuilder_bBuilder
+			        }
+
+			        let __safeDI_widgetBuilder_aBuilder: SafeDIScope_Widget.A_Scope.__safeDI_Builder<any Widget>
+			        let __safeDI_widgetBuilder_bBuilder: SafeDIScope_Widget.B_Scope.__safeDI_Builder<any Widget>
 			    }
 			}
 

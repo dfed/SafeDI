@@ -234,12 +234,14 @@ extension DependencyTreeGenerator {
 		for holeType in orderedHoleTypes {
 			let stem = stemByHoleType[holeType, default: ""]
 			let rootTypeNames = (plain: "\(scopeTypeNames.plain)_\(stem)".spelledAsIdentifier, sendable: "\(scopeTypeNames.sendable)_\(stem)".spelledAsIdentifier)
+			let builtType = returnType(of: holeType, in: flatHoles)
 			// The enums, nested by type.
 			var byType = ScopeEnumsByType()
 			if let reached = reachedByHoleType[holeType] {
 				byType = scopeEnumsByType(
 					of: seam,
 					holeType: holeType,
+					builderBuiltType: builtType,
 					rootTypeNames: rootTypeNames,
 					builderLabels: (plain: label(of: holeType, isSendable: false), sendable: label(of: holeType, isSendable: true)),
 					generator: generator,
@@ -320,7 +322,6 @@ extension DependencyTreeGenerator {
 					}
 				}
 				let enumType: TypeDescription = scopeTypeNames.areQualified ? .nested(name: typeName, parentType: seamType, generics: []) : .simple(name: typeName, generics: [])
-				let builtType = returnType(of: holeType, in: flatHoles)
 				let takesBuilderStruct = holeTypesDeclaringBuilderStructs.contains(holeType)
 				let parameterType = takesBuilderStruct
 					? .nested(name: ReservedName.builderStructTypeName, parentType: enumType, generics: [builtType])

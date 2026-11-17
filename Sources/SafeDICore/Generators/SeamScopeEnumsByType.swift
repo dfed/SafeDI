@@ -95,6 +95,8 @@ extension DependencyTreeGenerator {
 	/// none, since a place is handed only what the innermost `@Sendable` function that builds it binds, which is why a call's
 	/// case that leads to a `@Sendable` function inside the fill carries no inner scope.
 	/// - Parameters:
+	///   - builderBuiltType: What the hole type's builder returns, the generic argument of each builder struct its levels'
+	///     members return.
 	///   - reached: The places of the hole type, and the calls that pass one up, in the order the seam's generated code
 	///     reaches them.
 	///   - bindsReceivesAgain: Whether the tree is a public mock's, whose types' levels hold the receives it binds again
@@ -103,6 +105,7 @@ extension DependencyTreeGenerator {
 	static func scopeEnumsByType(
 		of seam: Instantiable,
 		holeType: SeamSignature.HoleType,
+		builderBuiltType: TypeDescription,
 		rootTypeNames: (plain: String, sendable: String),
 		builderLabels: (plain: String, sendable: String),
 		generator: ScopeGenerator,
@@ -531,17 +534,21 @@ extension DependencyTreeGenerator {
 			}
 			let leadsIntoFill = caseOfProperty.filledBuilder != nil
 			let enumType = enumTypeByDescribed[caseOfProperty.described]
+			// What a member returns: the builder struct of the enum the case holds, which a place's case, the last on its
+			// route, does not.
+			let heldEnumType = SeamSignature.ScopeEnum.heldEnumType(of: enumCase)
 			var member: SeamSignature.Hole.RouteStep.Member?
 			// Deliberate gap: a loop's level re-entered through a cycle-closing scope calls no member of its own, and re-enters
 			// the function built at its first opening with the struct bound there, which carries nothing bound above the
 			// reopened level. A read of such a value stays rejected (`declarationBoundOnCycleReentry`); do not lift that
 			// rejection before the member exists.
-			if let bindingPrefix, let enumType, let memberValuesTypeName = enumCase.memberValuesTypeName {
+			if let bindingPrefix, let enumType, let memberValuesTypeName = enumCase.memberValuesTypeName, let heldEnumType {
 				result.memberBindingKeysByFamily[isSendableRoute, default: []].insert(ValuesBindingKey(path: bindingPrefix, caseName: enumCase.name))
 				member = .init(
 					bindingName: "",
 					valuesType: .nested(name: memberValuesTypeName, parentType: enumType, generics: []),
 					fields: enumCase.values?.fields ?? [],
+					levelType: .nested(name: ReservedName.builderStructTypeName, parentType: heldEnumType, generics: [builderBuiltType]),
 					bindingPath: bindingPrefix,
 					isCalledInsideFunction: caseOfProperty.described.isSendable && buildsInSendableFunction,
 				)

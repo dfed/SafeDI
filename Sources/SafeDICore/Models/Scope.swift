@@ -481,7 +481,7 @@ final class Scope: Hashable {
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,
 			mockBuilders: mockBuilders,
-			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, parameters: $0.signature.parameters, callRoutes: $0.signature.callRoutes) }
+			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, parameters: $0.signature.parameters, callRoutes: $0.signature.callRoutes, holdsLoopPayloadsInBoxes: true) }
 				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, callRoutes: $0.callRoutes) }
 				?? SeamHoles(),
 			sitePath: [],
@@ -1425,6 +1425,7 @@ private struct ScopeGeneratorUnderConstruction {
 				}
 			},
 			valuesBindings: seamHoles.valuesBindings(at: sitePath),
+			holdsLoopPayloadsInBoxes: seamHoles.holdsLoopPayloadsInBoxes,
 			memberCallsInsideFunction: seamHoles.memberCallsInsideFunction(at: sitePath),
 			sendableFunctionsAreNonisolated: seamHoles.declaresBuilderStructs,
 			isBuiltByFill: fill != nil,
@@ -1727,10 +1728,12 @@ struct SeamHoles {
 		namesBoundForBuilders = []
 		namesBoundForDeferredParameters = []
 		declaresBuilderStructs = false
+		holdsLoopPayloadsInBoxes = false
 		namesBoundBySeam = GenerationWork.Shared([])
 	}
 
-	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = []) {
+	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = [], holdsLoopPayloadsInBoxes: Bool = false) {
+		self.holdsLoopPayloadsInBoxes = holdsLoopPayloadsInBoxes
 		var routeCasesByCall = [RouteCall: RouteCase]()
 		let internalNameByEnum = Dictionary(builders.map { ($0.enumKey, $0.internalName) }, uniquingKeysWith: { first, _ in first })
 		// The payload of each case that wraps another on the way to a place or a call nested by type, bound just before the
@@ -1848,6 +1851,7 @@ struct SeamHoles {
 		init(values: SeamSignature.Hole.RouteStep.Values) {
 			bindingName = values.bindingName
 			type = values.type
+			boundType = values.type
 			fields = values.fields
 			memberCall = nil
 			isCalledInsideFunction = false
@@ -1856,6 +1860,7 @@ struct SeamHoles {
 		init(member: SeamSignature.Hole.RouteStep.Member, parentName: String, caseName: String) {
 			bindingName = member.bindingName
 			type = member.valuesType
+			boundType = member.levelType
 			fields = member.fields
 			memberCall = (parentName, caseName)
 			isCalledInsideFunction = member.isCalledInsideFunction
@@ -1863,6 +1868,9 @@ struct SeamHoles {
 
 		let bindingName: String
 		let type: TypeDescription
+		/// The type of the value the binding binds, as the seam's extension spells it: the payload struct, or the struct the
+		/// member returns.
+		let boundType: TypeDescription
 		let fields: [SeamSignature.Hole.Field]
 		/// The struct the member is called on, by name, and the member, or `nil` for a payload the case carries.
 		let memberCall: (parentName: String, caseName: String)?
@@ -1872,11 +1880,16 @@ struct SeamHoles {
 		/// The line that binds the payload, each field read as
 		/// `valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)` reads it.
 		func line(readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>, bindingNamesPassedByName: [String: String] = [:], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:]) -> String {
+			"let \(bindingName) = \(expression(readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames))"
+		}
+
+		/// The value `line(readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)` binds.
+		func expression(readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>, bindingNamesPassedByName: [String: String] = [:], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:]) -> String {
 			let payload = "\(type.asSource)(\(SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)))"
 			return if let memberCall {
-				"let \(bindingName) = \(memberCall.parentName).\(memberCall.caseName)(\(payload))"
+				"\(memberCall.parentName).\(memberCall.caseName)(\(payload))"
 			} else {
-				"let \(bindingName) = \(payload)"
+				payload
 			}
 		}
 	}
@@ -1904,6 +1917,11 @@ struct SeamHoles {
 	/// Whether a builder of the seam takes a builder struct, so its tree spells every `@Sendable` local function it declares
 	/// `@Sendable nonisolated`, as a builder struct's `@Sendable` member is called at the top of one.
 	let declaresBuilderStructs: Bool
+	/// Whether the tree's scopes hold the payloads of a loop of builders in one box (`ScopeGenerator.boxedLoops`): only a
+	/// seam's own tree, whose initializer's extension declares the box's class. A public mock's tree, its fills included,
+	/// binds each payload in a `let` of its own, a deliberate gap: its payloads were never builder structs, and nothing in
+	/// its extension would declare the class.
+	let holdsLoopPayloadsInBoxes: Bool
 	/// `namesBoundForBuilders` and `namesBoundForDeferredParameters`, joined once for every scope of the tree to share: the
 	/// payloads' names grow with the tree, so a join for each scope grew with the square of the tree.
 	let namesBoundBySeam: GenerationWork.Shared<Set<String>>
