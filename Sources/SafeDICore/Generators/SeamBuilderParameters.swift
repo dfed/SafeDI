@@ -1998,7 +1998,8 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					return "`\(clause.declaration.declaringType.asSource)` declares on the path\(namesSeveralPlaces ? "s" : "") from the builder\(namesSeveralBuilders ? "s" : "") for \(listed(places.map { placeDescription(of: $0, namingSeam: false) })) to the call by which `\(clause.callingType.asSource)` instantiates `\(clause.calledSeam.asSource)` again (`\(clause.callProperty.label)`)"
 				}
 				let callsAreSeveral = Set(clauses.map { [$0.callingType.asSource, $0.calledSeam.asSource, $0.callProperty.label] }).count > 1
-				// A declaration two calls hide from is noted once.
+				// A declaration two calls hide from is noted once. Each note is a diagnostic of its own, so the notes follow where
+				// the declarations are, not the names the clauses are ordered by.
 				var notes = [SourceDiagnostic]()
 				for clause in clauses {
 					let note = SourceDiagnostic(severity: .note, location: clause.declaration.declarationLocation, message: "`\(clause.declaration.declaringType.asSource)` declares `\(clause.declaration.property.asSource)` here.")
@@ -2006,6 +2007,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 						notes.append(note)
 					}
 				}
+				notes.sort(by: SourceDiagnostic.precedesInSourceOrder)
 				let declaringTypes = listed(clauses.map { "`\($0.declaration.declaringType.asSource)`’s" })
 				return [
 					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(listed(clauseTexts)), but \(callsAreSeveral ? "those calls pass" : "that call passes") the builder on as \(module(callerModule)) fills it, which cannot hand it \(declaringTypes) values. Declare `@\(Dependency.Source.receivedRawValue) let \(reader.property.asSource)` on \(seamName), so the builder’s scope carries it, or \(fulfillRemedy(seamModule))."),
