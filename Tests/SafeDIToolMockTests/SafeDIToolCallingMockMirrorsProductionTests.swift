@@ -584,7 +584,8 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsTwinsError_whenFillInstantiatesTypeNoDeclarationCanFulfill(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
 		// `DefaultService`, which fills both of `Panel`’s places, instantiates a type spelled as no hole can be, which no
-		// declaration fulfills: production reports it, so the calling mock reports the same error.
+		// declaration fulfills: production reports it, so the calling mock reports the same error, in a build that compiles
+		// the generated mocks.
 		for (property, type) in [("names: [String]", "[String]"), ("lookup: [String: Int]", "[String: Int]"), ("make: () -> Int", "() -> Int"), ("pair: (Int, Int)", "(Int, Int)")] {
 			let diagnostics = { (fixtures: [String: FixturePaths]) in
 				"""
@@ -592,12 +593,32 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				"""
 			}
 			await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
-				try await executeSafeDIToolMultiModuleTest(modules: Self.fillInstantiatingGizmoModules(caller: caller.attribute, callee: calledTypes.attribute, defaultServiceProperties: [property]), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+				try await executeSafeDIToolMultiModuleTest(modules: Self.fillInstantiatingGizmoModules(caller: caller.attribute, callee: calledTypes.attribute, defaultServiceProperties: [property], appActiveCompilationConditions: ["DEBUG"]), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 			}
 			await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
 				try await executeSafeDIToolMultiModuleTest(modules: Self.fillInstantiatingGizmoModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, defaultServiceProperties: [property]), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 			}
 		}
+	}
+
+	@Test(arguments: [MockConditionCaller.internal, .public, .listed])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesMockWithoutTwinsError_whenBuildLeavesMockConditionInactive(caller: MockConditionCaller) async throws {
+		// The fill of the error above, in a release build: it compiles no generated mock, which is under `#if DEBUG`, so the
+		// calling mock that cannot fill the place is never compiled, and the tool reports nothing.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.fillInstantiatingGizmoModules(
+				caller: caller.attribute,
+				callee: CalledTypeDeclaration.seamAndPublicMock.attribute,
+				defaultServiceProperties: ["names: [String]"],
+				listsScreen: caller == .listed,
+				appIsReleaseConfiguration: true,
+			),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.modules["App"]?.generatedFiles == caller.expectedReleaseFiles)
 	}
 
 	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
@@ -3037,7 +3058,9 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 	/// `Up`’s `Panel`, which builds a `Service` inside `Row` and one beside it, and `App`’s `Screen`, which calls `Panel` and
 	/// fills both places with `DefaultService`, whose tree instantiates types no declaration `App` sees fulfills, by default
-	/// `gizmo: any Gizmo`. `StubGizmo` and `StubWidget` are no SafeDI declarations.
+	/// `gizmo: any Gizmo`. `StubGizmo` and `StubWidget` are no SafeDI declarations. `listsScreen` lists `Screen` in `App`’s
+	/// `additionalMocksToGenerate`; `App` is built with `appActiveCompilationConditions`, as a release build where
+	/// `appIsReleaseConfiguration`.
 	private static func fillInstantiatingGizmoModules(
 		caller: String,
 		callee: String,
@@ -3045,6 +3068,9 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		defaultServiceDeclarations: [String] = [],
 		appDeclarations: String = "",
 		screenInstantiatesGizmo: Bool = false,
+		listsScreen: Bool = false,
+		appActiveCompilationConditions: [String] = [],
+		appIsReleaseConfiguration: Bool = false,
 	) -> [ModuleFixture] {
 		let serviceDeclarations = defaultServiceProperties.map { "@Instantiated public let \($0)" } + defaultServiceDeclarations
 		let serviceParameters = serviceDeclarations.compactMap { $0.components(separatedBy: " let ").last }
@@ -3110,7 +3136,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				\(screenParameters.map { "    @Instantiated public let \($0)" }.joined(separator: "\n"))
 				}
 				""",
-			], dependencies: ["Up"]),
+			].merging(listsScreen ? ["SafeDIConfiguration.swift": "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Screen\"])\n"] : [:]) { first, _ in first }, dependencies: ["Up"], activeCompilationConditions: appActiveCompilationConditions, isReleaseConfiguration: appIsReleaseConfiguration),
 		]
 	}
 
@@ -3200,6 +3226,172 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 }
 
 /// The kind of a calling mock: `generateMock: true` or `generateMock: .public`.
+/// The kinds of caller whose generated mock the mock condition compiles out: an internal mock, a public mock, and a type
+/// the module lists in `additionalMocksToGenerate`.
+enum MockConditionCaller: CustomTestStringConvertible {
+	case `internal`
+	case `public`
+	case listed
+
+	/// The caller’s attribute line.
+	var attribute: String {
+		switch self {
+		case .internal:
+			CallingMockCaller.internal.attribute
+		case .public:
+			CallingMockCaller.public.attribute
+		case .listed:
+			"@Instantiable"
+		}
+	}
+
+	var testDescription: String {
+		switch self {
+		case .internal:
+			"internal caller"
+		case .public:
+			"public caller"
+		case .listed:
+			"listed caller"
+		}
+	}
+
+	/// What a release build of `App` generates: the place passed up, which an internal mock and a listed type’s take as
+	/// the same parameter.
+	var expectedReleaseFiles: [String: String] {
+		switch self {
+		case .internal, .listed:
+			["App.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+			#if canImport(Up)
+			import Up
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            panel: Panel.SafeDIOverrides = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                panel: panel
+			            )
+			        }
+
+			        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                panel: Panel.SafeDIOverrides
+			            ) {
+			                self.panel = panel
+			            }
+
+			            let panel: Panel.SafeDIOverrides
+			        }
+			    }
+
+			    static func mock(
+			        serviceBuilder: @escaping () -> any Service,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        let __safeDI_serviceBuilder = serviceBuilder
+			        _ = Panel.__safeDI_Panel_mock_9A2B32943A6C59F5.self // If this line does not compile, compile the code SafeDI generates for module Up into Up: under Bazel, add Up’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			        func __safeDI_panel() -> Panel {
+			            let serviceBuilder: () -> any Service = __safeDI_serviceBuilder
+			            return Panel.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides.panel)
+			        }
+			        let panel: Panel = __safeDI_panel()
+			        return Screen(panel: panel)
+			    }
+			}
+			#endif
+			"""]
+		case .public:
+			["App.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+			#if canImport(Up)
+			import Up
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    nonisolated public enum SafeDIMockScope_Service {
+			        nonisolated public struct panel_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let panel: (panel_Values) -> Panel.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+
+			            public init(panel: @escaping (panel_Values) -> Panel.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+			                self.panel = panel
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            panel: Panel.SafeDIOverrides = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                panel: panel
+			            )
+			        }
+
+			        public var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                panel: Panel.SafeDIOverrides
+			            ) {
+			                self.panel = panel
+			            }
+
+			            let panel: Panel.SafeDIOverrides
+			        }
+			    }
+
+			    public static func mock(
+			        serviceBuilder: @escaping () -> any Service,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        serviceBuilder __safeDI_serviceBuilder: Screen.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        _ = Panel.__safeDI_Panel_mock_9A2B32943A6C59F5.self // If this line does not compile, compile the code SafeDI generates for module Up into Up: under Bazel, add Up’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			        let panel = Panel.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.panel(SafeDIMockScope_Service.panel_Values()), safeDIOverrides: safeDIOverrides.panel)
+			        return Screen(panel: panel)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_mock_785941845E108814 {}
+			}
+			#endif
+			"""]
+		}
+	}
+}
+
 enum CallingMockCaller: CaseIterable, CustomTestStringConvertible {
 	case `internal`
 	case `public`
