@@ -4150,8 +4150,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// generated. Only for a call whose called mock takes no `SafeDIOverrides`, whose node's member is that closure; such a
 	/// mock builds nothing itself, so it has one level, which binds its parameters and holds its places.
 	///
-	/// A builder an internal mock passes up whole is handed as the mock takes it. A builder whose every place the call fills is
-	/// handed a function over the fill of its first place, which takes each value the fill reads (`fillTakesPayloadFields`),
+	/// A builder an internal mock passes up whole is handed as the mock takes it. A builder whose one place the call fills is
+	/// handed a function over its fill, which takes each value the fill reads (`fillTakesPayloadFields`),
 	/// handed the value the call passes the called mock's parameter of that label: where a value the fill reads is no such
 	/// parameter of that type, being another of the called mock's places or a value it renames, the call can hand no builder.
 	/// A public mock's body holds only the struct its caller built, so where it passes a place up, nothing can be handed
@@ -4177,10 +4177,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				buildersByLabel[builderCallArgument.label] = .callersBuilder(builderCallArgument.value)
 			case .fills:
 				// The called mock's one level holds every place the builder reaches, so its root level function's every member is a
-				// fill, which takes no value beside its payload.
+				// fill, which takes no value beside its payload. One builder a person writes stands for every place, so every place
+				// must be filled by one fill: a fill is generated per place, so a builder with two places gets no closure.
 				let members = builderCallArgument.builderStruct.flatMap { publicMockLevelFunctions?.rootMembers(ofDispatcherKeyed: $0.rootDispatcherKey) } ?? []
 				let fillTargets = members.compactMap(\.fillTakingOnlyItsPayload)
-				guard fillTargets.count == members.count, let target = fillTargets.first, let fill = propertiesToGenerate.first(where: { $0.fillKey == target.key && $0.fillEmitsCode }), fill.fillHole?.forwardedType == nil || fill.fillReturnsWrapperBuilder else { return nil }
+				guard fillTargets.count == members.count, Set(fillTargets.map(\.key)).count == 1, let target = fillTargets.first, let fill = propertiesToGenerate.first(where: { $0.fillKey == target.key && $0.fillEmitsCode }), fill.fillHole?.forwardedType == nil || fill.fillReturnsWrapperBuilder else { return nil }
 				let fields = fill.fillMemberParameterFields(takingPayloadFields: true)
 				guard fields.allSatisfy({ parameterTypesByLabel[$0.property.label] == $0.property.typeDescription }) else { return nil }
 				buildersByLabel[builderCallArgument.label] = .fill(
