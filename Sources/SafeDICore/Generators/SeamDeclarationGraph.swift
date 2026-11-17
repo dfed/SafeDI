@@ -214,7 +214,6 @@ struct SeamDeclarationGraph {
 		inTreeRootedAt root: ScopeGenerator,
 		edges: (_ parent: ScopeGenerator, _ child: ScopeGenerator) -> [ChildEdge],
 		fillEdges: (_ parent: ScopeGenerator, _ child: ScopeGenerator) -> [(edge: FillEdge, fulfiller: ScopeGenerator)],
-		fulfillingCallsHoldPlaces: Bool = false,
 	) -> PlaceHolding {
 		struct KindedEdge: Hashable {
 			let property: Property
@@ -273,8 +272,8 @@ struct SeamDeclarationGraph {
 					guard !fillEdge.reusesEnclosingFill else { continue }
 					generatorsToVisit.append((fulfiller, target))
 					// A fulfiller that is itself a call handing up an enum of the hole type holds a place, as a child call does: the
-					// fill's case then holds that call's enum. A seam's only: a public mock's fill keeps its enum form.
-					for fulfillerEdge in fulfillingCallsHoldPlaces ? edges(child, fulfiller) : [] {
+					// fill's case then holds that call's enum.
+					for fulfillerEdge in edges(child, fulfiller) {
 						let placeNode: Int
 						let placeKind: PlaceEdge
 						switch fulfillerEdge {

@@ -3757,7 +3757,8 @@ public actor DependencyTreeGenerator {
 				declaringModuleMockCondition: foreignPublicMock.declaringModuleMockCondition,
 				callerModuleMockCondition: seams.currentModuleMockCondition,
 				receiversByLabel: ownPlan.receiversByLabel,
-				typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.intersection(tierParameters.map(\.type)),
+				// A builder's `Builder` type, which a calling internal mock that passes its places up takes, is a function too.
+				typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.intersection(tierParameters.map(\.type)).union(tierParameters.compactMap { $0.builder?.readableParameterType.nameDeclaredEscaping }),
 				holes: (ownPlan.plan.holes + ownPlan.plan.unpresentedHoles).map { $0.atTier(tier) },
 				builders: ownPlan.plan.builders.map { $0.atTier(tier) },
 				scopeEnums: ownPlan.plan.scopeEnums,

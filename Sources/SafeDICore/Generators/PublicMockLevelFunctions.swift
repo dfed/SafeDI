@@ -34,6 +34,9 @@ struct PublicMockLevelFunctions: Sendable {
 		/// Whether some place beneath the level is passed up on the function's routes: the function then takes the caller's
 		/// struct of its level under `PublicMockLevelFunctions.upName`.
 		var takesUp = false
+		/// On a route to a place inside a fill of the call, the struct of the level that the caller's member for the call's case
+		/// returns, for each of the caller's levels a fill beneath this level is handed (`FillDispatcher.carriedInnerScopes`).
+		var carriedInnerScopes = [ScopeGenerator.FillDispatcher.CarriedInnerScope]()
 		var members = [Member]()
 	}
 
@@ -61,6 +64,25 @@ struct PublicMockLevelFunctions: Sendable {
 		/// The form the value is read in, and the form it is handed on in.
 		let heldForm: Property
 		let handedForm: Property
+		/// For the struct of a level of the caller's that a fill inside a fill of the call is handed, the name the function
+		/// takes the struct of its own level under, whose member for the case returns it.
+		var carriedUpName: String?
+	}
+
+	/// The name the level functions of a call whose dispatchers are `dispatchers` take the caller's struct under, apart from
+	/// every value they take, which a case's payload carries, and from the structs of the caller's levels a route to a place
+	/// inside a fill carries, which the call claimed names for. A call inside a fill that re-enters them hands the struct
+	/// under it.
+	static func upName(amongLabelsOf dispatchers: [ScopeGenerator.FillDispatcher]) -> String {
+		var labels = Set<String>()
+		for dispatcher in dispatchers {
+			labels.formUnion(dispatcher.carriedInnerScopes.map(\.upName))
+			for dispatcherCase in dispatcher.cases {
+				labels.formUnion((dispatcherCase.values ?? []).map(\.property.label))
+			}
+		}
+		var upNames = GeneratedNameAllocator(reserving: labels)
+		return upNames.claim("up")
 	}
 
 	/// The functions, in the order they are first reached.
@@ -95,15 +117,7 @@ struct PublicMockLevelFunctions: Sendable {
 				}
 			}
 		}
-		// The parameter the functions take the caller's struct under, apart from every value they take.
-		var allLabels = Set(fillParametersByKey.values.flatMap { $0.map(\.property.label) })
-		for dispatcher in dispatchers {
-			for dispatcherCase in dispatcher.cases {
-				allLabels.formUnion((dispatcherCase.values ?? []).map(\.property.label))
-			}
-		}
-		var upNames = GeneratedNameAllocator(reserving: allLabels)
-		upName = upNames.claim("up")
+		upName = Self.upName(amongLabelsOf: dispatchers)
 
 		var names = GeneratedNameAllocator(reserving: reservedNames.union(dispatchers.map(\.functionName)))
 		var indexBySpecialization = [String: Int]()
@@ -119,7 +133,9 @@ struct PublicMockLevelFunctions: Sendable {
 			let name = usedBaseNames.insert(dispatcher.functionName).inserted ? dispatcher.functionName : names.claim(dispatcher.functionName)
 			let index = functions.count
 			indexBySpecialization[specialization] = index
-			functions.append(Function(dispatcher: dispatcher, name: name, parameters: parameters))
+			let relevantCarried = dispatcher.carriedInnerScopes.filter { relevant.contains($0.name) }
+			functions.append(Function(dispatcher: dispatcher, name: name, parameters: parameters, carriedInnerScopes: relevantCarried))
+			let carriedByName = Dictionary(relevantCarried.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
 			let ownEnvironment = Dictionary(parameters.map { ($0.property.label, $0) }, uniquingKeysWith: { first, _ in first })
 			var members = [Member]()
 			for dispatcherCase in dispatcher.cases {
@@ -135,6 +151,10 @@ struct PublicMockLevelFunctions: Sendable {
 					var isAvailable = true
 					for parameter in fillParameters {
 						let label = parameter.property.label
+						if let carried = carriedByName[label] {
+							arguments.append(Argument(label: label, readsPayload: true, heldForm: parameter.property, handedForm: parameter.property, carriedUpName: carried.upName))
+							continue
+						}
 						guard !dispatcherCase.labelsBoundLater.contains(label),
 						      let held = ownEnvironment[label],
 						      CycleParameter.forms(providedBy: held.property).contains(parameter.property)
@@ -145,7 +165,7 @@ struct PublicMockLevelFunctions: Sendable {
 						arguments.append(Argument(label: label, readsPayload: false, heldForm: held.property, handedForm: parameter.property))
 					}
 					if isAvailable {
-						members.append(.fill(caseName: dispatcherCase.name, target: target, arguments: arguments, isIdentity: arguments.allSatisfy { $0.heldForm == $0.handedForm }))
+						members.append(.fill(caseName: dispatcherCase.name, target: target, arguments: arguments, isIdentity: arguments.allSatisfy { $0.heldForm == $0.handedForm && $0.carriedUpName == nil }))
 					} else {
 						members.append(.passedUp(caseName: dispatcherCase.name))
 					}
@@ -160,7 +180,13 @@ struct PublicMockLevelFunctions: Sendable {
 						childEnvironment[label] = field
 					}
 					let childIndex = function(of: targetDispatcher, given: childEnvironment)
-					let arguments = functions[childIndex].parameters.map { parameter in
+					var arguments = functions[childIndex].carriedInnerScopes.compactMap { childCarried in
+						carriedByName[childCarried.name].map { carried in
+							let property = Property(label: childCarried.name, typeDescription: childCarried.type)
+							return Argument(label: childCarried.upName, readsPayload: true, heldForm: property, handedForm: property, carriedUpName: carried.upName)
+						}
+					}
+					arguments += functions[childIndex].parameters.map { parameter in
 						Argument(label: parameter.property.label, readsPayload: payloadFields[parameter.property.label] != nil, heldForm: parameter.property, handedForm: parameter.property)
 					}
 					members.append(.level(caseName: dispatcherCase.name, functionIndex: childIndex, arguments: arguments))
@@ -203,11 +229,19 @@ struct PublicMockLevelFunctions: Sendable {
 		rootFunctionIndexByKey[key].map { functions[$0].members }
 	}
 
-	/// The call of the root level function of the dispatcher of `key`, handed `up` where it takes the caller's struct.
-	func rootCall(ofDispatcherKeyed key: String, up: String?) -> String? {
+	/// The call of the root level function of the dispatcher of `key`, handed `up` where it takes the caller's struct, and the
+	/// struct `carriedStructs` names for each struct of the caller's levels it is handed, by the name a fill takes it under.
+	func rootCall(ofDispatcherKeyed key: String, up: String?, carriedStructs: [String: String]) -> String? {
 		guard let index = rootFunctionIndexByKey[key] else { return nil }
 		let function = functions[index]
-		return function.takesUp ? "\(function.name)(\(upName.spelledAsArgumentLabel): \(up ?? ""))" : "\(function.name)()"
+		var arguments = [String]()
+		if function.takesUp {
+			arguments.append("\(upName.spelledAsArgumentLabel): \(up ?? "")")
+		}
+		for carried in function.carriedInnerScopes {
+			arguments.append("\(carried.upName.spelledAsArgumentLabel): \(carriedStructs[carried.name] ?? "")")
+		}
+		return "\(function.name)(\(arguments.joined(separator: ", ")))"
 	}
 
 	/// The fills a member holds the body of: those every member that calls them hands each value in the form the fill
@@ -241,7 +275,7 @@ struct PublicMockLevelFunctions: Sendable {
 		let memberIndent = indent + ScopeGenerator.standardIndent
 		return functions.map { function in
 			let dispatcher = function.dispatcher
-			let labels = Set(function.parameters.map(\.property.label) + [upName])
+			let labels = Set(function.parameters.map(\.property.label) + [upName] + function.carriedInnerScopes.map(\.upName))
 			func name(_ base: String) -> String {
 				var name = base
 				while labels.contains(name) {
@@ -251,7 +285,10 @@ struct PublicMockLevelFunctions: Sendable {
 			}
 			let valuesName = name("values")
 			let scopeName = name("scope")
-			func argumentText(_ argument: Argument, payloadName: String) -> String {
+			func argumentText(_ argument: Argument, payloadName: String, caseName: String) -> String {
+				if let carriedUpName = argument.carriedUpName {
+					return "\(argument.label.spelledAsArgumentLabel): \(carriedUpName).\(caseName.spelledAsMemberReference)(\(payloadName))"
+				}
 				let source = argument.readsPayload ? "\(payloadName).\(argument.label.spelledAsMemberReference)" : argument.label
 				// The instance of a `LazilyInstantiated` the routes bind, where the target reads the value: read where the member is
 				// called, which is where the place is built.
@@ -274,20 +311,22 @@ struct PublicMockLevelFunctions: Sendable {
 						let payloadArguments = (fillMemberParameterFieldsByKey[target.key] ?? []).filter { !extraLabels.contains($0.property.label) }.map { field in
 							"\(field.property.label.spelledAsArgumentLabel): \(valuesName).\(field.property.label.spelledAsMemberReference)"
 						}
-						let allArguments = payloadArguments + arguments.map { argumentText($0, payloadName: valuesName) }
-						members.append(["\(caseName.spelledAsArgumentLabel): { \(payloadArguments.isEmpty ? "_" : valuesName) in \(target.name)(\(allArguments.joined(separator: ", "))) }"])
+						let allArguments = payloadArguments + arguments.map { argumentText($0, payloadName: valuesName, caseName: caseName) }
+						let readsValues = !payloadArguments.isEmpty || arguments.contains { $0.carriedUpName != nil }
+						members.append(["\(caseName.spelledAsArgumentLabel): { \(readsValues ? valuesName : "_") in \(target.name)(\(allArguments.joined(separator: ", "))) }"])
 					} else {
 						let carriesPayload = dispatcher.cases.first { $0.name == caseName }?.carriesPayload ?? false
 						let bound = carriesPayload ? [scopeName] : []
-						let allArguments = bound + arguments.map { argumentText($0, payloadName: scopeName) }
-						members.append(["\(caseName.spelledAsArgumentLabel): { \(carriesPayload ? scopeName : "_") in \(target.name)(\(allArguments.joined(separator: ", "))) }"])
+						let allArguments = bound + arguments.map { argumentText($0, payloadName: scopeName, caseName: caseName) }
+						let readsScope = carriesPayload || arguments.contains { $0.carriedUpName != nil }
+						members.append(["\(caseName.spelledAsArgumentLabel): { \(readsScope ? scopeName : "_") in \(target.name)(\(allArguments.joined(separator: ", "))) }"])
 					}
 				case let .level(caseName, functionIndex, arguments):
 					let child = functions[functionIndex]
-					var allArguments = arguments.map { argumentText($0, payloadName: valuesName) }
+					var allArguments = arguments.map { argumentText($0, payloadName: valuesName, caseName: caseName) }
 					let readsValues = arguments.contains(where: \.readsPayload) || child.takesUp
 					if child.takesUp {
-						allArguments.append("\(upName.spelledAsArgumentLabel): \(upName).\(caseName.spelledAsMemberReference)(\(valuesName))")
+						allArguments.insert("\(upName.spelledAsArgumentLabel): \(upName).\(caseName.spelledAsMemberReference)(\(valuesName))", at: 0)
 					}
 					members.append(["\(caseName.spelledAsArgumentLabel): { \(readsValues ? valuesName : "_") in \(child.name)(\(allArguments.joined(separator: ", "))) }"])
 				}
@@ -296,6 +335,10 @@ struct PublicMockLevelFunctions: Sendable {
 			var parameterList = [String]()
 			if function.takesUp {
 				parameterList.append("\(upName.spelledAsArgumentLabel): \(builderType.asSource)")
+			}
+			for carried in function.carriedInnerScopes {
+				let carriedType = TypeDescription.nested(name: ReservedName.builderStructTypeName, parentType: dispatcher.enumType, generics: [ScopeGenerator.FillDispatcher.carried(carried.type, through: dispatcher.returnType)])
+				parameterList.append("\(carried.upName.spelledAsArgumentLabel): \(carriedType.asSource)")
 			}
 			parameterList += function.parameters.map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
 			let isSendable = sendableKeys.contains(dispatcher.key)

@@ -556,6 +556,7 @@ private struct ScopeGeneratorUnderConstruction {
 		sitePath: [Property],
 		enclosingFills: [String: String] = [:],
 		enclosingCarriedInnerScopes: [String: [ScopeGenerator.FillDispatcher.CarriedInnerScope]] = [:],
+		enclosingLevelUpNames: [String: String] = [:],
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
 		startsCodeGeneration: Bool,
@@ -751,6 +752,7 @@ private struct ScopeGeneratorUnderConstruction {
 		// by name, so every instance of the seam calls the same fills with its own scopes.
 		self.enclosingFills = enclosingFills
 		self.enclosingCarriedInnerScopes = enclosingCarriedInnerScopes
+		self.enclosingLevelUpNames = enclosingLevelUpNames
 		holeArguments = isPropertyCycle ? [] : scope.holeArguments
 		// The call's own fills are those no enclosing call fills, and its own dispatchers those no enclosing call declares. One
 		// pass names both, fills first, then dispatchers, apart from what encloses the call: the
@@ -975,9 +977,8 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// The parameters a fill of `hole` takes the scope values the seam whose tree holds `hole` handed it under, for the call at
 	/// `callPath`, where a place inside a fill of a place of that seam's enum reads one.
-	/// A seam's builder struct keys the value by the called seam's root enum whose builder reaches `hole`
-	/// (`DependencyTreeGenerator.filledRootKey(of:in:keysTheCalledSeam:)`), a public mock's by the root enum of the seam whose
-	/// tree holds it.
+	/// A builder struct keys the value by the called seam's root enum whose builder reaches `hole`
+	/// (`SeamScopeEnumsByType.filledRootKey(of:in:)`).
 	private static func innerScopeParameters(ofFillOf hole: SeamSignature.Hole, seamHoles: SeamHoles, callPath: [Property], calledBuilders: CalledBuilders?) -> [SeamSignature.Hole.Field] {
 		let calledRootKey = calledBuilders.flatMap { calledBuilders in
 			calledBuilders.builders.first { builder in
@@ -1071,6 +1072,7 @@ private struct ScopeGeneratorUnderConstruction {
 			sitePath: sitePath + hole.pathBeforePropertyInItsFill,
 			enclosingFills: enclosingFillsOfThisCall,
 			enclosingCarriedInnerScopes: enclosingCarriedInnerScopesOfThisCall,
+			enclosingLevelUpNames: enclosingLevelUpNamesOfThisCall,
 			erasedToConcreteExistential: hole.erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
 			startsCodeGeneration: startsCodeGeneration,
@@ -1130,6 +1132,7 @@ private struct ScopeGeneratorUnderConstruction {
 			sitePath: sitePath,
 			enclosingFills: enclosingFills,
 			enclosingCarriedInnerScopes: enclosingCarriedInnerScopes,
+			enclosingLevelUpNames: enclosingLevelUpNames,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
 			startsCodeGeneration: startsCodeGeneration,
@@ -1185,6 +1188,19 @@ private struct ScopeGeneratorUnderConstruction {
 			fills[dispatcher.key] = dispatcher.functionName
 		}
 		return fills
+	}
+
+	/// The name the level functions a fill of this call can refer to take the struct their caller passes up under: those of
+	/// enclosing calls, and this call's.
+	private var enclosingLevelUpNamesOfThisCall: [String: String] {
+		var upNames = enclosingLevelUpNames
+		if scope.publicMockCall != nil {
+			let upName = PublicMockLevelFunctions.upName(amongLabelsOf: dispatchersOfThisCall)
+			for dispatcher in dispatchersOfThisCall {
+				upNames[dispatcher.key] = upName
+			}
+		}
+		return upNames
 	}
 
 	/// The structs the level functions a fill of this call can refer to take: those of enclosing calls, and this call's.
@@ -1364,7 +1380,7 @@ private struct ScopeGeneratorUnderConstruction {
 				return .init(
 					label: label,
 					value: route == nil ? receivedLabel : publicMockUpValue,
-					builderStruct: .init(enumKey: enumKey, rootDispatcherKey: "", upValue: publicMockUpValue),
+					builderStruct: .init(enumKey: enumKey, rootDispatcherKey: "", upValue: publicMockUpValue, carriedStructs: [:]),
 					overrideHanding: route == nil ? .callersBuilder : .none,
 				)
 			}
@@ -1385,16 +1401,32 @@ private struct ScopeGeneratorUnderConstruction {
 			// What the call refers to by name: the enclosing dispatcher, whatever expression passes it.
 			let enclosingFill = enclosingFills[dispatcherKey] == nil ? nil : ScopeGenerator.BuilderCallArgument.EnclosingFill(key: dispatcherKey, name: dispatcher)
 			guard !isPublicMockCall else {
+				let passesUp = !reachedSites.isSubset(of: sitesFilledOnEveryRoute)
+				// A call inside a fill of an enclosing call of the same builder re-enters the enclosing call's root level function,
+				// handing it the struct this call passes up where a route does, and, for each struct of a level it takes, what the
+				// member of the call's own case of that struct's level returns, as a seam's call does.
+				if let enclosingName = enclosingFills[dispatcherKey] {
+					var arguments = passesUp ? ["\((enclosingLevelUpNames[dispatcherKey] ?? "").spelledAsArgumentLabel): \(publicMockUpValue)"] : []
+					arguments += (enclosingCarriedInnerScopes[dispatcherKey] ?? []).compactMap { carriedInnerScope in
+						seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, carrying: carriedInnerScope.type).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
+					}
+					return .init(label: label, value: "\(enclosingName)(\(arguments.joined(separator: ", ")))", enclosingFill: .init(key: dispatcherKey, name: enclosingName), isSendable: enumKey.isSendable)
+				}
 				// A public mock's caller passes the call of the builder's root level function, which decides per route which places
 				// it fills and passes the others up, handed the struct the caller passes up where a route does
 				// (`PublicMockLevelFunctions`).
 				// One function a person writes cannot both fill some places of the builder and hand others the builder passed up.
-				let passesUp = !reachedSites.isSubset(of: sitesFilledOnEveryRoute)
+				// The root level function of a route to a place inside a fill is handed the struct the case of this mock's own struct
+				// for the call returns, for each of its levels the fill is handed.
+				var carriedStructs = [String: String]()
+				for carriedInnerScope in dispatchersOfThisCall.first(where: { $0.key == dispatcherKey })?.carriedInnerScopes ?? [] {
+					carriedStructs[carriedInnerScope.name] = seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, innerScopeName: carriedInnerScope.name)
+				}
 				return .init(
 					label: label,
 					value: dispatcher,
 					isSendable: enumKey.isSendable,
-					builderStruct: .init(enumKey: enumKey, rootDispatcherKey: dispatcherKey, upValue: passesUp ? publicMockUpValue : nil),
+					builderStruct: .init(enumKey: enumKey, rootDispatcherKey: dispatcherKey, upValue: passesUp ? publicMockUpValue : nil, carriedStructs: carriedStructs),
 					overrideHanding: passesUp ? .none : .fills,
 				)
 			}
@@ -1625,6 +1657,9 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The structs each level function of `enclosingFills` takes from its caller (`FillDispatcher.carriedInnerScopes`), by its
 	/// key: a call that re-enters it hands it each from a member of its own case (`SeamHoles.carriedStruct`).
 	private let enclosingCarriedInnerScopes: [String: [ScopeGenerator.FillDispatcher.CarriedInnerScope]]
+	/// The name each level function of `enclosingFills` of a public mock's call takes the struct its caller passes up under
+	/// (`PublicMockLevelFunctions.upName`), by its key: a call that re-enters it hands it this call's.
+	private let enclosingLevelUpNames: [String: String]
 	/// The index in `fillsOfThisCall` of the next fill to create a generator for.
 	private var nextFillIndex = 0
 	private let erasedToConcreteExistential: Bool
