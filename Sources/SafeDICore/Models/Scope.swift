@@ -988,11 +988,7 @@ private struct ScopeGeneratorUnderConstruction {
 	/// (`DependencyTreeGenerator.filledRootKey(of:in:keysTheCalledSeam:)`), a public mock's by the root enum of the seam whose
 	/// tree holds it.
 	private static func innerScopeParameters(ofFillOf hole: SeamSignature.Hole, seamHoles: SeamHoles, callPath: [Property], calledBuilders: CalledBuilders?) -> [SeamSignature.Hole.Field] {
-		let calledRootKey = calledBuilders.flatMap { calledBuilders in
-			calledBuilders.builders.first { builder in
-				builder.enumKey.holeType == hole.holeType && SeamSignature.ScopeEnum.sitesReached(from: builder.enumKey, in: calledBuilders.enumsByKey).contains(hole.site)
-			}?.enumKey
-		}
+		let calledRootKey = calledBuilders?.keyOfFirstBuilderReaching(hole)
 		let innerKey = calledRootKey.flatMap { seamHoles.carriesStruct(at: callPath, innerKey: $0) ? $0 : nil } ?? SeamSignature.ScopeEnum.rootKey(of: hole)
 		return seamHoles.innerScopes(at: callPath, innerKey: innerKey).map { innerScope in
 			SeamSignature.Hole.Field(

@@ -1463,9 +1463,7 @@ public struct SeamCall: Sendable {
 		callerPackageName: String? = nil,
 	) {
 		self.parameters = parameters
-		self.holes = holes
-		self.builders = builders
-		self.scopeEnums = scopeEnums
+		calledBuilders = CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums)
 		self.guardTypeName = guardTypeName
 		self.comment = comment
 		self.unreachableTierIsReported = unreachableTierIsReported
@@ -1484,11 +1482,20 @@ public struct SeamCall: Sendable {
 	/// seam that reaches this one passes on at that access.
 	public let parameters: [SeamSignature.Parameter]
 	/// Every place the call's builders reach, in the order they reach them: every tier takes every builder.
-	public let holes: [SeamSignature.Hole]
+	public var holes: [SeamSignature.Hole] {
+		calledBuilders.holes
+	}
+
 	/// The builders the call passes.
-	public let builders: [SeamSignature.Builder]
+	public var builders: [SeamSignature.Builder] {
+		calledBuilders.builders
+	}
+
 	/// Every enum the call's builders reach.
-	public let scopeEnums: [SeamSignature.ScopeEnum]
+	public var scopeEnums: [SeamSignature.ScopeEnum] {
+		calledBuilders.scopeEnums
+	}
+
 	/// The `SeamSignature.guardTypeName` of the signature the call was generated from.
 	public let guardTypeName: String
 	/// The comment the call carries saying what to do when it does not compile.
@@ -1520,23 +1527,51 @@ public struct SeamCall: Sendable {
 	/// then reported as any other receive's is.
 	public let unreachableTierIsReported: Bool
 
-	/// The builders the call passes.
-	var calledBuilders: CalledBuilders {
-		CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums)
-	}
+	/// The builders the call passes, built once with the call.
+	let calledBuilders: CalledBuilders
 }
 
 /// The builders a call passes another module's seam or public mock: the builders, every enum they reach, and every place
 /// they reach, in the order they reach them, which the calling module fills or passes up.
 struct CalledBuilders: Sendable {
+	init(holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], scopeEnums: [SeamSignature.ScopeEnum]) {
+		self.holes = holes
+		self.builders = builders
+		self.scopeEnums = scopeEnums
+		let enumsByKey = Dictionary(scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+		self.enumsByKey = enumsByKey
+		var builderKeyByReachedPlace = [ReachedPlace: SeamSignature.ScopeEnum.Key]()
+		for builder in builders {
+			for site in SeamSignature.ScopeEnum.sitesReached(from: builder.enumKey, in: enumsByKey) {
+				let place = ReachedPlace(site: site, holeType: builder.enumKey.holeType)
+				if builderKeyByReachedPlace[place] == nil {
+					builderKeyByReachedPlace[place] = builder.enumKey
+				}
+			}
+		}
+		self.builderKeyByReachedPlace = builderKeyByReachedPlace
+	}
+
 	let holes: [SeamSignature.Hole]
 	let builders: [SeamSignature.Builder]
 	let scopeEnums: [SeamSignature.ScopeEnum]
-
 	/// Each enum by its key.
-	var enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum] {
-		Dictionary(scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+	let enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]
+
+	/// The enum key of the first builder of `hole`'s hole type, in builder order, whose enum reaches `hole`'s site, or `nil`
+	/// where none does: found once for the call, never once for each fill that asks.
+	func keyOfFirstBuilderReaching(_ hole: SeamSignature.Hole) -> SeamSignature.ScopeEnum.Key? {
+		builderKeyByReachedPlace[ReachedPlace(site: hole.site, holeType: hole.holeType)]
 	}
+
+	/// A site a builder of a hole type reaches.
+	private struct ReachedPlace: Hashable {
+		let site: SeamSignature.Hole.Site
+		let holeType: SeamSignature.HoleType
+	}
+
+	/// Each site and hole type, the enum key of the first builder of the hole type, in builder order, whose enum reaches it.
+	private let builderKeyByReachedPlace: [ReachedPlace: SeamSignature.ScopeEnum.Key]
 
 	/// The sites `builder` reaches: those of the places of its enum and of the enums its cases hold.
 	func sitesReached(by builder: SeamSignature.Builder, in enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]) -> Set<SeamSignature.Hole.Site> {
