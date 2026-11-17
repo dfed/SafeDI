@@ -418,10 +418,16 @@ final class Scope: Hashable {
 		// Every scope of the tree is enclosed by these, so they are held in storage each scope's copy shares.
 		let nearestDeclarations = nearestDeclarations.sharingDeclarations()
 		var startOrderChanged: Bool
+		var r0Tree: R0Tree? = R0Probe.isEnabled ? R0Tree(flags: "mock=\(forMockGeneration),starts=\(startsCodeGeneration),validatesForwarded=\(validatesForwardedProperties),seamRoot=\(seamRoot != nil),mockBuilders=\(mockBuilders != nil)") : nil
+		var r0Pass = 0
+		defer {
+			if let r0Tree { R0Probe.shared.submit(r0Tree) }
+		}
 		repeat {
 			if previousPassGenerator != nil {
 				generatorsToStart = []
 			}
+			defer { r0Pass += 1 }
 			scopeGenerator = try createScopeGenerator(
 				for: property,
 				nearestDeclarations: nearestDeclarations,
@@ -436,6 +442,8 @@ final class Scope: Hashable {
 				previousPassGenerator: previousPassGenerator,
 				generatorsToStart: &generatorsToStart,
 				placeHoldingPropertiesByType: placeHoldingPropertiesByType,
+				r0Tree: &r0Tree,
+				r0Pass: r0Pass,
 			)
 			previousPassGenerator = scopeGenerator
 			startOrderChanged = false
@@ -471,7 +479,15 @@ final class Scope: Hashable {
 		previousPassGenerator: ScopeGenerator?,
 		generatorsToStart: inout [ScopeGenerator]?,
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?,
+		r0Tree: inout R0Tree?,
+		r0Pass: Int,
 	) throws -> ScopeGenerator {
+		func r0Start(_ underConstruction: inout ScopeGeneratorUnderConstruction, parent: Int?) {
+			guard r0Tree != nil else { return }
+			let start = r0Tree!.nextEvent()
+			underConstruction.r0PlaceIndex = r0Tree!.places.count
+			r0Tree!.places.append(R0Place(parent: parent, start: start, pass: r0Pass))
+		}
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: self,
 			property: property,
@@ -494,16 +510,19 @@ final class Scope: Hashable {
 			cycleParameterContexts: [:],
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 		)]
+		r0Start(&scopeGeneratorsUnderConstruction[0], parent: nil)
 		while true {
 			let index = scopeGeneratorsUnderConstruction.count - 1
 			if let propertyToGenerate = scopeGeneratorsUnderConstruction[index].nextPropertyToGenerate() {
 				switch propertyToGenerate {
 				case let .instantiated(property, scope, erasedToConcreteExistential):
-					try scopeGeneratorsUnderConstruction.append(scopeGeneratorsUnderConstruction[index].childUnderConstruction(
+					var child = try scopeGeneratorsUnderConstruction[index].childUnderConstruction(
 						scope: scope,
 						property: property,
 						erasedToConcreteExistential: erasedToConcreteExistential,
-					))
+					)
+					r0Start(&child, parent: scopeGeneratorsUnderConstruction[index].r0PlaceIndex)
+					scopeGeneratorsUnderConstruction.append(child)
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
 					scopeGeneratorsUnderConstruction[index].addAliasGenerator(
 						property: property,
@@ -519,13 +538,35 @@ final class Scope: Hashable {
 					)
 				}
 			} else if let fill = scopeGeneratorsUnderConstruction[index].nextFill() {
-				try scopeGeneratorsUnderConstruction.append(scopeGeneratorsUnderConstruction[index].fillUnderConstruction(
+				var child = try scopeGeneratorsUnderConstruction[index].fillUnderConstruction(
 					fill: fill.fill,
 					scope: fill.scope,
-				))
+				)
+				r0Start(&child, parent: scopeGeneratorsUnderConstruction[index].r0PlaceIndex)
+				scopeGeneratorsUnderConstruction.append(child)
 			} else {
 				let createdScope = scopeGeneratorsUnderConstruction.removeLast()
 				let scopeGenerator = createdScope.scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart)
+				if r0Tree != nil {
+					let classKey: R0Hash? = createdScope.r0Excluded ? nil : createdScope.r0Key.map { key in
+						let logHash = createdScope.r0Log.canonicalHash
+						return R0Hash.of { hasher in
+							hasher.combine(key)
+							hasher.combine(logHash)
+						}
+					}
+					let finish = r0Tree!.nextEvent()
+					r0Tree!.places[createdScope.r0PlaceIndex].finish = finish
+					r0Tree!.places[createdScope.r0PlaceIndex].classKey = classKey
+					R0Probe.shared.register(generator: scopeGenerator, classKey: classKey ?? R0Probe.shared.uniqueHash())
+					if !scopeGeneratorsUnderConstruction.isEmpty {
+						let parentIndex = scopeGeneratorsUnderConstruction.count - 1
+						scopeGeneratorsUnderConstruction[parentIndex].r0Log.formUnion(createdScope.r0Log)
+						if createdScope.r0Excluded {
+							scopeGeneratorsUnderConstruction[parentIndex].r0Excluded = true
+						}
+					}
+				}
 				if scopeGeneratorsUnderConstruction.isEmpty {
 					return scopeGenerator
 				} else {
@@ -570,6 +611,7 @@ private struct ScopeGeneratorUnderConstruction {
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]? = nil,
 	) {
 		self.placeHoldingPropertiesByType = placeHoldingPropertiesByType
+		var r0Log = R0Log()
 		var childPropertyStack = propertyStack
 		var childConcreteTypeStack = concreteTypeStack
 		// The index on `propertyStack` of the declaration this scope repeats when it closes a cycle.
@@ -596,6 +638,25 @@ private struct ScopeGeneratorUnderConstruction {
 				childPropertyStack.insert(instanceProperty, at: 0)
 				childConcreteTypeStack.insert(concreteType, at: 0)
 			}
+			if R0Probe.isEnabled {
+				let declaration = inheritedNearestDeclarations[property.label]
+				r0Log.record { hasher in
+					hasher.combine(2)
+					hasher.combine(property.label)
+					if let declaration {
+						for (form, binding) in declaration.bindings.sorted(by: { $0.key < $1.key }) {
+							hasher.combine(form)
+							hasher.combine(binding)
+						}
+						hasher.combine(-1)
+						for form in declaration.formsBeingBuilt.sorted() {
+							hasher.combine(form)
+						}
+					} else {
+						hasher.combine(-2)
+					}
+				}
+			}
 			nearestDeclarations.build(property)
 			// A member of a loop of builders rebinds, at the top of its builder function, what its tree receives inside the
 			// loop, its own property among them, so the rebinding is the nearest declaration of each such label in the body.
@@ -608,6 +669,14 @@ private struct ScopeGeneratorUnderConstruction {
 			ScopeGenerator.BuiltDeclaration(property: propertyStack[$0], concreteType: scope.instantiable.concreteInstantiable)
 		}
 		let isPropertyCycle = closedOnDeclaration != nil
+		if let property {
+			r0Log.record { hasher in
+				hasher.combine(1)
+				hasher.combine(property.asValidatedForDependencyCycles)
+				hasher.combine(scope.instantiable.concreteInstantiable)
+				hasher.combine(closedOnDeclaration)
+			}
+		}
 		self.fillPathStackCount = fillPathStackCount
 		let fillPathStart = propertyStack.count - fillPathStackCount
 		// How many declarations of the fill's path lie beneath the one this scope closes on, when it closes on one: generation's
@@ -624,6 +693,13 @@ private struct ScopeGeneratorUnderConstruction {
 			[CycleParameter]()
 		}
 		let closedOnContext = closedOnDeclaration.flatMap { cycleParameterContexts[$0] }
+		if let closedOnDeclaration {
+			r0Log.record { hasher in
+				hasher.combine(3)
+				hasher.combine(closedOnDeclaration)
+				hasher.combine(closedOnContext?.parameters)
+			}
+		}
 		// The function's body reads each parameter's label from the parameter, which hides every other declaration of the
 		// label above it, as a forwarded property does.
 		let callSiteLazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
@@ -635,7 +711,7 @@ private struct ScopeGeneratorUnderConstruction {
 		// own label (see `ScopeGenerator.foundCycleParameters`).
 		var cycleParameterUnavailableProperties = Set<Property>()
 		for parameter in closedOnContext?.parameters ?? ownCycleParameters
-			where !parameter.isRequired && nearestDeclarations.binding(of: parameter.property) == nil
+			where !parameter.isRequired && Self.r0Binding(of: parameter.property, in: nearestDeclarations, log: &r0Log) == nil
 		{
 			cycleParameterUnavailableProperties.insert(parameter.property)
 		}
@@ -669,7 +745,7 @@ private struct ScopeGeneratorUnderConstruction {
 		/// available, or `nil` when `property` is unavailable: a property this scope creates, else the nearest declaration
 		/// of its label (see `NearestDeclarations.binding(of:)`).
 		func binding(of property: Property) -> Property? {
-			scope.createdBinding(of: property) ?? nearestDeclarations.binding(of: property)
+			scope.createdBinding(of: property) ?? Self.r0Binding(of: property, in: nearestDeclarations, log: &r0Log)
 		}
 		var unavailableOptionalProperties = Set<Property>()
 		var aliasBindings = [Property: Property]()
@@ -893,6 +969,48 @@ private struct ScopeGeneratorUnderConstruction {
 			GenerationWork.record(enclosingFillsOfThisCall.count, by: .gatheringFillsOfACall)
 		}
 		childGenerators.reserveCapacity(propertiesToGenerate.count + fillsOfThisCall.count)
+		self.r0Log = r0Log
+		r0Excluded = fill != nil || !enclosingFills.isEmpty || !seamHoles.isEmpty || seamRoot != nil || mockBuilders != nil || !holeArguments.isEmpty
+		if R0Probe.isEnabled {
+			let previousClass = R0Probe.shared.classKey(of: previousPassGenerator)
+			r0Key = R0Hash.of { hasher in
+				hasher.combine(ObjectIdentifier(scope))
+				hasher.combine(property)
+				hasher.combine(erasedToConcreteExistential)
+				hasher.combine(forMockGeneration)
+				hasher.combine(startsCodeGeneration)
+				hasher.combine(validatesForwardedProperties)
+				hasher.combine(buildsWithHandWrittenMocks)
+				hasher.combine(callSiteLazilyInstantiatedInstanceProperties.sorted())
+				hasher.combine(reboundProperties.sorted())
+				if let placeHoldingPropertiesByType {
+					for (type, properties) in placeHoldingPropertiesByType.sorted(by: { $0.key.asSource < $1.key.asSource }) {
+						hasher.combine(type)
+						hasher.combine(properties.sorted())
+					}
+				} else {
+					hasher.combine(-3)
+				}
+				hasher.combine(previousClass)
+			}
+		} else {
+			r0Key = nil
+		}
+	}
+
+	var r0Log: R0Log
+	var r0Excluded: Bool
+	var r0Key: R0Hash?
+	var r0PlaceIndex = 0
+
+	static func r0Binding(of property: Property, in nearestDeclarations: NearestDeclarations, log: inout R0Log) -> Property? {
+		let answer = nearestDeclarations.binding(of: property)
+		log.record { hasher in
+			hasher.combine(4)
+			hasher.combine(property)
+			hasher.combine(answer)
+		}
+		return answer
 	}
 
 	/// The enum keys of `calledBuilders`' builders that take a builder struct, of each hole type a call inside the trees of

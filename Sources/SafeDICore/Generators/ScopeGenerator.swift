@@ -2268,6 +2268,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else if let generateCodeTask = unavailablePropertiesToGenerateCodeTask[cacheKey] {
 				generatedCode = try await generateCodeTask.value
 			} else {
+				if R0Probe.isEnabled {
+					R0Probe.shared.recordEmission(generator: self, key: cacheKey)
+				}
 				let generateCodeTask = Task {
 					let code = try await generatePropertyCode(
 						codeGeneration: .dependencyTree,
@@ -2275,6 +2278,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						propertiesGeneratedLater: propertiesGeneratedLater,
 						builderFunctionNames: builderFunctionNames,
 					)
+					if R0Probe.isEnabled {
+						R0Probe.shared.checkEmission(generator: self, key: cacheKey, code: code)
+					}
 					// A task keeps the memory its async frames took until it is released, so the cache keeps the finished code
 					// rather than the task: keeping every finished task held that memory for every scope of the tree until the
 					// tree's code was done, about 13 KB for each line generated. The task runs on this actor, so it runs after
@@ -2287,6 +2293,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				generatedCode = try await generateCodeTask.value
 			}
 		case .mock:
+			if R0Probe.isEnabled {
+				R0Probe.shared.recordMockEmission(generator: self, unavailableProperties: unavailableProperties, propertiesGeneratedLater: propertiesGeneratedLater, builderFunctionNames: builderFunctionNames)
+			}
 			generatedCode = try await generatePropertyCode(
 				codeGeneration: codeGeneration,
 				unavailableProperties: unavailableProperties,
