@@ -840,12 +840,29 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		            desk: __safeDI_Core_Desk_MockConfiguration = .init(),
 		            model: ((any Service) -> Model)? = nil
 		        ) {
-		            self.desk = desk
-		            self.model = model
+		            __safeDI_storage = __safeDI_Storage(
+		                desk: desk,
+		                model: model
+		            )
 		        }
 
-		        public let desk: __safeDI_Core_Desk_MockConfiguration
-		        public let model: ((any Service) -> Model)?
+		        public var desk: __safeDI_Core_Desk_MockConfiguration { __safeDI_storage.desk }
+		        public var model: ((any Service) -> Model)? { __safeDI_storage.model }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                desk: __safeDI_Core_Desk_MockConfiguration,
+		                model: ((any Service) -> Model)?
+		            ) {
+		                self.desk = desk
+		                self.model = model
+		            }
+
+		            let desk: __safeDI_Core_Desk_MockConfiguration
+		            let model: ((any Service) -> Model)?
+		        }
 		    }
 
 		    public static func mock(
@@ -898,15 +915,35 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        model: ((any Service) -> Model)? = nil,
 		        _ safeDIBuilder: ((LazilyInstantiated<Token>, Model) -> Desk)? = nil
 		    ) {
-		        self.passUp = passUp
-		        self.model = model
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            passUp: passUp,
+		            model: model,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let passUp: (() -> Token)?
-		    public let model: ((any Service) -> Model)?
+		    public var passUp: (() -> Token)? { __safeDI_storage.passUp }
+		    public var model: ((any Service) -> Model)? { __safeDI_storage.model }
 		    /// Overrides how `Desk` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((LazilyInstantiated<Token>, Model) -> Desk)?
+		    public var safeDIBuilder: ((LazilyInstantiated<Token>, Model) -> Desk)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            passUp: (() -> Token)?,
+		            model: ((any Service) -> Model)?,
+		            safeDIBuilder: ((LazilyInstantiated<Token>, Model) -> Desk)?
+		        ) {
+		            self.passUp = passUp
+		            self.model = model
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let passUp: (() -> Token)?
+		        let model: ((any Service) -> Model)?
+		        let safeDIBuilder: ((LazilyInstantiated<Token>, Model) -> Desk)?
+		    }
 		}
 
 		extension Desk {
@@ -932,10 +969,24 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        init(
 		            office: Office.SafeDIOverrides = .init()
 		        ) {
-		            self.office = office
+		            __safeDI_storage = __safeDI_Storage(
+		                office: office
+		            )
 		        }
 
-		        let office: Office.SafeDIOverrides
+		        var office: Office.SafeDIOverrides { __safeDI_storage.office }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                office: Office.SafeDIOverrides
+		            ) {
+		                self.office = office
+		            }
+
+		            let office: Office.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -1063,10 +1114,24 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        init(
 		            office: Office.SafeDIOverrides = .init()
 		        ) {
-		            self.office = office
+		            __safeDI_storage = __safeDI_Storage(
+		                office: office
+		            )
 		        }
 
-		        let office: Office.SafeDIOverrides
+		        var office: Office.SafeDIOverrides { __safeDI_storage.office }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                office: Office.SafeDIOverrides
+		            ) {
+		                self.office = office
+		            }
+
+		            let office: Office.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
