@@ -146,7 +146,9 @@ jobs:
           key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-without-coverage
           restore-keys: |
             spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
+            spm-release-v2-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
             spm-release-${{ runner.os }}-swift-6.2-
+            spm-release-v2-${{ runner.os }}-swift-6.2-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
