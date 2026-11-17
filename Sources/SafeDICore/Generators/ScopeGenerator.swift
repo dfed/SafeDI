@@ -139,6 +139,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			fieldsCarriedBySites = []
 		}
 		passesUpBuilder = !passedUpHoles.isEmpty || propertiesToGenerate.contains(where: \.passesUpBuilder)
+		holdsCallReenteringEnclosingFill = holeCallArguments.contains { $0.enclosingFillKey != nil } || propertiesToGenerate.contains(where: \.holdsCallReenteringEnclosingFill)
 		// This runs at every scope of every tree, and nearly every child is outside every cycle.
 		var childCycleClosedOnDeclarations = Set<BuiltDeclaration>()
 		var childrenTakePartInCycle = false
@@ -747,6 +748,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		placeHoldingProperties = nil
 		fieldsCarriedBySites = []
 		passesUpBuilder = false
+		holdsCallReenteringEnclosingFill = false
 		fillKey = nil
 		closedOnFillPathDeclarationsBeneath = nil
 		fillStructBoundLabels = []
@@ -843,6 +845,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		placeHoldingProperties = nil
 		fieldsCarriedBySites = Set((site.map(Self.fieldsCarried(by:)) ?? []).map(\.property))
 		passesUpBuilder = false
+		holdsCallReenteringEnclosingFill = false
 		fillKey = nil
 		fillStructBoundLabels = []
 		fillBindsDeferredFieldsFromStruct = false
@@ -3777,6 +3780,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	let passedUpHoles: [SeamSignature.Hole]
 	/// Whether a scope in this generator's subtree passes up a builder (see `passedUpHoles`).
 	let passesUpBuilder: Bool
+	/// Whether this scope, or a scope in its subtree, calls a seam inside a fill of an enclosing call and passes one of that
+	/// call's fills or dispatchers by name (`enclosingFillsPassed`): the call re-enters the enclosing call's fill.
+	let holdsCallReenteringEnclosingFill: Bool
 	/// For a fill, its key (see `fillKey(of:)`); `nil` for every other generator.
 	let fillKey: String?
 	/// For a fill, the labels of the fields of its hole's struct it binds from the struct: every field but those bound
@@ -3916,9 +3922,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	let containsBuildSite: Bool
 
 	/// Whether a fill whose tree this scope's property roots is handed the structs of its own level
-	/// (`FillCallerReads.innerScopeParameters`): its tree builds a place, or a call that passes one up, whose case carries one.
+	/// (`FillCallerReads.innerScopeParameters`): its tree builds a place, or a call that passes one up, whose case carries one,
+	/// or a call that re-enters an enclosing call's fill, whose case's member is called on one.
 	nonisolated var readsFillInnerScopes: Bool {
-		containsBuildSite || passesUpBuilder
+		containsBuildSite || passesUpBuilder || holdsCallReenteringEnclosingFill
 	}
 	/// The properties of this scope's type that hold a place of the seam whose tree is generated, by the seam's declaration
 	/// graph (`SeamDeclarationGraph`): a fact of the type, the same on every path, which orders this scope's children. `nil`
