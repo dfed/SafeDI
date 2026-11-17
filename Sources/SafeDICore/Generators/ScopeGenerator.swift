@@ -1914,85 +1914,85 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					return labels.contains(innerScopeName)
 				} ? innerScopeName : nil
 			} ?? scopeName
+			// Every dispatcher of a seam's call returns the called seam's builder struct, as one function per level of its tree,
+			// and only a public mock's caller, which decides per route, switches over the enum: every seam's builders take
+			// builder structs (`SeamBuilderFamilies.declaresBuilderStructs(of:)`), and only a public mock's keep the closure over
+			// its enum; a call that hands the enum on in its enum form is a public mock's call inside a fill of the seam's call
+			// (`builderKeysHandedInEnumForm(byCallsInside:calling:)`), and no tree holds both, since only the trees of the seam
+			// world call seams (`createSeamScopeMapping`) and only mock trees call public mocks
+			// (`createMockTypeDescriptionToScopeMapping`); and a seam's case that carries the scope value a call hands its fill
+			// carries the struct of the fill's level too (`SeamHoles.carriesStruct(at:innerKey:)`), since its route step has a
+			// member wherever it has an inner scope.
+			guard !returnsBuilderStruct, decidesPerRoute, let routePlan else {
+				return structDeclaration(
+					isSendable: isSendable,
+					indent: indent,
+					inlinedFills: inlinedFills,
+					fillsReturningWrapperBuilders: fillsReturningWrapperBuilders,
+					parameters: parameters,
+					parametersByKey: parametersByKey,
+					ownValue: ownValue(of:),
+					valuesName: valuesName,
+					scopeName: scopeName,
+					typesDeclaredEscaping: typesDeclaredEscaping,
+				)
+			}
 			var caseLines = [String]()
 			for dispatcherCase in cases {
 				if let target = dispatcherCase.target, dispatcherCase.isFillCase {
 					// A call's case for a builder it fills hands on the enum of the fill's type and each value that one reads: the
 					// nearest of the inner seam's levels that holds it, through a reader, else this case's payload's field, else
 					// this function's own value.
-					let carried = dispatcherCase.carriedLabels
 					var readsValues = false
 					var readsInnerScope = false
 					var arguments = ""
-					if decidesPerRoute, let routePlan {
-						// A caller that decides per route hands on each value in the form the target takes it: the nearest of the inner
-						// seam's levels that holds it, through a reader, converted to that form, else what the route finds of it
-						// (`RoutePlan.source`), `nil` where it finds none, so the place is passed up there.
-						for targetParameter in routePlan.parametersByKey[target.key] ?? [] {
-							let channel = targetParameter.channel
-							var fallback: String?
-							var fallbackReadsValues = false
-							switch routePlan.source(of: channel, in: dispatcherCase, of: self, valuesName: valuesName) {
-							case let .payload(expression):
-								fallback = expression
-								fallbackReadsValues = true
-							case let .parameter(parameter):
-								fallback = parameter.name
-							case .none:
-								fallback = nil
-							}
-							var value = fallback ?? "nil"
-							var readsFallback = true
-							if let innerKey = dispatcherCase.carriedInnerKey,
-							   let readerForm = dispatcherCase.innerReaderFormByLabel[channel.label],
-							   let call = readers?.readerCall(of: channel.label, from: innerKey, handing: innerScopeBindingName)
-							{
-								if let converted = RoutePlan.conversion(of: "$0", from: readerForm, to: channel) {
-									readsInnerScope = true
-									if dispatcherCase.labelsEveryInnerRouteHolds.contains(channel.label) {
-										// A reader that finds a value on every route returns it.
-										readsFallback = false
-										value = RoutePlan.conversion(of: call, from: readerForm, to: channel) ?? call
-									} else {
-										// A reader returns `nil` on a route no level of which holds the value.
-										let read = converted == "$0" && readerForm.typeDescription == channel.type
-											? call
-											: "\(call).map { \(converted) as \(channel.type.asSource) }"
-										value = fallback.map { "\(read) ?? \($0)" } ?? read
-									}
-								} else if !dispatcherCase.labelsEveryInnerRouteHolds.contains(channel.label), let fallback {
-									// A level of the inner seam's that holds the value in a form that does not provide the one read hides every
-									// value further out, as inline's lookup does: only a route whose reader finds none hands on the fallback.
-									readsInnerScope = true
-									value = "\(call) == nil ? \(fallback) : nil"
-								} else {
-									readsFallback = false
-									value = "nil"
-								}
-							}
-							readsValues = readsValues || (fallbackReadsValues && readsFallback)
-							arguments += ", \(targetParameter.name.spelledAsArgumentLabel): \(value)"
+					// A caller that decides per route hands on each value in the form the target takes it: the nearest of the inner
+					// seam's levels that holds it, through a reader, converted to that form, else what the route finds of it
+					// (`RoutePlan.source`), `nil` where it finds none, so the place is passed up there.
+					for targetParameter in routePlan.parametersByKey[target.key] ?? [] {
+						let channel = targetParameter.channel
+						var fallback: String?
+						var fallbackReadsValues = false
+						switch routePlan.source(of: channel, in: dispatcherCase, of: self, valuesName: valuesName) {
+						case let .payload(expression):
+							fallback = expression
+							fallbackReadsValues = true
+						case let .parameter(parameter):
+							fallback = parameter.name
+						case .none:
+							fallback = nil
 						}
-					} else {
-						arguments = (parametersByKey[target.key] ?? []).map { parameter in
-							let label = parameter.property.label
-							var value = ownValue(of: label)
-							let readsOwnPayload = carried.contains(label)
-							if readsOwnPayload {
-								// A target that binds a deferred parameter's memo is handed the memo, as a level function hands it.
-								value = "\(valuesName).\(dispatcherCase.values?.first { $0.property.label == label }?.memberName(bindingMemo: parameter.bindsMemo) ?? label.spelledAsMemberReference)"
-							}
-							// The payload's field is read only where the reader falls back to it: a value the reader finds on every route
-							// leaves the payload unbound.
-							if let innerKey = dispatcherCase.carriedInnerKey, let call = readers?.call(of: label, from: innerKey, handing: innerScopeBindingName, fallback: value) {
+						var value = fallback ?? "nil"
+						var readsFallback = true
+						if let innerKey = dispatcherCase.carriedInnerKey,
+						   let readerForm = dispatcherCase.innerReaderFormByLabel[channel.label],
+						   let call = readers?.readerCall(of: channel.label, from: innerKey, handing: innerScopeBindingName)
+						{
+							if let converted = RoutePlan.conversion(of: "$0", from: readerForm, to: channel) {
 								readsInnerScope = true
-								readsValues = readsValues || (readsOwnPayload && call.readsFallback)
-								value = call.expression
+								if dispatcherCase.labelsEveryInnerRouteHolds.contains(channel.label) {
+									// A reader that finds a value on every route returns it.
+									readsFallback = false
+									value = RoutePlan.conversion(of: call, from: readerForm, to: channel) ?? call
+								} else {
+									// A reader returns `nil` on a route no level of which holds the value.
+									let read = converted == "$0" && readerForm.typeDescription == channel.type
+										? call
+										: "\(call).map { \(converted) as \(channel.type.asSource) }"
+									value = fallback.map { "\(read) ?? \($0)" } ?? read
+								}
+							} else if !dispatcherCase.labelsEveryInnerRouteHolds.contains(channel.label), let fallback {
+								// A level of the inner seam's that holds the value in a form that does not provide the one read hides every
+								// value further out, as inline's lookup does: only a route whose reader finds none hands on the fallback.
+								readsInnerScope = true
+								value = "\(call) == nil ? \(fallback) : nil"
 							} else {
-								readsValues = readsValues || readsOwnPayload
+								readsFallback = false
+								value = "nil"
 							}
-							return ", \(label.spelledAsArgumentLabel): \(value)"
-						}.joined()
+						}
+						readsValues = readsValues || (fallbackReadsValues && readsFallback)
+						arguments += ", \(targetParameter.name.spelledAsArgumentLabel): \(value)"
 					}
 					var bound = [String]()
 					if dispatcherCase.values != nil {
@@ -2018,8 +2018,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					caseLines += inlinedFill.body
 				} else if let target = dispatcherCase.target {
 					let passUpArgument = target.takesPassUp ? ", \(passUp): \(passUp)" : ""
-					let targetParameters = parametersByKey[target.key] ?? []
-					if decidesPerRoute, let routePlan, let channels = routePlan.fillChannelsByKey[target.key] {
+					if let channels = routePlan.fillChannelsByKey[target.key] {
 						// A fill nested by type takes each value it reads that its case's payload does not carry, in the form it reads,
 						// from this function's parameter of it (`RoutePlan.parameters(handing:from:)`): where that may be `nil`, the fill
 						// is called only where every such value is there, and the place is passed up elsewhere, as the per-place decision
@@ -2041,17 +2040,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							caseLines.append("\(caseIndent)\(pattern) if \(bindings) { return \(call) } else { return \(passUp)() }")
 						}
 					} else if Self.isFill(target) {
-						// A fill nested by type takes each value it reads that its case's payload does not carry, under its label:
-						// this function's own, or the caller's.
+						// A fill nested by type that takes no value beside its case's payload: one that takes one has its channels.
 						var bound = dispatcherCase.carriesPayload ? [scopeName] : []
 						if dispatcherCase.hasForwardedValue {
 							bound.append(forwarded)
 						}
-						let arguments = (bound + targetParameters.map { "\($0.property.label.spelledAsArgumentLabel): \(ownValue(of: $0.property.label))" }).joined(separator: ", ")
+						let arguments = bound.joined(separator: ", ")
 						caseLines.append(bound.isEmpty
 							? "\(caseIndent)case .\(dispatcherCase.name): return \(target.name)(\(arguments))"
 							: "\(caseIndent)case let .\(dispatcherCase.name)(\(bound.joined(separator: ", "))): return \(target.name)(\(arguments))")
-					} else if decidesPerRoute, let routePlan {
+					} else {
 						// A case nested by type hands its dispatcher the value it wraps and each value that one takes: this case's
 						// payload's, in the form taken, `nil` where the route does not bind it in that form, or this function's own. A
 						// case of a `@Sendable` enum carries no payload.
@@ -2072,50 +2070,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						}
 						let bound = dispatcherCase.values == nil ? scopeName : "\(readsValues ? valuesName : "_"), \(scopeName)"
 						caseLines.append("\(caseIndent)case let .\(dispatcherCase.name)(\(bound)): return \(target.name)(\(scopeName)\(arguments)\(passUpArgument))")
-					} else if dispatcherCase.values != nil || !targetParameters.isEmpty {
-						// A case nested by type hands its dispatcher the value it wraps and each value that one reads, from this case's
-						// payload where it carries one: a case of a `@Sendable` enum carries none.
-						let carried = dispatcherCase.carriedLabels
-						let arguments = targetParameters.map { parameter in
-							let label = parameter.property.label
-							return ", \(label.spelledAsArgumentLabel): \(carried.contains(label) ? "\(valuesName).\(label.spelledAsMemberReference)" : ownValue(of: label))"
-						}.joined()
-						let readsValues = targetParameters.contains { carried.contains($0.property.label) }
-						let bound = dispatcherCase.values == nil ? scopeName : "\(readsValues ? valuesName : "_"), \(scopeName)"
-						caseLines.append("\(caseIndent)case let .\(dispatcherCase.name)(\(bound)): return \(target.name)(\(scopeName)\(arguments)\(passUpArgument))")
-					} else {
-						caseLines.append("\(caseIndent)case let .\(dispatcherCase.name)(\(scopeName)): return \(target.name)(\(scopeName)\(passUpArgument))")
 					}
 				} else {
 					// A case whose every place is passed up is one of a dispatcher handed `passUp`.
 					caseLines.append("\(caseIndent)case .\(dispatcherCase.name): return \(passUp)()")
 				}
 			}
-			guard !returnsBuilderStruct else {
-				return structDeclaration(
-					isSendable: isSendable,
-					indent: indent,
-					inlinedFills: inlinedFills,
-					fillsReturningWrapperBuilders: fillsReturningWrapperBuilders,
-					parameters: parameters,
-					parametersByKey: parametersByKey,
-					ownValue: ownValue(of:),
-					valuesName: valuesName,
-					scopeName: scopeName,
-					typesDeclaredEscaping: typesDeclaredEscaping,
-				)
-			}
 			let passUpParameter = takesPassUp ? ", \(passUp): () -> \(returnType.asSource)" : ""
-			let valueParameters = if decidesPerRoute {
-				routeParameters.map { parameter in
-					let type = parameter.isOptional
-						? TypeDescription.optional(parameter.channel.type)
-						: parameter.channel.type.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
-					return ", \(parameter.name.spelledAsArgumentLabel): \(type.asSource)"
-				}.joined()
-			} else {
-				parameters.map { ", \($0.property.label.spelledAsArgumentLabel): \($0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }.joined()
-			}
+			let valueParameters = routeParameters.map { parameter in
+				let type = parameter.isOptional
+					? TypeDescription.optional(parameter.channel.type)
+					: parameter.channel.type.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
+				return ", \(parameter.name.spelledAsArgumentLabel): \(type.asSource)"
+			}.joined()
 			var lines = ["\(indent)\(isSendable ? "@Sendable " : "")func \(functionName)(_ \(parameterName): \(enumType.asSource)\(valueParameters)\(passUpParameter)) -> \(returnType.asSource) {", "\(caseIndent)switch \(parameterName) {"]
 			lines += caseLines
 			lines += ["\(caseIndent)}", "\(indent)}"]
