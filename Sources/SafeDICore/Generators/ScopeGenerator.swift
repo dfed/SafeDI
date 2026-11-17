@@ -2197,6 +2197,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			propertiesGeneratedLater: [],
 			builderFunctionNames: BuilderFunctionNames(),
 			leadingWhitespace: "",
+			// The root of what is generated is inside no fill an internal mock declares.
+			fillPlaceBindings: .none,
 		)
 	}
 
@@ -2219,7 +2221,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		propertiesGeneratedLater: Set<Property>,
 		builderFunctionNames: BuilderFunctionNames,
 		leadingWhitespace: String,
-		fillPlaceBindings: FillPlaceBindings = .none,
+		fillPlaceBindings: FillPlaceBindings,
 	) async throws -> String {
 		let generatedCode: String
 		// Mock code is not cached — the context varies per call site.
@@ -4994,7 +4996,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		propertiesGeneratedLater: Set<Property>,
 		enclosingFunctionNames: [BuiltDeclaration: String],
 		leadingMemberWhitespace: String,
-		fillPlaceBindings: FillPlaceBindings = .none,
+		fillPlaceBindings: FillPlaceBindings,
 	) async throws -> [String] {
 		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
 		// Nearly every body holds no scope of a cycle, and its children keep their names. Every child but a seam
@@ -5649,6 +5651,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						unavailableProperties: unavailableProperties,
 						propertiesGeneratedLater: propertiesGeneratedLater,
 						builderFunctionNames: builderFunctionNames,
+						fillPlaceBindings: fillPlaceBindings,
 					)
 				}
 				let argumentList = try instantiable.generateArgumentList()
@@ -5660,7 +5663,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					return try await """
 					extension \(instantiable.concreteInstantiable.asSource) {
 					    \(attributesPrefix)public \(instantiable.declarationType == .classType ? "convenience " : "")init() {
-					\(generateProperties(propertiesGeneratedLater: propertiesGeneratedLater, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames, leadingMemberWhitespace: "        ").joined(separator: "\n"))
+					\(generateProperties(propertiesGeneratedLater: propertiesGeneratedLater, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames, leadingMemberWhitespace: "        ", fillPlaceBindings: fillPlaceBindings).joined(separator: "\n"))
 					        self.init(\(argumentList))
 					    }
 					}
@@ -6618,6 +6621,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		unavailableProperties: Set<Property>,
 		propertiesGeneratedLater: Set<Property>,
 		builderFunctionNames: BuilderFunctionNames,
+		fillPlaceBindings: FillPlaceBindings,
 	) async throws -> String {
 		let signature = seamRoot.signature
 		let typeName = instantiable.concreteInstantiable.asSource
@@ -6668,6 +6672,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					propertiesGeneratedLater: propertiesGeneratedLater,
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 					leadingMemberWhitespace: bodyIndent,
+					fillPlaceBindings: fillPlaceBindings,
 				)
 				let argumentList = try instantiable.generateArgumentList(
 					unavailableProperties: unavailableProperties,
