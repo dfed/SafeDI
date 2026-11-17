@@ -14760,7 +14760,9 @@ enum GraphFuzzerOracle {
 			default:
 				break
 			}
-			if parametersEnd != nil { break }
+			if parametersEnd != nil {
+				break
+			}
 		}
 		guard let parametersEnd, let arrow = type[parametersEnd...].range(of: " -> ") else { return nil }
 		let parameterTypes = topLevelParameters(String(type[type.index(after: parametersStart)..<parametersEnd])).map { $0.trimmingCharacters(in: .whitespaces) }
