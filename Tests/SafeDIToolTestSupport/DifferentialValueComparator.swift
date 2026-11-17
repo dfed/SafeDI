@@ -1161,7 +1161,7 @@ enum DifferentialValueOracle {
 
 		let run = try await runProcess(executable, arguments: [])
 		if run.exitCode == 0, let memo, let memoKey {
-			try memo.record(run.stdout, for: memoKey)
+			memo.record(run.stdout, for: memoKey)
 		}
 		return run
 	}
