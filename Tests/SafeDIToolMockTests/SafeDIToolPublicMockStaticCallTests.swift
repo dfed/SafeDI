@@ -1732,7 +1732,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		// to `Detail.mock` as is.
 		let modules = Self.overrideModules(app: [
 			Self.live,
-			Self.overrideRoot,
+			Self.overrideRoot(mockGeneration: "true"),
 			"""
 			func overrideBuildsDetail() -> String {
 			    var calls = 0
@@ -1759,7 +1759,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		// No module fills `Api` but the probe, so `Root`’s mock takes the builder a person writes and hands it as is to the
 		// closure its overrides hold, which passes it on to `Detail.mock`.
 		let modules = Self.overrideModules(app: [
-			Self.overrideRoot,
+			Self.overrideRoot(mockGeneration: "true"),
 			"""
 			final class StubApi: Api {}
 
@@ -1784,6 +1784,274 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 			#expect(description == "probe overrideBuildsDetail()\nString \"override called 1, builder called 1, api is the stub true\"\n")
 		}
 	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsOverrideClosureFunctionOverCallersFill_whenPublicCallerFillsCalledMocksPlace() async throws {
+		// `Root`, a public mock, fills `Detail`’s place with `Live`, which reads only the session the call passes `Detail`, so
+		// its overrides keep the closure that builds `Detail`, handed a function over that fill, which a written closure in
+		// `App` passes on to `Detail.mock` as is.
+		let valueProbeSource = """
+		func apiReadsSession() -> String {
+		    let session = Session()
+		    let detail = Root.mock(session: session).detailBuilder.instantiate()
+		    return "api reads the session \\((detail.api as? Live)?.session === session)"
+		}
+		"""
+		let modules = Self.overrideModules(app: [
+			Self.live,
+			Self.overrideRoot(mockGeneration: ".public"),
+			valueProbeSource,
+			"""
+			func overrideBuildsDetail() -> String {
+			    var calls = 0
+			    let session = Session()
+			    let root = Root.mock(session: session, safeDIOverrides: .init(detailBuilder: { session, apiBuilder in
+			        calls += 1
+			        return Detail.mock(session: session, apiBuilder: apiBuilder)
+			    }))
+			    let detail = root.detailBuilder.instantiate()
+			    return "override called \\(calls), api reads the session \\((detail.api as? Live)?.session === session)"
+			}
+			""",
+		])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		TODO
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		TODO
+		"""])
+		let overrideDescription = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("overrideBuildsDetail()")], filesToDelete: &filesToDelete)
+		let probe = DifferentialValueProbe("apiReadsSession()")
+		let feature = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [probe], filesToDelete: &filesToDelete)
+		let knownRight = try await knownRightDescription(of: modules, keeping: ["Feature"], probeSource: Self.live + "\n\n" + Self.overrideRoot(mockGeneration: ".public") + "\n\n" + valueProbeSource, probe: probe)
+		if compileVerificationIsEnabled {
+			#expect(overrideDescription == "probe overrideBuildsDetail()\nString \"override called 1, api reads the session true\"\n")
+			#expect(knownRight == "probe apiReadsSession()\nString \"api reads the session true\"\n")
+			#expect(feature == knownRight)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsEmptyOverridesWithNoClosureForCalledMock_whenPublicCallerPassesCalledMocksPlaceUp() async throws {
+		// `Root`, a public mock, passes up the place of `Detail`, which no module fills. Its body holds only the builder struct
+		// its caller built, from which it can make no builder a person writes, so its overrides hold no closure that builds
+		// `Detail`. They stay, empty, as does its `safeDIOverrides:` parameter: `Host`’s internal mock in `Top` configures
+		// `Root` through them, and a person can still pass them.
+		let probeSource = """
+		func detailOfRoot() -> String {
+		    let session = Session()
+		    let detail = Root.mock(session: session, apiBuilder: { StubApi() }, safeDIOverrides: Root.SafeDIOverrides()).detailBuilder.instantiate()
+		    return "session is the session \\(detail.session === session), api is the stub \\(detail.api is StubApi)"
+		}
+		"""
+		let modules = Self.overrideModules(app: [Self.overrideRoot(mockGeneration: ".public")], top: [Self.host, Self.stubApi, probeSource])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		TODO
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		TODO
+		"""])
+		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
+		TODO
+		"""])
+		let probe = DifferentialValueProbe("detailOfRoot()")
+		let feature = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [probe], filesToDelete: &filesToDelete)
+		let knownRight = try await knownRightDescription(of: modules, keeping: ["Feature", "App"], probeSource: Self.stubApi + "\n\n" + probeSource, probe: probe)
+		if compileVerificationIsEnabled {
+			#expect(knownRight == "probe detailOfRoot()\nString \"session is the session true, api is the stub true\"\n")
+			#expect(feature == knownRight)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersNoOverrideClosureForCalledMock_whenInternalCallersFillReadsCalledMocksOtherPlace() async throws {
+		// `Root`’s internal mock fills `Detail`’s `api` with `LiveApi`, which reads `store`, another place of `Detail`’s, and
+		// passes `store` up. No builder a person writes can hand that fill the store `Detail` builds, so `Root`’s overrides
+		// hold no closure that builds `Detail`, though the builder it passes up is its own: they stay, empty. `LiveApi` reads
+		// the detail’s own store.
+		let modules = Self.storeModules(app: [
+			Self.liveApiReadingStore,
+			Self.overrideRoot(mockGeneration: "true"),
+			"final class StubStore: Store {}",
+			Self.apiReadsDetailsStore(root: "Root.mock(session: Session(), storeBuilder: { StubStore() })"),
+		])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		TODO
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		TODO
+		"""])
+		let description = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("apiReadsDetailsStore()")], filesToDelete: &filesToDelete)
+		if compileVerificationIsEnabled {
+			#expect(description == "probe apiReadsDetailsStore()\nString \"api reads the detail’s store true\"\n")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersNoOverrideClosureForCalledMock_whenPublicCallersFillReadsCalledMocksOtherPlace() async throws {
+		// `Root`, a public mock, fills both of `Detail`’s places: `store` with `LiveStore`, which reads nothing, and `api` with
+		// `LiveApi`, which reads `store`. No builder a person writes can hand the second fill the store `Detail` builds, so
+		// `Root`’s overrides hold no closure that builds `Detail`: they stay, empty. `LiveApi` reads the detail’s own store,
+		// as in one module.
+		let liveStore = """
+		@Instantiable(fulfillingAdditionalTypes: [Store.self])
+		public final class LiveStore: Instantiable, Store {
+		    public init() {}
+		}
+		"""
+		let modules = Self.storeModules(app: [
+			Self.liveApiReadingStore,
+			liveStore,
+			Self.overrideRoot(mockGeneration: ".public"),
+			Self.apiReadsDetailsStore(root: "Root.mock(session: Session())"),
+		])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		TODO
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		TODO
+		"""])
+		let probe = DifferentialValueProbe("apiReadsDetailsStore()")
+		let feature = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [probe], filesToDelete: &filesToDelete)
+		let knownRight = try await knownRightDescription(of: modules, keeping: Set(modules.map(\.name)), probeSource: "", probe: probe)
+		if compileVerificationIsEnabled {
+			#expect(knownRight == "probe apiReadsDetailsStore()\nString \"api reads the detail’s store true\"\n")
+			#expect(feature == knownRight)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersNoOverrideClosureForCalledMock_whenCallersFillReadsValueCalledMockRenames() async throws {
+		// `Detail` receives `mainSession` under the label `session`, and `Root`’s fill `Live` reads `session`: in `Detail`’s
+		// tree that is the main session, which `Root` holds under another label beside a `session` of its own. A closure handed
+		// a builder over the value `Root` holds as `session` would build `Live` with the wrong session, so `Root`’s overrides
+		// hold no closure that builds `Detail`: they stay, empty. `Live` holds the main session, as in one module.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContent: [
+				"""
+				import SafeDI
+
+				public protocol Api: AnyObject {}
+
+				@Instantiable
+				public final class Session: Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class Detail: Instantiable {
+				    init(session: Session, api: any Api) {
+				        self.session = session
+				        self.api = api
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "mainSession", ofType: Session.self) public let session: Session
+				    @Instantiated public let api: any Api
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+				"""
+				import Feature
+				import SafeDI
+
+				@Instantiable(fulfillingAdditionalTypes: [Api.self])
+				public final class Live: Instantiable, Api {
+				    public init(session: Session) {
+				        self.session = session
+				    }
+
+				    @Received public let session: Session
+				}
+
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(session: Session, mainSession: Session, detail: Detail) {
+				        self.session = session
+				        self.mainSession = mainSession
+				        self.detail = detail
+				    }
+
+				    @Instantiated public let session: Session
+				    @Instantiated public let mainSession: Session
+				    @Instantiated public let detail: Detail
+				}
+
+				func sessionOfLive() -> String {
+				    let root = Root.mock()
+				    let live = root.detail.api as? Live
+				    return "live holds the main session \\(live?.session === root.mainSession), live holds the root’s session \\(live?.session === root.session)"
+				}
+				""",
+			], dependencies: ["Feature"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		TODO
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		TODO
+		"""])
+		let probe = DifferentialValueProbe("sessionOfLive()")
+		let feature = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [probe], filesToDelete: &filesToDelete)
+		let knownRight = try await knownRightDescription(of: modules, keeping: Set(modules.map(\.name)), probeSource: "", probe: probe)
+		if compileVerificationIsEnabled {
+			#expect(knownRight == "probe sessionOfLive()\nString \"live holds the main session true, live holds the root’s session false\"\n")
+			#expect(feature == knownRight)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersNoOverrideClosureInConfigurationOfTypeThatCallsMock_whenPublicCallerPassesPlaceUpThroughType() async throws {
+		// `Middle`, which generates an internal mock, builds `Detail`; `Root`, a public mock in the same module, builds
+		// `Middle` and passes `Detail`’s place up. The call is in `Root`’s body, which holds only the builder struct its caller
+		// built, so `Middle`’s configuration in `Root`’s tree holds no closure that builds `Detail`. `Middle`’s own mock passes
+		// the place up from its own parameter and keeps the closure.
+		let modules = Self.overrideModules(app: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Middle: Instantiable {
+			    public init(session: Session, detailBuilder: Instantiator<Detail>) {
+			        self.session = session
+			        self.detailBuilder = detailBuilder
+			    }
+
+			    @Received public let session: Session
+			    @Instantiated public let detailBuilder: Instantiator<Detail>
+			}
+			""",
+			"""
+			@Instantiable(generateMock: .public)
+			public final class Root: Instantiable {
+			    public init(session: Session, middle: Middle) {
+			        self.session = session
+			        self.middle = middle
+			    }
+
+			    @Received public let session: Session
+			    @Instantiated public let middle: Middle
+			}
+			""",
+		])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		TODO
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		TODO
+		"""])
+	}
+
 
 	// MARK: Tests – a lazy value on a route, and a mocked type built again in its own tree
 
@@ -2168,24 +2436,39 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 	}
 	"""
 
-	/// `Root`, whose internal mock receives `session`, which its mock cannot build, and builds `Detail` in an instantiator.
-	private static let overrideRoot = """
+	/// `Root`, whose mock, generated as `mockGeneration` says, receives `session`, which its mock cannot build, and builds
+	/// `Detail` in an instantiator.
+	private static func overrideRoot(mockGeneration: String) -> String {
+		"""
+		@Instantiable(generateMock: \(mockGeneration))
+		public final class Root: Instantiable {
+		    public init(session: Session, detailBuilder: Instantiator<Detail>) {
+		        self.session = session
+		        self.detailBuilder = detailBuilder
+		    }
+
+		    @Received public let session: Session
+		    @Instantiated public let detailBuilder: Instantiator<Detail>
+		}
+		"""
+	}
+
+	/// `Host`, whose internal mock builds `Root`.
+	private static let host = """
 	@Instantiable(generateMock: true)
-	public final class Root: Instantiable {
-	    public init(session: Session, detailBuilder: Instantiator<Detail>) {
-	        self.session = session
-	        self.detailBuilder = detailBuilder
+	public final class Host: Instantiable {
+	    public init(root: Root) {
+	        self.root = root
 	    }
 
-	    @Received public let session: Session
-	    @Instantiated public let detailBuilder: Instantiator<Detail>
+	    @Instantiated public let root: Root
 	}
 	"""
 
 	/// `Detail`, a public mock in `Feature` that receives `session`, which no module builds, and builds nothing but its
-	/// place; then `App`.
-	private static func overrideModules(app: [String]) -> [ModuleFixture] {
-		[
+	/// place; then `App`, and, where `top` holds any file, `Top`, which depends on both.
+	private static func overrideModules(app: [String], top: [String] = []) -> [ModuleFixture] {
+		var modules = [
 			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContent: [
 				"""
 				import SafeDI
@@ -2210,6 +2493,66 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 			]),
 			ModuleFixture(name: "App", packageName: "App", swiftFileContent: app.map { "import Feature\nimport SafeDI\n\n" + $0 }, dependencies: ["Feature"]),
 		]
+		if !top.isEmpty {
+			modules.append(ModuleFixture(name: "Top", packageName: "Top", swiftFileContent: top.map { "import App\nimport Feature\nimport SafeDI\n\n" + $0 }, dependencies: ["Feature", "App"]))
+		}
+		return modules
+	}
+
+	/// `Detail`, a public mock in `Feature` that receives `session`, which no module builds, and builds two places, `store`
+	/// before `api`; then `App`.
+	private static func storeModules(app: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContent: [
+				"""
+				import SafeDI
+
+				public protocol Api: AnyObject {}
+
+				public protocol Store: AnyObject {}
+
+				public final class Session {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class Detail: Instantiable {
+				    init(session: Session, store: any Store, api: any Api) {
+				        self.session = session
+				        self.store = store
+				        self.api = api
+				    }
+
+				    @Received public let session: Session
+				    @Instantiated public let store: any Store
+				    @Instantiated public let api: any Api
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContent: app.map { "import Feature\nimport SafeDI\n\n" + $0 }, dependencies: ["Feature"]),
+		]
+	}
+
+	/// `LiveApi` fulfills `Api` in `App` and receives the store.
+	private static let liveApiReadingStore = """
+	@Instantiable(fulfillingAdditionalTypes: [Api.self])
+	public final class LiveApi: Instantiable, Api {
+	    public init(store: any Store) {
+	        self.store = store
+	    }
+
+	    @Received public let store: any Store
+	}
+	"""
+
+	/// Reports whether the `LiveApi` of the `Detail` that `root` builds holds that detail’s store.
+	private static func apiReadsDetailsStore(root: String) -> String {
+		"""
+		func apiReadsDetailsStore() -> String {
+		    let detail = \(root).detailBuilder.instantiate()
+		    return "api reads the detail’s store \\((detail.api as? LiveApi)?.store === detail.store)"
+		}
+		"""
 	}
 
 	/// `Counted` keeps how many instances of each subclass are alive and were built; `Navigator`, `Logger` and `Cache` count.
