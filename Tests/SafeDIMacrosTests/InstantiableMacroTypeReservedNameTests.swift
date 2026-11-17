@@ -500,6 +500,13 @@ import Testing
 						column: 11,
 						severity: .error,
 					),
+					// `instantiate()` spells the type it builds, which generated code spells too.
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Api` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 3,
+						column: 41,
+						severity: .error,
+					),
 				],
 				macros: instantiableTestMacros,
 			)
@@ -554,6 +561,435 @@ import Testing
 						message: "The type name `SafeDISendableScope_Api` begins with `SafeDISendableScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDISendableScope_`.",
 						line: 5,
 						column: 19,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		// MARK: A type the declaration spells
+
+		@Test
+		func declaration_producesReservedTypeNameDiagnosticAtEachSpelling_whenDependencyTypesSpellReservedNamesInGenericOptionalTupleAndClosure() {
+			// Generated code spells a dependency’s type, and each type the initializer that fulfills it takes, in scopes where a
+			// type SafeDI generates can hide a type of a reserved name, wherever that type is declared.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct Screen: Instantiable {
+				    public init(a: Array<SafeDIScope_A>, b: SafeDISendableScope_B?, c: (SafeDIMockScope_C, Int), d: @escaping (__safeDI_D) -> Void) {
+				        self.a = a
+				        self.b = b
+				        self.c = c
+				        self.d = d
+				    }
+
+				    @Received let a: Array<SafeDIScope_A>
+				    @Received let b: SafeDISendableScope_B?
+				    @Received let c: (SafeDIMockScope_C, Int)
+				    @Received let d: (__safeDI_D) -> Void
+				}
+				""",
+				expandedSource: """
+				public struct Screen: Instantiable {
+				    public init(a: Array<SafeDIScope_A>, b: SafeDISendableScope_B?, c: (SafeDIMockScope_C, Int), d: @escaping (__safeDI_D) -> Void) {
+				        self.a = a
+				        self.b = b
+				        self.c = c
+				        self.d = d
+				    }
+
+				    let a: Array<SafeDIScope_A>
+				    let b: SafeDISendableScope_B?
+				    let c: (SafeDIMockScope_C, Int)
+				    let d: (__safeDI_D) -> Void
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_A` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 3,
+						column: 26,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDISendableScope_B` begins with `SafeDISendableScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDISendableScope_`.",
+						line: 3,
+						column: 45,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDIMockScope_C` begins with `SafeDIMockScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIMockScope_`.",
+						line: 3,
+						column: 73,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `__safeDI_D` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `__safeDI_`.",
+						line: 3,
+						column: 112,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_A` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 10,
+						column: 28,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDISendableScope_B` begins with `SafeDISendableScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDISendableScope_`.",
+						line: 11,
+						column: 22,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDIMockScope_C` begins with `SafeDIMockScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIMockScope_`.",
+						line: 12,
+						column: 23,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `__safeDI_D` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `__safeDI_`.",
+						line: 13,
+						column: 23,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenRenamedTypesReplaceReservedNamesTheDependencyTypesSpelled() {
+			// The remedy: once each type is renamed, so that its name does not begin with a reserved prefix, nothing is reported.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct Screen: Instantiable {
+				    public init(a: Array<ScopeA>, b: SendableScopeB?, c: (MockScopeC, Int), d: @escaping (BuilderD) -> Void) {
+				        self.a = a
+				        self.b = b
+				        self.c = c
+				        self.d = d
+				    }
+
+				    @Received let a: Array<ScopeA>
+				    @Received let b: SendableScopeB?
+				    @Received let c: (MockScopeC, Int)
+				    @Received let d: (BuilderD) -> Void
+				}
+				""",
+				expandedSource: """
+				public struct Screen: Instantiable {
+				    public init(a: Array<ScopeA>, b: SendableScopeB?, c: (MockScopeC, Int), d: @escaping (BuilderD) -> Void) {
+				        self.a = a
+				        self.b = b
+				        self.c = c
+				        self.d = d
+				    }
+
+				    let a: Array<ScopeA>
+				    let b: SendableScopeB?
+				    let c: (MockScopeC, Int)
+				    let d: (BuilderD) -> Void
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedTypeNameDiagnosticAtEachSpelling_whenAliasOfTypeSpellsReservedNameInGeneric() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct Screen: Instantiable {
+				    public init(apis: Array<SafeDIScope_Api>) {
+				        self.apis = apis
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "services", ofType: Array<SafeDIScope_Api>.self) let apis: Array<SafeDIScope_Api>
+				}
+				""",
+				expandedSource: """
+				public struct Screen: Instantiable {
+				    public init(apis: Array<SafeDIScope_Api>) {
+				        self.apis = apis
+				    }
+
+				    let apis: Array<SafeDIScope_Api>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Api` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 3,
+						column: 29,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Api` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 7,
+						column: 69,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Api` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 7,
+						column: 108,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedTypeNameDiagnosticAtString_whenFulfilledByTypeNamesReservedName() {
+			// Generated code constructs the type `fulfilledByType:` names, so a reserved name there is reported at the string.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct Screen: Instantiable {
+				    public init(service: AnyService) {
+				        self.service = service
+				    }
+
+				    @Instantiated(fulfilledByType: "SafeDIScope_Impl", erasedToConcreteExistential: true) let service: AnyService
+				}
+				""",
+				expandedSource: """
+				public struct Screen: Instantiable {
+				    public init(service: AnyService) {
+				        self.service = service
+				    }
+
+				    let service: AnyService
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Impl` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 7,
+						column: 36,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedTypeNameDiagnostic_whenDefaultValuedInitializerParameterSpellsReservedNameInOptional() {
+			// A default-valued parameter is no dependency, but a generated `mock()` takes it, spelling its type.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct Screen: Instantiable {
+				    public init(service: Service, mode: SafeDIScope_Mode? = nil) {
+				        self.service = service
+				        self.mode = mode
+				    }
+
+				    @Received let service: Service
+				    let mode: SafeDIScope_Mode?
+				}
+				""",
+				expandedSource: """
+				public struct Screen: Instantiable {
+				    public init(service: Service, mode: SafeDIScope_Mode? = nil) {
+				        self.service = service
+				        self.mode = mode
+				    }
+
+				    let service: Service
+				    let mode: SafeDIScope_Mode?
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Mode` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 3,
+						column: 41,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_producesReservedTypeNameDiagnosticAtEachSpelling_whenInstantiateParameterAndReturnTypeSpellReservedNames() {
+			// An extension’s dependencies are its `instantiate(…)` parameters, and the type it builds is what that returns.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Box: Instantiable {
+				    public static func instantiate(handler: @escaping (SafeDIScope_Event) -> Void) -> Box<SafeDIScope_Item> {
+				        Box(handler: handler)
+				    }
+				}
+				""",
+				expandedSource: """
+				extension Box: Instantiable {
+				    public static func instantiate(handler: @escaping (SafeDIScope_Event) -> Void) -> Box<SafeDIScope_Item> {
+				        Box(handler: handler)
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Event` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 3,
+						column: 56,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Item` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 3,
+						column: 91,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedTypeNameDiagnosticAtEachSpelling_whenHandWrittenMockParameterAndReturnTypeSpellReservedNames() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true)
+				public struct Box<Item>: Instantiable {
+				    public static func mock(item: [SafeDIScope_Item] = []) -> Box<SafeDIScope_Item> {
+				        Box()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct Box<Item>: Instantiable {
+				    public static func mock(item: [SafeDIScope_Item] = []) -> Box<SafeDIScope_Item> {
+				        Box()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Item` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 3,
+						column: 36,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Item` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 3,
+						column: 67,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedTypeNameDiagnosticAtFirstNameOnly_whenSpellingQualifiesReservedName() {
+			// `Feature.SafeDIScope_Api` resolves as a member of `Feature`, which no type SafeDI generates can hide, while
+			// `SafeDIScope_Mode.Kind` resolves its first name lexically.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct Screen: Instantiable {
+				    public init(api: Feature.SafeDIScope_Api, mode: SafeDIScope_Mode.Kind, service: AnyService) {
+				        self.api = api
+				        self.mode = mode
+				        self.service = service
+				    }
+
+				    @Received let api: Feature.SafeDIScope_Api
+				    @Received let mode: SafeDIScope_Mode.Kind
+				    @Instantiated(fulfilledByType: "Feature.SafeDIScope_Impl", erasedToConcreteExistential: true) let service: AnyService
+				}
+				""",
+				expandedSource: """
+				public struct Screen: Instantiable {
+				    public init(api: Feature.SafeDIScope_Api, mode: SafeDIScope_Mode.Kind, service: AnyService) {
+				        self.api = api
+				        self.mode = mode
+				        self.service = service
+				    }
+
+				    let api: Feature.SafeDIScope_Api
+				    let mode: SafeDIScope_Mode.Kind
+				    let service: AnyService
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Mode` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 3,
+						column: 53,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Mode` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 10,
+						column: 25,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedTypeNameDiagnosticInEachClause_whenDependencyInConditionalCompilationBlockSpellsReservedName() {
+			// The macro reads every clause, as the compiler may select any of them.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct Screen: Instantiable {
+				    public init(a: SafeDIScope_A) {
+				        self.a = a
+				    }
+
+				    #if DEBUG
+				    @Received let a: SafeDIScope_A
+				    #else
+				    @Received let a: SafeDIScope_A
+				    #endif
+				}
+				""",
+				expandedSource: """
+				public struct Screen: Instantiable {
+				    public init(a: SafeDIScope_A) {
+				        self.a = a
+				    }
+
+				    #if DEBUG
+				    let a: SafeDIScope_A
+				    #else
+				    let a: SafeDIScope_A
+				    #endif
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_A` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 3,
+						column: 20,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_A` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 8,
+						column: 22,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_A` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 10,
+						column: 22,
 						severity: .error,
 					),
 				],

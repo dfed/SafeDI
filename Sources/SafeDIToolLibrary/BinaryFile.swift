@@ -108,6 +108,7 @@ enum BinaryFile {
 			Instantiable.DeclarationType.self,
 			Instantiable.DependencyLabelInUnselectedClause.self,
 			PlainTypeDeclaration.self,
+			ReservedTypeNameDeclaration.self,
 			MockGeneration.self,
 			AccessDeclaration.self,
 			AccessLevel.self,
@@ -132,7 +133,7 @@ enum BinaryFile {
 	/// because describing the schema reflects on every member's type, and reflection scans the runtime's
 	/// protocol conformance tables: computing it took most of a small module's `generate`. A test computes it
 	/// and fails, giving the new value, when a stored type's layout changes.
-	static let schemaFingerprint: UInt64 = 0x9CF0FE04ECF1ACDC
+	static let schemaFingerprint: UInt64 = 0x8169D88E88ACE0FA
 
 	/// The format version and every schema member's layout, one member per line: the name and type of each
 	/// field a struct writes, and the name and payload types of each case an enum writes, in the order written.

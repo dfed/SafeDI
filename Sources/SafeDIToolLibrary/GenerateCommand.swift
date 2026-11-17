@@ -252,6 +252,18 @@ public struct Generate: AsyncParsableCommand {
 				activeCompilationConditions: suppliedCompilationConditions,
 			),
 		)
+		// A reserved name is a mistake in the module's own files whatever its trees hold, so it is reported before any is
+		// built. A module that depends on this one never reads these declarations, so only this run reports them.
+		let reservedTypeNameDeclarations = parsed.module.reservedTypeNameDeclarations
+		guard reservedTypeNameDeclarations.isEmpty else {
+			throw ReservedTypeNameError(sourceDiagnostics: SourceDiagnostic.joiningInSourceOrder(reservedTypeNameDeclarations.map { declaration in
+				[SourceDiagnostic(
+					severity: .error,
+					location: declaration.location,
+					message: ReservedName.reservedTypeNameMessage(typeName: declaration.typeName, prefix: declaration.prefix),
+				)]
+			}))
+		}
 		let initialModule = parsed.module.moduleInfo
 		let initialModuleIsFromCache = parsed.isFromCache
 		let sourceConfiguration = parsed.module.configuration
@@ -1608,6 +1620,7 @@ public struct Generate: AsyncParsableCommand {
 			configuration: configuration,
 			conditionalCompilationEvaluator: evaluator,
 			additionalDirectories: cached.additionalDirectories,
+			reservedTypeNameDeclarations: cached.reservedTypeNameDeclarations,
 		)
 	}
 
@@ -1919,6 +1932,12 @@ struct AdditionalMocksNameNoInstantiableError: SourceLocatedError {
 /// A `#SafeDIConfiguration` lists, in `additionalMocksToGenerate`, types whose every declaration SafeDI read is `mockOnly`.
 /// Each diagnostic names one such type, in name order.
 struct AdditionalMocksNameMockOnlyDeclarationError: SourceLocatedError {
+	let sourceDiagnostics: [SourceDiagnostic]
+}
+
+/// Types the module's own files declare whose names begin with a prefix SafeDI reserves for the types it generates, which
+/// the `@Instantiable` macro does not see. Each diagnostic is at one declaration's name, in source order.
+struct ReservedTypeNameError: SourceLocatedError {
 	let sourceDiagnostics: [SourceDiagnostic]
 }
 
