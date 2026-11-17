@@ -1110,7 +1110,20 @@ struct GraphFuzzerCallingMockGraph {
 				packageName: Self.packageName,
 				swiftFileContentByFilePath: contentByFileName,
 				dependencies: file.dependencies,
+				activeCompilationConditions: activeCompilationConditions(of: form, module: file.module),
 			)
+		}
+	}
+
+	/// The conditions the tool is told `module` builds under in `form`: `DEBUG`, the mock condition, for the calling mock's
+	/// module, whose generated mock the comparator compiles, so the tool checks its calls of hand-written mocks and its
+	/// fills as a build that compiles the generated mocks does (`compilesGeneratedMocks`); none for every other module.
+	private func activeCompilationConditions(of form: Form, module: String) -> [String] {
+		switch form {
+		case .mock:
+			module == callerModule ? ["DEBUG"] : []
+		case .twin:
+			[]
 		}
 	}
 
