@@ -6438,7 +6438,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// A builder the internal mock of a type that generates its dependency tree takes for one hole type in one family, as
 		/// the type's readable initializer does: the builder a person writes, which the builder function of each type that
 		/// instantiates a place of it calls once per build, or builds the place's wrapper around, as the type's own tree calls
-		/// the builder its initializer takes. The mock builds every seam inline, so it hands no struct on.
+		/// the builder its initializer takes. The mock builds every seam inline, so it hands no struct on. An internal mock whose
+		/// tree calls other modules' public mocks takes one too for each hole type and family those calls pass up, as its
+		/// production tree's initializer takes one, which the calls are handed.
 		struct SeamMockBuilder {
 			/// The parameter's label.
 			let label: String
@@ -6450,10 +6452,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			/// The received properties under which the tree's calls of other modules' public mocks pass a builder of the same
 			/// hole type, family and type up, which `mock()` takes no parameter for: the calls are handed this builder.
 			let passedUpProperties: [Property]
+			/// For a builder with no `places`, which only calls of other modules' public mocks pass up, the type they pass it as.
+			var passedUpType: TypeDescription?
 
 			/// The parameter's type, the type a seam's builder of these places takes from a person.
 			var parameterType: TypeDescription {
-				Self.parameterType(ofPlaces: places, in: family)
+				passedUpType ?? Self.parameterType(ofPlaces: places, in: family)
 			}
 
 			/// The type a seam's builder of `places` in `family` takes from a person
@@ -6940,10 +6944,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		// A type that generates its dependency tree takes, in its internal mock, a builder for each hole type and family, in
 		// place of its places' parameters and of the builders its calls of other modules' public mocks pass up for it
-		// (`SeamMockBuilder`).
-		let seamMockBuilders = instantiable.generatesDependencyTree && instantiable.generateMock == .internal
+		// (`SeamMockBuilder`). Every other internal mock takes one for each hole type and family its calls pass up.
+		let seamMockBuilders = instantiable.generateMock != .public
 			? Self.seamMockBuilders(
-				of: uncoveredParameters,
+				of: instantiable.generatesDependencyTree ? uncoveredParameters : [],
 				passedUpBuilderFamilies: Self.passedUpBuilderFamilies(
 					in: treePropertyNodes,
 					among: flatReceivedProperties,
@@ -6952,8 +6956,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				otherParameterLabels: Set(forwardedDependencies.map(\.property.label))
 					.union(rootDefaultParameters.map(\.label))
 					.union(onlyIfAvailableReceivedProperties.map(\.label))
+					.union(instantiable.generatesDependencyTree ? [] : uncoveredParameters.map(\.label))
 					.union([ReservedName.mockOverridesParameterName]),
 				flatReceivedProperties: flatReceivedProperties,
+				capturedBySendableFunctions: parameterTree.passedUpBuildersCapturedBySendableFunctions,
+				typesDeclaredEscaping: typesDeclaredEscaping,
 				treePropertyNodes: treePropertyNodes,
 				namesBoundInTheTree: treeBindingNames.union(namesDeclaredInBuilderFunctions),
 			)
@@ -6983,24 +6990,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
-	/// The builders the internal mock of a type that generates its dependency tree takes for `uncoveredParameters`, the
-	/// `@Instantiated` dependencies its tree cannot build: one per hole type and family, as the type's readable initializer
-	/// takes them, in label order. A place built inside a `@Sendable` function, or held in a `Sendable` wrapper, is the
-	/// `@Sendable` family's. `mock()` lists them among its flat received parameters by label, where it lists the builders it
-	/// passes up to another module's public mock. A builder a call of another module's public mock passes up for a hole type
-	/// and family the mock builds places of, with the type of the mock's builder (`passedUpBuilderFamilies`), is that
-	/// builder, as the seam takes one builder for both, and is no parameter of its own (`passedUpProperties`).
+	/// The builders an internal mock takes: for `uncoveredParameters`, the `@Instantiated` dependencies the tree of a type
+	/// that generates its dependency tree cannot build, one per hole type and family, as the type's readable initializer
+	/// takes them, and one per hole type and family that the tree's calls of other modules' public mocks pass up, as the
+	/// readable initializer of the mock's production tree takes it, in label order. A place built inside a `@Sendable`
+	/// function, or held in a `Sendable` wrapper, is the `@Sendable` family's. `mock()` lists them among its flat received
+	/// parameters by label. A builder a call of another module's public mock passes up for a hole type and family the mock
+	/// builds places of, with the type of the mock's builder (`passedUpBuilderFamilies`), is that builder, as the seam takes
+	/// one builder for both, and is no parameter of its own (`passedUpProperties`). The builders the calls pass up for a
+	/// hole type and family the mock builds no place of are one builder, which every such call is handed, when the calls
+	/// pass them up as one type; calls that pass them up as different types forward different values, an error the mock
+	/// root reports (`DependencyTreeGenerator.placesForwardingOtherValuesErrors`), so they stay parameters of their own.
 	///
 	/// A builder is labeled from what it builds alone, as a seam's builder is (`DependencyTreeGenerator.stems(of:)`), with
 	/// `_` appended while another parameter of `mock()` has the label (`otherParameterLabels`, and the flat received
 	/// properties it is not). The body calls it by its label, unless a name the tree binds at any level has it
 	/// (`namesBoundInTheTree`): then by a name of its own apart from every builder function of the tree, which `mock()`
 	/// binds first.
+	/// - Parameter capturedBySendableFunctions: The builders the calls pass up that a `@Sendable` builder function captures,
+	///   which `mock()` takes `@Sendable`.
 	private static func seamMockBuilders(
 		of uncoveredParameters: [MockRootParameters.UncoveredParameter],
 		passedUpBuilderFamilies: [Property: MockRootParameters.SeamMockBuilder.Family],
 		otherParameterLabels: Set<String>,
 		flatReceivedProperties: [Property],
+		capturedBySendableFunctions: Set<Property>,
+		typesDeclaredEscaping: Set<TypeDescription>,
 		treePropertyNodes: [MockParameterNode],
 		namesBoundInTheTree: Set<String>,
 	) -> [MockRootParameters.SeamMockBuilder] {
@@ -7016,13 +7031,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			placesByFamily[family, default: []].append(uncovered)
 		}
+		// The builders the calls pass up for a family the mock builds no place of, by family, in the order of the flat received
+		// properties, which is a sorted order.
+		var passedUpOnlyPropertiesByFamily = [MockRootParameters.SeamMockBuilder.Family: [Property]]()
+		var passedUpOnlyFamiliesInOrder = [MockRootParameters.SeamMockBuilder.Family]()
+		for property in flatReceivedProperties {
+			guard let family = passedUpBuilderFamilies[property], placesByFamily[family] == nil else { continue }
+			if passedUpOnlyPropertiesByFamily[family] == nil {
+				passedUpOnlyFamiliesInOrder.append(family)
+			}
+			passedUpOnlyPropertiesByFamily[family, default: []].append(property)
+		}
+		for family in passedUpOnlyFamiliesInOrder {
+			let properties = passedUpOnlyPropertiesByFamily[family, default: []]
+			if Set(properties.map(\.typeDescription.strippingEscaping.asSource)).count == 1 {
+				familiesInOrder.append(family)
+			} else {
+				passedUpOnlyPropertiesByFamily[family] = nil
+			}
+		}
 		guard !familiesInOrder.isEmpty else { return [] }
 		var holeTypes = [SeamSignature.HoleType]()
 		for family in familiesInOrder where !holeTypes.contains(family.holeType) {
 			holeTypes.append(family.holeType)
 		}
 		let stems = DependencyTreeGenerator.stems(of: holeTypes)
-		var passedUpPropertiesByFamily = [MockRootParameters.SeamMockBuilder.Family: [Property]]()
+		var passedUpPropertiesByFamily = passedUpOnlyPropertiesByFamily
 		for property in flatReceivedProperties {
 			guard let family = passedUpBuilderFamilies[property], let places = placesByFamily[family] else { continue }
 			if property.typeDescription.strippingEscaping.asSource == MockRootParameters.SeamMockBuilder.parameterType(ofPlaces: places, in: family).strippingEscaping.asSource {
@@ -7034,7 +7068,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var builders = familiesInOrder.map { family in
 			let stem = stems[family.holeType, default: ""]
 			let label = labels.claim(family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
-			return MockRootParameters.SeamMockBuilder(label: label, internalName: label, family: family, places: placesByFamily[family, default: []], passedUpProperties: passedUpPropertiesByFamily[family, default: []])
+			// A builder with no place of its own is passed up as the calls pass it up, `@Sendable` where a `@Sendable` builder
+			// function captures it.
+			let passedUpType = passedUpOnlyPropertiesByFamily[family]?.first.map { property in
+				let type = capturedBySendableFunctions.contains(property) && !property.typeDescription.isSendableFunction ? property.typeDescription.asSendableFunction : property.typeDescription
+				return type.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
+			}
+			return MockRootParameters.SeamMockBuilder(label: label, internalName: label, family: family, places: placesByFamily[family, default: []], passedUpProperties: passedUpPropertiesByFamily[family, default: []], passedUpType: passedUpType)
 		}
 		builders.sort { $0.label < $1.label }
 		// A builder whose label a name of the tree has is called by a name apart from every builder function of the tree.

@@ -77,18 +77,13 @@ struct SafeDIToolCallingMockBuilderLabelTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_appendsUnderscoreToBuildersLabel_whenCallingMockTakesValueUnderTheBuildersLabel(caller: CallingMockCaller) async throws {
 		// `Screen` receives `serviceBuilder`, a value nothing in its tree builds, so `mock()` takes it under its own label,
-		// and the builder for `Panel`’s place takes the trailing `_`, as the twin’s initializer names them. Each caller kind
-		// keeps its own order of parameters.
+		// and the builder for `Panel`’s place takes the trailing `_`, as the twin’s initializer names them. An internal mock
+		// lists its builders among its received parameters by label, and a public one lists its builders after them, so both
+		// take the value first.
 		let mock = try await executeSafeDIToolMultiModuleTest(modules: Self.clashModules(caller: caller.attribute, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		let twin = try await executeSafeDIToolMultiModuleTest(modules: Self.clashModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 
-		let expectedMockLabels = switch caller {
-		case .internal:
-			["serviceBuilder_", "serviceBuilder", "safeDIOverrides"]
-		case .public:
-			["serviceBuilder", "serviceBuilder_", "safeDIOverrides"]
-		}
-		#expect(GraphFuzzerCallingMockCheck.mockParameterLabels(ofType: "Screen", inGeneratedFile: mock.modules["App"]?.generatedFiles["App.swift"] ?? "") == expectedMockLabels)
+		#expect(GraphFuzzerCallingMockCheck.mockParameterLabels(ofType: "Screen", inGeneratedFile: mock.modules["App"]?.generatedFiles["App.swift"] ?? "") == ["serviceBuilder", "serviceBuilder_", "safeDIOverrides"])
 		#expect(Self.generatedOnlyInitializerLabels(ofType: "Screen", inGeneratedFile: twin.modules["App"]?.generatedFiles["App.swift"] ?? "") == ["serviceBuilder", "serviceBuilder_"])
 	}
 
