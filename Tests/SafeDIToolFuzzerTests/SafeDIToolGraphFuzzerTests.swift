@@ -6274,13 +6274,13 @@ struct SafeDIToolGraphFuzzerTests {
 	static let gatingDrawJudgedGraphFloor = 10
 
 	/// What the retention oracle judges over the seam corpus (`Corpus.retentionCounts`). Pins: derived on CI.
-	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 61, judgedDrawingRetentionShape: 44, judgedThroughHandWrittenBuilder: 33, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 30, "SendableErasedInstantiator": 16, "Instantiator": 29, "SendableInstantiator": 11])
+	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 61, judgedDrawingRetentionShape: 51, judgedThroughHandWrittenBuilder: 33, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 30, "SendableErasedInstantiator": 16, "Instantiator": 29, "SendableInstantiator": 11])
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 567, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x68E8DD2A5FA95F82
+	static let seamCorpusFixtureHash: UInt64 = 0x53E979C1BCE5A958
 	static let seamCorpusAcceptedSeedCount = 289
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -6441,7 +6441,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`seamBuilderOrderShape(listedBy:)`). Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x18CB353E24F0F8BF
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x3BCF8B66DAB0F208
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
