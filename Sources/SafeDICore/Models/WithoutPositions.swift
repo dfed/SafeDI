@@ -58,6 +58,10 @@ extension Instantiable {
 			packageName: packageName,
 		)
 		instantiable.sourceFilePath = sourceFilePath
+		instantiable.dependencyLabelsInUnselectedClauses = dependencyLabelsInUnselectedClauses.map {
+			DependencyLabelInUnselectedClause(label: $0.label, clause: $0.clause, clauseLocation: nil, isDeclaredDirectlyInClause: $0.isDeclaredDirectlyInClause)
+		}
+		instantiable.dependencyLabelsInsideConditionalBlocks = dependencyLabelsInsideConditionalBlocks
 		return instantiable
 	}
 }
