@@ -620,7 +620,8 @@ extension DependencyTreeGenerator {
 	/// reported in the mock's module (`SeamSignature.Hole.forwardingLocation`), as its production tree reports it.
 	static func placesPassedUp(inMockTreeOf mockedType: Instantiable, generator: ScopeGenerator) -> [SeamSignature.Hole] {
 		let mockedModule = ModuleIdentity(moduleName: mockedType.moduleName, packageName: mockedType.packageName)
-		return holesPassedUp(in: generator, seamType: mockedType.concreteInstantiable, seamModule: mockedModule, ownSitePaths: []).passedUpHoles.map { passedUp in
+		var hiddenByCall = [ObjectIdentifier: [String: FillReentryHidings]]()
+		return holesPassedUp(in: generator, seamType: mockedType.concreteInstantiable, seamModule: mockedModule, ownSitePaths: [], hiddenByCall: &hiddenByCall).passedUpHoles.map { passedUp in
 			var place = passedUp.hole
 			place.passedUpRoute = passedUp.route + place.passedUpRoute
 			return place
