@@ -8068,8 +8068,6 @@ struct SafeDIToolGraphFuzzerTests {
 		.configurationStruct: 34,
 		.constructionFunction: 84,
 		.consumerCall: 82,
-		// pins: derive on CI
-		.consumerConvertsClosureOverEnum: 0,
 		.consumerErasedCall: 19,
 		.consumerErasedInline: 3,
 		.consumerFillReentersPublicMock: 2,
@@ -8141,7 +8139,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// and, without that check, fills with `T6`'s at every level (seed 555), and a graph whose fill reads `T6`'s
 	/// `holeContext` under that loop, which the loop does not declare again (seed 836); declarations moved
 	/// beneath the declaring module (seed 98) and a chain of public mocks through the three modules beneath it (seed 208),
-	/// which a consumer computes from the declaring module's view (`GraphFuzzerSeamDependencyDraw`). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
+	/// which a consumer computes from the declaring module's view (`GraphFuzzerSeamDependencyDraw`); and a type built with
+	/// its hand-written mock inside another public mock of its module, whose extensions declare the function only generated
+	/// code calls beside the construction function of that name (seed 37). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
 	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Beyond the corpus, seeds
 	/// 1339, 1649, 2687 and 2840 build a type whose public mock names `customMockName` erased to a concrete existential in
 	/// another module's public mock, whose shared construction function returned the eraser and did not compile
@@ -8151,7 +8151,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// code did not compile before each construction had a function of its own
 	/// (`SafeDIToolPublicMockSharedConstructionTests`); seed 555 draws it in the graph the tool rejects.
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
-	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
+	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
 	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x6811652CBED7F527
 

@@ -583,10 +583,11 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_convertsTheClosureOverTheEnumIntoTheStruct_whenInternalCallerFillsOneRouteAndPassesTheOtherUp() async throws {
+	mutating func generate_handsLevelFunctionsItsBuilderAsUp_whenInternalCallerFillsOneRouteAndPassesTheOtherUp() async throws {
 		// `Model`'s `api` is reached through `Page`, which binds `token`, and straight from `Hub`, which does not. `Root` fills
-		// the first route with `LiveToken`, which reads `token`, and passes the second up: it keeps its dispatchers and its
-		// parameter over `Hub`'s enum, and hands `Hub` a struct whose members rebuild the case and hand it to them.
+		// the first route with `LiveToken`, which reads `token`, and passes the second up: its level functions take the struct
+		// of the builder it takes, `.init(__safeDI_noScope: apiBuilder)`, as `up`, whose member the second route's level
+		// returns.
 		let modules = Self.routeModules(app: [
 			Self.liveToken,
 			Self.root(holding: "hub: Hub"),
@@ -888,9 +889,9 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_convertsTheParameterItTakesOverTheEnum_whenInternalCallerFillsNoPlace() async throws {
-		// `Root` sees nothing that fulfills `Api`: it takes `Page`'s builder over the enum as a parameter of its own and
-		// hands `Page` a struct whose members hand that parameter the rebuilt case. The call has no dispatcher.
+	mutating func generate_handsTheStructOfTheBuilderItTakes_whenInternalCallerFillsNoPlace() async throws {
+		// `Root` sees nothing that fulfills `Api`: it takes `Page`'s builder as a parameter of its own and hands `Page` its
+		// struct, `.init(__safeDI_noScope: apiBuilder)`. The call has no level function.
 		let modules = Self.pageModules(app: [
 			Self.root(holding: "page: Page"),
 			"""
@@ -1151,9 +1152,10 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_convertsTheRouteClosureIntoTheStruct_whenPublicCallerPassesThePlaceUpUnderItsOwnCase() async throws {
+	mutating func generate_handsLevelFunctionsItsOwnMemberAsUp_whenPublicCallerPassesThePlaceUpUnderItsOwnCase() async throws {
 		// `Shell`, a public mock in `Mid`, builds `Hub` and fills its route through `Page` with `LiveToken`, passing the other
-		// up under a case of its own enum, which holds `Hub`'s: `Shell`'s builder is kept, and `Hub`'s converted.
+		// up under a case of its own enum, which holds `Hub`'s: its level functions take, as `up`, what the member of `Shell`'s
+		// own struct for the call returns.
 		let modules = Self.chainModules(app: [
 			Self.root(holding: "shell: Shell"),
 			"""

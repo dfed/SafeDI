@@ -399,17 +399,12 @@ enum GraphFuzzerPublicMockOutputFeature: String, CaseIterable, Comparable {
 	/// `safeDIBuilder:` (`GraphFuzzerPublicMockDrawFeature.holeHandWrittenMockBuiltInPublicMock`).
 	case generatedOnlyMockFunctionBesideConstructionFunction
 	/// A consumer's call of a public mock's function only generated code calls passing the struct its level functions
-	/// return, `<label>: __safeDI_<…>()`, and one passing a struct converted from a closure over the enum,
-	/// `<label>: .init(…`.
+	/// return, `<label>: __safeDI_<…>()`.
 	case consumerPassesLevelFunctionsStruct
-	case consumerConvertsClosureOverEnum
 	/// A consumer's call of a public mock's function only generated code calls that passes a place up without handing any
 	/// written code a scope: a level function's struct over the caller's own as `up`, `.init(__safeDI_noScope: <builder>)`,
 	/// or a member of the caller's own struct.
 	case consumerPassesPlaceUpWithoutScope
-	/// A consumer's conversion over a loop of levels, one function per level a route first opens, which takes the wrap
-	/// of its level's case, `…_wrap: @escaping (…`.
-	case consumerConvertsOverReopenedLevel
 	/// `HoleLoop`'s generated code (`holeLoopBuilder`) in a graph whose `T6` takes the builder struct for its hole type.
 	case holeLoopBuilderOfBuilderStruct
 
@@ -3636,12 +3631,6 @@ extension GraphFuzzerPublicMockDraw {
 					if line.range(of: #"\w+: __safeDI_\w+\(up_*: "#, options: .regularExpression) != nil || line.contains(": .init(__safeDI_noScope: ") || line.range(of: #"\w+: __safeDI_\w+\.\w+\(\w*SafeDI(Sendable)?MockScope_\w+\.\w+_Values\(\)\)"#, options: .regularExpression) != nil {
 						features.insert(.consumerPassesPlaceUpWithoutScope)
 					}
-					if line.contains(": .init("), !line.contains("__safeDI_noScope:") {
-						features.insert(.consumerConvertsClosureOverEnum)
-					}
-				}
-				if line.hasPrefix("func __safeDI_"), line.contains("_wrap: @escaping (") {
-					features.insert(.consumerConvertsOverReopenedLevel)
 				}
 				for leafIndex in leafIndices {
 					let leafName = "\(prefix)T\(leafIndex)"
