@@ -637,12 +637,12 @@ extension GraphFuzzerBuilderSurface {
 	/// Whether `addingBuilderCalls(to:seamTypeAccess:modules:)` calls, in `generatedFiles`, a readable initializer that takes
 	/// a builder whose places are all held in instantiators, which takes the value they forward.
 	static func callsWrapperBuilder(in generatedFiles: [String: String]) -> Bool {
-		generatedFiles.contains { fileName, contents in
+		let membersByStruct = builderStructMembers(inGeneratedFiles: generatedFiles)
+		return generatedFiles.contains { fileName, contents in
 			guard isGenerated(fileName), contents.contains("enum __safeDI_") else { return false }
-			let membersByStruct = builderStructMembers(inGeneratedFile: contents)
 			return GraphFuzzerOracle.readableInitializerTiers(inGeneratedFile: contents).contains { tier in
 				tier.generatedOnlyParameters.contains { parameter in
-					switchedBuilder(ofGeneratedOnlyParameter: parameter).flatMap { forwardedValue(ofBuilderStruct: $0.structPath, membersByStruct: membersByStruct) } != nil
+					switchedBuilder(ofGeneratedOnlyParameter: parameter).flatMap { forwardedValue(ofBuilderStruct: "\(tier.seamTypeName).\($0.structPath)", membersByStruct: membersByStruct) } != nil
 				}
 			}
 		}
@@ -656,7 +656,8 @@ extension GraphFuzzerBuilderSurface {
 	/// builder a closure, `{ make() }`, and another the stored closure `make` itself, where `make` is `@escaping () -> T`, or
 	/// `@escaping @Sendable () -> T` in the `@Sendable` family: the family and `T` are read from the builder struct the
 	/// generated-only initializer takes, which the drawn graph decides, never from the readable parameter judged. A builder
-	/// whose places are all held in instantiators takes the value they forward, `F`, which the struct's members read
+	/// whose places are all held in instantiators – its own and those of the seams it calls, whose builder structs its
+	/// struct's members return – takes the value they forward, `F`, which the structs' members read
 	/// (`forwardedValue(ofBuilderStruct:membersByStruct:)`): `make` is `@escaping (F) -> T`, the closure
 	/// `{ value in make(value) }`, or `{ make(()) }` where `F` is `()`, and where `F` is a labeled tuple, two more functions
 	/// pass it a closure that destructures the tuple and one that reads it by label. Every other
@@ -666,10 +667,10 @@ extension GraphFuzzerBuilderSurface {
 	/// each other module calls the narrowest tier its package reaches.
 	static func addingBuilderCalls(to generatedFiles: [String: String], seamTypeAccess: [String: String] = [:], modules: Set<GraphFuzzerModule> = []) -> [String: String] {
 		var withCalls = generatedFiles
+		let membersByStruct = builderStructMembers(inGeneratedFiles: generatedFiles)
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where isGenerated(fileName) && contents.contains("enum __safeDI_") {
 			let directory = fileName.contains("/") ? String(fileName.prefix { $0 != "/" }) + "/" : ""
 			let imports = Set(contents.split(separator: "\n").filter { $0.hasPrefix("import ") }.map(String.init)).sorted()
-			let membersByStruct = builderStructMembers(inGeneratedFile: contents)
 			var seamTypeNames = [String]()
 			var tiersBySeam = [String: [(access: String, readableParameters: [String], generatedOnlyParameters: [String])]]()
 			for tier in GraphFuzzerOracle.readableInitializerTiers(inGeneratedFile: contents) {
@@ -721,7 +722,7 @@ extension GraphFuzzerBuilderSurface {
 				let name = "parameter\(position)"
 				if let builder = switchedBuilder(ofGeneratedOnlyParameter: generatedOnlyParameter) {
 					let attributes = "@escaping \(builder.isSendable ? "@Sendable " : "")"
-					if let forwarded = forwardedValue(ofBuilderStruct: builder.structPath, membersByStruct: membersByStruct) {
+					if let forwarded = forwardedValue(ofBuilderStruct: "\(seamTypeName).\(builder.structPath)", membersByStruct: membersByStruct) {
 						parameters.append("_ \(name): \(attributes)(\(forwarded)) -> \(builder.builtType)")
 						let closure = forwarded == "()" ? "\(label): { \(name)(()) }" : "\(label): { value in \(name)(value) }"
 						closureArguments.append(closure)
@@ -787,54 +788,67 @@ extension GraphFuzzerBuilderSurface {
 		return (isSendable, String(type[structRange.upperBound..<lastAngleBracket]), structPath)
 	}
 
-	/// The type each member of each builder struct `contents`, a generated file, declares returns, keyed by the path of the
-	/// enums that declare the struct from the outermost scope enum (`SafeDIScope_Api`, `SafeDIScope_Api.Worker_Scope`):
-	/// `__safeDI_Built` for a plain or lazy place, a wrapper's `Builder` over it for a place held in an instantiator, or a
-	/// level's struct.
-	static func builderStructMembers(inGeneratedFile contents: String) -> [String: [String]] {
+	/// The type each member of each builder struct the generated files among `generatedFiles` declare returns, keyed by the
+	/// struct's type, qualified by the extension that declares its outermost scope enum (`Home.SafeDIScope_Api`,
+	/// `Home.SafeDIScope_Api.Worker_Scope`): `__safeDI_Built` for a plain or lazy place, a wrapper's `Builder` over it for a
+	/// place held in an instantiator, or a level's struct – of the seam's own enum, of a seam it calls
+	/// (`Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>`), or, for a place inside a fill, the filled seam's struct
+	/// over the struct of the enum of the type the fill builds.
+	static func builderStructMembers(inGeneratedFiles generatedFiles: [String: String]) -> [String: [String]] {
 		var membersByStruct = [String: [String]]()
-		// Each open scope enum, and the builder struct open inside the innermost, by indentation.
-		var openEnums = [(indentation: Int, name: String)]()
-		var openStructIndentation: Int?
-		for line in contents.split(separator: "\n", omittingEmptySubsequences: false) {
-			let indentation = line.prefix { $0 == " " }.count
-			let trimmed = line.trimmingCharacters(in: .whitespaces)
-			if trimmed == "}" {
-				if indentation == openStructIndentation {
-					openStructIndentation = nil
-				} else if indentation == openEnums.last?.indentation {
-					openEnums.removeLast()
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where isGenerated(fileName) {
+			// The extension open at the outermost level, each open scope enum, and the builder struct open inside the
+			// innermost, by indentation.
+			var extendedType: String?
+			var openEnums = [(indentation: Int, name: String)]()
+			var openStructIndentation: Int?
+			for line in contents.split(separator: "\n", omittingEmptySubsequences: false) {
+				let indentation = line.prefix { $0 == " " }.count
+				let trimmed = line.trimmingCharacters(in: .whitespaces)
+				if trimmed == "}" {
+					if indentation == openStructIndentation {
+						openStructIndentation = nil
+					} else if indentation == openEnums.last?.indentation {
+						openEnums.removeLast()
+					}
+				} else if openEnums.isEmpty, trimmed.hasPrefix("extension "), trimmed.hasSuffix(" {") {
+					extendedType = String(trimmed.dropFirst("extension ".count).dropLast(" {".count))
+				} else if let enumRange = trimmed.range(of: #"enum \w+ \{$"#, options: .regularExpression) {
+					let name = String(trimmed[enumRange].dropFirst("enum ".count).dropLast(" {".count))
+					if !openEnums.isEmpty || name.range(of: #"^SafeDI(Sendable)?Scope_"#, options: .regularExpression) != nil {
+						openEnums.append((indentation, name))
+					}
+				} else if !openEnums.isEmpty, trimmed.range(of: #"struct __safeDI_Builder<"#, options: .regularExpression) != nil {
+					openStructIndentation = indentation
+				} else if openStructIndentation != nil,
+				          let extendedType,
+				          trimmed.hasPrefix("public let "),
+				          let arrow = trimmed.range(of: ") -> ")
+				{
+					membersByStruct[([extendedType] + openEnums.map(\.name)).joined(separator: "."), default: []].append(String(trimmed[arrow.upperBound...]))
 				}
-			} else if let enumRange = trimmed.range(of: #"enum \w+ \{$"#, options: .regularExpression) {
-				let name = String(trimmed[enumRange].dropFirst("enum ".count).dropLast(" {".count))
-				if !openEnums.isEmpty || name.range(of: #"^SafeDI(Sendable)?Scope_"#, options: .regularExpression) != nil {
-					openEnums.append((indentation, name))
-				}
-			} else if !openEnums.isEmpty, trimmed.range(of: #"struct __safeDI_Builder<"#, options: .regularExpression) != nil {
-				openStructIndentation = indentation
-			} else if openStructIndentation != nil,
-			          trimmed.hasPrefix("public let "),
-			          let arrow = trimmed.range(of: ") -> ")
-			{
-				membersByStruct[openEnums.map(\.name).joined(separator: "."), default: []].append(String(trimmed[arrow.upperBound...]))
 			}
 		}
 		return membersByStruct
 	}
 
-	/// The value a builder that takes the builder struct of the enums `structPath` takes, read from the members of that
-	/// struct and of every level's struct it reaches in `membersByStruct`: `nil` where a place among them is plain or lazy,
-	/// whose builder takes nothing; otherwise `()` where one forwards nothing, or else the first place's forwarded value.
-	static func forwardedValue(ofBuilderStruct structPath: String, membersByStruct: [String: [String]]) -> String? {
+	/// The value a builder that takes the builder struct `structType` takes (`Home.SafeDIScope_Api`), read from the members
+	/// of that struct and of every struct it reaches in `membersByStruct`, as `DependencyTreeGenerator.builderForm(ofPlaces:)`
+	/// reads the places the builder reaches: the structs of the levels nested in it, of the seams its levels call, whose
+	/// places it hands up, and of the type a fill builds, never the filled seam's, whose places the fill fills. `nil` where a
+	/// place among them is plain or lazy, whose builder takes nothing; otherwise `()` where one forwards nothing, or else the
+	/// first place's forwarded value.
+	static func forwardedValue(ofBuilderStruct structType: String, membersByStruct: [String: [String]]) -> String? {
 		var forwardedValues = [String]()
 		var visited = Set<String>()
-		var pathsToVisit = [structPath]
-		while !pathsToVisit.isEmpty {
-			let path = pathsToVisit.removeFirst()
-			guard visited.insert(path).inserted else { continue }
-			for returnType in membersByStruct[path] ?? [] {
-				if let levelRange = returnType.range(of: #"SafeDI(Sendable)?Scope_\w+(\.\w+)*(?=\.__safeDI_Builder<)"#, options: .regularExpression) {
-					pathsToVisit.append(String(returnType[levelRange]))
+		var structsToVisit = [structType]
+		while !structsToVisit.isEmpty {
+			let visitedStruct = structsToVisit.removeFirst()
+			guard visited.insert(visitedStruct).inserted else { continue }
+			for returnType in membersByStruct[visitedStruct] ?? [] {
+				// The innermost struct the member returns: a fill's is the fill's own level, the filled seam's around it.
+				if let levelStruct = levelStructTypes(in: returnType).last {
+					structsToVisit.append(qualifiedStructType(levelStruct, seenFrom: visitedStruct, membersByStruct: membersByStruct))
 				} else if let wrapperRange = returnType.range(of: #"^(Sendable)?ErasedInstantiator<"#, options: .regularExpression),
 				          let builtRange = returnType.range(of: ", __safeDI_Built>.Builder", options: .backwards)
 				{
@@ -846,6 +860,32 @@ extension GraphFuzzerBuilderSurface {
 		}
 		guard let firstValue = forwardedValues.first else { return nil }
 		return forwardedValues.contains { $0 == "()" || $0 == "Void" } ? "()" : firstValue
+	}
+
+	/// Each level's struct `type` spells, outermost first, as spelled before `.__safeDI_Builder<`: `Inner.SafeDIScope_Api`
+	/// and `SafeDIScope_Api.Detail_Scope` in
+	/// `Inner.SafeDIScope_Api.__safeDI_Builder<SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>>`.
+	private static func levelStructTypes(in type: String) -> [String] {
+		let suffix = ".__safeDI_Builder"
+		return type.split { !($0.isLetter || $0.isNumber || $0 == "_" || $0 == ".") }.compactMap { token in
+			guard token.hasSuffix(suffix) else { return nil }
+			let structType = String(token.dropLast(suffix.count))
+			return structType.split(separator: ".").contains { GraphFuzzerScopeDeclarations.isRootEnumName(String($0)) } ? structType : nil
+		}
+	}
+
+	/// `structType`, a level's struct a member of the struct `memberStruct` returns, qualified as `membersByStruct` keys it:
+	/// a struct of the seam's own enums, spelled from its root enum, by the extension that declares `memberStruct`, and a
+	/// called seam's, spelled from the seam's type, by the qualifiers of that type that a key holds.
+	private static func qualifiedStructType(_ structType: String, seenFrom memberStruct: String, membersByStruct: [String: [String]]) -> String {
+		let components = structType.split(separator: ".").map(String.init)
+		if GraphFuzzerScopeDeclarations.isRootEnumName(components.first ?? "") {
+			let extendedType = memberStruct.split(separator: ".").map(String.init).prefix { !GraphFuzzerScopeDeclarations.isRootEnumName($0) }
+			return (extendedType + components).joined(separator: ".")
+		} else {
+			// A seam's type the generated code qualifies by its module, which no key holds.
+			return (0..<components.count).lazy.map { components.dropFirst($0).joined(separator: ".") }.first { membersByStruct[$0] != nil } ?? structType
+		}
 	}
 
 	/// The labels of `type`, a tuple type each of whose elements is labeled, such as `(id: Int, name: String)`, or `nil`.
