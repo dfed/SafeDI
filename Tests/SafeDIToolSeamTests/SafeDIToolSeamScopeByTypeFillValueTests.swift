@@ -996,6 +996,66 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_wrapsCallersOptionalToken_whenCallingSeamTakesTokenOnlyIfAvailable() async throws {
+		// `Screen`, a seam of `App` that calls `Office`, receives `token` only if available, so its generated initializer takes
+		// `token: Token?`, which the root dispatcher maps into the wrapper the fill takes.
+		try await expectFill(
+			feature: Self.lazyRouteFeature(),
+			fulfillers: [Self.lazyRouteOnlyIfAvailableFulfiller],
+			root: seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Received(onlyIfAvailable: true) let token: Token?", "@Instantiated let office: Office"])
+				+ "\n\n"
+				+ seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Token", "@Instantiated let screen: Screen"]),
+			expectedApp: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let token = Token()
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_029593DA1BB2FBD5.self
+			            return Screen(__safeDI_token: token)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(token: token, screen: screen)
+			    }
+			}
+
+			extension Screen {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_token token: Token?) {
+			        func __safeDI_office() -> Office {
+			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: token.map { value in LazilyInstantiated<Token>({ value }) }) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
+			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
+			                    let userService: any UserService = DefaultUserService(token: token?.instance)
+			                    return userService
+			                })
+			            }
+			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+			        }
+			        let office: Office = __safeDI_office()
+			        self.init(token: token, office: office)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_029593DA1BB2FBD5 {}
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_wrapsCallersOptionalToken_whenCallerForwardsTokenOptionally() async throws {
 		// `Screen`, the caller, forwards `token: Token?`, which the fill reads only if available: the root dispatcher wraps
 		// the value where there is one, so the fill reads the caller’s `token` beside `Desk` and `Desk`’s instance beneath it.
