@@ -29,6 +29,8 @@ struct GraphFuzzerOverrideCandidate: Equatable {
 	let label: String
 	/// The concrete type whose scope builds the dependency.
 	let builtTypeName: String
+	/// The type of the dependency's property, without `any` or the types it is nested in.
+	let propertyTypeName: String
 }
 
 /// The form of the `SafeDIOverrides` field the override oracle passes its sentinel through.
@@ -44,8 +46,8 @@ enum GraphFuzzerOverrideFieldKind: String, CaseIterable, Comparable {
 }
 
 /// One override the oracle passes a compared mock: the mock's `SafeDIOverrides` field for `label`, given a builder that
-/// builds the type as its own initializer (or `instantiate(…)`) does from the arguments the mock hands it, and records
-/// what it built (`GraphFuzzerOverrideSentinel`). The pair's feature expression is the mock so called, with that record;
+/// builds the type as its own initializer (or `instantiate(…)`, or the hand-written mock the tool builds the property with
+/// when that mock returns another of the type's types) does from the arguments the mock hands it, and records what it built (`GraphFuzzerOverrideSentinel`). The pair's feature expression is the mock so called, with that record;
 /// its known-right expression is the production build the mock's pair compares with, with the instance production puts
 /// in scope under `label`. So the two agree only when the sentinel takes exactly that instance's place: every receiver
 /// of the label holds the sentinel, nothing else holds it, and every other value is what production builds, as it is
@@ -122,7 +124,7 @@ extension GraphFuzzerValueOraclePlan {
 				      GraphFuzzerMirrorTypes.kindOrder(of: declaration.property.type) == 0,
 				      !declaration.property.isOptional
 				else { return nil }
-				return GraphFuzzerOverrideCandidate(label: declaration.property.label, builtTypeName: builtTypeName)
+				return GraphFuzzerOverrideCandidate(label: declaration.property.label, builtTypeName: builtTypeName, propertyTypeName: GraphFuzzerMockMirrorModel.unqualifiedName(of: declaration.property.type))
 			}
 			if let probe = overrideProbe(
 				mockedTypeName: mirror.mockedTypeName,
@@ -178,6 +180,14 @@ extension GraphFuzzerValueOraclePlan {
 		let sentinel = GraphFuzzerOverrideSentinel.typeName(typeNamePrefix: fixture.typeNamePrefix)
 		let builder = if let instantiateParameters = instantiateParametersByExtensionTypeName[candidate.builtTypeName] {
 			"{ \(sentinel).recorded(\(candidate.builtTypeName).instantiate(\(Self.builderArguments(ofInstantiateParameters: instantiateParameters).joined(separator: ", ")))) }"
+		} else if kind == .configuration,
+		          let handWrittenMock = handWrittenMocksReturningAdditionalTypes[candidate.builtTypeName],
+		          handWrittenMock.returnTypeName == candidate.propertyTypeName
+		{
+			// The tool builds the property with the hand-written mock, which returns the property's type, so the
+			// configuration's builder takes the mock's parameters, which the initializer need not take. The builder returns
+			// the configured type, which the mock built and returns as the property's type.
+			"{ \(sentinel).recorded(\(candidate.builtTypeName).\(handWrittenMock.name)(\(Self.builderArguments(ofInstantiateParameters: handWrittenMock.parameters).joined(separator: ", "))) as! \(candidate.builtTypeName)) }"
 		} else {
 			"\(sentinel).recording(\(candidate.builtTypeName).init)"
 		}
