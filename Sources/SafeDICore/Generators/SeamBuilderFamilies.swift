@@ -630,7 +630,7 @@ extension DependencyTreeGenerator {
 			let functionType = TypeDescription.closure(arguments: [], isAsync: false, doesThrow: false, returnType: builtType)
 			return (isSendable ? functionType.asSendableFunction : functionType).asFunctionParameter
 		case let .wrapper(wrapperType):
-			return .attributed(.nested(name: Dependency.wrapperBuilderTypeName, parentType: isSendable ? wrapperType.sendableTwinOfWrapper : wrapperType, generics: []), specifiers: [], attributes: ["escaping"])
+			return wrapperType.wrapperBuilderParameterType(isSendable: isSendable)
 		case let .erased(forwarded):
 			return .attributed(erasedBuilderType(forwarding: forwarded, returning: builtType, isSendable: isSendable), specifiers: [], attributes: ["escaping"])
 		}

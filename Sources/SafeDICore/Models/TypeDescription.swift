@@ -722,6 +722,26 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// This builder type, a builder a public mock's call passes up as the builder a person writes for it
+	/// (`DependencyTreeGenerator.readableBuilderType(of:returning:isSendable:)`, without `@escaping`), `@Sendable`, as a
+	/// parameter of a function generated code declares. A nested type is an instantiator's `Builder`, the only nested type
+	/// that function spells, and is spelled `wrapperBuilderParameterType(isSendable: true)` of the instantiator; any other
+	/// type is a function type, which is `asSendableFunction`. A `@Sendable` written before the name of a function type
+	/// leaves the type the name stands for as it is: Linux's Swift 6.2 and Swift 6.4 reject a `@Sendable` function's capture
+	/// of a parameter spelled `@escaping @Sendable ErasedInstantiator<F, T>.Builder` ("capture of … with non-Sendable
+	/// type"), and Swift 6.4 warns at `@escaping @Sendable SendableErasedInstantiator<F, T>.Builder` ("attribute
+	/// '@Sendable' cannot be applied to a type alias").
+	var asSendableBuilder: TypeDescription {
+		guard case let .nested(_, wrapperType, _) = self else { return asSendableFunction }
+		return wrapperType.wrapperBuilderParameterType(isSendable: true)
+	}
+
+	/// The `Builder` of this instantiator, or of its `Sendable` twin (`sendableTwinOfWrapper`) where `isSendable`, declared
+	/// `@escaping`: how a parameter spells the builder a person writes for a place of this instantiator type.
+	func wrapperBuilderParameterType(isSendable: Bool) -> TypeDescription {
+		.attributed(.nested(name: Dependency.wrapperBuilderTypeName, parentType: isSendable ? sendableTwinOfWrapper : self, generics: []), specifiers: [], attributes: ["escaping"])
+	}
+
 	/// This function type, `@Sendable`.
 	var asSendableFunction: TypeDescription {
 		.attributed(self, specifiers: [], attributes: ["Sendable"])
