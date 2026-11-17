@@ -345,9 +345,9 @@ extension DependencyTreeGenerator {
 				}
 				let placesOfReadableType = takesBuilderStruct
 					? SeamSignature.ScopeEnum.sitesReached(from: key, in: enumsReachedByKey)
-						.compactMap { site in sortKeyBySite[site].map { (site: site, sortKey: $0) } }
-						.sorted { $0.sortKey < $1.sortKey }
-						.compactMap { holesBySite[$0.site] }
+					.compactMap { site in sortKeyBySite[site].map { (site: site, sortKey: $0) } }
+					.sorted { $0.sortKey < $1.sortKey }
+					.compactMap { holesBySite[$0.site] }
 					: reachedPlaces
 				let parameterType = takesBuilderStruct
 					? .nested(name: ReservedName.builderStructTypeName, parentType: enumType, generics: [builtType])
