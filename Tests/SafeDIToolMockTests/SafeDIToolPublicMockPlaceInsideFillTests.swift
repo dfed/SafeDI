@@ -2697,27 +2697,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 
 			    /// Overrides for the mock dependency tree.
 			    nonisolated public struct SafeDIOverrides {
-			        public init(
-			            innerBuilder: ((@escaping () -> any Service) -> Inner)? = nil
-			        ) {
-			            __safeDI_storage = __safeDI_Storage(
-			                innerBuilder: innerBuilder
-			            )
-			        }
-
-			        public var innerBuilder: ((@escaping () -> any Service) -> Inner)? { __safeDI_storage.innerBuilder }
-
-			        private let __safeDI_storage: __safeDI_Storage
-
-			        private final class __safeDI_Storage {
-			            init(
-			                innerBuilder: ((@escaping () -> any Service) -> Inner)?
-			            ) {
-			                self.innerBuilder = innerBuilder
-			            }
-
-			            let innerBuilder: ((@escaping () -> any Service) -> Inner)?
-			        }
+			        public init() {}
 			    }
 
 			    public static func mock(
