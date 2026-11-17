@@ -2355,10 +2355,42 @@ struct NearestDeclaration: Equatable, Sendable {
 	/// Each form the declaration provides (see `CycleParameter.forms(providedBy:)`), mapped to the declared property a
 	/// reader of that form is handed: the property itself, the optional property a parameter made optional binds, or
 	/// the `LazilyInstantiated` whose instance a by-value form reads.
-	var bindings = [Property: Property]()
+	var bindings = [Property: Property]() {
+		didSet { identity = Identity(bindings: bindings, formsBeingBuilt: formsBeingBuilt) }
+	}
+
 	/// The forms of the label being built between the declaration and the scope: a receive of one of them reads a
 	/// declaration that is not built yet.
-	var formsBeingBuilt = Set<Property>()
+	var formsBeingBuilt = Set<Property>() {
+		didSet { identity = Identity(bindings: bindings, formsBeingBuilt: formsBeingBuilt) }
+	}
+
+	/// Whether `other` is this declaration, unchanged since one was copied from the other: then it holds the same
+	/// properties, spelled alike, which a construction memo compares for every read it answers again.
+	func isUnchangedCopy(of other: Self) -> Bool {
+		identity === other.identity
+	}
+
+	static func == (lhs: Self, rhs: Self) -> Bool {
+		guard !lhs.isUnchangedCopy(of: rhs) else { return true }
+		return lhs.identity.contentHash == rhs.identity.contentHash && lhs.bindings == rhs.bindings && lhs.formsBeingBuilt == rhs.formsBeingBuilt
+	}
+
+	/// Made anew by every change, and copied with the declaration. It holds a hash of the declaration's content, which
+	/// declarations `==` equates share, so that two that differ are told apart without comparing their properties: a
+	/// construction memo compares many declarations that differ.
+	private final class Identity: Sendable {
+		init(bindings: [Property: Property], formsBeingBuilt: Set<Property>) {
+			var hasher = Hasher()
+			hasher.combine(bindings)
+			hasher.combine(formsBeingBuilt)
+			contentHash = hasher.finalize()
+		}
+
+		let contentHash: Int
+	}
+
+	private var identity = Identity(bindings: [:], formsBeingBuilt: [])
 }
 
 /// The nearest declaration of each label on the path from a tree's root to a scope. A label absent here is declared
