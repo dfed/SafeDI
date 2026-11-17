@@ -952,6 +952,8 @@ jobs:
     # code (#525; CLAUDE.md's rule on an actor's `lazy var`). It also
     # uploads the `macos` coverage flag that codecov.yml waits for.
     runs-on: macos-26
+    outputs:
+      build-cache-prefix: spm-release-v2-macOS-xcode-26.0-${{ steps.runner-image.outputs.version }}-
     permissions:
       contents: read
       # To read the passed compile checks other runs uploaded.
@@ -966,6 +968,14 @@ jobs:
         uses: actions/checkout@v7
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      # Before anything reads a source's modification time: SwiftPM rebuilds
+      # a target whose sources' times differ from the ones it built with,
+      # and a checkout gives every file the time of the checkout, so without
+      # this a restored build rebuilt every SafeDI target (17.1 minutes in
+      # runs 44144477988 and 44153760541, which changed no Swift file and
+      # restored the build of their own key).
+      - name: Stamp Source Times
+        run: .github/scripts/stamp-source-times.sh
       # GitHub's macOS images export ImageVersion (for example
       # 20261102.0473.1) from ~/.bashrc; it is not in the `env` context, so
       # a step reads it for the cache key below. The OS build stands in if
@@ -983,46 +993,50 @@ jobs:
           arguments=$(printf '%s\n%s' "$SWIFT_TEST_ARGUMENTS" "$compiler" | shasum -a 256 | cut -c1-16)
           test "${#arguments}" -eq 16
           echo "hash=$arguments" >> "$GITHUB_OUTPUT"
-      # Restoring `.build` carries swift-syntax's release-mode objects
-      # over between runs; SafeDI's own targets and tests still rebuild
-      # from the current sources. The key pins the Xcode version because
-      # build products aren't portable across toolchains. The
-      # restore-keys prefix reuses the most recent cache when
-      # Package.resolved changes, and the incremental build takes it
-      # from there. The build's arguments are in the key too: a cache hit
-      # is never re-saved, so a build with other compiler flags must not
-      # hit a cache it would rebuild from on every run. The key holds a
+      # Restoring `.build` carries the build of main's newest commit over:
+      # with the sources' times stamped above, SwiftPM rebuilds only the
+      # targets whose files differ from that commit's, and what depends on
+      # them. The key ends in the commit, so each push to main saves its own
+      # build ("Save Build Directory" below) and "Delete Older Build
+      # Directories" then removes main's older ones; a key without the
+      # commit was never saved again once hit, so the build it held fell
+      # further behind main with every landing. The key pins the Xcode
+      # version because build products aren't portable across toolchains.
+      # The restore-keys prefixes reuse the most recent build of the same
+      # arguments, then of other arguments or another Package.resolved,
+      # and the incremental build takes it from there. The key holds a
       # hash of the arguments and the compiler's version rather than of
-      # this workflow, because every
-      # change to the workflow then saved another 580 MB copy.
+      # this workflow, because every change to the workflow then saved
+      # another 580 MB copy. `v2` keeps a build made before the sources
+      # were stamped from being restored: SwiftPM would rebuild all of it.
       #
-      # The key names the runner image: a cache hit is never re-saved, so
-      # when runner image 20261102.0473 rolled out, every run restored the
-      # previous image's cache and rebuilt swift-syntax (~8 min). The first
-      # run on a new image restores an older image's cache, builds
-      # incrementally, and saves under its own key.
+      # The key names the runner image: when runner image 20261102.0473
+      # rolled out, every run restored the previous image's cache and
+      # rebuilt swift-syntax (~8 min). The first run on a new image
+      # restores an older image's cache, builds incrementally, and saves
+      # under its own key.
       #
-      # Only a run on main saves ("Save Build Directory" below). A pull
-      # request can restore main's caches and its own, never another pull
-      # request's, so a copy it saved served only its own later runs, and
-      # the repository's caches are evicted, least recently used first,
-      # above 10 GB: on 2026-11-17 they stood at 9.98 GB, two pull
-      # requests each held a 582 MB copy of this build, and PR #765's run
-      # 44067580141, on image 20261102.0473.1, found only image
-      # 20261112.0504.1's build to restore and built for 23.5 minutes
-      # where main's run 44032976346 built for 14.1. A pull request that
-      # changes the dependencies or the arguments builds from main's
-      # nearest cache on every run until it lands.
+      # Only a run on main saves. A pull request can restore main's caches
+      # and its own, never another pull request's, so a copy it saved
+      # served only its own later runs, and the repository's caches are
+      # evicted, least recently used first, above 10 GB: on 2026-11-17
+      # they stood at 9.98 GB, two pull requests each held a 582 MB copy
+      # of this build, and PR #765's run 44067580141, on image
+      # 20261102.0473.1, found only image 20261112.0504.1's build to
+      # restore and built for 23.5 minutes where main's run 44032976346
+      # built for 14.1. A pull request builds from main's newest build on
+      # every run until it lands.
       - name: Restore Build Directory
         id: build-cache
         uses: actions/cache/restore@v6
         with:
           path: .build
-          key: spm-release-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}
+          key: spm-release-v2-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}-${{ github.sha }}
           restore-keys: |
-            spm-release-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-
-            spm-release-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-
-            spm-release-${{ runner.os }}-xcode-26.0-
+            spm-release-v2-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}-
+            spm-release-v2-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-
+            spm-release-v2-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-
+            spm-release-v2-${{ runner.os }}-xcode-26.0-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -1196,6 +1210,13 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+      # For the macOS job's reason (17.9 and 19.8 minutes in the same two
+      # runs). The checkout is the container's, so git needs telling that
+      # this user may read it.
+      - name: Stamp Source Times
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          .github/scripts/stamp-source-times.sh
       # The compiler is hashed with the arguments, since a build is no start
       # for another compiler's. Assigned first, so that a compiler that
       # fails to report its version fails this step.
@@ -1209,7 +1230,8 @@ jobs:
       # Same idea as the macOS test job: reuse dependency build products
       # between runs. Keyed on the container's Swift version, the compiler
       # the `swift:6.2` tag names today, and the build's arguments, for the
-      # macOS job's reason. Only a run on main
+      # macOS job's reason, and on the commit, so that each push to main
+      # saves the build a later run starts from. Only a run on main
       # saves ("Save Build Directory" below), for the macOS job's reason
       # too: two pull requests each held a 546 MB copy of this build.
       - name: Restore Build Directory
@@ -1217,10 +1239,11 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: .build
-          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}
+          key: spm-release-v2-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}-${{ github.sha }}
           restore-keys: |
-            spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
-            spm-release-${{ runner.os }}-swift-6.2-
+            spm-release-v2-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}-
+            spm-release-v2-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
+            spm-release-v2-${{ runner.os }}-swift-6.2-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -1269,6 +1292,57 @@ jobs:
   # Runs the suite once, with compile checks and coverage, from the bundle
   # "Build Tests on Linux" built. It keeps the name it had when it also
   # built, which is the name of a required check.
+  # Leaves main one build directory per job and runner image: each push to
+  # main saves a build under a key that ends in its commit, about 580 MB on
+  # macOS and 546 MB on Linux, and the repository's caches are evicted above
+  # 10 GB. The newest is kept by creation time rather than this run's own, so
+  # an older run that finishes late deletes nothing newer. Deleting a cache
+  # takes `actions: write`, which only this job has; it checks nothing out
+  # and calls only GitHub's API, so it runs on Linux with no container. A
+  # failure warns and leaves the builds for the next run or for eviction.
+  prune-build-caches:
+    name: Delete Older Build Directories
+    needs: [spm, linux-build]
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Delete All but the Newest Build of Each Job
+        # A list and a delete for each older build, usually one per job.
+        # One minute is the least the limit can be set to in whole minutes.
+        timeout-minutes: 1
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          MACOS_PREFIX: ${{ needs.spm.outputs.build-cache-prefix }}
+          LINUX_PREFIX: spm-release-v2-Linux-swift-6.2-
+        run: |
+          for prefix in "$MACOS_PREFIX" "$LINUX_PREFIX"; do
+            # The macOS job names its runner image, which a job that did not run cannot.
+            case "$prefix" in *-) ;; *) continue ;; esac
+            if [ "$prefix" = "spm-release-v2-macOS-xcode-26.0--" ]; then
+              continue
+            fi
+            if ! older=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -f sort=created_at -f direction=desc -F per_page=100 --jq '.actions_caches[1:][] | "\(.id) \(.key)"' 2>&1); then
+              echo "::warning::Listing $REF's builds under $prefix failed: $(printf '%s' "$older" | tr '\r\n' '  ')"
+              continue
+            fi
+            if [ -z "$older" ]; then
+              echo "$REF has no older build under $prefix."
+              continue
+            fi
+            printf '%s\n' "$older" | while read -r id key; do
+              if deleted=$(gh api -X DELETE "repos/$REPOSITORY/actions/caches/$id" 2>&1); then
+                echo "Deleted $key."
+              else
+                echo "::warning::Deleting $key failed: $(printf '%s' "$deleted" | tr '\r\n' '  ')"
+              fi
+            done
+          done
+
   linux:
     name: Build and Test on Linux
     needs: [changes, linux-build]
