@@ -1392,16 +1392,272 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
+	// MARK: A place a caller fills inside the fill built again
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueOfOneRoute_whenCallerFillsPlaceInsideFillBuiltAgain() async {
+		// `DefaultFirst` binds `x` before it calls `SubB` again, and `App` fills `gadget`, inside the fill of `second`, with
+		// `DefaultGadget`, which receives `x` only if available: inline, the gadget reads `DefaultFirst`'s `x` on the route
+		// through that call and `nil` on `Top`'s own, while the one fill `Middle` generates for `second` reads the outer call's.
+		// `Host`'s module records what its visible build rejects, so `App` rejects it too.
+		let fixture = Fixture(
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueOfOneRoute_whenTypeAboveSeamCallDeclaresLabelTooAndReaderRequiresIt() async {
+		// `Host` binds `x` before it calls `Top`, so `gadget` carries `Host`'s `x` as a field, but on the route through
+		// `DefaultFirst`'s call of `SubB` inline reads `DefaultFirst`'s: a field of the label does not lift the rejection.
+		let fixture = Fixture(
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
+			hostDeclarations: ["@Instantiated let x: X", "@Instantiated let top: Top"],
+			gadgetDeclarations: ["@Received let x: X"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received let x: X` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueOfOneRoute_whenTypeAboveSeamCallDeclaresLabelTooAndReaderReceivesItOnlyIfAvailable() async {
+		// As above, with the gadget receiving `x` only if available.
+		let fixture = Fixture(
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
+			hostDeclarations: ["@Instantiated let x: X", "@Instantiated let top: Top"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueOfOneRoute_whenCallBuildsSeamAgainThroughInstantiator() async {
+		// `DefaultFirst` builds `SubB` again through an `Instantiator`, after binding `x`.
+		let fixture = Fixture(
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subBBuilder: Instantiator<SubB>"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subBBuilder`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueOfOneRoute_whenFillBuiltAgainBuildsItsSeamAgain() async {
+		// The fill of `second` builds `Holder`, which binds `x` and holds `SubB` in an `Instantiator`: the fill is passed to a
+		// call inside its own tree, and `gadget`, beside `holder`, reads `Holder`'s `x` inline only on that call's route.
+		let fixture = Fixture(
+			middleTypes: [seamFixtureType(named: "Holder", declarations: ["@Instantiated let x: X", "@Instantiated let subBBuilder: Instantiator<SubB>"])],
+			defaultSecondDeclarations: ["@Instantiated let holder: Holder", "@Instantiated let gadget: any Gadget"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `Holder` declares on the path from the builder for `SubB`’s `second: any Second` (case `second` of `secondBuilder`) to the call by which `Holder` instantiates `SubB` again (`subBBuilder`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `Holder`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["Holder.swift"]):10:5: note: `Holder` declares `x: X` here.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueOfOneRoute_whenCallBuildsSeamAgainInSendableFunction() async {
+		// `DefaultFirst` builds `SubB` again in a `SendableInstantiator`'s `@Sendable` function, after binding `x`.
+		let fixture = Fixture(
+			isSendable: true,
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subBBuilder: SendableInstantiator<SubB>"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subBBuilder`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueOfOneRoute_whenSeamCalledInsideFillBuiltAgainPassesPlaceUp() async {
+		// The fill of `second` calls `Inner`, whose place `gizmo` `Host` passes up, inside that fill, and `App` fills.
+		let fixture = Fixture(
+			featureTypes: ["public protocol Gizmo {}", seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated let gizmo: any Gizmo"])],
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
+			defaultSecondDeclarations: ["@Instantiated let inner: Inner"],
+			appTypes: [SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultGizmo", fulfilling: "Gizmo", declarations: ["@Received(onlyIfAvailable: true) let x: X?"])],
+		)
+		await expectBothBuildsThrow(fixture, readerFile: "DefaultGizmo.swift", readerLineInMiddle: 9) { readerLocation, fixtures in
+			"""
+			\(readerLocation): error: `DefaultGizmo` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueOfOneRoute_whenModuleAboveSeamThatPassesPlaceUpFillsIt() async {
+		// `App`'s `Shell` calls `Host` and passes `gadget` up; `Outer` fills it. The copy `Shell` takes keeps what `Host` recorded.
+		let fixture = Fixture(
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: fixture.feature),
+			ModuleFixture(name: "Middle", packageName: "Mid", swiftFileContent: fixture.middle.map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let host: Host"])].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+			ModuleFixture(
+				name: "Outer",
+				packageName: "Outer",
+				swiftFileContent: (fixture.app + [seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shell: Shell"])]).map { "import Feature\nimport Middle\nimport App\n\n" + $0 },
+				dependencies: ["Feature", "Middle", "App"],
+			),
+		]
+		await assertThrowsMultiModuleError(inModule: "Outer", diagnostics: { fixtures in
+			"""
+			\(fixtures["Outer"]!["DefaultGadget.swift"]):11:5: error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueOfOneRouteNamingEveryPath_whenTwoPathsDeclareLabel() async {
+		// `DefaultFirst` binds `x` before its call of `SubB`, and `Holder`, inside the fill of `second`, before its own: one
+		// error names both, in both builds.
+		let fixture = Fixture(
+			middleTypes: [seamFixtureType(named: "Holder", declarations: ["@Instantiated let x: X", "@Instantiated let subBBuilder: Instantiator<SubB>"])],
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
+			defaultSecondDeclarations: ["@Instantiated let holder: Holder", "@Instantiated let gadget: any Gadget"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`) and `Holder` declares on the path from the builder for `SubB`’s `second: any Second` (case `second` of `secondBuilder`) to the call by which `Holder` instantiates `SubB` again (`subBBuilder`), but those calls pass the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s and `Holder`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
+			\(fixtures["Middle"]!["Holder.swift"]):10:5: note: `Holder` declares `x: X` here.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueBoundByPassingUpSeam_whenCallInsideFillPassesFillToSeamThatPassesPlaceUp() async {
+		// `DefaultFirst` calls `Relay`, which binds `x` before it calls `SubB` and passes `second` up: the call hands the fill
+		// of `second` `Relay`'s copy of the hole, which does not carry `x`. `Host`'s place `gadget`, inside that fill, joins
+		// the copy's declaration to its own, so `App`'s fill is rejected as the visible build's is.
+		let fixture = Fixture(
+			featureTypes: [seamFixtureType(named: "Relay", isSeam: true, declarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"])],
+			defaultFirstDeclarations: ["@Instantiated let relay: Relay"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `Relay` builds where it calls `SubB`, but `Relay` passes the builder for `SubB`’s `second: any Second` (case `second` of `secondBuilder`) on from its own caller, which cannot hand it `Relay`’s values. Declare `@Received let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies, so `Relay` fills the builder itself.
+			\(fixtures["Feature"]!["Relay.swift"]):8:5: note: `Relay` declares `x: X` here.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenSeamBuiltAgainReceivesLabelOnlyIfAvailable() async throws {
+		// The first remedy for a reader only if available: `SubB` receives `x` only if available, so the scope of `second`
+		// carries the value of each route, `nil` on `Top`'s own. `X` is a class, so the comparison tells the routes' values apart.
+		let fixture = Fixture(
+			xIsFinalClass: true,
+			subBDeclarations: ["@Received(onlyIfAvailable: true) let x: X?", "@Instantiated let second: any Second"],
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		_ = try await executeSafeDIToolMultiModuleTest(modules: fixture.hostFillsEveryPlaceModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, fixture)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenSeamBuiltAgainReceivesLabelTypeAboveSeamCallDeclares() async throws {
+		// The first remedy for a required reader where `Host` binds `x` above its call of `Top`: `SubB` receives `x`, `Host`'s
+		// on `Top`'s own route and `DefaultFirst`'s on the route through its call.
+		let fixture = Fixture(
+			xIsFinalClass: true,
+			subBDeclarations: ["@Received let x: X", "@Instantiated let second: any Second"],
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
+			hostDeclarations: ["@Instantiated let x: X", "@Instantiated let top: Top"],
+			gadgetDeclarations: ["@Received let x: X"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		_ = try await executeSafeDIToolMultiModuleTest(modules: fixture.hostFillsEveryPlaceModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, fixture)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenSeamBuiltAgainDeclaresLabel() async throws {
+		// `SubB` binds an `x` of its own before `second`: inline reads it on every route, and the scope carries it.
+		let fixture = Fixture(
+			xIsFinalClass: true,
+			subBDeclarations: ["@Instantiated let x: X", "@Instantiated let second: any Second"],
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, fixture)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenFillBuiltAgainDeclaresLabelAbovePlace() async throws {
+		// `DefaultSecond` binds an `x` of its own before `gadget`: inline reads it on every route, and the place carries it.
+		let fixture = Fixture(
+			xIsFinalClass: true,
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
+			defaultSecondDeclarations: ["@Instantiated let x: X", "@Instantiated let gadget: any Gadget"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, fixture)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
 
 	/// The types of a fixture, in the modules that declare them: `Feature` (package `Shop`); `Middle` (package `Mid`), which
 	/// depends on it; and `App` (package `Other`), which depends on both. Each type of the graph conforms to `Sendable` when
-	/// `isSendable`.
+	/// `isSendable`. `X` is a final class when `xIsFinalClass`, so the value comparison tells two instances apart.
 	private struct Fixture {
 		init(
 			isSendable: Bool = false,
+			xIsFinalClass: Bool = false,
+			featureTypes: [String] = [],
 			subADeclarations: [String] = ["@Instantiated let first: any First"],
 			subBDeclarations: [String] = ["@Instantiated let second: any Second"],
 			topDeclarations: [String] = ["@Instantiated let subA: SubA", "@Instantiated let subB: SubB"],
@@ -1417,12 +1673,12 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 			feature = [
 				"public protocol First\(protocolConformance) {}",
 				"public protocol Second\(protocolConformance) {}",
-				seamFixtureType(named: "X", declarations: [], conformances: conformance),
+				seamFixtureType(named: "X", isFinalClass: xIsFinalClass, declarations: [], conformances: conformance),
 				seamFixtureType(named: "Label", declarations: [], conformances: conformance),
 				seamFixtureType(named: "SubA", isSeam: true, declarations: subADeclarations, conformances: conformance),
 				seamFixtureType(named: "SubB", isSeam: true, declarations: subBDeclarations, conformances: conformance),
 				seamFixtureType(named: "Top", isSeam: true, declarations: topDeclarations, conformances: conformance),
-			]
+			] + featureTypes
 			middle = ["public protocol Gadget\(protocolConformance) {}"] + middleTypes + [
 				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultFirst", fulfilling: "First", declarations: defaultFirstDeclarations),
 				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultSecond", fulfilling: "Second", declarations: defaultSecondDeclarations),
@@ -1449,6 +1705,15 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		var visibleModules: [ModuleFixture] {
 			SafeDIToolSeamBuilderParameterTests.modules(feature: feature + middle + app, app: [root])
 		}
+
+		/// The same graph with `App`'s types in `Middle`, so `Host`'s module fills every place its call of `Top` leads to.
+		var hostFillsEveryPlaceModules: [ModuleFixture] {
+			[
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
+				ModuleFixture(name: "Middle", packageName: "Mid", swiftFileContent: (middle + app).map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [root].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+			]
+		}
 	}
 
 	/// Expects `generatedFiles` to equal `expected`, recording the files generated when they do not, so a failure shows
@@ -1457,6 +1722,29 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		#expect(generatedFiles == expected, sourceLocation: sourceLocation)
 		if let generatedFiles, generatedFiles != expected {
 			Issue.record(Comment(rawValue: generatedFiles.sorted { $0.key < $1.key }.map { "=== \($0.key)\n\($0.value)" }.joined(separator: "\n")), sourceLocation: sourceLocation)
+		}
+	}
+
+	/// Expects the run of `fixture` to throw what `diagnostics` gives in `App`, which fills a place inside a fill `Host`'s
+	/// module generates, and the same in the visible build, where `Middle`, `Host`'s module, fills every place: the error is
+	/// at the reader, in `readerFile`, at `readerLineInMiddle` in `Middle` and a line further down in `App`, whose files
+	/// import one more module.
+	private mutating func expectBothBuildsThrow(
+		_ fixture: Fixture,
+		readerFile: String = "DefaultGadget.swift",
+		readerLineInMiddle: Int,
+		diagnostics: (_ readerLocation: String, _ fixtures: [String: FixturePaths]) -> String,
+		sourceLocation: SourceLocation = #_sourceLocation,
+	) async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			diagnostics("\(fixtures["App"]![readerFile]):\(readerLineInMiddle + 1):5", fixtures)
+		}, sourceLocation: sourceLocation) {
+			try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+		await assertThrowsMultiModuleError(inModule: "Middle", diagnostics: { fixtures in
+			diagnostics("\(fixtures["Middle"]![readerFile]):\(readerLineInMiddle):5", fixtures)
+		}, sourceLocation: sourceLocation) {
+			try await executeSafeDIToolMultiModuleTest(modules: fixture.hostFillsEveryPlaceModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 	}
 
