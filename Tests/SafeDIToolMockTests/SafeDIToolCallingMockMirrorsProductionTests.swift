@@ -601,24 +601,26 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		}
 	}
 
-	@Test(arguments: [MockConditionCaller.internal, .public, .listed])
+	@Test(arguments: [MockConditionCaller.internal, .public, .listed], MockConditionInactiveBuild.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_generatesMockWithoutTwinsError_whenBuildLeavesMockConditionInactive(caller: MockConditionCaller) async throws {
-		// The fill of the error above, in a release build: it compiles no generated mock, which is under `#if DEBUG`, so the
-		// calling mock that cannot fill the place is never compiled, and the tool reports nothing.
+	mutating func generate_generatesMockWithoutTwinsError_whenBuildLeavesMockConditionInactive(caller: MockConditionCaller, build: MockConditionInactiveBuild) async throws {
+		// The fill of the error above, in a build that does not tell the tool `DEBUG`, the mock condition: the tool checks
+		// the fill only where the generated mocks compile, so it reports nothing and passes the place up. A release build
+		// compiles no generated mock; a debug build whose integration does not report `DEBUG` compiles the mock, which
+		// compiles.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.fillInstantiatingGizmoModules(
 				caller: caller.attribute,
 				callee: CalledTypeDeclaration.seamAndPublicMock.attribute,
 				defaultServiceProperties: ["names: [String]"],
 				listsScreen: caller == .listed,
-				appIsReleaseConfiguration: true,
+				appIsReleaseConfiguration: build == .release,
 			),
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.modules["App"]?.generatedFiles == caller.expectedReleaseFiles)
+		#expect(output.modules["App"]?.generatedFiles == caller.expectedFilesWhereMockConditionIsInactive)
 	}
 
 	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
@@ -3225,6 +3227,23 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	}
 }
 
+/// The builds of a calling mock’s module that do not tell the tool `DEBUG`, the mock condition: a release build, which
+/// compiles no generated mock, and a debug build whose integration does not report `DEBUG`, as SwiftPM’s native backend
+/// does not, which compiles the generated mock.
+enum MockConditionInactiveBuild: CaseIterable, CustomTestStringConvertible {
+	case release
+	case debugWithoutMockCondition
+
+	var testDescription: String {
+		switch self {
+		case .release:
+			"release build"
+		case .debugWithoutMockCondition:
+			"debug build that does not report DEBUG"
+		}
+	}
+}
+
 /// The kinds of caller whose generated mock the mock condition compiles out: an internal mock, a public mock, and a type
 /// the module lists in `additionalMocksToGenerate`.
 enum MockConditionCaller: CustomTestStringConvertible {
@@ -3255,9 +3274,10 @@ enum MockConditionCaller: CustomTestStringConvertible {
 		}
 	}
 
-	/// What a release build of `App` generates: the place passed up, which an internal mock and a listed type’s take as
-	/// the same parameter.
-	var expectedReleaseFiles: [String: String] {
+	/// What a build of `App` that does not tell the tool the mock condition generates, a release build or a debug build
+	/// whose integration does not report `DEBUG`, alike: the place passed up, which an internal mock and a listed type’s
+	/// take as the same parameter.
+	var expectedFilesWhereMockConditionIsInactive: [String: String] {
 		switch self {
 		case .internal, .listed:
 			["App.swift": generatedFileHeader + """

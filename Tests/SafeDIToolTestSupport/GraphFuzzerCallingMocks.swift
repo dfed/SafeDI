@@ -67,15 +67,22 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 	/// instantiates: the seam's own mock takes one builder for its own places and the fill's of one hole type and family,
 	/// as its twin's initializer does.
 	case seamCallerFillSharesBuilder
+	/// As `fillInstantiatesTypeNoDeclarationCanFulfill`, in a build of the calling mock's module that does not tell the tool
+	/// the mock condition is active (`GraphFuzzerCallingMockGraph.MockBuild`): a release build, which compiles no generated
+	/// mock, or a debug build whose integration does not report `DEBUG`, which compiles the mock the tool generates. The tool
+	/// checks the fill production rejects only where the build compiles the generated mocks, so where the implementation is
+	/// a plain type the calling mock is accepted and passes the place up, where its twin reports the error; where it is a
+	/// seam, the seam's own tree, which every build generates, reports the error in the mock's module too.
+	case fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive
 
-	static func < (lhs: Self, rhs: Self) -> Bool {
+	static func <(lhs: Self, rhs: Self) -> Bool {
 		allCases.firstIndex(of: lhs) ?? 0 < allCases.firstIndex(of: rhs) ?? 0
 	}
 
 	/// Whether production rejects the shape with an error of its own, which the calling mock must report too.
 	var twinRejects: Bool {
 		switch self {
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			true
 		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
 			false
@@ -83,10 +90,11 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 	}
 
 	/// Whether the calling mock's pass-ups must be exactly the graph's `expectedPassUpLabels`: the control's hole builder,
-	/// and the builders of what the fill instantiates that nothing fulfills, which are the twin's.
+	/// the builders of what the fill instantiates that nothing fulfills, which are the twin's, and the place whose fill the
+	/// tool does not check where the mock condition is inactive.
 	var passesUpExactlyTheExpectedLabels: Bool {
 		switch self {
-		case .noVisibleImplementation, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
+		case .noVisibleImplementation, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			true
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill:
 			false
@@ -97,7 +105,7 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 		switch self {
 		case .noVisibleImplementation:
 			true
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			false
 		}
 	}
@@ -156,7 +164,9 @@ struct GraphFuzzerCallingMockCell: Hashable, Comparable, CustomStringConvertible
 
 	/// The draw's blocks of cells, each drawn `graphsPerCell` times in a range of seeds of its own after the blocks before
 	/// it, so a block added later draws no earlier seed anew: the internal and `.public` callers' cells; the listed
-	/// callers'; and the fill that receives the value building the call, for every caller, with a plain place.
+	/// callers'; the fill that receives the value building the call, for every caller, with a plain place; the fill that
+	/// instantiates what nothing fulfills; the fill that instantiates a type no declaration can fulfill; the seam caller;
+	/// and that fill again where the mock condition is inactive, for every caller.
 	static let blocks: [[Self]] = [
 		cells(of: firstShapes, callers: [.internal, .public]),
 		cells(of: firstShapes, callers: [.listed]),
@@ -164,6 +174,7 @@ struct GraphFuzzerCallingMockCell: Hashable, Comparable, CustomStringConvertible
 		cells(of: [.fillInstantiatesWhatNothingFulfills], callers: [.internal, .public]),
 		cells(of: [.fillInstantiatesTypeNoDeclarationCanFulfill], callers: [.internal, .public]),
 		cells(of: [.seamCallerFillSharesBuilder], callers: [.internal]),
+		cells(of: [.fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive], callers: Caller.allCases),
 	]
 
 	/// Every cell, block by block.
@@ -218,14 +229,25 @@ struct GraphFuzzerCallingMockDraw {
 		fillHoles = switch cell.shape {
 		case .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
 			FillHoles(random: &random, drawsSpellingNoHoleCanHave: false)
-		case .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			FillHoles(random: &random, drawsSpellingNoHoleCanHave: true)
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall:
 			nil
 		}
+		// Drawn after the fill's holes, and only for its shape.
+		mockBuild = switch cell.shape {
+		case .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
+			random.element(of: [.debugWithoutMockCondition, .release])
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .fillInstantiatesTypeNoDeclarationCanFulfill, .seamCallerFillSharesBuilder:
+			.compilesGeneratedMocks
+		}
 	}
 
 	static let callingMockRandomSeedMask: UInt64 = 0x63616C6C6D6F636B
+
+	/// The build of the calling mock's module the tool is told of: one that compiles the generated mocks, but in the shape
+	/// whose fill the tool does not check where the mock condition is inactive.
+	let mockBuild: GraphFuzzerCallingMockGraph.MockBuild
 
 	/// The graph the check judges.
 	var graph: GraphFuzzerCallingMockGraph {
@@ -242,6 +264,8 @@ struct GraphFuzzerCallingMockDraw {
 			expectedPassUpLabels: expectedPassUpLabels,
 			expectedTwinErrorSite: expectedTwinErrorSite,
 			valueProbes: valueProbes,
+			mockBuild: mockBuild,
+			twinErrorIsCheckedOnlyWhereMocksCompile: twinErrorIsCheckedOnlyWhereMocksCompile,
 		)
 	}
 
@@ -257,7 +281,7 @@ struct GraphFuzzerCallingMockDraw {
 		switch cell.shape {
 		case .implementationReceivesWhatNothingProvides:
 			[names.token.lowercasedFirst]
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			[]
 		}
 	}
@@ -267,7 +291,7 @@ struct GraphFuzzerCallingMockDraw {
 		switch cell.shape {
 		case .noVisibleImplementation, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
 			false
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			true
 		}
 	}
@@ -291,7 +315,7 @@ struct GraphFuzzerCallingMockDraw {
 	/// the place is visible.
 	var expectedTwinInitializerLabels: [String]? {
 		switch cell.shape {
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			nil
 		case .callersOwnValue:
 			[]
@@ -321,12 +345,27 @@ struct GraphFuzzerCallingMockDraw {
 		return builders.sorted { $0.label < $1.label }
 	}
 
-	/// The places the calling mock may pass up: the hole's builder where its module sees no type that fulfills the hole, and
-	/// the builders of what the fill instantiates that nothing fulfills, as the twin takes them.
+	/// Whether the twin's error is one the tool checks in the mock only where the generated mocks compile: the fill's
+	/// implementation is a plain type, so the type it instantiates that no declaration can fulfill is in no tree but the
+	/// mock's. Where it is a seam, its own tree, which every build generates, reports the error.
+	var twinErrorIsCheckedOnlyWhereMocksCompile: Bool {
+		switch cell.shape {
+		case .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
+			fillHoles?.fulfillerIsSeam == false
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
+			false
+		}
+	}
+
+	/// The places the calling mock may pass up: the hole's builder where its module sees no type that fulfills the hole, or
+	/// where the tool skips the twin's error in the mock, as a build that leaves the mock condition inactive skips a plain
+	/// implementation's, and the builders of what the fill instantiates that nothing fulfills, as the twin takes them.
 	var expectedPassUpLabels: [String] {
 		switch cell.shape {
 		case .noVisibleImplementation:
 			[holeBuilderLabel]
+		case .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
+			twinErrorIsCheckedOnlyWhereMocksCompile ? [holeBuilderLabel] : []
 		case .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
 			expectedBuilders.map(\.label)
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill:
@@ -357,7 +396,7 @@ struct GraphFuzzerCallingMockDraw {
 				let twinArguments = builders.map { "__safeDI_\($0.label): .init(__safeDI_noScope: \($0.value(names.callerModuleName)))" }
 				return ("\(caller).mock(\(mockArguments.joined(separator: ", ")))", "\(caller)(\(twinArguments.joined(separator: ", ")))")
 			}
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .noVisibleImplementation, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .noVisibleImplementation, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			nil
 		}
 		guard let calls else { return nil }
@@ -422,7 +461,7 @@ struct GraphFuzzerCallingMockDraw {
 			return ("\(names.outerModuleName)/\(names.outerModuleName)Types.swift", "@Received let \(names.inner.lowercasedFirst)Builder: Instantiator<\(names.inner)>")
 		case .fillReceivesValueBuildingTheCall:
 			return ("\(names.callerModuleName)/\(names.callerModuleName)Types.swift", "@Received let \(names.sibling.lowercasedFirst): \(names.sibling)")
-		case .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			return fillHoles?.spellingNoHoleCanHave.map { ("\(names.callerModuleName)/\(names.callerModuleName)Types.swift", "@Instantiated let \($0.label): \($0.type)") }
 		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
 			return nil
@@ -434,7 +473,7 @@ struct GraphFuzzerCallingMockDraw {
 	/// The draw's files, in dependency order, with each file's content by module and file name.
 	func files(_ form: Form) -> [File] {
 		switch cell.shape {
-		case .outerSeamValue, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .outerSeamValue, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			[
 				File(module: names.innerModuleName, dependencies: [], content: innerModuleContent(form)),
 				File(module: names.outerModuleName, dependencies: [names.innerModuleName], content: outerModuleContent),
@@ -680,7 +719,7 @@ struct GraphFuzzerCallingMockDraw {
 			    @Received let \(builder): Instantiator<\(names.inner)>
 			}
 			"""
-		case .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			// No seam of this module builds the called type, which the calling mock's form may declare a public mock only.
 			return """
 			import SafeDI
@@ -853,7 +892,7 @@ struct GraphFuzzerCallingMockDraw {
 			declarations.append("public struct \(names.token) {}")
 			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: (names.token.lowercasedFirst, names.token), isPublic: callerIsPublic))
 			declarations.append(callerDeclaration(form, properties: [(names.value.lowercasedFirst, names.value), (names.inner.lowercasedFirst, names.inner)]))
-		case .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			var properties = [(label: names.value.lowercasedFirst, type: names.value), (label: names.inner.lowercasedFirst, type: names.inner)]
 			if let fillHoles {
 				declarations += fillHolesDeclarations(fillHoles)
@@ -1033,6 +1072,31 @@ struct GraphFuzzerCallingMockGraph {
 		case twin
 	}
 
+	/// The build of the calling mock's module, as its integration tells the tool of it: whether the tool is told the mock
+	/// condition, `DEBUG`, is active, which decides whether it checks what only a compiled generated mock needs
+	/// (`compilesGeneratedMocks`), and whether the comparator's compile defines it. Every other module, and the twin's
+	/// every module, is told no condition.
+	enum MockBuild: CaseIterable {
+		/// A debug build whose integration reports `DEBUG`: the tool checks the mock, and the compile compiles it.
+		case compilesGeneratedMocks
+		/// A debug build whose integration does not report `DEBUG`, as SwiftPM's native backend does not: the tool is told
+		/// no condition, so it does not check the mock, which the compile, defining `DEBUG`, compiles.
+		case debugWithoutMockCondition
+		/// A release build: the tool is told `NDEBUG`, and the compile defines neither `DEBUG` nor the mock condition, so it
+		/// compiles no generated mock.
+		case release
+
+		/// Whether the tool is told the mock condition is active.
+		var compilesGeneratedMocks: Bool {
+			switch self {
+			case .compilesGeneratedMocks:
+				true
+			case .debugWithoutMockCondition, .release:
+				false
+			}
+		}
+	}
+
 	/// One module's one file, named `<Module>Types.swift`.
 	struct File {
 		let module: String
@@ -1074,8 +1138,9 @@ struct GraphFuzzerCallingMockGraph {
 	/// calls, in order, or `nil` when the graph does not state them: what production takes where it is accepted, which the
 	/// check reads to see that production fills what the graph is drawn for it to fill.
 	let expectedTwinInitializerLabels: [String]?
-	/// The places the calling mock may pass up because its module sees no type that fulfills the place's type: the only
-	/// labels the check classifies.
+	/// The places the calling mock may pass up because its module sees no type that fulfills the place's type, or, where
+	/// the tool skips the twin's error in the mock (`mockSkipsTwinsError`), because it does not check the fill production
+	/// rejects: the only labels the check classifies.
 	let expectedPassUpLabels: [String]
 	/// Where production reports the graph's shape error, as the module's file and the declaration's line, or `nil` when
 	/// production accepts the graph.
@@ -1085,6 +1150,19 @@ struct GraphFuzzerCallingMockGraph {
 	/// where the twin is accepted, or the caller's root initializer in `inlineModules` where the twin reports that a seam
 	/// built again passes its builder on unchanged. `nil` when the graph states none, which leaves that outcome unagreed.
 	let valueProbes: [DifferentialValueProbe]?
+	/// The build of the calling mock's module, as its integration tells the tool of it.
+	let mockBuild: MockBuild
+	/// Whether the twin's error is one the tool checks in the mock only where the generated mocks compile: a calling mock's
+	/// fill that instantiates a type no declaration can fulfill, where no seam of the caller's module, whose own tree any
+	/// build generates, instantiates the type.
+	let twinErrorIsCheckedOnlyWhereMocksCompile: Bool
+
+	/// Whether the tool skips the twin's error in the mock: the error is one it checks only where the generated mocks
+	/// compile, and `mockBuild` leaves the mock condition inactive. The mock must then be accepted, passing up
+	/// `expectedPassUpLabels`, where its twin reports the error.
+	var mockSkipsTwinsError: Bool {
+		twinErrorIsCheckedOnlyWhereMocksCompile && !mockBuild.compilesGeneratedMocks
+	}
 
 	var callerModule: String {
 		mockFiles.last?.module ?? ""
@@ -1111,17 +1189,18 @@ struct GraphFuzzerCallingMockGraph {
 				swiftFileContentByFilePath: contentByFileName,
 				dependencies: file.dependencies,
 				activeCompilationConditions: activeCompilationConditions(of: form, module: file.module),
+				isReleaseConfiguration: form == .mock && file.module == callerModule && mockBuild == .release,
 			)
 		}
 	}
 
 	/// The conditions the tool is told `module` builds under in `form`: `DEBUG`, the mock condition, for the calling mock's
-	/// module, whose generated mock the comparator compiles, so the tool checks its calls of hand-written mocks and its
+	/// module where `mockBuild` compiles the generated mocks, so the tool checks its calls of hand-written mocks and its
 	/// fills as a build that compiles the generated mocks does (`compilesGeneratedMocks`); none for every other module.
 	private func activeCompilationConditions(of form: Form, module: String) -> [String] {
 		switch form {
 		case .mock:
-			module == callerModule ? ["DEBUG"] : []
+			module == callerModule && mockBuild.compilesGeneratedMocks ? ["DEBUG"] : []
 		case .twin:
 			[]
 		}
@@ -1188,6 +1267,8 @@ struct GraphFuzzerCallingMockGraph {
 		expectedPassUpLabels: [String] = [],
 		expectedTwinErrorSite: (file: String, declaration: String)?,
 		valueProbes: [DifferentialValueProbe]? = nil,
+		mockBuild: MockBuild = .compilesGeneratedMocks,
+		twinErrorIsCheckedOnlyWhereMocksCompile: Bool = false,
 	) {
 		let twinFiles = mockFiles.enumerated().map { index, file in
 			guard index == mockFiles.count - 1 else { return file }
@@ -1212,6 +1293,8 @@ struct GraphFuzzerCallingMockGraph {
 			expectedPassUpLabels: expectedPassUpLabels,
 			expectedTwinErrorSite: expectedTwinErrorSite,
 			valueProbes: valueProbes,
+			mockBuild: mockBuild,
+			twinErrorIsCheckedOnlyWhereMocksCompile: twinErrorIsCheckedOnlyWhereMocksCompile,
 		)
 	}
 
@@ -1228,6 +1311,8 @@ struct GraphFuzzerCallingMockGraph {
 		expectedPassUpLabels: [String],
 		expectedTwinErrorSite: (file: String, declaration: String)?,
 		valueProbes: [DifferentialValueProbe]? = nil,
+		mockBuild: MockBuild = .compilesGeneratedMocks,
+		twinErrorIsCheckedOnlyWhereMocksCompile: Bool = false,
 	) {
 		self.name = name
 		self.mockFiles = mockFiles
@@ -1241,6 +1326,8 @@ struct GraphFuzzerCallingMockGraph {
 		self.expectedPassUpLabels = expectedPassUpLabels
 		self.expectedTwinErrorSite = expectedTwinErrorSite
 		self.valueProbes = valueProbes
+		self.mockBuild = mockBuild
+		self.twinErrorIsCheckedOnlyWhereMocksCompile = twinErrorIsCheckedOnlyWhereMocksCompile
 	}
 }
 
@@ -1289,10 +1376,14 @@ struct GraphFuzzerDiagnosticSite: Hashable, CustomStringConvertible {
 /// Why a calling mock passes a place up, of the permanent reasons contract rule 7's calling-mock clause names. The other
 /// permanent reason, a name the mock's tree hides, has no computable definition yet, so a pass-up this one does not
 /// explain is unclassified. A visible implementation that receives what nothing in the mock's tree builds is no reason:
-/// production fills that place from a parameter.
+/// production fills that place from a parameter. Beside rule 7's, a build that leaves the mock condition inactive is one:
+/// the tool checks a fill production rejects only where the generated mocks compile.
 enum GraphFuzzerCallingMockPassUpReason: String, CaseIterable, Comparable {
 	/// No type that fulfills the place's type is visible from the mock's module.
 	case noVisibleImplementation
+	/// The build leaves the mock condition inactive (`GraphFuzzerCallingMockGraph.MockBuild`), so the tool does not check
+	/// the fill production rejects, and passes its place up (`GraphFuzzerCallingMockGraph.mockSkipsTwinsError`).
+	case mockConditionIsInactive
 
 	static func < (lhs: Self, rhs: Self) -> Bool {
 		allCases.firstIndex(of: lhs) ?? 0 < allCases.firstIndex(of: rhs) ?? 0
@@ -1337,7 +1428,10 @@ enum GraphFuzzerCallingMockCheck {
 	/// passes its builder on unchanged while the mock is accepted, agrees only by values: the graph must state probes, and
 	/// when `comparesValues`, the mock must compile and build what the same types build inline (`inlineModules`), a
 	/// baseline that must build, as the twin must where it is accepted. Where values are not compared (`comparesValues` is
-	/// `false`, or compile verification is off), nothing more is judged of that outcome, as of an accepted twin's.
+	/// `false`, or compile verification is off), nothing more is judged of that outcome, as of an accepted twin's. Where
+	/// the tool skips the twin's error in the mock (`mockSkipsTwinsError`: an error it checks only where the generated mocks
+	/// compile, in a build that leaves the mock condition inactive), the mock must be accepted, and the places it passes up
+	/// are classified as that build's.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	static func run(_ graph: GraphFuzzerCallingMockGraph, seed: UInt64, comparesValues: Bool = true) async throws -> GraphFuzzerCallingMockResult {
 		let twin = try await toolRun(of: graph, .twin)
@@ -1372,13 +1466,19 @@ enum GraphFuzzerCallingMockCheck {
 		} ?? []
 		// The outcome rule 7 lists apart, judged by values below.
 		let agreesByValuesWithInline = twinSites != nil && mockSites == nil && graph.valueProbes != nil && twin.diagnostics.map(reportsOnlySeamBuiltAgain) == true
-		let mirroringFailure: GraphFuzzerFailure? = if let twinSites, let mockSites {
+		let mirroringFailure: GraphFuzzerFailure? = if graph.mockSkipsTwinsError, let mockDiagnostics = mock.diagnostics {
+			GraphFuzzerFailure(
+				seed: seed,
+				kind: .callingMockRejectedWhereMockConditionIsInactive,
+				details: "\(graph.name): the build leaves the mock condition inactive, and the calling mock reports \(mockDiagnostics)",
+			)
+		} else if let twinSites, let mockSites {
 			mockSites == twinSites ? nil : GraphFuzzerFailure(
 				seed: seed,
 				kind: .callingMockReportsOtherErrorThanTwin,
 				details: "\(graph.name): the twin reports \(twinSites), the calling mock \(mockSites)",
 			)
-		} else if let twinSites, !agreesByValuesWithInline {
+		} else if let twinSites, !agreesByValuesWithInline, !graph.mockSkipsTwinsError {
 			GraphFuzzerFailure(
 				seed: seed,
 				kind: .callingMockAcceptedWhereTwinReportsShapeError,
@@ -1513,7 +1613,16 @@ enum GraphFuzzerCallingMockCheck {
 		return labels
 			.filter { $0 != "safeDIOverrides" && !graph.flatParameterLabels.contains($0) }
 			.map { label in
-				(label, !graph.implementationIsVisible && graph.expectedPassUpLabels.contains(label) ? .noVisibleImplementation : nil)
+				let reason: GraphFuzzerCallingMockPassUpReason? = if !graph.expectedPassUpLabels.contains(label) {
+					nil
+				} else if !graph.implementationIsVisible {
+					.noVisibleImplementation
+				} else if graph.mockSkipsTwinsError {
+					.mockConditionIsInactive
+				} else {
+					nil
+				}
+				return (label, reason)
 			}
 	}
 
