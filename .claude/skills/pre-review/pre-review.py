@@ -75,6 +75,10 @@ It then lists these for the hand-back to answer, which fail nothing:
   ends, ask it again when the pins run's state (in progress, passed or not) has changed or the list is five minutes
   old, or one minute when it was not checked or left a branch unread. Without `gh`, or when a pull request or branch list does not answer, the block says it was not
   checked; a branch that is gone, unreadable or not read in time is named and the rest are read.
+- every instruction file (`CLAUDE.md`, `.claude/rules/*.md`, a directory's `CLAUDE.md`) within reach of the limit
+  `Scripts/check-claude-instruction-files.sh` fails at, counted as that script counts: 500 characters for a rules
+  file, 100 for a directory's `CLAUDE.md`, 50 words for the root one. Those the change edits are listed to trim or
+  split before review; the others are named in one line, so that a lane about to add a rule knows the room it has.
 
 With `--matrix` and `--hand-back` it also lists every cell of the brief's shape matrix that the hand-back does not
 account for. A cell is a row of a Markdown table whose first column is a number such as `6.11`. The hand-back
@@ -582,6 +586,33 @@ def seconds_between(start, end):
         return None
 
 
+def instruction_limit(path):
+    """The limit `Scripts/check-claude-instruction-files.sh` holds an instruction file to, as (limit, unit, margin), or None for another file."""
+    if path == "CLAUDE.md":
+        return 5500, "words", 50
+    if path.startswith(".claude/rules/") and path.endswith(".md") and path.count("/") == 2:
+        return 32000, "characters", 500
+    if path.endswith("/CLAUDE.md"):
+        return 1500, "characters", 100
+    return None
+
+
+def instruction_files_near_their_limit(texts, changed):
+    """Each instruction file within its margin of its limit, or over it, as (path, size, limit, unit, edited here), fullest first.
+
+    Measured as the script measures: characters, and words for the root `CLAUDE.md`."""
+    near = []
+    for path, text in texts.items():
+        limit = instruction_limit(path)
+        if limit is None:
+            continue
+        ceiling, unit, margin = limit
+        size = len(text.split()) if unit == "words" else len(text)
+        if size > ceiling - margin:
+            near.append((path, size, ceiling, unit, path in changed))
+    return sorted(near, key=lambda entry: (entry[2] - entry[1], entry[0]))
+
+
 def block(record):
     """The text a hand-back carries, and whether it says READY."""
     commits = record.get("commits", 0)
@@ -614,6 +645,14 @@ def block(record):
             lines += [f"  {line}" for line in shared]
         else:
             lines.append(f"overlap with other open changes: {text}")
+    near = record.get("near limit", [])
+    edited = [entry for entry in near if entry[4]]
+    if edited:
+        lines.append(f"to trim or split before review: {len(edited)} instruction file(s) this change edits at or near the limit")
+        lines += [f"  {path}: {size:,} of {limit:,} {unit}" for path, size, limit, unit, _ in edited]
+    others = [f"{path} ({size - limit:,} {unit} over)" if size > limit else f"{path} ({limit - size:,} {unit} left)" for path, size, limit, unit, here in near if not here]
+    if others:
+        lines.append(f"instruction files near their limit, not edited here: {', '.join(others)}")
     cells = record.get("cells")
     if cells:
         lines.append(f"to account for in the hand-back: {len(cells)} matrix cell(s) with no test, seed or outcome named: {', '.join(cells)}")
@@ -1167,6 +1206,8 @@ def run(arguments):
         "sorts": choices_keyed_on_a_name(added, lines_of),
         "tests": tests_of_a_choice(added),
     }
+    instruction_paths = [path for path in output_of("git", "ls-tree", "-r", "--name-only", head).splitlines() if instruction_limit(path)]
+    record["near limit"] = instruction_files_near_their_limit({path: subprocess.run(["git", "show", f"{head}:{path}"], capture_output=True, check=True).stdout.decode("utf-8") for path in instruction_paths}, set(changed))
     if arguments.matrix:
         record["cells"] = cells_unaccounted_for(pathlib.Path(matrix_path).read_text(), pathlib.Path(hand_back_path).read_text())
     runner = shlex.split(arguments.runner) if arguments.runner else []
@@ -1340,6 +1381,27 @@ def self_test():
         "lint: passed, 9 s",
         "touched suites: passed, 1 min 5 s: ok",
         "pins: not owed: the change touches nothing a corpus draws from or runs",
+        "result: READY",
+    ]), True))
+    rules = ".claude/rules/"
+    near = instruction_files_near_their_limit({
+        "CLAUDE.md": "word " * 5451, rules + "full.md": "x" * 31501, rules + "roomy.md": "x" * 31500, rules + "over.md": "é" * 32001,
+        rules + "nested/deeper.md": "x" * 31999, "Tests/CLAUDE.md": "x" * 1401, "Sources/CLAUDE.md": "x" * 1400, "Documentation/Manual.md": "x" * 99999,
+    }, {rules + "full.md", "Tests/CLAUDE.md"})
+    expect("instruction files within their margin of the limit, fullest first, as the check measures them", near, [
+        (rules + "over.md", 32001, 32000, "characters", False), ("CLAUDE.md", 5451, 5500, "words", False), ("Tests/CLAUDE.md", 1401, 1500, "characters", True),
+        (rules + "full.md", 31501, 32000, "characters", True),
+    ])
+    expect("a block that names them", block({**record, "near limit": near}), ("\n".join([
+        "Pre-review block",
+        f"head: {head} (claude/x), 3 commit(s) measured from origin/main at 123456789",
+        "lint: passed, 9 s",
+        "touched suites: passed, 1 min 5 s: ok",
+        "pins: not owed: the change touches nothing a corpus draws from or runs",
+        "to trim or split before review: 2 instruction file(s) this change edits at or near the limit",
+        "  Tests/CLAUDE.md: 1,401 of 1,500 characters",
+        "  .claude/rules/full.md: 31,501 of 32,000 characters",
+        "instruction files near their limit, not edited here: .claude/rules/over.md (1 characters over), CLAUDE.md (49 words left)",
         "result: READY",
     ]), True))
     listed = {**record, "uncommitted": True, "steps": {"lint": ("passed, 9 s", True)}, "sorts": [("Sources/A.swift", 3, "x.sorted { $0.label < $1.label }")], "tests": [("Tests/B.swift", 7, "a_picksTheFirst_whenTwo")]}
