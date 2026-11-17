@@ -3759,214 +3759,44 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesSendablePlaceUp_whenFillReadsValuesBoundOutsideTheSendableFunctionsThatBuildIt() async throws {
+	mutating func generate_reportsTwinsErrors_whenFillReadsValuesBoundOutsideTheSendableFunctionsThatBuildIt() async {
 		// As above, with `B` receiving `user`, which `Hub` builds before `A`, and `dep`, which `A` builds before `B`, and
 		// `LiveApi` reading both: a place is handed only what the innermost `@Sendable` function that builds it binds, and
-		// both are bound outside `B`'s, so `Screen`'s mock cannot fill it and passes it up, taking `apiSendableBuilder`
-		// itself. The inline mock fills it with `LiveApi`, so no probe reads both paths alike, and none is compared.
-		let modules = [
-			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
-				"public protocol Api: Sendable {}",
-				seamFixtureType(named: "User", isFinalClass: true, declarations: [], conformances: ", Sendable"),
-				seamFixtureType(named: "Dep", isFinalClass: true, declarations: [], conformances: ", Sendable"),
-				seamFixtureType(named: "A", declarations: ["@Instantiated public let dep: Dep", "@Instantiated public let bBuilder: SendableInstantiator<B>"], conformances: ", Sendable")
-					.replacingOccurrences(of: "public init(", with: "package init("),
-				seamFixtureType(named: "B", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let a: A", "@Received public let user: User", "@Received public let dep: Dep"], conformances: ", Sendable"),
-				seamFixtureType(named: "Hub", declarations: ["@Instantiated public let user: User", "@Instantiated public let a: A"], conformances: ", Sendable")
-					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: .public)\n"),
-			]),
-			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
-				"import Feature\n\n" + seamFixtureType(named: "LiveApi", declarations: ["@Received public let user: User", "@Received public let dep: Dep"], conformances: ", Api")
-					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api.self])\n"),
-				"import Feature\n\n" + seamFixtureType(named: "Screen", declarations: ["@Instantiated public let hub: Hub"])
-					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n"),
-			], dependencies: ["Feature"]),
-		]
-		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
-		#if DEBUG
-		extension Hub {
-		    nonisolated public enum SafeDIMockScope_Api {
-		        nonisolated public enum B_Scope {
-		            nonisolated public struct api_Values {
-		                public let a: A
-		            }
-
-		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
-
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
-		                    self.api = api
-		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.api = { _ in __safeDI_builder() }
-		                }
-		            }
-		        }
-		    }
-
-		    nonisolated public enum SafeDISendableMockScope_Api {
-		        nonisolated public struct a_Sendable_Values: Sendable {}
-
-		        nonisolated public enum A_Scope {
-		            nonisolated public struct bBuilder_Values: Sendable {}
-
-		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-		                public let bBuilder: @Sendable (bBuilder_Values) -> SafeDIMockScope_Api.B_Scope.__safeDI_Builder<__safeDI_Built>
-
-		                public init(bBuilder: @escaping @Sendable (bBuilder_Values) -> SafeDIMockScope_Api.B_Scope.__safeDI_Builder<__safeDI_Built>) {
-		                    self.bBuilder = bBuilder
-		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                }
-		            }
-		        }
-
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-		            public let a_Sendable: @Sendable (a_Sendable_Values) -> SafeDISendableMockScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
-
-		            public init(a_Sendable: @escaping @Sendable (a_Sendable_Values) -> SafeDISendableMockScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
-		                self.a_Sendable = a_Sendable
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.a_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		            }
-		        }
-		    }
-
-		    /// Overrides for the mock dependency tree.
-		    nonisolated public struct SafeDIOverrides {
-		        public init(
-		            user: (() -> User)? = nil,
-		            a: __safeDI_Feature_A_MockConfiguration = .init()
-		        ) {
-		            self.user = user
-		            self.a = a
-		        }
-
-		        public let user: (() -> User)?
-		        public let a: __safeDI_Feature_A_MockConfiguration
-		    }
-
-		    public static func mock(
-		        apiSendableBuilder: @escaping @Sendable () -> any Api,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Hub {
-		        Hub.__safeDI_mock(apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder), safeDIOverrides: safeDIOverrides)
-		    }
-
-		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
-		    public static func __safeDI_mock(
-		        apiSendableBuilder __safeDI_apiSendableBuilder: Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api>,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Hub {
-		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
-		        let __safeDI_a__a_dep_safeDIBuilder = safeDIOverrides.a.dep
-		        let __safeDI_a__a_bBuilder_safeDIBuilder = safeDIOverrides.a.bBuilder.safeDIBuilder
-		        let __safeDI_a__safeDIBuilder = safeDIOverrides.a.safeDIBuilder
-		        @Sendable func __safeDI_a() -> A {
-		            let __safeDI_apiSendableBuilder_a_Sendable = __safeDI_apiSendableBuilder.a_Sendable(SafeDISendableMockScope_Api.a_Sendable_Values())
-		            let dep = if let safeDIBuilder = __safeDI_a__a_dep_safeDIBuilder { safeDIBuilder() } else { Dep() }
-		            @Sendable func __safeDI_bBuilder() -> B {
-		                let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_a_Sendable.bBuilder(SafeDISendableMockScope_Api.A_Scope.bBuilder_Values())
-		                let a: A = __safeDI_a()
-		                let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(SafeDIMockScope_Api.B_Scope.api_Values(a: a))
-		                return B.__safeDI_init(api: api, a: a, user: user, dep: dep, safeDIBuilder: __safeDI_a__a_bBuilder_safeDIBuilder)
-		            }
-		            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
-		            return A.__safeDI_init(dep: dep, bBuilder: bBuilder, safeDIBuilder: __safeDI_a__safeDIBuilder)
-		        }
-		        let a: A = __safeDI_a()
-		        return Hub(user: user, a: a)
-		    }
+		// both are bound outside `B`'s. The twin reports each, so the calling mock reports the same.
+		let modules = { (form: (String) -> String) in
+			[
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+					"public protocol Api: Sendable {}",
+					seamFixtureType(named: "User", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+					seamFixtureType(named: "Dep", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+					seamFixtureType(named: "A", declarations: ["@Instantiated public let dep: Dep", "@Instantiated public let bBuilder: SendableInstantiator<B>"], conformances: ", Sendable")
+						.replacingOccurrences(of: "public init(", with: "package init("),
+					seamFixtureType(named: "B", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let a: A", "@Received public let user: User", "@Received public let dep: Dep"], conformances: ", Sendable"),
+					seamFixtureType(named: "Hub", declarations: ["@Instantiated public let user: User", "@Instantiated public let a: A"], conformances: ", Sendable")
+						.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: .public)\n"),
+				].map(form)),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+					"import Feature\n\n" + seamFixtureType(named: "LiveApi", declarations: ["@Received public let user: User", "@Received public let dep: Dep"], conformances: ", Api")
+						.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api.self])\n"),
+					"import Feature\n\n" + seamFixtureType(named: "Screen", declarations: ["@Instantiated public let hub: Hub"])
+						.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n"),
+				].map(form), dependencies: ["Feature"]),
+			]
 		}
-
-		extension Hub {
-		    public enum __safeDI_Hub_mock_553224174FD1C5B1 {}
+		let diagnostics = { (fixtures: [String: FixturePaths]) in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `user: User`, which `Hub` declares outside the `@Sendable` function that builds `bBuilder: SendableInstantiator<B>`, and the values struct SafeDI hands the builder for `B`’s `api: any Api` (`api` of `apiSendableBuilder`) carries only what that function binds. Instantiate `user` outside `Hub` and declare `@Received let user: User` on `Hub`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Hub.swift"]):8:5: note: `Hub` declares `user: User` here.
+			\(fixtures["App"]!["LiveApi.swift"]):11:5: error: `LiveApi` receives `dep: Dep`, which `A` declares outside the `@Sendable` function that builds `bBuilder: SendableInstantiator<B>`, and the values struct SafeDI hands the builder for `B`’s `api: any Api` (`api` of `apiSendableBuilder`) carries only what that function binds. Instantiate `dep` outside `Hub` and declare `@Received let dep: Dep` on `Hub`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["A.swift"]):8:5: note: `A` declares `dep: Dep` here.
+			"""
 		}
-		#endif
-
-		#if DEBUG
-		/// Configuration for how `B` is constructed within the public mock trees of module `Feature`.
-		nonisolated public struct __safeDI_Feature_B_MockConfiguration {
-		    public init(
-		        _ safeDIBuilder: (@Sendable (any Api, A, User, Dep) -> B)? = nil
-		    ) {
-		        self.safeDIBuilder = safeDIBuilder
-		    }
-
-		    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: (@Sendable (any Api, A, User, Dep) -> B)?
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules { $0 }, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		}
-
-		extension B {
-		    static func __safeDI_init(api: any Api, a: A, user: User, dep: Dep, safeDIBuilder: (@Sendable (any Api, A, User, Dep) -> B)?) -> B {
-		        if let safeDIBuilder { safeDIBuilder(api, a, user, dep) } else { B(api: api, a: a, user: user, dep: dep) }
-		    }
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules(callingMockProductionTwin(of:)), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		}
-
-		/// Configuration for how `A` is constructed within the public mock trees of module `Feature`.
-		nonisolated public struct __safeDI_Feature_A_MockConfiguration {
-		    public init(
-		        dep: (@Sendable () -> Dep)? = nil,
-		        bBuilder: __safeDI_Feature_B_MockConfiguration = .init(),
-		        _ safeDIBuilder: (@Sendable (Dep, SendableInstantiator<B>) -> A)? = nil
-		    ) {
-		        self.dep = dep
-		        self.bBuilder = bBuilder
-		        self.safeDIBuilder = safeDIBuilder
-		    }
-
-		    public let dep: (@Sendable () -> Dep)?
-		    public let bBuilder: __safeDI_Feature_B_MockConfiguration
-		    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: (@Sendable (Dep, SendableInstantiator<B>) -> A)?
-		}
-
-		extension A {
-		    static func __safeDI_init(dep: Dep, bBuilder: SendableInstantiator<B>, safeDIBuilder: (@Sendable (Dep, SendableInstantiator<B>) -> A)?) -> A {
-		        if let safeDIBuilder { safeDIBuilder(dep, bBuilder) } else { A(dep: dep, bBuilder: bBuilder) }
-		    }
-		}
-		#endif
-
-		"""])
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
-		#if canImport(Feature)
-		import Feature
-		#endif
-
-		#if DEBUG
-		extension Screen {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            hub: Hub.SafeDIOverrides = .init()
-		        ) {
-		            self.hub = hub
-		        }
-
-		        let hub: Hub.SafeDIOverrides
-		    }
-
-		    static func mock(
-		        apiSendableBuilder: @escaping @Sendable () -> any Api,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Screen {
-		        _ = Hub.__safeDI_Hub_mock_553224174FD1C5B1.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
-		        let hub = Hub.__safeDI_mock(apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder), safeDIOverrides: safeDIOverrides.hub)
-		        return Screen(hub: hub)
-		    }
-		}
-		#endif
-		"""])
 	}
 
 	@Test
