@@ -719,9 +719,8 @@ public struct SeamSignature: Sendable {
 			public let innerScope: InnerScope?
 			/// Whether the case is a call's for a builder it fills, which leads into what the fill builds.
 			let leadsIntoFill: Bool
-			/// Where the enum declares a builder struct (`ScopeEnum.declaresBuilderStruct`), the call of the case's member the
-			/// seam's tree makes, whose result the next step's call, or the place's, is made on; `nil` for an enum that declares
-			/// none.
+			/// The call of the case's member of the enum's builder struct the seam's tree makes, whose result the next step's
+			/// call, or the place's, is made on.
 			let member: Member?
 
 			/// The call of a case's member on a route: the name the seam's tree binds the struct it returns under, the type of
@@ -781,12 +780,6 @@ public struct SeamSignature: Sendable {
 						member.map { Member(bindingName: name, valuesType: $0.valuesType, fields: $0.fields, levelType: $0.levelType, bindingPath: $0.bindingPath, isCalledInsideFunction: $0.isCalledInsideFunction) }
 					},
 				)
-			}
-
-			/// What the case carries before the value it wraps, each followed by a comma: its payload's binding, then the inner
-			/// scope.
-			var leadingArguments: String {
-				[values?.bindingName, innerScope?.name].compactMap(\.self).map { "\($0), " }.joined()
 			}
 		}
 
@@ -1027,9 +1020,9 @@ public struct SeamSignature: Sendable {
 			public internal(set) var kind: Kind
 			/// What the type the enum describes binds before the case's property; `nil` for a case of a `@Sendable` enum.
 			public let values: Values?
-			/// The name of the struct the member of the case takes, in an enum that declares a builder struct
-			/// (`ScopeEnum.declaresBuilderStruct`): the payload struct's, or, for a case of a `@Sendable` enum, which carries no
-			/// values, an empty `Sendable` struct's, named apart as a payload struct is.
+			/// The name of the struct the member of the case in the enum's builder struct takes: the payload struct's, or, for a
+			/// case of a `@Sendable` enum, which carries no values, an empty `Sendable` struct's, named apart as a payload struct
+			/// is.
 			public let memberValuesTypeName: String?
 		}
 
@@ -1048,12 +1041,6 @@ public struct SeamSignature: Sendable {
 		/// The label of the builder this enum is handed to, which names its dispatcher.
 		public let builderLabel: String
 		public internal(set) var cases: [Case]
-		/// Whether the seam declares a builder struct for the enum, `__safeDI_Builder<Built>`, with one member per case, which
-		/// its generated-only initializer takes in place of a closure over the enum: true for every enum of a hole type no place
-		/// of which holds a seam's scope (`DependencyTreeGenerator.declaresBuilderStructs(of:)`),
-		/// never for a public mock's.
-		public internal(set) var declaresBuilderStruct = false
-
 		/// The enum's type, as a module that does not declare it spells it: qualified by the seam's type, through the root
 		/// enum.
 		var type: TypeDescription {
@@ -1129,17 +1116,15 @@ public struct SeamSignature: Sendable {
 		/// The label the widest tier takes the builder under.
 		public let label: String
 		public let internalName: String
-		/// The parameter's type, as the initializer only generated code calls spells it: the root enum's builder struct
-		/// where the enum declares one (`ScopeEnum.declaresBuilderStruct`), else a closure over the enum.
+		/// The parameter's type, as the initializer only generated code calls spells it: the root enum's builder struct.
 		public let parameterType: TypeDescription
 		/// `parameterType` without `any` at every depth, which the guard hashes: made by the same function, so nothing can be
 		/// emitted and not hashed.
 		public let parameterTypeWithoutAny: TypeDescription
-		/// The parameter's type, as the initializer people call spells it, which a diagnostic names: a closure that takes
-		/// nothing where the generated-only initializer takes a builder struct, which the readable initializer makes from it
-		/// (`init(__safeDI_noScope:)`), else `parameterType`.
+		/// The parameter's type, as the initializer people call spells it, which a diagnostic names: the builder a person
+		/// writes, from which the readable initializer makes the builder struct (`init(__safeDI_noScope:)`).
 		public let readableParameterType: TypeDescription
-		/// Whether the generated-only initializer takes the root enum's builder struct.
+		/// Whether the generated-only initializer takes the root enum's builder struct: every builder's does.
 		public let takesBuilderStruct: Bool
 		/// The access each tier that takes the builder must have no more than: the narrowest of what its type names.
 		public let tierAccess: AccessLevel
