@@ -52,10 +52,6 @@ struct DifferentialValueOutputMemo: Sendable {
 		return DifferentialValueOutputMemo(directory: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("value-outputs"))
 	}()
 
-	init(directory: URL) {
-		self.directory = directory
-	}
-
 	/// The directory of outputs: one file per key.
 	let directory: URL
 
