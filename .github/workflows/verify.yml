@@ -380,9 +380,10 @@ jobs:
       # The limit is twice the slowest group's time with every compile check
       # compiling: the seam tests took 5.5 minutes, the mock tests 5.0, the
       # seam smoke seeds 3.4, the other smoke tests 1.9 and the other three
-      # groups 1.2 to 1.3 (run 43766692766).
+      # groups 1.2 to 1.3 (run 43766692766). The seam tests have since taken
+      # 6.5 (run 44097575826).
       - name: Test
-        timeout-minutes: 11
+        timeout-minutes: 13
         shell: bash
         env:
           SELECTION: ${{ matrix.selection }}
