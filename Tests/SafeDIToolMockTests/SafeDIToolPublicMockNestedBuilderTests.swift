@@ -1455,8 +1455,143 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesThePlaceUp_whenInternalCallersFulfillerInstantiatesATypeNothingFulfills() async throws {
+	mutating func generate_takesABuilderForWhatTheFillInstantiates_whenInternalCallersFulfillerInstantiatesATypeNothingFulfills() async throws {
+		// `Screen` fills both of `Panel`’s places with `DefaultService`, whose `gizmo` nothing in `App` fulfills, and takes
+		// `gizmoBuilder`, which each `DefaultService` calls where it is built, as the `.public` caller below does.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(app: [Self.screen, Self.defaultServiceInstantiatingGizmo]), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            panel: Panel.SafeDIOverrides = .init()
+			        ) {
+			            self.panel = panel
+			        }
+
+			        let panel: Panel.SafeDIOverrides
+			    }
+
+			    static func mock(
+			        gizmoBuilder: @escaping () -> any Gizmo,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_panel() -> Panel {
+			            func __safeDI_serviceBuilder_Panel_service(_ scope: Panel.SafeDIMockScope_Service.service_Values) -> any Service {
+			                func __safeDI_service() -> DefaultService {
+			                    let gizmo: any Gizmo = gizmoBuilder()
+			                    return DefaultService(gizmo: gizmo)
+			                }
+			                let service: any Service = __safeDI_service()
+			                return service
+			            }
+			            func __safeDI_serviceBuilder_Panel_Row_Scope_service(_ scope: Panel.SafeDIMockScope_Service.Row_Scope.service_Values) -> any Service {
+			                func __safeDI_service() -> DefaultService {
+			                    let gizmo: any Gizmo = gizmoBuilder()
+			                    return DefaultService(gizmo: gizmo)
+			                }
+			                let service: any Service = __safeDI_service()
+			                return service
+			            }
+			            func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+			                .init(row: { _ in __safeDI_serviceBuilder_Panel_Row_Scope() }, service: { scope in __safeDI_serviceBuilder_Panel_service(scope) })
+			            }
+			            func __safeDI_serviceBuilder_Panel_Row_Scope() -> Panel.SafeDIMockScope_Service.Row_Scope.__safeDI_Builder<any Service> {
+			                .init(service: { scope in __safeDI_serviceBuilder_Panel_Row_Scope_service(scope) })
+			            }
+			            _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Panel.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Panel(), safeDIOverrides: safeDIOverrides.panel)
+			        }
+			        let panel: Panel = __safeDI_panel()
+			        return Screen(panel: panel)
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsWithTheFakeAndTakesNoBuilder_whenInternalCallersFulfillerInstantiatesATypeOnlyAMockOnlyFakeFulfills() async throws {
+		// A `mockOnly` fake of `Gizmo` fulfills it in mocks, so the fill builds it, as a seam’s own internal mock and the
+		// `.public` caller do, and `mock()` takes no builder.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(app: [Self.screen, Self.defaultServiceInstantiatingGizmo, Self.fakeGizmo]), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            panel: Panel.SafeDIOverrides = .init()
+			        ) {
+			            self.panel = panel
+			        }
+
+			        let panel: Panel.SafeDIOverrides
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_panel() -> Panel {
+			            func __safeDI_serviceBuilder_Panel_service(_ scope: Panel.SafeDIMockScope_Service.service_Values) -> any Service {
+			                func __safeDI_service() -> DefaultService {
+			                    let gizmo: any Gizmo = FakeGizmo.mock()
+			                    return DefaultService(gizmo: gizmo)
+			                }
+			                let service: any Service = __safeDI_service()
+			                return service
+			            }
+			            func __safeDI_serviceBuilder_Panel_Row_Scope_service(_ scope: Panel.SafeDIMockScope_Service.Row_Scope.service_Values) -> any Service {
+			                func __safeDI_service() -> DefaultService {
+			                    let gizmo: any Gizmo = FakeGizmo.mock()
+			                    return DefaultService(gizmo: gizmo)
+			                }
+			                let service: any Service = __safeDI_service()
+			                return service
+			            }
+			            func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+			                .init(row: { _ in __safeDI_serviceBuilder_Panel_Row_Scope() }, service: { scope in __safeDI_serviceBuilder_Panel_service(scope) })
+			            }
+			            func __safeDI_serviceBuilder_Panel_Row_Scope() -> Panel.SafeDIMockScope_Service.Row_Scope.__safeDI_Builder<any Service> {
+			                .init(service: { scope in __safeDI_serviceBuilder_Panel_Row_Scope_service(scope) })
+			            }
+			            _ = Panel.__safeDI_Panel_mock_4401C36B70302082.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Panel.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Panel(), safeDIOverrides: safeDIOverrides.panel)
+			        }
+			        let panel: Panel = __safeDI_panel()
+			        return Screen(panel: panel)
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesThePlaceUp_whenInternalCallersFulfillerIsAnotherModulesSeamItCannotConstruct() async throws {
+		// `GadgetSeam`, in `Mid`, fulfills `Service`, but its initializer is `internal`, so `App` cannot build it inline: the
+		// mock passes the place up, as the `.public` caller does.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(mid: [Self.gadgetSeam], app: [Self.screen]), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["App"]?.generatedFiles == [
 			"App.swift": generatedFileHeader + """
 			#if canImport(Core)
@@ -5779,6 +5914,35 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	    }
 
 	    @Instantiated let gizmo: any Gizmo
+	}
+	"""
+
+	/// A fake of `Gizmo`, which `defaultServiceInstantiatingGizmo` declares, in mocks only.
+	private static let fakeGizmo = """
+	import SafeDI
+
+	@Instantiable(fulfillingAdditionalTypes: [Gizmo.self], mockOnly: true)
+	public struct FakeGizmo: Gizmo {
+	    public static func mock() -> FakeGizmo {
+	        FakeGizmo()
+	    }
+	}
+	"""
+
+	/// A seam in `Mid` that fulfills `Service`, whose initializer another module cannot call, with a hole of its own.
+	private static let gadgetSeam = """
+	import Core
+	import SafeDI
+
+	public protocol Gadget: Sendable {}
+
+	@Instantiable(generateDependencyTree: true, fulfillingAdditionalTypes: [Service.self])
+	public struct GadgetSeam: Service, Instantiable {
+	    init(gadget: any Gadget) {
+	        self.gadget = gadget
+	    }
+
+	    @Instantiated let gadget: any Gadget
 	}
 	"""
 
