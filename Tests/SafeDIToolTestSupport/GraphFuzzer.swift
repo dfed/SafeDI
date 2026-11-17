@@ -5704,7 +5704,7 @@ enum GraphFuzzerGenerator {
 			// Four times in five it forwards nothing, so that the plain place and the place that forwards nothing are drawn beside
 			// it in ten judged graphs each.
 			let handedForwardedType: String? = switch handedForwardsRoll {
-			case 0 ... 7:
+			case 0...7:
 				nil
 			case 8:
 				"Int"
