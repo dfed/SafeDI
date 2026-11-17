@@ -44,6 +44,7 @@ extension CachedScannedModuleInfo: BinarySchemaMember {
 				BinaryLayoutField("keptPlainTypeNames", \.keptPlainTypeNames),
 				BinaryLayoutField("additionalKeptPlainTypeNames", \.additionalKeptPlainTypeNames),
 				BinaryLayoutField("activeCompilationConditions", \.activeCompilationConditions),
+				BinaryLayoutField("reservedTypeNameDeclarations", \.reservedTypeNameDeclarations),
 			],
 			unwrittenProperties: [],
 		)
@@ -63,6 +64,7 @@ extension CachedScannedModuleInfo: BinarySchemaMember {
 			keptPlainTypeNames: reader.read(),
 			additionalKeptPlainTypeNames: reader.read(),
 			activeCompilationConditions: reader.read(),
+			reservedTypeNameDeclarations: reader.read(),
 		)
 	}
 
@@ -79,6 +81,7 @@ extension CachedScannedModuleInfo: BinarySchemaMember {
 		writer.write(keptPlainTypeNames)
 		writer.write(additionalKeptPlainTypeNames)
 		writer.write(activeCompilationConditions)
+		writer.write(reservedTypeNameDeclarations)
 	}
 }
 
@@ -147,6 +150,7 @@ extension FileScan: BinarySchemaMember {
 				BinaryLayoutField("outputFileDeclarations", \.outputFileDeclarations),
 				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
 				BinaryLayoutField("keptGuardedPlainTypeNames", \.keptGuardedPlainTypeNames),
+				BinaryLayoutField("reservedTypeNameDeclarations", \.reservedTypeNameDeclarations),
 			],
 			// A cached scan is one whose module kept its plain type declarations
 			// (`FileScan.keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesPackageCanName:isInReadingModule:)`),
@@ -171,6 +175,7 @@ extension FileScan: BinarySchemaMember {
 			plainTypeDeclarations: reader.read(),
 			plainTypeDeclarationDecisions: [],
 			keptGuardedPlainTypeNames: reader.read(),
+			reservedTypeNameDeclarations: reader.read(),
 		)
 	}
 
@@ -188,6 +193,7 @@ extension FileScan: BinarySchemaMember {
 		writer.write(outputFileDeclarations)
 		writer.write(plainTypeDeclarations)
 		writer.write(keptGuardedPlainTypeNames)
+		writer.write(reservedTypeNameDeclarations)
 	}
 }
 
@@ -591,6 +597,33 @@ extension Instantiable.DeclarationType: BinarySchemaMember {
 		case actorType
 		case structType
 		case extensionType
+	}
+}
+
+extension ReservedTypeNameDeclaration: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("typeName", \.typeName),
+				BinaryLayoutField("prefix", \.prefix),
+				BinaryLayoutField("location", \.location),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			typeName: reader.read(),
+			prefix: reader.read(),
+			location: reader.read() as Dependency.DeclarationLocation?,
+		)
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(typeName)
+		writer.write(prefix)
+		writer.write(location)
 	}
 }
 

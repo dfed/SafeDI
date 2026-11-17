@@ -40,12 +40,17 @@ public final class FileVisitor: SyntaxVisitor {
 
 	public override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
 		// A protocol declares no type SafeDI scans for, but its declaration proves its access, as any plain type's does.
-		// Its body declares nothing SafeDI reads: a type nested in it counts as the protocol does (`TypeAccessProof`).
+		// Its body declares nothing SafeDI reads: a type nested in it counts as the protocol does (`TypeAccessProof`). The
+		// type aliases it declares can have reserved names.
 		recordPlainTypeDeclaration(
 			typeDefined(named: node.name.text),
 			access: node.modifiers.access(introducedBy: node.protocolKeyword, sourceLocationConverter: sourceLocationConverter),
 			isInstantiable: false,
 		)
+		recordReservedTypeName(node.name, isInstantiable: false)
+		if recordsReservedTypeNamesAtPosition {
+			reservedTypeNameDeclarations += ReservedTypeNameDeclaration.declaredAmongMembers(of: node, sourceLocationConverter: sourceLocationConverter)
+		}
 		return .skipChildren
 	}
 
@@ -84,21 +89,26 @@ public final class FileVisitor: SyntaxVisitor {
 			access: node.modifiers.access(introducedBy: node.typealiasKeyword, sourceLocationConverter: sourceLocationConverter),
 			isInstantiable: false,
 		)
+		recordReservedTypeName(node.name, isInstantiable: false)
 		return .skipChildren
 	}
 
 	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
 		// The block's declarations in every clause, including those of nested blocks, which this visitor
-		// reaches again only in the clauses it scans.
+		// reaches again only in the clauses it scans. A reserved name is reserved under every condition, so the walk of
+		// the outermost block records the declarations of reserved names in every clause, of nested blocks too.
+		let recordsReservedTypeNames = recordsReservedTypeNamesAtPosition
 		enclosingBlocksNameConditionOnlyTheCompilerDecides.append(node.namesConditionOnlyTheCompilerDecides)
-		let (content, blockOutputFileDeclarations, plainTypeNames) = node.safeDIContentAmongDeclarations(
+		let (content, blockOutputFileDeclarations, plainTypeNames, blockReservedTypeNameDeclarations) = node.safeDIContentAmongDeclarations(
 			enclosedBy: parentType,
 			enclosingTypeAccess: enclosingTypeAccess,
 			inExtensionOf: enclosingExtendedType,
 			enclosingExtensionAccess: enclosingExtensionAccess,
 			sourceLocationConverter: sourceLocationConverter,
+			recordsReservedTypeNames: recordsReservedTypeNames,
 		)
 		outputFileDeclarations.formUnion(blockOutputFileDeclarations)
+		reservedTypeNameDeclarations += blockReservedTypeNameDeclarations
 		// A plain type declaration is recorded from the clauses this visitor scans, which the conditions select as they
 		// select a block guarding production declarations. A block that also guards mock-only declarations is selected as
 		// if the mock condition were active, and its plain declarations are also recorded from the clauses a build where
@@ -204,6 +214,7 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
 		// Enums can't be instantiable because they can't have `let` properties.
 		// However, they can have nested types within them that are instantiable.
+		recordReservedTypeName(node.name, isInstantiable: node.attributes.instantiableMacro != nil)
 		enterType(
 			typeDefined(named: node.name.text),
 			access: node.modifiers.access(introducedBy: node.enumKeyword, sourceLocationConverter: sourceLocationConverter),
@@ -244,6 +255,7 @@ public final class FileVisitor: SyntaxVisitor {
 		parentType = node.extendedType.typeDescription
 		enclosingExtendedType = node.extendedType.typeDescription
 		enclosingExtensionAccess = node.modifiers.access(introducedBy: node.extensionKeyword, sourceLocationConverter: sourceLocationConverter)
+		isInsideDeclarationTheMacroReads = node.attributes.instantiableMacro != nil
 
 		// Continue to find child types.
 		return .visitChildren
@@ -254,6 +266,7 @@ public final class FileVisitor: SyntaxVisitor {
 		parentType = nil
 		enclosingExtendedType = nil
 		enclosingExtensionAccess = nil
+		isInsideDeclarationTheMacroReads = false
 	}
 
 	// SwiftSyntax 602 and prior could not recover from certain parse errors, causing the remainder
@@ -299,6 +312,11 @@ public final class FileVisitor: SyntaxVisitor {
 	/// The declarations that decide which files SafeDI generates, found in every clause of every `#if`
 	/// block. They depend on no condition, so walking the file with any evaluator finds the same.
 	public private(set) var outputFileDeclarations = OutputFileDeclarations()
+	/// The declarations of the types whose names begin with one of `ReservedName.reservedTypeNamePrefixes` that the
+	/// `@Instantiable` macro does not see – neither `@Instantiable` themselves nor inside an `@Instantiable` type or
+	/// extension, at any depth – in every clause of every `#if` block, in source order. A reserved name is reserved under
+	/// every condition, so walking the file with any evaluator finds the same.
+	public private(set) var reservedTypeNameDeclarations = [ReservedTypeNameDeclaration]()
 	/// Every `struct`, `class`, `actor`, `enum`, `protocol`, and `typealias` declaration that is not `@Instantiable`, outside
 	/// every `#if` block or in a clause this visitor scans, directly inside an extension or not, in source order. The
 	/// conditions of each block that declares one in any clause are among `consultedCompilationConditions`, or, for a
@@ -325,6 +343,17 @@ public final class FileVisitor: SyntaxVisitor {
 	/// For each `#if` block that encloses the walk's position, outermost first, whether a clause's condition names
 	/// something only the compiler decides (`IfConfigDeclSyntax.namesConditionOnlyTheCompilerDecides`).
 	private var enclosingBlocksNameConditionOnlyTheCompilerDecides = [Bool]()
+	/// Whether the walk's position is inside a declaration the `@Instantiable` macro reads: an `@Instantiable` type or
+	/// extension, at any depth.
+	private var isInsideDeclarationTheMacroReads = false
+	/// `isInsideDeclarationTheMacroReads` outside each type declaration enclosing the walk's position, outermost first.
+	private var outerIsInsideDeclarationTheMacroReads = [Bool]()
+	/// Whether a declaration at the walk's position of a type whose name begins with a reserved prefix is recorded here:
+	/// outside every `#if` block, whose outermost block's walk records those of every clause, and outside every
+	/// declaration the `@Instantiable` macro reads.
+	private var recordsReservedTypeNamesAtPosition: Bool {
+		enclosingBlocksNameConditionOnlyTheCompilerDecides.isEmpty && !isInsideDeclarationTheMacroReads
+	}
 	private let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
 	private let sourceLocationConverter: SourceLocationConverter?
 	/// The `#if` clauses the evaluator selected for scanning.
@@ -359,6 +388,7 @@ public final class FileVisitor: SyntaxVisitor {
 		appendInstantiables(of: instantiableVisitor)
 		record(instantiableVisitor.conditionalCompilationDecisions)
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
+		recordReservedTypeName(node.name, isInstantiable: node.attributes.instantiableMacro != nil)
 		let definedType = typeDefined(named: node.name.text)
 		if node.attributes.instantiableMacro != nil {
 			outputFileDeclarations.recordInstantiable(
@@ -387,6 +417,8 @@ public final class FileVisitor: SyntaxVisitor {
 		recordPlainTypeDeclaration(type, access: access, isInstantiable: isInstantiable)
 		parentType = type
 		enclosingTypeAccess.append(access)
+		outerIsInsideDeclarationTheMacroReads.append(isInsideDeclarationTheMacroReads)
+		isInsideDeclarationTheMacroReads = isInsideDeclarationTheMacroReads || isInstantiable
 	}
 
 	/// Records `type`, which a declaration with `access` declares, among `plainTypeDeclarations` when it is not
@@ -452,6 +484,17 @@ public final class FileVisitor: SyntaxVisitor {
 	private func exitType() {
 		parentType = parentType?.popNested
 		enclosingTypeAccess.removeLast()
+		isInsideDeclarationTheMacroReads = outerIsInsideDeclarationTheMacroReads.removeLast()
+	}
+
+	/// Records the declaration of the type `name` names, unless it is `@Instantiable`, when its name begins with a reserved
+	/// prefix and the declaration is recorded here (`recordsReservedTypeNamesAtPosition`).
+	private func recordReservedTypeName(_ name: TokenSyntax, isInstantiable: Bool) {
+		guard recordsReservedTypeNamesAtPosition,
+		      !isInstantiable,
+		      let declaration = ReservedTypeNameDeclaration.declaredBy(name, sourceLocationConverter: sourceLocationConverter)
+		else { return }
+		reservedTypeNameDeclarations.append(declaration)
 	}
 
 	/// Records each decision once, even when both this visitor and an `InstantiableVisitor` walk the block.

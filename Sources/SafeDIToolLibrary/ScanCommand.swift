@@ -292,6 +292,7 @@ public func performScan(
 		keptPlainTypeNames: moduleKeptTypeNames,
 		additionalKeptPlainTypeNames: moduleKeptTypeNames.union(keptPlainTypeNames(of: additionalFileScans.map(\.fileScan))),
 		activeCompilationConditions: activeCompilationConditions.sorted(),
+		reservedTypeNameDeclarations: parsedModule.reservedTypeNameDeclarations,
 	)
 	// Cache write is best-effort. A full disk or other transient FS
 	// failure, or a type nested too deeply to write, shouldn't block the
@@ -418,6 +419,10 @@ public struct CachedScannedModuleInfo: Codable, Sendable {
 	/// may differ: a build tool plugin hands `scan` only the conditions it can see, while `generate`
 	/// usually reads more from the build settings, such as `DEBUG` and `SWIFT_PACKAGE`.
 	let activeCompilationConditions: [String]
+	/// The declarations in the module's own files of the types whose names begin with a reserved prefix that the
+	/// `@Instantiable` macro does not see (`ParsedModule.reservedTypeNameDeclarations`), in source order. They depend on no
+	/// condition, so `generate` reports these whatever its conditions, and walks no file again for them.
+	let reservedTypeNameDeclarations: [ReservedTypeNameDeclaration]
 }
 
 /// A file `scan` read, and its modification times when scan read it.

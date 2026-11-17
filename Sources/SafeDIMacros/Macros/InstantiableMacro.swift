@@ -169,6 +169,12 @@ public struct InstantiableMacro: MemberMacro {
 			Self.diagnoseRenamesOfRenamesAndOfThemselves(among: declaration.memberBlock.members, context: context)
 
 			let memberDeclarations = Self.declarations(in: declaration.memberBlock.members)
+			Self.diagnoseReservedTypeNamesSpelled(
+				byDependenciesAmong: memberDeclarations,
+				parametersOf: memberDeclarations.compactMap { InitializerDeclSyntax($0)?.signature } + Self.mockFunctionSignatures(foundBy: visitor),
+				returnTypesOf: Self.mockFunctionSignatures(foundBy: visitor),
+				context: context,
+			)
 			Self.diagnoseNestedTypesSpelledThroughSelf(
 				in: memberDeclarations
 					.compactMap { VariableDeclSyntax($0) }
@@ -867,6 +873,15 @@ public struct InstantiableMacro: MemberMacro {
 			Self.diagnoseReservedTypeNames(
 				declaredBy: Self.typeNameToken(of: extensionDeclaration.extendedType),
 				among: declaration.memberBlock.members,
+				context: context,
+			)
+			// An extension's dependencies are the parameters of its `instantiate(…)` methods, and the type it builds is what
+			// they return.
+			let extensionFunctionSignatures = visitor.instantiateFunctions.map(\.syntax.signature) + Self.mockFunctionSignatures(foundBy: visitor)
+			Self.diagnoseReservedTypeNamesSpelled(
+				byDependenciesAmong: [],
+				parametersOf: extensionFunctionSignatures,
+				returnTypesOf: extensionFunctionSignatures,
 				context: context,
 			)
 
