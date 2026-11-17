@@ -817,14 +817,23 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test(arguments: [(UInt64(153), GraphFuzzerGeneratorFeature.generateDependencyTree), (163, .generateDependencyTree), (98, .generateMockPublic), (208, .generateMockPublic)])
 	func seamDependencyDraw_importsOnlyTheModuleBeneath_whenDeclarationsMoveOrAChainIsDrawnBeneathSeamsModule(seed: UInt64, feature: GraphFuzzerGeneratorFeature) throws {
-		// Each module of the chain beneath the seam's module imports only the module beneath it, and a caller only the seam's
-		// module, so that under the module-info flow a caller reads the chain only through the seam's module's view.
+		// Each module imports only what it lists under the module-info flow. Each module of the chain beneath the seam's module
+		// imports only the module beneath it, and a caller only the seam's module, except a module that lists every module
+		// beneath it because it declares a root of the draws beneath the seam's module
+		// (`GraphFuzzerFixture.modulesListingEveryModuleBeneath`), so that a caller that reads through the seam's module's
+		// view, of which the graph holds at least one, reads the chain only through that view.
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [feature])
 		let modules = try #require(fixture.modules)
+		let lists = fixture.dependencyLists(modules: modules, integration: .moduleInfo, listsTransitiveDependencies: false)
+		let modulesListingEveryModuleBeneath = fixture.modulesListingEveryModuleBeneath
 		for (module, content) in zip(modules, fixture.swiftFileContent) {
 			let importedModuleNames = content.split(separator: "\n").filter { $0.hasPrefix("import Fuzz") }.map { String($0.dropFirst("import ".count)) }
-			#expect(importedModuleNames == module.dependencies.filter(modules.contains).map(\.name), "Seed \(seed), \(module.name)")
+			#expect(Set(importedModuleNames).isSubset(of: (lists[module] ?? []).map(\.name)), "Seed \(seed), \(module.name)")
+			if !modulesListingEveryModuleBeneath.contains(module) {
+				#expect(importedModuleNames == module.dependencies.filter(modules.contains).map(\.name), "Seed \(seed), \(module.name)")
+			}
 		}
+		#expect(!GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: fixture).isEmpty, "Seed \(seed): no caller reads through the seam's module's view")
 		let drawn = GraphFuzzerSeamDependencyDraw.drawn(in: fixture)
 		// Seed 208 moves a declaration beside its chain.
 		let expected: [UInt64: (movesDeclaration: Bool, drawsChain: Bool)] = [153: (true, false), 163: (false, true), 98: (true, false), 208: (true, true)]
