@@ -69,9 +69,14 @@ jobs:
           compiler=$(swift --version 2>&1 | sha256sum | cut -c1-16)
           test "${#compiler}" -eq 16
           echo "key=safedi-release-$OLDER_RELEASE-${OLDER_RELEASE_COMMIT:0:9}-$RUNNER_OS-swift-6.2-$compiler" >> "$GITHUB_OUTPUT"
-      - name: Cache Older Release Build
+      # Only a run on main saves the build ("Save Older Release Build"
+      # below): a pull request can restore main's cache, and a copy it
+      # saved (230 MB each, four of them on 2026-11-17) served only its own
+      # later runs while it pushed main's caches toward eviction. Until main
+      # has saved one, every run builds the release.
+      - name: Restore Older Release Build
         id: older-release-cache
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: older-release/.build
           key: ${{ steps.older-release-key.outputs.key }}
@@ -92,6 +97,12 @@ jobs:
         if: ${{ steps.older-release-cache.outputs.cache-hit != 'true' }}
         timeout-minutes: 14
         run: swift build -c release --traits sourceBuild --package-path older-release --product SafeDI
+      - name: Save Older Release Build
+        if: ${{ github.ref == 'refs/heads/main' && steps.older-release-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: older-release/.build
+          key: ${{ steps.older-release-cache.outputs.cache-primary-key }}
       # A missing product fails the job here rather than leaving the shards to
       # find it.
       - name: Package Older Release
@@ -132,8 +143,9 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: .build
-          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/ci.yml') }}
+          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-without-coverage
           restore-keys: |
+            spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
             spm-release-${{ runner.os }}-swift-6.2-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry

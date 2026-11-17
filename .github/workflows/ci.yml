@@ -959,26 +959,54 @@ jobs:
       - name: Read Runner Image Version
         id: runner-image
         run: echo "version=${ImageVersion:-$(sw_vers -buildVersion)}" >> "$GITHUB_OUTPUT"
+      # The compiler is hashed with the arguments, since a build is no start
+      # for another compiler's. Assigned first, so that a compiler that
+      # fails to report its version fails this step.
+      - name: Hash Build Arguments
+        id: build-arguments
+        run: |
+          compiler=$(xcrun swift --version 2>&1)
+          arguments=$(printf '%s\n%s' "$SWIFT_TEST_ARGUMENTS" "$compiler" | shasum -a 256 | cut -c1-16)
+          test "${#arguments}" -eq 16
+          echo "hash=$arguments" >> "$GITHUB_OUTPUT"
       # Restoring `.build` carries swift-syntax's release-mode objects
       # over between runs; SafeDI's own targets and tests still rebuild
       # from the current sources. The key pins the Xcode version because
       # build products aren't portable across toolchains. The
       # restore-keys prefix reuses the most recent cache when
       # Package.resolved changes, and the incremental build takes it
-      # from there. This workflow is in the key too: the test commands
-      # below set compiler flags, and a cache hit is never re-saved.
+      # from there. The build's arguments are in the key too: a cache hit
+      # is never re-saved, so a build with other compiler flags must not
+      # hit a cache it would rebuild from on every run. The key holds a
+      # hash of the arguments and the compiler's version rather than of
+      # this workflow, because every
+      # change to the workflow then saved another 580 MB copy.
       #
       # The key names the runner image: a cache hit is never re-saved, so
       # when runner image 20261102.0473 rolled out, every run restored the
       # previous image's cache and rebuilt swift-syntax (~8 min). The first
       # run on a new image restores an older image's cache, builds
       # incrementally, and saves under its own key.
-      - name: Cache Build Directory
-        uses: actions/cache@v6
+      #
+      # Only a run on main saves ("Save Build Directory" below). A pull
+      # request can restore main's caches and its own, never another pull
+      # request's, so a copy it saved served only its own later runs, and
+      # the repository's caches are evicted, least recently used first,
+      # above 10 GB: on 2026-11-17 they stood at 9.98 GB, two pull
+      # requests each held a 582 MB copy of this build, and PR #765's run
+      # 44067580141, on image 20261102.0473.1, found only image
+      # 20261112.0504.1's build to restore and built for 23.5 minutes
+      # where main's run 44032976346 built for 14.1. A pull request that
+      # changes the dependencies or the arguments builds from main's
+      # nearest cache on every run until it lands.
+      - name: Restore Build Directory
+        id: build-cache
+        uses: actions/cache/restore@v6
         with:
           path: .build
-          key: spm-release-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved', '.github/workflows/ci.yml') }}
+          key: spm-release-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}
           restore-keys: |
+            spm-release-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-
             spm-release-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-
             spm-release-${{ runner.os }}-xcode-26.0-
       - name: Resolve Package Dependencies
@@ -1069,6 +1097,14 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # The arguments are words to split.
           xcrun swift build --build-tests $SWIFT_TEST_ARGUMENTS
+      # After the build rather than at the job's end, so the cache holds
+      # the build alone and a failing test does not lose it.
+      - name: Save Build Directory
+        if: ${{ github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .build
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
       - name: Test Framework
         timeout-minutes: 85
         env:
@@ -1146,15 +1182,30 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+      # The compiler is hashed with the arguments, since a build is no start
+      # for another compiler's. Assigned first, so that a compiler that
+      # fails to report its version fails this step.
+      - name: Hash Build Arguments
+        id: build-arguments
+        run: |
+          compiler=$(swift --version 2>&1)
+          arguments=$(printf '%s\n%s' "$SWIFT_TEST_ARGUMENTS" "$compiler" | sha256sum | cut -c1-16)
+          test "${#arguments}" -eq 16
+          echo "hash=$arguments" >> "$GITHUB_OUTPUT"
       # Same idea as the macOS test job: reuse dependency build products
-      # between runs. Keyed on the container's Swift version, and on this
-      # workflow for the macOS job's reason.
-      - name: Cache Build Directory
-        uses: actions/cache@v6
+      # between runs. Keyed on the container's Swift version, the compiler
+      # the `swift:6.2` tag names today, and the build's arguments, for the
+      # macOS job's reason. Only a run on main
+      # saves ("Save Build Directory" below), for the macOS job's reason
+      # too: two pull requests each held a 546 MB copy of this build.
+      - name: Restore Build Directory
+        id: build-cache
+        uses: actions/cache/restore@v6
         with:
           path: .build
-          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/ci.yml') }}
+          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}
           restore-keys: |
+            spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
             spm-release-${{ runner.os }}-swift-6.2-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
@@ -1170,6 +1221,14 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # The arguments are words to split.
           swift build --build-tests $SWIFT_TEST_ARGUMENTS
+      # After the build rather than at the job's end, so the cache holds
+      # the build alone and a failing test does not lose it.
+      - name: Save Build Directory
+        if: ${{ github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .build
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
       # What a job that runs the tests needs of the build: the bundle,
       # SafeDITool and the macro plugin (which compile checks and the
       # fuzzer's compiler runs use), SafeDI's module, and the build's record
