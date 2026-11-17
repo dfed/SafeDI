@@ -1511,12 +1511,20 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			    }
 
 			    static func mock(
-			        apiSendableBuilder: @escaping @Sendable () -> any Api,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        _ = Detail.__safeDI_Detail_mock_77306242221AEE42.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        func __safeDI_detailBuilder(id: Int) -> Detail {
-			            Detail.__safeDI_mock(id: id, apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder), safeDIOverrides: safeDIOverrides.detailBuilder)
+			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Detail() -> Detail.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
+			                .init(panelBuilder: { _ in __safeDI_apiBuilder_Detail_Panel_Scope() })
+			            }
+			            @Sendable nonisolated func __safeDI_apiBuilder_Detail_Panel_Scope() -> Detail.SafeDIMockScope_Api.Panel_Scope.__safeDI_Builder<any Api> {
+			                .init(api: { _ in
+			                    let api: any Api = Live(id: id)
+			                    return api
+			                })
+			            }
+			            _ = Detail.__safeDI_Detail_mock_77306242221AEE42.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Detail.__safeDI_mock(id: id, apiSendableBuilder: __safeDI_apiSendableBuilder_Detail(), safeDIOverrides: safeDIOverrides.detailBuilder)
 			        }
 			        let detailBuilder = Instantiator<Detail> {
 			            __safeDI_detailBuilder(id: $0)

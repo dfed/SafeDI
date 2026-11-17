@@ -285,25 +285,28 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
+		            token: (() -> Token)? = nil,
 		            office: Office.SafeDIOverrides = .init()
 		        ) {
+		            self.token = token
 		            self.office = office
 		        }
 
+		        let token: (() -> Token)?
 		        let office: Office.SafeDIOverrides
 		    }
 
 		    static func mock(
-		        serviceBuilder: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
+		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_office() -> Office {
 		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token) -> any Service {
 		                let service: any Service = DefaultService(token: token)
 		                return service
 		            }
-		            func __safeDI_serviceBuilder_Office(up: Office.SafeDIMockScope_Service.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-		                .init(desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() }, model: { values in __safeDI_serviceBuilder_Office_Model_Scope_(up: up.model(values)) })
+		            func __safeDI_serviceBuilder_Office(token: Token) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_serviceBuilder_Office_Model_Scope_(token: token) })
 		            }
 		            func __safeDI_serviceBuilder_Office_Desk_Scope() -> Office.SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<any Service> {
 		                .init(model: { values in __safeDI_serviceBuilder_Office_Model_Scope(token: values.token) })
@@ -311,11 +314,11 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
 		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token.instance) })
 		            }
-		            func __safeDI_serviceBuilder_Office_Model_Scope_(up: Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
-		                .init(service: up.service)
+		            func __safeDI_serviceBuilder_Office_Model_Scope_(token: Token) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) })
 		            }
 		            _ = Office.__safeDI_Office_mock_533562D85E48F99D.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(up: .init(__safeDI_noScope: serviceBuilder)), safeDIOverrides: safeDIOverrides.office)
+		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(token: token), safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
 		        return OfficeScreen(office: office)
@@ -828,25 +831,28 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
+		            passUp: (() -> Token)? = nil,
 		            office: Office.SafeDIOverrides = .init()
 		        ) {
+		            self.passUp = passUp
 		            self.office = office
 		        }
 
+		        let passUp: (() -> Token)?
 		        let office: Office.SafeDIOverrides
 		    }
 
 		    static func mock(
-		        serviceBuilder: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
+		        let passUp = if let safeDIBuilder = safeDIOverrides.passUp { safeDIBuilder() } else { Token() }
 		        func __safeDI_office() -> Office {
 		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, passUp: Token) -> any Service {
 		                let service: any Service = DefaultService(passUp: passUp)
 		                return service
 		            }
-		            func __safeDI_serviceBuilder_Office(up: Office.SafeDIMockScope_Service.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-		                .init(desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() }, model: { values in __safeDI_serviceBuilder_Office_Model_Scope_(up: up.model(values)) })
+		            func __safeDI_serviceBuilder_Office(passUp: Token) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_serviceBuilder_Office_Model_Scope_(passUp: passUp) })
 		            }
 		            func __safeDI_serviceBuilder_Office_Desk_Scope() -> Office.SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<any Service> {
 		                .init(model: { values in __safeDI_serviceBuilder_Office_Model_Scope(passUp: values.passUp) })
@@ -854,11 +860,11 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Office_Model_Scope(passUp: LazilyInstantiated<Token>) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
 		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, passUp: passUp.instance) })
 		            }
-		            func __safeDI_serviceBuilder_Office_Model_Scope_(up: Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
-		                .init(service: up.service)
+		            func __safeDI_serviceBuilder_Office_Model_Scope_(passUp: Token) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, passUp: passUp) })
 		            }
 		            _ = Office.__safeDI_Office_mock_0BCE696681EAA0EC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(up: .init(__safeDI_noScope: serviceBuilder)), safeDIOverrides: safeDIOverrides.office)
+		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(passUp: passUp), safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
 		        return OfficeScreen(office: office)
@@ -959,25 +965,28 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
+		            up: (() -> Token)? = nil,
 		            office: Office.SafeDIOverrides = .init()
 		        ) {
+		            self.up = up
 		            self.office = office
 		        }
 
+		        let up: (() -> Token)?
 		        let office: Office.SafeDIOverrides
 		    }
 
 		    static func mock(
-		        serviceBuilder: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
+		        let up = if let safeDIBuilder = safeDIOverrides.up { safeDIBuilder() } else { Token() }
 		        func __safeDI_office() -> Office {
 		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, up: Token) -> any Service {
 		                let service: any Service = DefaultService(up: up)
 		                return service
 		            }
-		            func __safeDI_serviceBuilder_Office(up_: Office.SafeDIMockScope_Service.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-		                .init(desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() }, model: { values in __safeDI_serviceBuilder_Office_Model_Scope_(up_: up_.model(values)) })
+		            func __safeDI_serviceBuilder_Office(up: Token) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_serviceBuilder_Office_Model_Scope_(up: up) })
 		            }
 		            func __safeDI_serviceBuilder_Office_Desk_Scope() -> Office.SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<any Service> {
 		                .init(model: { values in __safeDI_serviceBuilder_Office_Model_Scope(up: values.up) })
@@ -985,11 +994,11 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Office_Model_Scope(up: LazilyInstantiated<Token>) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
 		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, up: up.instance) })
 		            }
-		            func __safeDI_serviceBuilder_Office_Model_Scope_(up_: Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service>) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
-		                .init(service: up_.service)
+		            func __safeDI_serviceBuilder_Office_Model_Scope_(up: Token) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, up: up) })
 		            }
 		            _ = Office.__safeDI_Office_mock_30B1C276807B6ACB.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(up_: .init(__safeDI_noScope: serviceBuilder)), safeDIOverrides: safeDIOverrides.office)
+		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(up: up), safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
 		        return OfficeScreen(office: office)

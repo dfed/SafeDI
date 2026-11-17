@@ -308,8 +308,13 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		        apiBuilder: @escaping () -> any Api,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        let __safeDI_apiBuilder = apiBuilder
 		        _ = Shell.__safeDI_Shell_mock_BCE44FADDA8E6FCF.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let shell = Shell.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides.shell)
+		        func __safeDI_shell() -> Shell {
+		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
+		            return Shell.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides.shell)
+		        }
+		        let shell: Shell = __safeDI_shell()
 		        return Root(shell: shell)
 		    }
 		}
@@ -2202,8 +2207,13 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		        session: Session,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Host {
+		        let __safeDI_apiBuilder = apiBuilder
 		        _ = Root.__safeDI_Root_mock_A8AB7F7A25FA7E0C.self // If this line does not compile, compile the code SafeDI generates for module App into App: under Bazel, add App’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let root = Root.__safeDI_mock(session: session, apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides.root)
+		        func __safeDI_root() -> Root {
+		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
+		            return Root.__safeDI_mock(session: session, apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides.root)
+		        }
+		        let root: Root = __safeDI_root()
 		        return Host(root: root)
 		    }
 		}
@@ -2323,6 +2333,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		        storeBuilder: @escaping () -> any Store,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        let __safeDI_storeBuilder = storeBuilder
 		        func __safeDI_detailBuilder() -> Detail {
 		            func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(api: { scope in
@@ -2332,6 +2343,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		                })
 		            }
 		            _ = Detail.__safeDI_Detail_mock_396CF79E0DB1FDB4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            let storeBuilder: () -> any Store = __safeDI_storeBuilder
 		            return Detail.__safeDI_mock(session: session, apiBuilder: __safeDI_apiBuilder_Detail(), storeBuilder: .init(__safeDI_noScope: storeBuilder))
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -2783,9 +2795,11 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		        session: Session,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Middle {
+		        let __safeDI_apiBuilder = apiBuilder
 		        _ = Detail.__safeDI_Detail_mock_761E40A8BF1136DD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_detailBuilder() -> Detail {
-		            if let safeDIBuilder = safeDIOverrides.detailBuilder { safeDIBuilder(session, apiBuilder) } else { Detail.__safeDI_mock(session: session, apiBuilder: .init(__safeDI_noScope: apiBuilder)) }
+		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
+		            return if let safeDIBuilder = safeDIOverrides.detailBuilder { safeDIBuilder(session, apiBuilder) } else { Detail.__safeDI_mock(session: session, apiBuilder: .init(__safeDI_noScope: apiBuilder)) }
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		        return Middle(session: session, detailBuilder: detailBuilder)

@@ -1783,8 +1783,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        userServiceBuilder: @escaping () -> any UserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
+		        let __safeDI_userServiceBuilder = userServiceBuilder
 		        _ = Panel.__safeDI_Panel_mock_F6067D88F054320F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let panel = if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(userServiceBuilder) } else { Panel.__safeDI_mock(userServiceBuilder: .init(__safeDI_noScope: userServiceBuilder)) }
+		        func __safeDI_panel() -> Panel {
+		            let userServiceBuilder: () -> any UserService = __safeDI_userServiceBuilder
+		            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(userServiceBuilder) } else { Panel.__safeDI_mock(userServiceBuilder: .init(__safeDI_noScope: userServiceBuilder)) }
+		        }
+		        let panel: Panel = __safeDI_panel()
 		        return Service(panel: panel)
 		    }
 		}
