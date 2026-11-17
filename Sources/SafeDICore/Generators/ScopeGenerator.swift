@@ -8708,6 +8708,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			guard let publicMockCall, !publicMockCall.takesOverrides else { return true }
 			return publicMockOverrideBuilders != nil
 		}
+
 		/// The `propertiesGeneratedLater` of the body of this node's builder function, which declares the fills of
 		/// `fillingGenerator` beside the node's children: the fills are generated with them, as production generates a
 		/// seam call's fills, so a receive inside one of a property generated after the call is passed `nil`. Read only

@@ -2775,7 +2775,6 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		"""])
 	}
 
-
 	// MARK: Tests – a lazy value on a route, and a mocked type built again in its own tree
 
 	@Test
