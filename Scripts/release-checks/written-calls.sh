@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Scripts/release-checks/written-calls.sh --tool SAFEDITOOL [--macros MACROS] [--modules DIRECTORY] [--output DIRECTORY]
-#                                         [--compile-only] [--configuration debug|release]
+#                                         [--compile-only] [--configuration debug|release] [--keep-going]
 #
 # A release check: code written against a release still compiles against a later SafeDITool. The fixture modules in
 # `written-calls/` hold hand-written calls of every generated declaration the release’s manual tells a person to call:
@@ -30,13 +30,15 @@
 # Output:  <output>/<configuration>/<Module>+SafeDI.swift (generated), <Module>.safedi, .swiftmodule, .o; default
 #          `.build/release-checks/written-calls` in this checkout. Temporary files go to <output>/tmp.
 # `--compile-only` skips generation and compiles the generated files already in <output>, so that a test of the check
-# can edit a generated file and see the compile fail.
+# can edit a generated file and see the compile fail. `--keep-going` compiles every module of every configuration even
+# after one fails, prints each failure, and exits non-zero if any failed; a module that depends on a failed one then
+# fails too, with `no such module`. Without it, the first failing module ends the run.
 set -euo pipefail
 step="reading the arguments"
 trap 'failure_status=$?; (( ZSH_SUBSHELL )) || print -ru2 -- "${0:t}: failed with status $failure_status at line $LINENO, while $step"' ZERR
 
-usage="usage: $0 --tool SAFEDITOOL [--macros MACROS] [--modules DIRECTORY] [--output DIRECTORY] [--compile-only] [--configuration debug|release]"
-tool="" macros="" module_search_path="" output="" compile_only=0
+usage="usage: $0 --tool SAFEDITOOL [--macros MACROS] [--modules DIRECTORY] [--output DIRECTORY] [--compile-only] [--configuration debug|release] [--keep-going]"
+tool="" macros="" module_search_path="" output="" compile_only=0 keep_going=0
 configurations=(debug release)
 while (( $# )); do
 	case $1 in
@@ -46,6 +48,7 @@ while (( $# )); do
 	--output) output=${2:A}; shift 2 ;;
 	--compile-only) compile_only=1; shift ;;
 	--configuration) configurations=($2); shift 2 ;;
+	--keep-going) keep_going=1; shift ;;
 	*) print -ru2 -- "$usage"; exit 2 ;;
 	esac
 done
@@ -84,6 +87,7 @@ package_of() {
 }
 
 print -ru2 -- "SafeDITool: $tool ($("$tool" --version))"
+failures=()
 for configuration in "${configurations[@]}"; do
 	directory="$output/$configuration"
 	condition_list=()
@@ -119,13 +123,27 @@ for configuration in "${configurations[@]}"; do
 		step="compiling $module ($configuration)"
 		[[ -f "$directory/$module+SafeDI.swift" ]] || { print -ru2 -- "no generated $directory/$module+SafeDI.swift: run without --compile-only first"; exit 2; }
 		print -ru2 -- "--- $configuration: swiftc $module"
-		"${swiftc[@]}" -emit-object -whole-module-optimization -parse-as-library \
-			-o "$directory/$module.o" -module-name "$module" -package-name "$(package_of "$module")" \
-			-emit-module -emit-module-path "$directory/$module.swiftmodule" \
-			-I "$module_search_path" -I "$directory" \
-			-load-plugin-executable "$macros#SafeDIMacros" -swift-version 6 \
-			${condition_list/#/-D} \
-			"${sources[@]}" "$directory/$module+SafeDI.swift"
+		# A module that failed leaves no module behind from an earlier run for the modules that depend on it to read.
+		rm -rf "$directory/$module.swiftmodule" "$directory/$module.o"
+		compile=("${swiftc[@]}" -emit-object -whole-module-optimization -parse-as-library
+			-o "$directory/$module.o" -module-name "$module" -package-name "$(package_of "$module")"
+			-emit-module -emit-module-path "$directory/$module.swiftmodule"
+			-I "$module_search_path" -I "$directory"
+			-load-plugin-executable "$macros#SafeDIMacros" -swift-version 6
+			${condition_list/#/-D}
+			"${sources[@]}" "$directory/$module+SafeDI.swift")
+		if (( keep_going )); then
+			if ! "${compile[@]}"; then
+				print -ru2 -- "--- $configuration: $module FAILED to compile"
+				failures+=("$module ($configuration)")
+			fi
+		else
+			"${compile[@]}"
+		fi
 	done
 done
+if (( ${#failures} )); then
+	print -ru2 -- "--- ${#failures} module compiles failed: ${(j:, :)failures}; outputs in $output"
+	exit 1
+fi
 print -ru2 -- "--- every written call compiled (${(j:, :)configurations}); outputs in $output"
