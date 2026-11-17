@@ -676,6 +676,69 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_declareReceivedPropertyOnRootInItsOwnModuleAndLeaveNoErrorAtTheReceive_whenTheReceiverIsInAnotherModule() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			// module: FuzzApp
+			import FuzzFeature
+
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1: S1_T1) {
+					self.t1 = t1
+				}
+
+				@Instantiated let t1: S1_T1
+			}
+			""",
+			"""
+			// module: FuzzFeature
+
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_T2) {
+					self.t2 = t2
+				}
+
+				@Received let t2: S1_T2
+			}
+			""",
+			"""
+			// module: FuzzFeature
+
+			@Instantiable
+			public final class S1_T2: Instantiable {
+				public init() {}
+			}
+			""",
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.instantiateOnRoot])
+		#expect(runs.first?.remedy.fixture.swiftFileContent == [
+			"""
+			// module: FuzzApp
+			import FuzzFeature
+
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1: S1_T1, t2: S1_T2) {
+					self.t1 = t1
+					self.t2 = t2
+				}
+
+				@Instantiated let t1: S1_T1
+				@Instantiated let t2: S1_T2
+			}
+			""",
+		] + fixture.swiftFileContent.dropFirst())
+		#expect(runs.first?.remedy.fixture.modules?.map(\.name) == fixture.modules?.map(\.name))
+		#expect(runs.map(\.errorsAtSite) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func remedyRuns_defaultTheMockParameterOrMoveTheMockIntoTheClauseAndLeaveNoErrorAtTheDependency_whenAMockTakesADependencyOfAnInactiveClause() async throws {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
 			"""
@@ -2188,6 +2251,18 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 			""",
 			leaf("S1_User"),
 		]
+	}
+
+	/// The remedy runs of `fixture`, which the tool must reject, and the sites of a family the oracle reads that get none.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func remedyRunsAndUnremediedSiteCount(of fixture: GraphFuzzerFixture) async throws -> ([GraphFuzzerRemedyRun], Int) {
+		let outcome = try await GraphFuzzerOracle.toolOutcome(of: fixture)
+		guard case let .rejected(diagnostics) = outcome else {
+			Issue.record("The tool accepts the graph:\n\(outcome.description)")
+			return ([], 0)
+		}
+		let runs = try await GraphFuzzerOracle.remedyRuns(of: fixture, outcome: outcome)
+		return (runs, GraphFuzzerRemedies.unremediedSiteCount(of: fixture, diagnostics: diagnostics))
 	}
 
 	/// The remedy runs of `fixture`, which the tool must reject.
