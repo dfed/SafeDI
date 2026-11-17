@@ -70,12 +70,7 @@ struct SafeDIToolPublicMockBuilderLabelTests: ~Copyable {
 					}
 
 					func handWrittenMock() -> F {
-					    F.mock(impl_ApiBuilder: { scope in
-					        switch scope {
-					        case let .a(_, id):
-					            Impl(id: id)
-					        }
-					    })
+					    F.mock(impl_ApiBuilder: { id in Impl(id: id) })
 					}
 					""",
 				], dependencies: ["Feature"]),
@@ -87,25 +82,40 @@ struct SafeDIToolPublicMockBuilderLabelTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		#if DEBUG
 		extension F {
-		    @frozen public enum SafeDIMockScope_Impl_Api {
-		        case a(a_Values, Int)
+		    nonisolated public enum SafeDIMockScope_Impl_Api {
+		        nonisolated public struct a_Values {}
 
-		        public struct a_Values {}
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let a: (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+
+		            public init(a: @escaping (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a = a
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    public static func mock(
-		        impl_ApiBuilder: @escaping (F.SafeDIMockScope_Impl_Api) -> any Api
+		        impl_ApiBuilder: @escaping ErasedInstantiator<Int, any Api>.Builder
 		    ) -> F {
-		        let __safeDI_impl_ApiBuilder = impl_ApiBuilder
-		        let a = ErasedInstantiator<Int, any Api> {
-		            __safeDI_impl_ApiBuilder(.a(SafeDIMockScope_Impl_Api.a_Values(), $0))
-		        }
+		        F.__safeDI_mock(impl_ApiBuilder: .init(__safeDI_noScope: impl_ApiBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        impl_ApiBuilder __safeDI_impl_ApiBuilder: F.SafeDIMockScope_Impl_Api.__safeDI_Builder<any Api>
+		    ) -> F {
+		        let a = ErasedInstantiator<Int, any Api>(__safeDI_impl_ApiBuilder.a(SafeDIMockScope_Impl_Api.a_Values()))
 		        return F(a: a)
 		    }
 		}
 
 		extension F {
-		    public enum __safeDI_F_mock_5ED0DB3738BA6930 {}
+		    public enum __safeDI_F_mock_C767B7BC2835A9DA {}
 		}
 		#endif
 		"""])

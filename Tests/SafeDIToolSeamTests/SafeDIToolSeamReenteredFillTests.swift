@@ -743,10 +743,9 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keysPublicMockEnumsByDeeperSeam_whenMockedTreeHoldsCallThatReentersFill() async throws {
-		// `Panel`'s public mock builds `Top`, whose tree the seam's would take its struct from a member for: the mock's enums
-		// take no member for the call that reenters the fill and stay nested by type, keyed by the deeper seam. `Gadget` takes
-		// the builder struct by the public mock's own rule.
+	mutating func generate_takesBuilderStructInPublicMock_whenMockedTreeHoldsCallThatReentersFill() async throws {
+		// `Panel`'s public mock builds `Top`, whose tree holds a call that reenters the seam's fill: the mock takes its
+		// builder struct, as the seam does, and its enums declare no case.
 		let fixture = Fixture(
 			middleTypes: [seamFixtureType(named: "Panel", declarations: ["@Instantiated let top: Top"]).replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: .public)\n")],
 		)
@@ -866,15 +865,10 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		#if DEBUG
 		extension Panel {
-		    @frozen nonisolated public enum SafeDIMockScope_Gadget {
-		        case top(top_Values, SafeDIMockScope_Gadget.Top_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Gadget {
 		        nonisolated public struct top_Values {}
 
-		        @frozen nonisolated public enum Top_Scope {
-		            case subA(subA_Values, SafeDIMockScope_Gadget.SubA_Scope)
-		            case subB(subB_Values, SafeDIMockScope_Gadget.SubB_Scope)
-
+		        nonisolated public enum Top_Scope {
 		            nonisolated public struct subA_Values {}
 
 		            nonisolated public struct subB_Values {
@@ -898,9 +892,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum SubA_Scope {
-		            case first(first_Values, SafeDIMockScope_Gadget.DefaultFirst_Scope)
-
+		        nonisolated public enum SubA_Scope {
 		            nonisolated public struct first_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -917,9 +909,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum SubB_Scope {
-		            case second(second_Values, SafeDIMockScope_Gadget.DefaultSecond_Scope)
-
+		        nonisolated public enum SubB_Scope {
 		            nonisolated public struct second_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -936,9 +926,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum DefaultFirst_Scope {
-		            case subB(subB_Values, SafeDIMockScope_Gadget.SubB_Scope)
-
+		        nonisolated public enum DefaultFirst_Scope {
 		            nonisolated public struct subB_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -955,9 +943,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum DefaultSecond_Scope {
-		            case gadget(gadget_Values)
-
+		        nonisolated public enum DefaultSecond_Scope {
 		            nonisolated public struct gadget_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.

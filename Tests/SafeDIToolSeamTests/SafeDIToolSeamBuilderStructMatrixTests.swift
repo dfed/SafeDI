@@ -1703,16 +1703,12 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		#if DEBUG
 		extension Inner {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case innermost(innermost_Values, SafeDIMockScope_Service.Innermost_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct innermost_Values {
 		            public let navigator: Navigator
 		        }
 
-		        @frozen nonisolated public enum Innermost_Scope {
-		            case detailBuilder(detailBuilder_Values, SafeDIMockScope_Service.Detail_Scope)
-
+		        nonisolated public enum Innermost_Scope {
 		            nonisolated public struct detailBuilder_Values {
 		                public let logger: Logger
 		            }
@@ -1731,9 +1727,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Detail_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Detail_Scope {
 		            nonisolated public struct service_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
