@@ -1567,17 +1567,20 @@ struct PublicMockCall: Sendable {
 	/// The calling tree's scope for the type is a leaf, with no scopes for that tree, so a function the calling tree
 	/// declares with such a parameter learns the name here.
 	let typesDeclaredEscaping: Set<TypeDescription>
-	/// Every place the mock's builders reach: those it hands them, in the order they reach them (`PublicMockPlan.holes`),
-	/// then those it fills itself (`PublicMockPlan.unpresentedHoles`), which the calling module fills or passes up alike.
-	let holes: [SeamSignature.Hole]
-	/// The builders the mock takes (`PublicMockPlan.builders`).
-	let builders: [SeamSignature.Builder]
-	/// Every enum the mock's builders reach (`PublicMockPlan.scopeEnums`).
-	let scopeEnums: [SeamSignature.ScopeEnum]
+	/// The builders the call passes, built once with the call: its `holes` are every place the mock's builders reach, those it
+	/// hands them, in the order they reach them (`PublicMockPlan.holes`), then those it fills itself
+	/// (`PublicMockPlan.unpresentedHoles`), which the calling module fills or passes up alike; its `builders` the builders the
+	/// mock takes (`PublicMockPlan.builders`); and its `scopeEnums` every enum they reach (`PublicMockPlan.scopeEnums`).
+	let calledBuilders: CalledBuilders
 
-	/// The builders the call passes.
-	var calledBuilders: CalledBuilders {
-		CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums)
+	/// Every place the mock's builders reach (see `calledBuilders`).
+	var holes: [SeamSignature.Hole] {
+		calledBuilders.holes
+	}
+
+	/// The builders the mock takes.
+	var builders: [SeamSignature.Builder] {
+		calledBuilders.builders
 	}
 
 	/// The sites of the places the call fills on every route.

@@ -106,6 +106,8 @@ extension DependencyTreeGenerator {
 	///   - bindsReceivesAgain: Whether the tree is a public mock's, whose types' levels hold the receives it binds again
 	///     (`receivesBoundAgainOfAnyBuild(inTreeRootedAt:rootFields:namesApartAtRoot:)`).
 	///   - namesApartAtRoot: For a public mock, what its root binds only under names apart, which no level declares.
+	///   - reenteredFillsByKey: The fills a call inside a fill of the same call can re-enter
+	///     (`emittingFillsByKey(inTreeRootedAt:)`), found once for the seam; empty for a public mock's tree.
 	static func scopeEnumsByType(
 		of seam: Instantiable,
 		holeType: SeamSignature.HoleType,
@@ -118,6 +120,7 @@ extension DependencyTreeGenerator {
 		parameters: [SeamSignature.Parameter],
 		bindsReceivesAgain: Bool,
 		namesApartAtRoot: PublicMockRootLevel.NamesApart,
+		reenteredFillsByKey: [String: ScopeGenerator],
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
 		reachedEnum: (SeamSignature.ScopeEnum.Key) -> SeamSignature.ScopeEnum?,
@@ -152,7 +155,6 @@ extension DependencyTreeGenerator {
 		// A call's fill is entered where it is the fill whose code is generated and builds a place or a call that passes one
 		// up: an edge from the call's declaration to the type the fill builds.
 		// The graph reads only a child with a property (`SeamDeclarationGraph.placeHolding`), which a fill has none of.
-		let reenteredFillsByKey = bindsReceivesAgain ? [:] : Self.emittingFillsByKey(inTreeRootedAt: generator)
 		let placeHolding = SeamDeclarationGraph.placeHolding(inTreeRootedAt: generator, edges: { parent, child in
 			if let site = child.holeSite {
 				guard let owner = parent.builtInstantiable?.concreteInstantiable,
@@ -1106,10 +1108,7 @@ extension DependencyTreeGenerator {
 	static func filledRootKey(of fill: ScopeGenerator, in call: ScopeGenerator, keysTheCalledSeam: Bool) -> SeamSignature.ScopeEnum.Key? {
 		guard let hole = fill.fillHole else { return nil }
 		guard keysTheCalledSeam, let calledBuilders = call.calledBuilders else { return SeamSignature.ScopeEnum.rootKey(of: hole) }
-		let enumsByKey = calledBuilders.enumsByKey
-		return calledBuilders.builders.first { builder in
-			builder.enumKey.holeType == hole.holeType && SeamSignature.ScopeEnum.sitesReached(from: builder.enumKey, in: enumsByKey).contains(hole.site)
-		}?.enumKey ?? SeamSignature.ScopeEnum.rootKey(of: hole)
+		return calledBuilders.keyOfFirstBuilderReaching(hole) ?? SeamSignature.ScopeEnum.rootKey(of: hole)
 	}
 
 	/// The keys of the root enums of `calledBuilders`, each once, with the label of the called seam's builder that is handed
