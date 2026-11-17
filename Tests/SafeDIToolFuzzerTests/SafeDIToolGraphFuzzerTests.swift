@@ -5705,7 +5705,7 @@ struct SafeDIToolGraphFuzzerTests {
 									remedyCounts[remedyRun.remedy.kind, default: (0, 0)].failed += 1
 								}
 							}
-							if result.fixture.modules == nil, GraphFuzzerGeneratorFeature.features(drawnIn: result.fixture).isEmpty, case let .rejected(diagnostics) = result.outcome {
+							if case let .rejected(diagnostics) = result.outcome {
 								unremediedSiteCount += GraphFuzzerRemedies.unremediedSiteCount(of: result.fixture, diagnostics: diagnostics)
 							}
 							// Counted whether or not the graph also fails another way.
@@ -5802,8 +5802,8 @@ struct SafeDIToolGraphFuzzerTests {
 			report.append("value-oracle \(corpus.name) \(valueOracleCounts.reportField) \(pinnedValueOracleCounts.reportField)")
 		}
 		// The remedy oracle's judgments by kind, as `judged/failed`, and the sites it applied no remedy to, which no pin checks:
-		// the base corpus's unit tests hold a representative of each kind.
-		if corpus.features.isEmpty {
+		// the remedy oracle's unit tests hold a representative of each kind. The seam corpus's graphs get one kind only.
+		if corpus.features.isEmpty || corpus.features == [.generateDependencyTree] {
 			let counts = GraphFuzzerRemedyKind.allCases.map { "\($0.rawValue)=\(remedyCounts[$0]?.judged ?? 0)/\(remedyCounts[$0]?.failed ?? 0)" }.joined(separator: ",")
 			report.append("remedies \(corpus.name) \(counts) unremedied=\(unremediedSiteCount)")
 		}
@@ -6444,7 +6444,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`seamBuilderOrderShape(listedBy:)`). Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x18CB353E24F0F8BF
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xDA4DDF705D4B4487
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -6843,6 +6843,12 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "\(mockParameterAndFieldOrderReason); and \(inSeamLeakReason)",
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)] + inSeamLeakSignatures,
 			seeds: [300],
+		),
+		// The remedy oracle reads a seam's label collision in one-module seam graphs, the only remedy it applies there.
+		GraphFuzzerKnownIssue(
+			reason: remedySeamProvidingWrapperUndeclaredReason,
+			signatures: [.remedyLeavesErrorAtSite(.declareProvidingFormOnSeam, containing: "` is not @Instantiated or @Forwarded in chain: ")],
+			seeds: [171, 647, 686, 731, 898, 911, 957],
 		),
 	]
 
@@ -8129,6 +8135,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	static let remedyDeclarationClosesCycleThroughRootReason = "An error advises declaring a property on a root whose own properties the declared type's tree receives and that require the declaration, so the declaration closes a dependency cycle there (remedyRuns_leaveNoErrorAtTheReceive_whenTheDeclaredTypesTreeReceivesARootPropertyThatRequiresTheDeclaration: Root builds `t2: T2`, which requires `t0Builder: Instantiator<T0>`, and T0 receives `t2`)"
 
+	static let remedySeamProvidingWrapperUndeclaredReason = "A seam's error for one label its tree receives in two forms advises declaring on the seam the wrapper that provides the others, which no type that builds the seam declares, so the seam's receive is then unfulfilled (remedyRuns_leaveNoErrorAtTheSeam_whenTheProvidingFormIsAWrapperTheSeamsCallerDoesNotDeclare: Root declares `user: S1_User` and builds S1_Seam, which receives `user: LazilyInstantiated<S1_User>?` only if available and builds S1_Child, which requires `user: S1_User`, and the error says to declare `@Received let user: LazilyInstantiated<S1_User>` on S1_Seam). Plan row I8 owns the fix"
 	static let remedySendableWrapperNamesOneDeclarationReason = "An error at a receive inside a `@Sendable` function advises declaring the captured property as its `Sendable` wrapper on the one root its chain starts at, and at the receive, where another root declares the property, or another type receives it, as the wrapper that is not `Sendable`: the receive is then unfulfilled beneath the other root, or hidden beneath the other receiver (remedyRuns_leaveNoErrorAtTheReceive_whenAnotherRootDeclaresThePropertyTheSendableBuilderCannotCapture: Root0 builds T1 through `SendableInstantiator<T1>` and Root1 as a constant, each declares `t2Builder: Instantiator<T2>`, and T1 receives it). The fix, on the branch claude/sendable-remedy-names-all, names every declaration; its roll is seed 1436"
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
