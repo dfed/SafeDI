@@ -3934,6 +3934,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	nonisolated var readsFillInnerScopes: Bool {
 		!buildsInSendableFunction && (containsBuildSite || passesUpBuilder || holdsCallReenteringEnclosingFill)
 	}
+
 	/// The properties of this scope's type that hold a place of the seam whose tree is generated, by the seam's declaration
 	/// graph (`SeamDeclarationGraph`): a fact of the type, the same on every path, which orders this scope's children. `nil`
 	/// where the order by path is the same, which `Scope.createScopeGenerator` checks, inside a fill, whose tree is built
