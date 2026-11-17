@@ -306,6 +306,16 @@ struct ConstructionLog: Sendable {
 		case declarationClosedOn(Property, TypeDescription)
 		/// The parameters of the builder function built for a declaration that a lazy cycle closes on, if any.
 		case cycleParameterContext(ScopeGenerator.BuiltDeclaration)
+
+		/// Whether this read asks what a cycle closes on or passes: what most places of one key differ in.
+		var isCycleRead: Bool {
+			switch self {
+			case .nearestDeclaration, .binding:
+				false
+			case .declarationClosedOn, .cycleParameterContext:
+				true
+			}
+		}
 	}
 
 	/// The answer to a `Read`. Two answers are alike when the synthesized `==` of everything a generator is built from,
@@ -388,12 +398,16 @@ struct ConstructionLog: Sendable {
 	/// These reads as `context` answers them, or `nil` when `context` answers one otherwise.
 	func answeredAlike(in context: ConstructionContext) -> Self? {
 		// Most candidates differ in some read, so the answers are kept in an array until every read is answered alike.
+		// The reads that tell most candidates apart, which closes a cycle and on what, are asked first, so a candidate that
+		// differs is set aside after a read or two.
 		var answers = [(read: AnsweredRead, answer: Answer)]()
 		answers.reserveCapacity(answersByRead.count)
-		for (read, answered) in answersByRead {
-			let (answer, depth) = context.answer(read.read)
-			guard answer.isAlike(answered) else { return nil }
-			answers.append((AnsweredRead(read: read.read, depth: depth), answer))
+		for asksCycleReads in [true, false] {
+			for (read, answered) in answersByRead where read.read.isCycleRead == asksCycleReads {
+				let (answer, depth) = context.answer(read.read)
+				guard answer.isAlike(answered) else { return nil }
+				answers.append((AnsweredRead(read: read.read, depth: depth), answer))
+			}
 		}
 		var reads = Self()
 		reads.answersByRead.reserveCapacity(answers.count)
