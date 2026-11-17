@@ -5922,10 +5922,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				return payload.hasPrefix("nonisolated(") ? "_ forwarded: \(payload)" : payload
 			}
 		}
-		/// A case's declaration of `payloads`, the values it carries, none of which may be missing but the forwarded value.
+		/// A case's declaration of `payloads`, the values it carries, none of which may be missing but the forwarded value. A
+		/// case is named as a label, so it is declared as a member's name is spelled: Swift rejects a case named `Type` or
+		/// `Protocol` bare where it carries no values.
 		func caseLine(_ name: String, isIndirect: Bool = false, payloads: [String?]) -> String {
 			let carried = payloads.compactMap(\.self)
-			return "\(caseIndent)\(isIndirect ? "indirect " : "")case \(name)\(carried.isEmpty ? "" : "(\(carried.joined(separator: ", ")))")"
+			return "\(caseIndent)\(isIndirect ? "indirect " : "")case \(name.spelledAsMemberDeclarationName)\(carried.isEmpty ? "" : "(\(carried.joined(separator: ", ")))")"
 		}
 		let declaresBuilderStruct = scopeEnum.declaresBuilderStruct
 		for enumCase in scopeEnum.cases {
@@ -6003,8 +6005,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"\(indent)/// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.",
 			"\(indent)nonisolated public struct \(ReservedName.builderStructTypeName)<\(builtType)>\(isSendable ? ": Sendable" : "") {",
 		]
+		// A member is named as its case, which is a label, so it is declared as a member's name is spelled: `Type` and
+		// `Protocol` in backticks. No case is named `self`, which the memberwise initializer's parameter would hide the
+		// instance behind: the macro requires an initializer parameter named as each dependency, and no initializer can
+		// assign a property from a parameter named `self`.
 		for member in members {
-			lines.append("\(memberIndent)public let \(member.name): \(member.type)")
+			lines.append("\(memberIndent)public let \(member.name.spelledAsMemberDeclarationName): \(member.type)")
 		}
 		lines.append("")
 		lines.append("\(memberIndent)public init(\(members.map { "\($0.name): @escaping \($0.type)" }.joined(separator: ", "))) {")
@@ -9408,17 +9414,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		let storage = ConfigurationStorage(fields: childFields.map(\.field))
 		lines.append("\(innerIndent)init(")
-		var initParameters = childFields.map { "\(memberIndent)\($0.field.name): \($0.field.typeSource) = \($0.defaultValue)" }
+		// Each parameter is named apart from `self`, which would hide the instance the overrides of what the mock receives only
+		// if available are assigned to.
+		var initParameters = childFields.map { "\(memberIndent)\($0.field.name.spelledAsAssigningParameter(labeled: $0.field.name)): \($0.field.typeSource) = \($0.defaultValue)" }
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
-			initParameters.append("\(memberIndent)\(onlyIfAvailableOverride.name): \(onlyIfAvailableOverride.typeDescription.asSource) = nil")
+			initParameters.append("\(memberIndent)\(onlyIfAvailableOverride.name.spelledAsAssigningParameter(labeled: onlyIfAvailableOverride.name)): \(onlyIfAvailableOverride.typeDescription.asSource) = nil")
 		}
 		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
 		if !storage.fields.isEmpty {
-			lines.append(contentsOf: storage.initialization(to: storage.fields.map(\.name), indent: memberIndent))
+			lines.append(contentsOf: storage.initialization(to: storage.fields.map(\.name.spelledAsAssigningParameterName), indent: memberIndent))
 		}
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
-			lines.append("\(memberIndent)self.\(onlyIfAvailableOverride.name) = \(onlyIfAvailableOverride.name)")
+			lines.append("\(memberIndent)self.\(onlyIfAvailableOverride.name) = \(onlyIfAvailableOverride.name.spelledAsAssigningParameterName)")
 		}
 		lines.append("\(innerIndent)}")
 
@@ -9426,7 +9434,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("")
 		lines.append(contentsOf: storage.readers(indent: innerIndent))
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
-			lines.append("\(innerIndent)let \(onlyIfAvailableOverride.name): \(onlyIfAvailableOverride.typeDescription.asSource)")
+			lines.append("\(innerIndent)let \(onlyIfAvailableOverride.name.spelledAsMemberDeclarationName): \(onlyIfAvailableOverride.typeDescription.asSource)")
 		}
 		if !storage.fields.isEmpty {
 			lines.append("")

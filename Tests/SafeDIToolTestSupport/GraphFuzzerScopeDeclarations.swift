@@ -255,7 +255,8 @@ struct GraphFuzzerScopeDeclarations {
 		var descriptions = [String]()
 		for scopeEnum in seamEnums {
 			guard let holder = holder(of: scopeEnum, in: facts) else { continue }
-			let declaredLabels = facts.declaredLabels[holder, default: []]
+			// A label written as a keyword, in backticks, names the case its label does without them.
+			let declaredLabels = Set(facts.declaredLabels[holder, default: []].map { $0.replacingOccurrences(of: "`", with: "") })
 			for scopeCase in scopeEnum.cases {
 				let namesProperty = declaredLabels.contains(scopeCase.label)
 					|| scopeCase.label.hasSuffix("_Sendable") && declaredLabels.contains(String(scopeCase.label.dropLast("_Sendable".count)))
@@ -416,8 +417,9 @@ private final class ScopeEnumCollector: SyntaxVisitor {
 		for member in enumDeclaration.memberBlock.members {
 			if let caseDeclaration = member.decl.as(EnumCaseDeclSyntax.self) {
 				for element in caseDeclaration.elements {
+					// A case named as a keyword is spelled in backticks, which a place's label, read without them, does not spell.
 					cases.append(GraphFuzzerScopeDeclarations.ScopeCase(
-						label: element.name.text,
+						label: element.name.text.replacingOccurrences(of: "`", with: ""),
 						payload: element.parameterClause?.parameters.map(\.type.trimmedDescription) ?? [],
 					))
 				}

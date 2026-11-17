@@ -107,9 +107,11 @@ struct GraphFuzzerPlaceFacts: Equatable {
 	/// call of a seam whose hole a fill on the path fills, the call's case for the builder filled, `<label>_<builder>`,
 	/// which holds the enum of `filledType`, the type the fill builds.
 	struct ProducedCase: Hashable, Comparable {
+		/// - Parameter label: The label of the property whose case it is, read without the backticks a keyword is written
+		///   with, as the case's name is compared.
 		init(holder: Holder, label: String, filledType: String? = nil) {
 			self.holder = holder
-			self.label = label
+			self.label = label.replacingOccurrences(of: "`", with: "")
 			self.filledType = filledType
 		}
 

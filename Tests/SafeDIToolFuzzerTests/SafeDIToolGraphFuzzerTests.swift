@@ -423,6 +423,8 @@ struct SafeDIToolGraphFuzzerTests {
 			.holeAliasOrOnlyIfAvailable,
 			.holeReadOnlyIfAvailable,
 			.holeOwnerAliasesField,
+			.holeOwnerLabeledAsKeyword,
+			.holeSendablePlaceLabeledAsKeyword,
 			.holeMocks,
 			.holeImplInNamespace,
 			.holeSeamModuleWithoutPackageName,
@@ -5823,7 +5825,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 561, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x64C62256B4F98306
+	static let seamCorpusFixtureHash: UInt64 = 0x78799E69D36BE0F6
 	static let seamCorpusAcceptedSeedCount = 289
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -5961,7 +5963,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`seamBuilderOrderShape(listedBy:)`). Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x50B8EC16C7E69FDF
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x296013D75454425
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -6078,6 +6080,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeAliasOrOnlyIfAvailable: 57,
 		.holeReadOnlyIfAvailable: 30,
 		.holeOwnerAliasesField: 25,
+		.holeOwnerLabeledAsKeyword: 108,
+		.holeSendablePlaceLabeledAsKeyword: 24,
 		.holeMocks: 48,
 		.holeImplInNamespace: 48,
 		.holeSeamModuleWithoutPackageName: 33,
@@ -6475,20 +6479,35 @@ struct SafeDIToolGraphFuzzerTests {
 	/// prefix with what is held and both counts, as the corpus runs observed: `addingRetentionShapes`' generated fill, and
 	/// the hole draws' tangle, ring, nest and cycle.
 	private static let inSeamLeakSignatures: [GraphFuzzerKnownIssue.Signature] = [
+		"_ChainBase alive holding holeSeam.Protocol once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainBase alive holding holeSeam.Self once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainBase alive holding holeSeam.Type once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainBase alive holding holeSeam.default once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainBase alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainBase alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainBase alive holding holeSeam.holeOwnerBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainBase alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainBase alive holding holeSeam.init once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainBase alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainLeaf alive holding holeSeam.Protocol once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainLeaf alive holding holeSeam.Self once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainLeaf alive holding holeSeam.Type once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainLeaf alive holding holeSeam.default once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLeaf alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLeaf alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLeaf alive holding holeSeam.holeOwnerBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLeaf alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainLeaf alive holding holeSeam.init once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLeaf alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainLink alive holding holeSeam.Protocol once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainLink alive holding holeSeam.Self once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainLink alive holding holeSeam.Type once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainLink alive holding holeSeam.default once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLink alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLink alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLink alive holding holeSeam.holeOwnerBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLink alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ChainLink alive holding holeSeam.init once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_ChainLink alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_Cycle4Reader alive holding cycleSeam.cycle1A.cycle2BBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_CycleTag alive holding cycleSeam.cycle1A.cycle2BBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6833,6 +6852,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.sharedConstructionPublicMockErased: 106,
 		.sharedConstructionPublicMockExtensionBased: 103,
 		.sharedConstructionPublicMockInDeclaringModule: 69,
+		.keywordLabeledPublicMock: 234,
+		.keywordLabeledPublicMockBesideInternalConfiguration: 107,
 		.sharedConstructionPublicMockOneHolder: 46,
 		.sharedConstructionPublicMockWithoutMockFirst: 101,
 	]
@@ -6868,7 +6889,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0xAA68F0D018013D8E
+	static let publicMockCorpusFixtureHash: UInt64 = 0x2AF5A5F789481B4
 	static let publicMockCorpusAcceptedSeedCount = 856
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x00FC421C8B43BC22
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -6918,7 +6939,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xCD6CA3904FDC435E
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x37B82E937A0C994B
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -7291,6 +7312,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.sharedConstructionPublicMockInDeclaringModule: 73,
 		.sharedConstructionPublicMockOneHolder: 49,
 		.sharedConstructionPublicMockWithoutMockFirst: 108,
+		.keywordLabeledPublicMock: 264,
+		.keywordLabeledPublicMockBesideInternalConfiguration: 119,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,

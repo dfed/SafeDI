@@ -275,13 +275,22 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// `ShareService`'s `mockOnly` mock, which takes one more optional default than its initializer, builds `ShareApi`
 	/// only beneath a cycle edge, in `ShareTicker`, which `ShareService` builds through an instantiator.
 	case sharedConstructionPublicMockBeneathCycleEdge
+	/// On a stream of its own (`publicMockKeywordLabelRandomSeedMask`), labels that the generated configurations declare
+	/// as members, spelled as keywords: `KeywordHome`, a `.public` type of the declaring module, builds `KeywordKind` under
+	/// `Type` and `KeywordHolder` under `Protocol`, and `KeywordHolder` builds `KeywordKind` under `Self` and `init` and
+	/// takes a default-valued `default`; `KeywordApp`, a mocked consumer, builds `KeywordHome` under `Type`, so that its
+	/// overrides and the public mock's, and the module-level configuration of `KeywordHolder`, declare keyword members.
+	case keywordLabeledPublicMock
+	/// `KeywordApp` also builds `KeywordLocal`, a type of its own module that builds `KeywordKind` under `Protocol`, so that
+	/// an internal `SafeDIMockConfiguration` declares a keyword member too.
+	case keywordLabeledPublicMockBesideInternalConfiguration
 
 	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,
-	/// `retentionPublicMockValueBeforeBuilder…`, `sharedConstructionPublicMock…`) draws this shape, whose count in accepted
+	/// `retentionPublicMockValueBeforeBuilder…`, `sharedConstructionPublicMock…`, `keywordLabeledPublicMock…`) draws this shape, whose count in accepted
 	/// graphs the public mock corpus pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
 	var isCountedWhenAccepted: Bool {
 		rawValue.hasPrefix("selfBuildingPublicMock") || rawValue.hasPrefix("placeInsidePublicMockFill") || isRetentionShape
-			|| rawValue.hasPrefix("sharedConstructionPublicMock")
+			|| rawValue.hasPrefix("sharedConstructionPublicMock") || rawValue.hasPrefix("keywordLabeledPublicMock")
 	}
 
 	/// Whether the retention oracle's gating draw (`retentionPublicMockValueBeforeBuilder…`) draws this shape, whose
@@ -508,6 +517,8 @@ struct GraphFuzzerPublicMockDraw {
 		drawRetentionPublicMock(random: &retentionRandom)
 		var sharedConstructionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockSharedConstructionRandomSeedMask)
 		drawSharedConstructionPublicMock(random: &sharedConstructionRandom)
+		var keywordLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockKeywordLabelRandomSeedMask)
+		drawKeywordLabeledPublicMock(random: &keywordLabelRandom)
 	}
 
 	/// The files of the graph, each beginning with its module's marker: as drawn, or, for the known-right path of the
@@ -622,6 +633,10 @@ struct GraphFuzzerPublicMockDraw {
 	/// Draws only a type a module's public mocks build two ways (`drawSharedConstructionPublicMock`): rolls added after the
 	/// rest of the draw was pinned, so that its other shapes are drawn as before.
 	static let publicMockSharedConstructionRandomSeedMask: UInt64 = 0x7075626D6B736863
+	/// Draws only labels the generated configurations declare as members, spelled as keywords
+	/// (`drawKeywordLabeledPublicMock`): rolls added after the rest of the draw was pinned, so that its other shapes are
+	/// drawn as before.
+	static let publicMockKeywordLabelRandomSeedMask: UInt64 = 0x7075626D6B6B6579
 	/// What begins the comment in `T6`'s file that holds its hand-written caller's call, after the caller's module:
 	/// `// publicMockCaller in FuzzOther: S1_T6.mock(s1_HoleBuilder: …)`. `GraphFuzzerOracle.addingPublicMockCallers` reads it.
 	static let publicMockCallerMarker = "// publicMockCaller in "
@@ -1961,6 +1976,52 @@ struct GraphFuzzerPublicMockDraw {
 		files.append(File(module: consumerModule, declarations: consumerDeclarations))
 	}
 
+	/// Labels the generated configurations declare as members, spelled as keywords, in three graphs in ten:
+	/// `KeywordHome`, a `.public` type of the declaring module, builds `KeywordKind` under `Type` and `KeywordHolder` under
+	/// `Protocol`, and `KeywordHolder` builds `KeywordKind` under `Self` and `init` and takes a default-valued `default`.
+	/// `KeywordApp`, a mocked consumer in one consumer module, builds `KeywordHome` under `Type`, so that its mock calls
+	/// `KeywordHome`'s public mock, and, two draws in five, `KeywordLocal`, a type of its own module that builds
+	/// `KeywordKind` under `Protocol`. So `KeywordApp`'s overrides, `KeywordHome`'s public overrides, `KeywordHolder`'s
+	/// module-level configuration and `KeywordLocal`'s internal configuration each declare a keyword member, which Swift
+	/// rejects written bare for `Type` and `Protocol`. Never `self`, which the fixture's initializer would take as the name of
+	/// a parameter that hides the instance it assigns to. Every roll is made before any is read.
+	private mutating func drawKeywordLabeledPublicMock(random: inout GraphFuzzerRandomNumberGenerator) {
+		let drawsShape = random.percentChance(30)
+		let buildsLocal = random.percentChance(40)
+		let consumerModuleRoll = random.integer(in: 0...1)
+		let consumerModules = consumerModules
+		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
+		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
+		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
+		let kind = InstantiableClass(name: name("KeywordKind"), conformances: conformances)
+		var holder = InstantiableClass(name: name("KeywordHolder"), conformances: conformances)
+		holder.properties = [
+			Property(attribute: "@Instantiated", label: "`Self`", type: kind.name),
+			Property(attribute: "@Instantiated", label: "`init`", type: kind.name),
+		]
+		holder.defaults = [DefaultParameter(name: "`default`", type: "Int", defaultValue: "1")]
+		var home = InstantiableClass(name: name("KeywordHome"), conformances: conformances)
+		home.mockGeneration = ".public"
+		// An `internal` initializer, which no consumer module can call, so that a consumer's mock calls the public mock.
+		home.initializerAccess = .internal
+		home.properties = [
+			Property(attribute: "@Instantiated", label: "`Type`", type: kind.name),
+			Property(attribute: "@Instantiated", label: "`Protocol`", type: holder.name),
+		]
+		var app = InstantiableClass(name: name("KeywordApp"), conformances: conformances)
+		app.mockGeneration = "true"
+		app.properties = [Property(attribute: "@Instantiated", label: "`Type`", type: home.name)]
+		var consumerDeclarations = [Self.renderer(of: app)]
+		if buildsLocal {
+			var local = InstantiableClass(name: name("KeywordLocal"), conformances: conformances)
+			local.properties = [Property(attribute: "@Instantiated", label: "`Protocol`", type: kind.name)]
+			app.properties.append(Property(attribute: "@Instantiated", label: "keywordLocal", type: local.name))
+			consumerDeclarations = [Self.renderer(of: app), Self.renderer(of: local)]
+		}
+		files.append(File(module: .seamModule, declarations: [Self.renderer(of: home), Self.renderer(of: holder), Self.renderer(of: kind)]))
+		files.append(File(module: consumerModule, declarations: consumerDeclarations))
+	}
+
 	/// The retention oracle's shape, in three graphs in twenty: `RetainHome`, a `.public` type of the declaring module
 	/// with an `internal` initializer, binds `retainNavigator` and then builds `RetainDetail` through an
 	/// `Instantiator`, beneath which `RetainLeaf`, built by value or through an `Instantiator`, holds a place of
@@ -3165,6 +3226,12 @@ extension GraphFuzzerPublicMockDraw {
 			}
 			if types.declarations["\(prefix)PlaceInFillInnerScreen"] != nil {
 				features.insert(.placeInsidePublicMockFillOnForwardingRoute)
+			}
+		}
+		if let keywordApp = types.declarations["\(prefix)KeywordApp"] {
+			features.insert(.keywordLabeledPublicMock)
+			if keywordApp.properties.contains(where: { $0.label == "keywordLocal" }) {
+				features.insert(.keywordLabeledPublicMockBesideInternalConfiguration)
 			}
 		}
 		if types.declarations["\(prefix)RetainHome"] != nil {
