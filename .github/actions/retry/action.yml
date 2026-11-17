@@ -3,7 +3,7 @@ description: Run a command with retries and exponential backoff between attempts
 
 inputs:
   command:
-    description: The command to run.
+    description: The command to run. Every attempt runs it in one shell, so a command that changes directory does so in a subshell, `(cd directory && …)`, or a later attempt starts where a failed one stopped.
     required: true
   attempts:
     description: Maximum number of attempts.

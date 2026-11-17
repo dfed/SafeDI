@@ -478,7 +478,7 @@ jobs:
         if: ${{ !cancelled() && steps.xcode-26-4.outcome == 'success' }}
         uses: ./.github/actions/retry
         with:
-          command: pushd Examples/ExampleProjectIntegration && xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration && popd
+          command: (cd Examples/ExampleProjectIntegration && xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration)
       # `EventLogger.swift` declares a different `@Instantiable` under
       # `#if DEBUG` and `#else`. Xcode runs the plugin's command through a
       # shell script that expands the target's
@@ -511,7 +511,7 @@ jobs:
         if: ${{ !cancelled() && steps.xcode-26-4.outcome == 'success' }}
         uses: ./.github/actions/retry
         with:
-          command: pushd Examples/ExampleMultiProjectIntegration && xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration && popd
+          command: (cd Examples/ExampleMultiProjectIntegration && xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration)
       - name: Build Multi Project Integration
         timeout-minutes: 7
         id: multi-project-2
