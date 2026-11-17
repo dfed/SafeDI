@@ -149,7 +149,8 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 	func scopeDeclarations_readEveryNestedEnumCaseAndField_whenTheGeneratedFileNestsByType() {
 		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": Self.nestedHomeScope(screenBHoldsShared: true)])
 
-		#expect(declarations.entries == [
+		// Compared as sorted lists, so that a failure prints both in one order on every run.
+		#expect(declarations.entries.sorted() == [
 			"enum Home.SafeDIScope_Service",
 			"case Home.SafeDIScope_Service.screenA(screenA_Values, SafeDIScope_Service.ScreenA_Scope)",
 			"case Home.SafeDIScope_Service.screenB(screenB_Values, SafeDIScope_Service.ScreenB_Scope)",
@@ -169,7 +170,7 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 			"enum Home.SafeDIScope_Service.Shared_Scope",
 			"case Home.SafeDIScope_Service.Shared_Scope.service(service_Values)",
 			"struct Home.SafeDIScope_Service.Shared_Scope.service_Values",
-		])
+		].sorted())
 	}
 
 	@Test
@@ -194,7 +195,8 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 		self.filesToDelete = filesToDelete
 		let declarations = try GraphFuzzerScopeDeclarations(generatedFiles: #require(output.generatedFiles))
 
-		#expect(declarations.entries == [
+		// Compared as sorted lists, so that a failure prints both in one order on every run.
+		#expect(declarations.entries.sorted() == [
 			"enum Host.SafeDIScope_Widget",
 			"enum Host.SafeDIScope_Widget.Panel_Scope",
 			"case Host.SafeDIScope_Widget.Panel_Scope.widget(widget_Values)",
@@ -204,7 +206,7 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 			"case Host.SafeDISendableScope_Widget.shell_Sendable(SafeDISendableScope_Widget.Shell_Scope)",
 			"enum Host.SafeDISendableScope_Widget.Shell_Scope",
 			"case Host.SafeDISendableScope_Widget.Shell_Scope.panelBuilder(SafeDIScope_Widget.Panel_Scope)",
-		])
+		].sorted())
 		#expect(declarations.undeclaredProducedCases(of: facts) == [])
 		#expect(declarations.unproducedDeclaredCases(of: facts) == [])
 		#expect(declarations.casesNamingNoPropertyOfTheirType(of: facts) == [])
@@ -300,7 +302,8 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 		// type the fill builds.
 		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": Self.nestedHomeScopeOfBuilderStructs])
 
-		#expect(declarations.entries == [
+		// Compared as sorted lists, so that a failure prints both in one order on every run.
+		#expect(declarations.entries.sorted() == [
 			"enum Home.SafeDIScope_Service",
 			"case Home.SafeDIScope_Service.screenA(screenA_Values, SafeDIScope_Service.ScreenA_Scope)",
 			"case Home.SafeDIScope_Service.screenB(screenB_Values, SafeDIScope_Service.ScreenB_Scope)",
@@ -328,7 +331,7 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 			"struct Home.SafeDIScope_Service.Shared_Scope.service_Values",
 			"enum Home.SafeDISendableScope_Service",
 			"case Home.SafeDISendableScope_Service.screenA_Sendable(SafeDIScope_Service.ScreenA_Scope)",
-		])
+		].sorted())
 		#expect(declarations.undeclaredProducedCases(of: Self.sharedTypeFactsWithPlaceInsideFill) == [])
 		#expect(declarations.unproducedDeclaredCases(of: Self.sharedTypeFactsWithPlaceInsideFill) == [])
 		#expect(declarations.casesNamingNoPropertyOfTheirType(of: Self.sharedTypeFactsWithPlaceInsideFill) == [])
