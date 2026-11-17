@@ -3635,27 +3635,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
-		        public init(
-		            board: ((@escaping () -> any Gadget) -> Board)? = nil
-		        ) {
-		            __safeDI_storage = __safeDI_Storage(
-		                board: board
-		            )
-		        }
-
-		        public var board: ((@escaping () -> any Gadget) -> Board)? { __safeDI_storage.board }
-
-		        private let __safeDI_storage: __safeDI_Storage
-
-		        private final class __safeDI_Storage {
-		            init(
-		                board: ((@escaping () -> any Gadget) -> Board)?
-		            ) {
-		                self.board = board
-		            }
-
-		            let board: ((@escaping () -> any Gadget) -> Board)?
-		        }
+		        public init() {}
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
