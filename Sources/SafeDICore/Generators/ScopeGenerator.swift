@@ -11814,7 +11814,7 @@ extension Property.PropertyType {
 }
 
 extension SeamSignature.Hole.Field {
-	/// This field, declaring `property`, a form of its own property.
+	/// This field, declaring `property`, a form of its own property, and keeping everything else it holds.
 	func withProperty(_ property: Property) -> SeamSignature.Hole.Field {
 		SeamSignature.Hole.Field(
 			property: property,
@@ -11823,6 +11823,7 @@ extension SeamSignature.Hole.Field {
 			declaringType: declaringType,
 			declarationLocation: declarationLocation,
 			isReceivedOnlyIfAvailable: isReceivedOnlyIfAvailable,
+			parameterTakingType: parameterTakingType,
 			deferral: deferral,
 			bindsMemo: bindsMemo,
 		)
