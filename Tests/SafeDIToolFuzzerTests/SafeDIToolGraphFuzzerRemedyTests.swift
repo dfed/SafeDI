@@ -395,6 +395,93 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 		#expect(runs.map(\.errorsAtSite) == [[], []])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_declareTheProvidingFormOnTheSeamAndLeaveNoErrorAtTheSeam_whenItsTreeReceivesALabelOptionallyAndAsItsNonOptionalForm() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.seamFormsGraph(seamAttribute: "@Received(onlyIfAvailable: true)", seamType: "S1_User?"))
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.declareProvidingFormOnSeam])
+		#expect(runs.first?.remedy.fixture.swiftFileContent[1] == """
+		@Instantiable(generateDependencyTree: true)
+		public final class S1_Seam: Instantiable {
+			public init(user: S1_User, child: S1_Child) {
+				self.user = user
+				self.child = child
+			}
+
+			@Received let user: S1_User
+			@Instantiated let child: S1_Child
+		}
+		""")
+		#expect(runs.map(\.errorsAtSite) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_applyNoRemedyAtTheSeam_whenItsTreeRequiresAnOptionalFormOfTheLabel() async throws {
+		// A required receive of an optional is not a shape an adopter writes, so its pair is not judged.
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(hostBuilder: Instantiator<S1_Host>) {
+					self.hostBuilder = hostBuilder
+				}
+
+				@Instantiated let hostBuilder: Instantiator<S1_Host>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_Host: Instantiable {
+				public init(user: LazilyInstantiated<S1_User>?, seam: S1_Seam) {
+					self.user = user
+					self.seam = seam
+				}
+
+				@Forwarded let user: LazilyInstantiated<S1_User>?
+				@Instantiated let seam: S1_Seam
+			}
+			""",
+			"""
+			@Instantiable(generateDependencyTree: true)
+			public final class S1_Seam: Instantiable {
+				public init(user: S1_User?, child: S1_Child) {
+					self.user = user
+					self.child = child
+				}
+
+				@Received(onlyIfAvailable: true) let user: S1_User?
+				@Instantiated let child: S1_Child
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_Child: Instantiable {
+				public init(user: LazilyInstantiated<S1_User>?) {
+					self.user = user
+				}
+
+				@Received let user: LazilyInstantiated<S1_User>?
+			}
+			""",
+			Self.leaf("S1_User"),
+		])
+
+		let outcome = try await GraphFuzzerOracle.toolOutcome(of: fixture)
+		let runs = try await GraphFuzzerOracle.remedyRuns(of: fixture, outcome: outcome)
+
+		#expect(runs.isEmpty)
+		guard case let .rejected(diagnostics) = outcome else {
+			Issue.record("The tool accepts the graph:\n\(outcome.description)")
+			return
+		}
+		// The site is read, and counted as one the oracle leaves.
+		#expect(GraphFuzzerRemedies.unremediedSiteCount(of: fixture, diagnostics: diagnostics) == 1)
+	}
+
 	// MARK: Known issues
 
 	// The minimal graph of each shape `SafeDIToolGraphFuzzerTests.knownIssues` records under `remedyLeavesErrorAtSite`:
@@ -1690,6 +1777,19 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_leaveNoErrorAtTheSeam_whenTheProvidingFormIsAWrapperTheSeamsCallerDoesNotDeclare() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.seamFormsGraph(seamAttribute: "@Received(onlyIfAvailable: true)", seamType: "LazilyInstantiated<S1_User>?"))
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.declareProvidingFormOnSeam])
+		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedySeamProvidingWrapperUndeclaredReason)") {
+			#expect(runs.map(\.errorsAtSite) == [[]])
+		}
+	}
+
 	// MARK: Verdict
 
 	@Test
@@ -1860,6 +1960,48 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 			public init() {}
 		}
 		"""
+	}
+
+	/// A root that declares `user: S1_User` and builds a seam, which receives `user: seamType` with `seamAttribute` and
+	/// builds a child that requires `user: S1_User`: one label in two forms of one type in the seam's tree.
+	private static func seamFormsGraph(seamAttribute: String, seamType: String) -> [String] {
+		[
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(user: S1_User, seam: S1_Seam) {
+					self.user = user
+					self.seam = seam
+				}
+
+				@Instantiated let user: S1_User
+				@Instantiated let seam: S1_Seam
+			}
+			""",
+			"""
+			@Instantiable(generateDependencyTree: true)
+			public final class S1_Seam: Instantiable {
+				public init(user: \(seamType), child: S1_Child) {
+					self.user = user
+					self.child = child
+				}
+
+				\(seamAttribute) let user: \(seamType)
+				@Instantiated let child: S1_Child
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_Child: Instantiable {
+				public init(user: S1_User) {
+					self.user = user
+				}
+
+				@Received let user: S1_User
+			}
+			""",
+			leaf("S1_User"),
+		]
 	}
 
 	/// The remedy runs of `fixture`, which the tool must reject.
