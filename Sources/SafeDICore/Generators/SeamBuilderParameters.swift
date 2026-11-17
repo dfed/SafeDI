@@ -191,7 +191,7 @@ extension DependencyTreeGenerator {
 		var holes = [SeamSignature.Hole]()
 		for (index, content) in siteContents.enumerated() {
 			let property = content.site.property
-			var scopeTypeName = "SafeDIScope_\(content.owner.concreteInstantiable.asIdentifier)_\(property.label)".spelledAsJoinedIdentifier
+			var scopeTypeName = "\(ReservedName.seamScopeTypeNamePrefix)\(content.owner.concreteInstantiable.asIdentifier)_\(property.label)".spelledAsJoinedIdentifier
 			if siteCountByProperty[OwnedProperty(owner: content.owner.concreteInstantiable, property: property), default: 0] > 1 {
 				scopeTypeName = "\(scopeTypeName)_\(content.site.pathLabels)".spelledAsJoinedIdentifier
 			}

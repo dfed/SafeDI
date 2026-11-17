@@ -2717,4 +2717,152 @@ struct FileVisitorTests {
 		// A type spelled with sugar, such as `[Pallet]`, is declared nowhere SafeDI reads, and records no name.
 		#expect(fileVisitor.outputFileDeclarations.extendedTypeNames == ["Rack", "Outer", "Cabinet", "Closet", "Crate"])
 	}
+
+	// MARK: Reserved type names
+
+	@Test
+	func walk_recordsNoReservedTypeName_whenTypeIsDeclaredInsideInstantiableTypeOrExtension() {
+		// The `@Instantiable` macro reports these, in every clause and at any depth, so the tool does not report them again.
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable
+		public struct Screen: Instantiable {
+		    public init() {}
+		    struct SafeDIScope_A {}
+		    enum Space {
+		        struct SafeDIScope_B {}
+		    }
+		    #if FOO
+		    struct SafeDIScope_C {}
+		    #endif
+		}
+
+		@Instantiable
+		extension Home: Instantiable {
+		    public static func instantiate() -> Home { Home() }
+		    struct SafeDIScope_D {}
+		    #if FOO
+		    protocol __safeDI_E {
+		        typealias SafeDIMockScope_F = Int
+		    }
+		    #endif
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.reservedTypeNameDeclarations == [])
+	}
+
+	@Test
+	func walk_recordsReservedTypeName_whenPlainExtensionOfInstantiableTypeInSameFileDeclaresIt() {
+		// The macro sees only the `@Instantiable` declaration, not the plain extension beside it.
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable
+		public struct Screen: Instantiable {
+		    public init() {}
+		    struct SafeDIScope_A {}
+		}
+
+		extension Screen {
+		    struct SafeDIScope_B {}
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.reservedTypeNameDeclarations == [
+			ReservedTypeNameDeclaration(typeName: "SafeDIScope_B", prefix: "SafeDIScope_", location: .init(filePath: "File.swift", line: 8, column: 12)),
+		])
+	}
+
+	@Test
+	func walk_recordsReservedTypeNameOfPlainTypeOnly_whenInstantiableTypeIsNestedInPlainType() {
+		// A nested `@Instantiable` type's own expansion reports its name and its members; the plain types beside it are
+		// the tool's.
+		let syntaxTree = Parser.parse(source: """
+		enum Outer {
+		    @Instantiable
+		    struct SafeDIScope_Screen: Instantiable {
+		        init() {}
+		        struct SafeDIScope_A {}
+		    }
+		    struct SafeDIScope_Plain {}
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.reservedTypeNameDeclarations == [
+			ReservedTypeNameDeclaration(typeName: "SafeDIScope_Plain", prefix: "SafeDIScope_", location: .init(filePath: "File.swift", line: 7, column: 12)),
+		])
+	}
+
+	@Test
+	func walk_recordsReservedTypeNamesOfEveryClause_whenInstantiableTypeAndPlainTypesShareConditionalCompilationBlock() {
+		// The block's walk records every clause, a nested block's and a protocol's type aliases included, skipping the
+		// `@Instantiable` type and what it declares.
+		let syntaxTree = Parser.parse(source: """
+		#if FOO
+		@Instantiable
+		struct Screen: Instantiable {
+		    init() {}
+		    struct SafeDIScope_A {}
+		}
+		struct SafeDIScope_B {}
+		#else
+		enum Space {
+		    #if BAR
+		    actor SafeDIMockScope_C {}
+		    #endif
+		}
+		protocol Holder {
+		    #if BAZ
+		    typealias __safeDI_D = Int
+		    #endif
+		}
+		#endif
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.reservedTypeNameDeclarations == [
+			ReservedTypeNameDeclaration(typeName: "SafeDIScope_B", prefix: "SafeDIScope_", location: .init(filePath: "File.swift", line: 7, column: 8)),
+			ReservedTypeNameDeclaration(typeName: "SafeDIMockScope_C", prefix: "SafeDIMockScope_", location: .init(filePath: "File.swift", line: 11, column: 11)),
+			ReservedTypeNameDeclaration(typeName: "__safeDI_D", prefix: "__safeDI_", location: .init(filePath: "File.swift", line: 16, column: 15)),
+		])
+	}
+
+	@Test
+	func walk_recordsSameReservedTypeNames_whicheverClausesConditionsSelect() {
+		// A reserved name is reserved under every condition, so scan's cache needs no condition to reuse the records.
+		let source = """
+		#if FOO
+		struct SafeDIScope_A {}
+		#elseif DEBUG
+		@Instantiable(mockOnly: true)
+		struct Screen: Instantiable {
+		    static func mock() -> Screen { Screen() }
+		}
+		struct SafeDISendableScope_B {}
+		#else
+		enum Space {
+		    #if BAR
+		    struct SafeDIMockScope_C {}
+		    #else
+		    struct SafeDISendableMockScope_D {}
+		    #endif
+		}
+		#endif
+		protocol Holder {
+		    typealias __safeDI_E = Int
+		}
+		"""
+		let records = [Set<String>(), ["FOO"], ["DEBUG"], ["BAR"], ["FOO", "BAR"]].map { conditions in
+			let syntaxTree = Parser.parse(source: source)
+			let fileVisitor = FileVisitor(
+				conditionalCompilationEvaluator: ConditionalCompilationEvaluator(activeCompilationConditions: conditions),
+				sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree),
+			)
+			fileVisitor.walk(syntaxTree)
+			return fileVisitor.reservedTypeNameDeclarations
+		}
+		#expect(records.allSatisfy { $0 == records[0] })
+		#expect(records[0].map(\.typeName) == ["SafeDIScope_A", "SafeDISendableScope_B", "SafeDIMockScope_C", "SafeDISendableMockScope_D", "__safeDI_E"])
+	}
 }
