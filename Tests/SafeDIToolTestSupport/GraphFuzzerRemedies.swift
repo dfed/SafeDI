@@ -59,19 +59,22 @@ enum GraphFuzzerRemedyKind: String, CaseIterable, Comparable {
 	/// turn, a remedy each.
 	case keepOneFulfiller = "keep-one-fulfiller"
 	/// "Decorate `X`, or an extension of it, with @Instantiable", for an `@Instantiated` property of a type no declaration
-	/// fulfills: the empty class the fixture declares gets `@Instantiable`, the conformance and a public initializer.
+	/// fulfills: the empty class the fixture declares gets `@Instantiable`, and the conformance and public initializer the
+	/// macro then requires of it, which the error does not state.
 	case decorateType = "decorate-type"
 	/// "Declare `x` on `T`, and this property, as `SendableInstantiator<X>` to fix.", for a receive inside a `@Sendable`
 	/// function of a wrapper that is not `Sendable`: the declaration the error names, and the receive where the error says
 	/// "and this property", take the `Sendable` wrapper it spells. Where the error names no declaring type ("where it is
-	/// declared and where it is received as `Instantiator<X>`"), every property of that label and type takes it.
+	/// declared and where it is received as `Instantiator<X>`"), every property of that label and type takes it, in every
+	/// type of the graph: more than the chain the error names where another branch declares the same label and type.
 	case declareAsSendableWrapper = "declare-as-sendable-wrapper"
 	/// "Declare `@Forwarded let x: X` on a type below `Root` in the chain, and pass the value to the `Instantiator` that
 	/// builds that type", for an unfulfilled receive of a type SafeDI cannot build as a constant: the receiver, a type
 	/// below the root, forwards the property in place of receiving it. A type that built the receiver as a constant, or
 	/// through an erased instantiator that took nothing, then reports the declaration that builds it instead ("Declare it
-	/// as `Instantiator<T>`."), which the remedy follows too, for at most two runs of the tool
-	/// (`GraphFuzzerRemedies.followingForwardedReceive`).
+	/// as `Instantiator<T>`."), which the remedy follows too, a run of the tool for each set of declarations the run
+	/// before it states (`GraphFuzzerRemedies.followingForwardedReceive`). Only a property whose new error states
+	/// "Declare it as `…`" is retyped; any other new error is left alone.
 	case forwardReceive = "forward-receive"
 
 	/// The words a failure line of a remedy of this kind begins with (`GraphFuzzerRemedyRun.failureLine`), which a known
@@ -122,11 +125,15 @@ struct GraphFuzzerRemedy: Equatable {
 struct GraphFuzzerRemedyRun {
 	let remedy: GraphFuzzerRemedy
 	let outcome: GraphFuzzerToolOutcome
+	/// The messages of the errors the remedy introduced and its follow-up runs left, at the declarations that build the
+	/// type of the remedy's site (`GraphFuzzerRemedies.errorsIntroducedByForwarding`): a `forwardReceive` remedy's, whose
+	/// own site, once it forwards, has no receive left for an error to be at.
+	var introducedErrors = [String]()
 
-	/// The messages of the errors the tool reports at the remedy's site in the remedied graph: none when the remedy fixes
-	/// what it answers and adds no error there.
+	/// The messages of the errors the tool reports at the remedy's site in the remedied graph, and of those the remedy
+	/// introduced elsewhere and left (`introducedErrors`): none when the remedy fixes what it answers and adds no error.
 	var errorsAtSite: [String] {
-		GraphFuzzerRemedies.errors(at: remedy.site, in: outcome, of: remedy.fixture)
+		GraphFuzzerRemedies.errors(at: remedy.site, in: outcome, of: remedy.fixture) + introducedErrors
 	}
 
 	/// The line a failure lists for this run, or `nil` when the remedy leaves no error at its site.
@@ -342,16 +349,27 @@ enum GraphFuzzerRemedies {
 
 	/// The number of sites of `diagnostics` whose errors are in a family the oracle reads – a receive no type in its chain
 	/// fulfills, or a cycle – and that get no remedy: the oracle's blind spot, which the long run reports.
+	///
+	/// An error of such a family at a line the oracle cannot place (`Files.site(of:)`: a declaration that is no `final
+	/// class`'s, or an attribute on two lines) counts as a site of its own, so that a draw the oracle cannot read shows
+	/// in the count.
 	static func unremediedSiteCount(of fixture: GraphFuzzerFixture, diagnostics: String) -> Int {
-		sites(of: fixture, diagnostics: diagnostics).count(where: { site in
-			site.remedies.isEmpty && site.errors.contains { error in
-				error.message.hasPrefix("Dependency cycle: ")
-					|| error.message.contains("` is not @Instantiated or @Forwarded in chain: ")
-					|| error.message.hasPrefix(StatedRemedy.multipleFulfillersPrefix)
-					|| error.message.hasPrefix(StatedRemedy.unfulfilledInstantiatedTypePrefix)
-					|| error.message.contains(StatedRemedy.sendableCaptureMarker)
-			}
+		func isOfAFamilyTheOracleReads(_ error: ReportedError) -> Bool {
+			error.message.hasPrefix("Dependency cycle: ")
+				|| error.message.contains("` is not @Instantiated or @Forwarded in chain: ")
+				|| error.message.hasPrefix(StatedRemedy.multipleFulfillersPrefix)
+				|| error.message.hasPrefix(StatedRemedy.unfulfilledInstantiatedTypePrefix)
+				|| error.message.contains(StatedRemedy.sendableCaptureMarker)
+		}
+		let unremediedCount = sites(of: fixture, diagnostics: diagnostics).count(where: { site in
+			site.remedies.isEmpty && site.errors.contains(where: isOfAFamilyTheOracleReads)
 		})
+		guard let files = Files(fixture) else { return unremediedCount }
+		let unplacedCount = diagnostics.split(separator: "\n").count(where: { diagnosticLine in
+			guard let error = ReportedError(diagnosticLine) else { return false }
+			return files.site(of: error) == nil && isOfAFamilyTheOracleReads(error)
+		})
+		return unremediedCount + unplacedCount
 	}
 
 	/// Each property declaration `diagnostics` reports an error at, in the order of its first error, with its errors and
@@ -379,6 +397,9 @@ enum GraphFuzzerRemedies {
 	/// "The first generic argument of … Declare it as `ErasedInstantiator<X, AnyT>`.". Each such property takes the type
 	/// its error states. An error `originalDiagnostics`, the tool's on the graph before the remedy, reports too is not the
 	/// remedy's to follow. Returns `nil` when no error states such a declaration, or one cannot be applied.
+	///
+	/// "New" is read from the message alone, so an error of either form that the remedy exposed without causing, at a
+	/// declaration that builds another type, is followed too; any other new error is left as it is.
 	static func followingForwardedReceive(_ remedy: GraphFuzzerRemedy, diagnostics: String, originalDiagnostics: String) -> GraphFuzzerRemedy? {
 		guard var files = Files(remedy.fixture) else { return nil }
 		let originalMessages = Set(originalDiagnostics.split(separator: "\n").compactMap { ReportedError($0)?.message })
@@ -388,7 +409,7 @@ enum GraphFuzzerRemedies {
 		for diagnosticLine in diagnostics.split(separator: "\n") {
 			guard let error = ReportedError(diagnosticLine),
 			      !originalMessages.contains(error.message),
-			      error.message.contains(", which has @Forwarded properties that only an instantiator is passed.") || error.message.hasPrefix("The first generic argument of `"),
+			      isForwardedBuilderError(error.message),
 			      error.message.hasSuffix("`."),
 			      let declarationStart = error.message.range(of: declarationMarker, options: .backwards),
 			      let site = files.site(of: error),
@@ -408,6 +429,28 @@ enum GraphFuzzerRemedies {
 			description: "\(remedy.description), and \(declarations.joined(separator: ", and "))",
 			fixture: GraphFuzzerFixture(seed: remedy.fixture.seed, swiftFileContent: files.contents),
 		)
+	}
+
+	/// Whether `message` is the error of a declaration that builds a type with `@Forwarded` properties otherwise than
+	/// through an instantiator that is passed them.
+	private static func isForwardedBuilderError(_ message: String) -> Bool {
+		message.contains(", which has @Forwarded properties that only an instantiator is passed.") || message.hasPrefix("The first generic argument of `")
+	}
+
+	/// The messages of the errors `outcome`, the last of a `forwardReceive` remedy's runs, still reports at a declaration
+	/// that builds the type of the remedy's site, and that `originalDiagnostics`, the tool's on the graph before the
+	/// remedy, did not report: what forwarding introduced and the declarations the tool stated did not clear.
+	static func errorsIntroducedByForwarding(_ remedy: GraphFuzzerRemedy, outcome: GraphFuzzerToolOutcome, originalDiagnostics: String) -> [String] {
+		guard case let .rejected(diagnostics) = outcome else { return [] }
+		let originalMessages = Set(originalDiagnostics.split(separator: "\n").compactMap { ReportedError($0)?.message })
+		return diagnostics.split(separator: "\n").compactMap { diagnosticLine in
+			guard let message = ReportedError(diagnosticLine)?.message,
+			      !originalMessages.contains(message),
+			      isForwardedBuilderError(message),
+			      message.contains(" cannot build `\(remedy.site.typeName)`, ") || message.contains(" properties of `\(remedy.site.typeName)`, which it builds.")
+			else { return nil }
+			return message
+		}
 	}
 
 	/// The messages of the errors `outcome` reports at `site` of `fixture`.
@@ -890,6 +933,11 @@ extension GraphFuzzerOracle {
 	/// Runs SafeDITool over each remedy the errors of `outcome` state for `fixture` (`GraphFuzzerRemedies`), when the tool
 	/// rejects a base corpus graph in one module: tool runs only, no compile. Remedies are not applied to a graph of
 	/// another corpus, whose seams, holes and public mocks spell declarations the remedies do not edit.
+	/// How many runs of the tool may follow a `forwardReceive` remedy, each applying the declarations the run before it
+	/// stated. The base corpus's graphs need three at most (a builder on each of three roots, a run each); a remedy that
+	/// still has an error to follow after these fails with it (`errorsIntroducedByForwarding`).
+	static let maximumForwardedReceiveFollowingRunCount = 6
+
 	static func remedyRuns(of fixture: GraphFuzzerFixture, outcome: GraphFuzzerToolOutcome) async throws -> [GraphFuzzerRemedyRun] {
 		guard GraphFuzzerGeneratorFeature.features(drawnIn: fixture).isEmpty, fixture.modules == nil, case let .rejected(diagnostics) = outcome else { return [] }
 		var runs = [GraphFuzzerRemedyRun]()
@@ -898,8 +946,9 @@ extension GraphFuzzerOracle {
 			var remedyOutcome = try await toolOutcome(of: remedy.fixture)
 			if remedy.kind == .forwardReceive {
 				// A type that now forwards a property is built only by an instantiator that is passed it, which the tool's
-				// next errors state for what built it otherwise: at most two runs follow them.
-				for _ in 0..<2 {
+				// next errors state for what built it otherwise. Each root reports the first error its own walk finds, so a
+				// run can state the declarations of some builders only, and the next run states more.
+				for _ in 0..<maximumForwardedReceiveFollowingRunCount {
 					guard case let .rejected(remediedDiagnostics) = remedyOutcome,
 					      let followingRemedy = GraphFuzzerRemedies.followingForwardedReceive(remedy, diagnostics: remediedDiagnostics, originalDiagnostics: diagnostics)
 					else { break }
@@ -907,7 +956,10 @@ extension GraphFuzzerOracle {
 					remedyOutcome = try await toolOutcome(of: remedy.fixture)
 				}
 			}
-			runs.append(GraphFuzzerRemedyRun(remedy: remedy, outcome: remedyOutcome))
+			let introducedErrors = remedy.kind == .forwardReceive
+				? GraphFuzzerRemedies.errorsIntroducedByForwarding(remedy, outcome: remedyOutcome, originalDiagnostics: diagnostics)
+				: []
+			runs.append(GraphFuzzerRemedyRun(remedy: remedy, outcome: remedyOutcome, introducedErrors: introducedErrors))
 		}
 		return runs
 	}
