@@ -23,8 +23,8 @@ import SwiftSyntax
 import SwiftSyntaxMacros
 
 extension InstantiableMacro {
-	/// The prefixes of the names of the types SafeDI’s generated code declares beside the types a person declares, where
-	/// a person’s type of such a name makes the generated code fail to compile: a seam’s root enums, `SafeDIScope_<Stem>`
+	/// The prefixes of the names of the types SafeDI’s generated code declares beside the types a person declares, each
+	/// reserved whole so that no generated name can collide with a person’s type: a seam’s root enums, `SafeDIScope_<Stem>`
 	/// and `SafeDISendableScope_<Stem>`, which the seam’s module declares in an extension of the seam, and in which the
 	/// types of the seam’s tree are spelled (`ScopeTypeNames.seam` in `SeamBuilderFamilies.swift`, which this target does
 	/// not compile), and `ReservedName.builderFunctionNamePrefix`, the prefix of the builder struct `__safeDI_Builder`
