@@ -4614,6 +4614,49 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func valuesInOrder_givesValuesInElementOrder_whenLaterElementsFinishFirst() async throws {
+		// Each element waits longer the earlier it is, so the twenty finish in the reverse of their order.
+		let values = try await GraphFuzzerOracle.valuesInOrder(of: Array(0..<20), concurrent: 20) { element in
+			try await Task.sleep(for: .milliseconds(10 * (20 - element)))
+			return "value \(element)"
+		}
+
+		#expect(values == (0..<20).map { "value \($0)" })
+	}
+
+	@Test
+	func valuesInOrder_throwsTheFirstFailureInElementOrder_whenLaterElementsFailFirst() async {
+		// Six of twenty elements fail, and each waits longer the earlier it is, so the first of them in order, 3, is the
+		// last to fail. A loop that threw whichever failure finished first would name 17.
+		let failing: Set = [3, 5, 8, 11, 14, 17]
+
+		let error = await #expect(throws: ElementFailure.self) {
+			try await GraphFuzzerOracle.valuesInOrder(of: Array(0..<20), concurrent: 20) { element in
+				try await Task.sleep(for: .milliseconds(10 * (20 - element)))
+				guard !failing.contains(element) else { throw ElementFailure(description: "element \(element) failed") }
+				return element
+			}
+		}
+
+		#expect(error?.description == "element 3 failed")
+	}
+
+	@Test
+	func valuesInOrder_startsNoElementAfterAFailure_whenOneElementRunsAtATime() async {
+		let started = StartedElements()
+
+		await #expect(throws: ElementFailure.self) {
+			try await GraphFuzzerOracle.valuesInOrder(of: Array(0..<20), concurrent: 1) { element in
+				await started.append(element)
+				guard element != 2 else { throw ElementFailure(description: "element 2 failed") }
+				return element
+			}
+		}
+
+		#expect(await started.elements == [0, 1, 2])
+	}
+
+	@Test
 	func difference_isNil_whenUnreadTypeCommentMovesToAnotherFileOfItsModule() {
 		let comment = "    // SafeDI counts `StaticString` as `public`: no module it reads declares it narrower. If `StaticString` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n"
 		let commentAboveFirst = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S5_T0+SafeDIMock.swift": "extension S5_T0 {\n\(comment)    public static func mock() {}\n}\n", "FuzzFeature/S5_T1+SafeDIMock.swift": "extension S5_T1 {\n    public static func mock() {}\n}\n"], warnings: [])
@@ -5552,7 +5595,7 @@ struct SafeDIToolGraphFuzzerTests {
 						.map(configuration.seed(at:))
 					nextBatchIndex += 1
 					group.addTask { try await GraphFuzzerPhaseAccount.$current.withValue(phaseContext) {
-						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueGraphsOf: corpus.isolatedValueGraphSeeds) { seed in
+						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueGraphsOf: corpus.isolatedValueGraphSeeds, concurrentToolRuns: 1) { seed in
 							report.append("seed \(seed)")
 						}
 						for index in results.indices where results[index].passesBesidesBuilderSurface
@@ -8600,4 +8643,18 @@ private enum GeneratedExtension {
 	static let second = "extension S12_T1 {\n    static let b = 1\n}\n"
 	static let third = "extension S12_T2 {\n    static let c = 1\n}\n"
 	static let fourth = "extension S12_T3 {\n    static let d = 1\n}\n"
+}
+
+/// What a `valuesInOrder` test's element throws.
+private struct ElementFailure: Error, CustomStringConvertible {
+	let description: String
+}
+
+/// The elements a `valuesInOrder` test's closure was called with, in the order of the calls.
+private actor StartedElements {
+	private(set) var elements = [Int]()
+
+	func append(_ element: Int) {
+		elements.append(element)
+	}
 }

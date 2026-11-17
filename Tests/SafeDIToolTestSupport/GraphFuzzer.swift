@@ -12189,22 +12189,73 @@ enum GraphFuzzerOracle {
 	///   which seed was running if the tool crashes the process.
 	/// - Parameter isolatedSeeds: The seeds whose value graphs are each compared on their own
 	///   (`valueComparisons(of:isolatingValueGraphsOf:)`).
+	/// - Parameter concurrentToolRuns: How many seeds' graphs the tool runs at once. The results are in the order of
+	///   `seeds` whatever it is. A long run passes 1: its batches already run side by side, and with one seed running
+	///   per batch the last seed a batch recorded is the one a crash interrupted.
 	static func results(
 		forSeeds seeds: [UInt64],
 		features: Set<GraphFuzzerGeneratorFeature> = [],
 		isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = [],
-		willRunSeed: @Sendable (UInt64) -> Void = { _ in },
+		concurrentToolRuns: Int = ProcessInfo.processInfo.activeProcessorCount,
+		willRunSeed: @escaping @Sendable (UInt64) -> Void = { _ in },
 	) async throws -> [GraphFuzzerResult] {
 		await ProcessSlots.shared.takePlaceInLine(for: Test.current?.id)
-		let toolRuns = try await GraphFuzzerPhaseAccount.measuring(.toolRuns) {
-			var toolRuns = [GraphFuzzerToolRuns]()
-			for seed in seeds {
+		// Each seed's runs are measured in the task that makes them, so the phase's figure stays the seconds spent in it
+		// summed over seeds, as it is summed over batches.
+		let toolRuns = try await valuesInOrder(of: seeds, concurrent: concurrentToolRuns) { seed in
+			try await GraphFuzzerPhaseAccount.measuring(.toolRuns) {
 				willRunSeed(seed)
-				await toolRuns.append(try self.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: features)))
+				return try await self.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: features))
 			}
-			return toolRuns
 		}
 		return try await results(of: toolRuns, isolatingValueGraphsOf: isolatedSeeds)
+	}
+
+	/// What `value` gives for each of `elements`, in their order, with at most `concurrent` of them being worked out
+	/// at once.
+	///
+	/// When `value` throws for several elements, the error thrown is that of the first of them in the order of
+	/// `elements`, whichever finished first: after a failure no further element is started, the ones running finish,
+	/// and elements are started in order, so every element before a failed one has run. A serial loop throws the same
+	/// error, so the seed a failure names does not change from run to run.
+	static func valuesInOrder<Element: Sendable, Value: Sendable>(
+		of elements: [Element],
+		concurrent: Int,
+		_ value: @escaping @Sendable (Element) async throws -> Value,
+	) async throws -> [Value] {
+		let resultsByIndex = await withTaskGroup(of: (index: Int, result: Result<Value, any Error>).self) { group in
+			var nextIndex = 0
+			var hasFailed = false
+			func addNextElement() {
+				guard !hasFailed, nextIndex < elements.count else { return }
+				let index = nextIndex
+				let element = elements[index]
+				nextIndex += 1
+				group.addTask {
+					do {
+						return try await (index, .success(value(element)))
+					} catch {
+						return (index, .failure(error))
+					}
+				}
+			}
+			for _ in 0..<max(1, concurrent) {
+				addNextElement()
+			}
+			var resultsByIndex = [Int: Result<Value, any Error>]()
+			for await finished in group {
+				resultsByIndex[finished.index] = finished.result
+				switch finished.result {
+				case .success:
+					break
+				case .failure:
+					hasFailed = true
+				}
+				addNextElement()
+			}
+			return resultsByIndex
+		}
+		return try elements.indices.compactMap { resultsByIndex[$0] }.map { try $0.get() }
 	}
 
 	/// The oracle's verdict on graphs the tool already ran.
