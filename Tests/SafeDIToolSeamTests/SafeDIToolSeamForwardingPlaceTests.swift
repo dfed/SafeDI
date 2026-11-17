@@ -1769,11 +1769,11 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		}
 	}
 
-	// MARK: A seam that keeps its closure over its enum
+	// MARK: A seam that passes up an inner seam’s places
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsInnerSeamBuildersTakingForwardedValue_whenKeptSeamPassesUpForwardingPlacesOfBothFamilies() async throws {
+	mutating func generate_handsInnerSeamBuildersTakingForwardedValue_whenOuterSeamPassesUpForwardingPlacesOfBothFamilies() async throws {
 		let featureTypes = [
 			seamFixtureType(named: "Inner", isSeam: true, isFinalClass: true, declarations: ["@Received let analytics: Analytics", "@Instantiated public let part: Instantiator<Panel>", "@Instantiated public let sendablePart: SendableInstantiator<Panel>"]),
 			seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let navigator: Navigator", "@Instantiated public let inner: Inner"]),
@@ -1944,7 +1944,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsInnerSeamBuildersTakingNothing_whenKeptSeamPassesUpErasedPlacesForwardingNothing() async throws {
+	mutating func generate_handsInnerSeamBuildersTakingNothing_whenOuterSeamPassesUpErasedPlacesForwardingNothing() async throws {
 		let featureTypes = [
 			seamFixtureType(named: "Inner", isSeam: true, isFinalClass: true, declarations: [
 				"@Received let analytics: Analytics",
@@ -2119,8 +2119,8 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_fillsSwitchedSeamsForwardingBuilderWithLevelFunctions_whenKeptSeamFillsItOutright() async throws {
-		// `Outer` keeps its closure over its enum for `Inner`'s `service`, which `Inner` passes up, and fills `Inner`'s place
+	mutating func generate_fillsSwitchedSeamsForwardingBuilderWithLevelFunctions_whenOuterSeamFillsItOutright() async throws {
+		// `Outer` passes up `Inner`'s `service`, which `Inner` passes up, and fills `Inner`'s place
 		// `part` itself, with `DefaultPanel`: no case of `Outer`'s carries `Inner`'s scope for it, so `Outer` hands `Inner` the
 		// level functions any calling module writes, whose builder takes the title `part` forwards.
 		let innerSeamFiles = [
@@ -2217,7 +2217,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_handsEachDepthsValueToPlace_whenForwardingPlaceIsOnLevelThatOpensAgain() async throws {
-		let (modules, visibleModules) = Self.screenModules(throughKeptSeam: false)
+		let (modules, visibleModules) = Self.screenModules(throughOuterSeam: false)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Home {
@@ -2339,10 +2339,10 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_rebuildsCaseAroundForwardedValueOncePerFirstOpening_whenKeptSeamPassesUpForwardingPlaceOnLevelThatOpensAgain() async throws {
-		// A kept `Outer` passes `Home`'s place up through one conversion function per first opening of `Screen`'s level, whose
+	mutating func generate_rebuildsCaseAroundForwardedValueOncePerFirstOpening_whenOuterSeamPassesUpForwardingPlaceOnLevelThatOpensAgain() async throws {
+		// `Outer` passes `Home`'s place up through one conversion function per first opening of `Screen`'s level, whose
 		// place's member hands `Outer`'s builder the case rebuilt around the value it forwards.
-		let (modules, visibleModules) = Self.screenModules(throughKeptSeam: true)
+		let (modules, visibleModules) = Self.screenModules(throughOuterSeam: true)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Home {
@@ -3983,10 +3983,10 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 	/// A root that instantiates the `analytics` an `Inner` receives and the `Outer` that holds it.
 	private static let rootOfOuter = seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated public let outer: Outer"])
 
-	/// `Feature`'s seam `Home`, whose `Screen` builds itself again beside a place that reads its forwarded `id`, held by a kept
-	/// seam `Outer` where `throughKeptSeam`; `App`, whose `LiveGadget` fills the place; and the same types with `LiveGadget`
+	/// `Feature`'s seam `Home`, whose `Screen` builds itself again beside a place that reads its forwarded `id`, held by a seam
+	/// `Outer` where `throughOuterSeam`; `App`, whose `LiveGadget` fills the place; and the same types with `LiveGadget`
 	/// in `Feature`, which builds the tree inline.
-	private static func screenModules(throughKeptSeam: Bool) -> (modules: [ModuleFixture], visibleModules: [ModuleFixture]) {
+	private static func screenModules(throughOuterSeam: Bool) -> (modules: [ModuleFixture], visibleModules: [ModuleFixture]) {
 		var featureTypes = [
 			seamFixtureType(named: "Screen", isFinalClass: true, declarations: [
 				"@Forwarded public let id: Int",
@@ -3995,16 +3995,16 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 			]),
 			seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let screenBuilder: Instantiator<Screen>"]),
 		]
-		if throughKeptSeam {
+		if throughOuterSeam {
 			featureTypes.append(seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]))
 		}
-		let root = seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: [throughKeptSeam ? "@Instantiated public let outer: Outer" : "@Instantiated public let home: Home"])
+		let root = seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: [throughOuterSeam ? "@Instantiated public let outer: Outer" : "@Instantiated public let home: Home"])
 		let probe = """
 		func firstScreenIsFreed(holdingDepth depth: Int) -> Bool {
 		    weak var firstScreen: Screen?
 		    var heldScreen: Screen?
 		    do {
-		        var screen = \(throughKeptSeam ? "Root().outer.home" : "Root().home").screenBuilder.instantiate(1)
+		        var screen = \(throughOuterSeam ? "Root().outer.home" : "Root().home").screenBuilder.instantiate(1)
 		        firstScreen = screen
 		        for id in 2...depth {
 		            screen = screen.next.instantiate(id)
