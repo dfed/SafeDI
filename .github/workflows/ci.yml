@@ -952,8 +952,6 @@ jobs:
     # code (#525; CLAUDE.md's rule on an actor's `lazy var`). It also
     # uploads the `macos` coverage flag that codecov.yml waits for.
     runs-on: macos-26
-    outputs:
-      build-cache-prefix: spm-release-v2-macOS-xcode-26.0-${{ steps.runner-image.outputs.version }}-
     permissions:
       contents: read
       # To read the passed compile checks other runs uploaded.
@@ -1292,14 +1290,19 @@ jobs:
   # Runs the suite once, with compile checks and coverage, from the bundle
   # "Build Tests on Linux" built. It keeps the name it had when it also
   # built, which is the name of a required check.
-  # Leaves main one build directory per job and runner image: each push to
-  # main saves a build under a key that ends in its commit, about 580 MB on
-  # macOS and 546 MB on Linux, and the repository's caches are evicted above
-  # 10 GB. The newest is kept by creation time rather than this run's own, so
-  # an older run that finishes late deletes nothing newer. Deleting a cache
-  # takes `actions: write`, which only this job has; it checks nothing out
-  # and calls only GitHub's API, so it runs on Linux with no container. A
-  # failure warns and leaves the builds for the next run or for eviction.
+  # Leaves main the builds of its newest commits only: each push to main
+  # saves a build under a key that ends in its commit, about 580 MB on macOS
+  # and 546 MB on Linux, and the repository's caches are evicted above
+  # 10 GB. A build is deleted only when this run's commit has a build under
+  # the same prefix and the other build's commit is an ancestor of this
+  # run's. Two pushes to main do not cancel each other, so the older one's
+  # run can finish last: it finds the newer build's commit ahead of its
+  # own and leaves it. The macOS prefix names no runner image, so a build
+  # an older image made goes when a newer commit's build exists. Deleting a
+  # cache takes `actions: write` and comparing two commits `contents: read`;
+  # only this job has the first. It checks nothing out and calls only
+  # GitHub's API, so it runs on Linux with no container. A failure warns and
+  # leaves the builds for the next run or for eviction.
   prune-build-caches:
     name: Delete Older Build Directories
     needs: [spm, linux-build]
@@ -1307,34 +1310,47 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: write
+      contents: read
     steps:
-      - name: Delete All but the Newest Build of Each Job
-        # A list and a delete for each older build, usually one per job.
-        # One minute is the least the limit can be set to in whole minutes.
+      - name: Delete the Builds of This Commit's Ancestors
+        # A list for each job, then a comparison and a delete for each older
+        # build, usually one per job. One minute is the least the limit can
+        # be set to in whole minutes.
         timeout-minutes: 1
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           REF: ${{ github.ref }}
-          MACOS_PREFIX: ${{ needs.spm.outputs.build-cache-prefix }}
-          LINUX_PREFIX: spm-release-v2-Linux-swift-6.2-
+          COMMIT: ${{ github.sha }}
         run: |
-          for prefix in "$MACOS_PREFIX" "$LINUX_PREFIX"; do
-            # The macOS job names its runner image, which a job that did not run cannot.
-            case "$prefix" in *-) ;; *) continue ;; esac
-            if [ "$prefix" = "spm-release-v2-macOS-xcode-26.0--" ]; then
+          for prefix in spm-release-v2-macOS-xcode-26.0- spm-release-v2-Linux-swift-6.2-; do
+            if ! builds=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -F per_page=100 --jq '.actions_caches[] | "\(.id) \(.key)"' 2>&1); then
+              echo "::warning::Listing $REF's builds under $prefix failed: $(printf '%s' "$builds" | tr '\r\n' '  ')"
               continue
             fi
-            if ! older=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -f sort=created_at -f direction=desc -F per_page=100 --jq '.actions_caches[1:][] | "\(.id) \(.key)"' 2>&1); then
-              echo "::warning::Listing $REF's builds under $prefix failed: $(printf '%s' "$older" | tr '\r\n' '  ')"
-              continue
-            fi
-            if [ -z "$older" ]; then
-              echo "$REF has no older build under $prefix."
-              continue
-            fi
-            printf '%s\n' "$older" | while read -r id key; do
+            # Without this commit's build, an ancestor's is the one to keep.
+            case "$builds" in
+              *"-$COMMIT"*) ;;
+              *)
+                echo "$REF has no build of $COMMIT under $prefix, so its other builds stay."
+                continue
+                ;;
+            esac
+            printf '%s\n' "$builds" | while read -r id key; do
+              other=${key##*-}
+              if [ "$other" = "$COMMIT" ]; then
+                continue
+              fi
+              if ! status=$(gh api "repos/$REPOSITORY/compare/$other...$COMMIT" --jq .status 2>&1); then
+                echo "::warning::Comparing $other with $COMMIT failed, so $key stays: $(printf '%s' "$status" | tr '\r\n' '  ')"
+                continue
+              fi
+              # "ahead" says this commit has commits the other lacks and lacks none of the other's.
+              if [ "$status" != ahead ]; then
+                echo "Kept $key, whose commit is not an ancestor of $COMMIT ($status)."
+                continue
+              fi
               if deleted=$(gh api -X DELETE "repos/$REPOSITORY/actions/caches/$id" 2>&1); then
                 echo "Deleted $key."
               else
