@@ -6654,7 +6654,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.reenteredFillReentersEnclosingFill: 24,
 		.reenteredFillSendableCall: 11,
 		.seamDependencyChainReadThroughView: 13,
-		.seamDependencyReadThroughView: 10,
+		.seamDependencyReadThroughView: 13,
 	]
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
@@ -6814,7 +6814,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.seamModuleRunWithoutPackageName: 62,
 		.seamDependency: 35,
 		.seamDependencyChain: 55,
-		.seamDependencyReadThroughView: 64,
+		.seamDependencyReadThroughView: 76,
 		.seamDependencyChainReadThroughView: 58,
 		.hole: 331,
 		.holeOwnedBySeam: 75,

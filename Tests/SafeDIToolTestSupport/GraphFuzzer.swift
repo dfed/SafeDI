@@ -8624,7 +8624,7 @@ enum GraphFuzzerGenerator {
 					declarations += [link, base, leaf]
 				}
 			}
-			let destinations = GraphFuzzerSeamDependencyDraw.destinations(of: units(of: declarations), typeNamePrefix: prefix, random: &seamDependencyRandom)
+			let destinations = GraphFuzzerSeamDependencyDraw.destinations(of: units(of: declarations), typeNamePrefix: prefix, percent: GraphFuzzerSeamDependencyDraw.seamCorpusDrawPercent, random: &seamDependencyRandom)
 			for (index, destination) in zip(declarations.indices, destinations) {
 				if let destination {
 					declarations[index].module = destination
