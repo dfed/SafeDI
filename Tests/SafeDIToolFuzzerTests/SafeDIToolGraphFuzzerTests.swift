@@ -6279,7 +6279,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 561, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0xE4F258D97EB28F62
+	static let seamCorpusFixtureHash: UInt64 = 0x68E8DD2A5FA95F82
 	static let seamCorpusAcceptedSeedCount = 289
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -6436,7 +6436,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`seamBuilderOrderShape(listedBy:)`). Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x0323974AA9955E8D
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x18CB353E24F0F8BF
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -7666,7 +7666,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xCD6CA3904FDC435E
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x37B82E937A0C994B
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
