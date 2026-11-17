@@ -881,8 +881,8 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		"""])
 		let description = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("countsOfHubTheTestBuilds()")], filesToDelete: &filesToDelete)
 		if compileVerificationIsEnabled {
-			// The base keeps the same instances alive.
-			#expect(description == "probe countsOfHubTheTestBuilds()\nString \"Navigator 1, Token 1\"\n")
+			// Once released, the hub keeps nothing it built alive: the builder it is handed takes nothing that holds them.
+			#expect(description == "probe countsOfHubTheTestBuilds()\nString \"Navigator 0, Token 0\"\n")
 		}
 	}
 
@@ -1144,8 +1144,8 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		"""])
 		let description = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("countsOfPageTheTestBuilds()")], filesToDelete: &filesToDelete)
 		if compileVerificationIsEnabled {
-			// The base keeps the same instances alive.
-			#expect(description == "probe countsOfPageTheTestBuilds()\nString \"Navigator 1, Logger 1\"\n")
+			// Once released, the page keeps nothing it built alive: the builder it is handed takes nothing that holds them.
+			#expect(description == "probe countsOfPageTheTestBuilds()\nString \"Navigator 0, Logger 0\"\n")
 		}
 	}
 
@@ -1558,8 +1558,8 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		"""])
 		let description = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("countsOfShellTheTestBuilds()")], filesToDelete: &filesToDelete)
 		if compileVerificationIsEnabled {
-			// The base keeps the same instances alive.
-			#expect(description == "probe countsOfShellTheTestBuilds()\nString \"Navigator 1, Token 1, Logger 0\"\n")
+			// Once released, the shell keeps nothing it built alive: the builder it is handed takes nothing that holds them.
+			#expect(description == "probe countsOfShellTheTestBuilds()\nString \"Navigator 0, Token 0, Logger 0\"\n")
 		}
 	}
 

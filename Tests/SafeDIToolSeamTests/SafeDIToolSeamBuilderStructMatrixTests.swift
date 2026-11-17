@@ -1605,10 +1605,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_handsLevelFunctionsToPublicMockThatBuildsSeamInline_whenCallerFillsPlaceReadingLevelValue() async throws {
-		// `Inner`'s public mock builds `Innermost`'s tree inline as a nested level, and takes `Service`'s builder struct, since
-		// no place of `Service` forwards a value, is lazy or is built in a `@Sendable` function, and no case holds another
-		// scope. `Screen`'s mock fills the place, which reads `logger` from `detailBuilder_Values`, so it calls
-		// `Inner.__safeDI_mock` with level functions.
+		// `Inner`'s seam side hands `Innermost` a struct; its public mock builds `Innermost`'s tree itself and takes its builder
+		// struct, as the seam does. `Screen`'s mock fills the place, which reads `logger` from `detailBuilder_Values`, so it
+		// calls `Inner.__safeDI_mock` with level functions.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["mockBeside"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Inner {
