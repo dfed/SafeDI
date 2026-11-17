@@ -689,6 +689,18 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func leafCalls_readCallOfGeneratedOnlyMockFunction_whenCalledMockTakesBuilders() {
+		// A consumer calls a public mock that takes builders through its function only generated code calls, directly
+		// (`t6`) or inside the leaf's eraser (`anyT0`), handing it a wrapper's instance as `mock(` would.
+		let mock = "import FuzzFeature\n\nextension S1_T8 {\n    static func mock() -> S1_T8 {\n        let holeSession = LazilyInstantiated<S1_HoleSession>(__safeDI_holeSession)\n        let anyT0 = S1_AnyT0(S1_T0.__safeDI_mock(theme: nil, s1_HoleBuilder: __safeDI_s1_HoleBuilder_S1_T0()))\n        let t6 = S1_T6.__safeDI_mock(holeSession: holeSession.instance, s1_HoleBuilder: __safeDI_s1_HoleBuilder_S1_T6(), safeDIOverrides: safeDIOverrides.t6)\n        return S1_T8(anyT0: anyT0, t6: t6, holeSession: holeSession)\n    }\n}\n"
+		#expect(GraphFuzzerOracle.leafCalls(ofMockedType: "S1_T8", in: ["FuzzOther/S1_T8+SafeDIMock.swift": mock], prefix: "S1_") == [
+			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "anyT0", passedLabels: ["s1_HoleBuilder"], instanceLabels: []),
+			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "t6", passedLabels: ["holeSession", "s1_HoleBuilder"], instanceLabels: ["holeSession"]),
+		])
+	}
+
 	// MARK: Compiler oracle
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
@@ -743,7 +755,8 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	func statedPublicMockValueDivergences_exemptOnlyWhatLeafCallsExplain_whenConsumerCallsPublicMocks() async throws {
 		// The two divergences section 5 states, derived from the leaf calls of graphs shaped as the fuzzer draws them.
 		// M8.32: a consumer passes `analytics.instance` of the wrapper it holds; the leaf's re-made wrapper and the early
-		// read are exempt (seed 901) – unless the leaf wraps a new instance, whose wrapper still fails (seed 902). M8.9b: two
+		// read are exempt (seed 901), through a call of the function only generated code calls too (seed 906) – unless the
+		// leaf wraps a new instance, whose wrapper still fails (seed 902). M8.9b: two
 		// leaves each build the `session` their caller in another package cannot name (seed 903), or one builds it and the
 		// other, receiving it only if available, holds `nil` (seed 905) – but a caller that holds `session` itself and passes
 		// it to neither leaf still fails (seed 904).
@@ -759,6 +772,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			Self.instancePerLeafCase(seed: 903, callerHoldsSession: false),
 			Self.instancePerLeafCase(seed: 904, callerHoldsSession: true),
 			Self.instancePerLeafCase(seed: 905, callerHoldsSession: false, secondLeafReceivesOnlyIfAvailable: true),
+			Self.heldWrapperCase(seed: 906, leafWrapsHeldInstance: true, callsGeneratedOnlyFunction: true),
 		]
 		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: cases.map(\.graph), filesToDelete: &filesToDelete))
 		let remaining = try zip(cases, comparisons).map { testCase, comparison in
@@ -771,6 +785,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(remaining[1] == [DifferentialValueDifference(probe: "S902_T8.mock()", path: ["<1> S902_T8", "analytics"], feature: "analytics: <4> LazilyInstantiated<S902_Analytics> (instance read last)", knownRight: "analytics: <3> LazilyInstantiated<S902_Analytics> (seen, first at <1> S902_T8 > t0 > analytics)")])
 		#expect(remaining[2] == [])
 		#expect(remaining[4] == [])
+		#expect(remaining[5] == [])
 		#expect(remaining[3] == [DifferentialValueDifference(probe: "S904_T7.mock()", path: ["<1> S904_T7", "t0", "session"], feature: "session: <4> S904_Session", knownRight: "session: <2> S904_Session (seen, first at <1> S904_T7 > session)"), DifferentialValueDifference(probe: "S904_T7.mock()", path: ["<1> S904_T7", "t1", "session"], feature: "session: <6> S904_Session", knownRight: "session: <2> S904_Session (seen, first at <1> S904_T7 > session)")])
 	}
 
@@ -874,8 +889,9 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 
 	/// M8.32: `T8`, in another package, holds `analytics` lazily, receives `T0`, which receives the wrapper, and calls
 	/// `T0`'s public mock with `analytics.instance`, which the mock wraps again – around the instance it is passed, or,
-	/// unless `leafWrapsHeldInstance`, around a new one.
-	private static func heldWrapperCase(seed: UInt64, leafWrapsHeldInstance: Bool) -> StatedDivergenceCase {
+	/// unless `leafWrapsHeldInstance`, around a new one. When `callsGeneratedOnlyFunction`, the mock is the function only
+	/// generated code calls, `__safeDI_mock(`, as a call of a mock that takes builders is.
+	private static func heldWrapperCase(seed: UInt64, leafWrapsHeldInstance: Bool, callsGeneratedOnlyFunction: Bool = false) -> StatedDivergenceCase {
 		let p = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 		let stamp = DifferentialValueCreationStamp.property(counterNamed: "\(p)Counter")
 		let files = [
@@ -884,13 +900,14 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			"// module: FuzzOther\nimport FuzzFeature\n\n@Instantiable(generateMock: true)\npublic final class \(p)T8: Instantiable {\n\t\(stamp)\n\n\tpublic init(t0: \(p)T0, analytics: LazilyInstantiated<\(p)Analytics>) {\n\t\tself.t0 = t0\n\t\tself.analytics = analytics\n\t}\n\n\t@Received let t0: \(p)T0\n\t@Instantiated let analytics: LazilyInstantiated<\(p)Analytics>\n}\n",
 		]
 		let reWrapped = leafWrapsHeldInstance ? "analytics ?? \(p)Analytics()" : "\(p)Analytics()"
+		let mockFunction = callsGeneratedOnlyFunction ? "__safeDI_mock" : "mock"
 		return statedDivergenceCase(
 			seed: seed,
 			files: files,
 			knownRightFiles: files.map { $0.replacingOccurrences(of: "generateMock: .public", with: "generateMock: true") },
 			featureFiles: [
-				"FuzzFeature/\(p)T0+SafeDIMock.swift": "extension \(p)T0 {\n    public static func mock(analytics: \(p)Analytics? = nil) -> \(p)T0 {\n        \(p)T0(analytics: LazilyInstantiated { \(reWrapped) })\n    }\n}\n",
-				"FuzzOther/\(p)T8+SafeDIMock.swift": "import FuzzFeature\n\nextension \(p)T8 {\n    static func mock() -> \(p)T8 {\n        let analytics = LazilyInstantiated<\(p)Analytics> { \(p)Analytics() }\n        let t0 = \(p)T0.mock(analytics: analytics.instance)\n        return \(p)T8(t0: t0, analytics: analytics)\n    }\n}\n",
+				"FuzzFeature/\(p)T0+SafeDIMock.swift": "extension \(p)T0 {\n    public static func \(mockFunction)(analytics: \(p)Analytics? = nil) -> \(p)T0 {\n        \(p)T0(analytics: LazilyInstantiated { \(reWrapped) })\n    }\n}\n",
+				"FuzzOther/\(p)T8+SafeDIMock.swift": "import FuzzFeature\n\nextension \(p)T8 {\n    static func mock() -> \(p)T8 {\n        let analytics = LazilyInstantiated<\(p)Analytics> { \(p)Analytics() }\n        let t0 = \(p)T0.\(mockFunction)(analytics: analytics.instance)\n        return \(p)T8(t0: t0, analytics: analytics)\n    }\n}\n",
 			],
 			knownRightGeneratedFiles: [
 				"FuzzOther/\(p)T8+SafeDIMock.swift": "import FuzzFeature\n\nextension \(p)T8 {\n    static func mock() -> \(p)T8 {\n        let analytics = LazilyInstantiated<\(p)Analytics> { \(p)Analytics() }\n        return \(p)T8(t0: \(p)T0(analytics: analytics), analytics: analytics)\n    }\n}\n",
