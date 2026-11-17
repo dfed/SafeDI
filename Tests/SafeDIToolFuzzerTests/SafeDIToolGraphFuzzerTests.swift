@@ -6394,7 +6394,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
-	static let smokeRemedyKinds: [GraphFuzzerRemedyKind] = [.decorateType, .defaultMockParameter, .instantiateOnRoot, .instantiateOnRootAndReceiveOnlyIfAvailable, .moveMockIntoClause, .receiveOptionallyIfAvailable, .receiveSuggestedProperty, .removeReceive]
+	static let smokeRemedyKinds: [GraphFuzzerRemedyKind] = [.decorateType, .defaultMockParameter, .instantiateOnRoot, .instantiateOnRootAndReceiveOnlyIfAvailable, .moveMockIntoClause, .receiveOptionallyIfAvailable, .receiveSuggestedProperty, .relabelHidingDeclaration, .removeReceive]
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
