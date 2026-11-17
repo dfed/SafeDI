@@ -6961,6 +6961,22 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
 			seeds: [281, 300, 548],
 		),
+		// A fill that re-enters its own seam: the place the re-entered seam builds is handed the root dispatcher, not the
+		// fill's values, so `HoleImpl`'s only-if-available `holeNestId` is `nil` where the visible build and the inline
+		// build pass it.
+		GraphFuzzerKnownIssue(
+			reason: "\(fillReenteringItsSeamLosesValueReason); and \(seamBuilderOrderReason)",
+			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeListOrder)],
+			seeds: [600],
+		),
+		// A type that fills a hole from a caller's module receives a label the seam takes as a parameter in another form,
+		// which the seam's check that its tree receives each label in forms one parameter takes does not see: the fill is
+		// handed `nil` where the visible build reports the seam's error.
+		GraphFuzzerKnownIssue(
+			reason: fillReceivesSeamParameterInAnotherFormReason,
+			signatures: [.holeAcceptedWhereVisibleBuildRejects(containing: "the generated initializer takes each property the tree receives from outside the seam as one parameter named after it")],
+			seeds: [1_815],
+		),
 	]
 
 	/// `seamKnownIssuesBesideBuilderSurface` with each part of the builder surface added for its seeds.
@@ -7557,6 +7573,12 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	private static let seamTraversalLimitReason = "A graph whose probes traverse more wrappers than a graph compared on its own may traverse, so the comparator describes none of its values beneath the point where its traversals run out"
+
+	private static let fillReenteringItsSeamLosesValueReason = "A fill that re-enters its own seam hands the re-entered seam the root dispatcher, not its own values, so a fill there reads `nil` for an only-if-available value its visible build and its inline build pass; fixed in a later PR"
+
+	private static let fillReenteringItsSeamLosesValueDifference = "> holeService > holeNestId:\n  feature:     holeNestId: nil\n  known right: holeNestId: Int 7"
+
+	private static let fillReceivesSeamParameterInAnotherFormReason = "A type that fills a hole from a caller's module is outside the seam's check that its tree receives each label from outside it in forms one parameter takes, so a fill that receives the seam's parameter in another form is handed `nil` where the visible build reports the seam's error; fixed in a later PR"
 
 	private static let seamBuilderOrderReason = "A seam's builders are ordered by label, which its hole type's names spell, so moving type names across wrapper names reorders the builders of a seam with two hole types, its generated initializers and the calls of them"
 

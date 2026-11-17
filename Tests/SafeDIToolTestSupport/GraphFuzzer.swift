@@ -11936,6 +11936,8 @@ struct GraphFuzzerKnownIssue: Equatable {
 		/// The build that fills a hole constructs other values than its visible build, with a difference whose description
 		/// contains this text.
 		case holeBuildsOtherValuesThanVisibleBuild(containing: String)
+		/// The tool accepts a graph with a hole and rejects its visible build, with an error whose text contains this.
+		case holeAcceptedWhereVisibleBuildRejects(containing: String)
 		/// The value comparator could not describe the graph, with details containing this text, such as the error of
 		/// an inline build that does not compile.
 		case valueComparatorCouldNotDescribeGraph(containing: String)
@@ -11993,7 +11995,7 @@ struct GraphFuzzerKnownIssue: Equatable {
 			switch signature {
 			case .mockBuildsOtherValuesThanProduction, .valueOracleFixtureDoesNotCompile, .valueOracleFixtureRejected, .remedyLeavesErrorAtSite:
 				true
-			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .holeNamesChangeWithSecondPlace, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
+			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .holeAcceptedWhereVisibleBuildRejects, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .holeNamesChangeWithSecondPlace, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
 				false
 			case .builderSurface:
 				false
@@ -12008,7 +12010,7 @@ struct GraphFuzzerKnownIssue: Equatable {
 			switch signature {
 			case .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees:
 				true
-			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
+			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .holeAcceptedWhereVisibleBuildRejects, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
 				false
 			case .builderSurface:
 				false
@@ -12023,7 +12025,7 @@ struct GraphFuzzerKnownIssue: Equatable {
 			switch signature {
 			case .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees:
 				true
-			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite, .builderSurface, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
+			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .holeAcceptedWhereVisibleBuildRejects, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite, .builderSurface, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
 				false
 			}
 		}
@@ -12040,7 +12042,7 @@ struct GraphFuzzerKnownIssue: Equatable {
 			switch signature {
 			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderSurface, .renamedGraphDiffers:
 				true
-			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
+			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .holeAcceptedWhereVisibleBuildRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
 				false
 			}
 		}
@@ -12095,6 +12097,8 @@ struct GraphFuzzerKnownIssue: Equatable {
 						}
 					}
 				}
+			case let .holeAcceptedWhereVisibleBuildRejects(text):
+				failure.kind == .holeAcceptedWhereVisibleBuildRejects && failure.details.contains(text)
 			case let .publicMockRejectsGraphKnownRightAccepts(text):
 				failure.kind == .publicMockRejectsGraphKnownRightAccepts && failure.details.contains(text)
 			case .publicMockBuildsOtherValuesThanKnownRight:
