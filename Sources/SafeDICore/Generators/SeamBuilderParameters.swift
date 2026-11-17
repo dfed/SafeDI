@@ -1250,8 +1250,8 @@ extension DependencyTreeGenerator {
 	/// it – and for every scope in a fill that closes a cycle on a property of the seam's path, which code
 	/// generated outside the seam's module cannot refer to. Each finding once, by kind and location: the findings of several
 	/// fills that differ only in the places they name are one that names every such place (`FillFinding.adding(_:to:)`),
-	/// since the place declared first is a fact of file names; of findings that differ otherwise, the one that comes first in
-	/// source order (`FillFinding.precedesInSourceOrder`), never the first the walk meets, since builders are in label order.
+	/// since the place declared first is a fact of file names; findings that differ otherwise are each reported, none picked,
+	/// in the order `FillFinding.precedesInSourceOrder` gives, which includes the file of each place.
 	static func validateFills(
 		inTreesRootedAt generators: [ScopeGenerator],
 		callerModule: ModuleIdentity,
@@ -1284,8 +1284,9 @@ extension DependencyTreeGenerator {
 				})
 			}
 		}
-		// Of a key's findings that differ in more than the places they name, the one that comes first in source order.
-		let findings = keys.compactMap { findingsByKey[$0]?.min { $0.precedesInSourceOrder($1) } }
+		// Every finding of a key that differs from the others in more than the places it names: each is a fact of its own, with
+		// a remedy of its own, so none is picked.
+		let findings = keys.flatMap { findingsByKey[$0] ?? [] }
 		if !findings.isEmpty {
 			throw DependencyTreeGeneratorError.fillFindings(findings)
 		}
@@ -1703,10 +1704,10 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 		}
 
 		/// Whether this finding comes before `other`: by where each of its diagnostics is reported, then where the place it
-		/// names is declared, then where each declaration of the path to that place is, then by kind, so which of two findings
-		/// of one key is reported, and the order of two at one location, never depends on a name. A seam that builds one type
+		/// names is declared, then where each declaration of the path to that place is, then by kind, so the order of two at one
+		/// location never depends on a name; it chooses nothing, and follows the file of each place. A seam that builds one type
 		/// under two parents reaches one place through two paths that differ only in the declarations along them, so the
-		/// path decides between them. Their messages break only a tie between findings that print the same.
+		/// path orders them. Their messages break only a tie between findings that print the same.
 		func precedesInSourceOrder(_ other: FillFinding) -> Bool {
 			let (diagnostics, otherDiagnostics) = (sourceDiagnostics, other.sourceDiagnostics)
 			let (locations, otherLocations) = (orderingLocations, other.orderingLocations)
@@ -2009,8 +2010,15 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				}
 				notes.sort(by: SourceDiagnostic.precedesInSourceOrder)
 				let declaringTypes = listed(clauses.map { "`\($0.declaration.declaringType.asSource)`’s" })
+				// The remedy fulfills the type every place the finding names instantiates, each once, so two findings that differ
+				// only in their places print alike and merge, and no place's type is picked by where it is declared.
+				var remediedTypes = [TypeDescription]()
+				for place in places where !remediedTypes.contains(place.instantiatedType) {
+					remediedTypes.append(place.instantiatedType)
+				}
+				let fulfillRemedies = listed(remediedTypes.map { SeamAccessExplanation.fulfillRemedy(fulfilling: $0, seamModuleName: seamModule.moduleName, effect: nil) })
 				return [
-					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(listed(clauseTexts)), but \(callsAreSeveral ? "those calls pass" : "that call passes") the builder on as \(module(callerModule)) fills it, which cannot hand it \(declaringTypes) values. Declare `@\(Dependency.Source.receivedRawValue) let \(reader.property.asSource)` on \(seamName), so the builder’s scope carries it, or \(fulfillRemedy(seamModule))."),
+					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(listed(clauseTexts)), but \(callsAreSeveral ? "those calls pass" : "that call passes") the builder on as \(module(callerModule)) fills it, which cannot hand it \(declaringTypes) values. Declare `@\(Dependency.Source.receivedRawValue) let \(reader.property.asSource)` on \(seamName), so the builder’s scope carries it, or \(fulfillRemedies)."),
 				] + notes
 			case let .closesCycleInSeamTree(closingProperty, closingType, declarationLocation, fillAncestors, closedOnDeclaration, closesOnOwnerOfHole, seamModule):
 				let closingTypeName = "`\(closingType.asSource)`"
