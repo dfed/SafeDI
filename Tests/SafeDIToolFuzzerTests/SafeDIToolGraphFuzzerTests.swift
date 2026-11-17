@@ -6955,7 +6955,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `addingHoleShapes` with an accepted variant (with seeds 68, 227, 605 and 1890), the nested builders' draws among them
 	/// – a second hole type (seed 215), a wrapper of the hole beside its by-value place (seeds 78 and 605), a cycle of two
 	/// seams with a `@Sendable` edge (seed 93), and an inner seam reached by a plain and a `@Sendable` route, passed up with
-	/// both enums, an inner `@Sendable` place on a `@Sendable` route and a place inside a `@Sendable` fill (seed 304), a place
+	/// both enums, an inner `@Sendable` place on a `@Sendable` route and a place inside a `@Sendable` fill (seed 273), a place
 	/// inside a plain fill on two routes of the inner seam's enum, two types deep, read through the inner seam's levels
 	/// (seed 594, and seed 151 on two routes), on two calls (seed 1010) and read by its fulfiller (seed 1450), and a hole
 	/// under a later member of a loop of received instantiators, declared by the seam (seed 347) or beneath it (seed 215),
@@ -6979,10 +6979,11 @@ struct SafeDIToolGraphFuzzerTests {
 	/// hole type, for a hole read only if available. Seeds 309, 1010, 1020 and 1890, whose seams later draws gave a second
 	/// hole type that the move reorders, stay for the shapes above: they are listed under `seamBuilderOrderReason`, a
 	/// sanctioned order, which `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` counts as passing
-	/// (`seamBuilderOrderShape(listedBy:)`). Seeds 0, 227, 1010 and 1890 are now rejected – both builds reject a
+	/// (`seamBuilderOrderShape(listedBy:)`). Seeds 0, 227, 304, 1010 and 1890 are now rejected – both builds reject a
 	/// re-entered fill's unremedied read of a value one route holds, and passing-up copies hide a label – so seeds 93, 273,
 	/// 468, 743, 892 and 1986 show, accepted, the rolls they showed: a cycle of two seams with a `@Sendable` edge (seed 93),
-	/// a diamond with a `@Sendable` seam (seed 273), `HoleOwner` aliasing the field (seeds 468 and 1986), a fulfiller's
+	/// a diamond with a `@Sendable` seam, and seed 304's inner seam on a plain and a `@Sendable` route (seed 273),
+	/// `HoleOwner` aliasing the field (seeds 468 and 1986), a fulfiller's
 	/// `package` initializer in another package (seed 743), two calls of the plain fill (seed 892) and mixed wrapper kinds
 	/// in the cycle (seed 1986); seeds 151, 309, 594 and 969 draw places inside a plain fill that spell their hole type
 	/// with and without `any`, seed 969 with no known issue, and seeds 68 and 84 the remedied read of a value one route
