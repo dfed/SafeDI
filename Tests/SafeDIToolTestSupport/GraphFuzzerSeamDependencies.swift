@@ -51,8 +51,17 @@ enum GraphFuzzerSeamDependencyDraw {
 	static let seamRandomSeedMask: UInt64 = 0x7365616D44657073
 	/// The stream the public mock corpus draws from.
 	static let publicMockRandomSeedMask: UInt64 = 0x7075624D6B446570
-	/// The share of eligible graphs whose declarations of the seam's module may move beneath it, in percent.
+	/// The share of the public mock corpus's eligible graphs whose declarations of the seam's module may move beneath it,
+	/// in percent.
 	static let drawPercent = 30
+	/// The share of the seam corpus's eligible graphs whose declarations of the seam's module may move beneath it, in
+	/// percent: higher than `drawPercent`, since nearly every graph of the seam corpus that the draw can move in declares
+	/// a root of the draws beneath the seam's module, whose module lists every module beneath it
+	/// (`GraphFuzzerFixture.modulesListingEveryModuleBeneath`), so only the other package's caller reads a move through
+	/// the seam's module's view (`callersReadingThroughView(of:)`), and the graphs that show it would otherwise sit at the
+	/// floor of accepted graphs. The roll draws one number whatever the share, so a graph that moved at the lower share
+	/// moves the same declarations at this one.
+	static let seamCorpusDrawPercent = 45
 	/// The share of eligible graphs that gain a chain of seams or public mocks beneath the seam's module, in percent:
 	/// `ChainLink`, in `seamDependency`, which a seam or public mock of the seam's module instantiates; `ChainBase`, in
 	/// `seamDependencyBase`, which `ChainLink` instantiates; and `ChainLeaf`, in `seamDependencyLeaf`, which `ChainBase`
@@ -62,7 +71,7 @@ enum GraphFuzzerSeamDependencyDraw {
 	/// The bottom level reads a module the level above it does not list, which is what a computation from the wrong
 	/// module's view gets wrong (cell 5b of the module info view's design: with one module fewer, the chain passes with or
 	/// without that defect). A type of the seam's module moves only one module down
-	/// (`destinations(of:typeNamePrefix:random:)`), since the seam's module builds what a seam's or public mock's tree names
+	/// (`destinations(of:typeNamePrefix:percent:random:)`), since the seam's module builds what a seam's or public mock's tree names
 	/// and lists only the module beneath it, so the chain is drawn on purpose, beneath a seam or public mock that each
 	/// module calls rather than builds.
 	static let chainPercent = 20
@@ -250,9 +259,9 @@ enum GraphFuzzerSeamDependencyDraw {
 	}
 
 	/// The module each of `units` moves to, in the order given, or `nil` for one that stays. Empty when the draw
-	/// moves nothing: the roll against `drawPercent` fails, or no file can move.
-	static func destinations(of units: [Unit], typeNamePrefix prefix: String, random: inout GraphFuzzerRandomNumberGenerator) -> [GraphFuzzerModule?] {
-		guard random.percentChance(drawPercent) else { return [] }
+	/// moves nothing: the roll against `percent` (`drawPercent` or `seamCorpusDrawPercent`) fails, or no file can move.
+	static func destinations(of units: [Unit], typeNamePrefix prefix: String, percent: Int, random: inout GraphFuzzerRandomNumberGenerator) -> [GraphFuzzerModule?] {
+		guard random.percentChance(percent) else { return [] }
 		let analysis = Analysis(units: units, typeNamePrefix: prefix)
 		let declaredNames = analysis.declaredNames
 		let referencedNames = analysis.referencedNames
