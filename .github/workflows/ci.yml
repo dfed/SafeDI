@@ -1501,19 +1501,67 @@ jobs:
           - corpus: generateDependencyTree
             features: generateDependencyTree
             starting-seed: 0
-            iterations: 250
+            iterations: 125
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 125
+            iterations: 125
           - corpus: generateDependencyTree
             features: generateDependencyTree
             starting-seed: 250
-            iterations: 250
+            iterations: 125
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 375
+            iterations: 125
           - corpus: generateDependencyTree
             features: generateDependencyTree
             starting-seed: 500
-            iterations: 250
+            iterations: 125
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 625
+            iterations: 125
           - corpus: generateDependencyTree
             features: generateDependencyTree
             starting-seed: 750
-            iterations: 250
+            iterations: 125
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 875
+            iterations: 125
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 1000
+            iterations: 125
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 1125
+            iterations: 125
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 1250
+            iterations: 125
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 1375
+            iterations: 125
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 1500
+            iterations: 125
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 1625
+            iterations: 125
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 1750
+            iterations: 125
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 1875
+            iterations: 125
           - corpus: generateMockPublic
             features: generateMockPublic
             starting-seed: 0
@@ -1737,7 +1785,7 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
           # graph-fuzzer's matrix, `<corpus>-<starting-seed>` per shard.
-          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-250 generateDependencyTree-500 generateDependencyTree-750 generateMockPublic-0 generateMockPublic-500
+          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-125 generateDependencyTree-250 generateDependencyTree-375 generateDependencyTree-500 generateDependencyTree-625 generateDependencyTree-750 generateDependencyTree-875 generateDependencyTree-1000 generateDependencyTree-1125 generateDependencyTree-1250 generateDependencyTree-1375 generateDependencyTree-1500 generateDependencyTree-1625 generateDependencyTree-1750 generateDependencyTree-1875 generateMockPublic-0 generateMockPublic-500
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           tar -xzf graph-fuzzer-test-bundle.tar.gz
