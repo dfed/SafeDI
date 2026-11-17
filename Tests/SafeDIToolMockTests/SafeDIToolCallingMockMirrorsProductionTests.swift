@@ -184,7 +184,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		}
 	}
 
-	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_fillsEachHomesApiWithNearestLogger_whenCallingMocksFillReadsValueOfLevelBetweenBuildsOfCalledType(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
 		// The seam form passes the builder `Home` takes on unchanged where `Loop` builds `Home` again, so its caller cannot hand
@@ -208,7 +208,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		)
 	}
 
-	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_handsReenteredPlaceTheScreensCart_whenCallInsideFillReentersCalledTypesRootLevel(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
 		// `LivePayments` fills `Checkout`’s `payments` and builds `Checkout` again, from inside the fill of the `payments`
@@ -576,7 +576,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		}
 	}
 
-	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_handsEachRouteItsNearestToken_whenOneRouteBindsTokenLazilyAndTheCallerHoldsAPlainToken(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
 		// `Desk` binds `token` lazily above one of `Model`’s places, and the caller holds a plain `token` above the other:

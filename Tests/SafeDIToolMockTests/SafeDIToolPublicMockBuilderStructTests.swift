@@ -828,51 +828,36 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
+		            token: (() -> Token)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            __safeDI_storage = __safeDI_Storage(
-		                hub: hub
-		            )
+		            self.token = token
+		            self.hub = hub
 		        }
 
-		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
-
-		        private let __safeDI_storage: __safeDI_Storage
-
-		        private final class __safeDI_Storage {
-		            init(
-		                hub: Hub.SafeDIOverrides
-		            ) {
-		                self.hub = hub
-		            }
-
-		            let hub: Hub.SafeDIOverrides
-		        }
+		        let token: (() -> Token)?
+		        let hub: Hub.SafeDIOverrides
 		    }
 
 		    static func mock(
-		        apiBuilder: @escaping () -> any Api,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_hub() -> Hub {
-		            func __safeDI_apiBuilder_Hub_Model_Scope_api(_ scope: Hub.SafeDIMockScope_Api.Model_Scope.api_Values, token: Token) -> any Api {
-		                let api: any Api = LiveToken(token: token)
-		                return api
-		            }
-		            func __safeDI_apiBuilder_Hub(up: Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api>) -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
-		                .init(pageBuilder: { _ in __safeDI_apiBuilder_Hub_Page_Scope() }, modelBuilder: { values in __safeDI_apiBuilder_Hub_Model_Scope_(up: up.modelBuilder(values)) })
+		            func __safeDI_apiBuilder_Hub(token: Token) -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(pageBuilder: { _ in __safeDI_apiBuilder_Hub_Page_Scope() }, modelBuilder: { _ in __safeDI_apiBuilder_Hub_Model_Scope(token: token) })
 		            }
 		            func __safeDI_apiBuilder_Hub_Page_Scope() -> Hub.SafeDIMockScope_Api.Page_Scope.__safeDI_Builder<any Api> {
 		                .init(modelBuilder: { values in __safeDI_apiBuilder_Hub_Model_Scope(token: values.token) })
 		            }
 		            func __safeDI_apiBuilder_Hub_Model_Scope(token: Token) -> Hub.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api> {
-		                .init(api: { scope in __safeDI_apiBuilder_Hub_Model_Scope_api(scope, token: token) })
-		            }
-		            func __safeDI_apiBuilder_Hub_Model_Scope_(up: Hub.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api>) -> Hub.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api> {
-		                .init(api: up.api)
+		                .init(api: { _ in
+		                    let api: any Api = LiveToken(token: token)
+		                    return api
+		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_9D3DEE011EBEDDFF.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Hub(up: .init(__safeDI_noScope: apiBuilder)), safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Hub(token: token), safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Root(hub: hub)
@@ -1136,8 +1121,13 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        apiBuilder: @escaping () -> any Api,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        let __safeDI_apiBuilder = apiBuilder
 		        _ = Page.__safeDI_Page_mock_50657E78D19F8704.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let page = Page.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides.page)
+		        func __safeDI_page() -> Page {
+		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
+		            return Page.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides.page)
+		        }
+		        let page: Page = __safeDI_page()
 		        return Root(page: page)
 		    }
 		}
@@ -1392,87 +1382,44 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Shell {
-		    nonisolated public enum SafeDIMockScope_Api {
-		        nonisolated public struct hub_Values: Sendable {}
-
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let hub: (hub_Values) -> Hub.SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>
-
-		            public init(hub: @escaping (hub_Values) -> Hub.SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>) {
-		                self.hub = hub
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.hub = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		            }
-		        }
-		    }
-
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            logger: (() -> Logger)? = nil,
+		            token: (() -> Token)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            __safeDI_storage = __safeDI_Storage(
-		                logger: logger,
-		                hub: hub
-		            )
+		            self.logger = logger
+		            self.token = token
+		            self.hub = hub
 		        }
 
-		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
-		        public var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
-
-		        private let __safeDI_storage: __safeDI_Storage
-
-		        private final class __safeDI_Storage {
-		            init(
-		                logger: (() -> Logger)?,
-		                hub: Hub.SafeDIOverrides
-		            ) {
-		                self.logger = logger
-		                self.hub = hub
-		            }
-
-		            let logger: (() -> Logger)?
-		            let hub: Hub.SafeDIOverrides
-		        }
+		        public let logger: (() -> Logger)?
+		        public let token: (() -> Token)?
+		        public let hub: Hub.SafeDIOverrides
 		    }
 
-		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    public static func mock(
-		        apiBuilder: @escaping () -> any Api,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Shell {
-		        Shell.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides)
-		    }
-
-		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
-		    public static func __safeDI_mock(
-		        apiBuilder __safeDI_apiBuilder: Shell.SafeDIMockScope_Api.__safeDI_Builder<any Api>,
+		        token: Token? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Shell {
 		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder() } else { Logger() }
+		        let token = if let token { token } else if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_hub() -> Hub {
-		            func __safeDI_apiBuilder_Hub_Model_Scope_api(_ scope: Hub.SafeDIMockScope_Api.Model_Scope.api_Values, token: Token) -> any Api {
-		                let api: any Api = LiveToken(token: token)
-		                return api
-		            }
-		            func __safeDI_apiBuilder_Hub(up: Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api>) -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
-		                .init(pageBuilder: { _ in __safeDI_apiBuilder_Hub_Page_Scope() }, modelBuilder: { values in __safeDI_apiBuilder_Hub_Model_Scope_(up: up.modelBuilder(values)) })
+		            func __safeDI_apiBuilder_Hub(token: Token) -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(pageBuilder: { _ in __safeDI_apiBuilder_Hub_Page_Scope() }, modelBuilder: { _ in __safeDI_apiBuilder_Hub_Model_Scope(token: token) })
 		            }
 		            func __safeDI_apiBuilder_Hub_Page_Scope() -> Hub.SafeDIMockScope_Api.Page_Scope.__safeDI_Builder<any Api> {
 		                .init(modelBuilder: { values in __safeDI_apiBuilder_Hub_Model_Scope(token: values.token) })
 		            }
 		            func __safeDI_apiBuilder_Hub_Model_Scope(token: Token) -> Hub.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api> {
-		                .init(api: { scope in __safeDI_apiBuilder_Hub_Model_Scope_api(scope, token: token) })
-		            }
-		            func __safeDI_apiBuilder_Hub_Model_Scope_(up: Hub.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api>) -> Hub.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api> {
-		                .init(api: up.api)
+		                .init(api: { _ in
+		                    let api: any Api = LiveToken(token: token)
+		                    return api
+		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_9D3DEE011EBEDDFF.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Hub(up: __safeDI_apiBuilder.hub(SafeDIMockScope_Api.hub_Values())), safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Hub(token: token), safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Shell(logger: logger, hub: hub)
@@ -1480,7 +1427,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		}
 
 		extension Shell {
-		    public enum __safeDI_Shell_mock_C9584A08439C1AA6 {}
+		    public enum __safeDI_Shell_mock_C51D6EADDA480E49 {}
 		}
 		#endif
 		"""])
@@ -1503,56 +1450,23 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
+		            token: (() -> Token)? = nil,
 		            shell: Shell.SafeDIOverrides = .init()
 		        ) {
-		            __safeDI_storage = __safeDI_Storage(
-		                shell: shell
-		            )
+		            self.token = token
+		            self.shell = shell
 		        }
 
-		        var shell: Shell.SafeDIOverrides { __safeDI_storage.shell }
-
-		        private let __safeDI_storage: __safeDI_Storage
-
-		        private final class __safeDI_Storage {
-		            init(
-		                shell: Shell.SafeDIOverrides
-		            ) {
-		                self.shell = shell
-		            }
-
-		            let shell: Shell.SafeDIOverrides
-		        }
+		        let token: (() -> Token)?
+		        let shell: Shell.SafeDIOverrides
 		    }
 
 		    static func mock(
-		        apiBuilder: @escaping () -> any Api,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_shell() -> Shell {
-		            func __safeDI_apiBuilder_Hub_Model_Scope_api(_ scope: Hub.SafeDIMockScope_Api.Model_Scope.api_Values, token: Token) -> any Api {
-		                let api: any Api = LiveToken(token: token)
-		                return api
-		            }
-		            func __safeDI_apiBuilder_Shell(up: Shell.SafeDIMockScope_Api.__safeDI_Builder<any Api>) -> Shell.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
-		                .init(hub: { values in __safeDI_apiBuilder_Hub(up: up.hub(values)) })
-		            }
-		            func __safeDI_apiBuilder_Hub(up: Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api>) -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
-		                .init(pageBuilder: { _ in __safeDI_apiBuilder_Hub_Page_Scope() }, modelBuilder: { values in __safeDI_apiBuilder_Hub_Model_Scope_(up: up.modelBuilder(values)) })
-		            }
-		            func __safeDI_apiBuilder_Hub_Page_Scope() -> Hub.SafeDIMockScope_Api.Page_Scope.__safeDI_Builder<any Api> {
-		                .init(modelBuilder: { values in __safeDI_apiBuilder_Hub_Model_Scope(token: values.token) })
-		            }
-		            func __safeDI_apiBuilder_Hub_Model_Scope(token: Token) -> Hub.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api> {
-		                .init(api: { scope in __safeDI_apiBuilder_Hub_Model_Scope_api(scope, token: token) })
-		            }
-		            func __safeDI_apiBuilder_Hub_Model_Scope_(up: Hub.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api>) -> Hub.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api> {
-		                .init(api: up.api)
-		            }
-		            _ = Shell.__safeDI_Shell_mock_C9584A08439C1AA6.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Shell.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Shell(up: .init(__safeDI_noScope: apiBuilder)), safeDIOverrides: safeDIOverrides.shell)
-		        }
-		        let shell: Shell = __safeDI_shell()
+		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        _ = Shell.__safeDI_Shell_mock_C51D6EADDA480E49.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let shell = Shell.mock(token: token, safeDIOverrides: safeDIOverrides.shell)
 		        return Root(shell: shell)
 		    }
 		}
@@ -4283,11 +4197,16 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceBuilder_: @escaping () -> any Service,
+		        serviceBuilder: @escaping () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let __safeDI_serviceBuilder = serviceBuilder
 		        _ = Panel.__safeDI_Panel_mock_615ECD1543E5AA59.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let panel = Panel.__safeDI_mock(serviceBuilder_: .init(__safeDI_noScope: serviceBuilder_), serviceBuilder: nil, safeDIOverrides: safeDIOverrides.panel)
+		        func __safeDI_panel() -> Panel {
+		            let serviceBuilder_: () -> any Service = __safeDI_serviceBuilder
+		            return Panel.__safeDI_mock(serviceBuilder_: .init(__safeDI_noScope: serviceBuilder_), serviceBuilder: nil, safeDIOverrides: safeDIOverrides.panel)
+		        }
+		        let panel: Panel = __safeDI_panel()
 		        return Screen(panel: panel)
 		    }
 		}
@@ -5366,87 +5285,44 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Shell {
-		    nonisolated public enum SafeDIMockScope_Api {
-		        nonisolated public struct hub_Values: Sendable {}
-
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let hub: (hub_Values) -> Hub.SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>
-
-		            public init(hub: @escaping (hub_Values) -> Hub.SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>) {
-		                self.hub = hub
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.hub = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		            }
-		        }
-		    }
-
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            logger: (() -> Logger)? = nil,
+		            token: (() -> Token)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            __safeDI_storage = __safeDI_Storage(
-		                logger: logger,
-		                hub: hub
-		            )
+		            self.logger = logger
+		            self.token = token
+		            self.hub = hub
 		        }
 
-		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
-		        public var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
-
-		        private let __safeDI_storage: __safeDI_Storage
-
-		        private final class __safeDI_Storage {
-		            init(
-		                logger: (() -> Logger)?,
-		                hub: Hub.SafeDIOverrides
-		            ) {
-		                self.logger = logger
-		                self.hub = hub
-		            }
-
-		            let logger: (() -> Logger)?
-		            let hub: Hub.SafeDIOverrides
-		        }
+		        public let logger: (() -> Logger)?
+		        public let token: (() -> Token)?
+		        public let hub: Hub.SafeDIOverrides
 		    }
 
-		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    public static func mock(
-		        apiBuilder: @escaping () -> any Api,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Shell {
-		        Shell.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides)
-		    }
-
-		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
-		    public static func __safeDI_mock(
-		        apiBuilder __safeDI_apiBuilder: Shell.SafeDIMockScope_Api.__safeDI_Builder<any Api>,
+		        token: Token? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Shell {
 		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder() } else { Logger() }
+		        let token = if let token { token } else if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_hub() -> Hub {
-		            func __safeDI_apiBuilder_Hub_Model_Scope_api(_ scope: Hub.SafeDIMockScope_Api.Model_Scope.api_Values, token: Token) -> any Api {
-		                let api: any Api = LiveToken(token: token)
-		                return api
-		            }
-		            func __safeDI_apiBuilder_Hub(up: Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api>) -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
-		                .init(pageBuilder: { _ in __safeDI_apiBuilder_Hub_Page_Scope() }, modelBuilder: { values in __safeDI_apiBuilder_Hub_Model_Scope_(up: up.modelBuilder(values)) })
+		            func __safeDI_apiBuilder_Hub(token: Token) -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(pageBuilder: { _ in __safeDI_apiBuilder_Hub_Page_Scope() }, modelBuilder: { _ in __safeDI_apiBuilder_Hub_Model_Scope(token: token) })
 		            }
 		            func __safeDI_apiBuilder_Hub_Page_Scope() -> Hub.SafeDIMockScope_Api.Page_Scope.__safeDI_Builder<any Api> {
 		                .init(modelBuilder: { values in __safeDI_apiBuilder_Hub_Model_Scope(token: values.token) })
 		            }
 		            func __safeDI_apiBuilder_Hub_Model_Scope(token: Token) -> Hub.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api> {
-		                .init(api: { scope in __safeDI_apiBuilder_Hub_Model_Scope_api(scope, token: token) })
-		            }
-		            func __safeDI_apiBuilder_Hub_Model_Scope_(up: Hub.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api>) -> Hub.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api> {
-		                .init(api: up.api)
+		                .init(api: { _ in
+		                    let api: any Api = LiveToken(token: token)
+		                    return api
+		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_9D3DEE011EBEDDFF.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Hub(up: __safeDI_apiBuilder.hub(SafeDIMockScope_Api.hub_Values())), safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Hub(token: token), safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Shell(logger: logger, hub: hub)
@@ -5454,7 +5330,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		}
 
 		extension Shell {
-		    public enum __safeDI_Shell_mock_C9584A08439C1AA6 {}
+		    public enum __safeDI_Shell_mock_C51D6EADDA480E49 {}
 		}
 		#endif
 		"""])
@@ -5477,51 +5353,23 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
+		            token: (() -> Token)? = nil,
 		            shell: Shell.SafeDIOverrides = .init()
 		        ) {
-		            __safeDI_storage = __safeDI_Storage(
-		                shell: shell
-		            )
+		            self.token = token
+		            self.shell = shell
 		        }
 
-		        var shell: Shell.SafeDIOverrides { __safeDI_storage.shell }
-
-		        private let __safeDI_storage: __safeDI_Storage
-
-		        private final class __safeDI_Storage {
-		            init(
-		                shell: Shell.SafeDIOverrides
-		            ) {
-		                self.shell = shell
-		            }
-
-		            let shell: Shell.SafeDIOverrides
-		        }
+		        let token: (() -> Token)?
+		        let shell: Shell.SafeDIOverrides
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_shell() -> Shell {
-		            func __safeDI_apiBuilder_Shell() -> Shell.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
-		                .init(hub: { _ in __safeDI_apiBuilder_Hub() })
-		            }
-		            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
-		                .init(pageBuilder: { values in __safeDI_apiBuilder_Hub_Page_Scope(navigator: values.navigator) }, modelBuilder: { values in __safeDI_apiBuilder_Hub_Model_Scope(navigator: values.navigator) })
-		            }
-		            func __safeDI_apiBuilder_Hub_Page_Scope(navigator: Navigator) -> Hub.SafeDIMockScope_Api.Page_Scope.__safeDI_Builder<any Api> {
-		                .init(modelBuilder: { _ in __safeDI_apiBuilder_Hub_Model_Scope(navigator: navigator) })
-		            }
-		            func __safeDI_apiBuilder_Hub_Model_Scope(navigator: Navigator) -> Hub.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api> {
-		                .init(api: { _ in
-		                    let api: any Api = AppApi(navigator: navigator)
-		                    return api
-		                })
-		            }
-		            _ = Shell.__safeDI_Shell_mock_C9584A08439C1AA6.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Shell.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Shell(), safeDIOverrides: safeDIOverrides.shell)
-		        }
-		        let shell: Shell = __safeDI_shell()
+		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        _ = Shell.__safeDI_Shell_mock_C51D6EADDA480E49.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let shell = Shell.mock(token: token, safeDIOverrides: safeDIOverrides.shell)
 		        return Root(shell: shell)
 		    }
 		}
@@ -6194,8 +6042,13 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        apiBuilder: @escaping () -> any Api,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        let __safeDI_apiBuilder = apiBuilder
 		        _ = Shell.__safeDI_Shell_mock_BCE44FADDA8E6FCF.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let shell = Shell.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides.shell)
+		        func __safeDI_shell() -> Shell {
+		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
+		            return Shell.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides.shell)
+		        }
+		        let shell: Shell = __safeDI_shell()
 		        return Root(shell: shell)
 		    }
 		}
