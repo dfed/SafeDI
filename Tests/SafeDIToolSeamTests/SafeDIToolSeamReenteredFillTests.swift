@@ -1998,6 +1998,186 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesBuilderFunctionApartFromReusedLevelFunction_whenFillCallingSeamThatPassesReenteredPlaceUpDeclaresPropertyOfItsName() async throws {
+		// `DefaultFirst` calls `Relay`, whose level function's case calls `SubB`'s, `__safeDI_secondBuilder_SubB`, which the
+		// call of `Top` declares and this call reuses. `DefaultFirst`'s instantiator `secondBuilder_SubB` would take that name
+		// for its builder function and hide the reused one from the case, so it takes another.
+		let fixture = Fixture(
+			featureTypes: [seamFixtureType(named: "Relay", isSeam: true, declarations: ["@Instantiated let subB: SubB"])],
+			defaultFirstDeclarations: ["@Instantiated let relay: Relay", "@Instantiated let secondBuilder_SubB: Instantiator<X>"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Middle"]?.generatedFiles, ["Middle.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Host {
+		    nonisolated public enum SafeDIScope_Gadget {
+		        nonisolated public struct top_firstBuilder_Values {}
+
+		        nonisolated public struct top_secondBuilder_Values {}
+
+		        nonisolated public enum DefaultFirst_Scope {
+		            nonisolated public struct relay_secondBuilder_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let relay_secondBuilder: (relay_secondBuilder_Values) -> Relay.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>
+
+		                public init(relay_secondBuilder: @escaping (relay_secondBuilder_Values) -> Relay.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
+		                    self.relay_secondBuilder = relay_secondBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.relay_secondBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		                }
+		            }
+		        }
+
+		        nonisolated public enum DefaultSecond_Scope {
+		            nonisolated public struct gadget_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let gadget: (gadget_Values) -> __safeDI_Built
+
+		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
+		                    self.gadget = gadget
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.gadget = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let top_firstBuilder: (top_firstBuilder_Values) -> Top.SafeDIScope_First.__safeDI_Builder<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>
+		            public let top_secondBuilder: (top_secondBuilder_Values) -> Top.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>
+
+		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.SafeDIScope_First.__safeDI_Builder<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
+		                self.top_firstBuilder = top_firstBuilder
+		                self.top_secondBuilder = top_secondBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.top_firstBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		                self.top_secondBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
+		        let __safeDI_gadgetBuilder_top_firstBuilder = __safeDI_gadgetBuilder.top_firstBuilder(SafeDIScope_Gadget.top_firstBuilder_Values())
+		        let __safeDI_gadgetBuilder_top_secondBuilder = __safeDI_gadgetBuilder.top_secondBuilder(SafeDIScope_Gadget.top_secondBuilder_Values())
+		        func __safeDI_top() -> Top {
+		            _ = Top.__safeDI_Top_333CA8E405D3F446.self\(seamCallComment(seam: "Top", module: "Feature"))
+		            func __safeDI_firstBuilder_SubA_first(_ scope: SubA.SafeDIScope_First.first_Values, __safeDI_top_firstBuilder: SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>) -> any First {
+		                func __safeDI_first() -> DefaultFirst {
+		                    let __safeDI_gadgetBuilder_relay_secondBuilder = __safeDI_top_firstBuilder.relay_secondBuilder(SafeDIScope_Gadget.DefaultFirst_Scope.relay_secondBuilder_Values())
+		                    func __safeDI_relay() -> Relay {
+		                        _ = Relay.__safeDI_Relay_B5E461E2A0A36863.self\(seamCallComment(seam: "Relay", module: "Feature"))
+		                        func __safeDI_secondBuilder_Relay(up: Relay.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> Relay.SafeDIScope_Second.__safeDI_Builder<any Second> {
+		                            .init(subB: { values in __safeDI_secondBuilder_SubB(up: up.subB(values)) })
+		                        }
+		                        return Relay(__safeDI_secondBuilder: __safeDI_secondBuilder_Relay(up: __safeDI_gadgetBuilder_relay_secondBuilder))
+		                    }
+		                    let relay: Relay = __safeDI_relay()
+		                    func __safeDI_secondBuilder_SubB_X() -> X {
+		                        X()
+		                    }
+		                    let secondBuilder_SubB = Instantiator<X>(__safeDI_secondBuilder_SubB_X)
+		                    return DefaultFirst(relay: relay, secondBuilder_SubB: secondBuilder_SubB)
+		                }
+		                let first: any First = __safeDI_first()
+		                return first
+		            }
+		            func __safeDI_secondBuilder_SubB_second(_ scope: SubB.SafeDIScope_Second.second_Values, __safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
+		                func __safeDI_second() -> DefaultSecond {
+		                    let gadget: any Gadget = __safeDI_top_secondBuilder.gadget(SafeDIScope_Gadget.DefaultSecond_Scope.gadget_Values())
+		                    return DefaultSecond(gadget: gadget)
+		                }
+		                let second: any Second = __safeDI_second()
+		                return second
+		            }
+		            func __safeDI_firstBuilder_Top(up: Top.SafeDIScope_First.__safeDI_Builder<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>>) -> Top.SafeDIScope_First.__safeDI_Builder<any First> {
+		                .init(subA: { values in __safeDI_firstBuilder_SubA(up: up.subA(values)) })
+		            }
+		            func __safeDI_firstBuilder_SubA(up: SubA.SafeDIScope_First.__safeDI_Builder<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>>) -> SubA.SafeDIScope_First.__safeDI_Builder<any First> {
+		                .init(first: { scope in __safeDI_firstBuilder_SubA_first(scope, __safeDI_top_firstBuilder: up.first(scope)) })
+		            }
+		            func __safeDI_secondBuilder_Top(up: Top.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> Top.SafeDIScope_Second.__safeDI_Builder<any Second> {
+		                .init(subB: { values in __safeDI_secondBuilder_SubB(up: up.subB(values)) })
+		            }
+		            func __safeDI_secondBuilder_SubB(up: SubB.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> SubB.SafeDIScope_Second.__safeDI_Builder<any Second> {
+		                .init(second: { scope in __safeDI_secondBuilder_SubB_second(scope, __safeDI_top_secondBuilder: up.second(scope)) })
+		            }
+		            return Top(__safeDI_firstBuilder: __safeDI_firstBuilder_Top(up: __safeDI_gadgetBuilder_top_firstBuilder), __safeDI_secondBuilder: __safeDI_secondBuilder_Top(up: __safeDI_gadgetBuilder_top_secondBuilder))
+		        }
+		        let top: Top = __safeDI_top()
+		        self.init(top: top)
+		    }
+		}
+
+		extension Host {
+		    public enum __safeDI_Host_C7902D4957C0C6C9 {}
+		}
+		"""])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_host() -> Host {
+		            _ = Host.__safeDI_Host_C7902D4957C0C6C9.self\(seamCallComment(seam: "Host", module: "Middle"))
+		            func __safeDI_gadgetBuilder_Host() -> Host.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(top_firstBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDIScope_First() }, top_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDIScope_Second() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() -> Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget> {
+		                .init(relay_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_Relay() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_DefaultSecond_Scope() -> Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget> {
+		                .init(gadget: { _ in
+		                    let gadget: any Gadget = DefaultGadget()
+		                    return gadget
+		                })
+		            }
+		            func __safeDI_gadgetBuilder_Host_Top_SafeDIScope_First() -> Top.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(subA: { _ in __safeDI_gadgetBuilder_Host_SubA() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_SubA() -> SubA.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(first: { _ in __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_Top_SafeDIScope_Second() -> Top.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(subB: { _ in __safeDI_gadgetBuilder_Host_SubB() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_SubB() -> SubB.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(second: { _ in __safeDI_gadgetBuilder_Host_DefaultSecond_Scope() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_Relay() -> Relay.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(subB: { _ in __safeDI_gadgetBuilder_Host_SubB() })
+		            }
+		            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host())
+		        }
+		        let host: Host = __safeDI_host()
+		        self.init(host: host)
+		    }
+		}
+		"""])
+		try await expectValuesEqualVisibleBuild(output, fixture)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_handsCarriedStructThroughEachLevelFunction_whenFillCallsSeamThatPassesReenteredPlaceUpTwoSeamsDeep() async throws {
 		// `DefaultFirst` calls `Outer`, a seam that calls `Relay`, which calls `SubB`: both pass `second` up, so each level
 		// function this call declares takes the struct of its level on the way to `SubB`'s, which it reuses.
