@@ -59,22 +59,59 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 			#if DEBUG
 			extension Hub {
-			    @frozen public enum SafeDIMockScope_Api {
-			        @frozen public enum B_Scope {
-			            case api(api_Values)
-
-			            public struct api_Values {
+			    nonisolated public enum SafeDIMockScope_Api {
+			        nonisolated public enum B_Scope {
+			            nonisolated public struct api_Values {
 			                public let user: Draft
 			                public let x: X
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let api: (api_Values) -> __safeDI_Built
+
+			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+			                    self.api = api
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.api = { _ in __safeDI_builder() }
+			                }
 			            }
 			        }
 			    }
 
-			    @frozen public enum SafeDISendableMockScope_Api {
-			        case x_Sendable(SafeDISendableMockScope_Api.X_Scope)
+			    nonisolated public enum SafeDISendableMockScope_Api {
+			        nonisolated public struct x_Sendable_Values: Sendable {}
 
-			        @frozen public enum X_Scope {
-			            case bBuilder(SafeDIMockScope_Api.B_Scope)
+			        nonisolated public enum X_Scope {
+			            nonisolated public struct bBuilder_Values: Sendable {}
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			                public let bBuilder: @Sendable (bBuilder_Values) -> SafeDIMockScope_Api.B_Scope.__safeDI_Builder<__safeDI_Built>
+
+			                public init(bBuilder: @escaping @Sendable (bBuilder_Values) -> SafeDIMockScope_Api.B_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                    self.bBuilder = bBuilder
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let x_Sendable: @Sendable (x_Sendable_Values) -> SafeDISendableMockScope_Api.X_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(x_Sendable: @escaping @Sendable (x_Sendable_Values) -> SafeDISendableMockScope_Api.X_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.x_Sendable = x_Sendable
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                self.x_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
 			        }
 			    }
 
@@ -94,19 +131,31 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 			    public static func mock(
 			        user_Draft: Draft,
-			        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
+			        apiSendableBuilder: @escaping @Sendable () -> any Api,
 			        user: User? = nil,
 			        x: X? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Hub {
-			        let __safeDI_apiSendableBuilder = apiSendableBuilder
+			        Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder), user: user, x: x, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        user_Draft: Draft,
+			        apiSendableBuilder __safeDI_apiSendableBuilder: Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api>,
+			        user: User? = nil,
+			        x: X? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Hub {
 			        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 			        let __safeDI_x__safeDIBuilder = safeDIOverrides.x.safeDIBuilder
 			        @Sendable func __safeDI_x() -> X {
+			            let __safeDI_apiSendableBuilder_x_Sendable = __safeDI_apiSendableBuilder.x_Sendable(SafeDISendableMockScope_Api.x_Sendable_Values())
 			            @Sendable func __safeDI_bBuilder() -> B {
+			                let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_x_Sendable.bBuilder(SafeDISendableMockScope_Api.X_Scope.bBuilder_Values())
 			                let user: Draft = user_Draft
 			                let x: X = __safeDI_x()
-			                let api: any Api = __safeDI_apiSendableBuilder(.x_Sendable(.bBuilder(.api(SafeDIMockScope_Api.B_Scope.api_Values(user: user, x: x)))))
+			                let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(SafeDIMockScope_Api.B_Scope.api_Values(user: user, x: x))
 			                return B.__safeDI_init(api: api, x: x, user: user, safeDIBuilder: nil)
 			            }
 			            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
@@ -118,7 +167,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_mock_2D6711958996C05D {}
+			    public enum __safeDI_Hub_mock_BF59370D78E87A91 {}
 			}
 			#endif
 
@@ -190,13 +239,13 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
+		        apiSendableBuilder: @escaping @Sendable () -> any Api,
 		        user_Draft: Draft,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
-		        _ = Hub.__safeDI_Hub_mock_2D6711958996C05D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let hub = Hub.mock(user_Draft: user_Draft, apiSendableBuilder: apiSendableBuilder, user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
+		        _ = Hub.__safeDI_Hub_mock_BF59370D78E87A91.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let hub = Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder), user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
 		        return Screen(hub: hub)
 		    }
 		}
@@ -241,26 +290,21 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    ) -> Screen {
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
-		            @Sendable func __safeDI_apiSendableBuilder_Hub(_ scope: Hub.SafeDISendableMockScope_Api) -> any Api {
-		                switch scope {
-		                case let .x_Sendable(scope): return __safeDI_apiSendableBuilder_Hub_X_Scope(scope)
-		                }
+		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(x_Sendable: { _ in __safeDI_apiSendableBuilder_Hub_X_Scope() })
 		            }
-		            @Sendable func __safeDI_apiSendableBuilder_Hub_X_Scope(_ scope: Hub.SafeDISendableMockScope_Api.X_Scope) -> any Api {
-		                switch scope {
-		                case let .bBuilder(scope): return __safeDI_apiBuilder_Hub_B_Scope(scope)
-		                }
+		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub_X_Scope() -> Hub.SafeDISendableMockScope_Api.X_Scope.__safeDI_Builder<any Api> {
+		                .init(bBuilder: { _ in __safeDI_apiBuilder_Hub_B_Scope() })
 		            }
-		            @Sendable func __safeDI_apiBuilder_Hub_B_Scope(_ scope: Hub.SafeDIMockScope_Api.B_Scope) -> any Api {
-		                switch scope {
-		                case let .api(scope):
+		            @Sendable nonisolated func __safeDI_apiBuilder_Hub_B_Scope() -> Hub.SafeDIMockScope_Api.B_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { scope in
 		                    let user = scope.user
 		                    let api: any Api = LiveApi(user: user)
 		                    return api
-		                }
+		                })
 		            }
-		            _ = Hub.__safeDI_Hub_mock_2D6711958996C05D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.mock(user_Draft: user_Draft, apiSendableBuilder: __safeDI_apiSendableBuilder_Hub, user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
+		            _ = Hub.__safeDI_Hub_mock_BF59370D78E87A91.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: __safeDI_apiSendableBuilder_Hub(), user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -285,22 +329,59 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 			#if DEBUG
 			extension Hub {
-			    @frozen public enum SafeDIMockScope_Api {
-			        @frozen public enum B_Scope {
-			            case api(api_Values)
-
-			            public struct api_Values {
+			    nonisolated public enum SafeDIMockScope_Api {
+			        nonisolated public enum B_Scope {
+			            nonisolated public struct api_Values {
 			                public let user: Draft
 			                public let x: X
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let api: (api_Values) -> __safeDI_Built
+
+			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+			                    self.api = api
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.api = { _ in __safeDI_builder() }
+			                }
 			            }
 			        }
 			    }
 
-			    @frozen public enum SafeDISendableMockScope_Api {
-			        case x_Sendable(SafeDISendableMockScope_Api.X_Scope)
+			    nonisolated public enum SafeDISendableMockScope_Api {
+			        nonisolated public struct x_Sendable_Values: Sendable {}
 
-			        @frozen public enum X_Scope {
-			            case bBuilder(SafeDIMockScope_Api.B_Scope)
+			        nonisolated public enum X_Scope {
+			            nonisolated public struct bBuilder_Values: Sendable {}
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			                public let bBuilder: @Sendable (bBuilder_Values) -> SafeDIMockScope_Api.B_Scope.__safeDI_Builder<__safeDI_Built>
+
+			                public init(bBuilder: @escaping @Sendable (bBuilder_Values) -> SafeDIMockScope_Api.B_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                    self.bBuilder = bBuilder
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let x_Sendable: @Sendable (x_Sendable_Values) -> SafeDISendableMockScope_Api.X_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(x_Sendable: @escaping @Sendable (x_Sendable_Values) -> SafeDISendableMockScope_Api.X_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.x_Sendable = x_Sendable
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                self.x_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
 			        }
 			    }
 
@@ -320,19 +401,31 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 			    public static func mock(
 			        user_Draft: Draft,
-			        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
+			        apiSendableBuilder: @escaping @Sendable () -> any Api,
 			        user: User? = nil,
 			        x: X? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Hub {
-			        let __safeDI_apiSendableBuilder = apiSendableBuilder
+			        Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder), user: user, x: x, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        user_Draft: Draft,
+			        apiSendableBuilder __safeDI_apiSendableBuilder: Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api>,
+			        user: User? = nil,
+			        x: X? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Hub {
 			        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 			        let __safeDI_x__safeDIBuilder = safeDIOverrides.x.safeDIBuilder
 			        @Sendable func __safeDI_x() -> X {
+			            let __safeDI_apiSendableBuilder_x_Sendable = __safeDI_apiSendableBuilder.x_Sendable(SafeDISendableMockScope_Api.x_Sendable_Values())
 			            @Sendable func __safeDI_bBuilder() -> B {
+			                let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_x_Sendable.bBuilder(SafeDISendableMockScope_Api.X_Scope.bBuilder_Values())
 			                let user: Draft = user_Draft
 			                let x: X = __safeDI_x()
-			                let api: any Api = __safeDI_apiSendableBuilder(.x_Sendable(.bBuilder(.api(SafeDIMockScope_Api.B_Scope.api_Values(user: user, x: x)))))
+			                let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(SafeDIMockScope_Api.B_Scope.api_Values(user: user, x: x))
 			                return B.__safeDI_init(api: api, x: x, user: user, safeDIBuilder: nil)
 			            }
 			            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
@@ -344,7 +437,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_mock_2D6711958996C05D {}
+			    public enum __safeDI_Hub_mock_BF59370D78E87A91 {}
 			}
 			#endif
 
@@ -416,13 +509,13 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
+		        apiSendableBuilder: @escaping @Sendable () -> any Api,
 		        user_Draft: Draft,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
-		        _ = Hub.__safeDI_Hub_mock_2D6711958996C05D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let hub = Hub.mock(user_Draft: user_Draft, apiSendableBuilder: apiSendableBuilder, user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
+		        _ = Hub.__safeDI_Hub_mock_BF59370D78E87A91.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let hub = Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder), user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
 		        return Screen(hub: hub)
 		    }
 		}
@@ -467,26 +560,21 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    ) -> Screen {
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
-		            @Sendable func __safeDI_apiSendableBuilder_Hub(_ scope: Hub.SafeDISendableMockScope_Api) -> any Api {
-		                switch scope {
-		                case let .x_Sendable(scope): return __safeDI_apiSendableBuilder_Hub_X_Scope(scope)
-		                }
+		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(x_Sendable: { _ in __safeDI_apiSendableBuilder_Hub_X_Scope() })
 		            }
-		            @Sendable func __safeDI_apiSendableBuilder_Hub_X_Scope(_ scope: Hub.SafeDISendableMockScope_Api.X_Scope) -> any Api {
-		                switch scope {
-		                case let .bBuilder(scope): return __safeDI_apiBuilder_Hub_B_Scope(scope)
-		                }
+		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub_X_Scope() -> Hub.SafeDISendableMockScope_Api.X_Scope.__safeDI_Builder<any Api> {
+		                .init(bBuilder: { _ in __safeDI_apiBuilder_Hub_B_Scope() })
 		            }
-		            @Sendable func __safeDI_apiBuilder_Hub_B_Scope(_ scope: Hub.SafeDIMockScope_Api.B_Scope) -> any Api {
-		                switch scope {
-		                case let .api(scope):
+		            @Sendable nonisolated func __safeDI_apiBuilder_Hub_B_Scope() -> Hub.SafeDIMockScope_Api.B_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { scope in
 		                    let user = scope.user
 		                    let api: any Api = LiveApi(user: user)
 		                    return api
-		                }
+		                })
 		            }
-		            _ = Hub.__safeDI_Hub_mock_2D6711958996C05D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.mock(user_Draft: user_Draft, apiSendableBuilder: __safeDI_apiSendableBuilder_Hub, user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
+		            _ = Hub.__safeDI_Hub_mock_BF59370D78E87A91.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: __safeDI_apiSendableBuilder_Hub(), user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -511,18 +599,42 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 			#if DEBUG
 			extension Hub {
-			    @frozen public enum SafeDIMockScope_Api {
-			        @frozen public enum B_Scope {
-			            case api(api_Values)
-
-			            public struct api_Values {
+			    nonisolated public enum SafeDIMockScope_Api {
+			        nonisolated public enum B_Scope {
+			            nonisolated public struct api_Values {
 			                public let user: Draft
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let api: (api_Values) -> __safeDI_Built
+
+			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+			                    self.api = api
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.api = { _ in __safeDI_builder() }
+			                }
 			            }
 			        }
 			    }
 
-			    @frozen public enum SafeDISendableMockScope_Api {
-			        case bBuilder(SafeDIMockScope_Api.B_Scope)
+			    nonisolated public enum SafeDISendableMockScope_Api {
+			        nonisolated public struct bBuilder_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let bBuilder: @Sendable (bBuilder_Values) -> SafeDIMockScope_Api.B_Scope.__safeDI_Builder<__safeDI_Built>
+
+			            public init(bBuilder: @escaping @Sendable (bBuilder_Values) -> SafeDIMockScope_Api.B_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                self.bBuilder = bBuilder
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
 			    }
 
 			    /// Overrides for the mock dependency tree.
@@ -541,17 +653,28 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 			    public static func mock(
 			        user_Draft: Draft,
-			        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
+			        apiSendableBuilder: @escaping @Sendable () -> any Api,
 			        bBuilder: SendableInstantiator<B>? = nil,
 			        user: User? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Hub {
-			        let __safeDI_apiSendableBuilder = apiSendableBuilder
+			        Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder), bBuilder: bBuilder, user: user, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        user_Draft: Draft,
+			        apiSendableBuilder __safeDI_apiSendableBuilder: Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api>,
+			        bBuilder: SendableInstantiator<B>? = nil,
+			        user: User? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Hub {
 			        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 			        let __safeDI_bBuilder__safeDIBuilder = safeDIOverrides.bBuilder
 			        @Sendable func __safeDI_bBuilder() -> B {
+			            let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder.bBuilder(SafeDISendableMockScope_Api.bBuilder_Values())
 			            let user: Draft = user_Draft
-			            let api: any Api = __safeDI_apiSendableBuilder(.bBuilder(.api(SafeDIMockScope_Api.B_Scope.api_Values(user: user))))
+			            let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(SafeDIMockScope_Api.B_Scope.api_Values(user: user))
 			            return if let safeDIBuilder = __safeDI_bBuilder__safeDIBuilder { safeDIBuilder(api, user) } else { B(api: api, user: user) }
 			        }
 			        let bBuilder = if let bBuilder { bBuilder } else { SendableInstantiator<B>(__safeDI_bBuilder) }
@@ -560,7 +683,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_mock_AF3A489729B5F092 {}
+			    public enum __safeDI_Hub_mock_F3FC3EE051794EEE {}
 			}
 			#endif
 			""",
@@ -590,13 +713,13 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
+		        apiSendableBuilder: @escaping @Sendable () -> any Api,
 		        user_Draft: Draft,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
-		        _ = Hub.__safeDI_Hub_mock_AF3A489729B5F092.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let hub = Hub.mock(user_Draft: user_Draft, apiSendableBuilder: apiSendableBuilder, bBuilder: nil, user: user, safeDIOverrides: safeDIOverrides.hub)
+		        _ = Hub.__safeDI_Hub_mock_F3FC3EE051794EEE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let hub = Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder), bBuilder: nil, user: user, safeDIOverrides: safeDIOverrides.hub)
 		        return Screen(hub: hub)
 		    }
 		}
@@ -798,21 +921,13 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        apiBuilder: @escaping (Hub.SafeDIMockScope_Api) -> any Api,
+		        apiBuilder: @escaping () -> any Api,
 		        user_Draft: Draft,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        _ = Hub.__safeDI_Hub_mock_C92FAC1B9AC96ECD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let hub = Hub.__safeDI_mock(user_Draft: user_Draft, apiBuilder: .init(
-		            x: { __safeDI_xValues in
-		                .init(
-		                    bBuilder: { __safeDI_bBuilderValues in
-		                        .init(api: { __safeDI_apiValues in apiBuilder(.x(__safeDI_xValues, .bBuilder(__safeDI_bBuilderValues, .api(__safeDI_apiValues)))) })
-		                    }
-		                )
-		            }
-		        ), user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
+		        let hub = Hub.__safeDI_mock(user_Draft: user_Draft, apiBuilder: .init(__safeDI_noScope: apiBuilder), user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
 		        return Screen(hub: hub)
 		    }
 		}
@@ -1009,17 +1124,13 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        apiBuilder: @escaping (Hub.SafeDIMockScope_Api) -> any Api,
+		        apiBuilder: @escaping () -> any Api,
 		        user_Draft: Draft,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        _ = Hub.__safeDI_Hub_mock_AC7AE65B2B9A4A12.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let hub = Hub.__safeDI_mock(user_Draft: user_Draft, apiBuilder: .init(
-		            bBuilder: { __safeDI_bBuilderValues in
-		                .init(api: { __safeDI_apiValues in apiBuilder(.bBuilder(__safeDI_bBuilderValues, .api(__safeDI_apiValues))) })
-		            }
-		        ), bBuilder: nil, user: user, safeDIOverrides: safeDIOverrides.hub)
+		        let hub = Hub.__safeDI_mock(user_Draft: user_Draft, apiBuilder: .init(__safeDI_noScope: apiBuilder), bBuilder: nil, user: user, safeDIOverrides: safeDIOverrides.hub)
 		        return Screen(hub: hub)
 		    }
 		}
@@ -1288,22 +1399,59 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 	#if DEBUG
 	extension Hub {
-	    @frozen public enum SafeDIMockScope_Api {
-	        @frozen public enum B_Scope {
-	            case api(api_Values)
-
-	            public struct api_Values {
+	    nonisolated public enum SafeDIMockScope_Api {
+	        nonisolated public enum B_Scope {
+	            nonisolated public struct api_Values {
 	                public let user: Draft
 	                public let x: X
+	            }
+
+	            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+	                public let api: (api_Values) -> __safeDI_Built
+
+	                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+	                    self.api = api
+	                }
+
+	                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+	                    self.api = { _ in __safeDI_builder() }
+	                }
 	            }
 	        }
 	    }
 
-	    @frozen public enum SafeDISendableMockScope_Api {
-	        case x_Sendable(SafeDISendableMockScope_Api.X_Scope)
+	    nonisolated public enum SafeDISendableMockScope_Api {
+	        nonisolated public struct x_Sendable_Values: Sendable {}
 
-	        @frozen public enum X_Scope {
-	            case bBuilder(SafeDIMockScope_Api.B_Scope)
+	        nonisolated public enum X_Scope {
+	            nonisolated public struct bBuilder_Values: Sendable {}
+
+	            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+	                public let bBuilder: @Sendable (bBuilder_Values) -> SafeDIMockScope_Api.B_Scope.__safeDI_Builder<__safeDI_Built>
+
+	                public init(bBuilder: @escaping @Sendable (bBuilder_Values) -> SafeDIMockScope_Api.B_Scope.__safeDI_Builder<__safeDI_Built>) {
+	                    self.bBuilder = bBuilder
+	                }
+
+	                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+	                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+	                }
+	            }
+	        }
+
+	        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+	            public let x_Sendable: @Sendable (x_Sendable_Values) -> SafeDISendableMockScope_Api.X_Scope.__safeDI_Builder<__safeDI_Built>
+
+	            public init(x_Sendable: @escaping @Sendable (x_Sendable_Values) -> SafeDISendableMockScope_Api.X_Scope.__safeDI_Builder<__safeDI_Built>) {
+	                self.x_Sendable = x_Sendable
+	            }
+
+	            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+	                self.x_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+	            }
 	        }
 	    }
 
@@ -1323,19 +1471,31 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 	    public static func mock(
 	        user_Draft: Draft,
-	        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
+	        apiSendableBuilder: @escaping @Sendable () -> any Api,
 	        user: User? = nil,
 	        x: X? = nil,
 	        safeDIOverrides: SafeDIOverrides = .init()
 	    ) -> Hub {
-	        let __safeDI_apiSendableBuilder = apiSendableBuilder
+	        Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder), user: user, x: x, safeDIOverrides: safeDIOverrides)
+	    }
+
+	    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+	    public static func __safeDI_mock(
+	        user_Draft: Draft,
+	        apiSendableBuilder __safeDI_apiSendableBuilder: Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api>,
+	        user: User? = nil,
+	        x: X? = nil,
+	        safeDIOverrides: SafeDIOverrides = .init()
+	    ) -> Hub {
 	        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 	        let __safeDI_x__safeDIBuilder = safeDIOverrides.x.safeDIBuilder
 	        @Sendable func __safeDI_x() -> X {
+	            let __safeDI_apiSendableBuilder_x_Sendable = __safeDI_apiSendableBuilder.x_Sendable(SafeDISendableMockScope_Api.x_Sendable_Values())
 	            @Sendable func __safeDI_bBuilder() -> B {
+	                let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_x_Sendable.bBuilder(SafeDISendableMockScope_Api.X_Scope.bBuilder_Values())
 	                let user: Draft = user_Draft
 	                let x: X = __safeDI_x()
-	                let api: any Api = __safeDI_apiSendableBuilder(.x_Sendable(.bBuilder(.api(SafeDIMockScope_Api.B_Scope.api_Values(user: user, x: x)))))
+	                let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(SafeDIMockScope_Api.B_Scope.api_Values(user: user, x: x))
 	                return B.__safeDI_init(api: api, x: x, user: user, safeDIBuilder: nil)
 	            }
 	            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
@@ -1347,7 +1507,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	}
 
 	extension Hub {
-	    public enum __safeDI_Hub_mock_2D6711958996C05D {}
+	    public enum __safeDI_Hub_mock_BF59370D78E87A91 {}
 	}
 	#endif
 

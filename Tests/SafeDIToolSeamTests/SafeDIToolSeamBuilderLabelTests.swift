@@ -256,25 +256,40 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 
 		#if DEBUG
 		extension F {
-		    @frozen public enum SafeDIMockScope_Impl_Api {
-		        case a(a_Values, Int)
+		    nonisolated public enum SafeDIMockScope_Impl_Api {
+		        nonisolated public struct a_Values {}
 
-		        public struct a_Values {}
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let a: (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+
+		            public init(a: @escaping (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a = a
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    public static func mock(
-		        impl_ApiBuilder: @escaping (F.SafeDIMockScope_Impl_Api) -> any Api
+		        impl_ApiBuilder: @escaping ErasedInstantiator<Int, any Api>.Builder
 		    ) -> F {
-		        let __safeDI_impl_ApiBuilder = impl_ApiBuilder
-		        let a = ErasedInstantiator<Int, any Api> {
-		            __safeDI_impl_ApiBuilder(.a(SafeDIMockScope_Impl_Api.a_Values(), $0))
-		        }
+		        F.__safeDI_mock(impl_ApiBuilder: .init(__safeDI_noScope: impl_ApiBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        impl_ApiBuilder __safeDI_impl_ApiBuilder: F.SafeDIMockScope_Impl_Api.__safeDI_Builder<any Api>
+		    ) -> F {
+		        let a = ErasedInstantiator<Int, any Api>(__safeDI_impl_ApiBuilder.a(SafeDIMockScope_Impl_Api.a_Values()))
 		        return F(a: a)
 		    }
 		}
 
 		extension F {
-		    public enum __safeDI_F_mock_5ED0DB3738BA6930 {}
+		    public enum __safeDI_F_mock_C767B7BC2835A9DA {}
 		}
 		#endif
 		"""])
@@ -358,23 +373,56 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 
 		#if DEBUG
 		extension F {
-		    @frozen public enum SafeDIMockScope_Impl_Api {
-		        case a(a_Values, Int)
+		    nonisolated public enum SafeDIMockScope_Impl_Api {
+		        nonisolated public struct a_Values {}
 
-		        public struct a_Values {}
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let a: (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+
+		            public init(a: @escaping (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a = a
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
-		    @frozen public enum SafeDIMockScope_Impl_Other {
-		        case child(child_Values, SafeDIMockScope_Impl_Other.Child_Scope)
-
-		        public struct child_Values {
+		    nonisolated public enum SafeDIMockScope_Impl_Other {
+		        nonisolated public struct child_Values {
 		            public let a: ErasedInstantiator<Int, any Api>
 		        }
 
-		        @frozen public enum Child_Scope {
-		            case o(o_Values, Int)
+		        nonisolated public enum Child_Scope {
+		            nonisolated public struct o_Values {}
 
-		            public struct o_Values {}
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let o: (o_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+
+		                public init(o: @escaping (o_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                    self.o = o
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                    self.o = { _ in __safeDI_builder }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let child: (child_Values) -> SafeDIMockScope_Impl_Other.Child_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(child: @escaping (child_Values) -> SafeDIMockScope_Impl_Other.Child_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.child = child
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.child = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
 		        }
 		    }
 
@@ -390,20 +438,23 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        impl_ApiBuilder: @escaping (F.SafeDIMockScope_Impl_Api) -> any Api,
-		        impl_OtherBuilder: @escaping (F.SafeDIMockScope_Impl_Other) -> any Other,
+		        impl_ApiBuilder: @escaping ErasedInstantiator<Int, any Api>.Builder,
+		        impl_OtherBuilder: @escaping ErasedInstantiator<Int, any Other>.Builder,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> F {
-		        let __safeDI_impl_ApiBuilder = impl_ApiBuilder
-		        let __safeDI_impl_OtherBuilder = impl_OtherBuilder
-		        let a = ErasedInstantiator<Int, any Api> {
-		            __safeDI_impl_ApiBuilder(.a(SafeDIMockScope_Impl_Api.a_Values(), $0))
-		        }
-		        let __safeDI_impl_OtherValues_child = SafeDIMockScope_Impl_Other.child_Values(a: a)
+		        F.__safeDI_mock(impl_ApiBuilder: .init(__safeDI_noScope: impl_ApiBuilder), impl_OtherBuilder: .init(__safeDI_noScope: impl_OtherBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        impl_ApiBuilder __safeDI_impl_ApiBuilder: F.SafeDIMockScope_Impl_Api.__safeDI_Builder<any Api>,
+		        impl_OtherBuilder __safeDI_impl_OtherBuilder: F.SafeDIMockScope_Impl_Other.__safeDI_Builder<any Other>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> F {
+		        let a = ErasedInstantiator<Int, any Api>(__safeDI_impl_ApiBuilder.a(SafeDIMockScope_Impl_Api.a_Values()))
+		        let __safeDI_impl_OtherBuilder_child = __safeDI_impl_OtherBuilder.child(SafeDIMockScope_Impl_Other.child_Values(a: a))
 		        func __safeDI_child() -> Child {
-		            let o = ErasedInstantiator<Int, any Other> {
-		                __safeDI_impl_OtherBuilder(.child(__safeDI_impl_OtherValues_child, .o(SafeDIMockScope_Impl_Other.Child_Scope.o_Values(), $0)))
-		            }
+		            let o = ErasedInstantiator<Int, any Other>(__safeDI_impl_OtherBuilder_child.o(SafeDIMockScope_Impl_Other.Child_Scope.o_Values()))
 		            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(o) } else { Child(o: o) }
 		        }
 		        let child: Child = __safeDI_child()
@@ -412,7 +463,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		}
 
 		extension F {
-		    public enum __safeDI_F_mock_D3BA9C2E9733701A {}
+		    public enum __safeDI_F_mock_379612150B7A3740 {}
 		}
 		#endif
 		"""])
@@ -465,25 +516,40 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 
 		#if DEBUG
 		extension Inner {
-		    @frozen public enum SafeDIMockScope_Impl_Other {
-		        case a2(a2_Values, Int)
+		    nonisolated public enum SafeDIMockScope_Impl_Other {
+		        nonisolated public struct a2_Values {}
 
-		        public struct a2_Values {}
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let a2: (a2_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+
+		            public init(a2: @escaping (a2_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a2 = a2
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a2 = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
 		    public static func mock(
-		        impl_OtherBuilder: @escaping (Inner.SafeDIMockScope_Impl_Other) -> any Other
+		        impl_OtherBuilder: @escaping ErasedInstantiator<Int, any Other>.Builder
 		    ) -> Inner {
-		        let __safeDI_impl_OtherBuilder = impl_OtherBuilder
-		        let a2 = ErasedInstantiator<Int, any Other> {
-		            __safeDI_impl_OtherBuilder(.a2(SafeDIMockScope_Impl_Other.a2_Values(), $0))
-		        }
+		        Inner.__safeDI_mock(impl_OtherBuilder: .init(__safeDI_noScope: impl_OtherBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        impl_OtherBuilder __safeDI_impl_OtherBuilder: Inner.SafeDIMockScope_Impl_Other.__safeDI_Builder<any Other>
+		    ) -> Inner {
+		        let a2 = ErasedInstantiator<Int, any Other>(__safeDI_impl_OtherBuilder.a2(SafeDIMockScope_Impl_Other.a2_Values()))
 		        return Inner(a2: a2)
 		    }
 		}
 
 		extension Inner {
-		    public enum __safeDI_Inner_mock_D43671391B56312A {}
+		    public enum __safeDI_Inner_mock_670A3C2AA06D5DC8 {}
 		}
 		#endif
 		"""])
@@ -554,23 +620,56 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 
 		#if DEBUG
 		extension F {
-		    @frozen public enum SafeDIMockScope_Impl_Api {
-		        case a(a_Values, Int)
+		    nonisolated public enum SafeDIMockScope_Impl_Api {
+		        nonisolated public struct a_Values {}
 
-		        public struct a_Values {}
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let a: (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+
+		            public init(a: @escaping (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a = a
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.a = { _ in __safeDI_builder }
+		            }
+		        }
 		    }
 
-		    @frozen public enum SafeDIMockScope_Impl_Other {
-		        case inner(inner_Values, SafeDIMockScope_Impl_Other.Inner_Scope)
-
-		        public struct inner_Values {
+		    nonisolated public enum SafeDIMockScope_Impl_Other {
+		        nonisolated public struct inner_Values {
 		            public let a: ErasedInstantiator<Int, any Api>
 		        }
 
-		        @frozen public enum Inner_Scope {
-		            case a2(a2_Values, Int)
+		        nonisolated public enum Inner_Scope {
+		            nonisolated public struct a2_Values {}
 
-		            public struct a2_Values {}
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let a2: (a2_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+
+		                public init(a2: @escaping (a2_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                    self.a2 = a2
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                    self.a2 = { _ in __safeDI_builder }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let inner: (inner_Values) -> SafeDIMockScope_Impl_Other.Inner_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(inner: @escaping (inner_Values) -> SafeDIMockScope_Impl_Other.Inner_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.inner = inner
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
 		        }
 		    }
 
@@ -586,20 +685,23 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        impl_ApiBuilder: @escaping (F.SafeDIMockScope_Impl_Api) -> any Api,
-		        impl_OtherBuilder: @escaping (F.SafeDIMockScope_Impl_Other) -> any Other,
+		        impl_ApiBuilder: @escaping ErasedInstantiator<Int, any Api>.Builder,
+		        impl_OtherBuilder: @escaping ErasedInstantiator<Int, any Other>.Builder,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> F {
-		        let __safeDI_impl_ApiBuilder = impl_ApiBuilder
-		        let __safeDI_impl_OtherBuilder = impl_OtherBuilder
-		        let a = ErasedInstantiator<Int, any Api> {
-		            __safeDI_impl_ApiBuilder(.a(SafeDIMockScope_Impl_Api.a_Values(), $0))
-		        }
-		        let __safeDI_impl_OtherValues_inner = SafeDIMockScope_Impl_Other.inner_Values(a: a)
+		        F.__safeDI_mock(impl_ApiBuilder: .init(__safeDI_noScope: impl_ApiBuilder), impl_OtherBuilder: .init(__safeDI_noScope: impl_OtherBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        impl_ApiBuilder __safeDI_impl_ApiBuilder: F.SafeDIMockScope_Impl_Api.__safeDI_Builder<any Api>,
+		        impl_OtherBuilder __safeDI_impl_OtherBuilder: F.SafeDIMockScope_Impl_Other.__safeDI_Builder<any Other>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> F {
+		        let a = ErasedInstantiator<Int, any Api>(__safeDI_impl_ApiBuilder.a(SafeDIMockScope_Impl_Api.a_Values()))
+		        let __safeDI_impl_OtherBuilder_inner = __safeDI_impl_OtherBuilder.inner(SafeDIMockScope_Impl_Other.inner_Values(a: a))
 		        func __safeDI_inner() -> Inner {
-		            let a2 = ErasedInstantiator<Int, any Other> {
-		                __safeDI_impl_OtherBuilder(.inner(__safeDI_impl_OtherValues_inner, .a2(SafeDIMockScope_Impl_Other.Inner_Scope.a2_Values(), $0)))
-		            }
+		            let a2 = ErasedInstantiator<Int, any Other>(__safeDI_impl_OtherBuilder_inner.a2(SafeDIMockScope_Impl_Other.Inner_Scope.a2_Values()))
 		            return if let safeDIBuilder = safeDIOverrides.inner { safeDIBuilder(a2) } else { Inner(a2: a2) }
 		        }
 		        let inner: Inner = __safeDI_inner()
@@ -608,7 +710,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		}
 
 		extension F {
-		    public enum __safeDI_F_mock_6739CD7A53F23F2A {}
+		    public enum __safeDI_F_mock_8B6B84D83557BC3C {}
 		}
 		#endif
 		"""])
