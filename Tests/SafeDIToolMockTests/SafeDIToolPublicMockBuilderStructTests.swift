@@ -146,14 +146,34 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            logger: (() -> Logger)? = nil,
 		            detailBuilder: __safeDI_Feed_Detail_MockConfiguration = .init()
 		        ) {
-		            self.navigator = navigator
-		            self.logger = logger
-		            self.detailBuilder = detailBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                navigator: navigator,
+		                logger: logger,
+		                detailBuilder: detailBuilder
+		            )
 		        }
 
-		        public let navigator: (() -> Navigator)?
-		        public let logger: (() -> Logger)?
-		        public let detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		        public var navigator: (() -> Navigator)? { __safeDI_storage.navigator }
+		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
+		        public var detailBuilder: __safeDI_Feed_Detail_MockConfiguration { __safeDI_storage.detailBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                navigator: (() -> Navigator)?,
+		                logger: (() -> Logger)?,
+		                detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		            ) {
+		                self.navigator = navigator
+		                self.logger = logger
+		                self.detailBuilder = detailBuilder
+		            }
+
+		            let navigator: (() -> Navigator)?
+		            let logger: (() -> Logger)?
+		            let detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -198,13 +218,30 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        leafBuilder: ((any Api) -> Leaf)? = nil,
 		        _ safeDIBuilder: ((Instantiator<Leaf>) -> Detail)? = nil
 		    ) {
-		        self.leafBuilder = leafBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            leafBuilder: leafBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let leafBuilder: ((any Api) -> Leaf)?
+		    public var leafBuilder: ((any Api) -> Leaf)? { __safeDI_storage.leafBuilder }
 		    /// Overrides how `Detail` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		    public var safeDIBuilder: ((Instantiator<Leaf>) -> Detail)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            leafBuilder: ((any Api) -> Leaf)?,
+		            safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		        ) {
+		            self.leafBuilder = leafBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let leafBuilder: ((any Api) -> Leaf)?
+		        let safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		    }
 		}
 
 		extension Detail {
@@ -233,10 +270,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            page: Page.SafeDIOverrides = .init()
 		        ) {
-		            self.page = page
+		            __safeDI_storage = __safeDI_Storage(
+		                page: page
+		            )
 		        }
 
-		        let page: Page.SafeDIOverrides
+		        var page: Page.SafeDIOverrides { __safeDI_storage.page }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                page: Page.SafeDIOverrides
+		            ) {
+		                self.page = page
+		            }
+
+		            let page: Page.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -363,14 +414,34 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            logger: (() -> Logger)? = nil,
 		            detailBuilder: __safeDI_Feed_Detail_MockConfiguration = .init()
 		        ) {
-		            self.navigator = navigator
-		            self.logger = logger
-		            self.detailBuilder = detailBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                navigator: navigator,
+		                logger: logger,
+		                detailBuilder: detailBuilder
+		            )
 		        }
 
-		        public let navigator: (() -> Navigator)?
-		        public let logger: (() -> Logger)?
-		        public let detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		        public var navigator: (() -> Navigator)? { __safeDI_storage.navigator }
+		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
+		        public var detailBuilder: __safeDI_Feed_Detail_MockConfiguration { __safeDI_storage.detailBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                navigator: (() -> Navigator)?,
+		                logger: (() -> Logger)?,
+		                detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		            ) {
+		                self.navigator = navigator
+		                self.logger = logger
+		                self.detailBuilder = detailBuilder
+		            }
+
+		            let navigator: (() -> Navigator)?
+		            let logger: (() -> Logger)?
+		            let detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -415,13 +486,30 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        leafBuilder: ((any Api) -> Leaf)? = nil,
 		        _ safeDIBuilder: ((Instantiator<Leaf>) -> Detail)? = nil
 		    ) {
-		        self.leafBuilder = leafBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            leafBuilder: leafBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let leafBuilder: ((any Api) -> Leaf)?
+		    public var leafBuilder: ((any Api) -> Leaf)? { __safeDI_storage.leafBuilder }
 		    /// Overrides how `Detail` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		    public var safeDIBuilder: ((Instantiator<Leaf>) -> Detail)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            leafBuilder: ((any Api) -> Leaf)?,
+		            safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		        ) {
+		            self.leafBuilder = leafBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let leafBuilder: ((any Api) -> Leaf)?
+		        let safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		    }
 		}
 
 		extension Detail {
@@ -450,10 +538,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            page: Page.SafeDIOverrides = .init()
 		        ) {
-		            self.page = page
+		            __safeDI_storage = __safeDI_Storage(
+		                page: page
+		            )
 		        }
 
-		        let page: Page.SafeDIOverrides
+		        var page: Page.SafeDIOverrides { __safeDI_storage.page }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                page: Page.SafeDIOverrides
+		            ) {
+		                self.page = page
+		            }
+
+		            let page: Page.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -610,14 +712,34 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            pageBuilder: __safeDI_Feed_Page_MockConfiguration = .init(),
 		            modelBuilder: ((any Api) -> Model)? = nil
 		        ) {
-		            self.navigator = navigator
-		            self.pageBuilder = pageBuilder
-		            self.modelBuilder = modelBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                navigator: navigator,
+		                pageBuilder: pageBuilder,
+		                modelBuilder: modelBuilder
+		            )
 		        }
 
-		        public let navigator: (() -> Navigator)?
-		        public let pageBuilder: __safeDI_Feed_Page_MockConfiguration
-		        public let modelBuilder: ((any Api) -> Model)?
+		        public var navigator: (() -> Navigator)? { __safeDI_storage.navigator }
+		        public var pageBuilder: __safeDI_Feed_Page_MockConfiguration { __safeDI_storage.pageBuilder }
+		        public var modelBuilder: ((any Api) -> Model)? { __safeDI_storage.modelBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                navigator: (() -> Navigator)?,
+		                pageBuilder: __safeDI_Feed_Page_MockConfiguration,
+		                modelBuilder: ((any Api) -> Model)?
+		            ) {
+		                self.navigator = navigator
+		                self.pageBuilder = pageBuilder
+		                self.modelBuilder = modelBuilder
+		            }
+
+		            let navigator: (() -> Navigator)?
+		            let pageBuilder: __safeDI_Feed_Page_MockConfiguration
+		            let modelBuilder: ((any Api) -> Model)?
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -669,15 +791,35 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        modelBuilder: ((any Api) -> Model)? = nil,
 		        _ safeDIBuilder: ((Token, Instantiator<Model>) -> Page)? = nil
 		    ) {
-		        self.token = token
-		        self.modelBuilder = modelBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            modelBuilder: modelBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
-		    public let modelBuilder: ((any Api) -> Model)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
+		    public var modelBuilder: ((any Api) -> Model)? { __safeDI_storage.modelBuilder }
 		    /// Overrides how `Page` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		    public var safeDIBuilder: ((Token, Instantiator<Model>) -> Page)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            modelBuilder: ((any Api) -> Model)?,
+		            safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		        ) {
+		            self.token = token
+		            self.modelBuilder = modelBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let modelBuilder: ((any Api) -> Model)?
+		        let safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		    }
 		}
 
 		extension Page {
@@ -706,10 +848,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                hub: hub
+		            )
 		        }
 
-		        let hub: Hub.SafeDIOverrides
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.hub = hub
+		            }
+
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -872,14 +1028,34 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            logger: (() -> Logger)? = nil,
 		            detailBuilder: __safeDI_Feed_Detail_MockConfiguration = .init()
 		        ) {
-		            self.navigator = navigator
-		            self.logger = logger
-		            self.detailBuilder = detailBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                navigator: navigator,
+		                logger: logger,
+		                detailBuilder: detailBuilder
+		            )
 		        }
 
-		        public let navigator: (() -> Navigator)?
-		        public let logger: (() -> Logger)?
-		        public let detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		        public var navigator: (() -> Navigator)? { __safeDI_storage.navigator }
+		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
+		        public var detailBuilder: __safeDI_Feed_Detail_MockConfiguration { __safeDI_storage.detailBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                navigator: (() -> Navigator)?,
+		                logger: (() -> Logger)?,
+		                detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		            ) {
+		                self.navigator = navigator
+		                self.logger = logger
+		                self.detailBuilder = detailBuilder
+		            }
+
+		            let navigator: (() -> Navigator)?
+		            let logger: (() -> Logger)?
+		            let detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -924,13 +1100,30 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        leafBuilder: ((any Api) -> Leaf)? = nil,
 		        _ safeDIBuilder: ((Instantiator<Leaf>) -> Detail)? = nil
 		    ) {
-		        self.leafBuilder = leafBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            leafBuilder: leafBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let leafBuilder: ((any Api) -> Leaf)?
+		    public var leafBuilder: ((any Api) -> Leaf)? { __safeDI_storage.leafBuilder }
 		    /// Overrides how `Detail` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		    public var safeDIBuilder: ((Instantiator<Leaf>) -> Detail)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            leafBuilder: ((any Api) -> Leaf)?,
+		            safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		        ) {
+		            self.leafBuilder = leafBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let leafBuilder: ((any Api) -> Leaf)?
+		        let safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		    }
 		}
 
 		extension Detail {
@@ -959,10 +1152,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            page: Page.SafeDIOverrides = .init()
 		        ) {
-		            self.page = page
+		            __safeDI_storage = __safeDI_Storage(
+		                page: page
+		            )
 		        }
 
-		        let page: Page.SafeDIOverrides
+		        var page: Page.SafeDIOverrides { __safeDI_storage.page }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                page: Page.SafeDIOverrides
+		            ) {
+		                self.page = page
+		            }
+
+		            let page: Page.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -1108,14 +1315,34 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            pageBuilder: __safeDI_Feed_Page_MockConfiguration = .init(),
 		            modelBuilder: ((any Api) -> Model)? = nil
 		        ) {
-		            self.navigator = navigator
-		            self.pageBuilder = pageBuilder
-		            self.modelBuilder = modelBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                navigator: navigator,
+		                pageBuilder: pageBuilder,
+		                modelBuilder: modelBuilder
+		            )
 		        }
 
-		        public let navigator: (() -> Navigator)?
-		        public let pageBuilder: __safeDI_Feed_Page_MockConfiguration
-		        public let modelBuilder: ((any Api) -> Model)?
+		        public var navigator: (() -> Navigator)? { __safeDI_storage.navigator }
+		        public var pageBuilder: __safeDI_Feed_Page_MockConfiguration { __safeDI_storage.pageBuilder }
+		        public var modelBuilder: ((any Api) -> Model)? { __safeDI_storage.modelBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                navigator: (() -> Navigator)?,
+		                pageBuilder: __safeDI_Feed_Page_MockConfiguration,
+		                modelBuilder: ((any Api) -> Model)?
+		            ) {
+		                self.navigator = navigator
+		                self.pageBuilder = pageBuilder
+		                self.modelBuilder = modelBuilder
+		            }
+
+		            let navigator: (() -> Navigator)?
+		            let pageBuilder: __safeDI_Feed_Page_MockConfiguration
+		            let modelBuilder: ((any Api) -> Model)?
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -1167,15 +1394,35 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        modelBuilder: ((any Api) -> Model)? = nil,
 		        _ safeDIBuilder: ((Token, Instantiator<Model>) -> Page)? = nil
 		    ) {
-		        self.token = token
-		        self.modelBuilder = modelBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            modelBuilder: modelBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
-		    public let modelBuilder: ((any Api) -> Model)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
+		    public var modelBuilder: ((any Api) -> Model)? { __safeDI_storage.modelBuilder }
 		    /// Overrides how `Page` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		    public var safeDIBuilder: ((Token, Instantiator<Model>) -> Page)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            modelBuilder: ((any Api) -> Model)?,
+		            safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		        ) {
+		            self.token = token
+		            self.modelBuilder = modelBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let modelBuilder: ((any Api) -> Model)?
+		        let safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		    }
 		}
 
 		extension Page {
@@ -1209,12 +1456,29 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            logger: (() -> Logger)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.logger = logger
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                logger: logger,
+		                hub: hub
+		            )
 		        }
 
-		        public let logger: (() -> Logger)?
-		        public let hub: Hub.SafeDIOverrides
+		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
+		        public var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                logger: (() -> Logger)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.logger = logger
+		                self.hub = hub
+		            }
+
+		            let logger: (() -> Logger)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -1291,10 +1555,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            shell: Shell.SafeDIOverrides = .init()
 		        ) {
-		            self.shell = shell
+		            __safeDI_storage = __safeDI_Storage(
+		                shell: shell
+		            )
 		        }
 
-		        let shell: Shell.SafeDIOverrides
+		        var shell: Shell.SafeDIOverrides { __safeDI_storage.shell }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                shell: Shell.SafeDIOverrides
+		            ) {
+		                self.shell = shell
+		            }
+
+		            let shell: Shell.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -1446,14 +1724,34 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            pageBuilder: __safeDI_Feed_Page_MockConfiguration = .init(),
 		            modelBuilder: ((any Api) -> Model)? = nil
 		        ) {
-		            self.navigator = navigator
-		            self.pageBuilder = pageBuilder
-		            self.modelBuilder = modelBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                navigator: navigator,
+		                pageBuilder: pageBuilder,
+		                modelBuilder: modelBuilder
+		            )
 		        }
 
-		        public let navigator: (() -> Navigator)?
-		        public let pageBuilder: __safeDI_Feed_Page_MockConfiguration
-		        public let modelBuilder: ((any Api) -> Model)?
+		        public var navigator: (() -> Navigator)? { __safeDI_storage.navigator }
+		        public var pageBuilder: __safeDI_Feed_Page_MockConfiguration { __safeDI_storage.pageBuilder }
+		        public var modelBuilder: ((any Api) -> Model)? { __safeDI_storage.modelBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                navigator: (() -> Navigator)?,
+		                pageBuilder: __safeDI_Feed_Page_MockConfiguration,
+		                modelBuilder: ((any Api) -> Model)?
+		            ) {
+		                self.navigator = navigator
+		                self.pageBuilder = pageBuilder
+		                self.modelBuilder = modelBuilder
+		            }
+
+		            let navigator: (() -> Navigator)?
+		            let pageBuilder: __safeDI_Feed_Page_MockConfiguration
+		            let modelBuilder: ((any Api) -> Model)?
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -1505,15 +1803,35 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        modelBuilder: ((any Api) -> Model)? = nil,
 		        _ safeDIBuilder: ((Token, Instantiator<Model>) -> Page)? = nil
 		    ) {
-		        self.token = token
-		        self.modelBuilder = modelBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            modelBuilder: modelBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
-		    public let modelBuilder: ((any Api) -> Model)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
+		    public var modelBuilder: ((any Api) -> Model)? { __safeDI_storage.modelBuilder }
 		    /// Overrides how `Page` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		    public var safeDIBuilder: ((Token, Instantiator<Model>) -> Page)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            modelBuilder: ((any Api) -> Model)?,
+		            safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		        ) {
+		            self.token = token
+		            self.modelBuilder = modelBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let modelBuilder: ((any Api) -> Model)?
+		        let safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		    }
 		}
 
 		extension Page {
@@ -1543,12 +1861,29 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            logger: (() -> Logger)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.logger = logger
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                logger: logger,
+		                hub: hub
+		            )
 		        }
 
-		        public let logger: (() -> Logger)?
-		        public let hub: Hub.SafeDIOverrides
+		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
+		        public var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                logger: (() -> Logger)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.logger = logger
+		                self.hub = hub
+		            }
+
+		            let logger: (() -> Logger)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    public static func mock(
@@ -1602,10 +1937,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            shell: Shell.SafeDIOverrides = .init()
 		        ) {
-		            self.shell = shell
+		            __safeDI_storage = __safeDI_Storage(
+		                shell: shell
+		            )
 		        }
 
-		        let shell: Shell.SafeDIOverrides
+		        var shell: Shell.SafeDIOverrides { __safeDI_storage.shell }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                shell: Shell.SafeDIOverrides
+		            ) {
+		                self.shell = shell
+		            }
+
+		            let shell: Shell.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -1728,14 +2077,34 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            logger: (() -> Logger)? = nil,
 		            detailBuilder: __safeDI_Feed_Detail_MockConfiguration = .init()
 		        ) {
-		            self.navigator = navigator
-		            self.logger = logger
-		            self.detailBuilder = detailBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                navigator: navigator,
+		                logger: logger,
+		                detailBuilder: detailBuilder
+		            )
 		        }
 
-		        public let navigator: (() -> Navigator)?
-		        public let logger: (() -> Logger)?
-		        public let detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		        public var navigator: (() -> Navigator)? { __safeDI_storage.navigator }
+		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
+		        public var detailBuilder: __safeDI_Feed_Detail_MockConfiguration { __safeDI_storage.detailBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                navigator: (() -> Navigator)?,
+		                logger: (() -> Logger)?,
+		                detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		            ) {
+		                self.navigator = navigator
+		                self.logger = logger
+		                self.detailBuilder = detailBuilder
+		            }
+
+		            let navigator: (() -> Navigator)?
+		            let logger: (() -> Logger)?
+		            let detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -1780,13 +2149,30 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        leafBuilder: ((any Api) -> Leaf)? = nil,
 		        _ safeDIBuilder: ((Instantiator<Leaf>) -> Detail)? = nil
 		    ) {
-		        self.leafBuilder = leafBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            leafBuilder: leafBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let leafBuilder: ((any Api) -> Leaf)?
+		    public var leafBuilder: ((any Api) -> Leaf)? { __safeDI_storage.leafBuilder }
 		    /// Overrides how `Detail` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		    public var safeDIBuilder: ((Instantiator<Leaf>) -> Detail)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            leafBuilder: ((any Api) -> Leaf)?,
+		            safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		        ) {
+		            self.leafBuilder = leafBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let leafBuilder: ((any Api) -> Leaf)?
+		        let safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		    }
 		}
 
 		extension Detail {
@@ -1815,10 +2201,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            page: Page.SafeDIOverrides = .init()
 		        ) {
-		            self.page = page
+		            __safeDI_storage = __safeDI_Storage(
+		                page: page
+		            )
 		        }
 
-		        let page: Page.SafeDIOverrides
+		        var page: Page.SafeDIOverrides { __safeDI_storage.page }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                page: Page.SafeDIOverrides
+		            ) {
+		                self.page = page
+		            }
+
+		            let page: Page.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -1956,14 +2356,34 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            logger: (() -> Logger)? = nil,
 		            detailBuilder: __safeDI_Feed_Detail_MockConfiguration = .init()
 		        ) {
-		            self.navigator = navigator
-		            self.logger = logger
-		            self.detailBuilder = detailBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                navigator: navigator,
+		                logger: logger,
+		                detailBuilder: detailBuilder
+		            )
 		        }
 
-		        public let navigator: (() -> Navigator)?
-		        public let logger: (() -> Logger)?
-		        public let detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		        public var navigator: (() -> Navigator)? { __safeDI_storage.navigator }
+		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
+		        public var detailBuilder: __safeDI_Feed_Detail_MockConfiguration { __safeDI_storage.detailBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                navigator: (() -> Navigator)?,
+		                logger: (() -> Logger)?,
+		                detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		            ) {
+		                self.navigator = navigator
+		                self.logger = logger
+		                self.detailBuilder = detailBuilder
+		            }
+
+		            let navigator: (() -> Navigator)?
+		            let logger: (() -> Logger)?
+		            let detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -2008,13 +2428,30 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        leafBuilder: ((any Api) -> Leaf)? = nil,
 		        _ safeDIBuilder: ((Instantiator<Leaf>) -> Detail)? = nil
 		    ) {
-		        self.leafBuilder = leafBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            leafBuilder: leafBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let leafBuilder: ((any Api) -> Leaf)?
+		    public var leafBuilder: ((any Api) -> Leaf)? { __safeDI_storage.leafBuilder }
 		    /// Overrides how `Detail` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		    public var safeDIBuilder: ((Instantiator<Leaf>) -> Detail)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            leafBuilder: ((any Api) -> Leaf)?,
+		            safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		        ) {
+		            self.leafBuilder = leafBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let leafBuilder: ((any Api) -> Leaf)?
+		        let safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		    }
 		}
 
 		extension Detail {
@@ -2044,12 +2481,29 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            page: Page.SafeDIOverrides = .init(),
 		            backupPage: Page.SafeDIOverrides = .init()
 		        ) {
-		            self.page = page
-		            self.backupPage = backupPage
+		            __safeDI_storage = __safeDI_Storage(
+		                page: page,
+		                backupPage: backupPage
+		            )
 		        }
 
-		        let page: Page.SafeDIOverrides
-		        let backupPage: Page.SafeDIOverrides
+		        var page: Page.SafeDIOverrides { __safeDI_storage.page }
+		        var backupPage: Page.SafeDIOverrides { __safeDI_storage.backupPage }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                page: Page.SafeDIOverrides,
+		                backupPage: Page.SafeDIOverrides
+		            ) {
+		                self.page = page
+		                self.backupPage = backupPage
+		            }
+
+		            let page: Page.SafeDIOverrides
+		            let backupPage: Page.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -2197,10 +2651,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            detail: ((@escaping (Detail.SafeDIMockScope_Api) -> any Api) -> Detail)? = nil
 		        ) {
-		            self.detail = detail
+		            __safeDI_storage = __safeDI_Storage(
+		                detail: detail
+		            )
 		        }
 
-		        let detail: ((@escaping (Detail.SafeDIMockScope_Api) -> any Api) -> Detail)?
+		        var detail: ((@escaping (Detail.SafeDIMockScope_Api) -> any Api) -> Detail)? { __safeDI_storage.detail }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                detail: ((@escaping (Detail.SafeDIMockScope_Api) -> any Api) -> Detail)?
+		            ) {
+		                self.detail = detail
+		            }
+
+		            let detail: ((@escaping (Detail.SafeDIMockScope_Api) -> any Api) -> Detail)?
+		        }
 		    }
 
 		    static func mock(
@@ -2481,10 +2949,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        public init(
 		            logger: (() -> Logger)? = nil
 		        ) {
-		            self.logger = logger
+		            __safeDI_storage = __safeDI_Storage(
+		                logger: logger
+		            )
 		        }
 
-		        public let logger: (() -> Logger)?
+		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                logger: (() -> Logger)?
+		            ) {
+		                self.logger = logger
+		            }
+
+		            let logger: (() -> Logger)?
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -2561,10 +3043,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        public init(
 		            card: __safeDI_Feed_Card_MockConfiguration = .init()
 		        ) {
-		            self.card = card
+		            __safeDI_storage = __safeDI_Storage(
+		                card: card
+		            )
 		        }
 
-		        public let card: __safeDI_Feed_Card_MockConfiguration
+		        public var card: __safeDI_Feed_Card_MockConfiguration { __safeDI_storage.card }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                card: __safeDI_Feed_Card_MockConfiguration
+		            ) {
+		                self.card = card
+		            }
+
+		            let card: __safeDI_Feed_Card_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -2603,16 +3099,36 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        retries: Int? = nil,
 		        _ safeDIBuilder: ((any Api, Logger, Int) -> Card)? = nil
 		    ) {
-		        self.logger = logger
-		        self.retries = retries
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            logger: logger,
+		            retries: retries,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let logger: (() -> Logger)?
+		    public var logger: (() -> Logger)? { __safeDI_storage.logger }
 		    /// `nil` keeps the default of `Card`’s `retries`.
-		    public let retries: Int?
+		    public var retries: Int? { __safeDI_storage.retries }
 		    /// Overrides how `Card` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((any Api, Logger, Int) -> Card)?
+		    public var safeDIBuilder: ((any Api, Logger, Int) -> Card)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            logger: (() -> Logger)?,
+		            retries: Int?,
+		            safeDIBuilder: ((any Api, Logger, Int) -> Card)?
+		        ) {
+		            self.logger = logger
+		            self.retries = retries
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let logger: (() -> Logger)?
+		        let retries: Int?
+		        let safeDIBuilder: ((any Api, Logger, Int) -> Card)?
+		    }
 		}
 
 		extension Card {
@@ -2736,10 +3252,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        public init(
 		            card: __safeDI_Feed_Card_MockConfiguration = .init()
 		        ) {
-		            self.card = card
+		            __safeDI_storage = __safeDI_Storage(
+		                card: card
+		            )
 		        }
 
-		        public let card: __safeDI_Feed_Card_MockConfiguration
+		        public var card: __safeDI_Feed_Card_MockConfiguration { __safeDI_storage.card }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                card: __safeDI_Feed_Card_MockConfiguration
+		            ) {
+		                self.card = card
+		            }
+
+		            let card: __safeDI_Feed_Card_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -2776,14 +3306,31 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        retries: Int? = nil,
 		        _ safeDIBuilder: ((any Api, Int) -> Card)? = nil
 		    ) {
-		        self.retries = retries
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            retries: retries,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
 		    /// `nil` keeps the default of `Card`’s `retries`.
-		    public let retries: Int?
+		    public var retries: Int? { __safeDI_storage.retries }
 		    /// Overrides how `Card` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((any Api, Int) -> Card)?
+		    public var safeDIBuilder: ((any Api, Int) -> Card)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            retries: Int?,
+		            safeDIBuilder: ((any Api, Int) -> Card)?
+		        ) {
+		            self.retries = retries
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let retries: Int?
+		        let safeDIBuilder: ((any Api, Int) -> Card)?
+		    }
 		}
 
 		extension Card {
@@ -2871,10 +3418,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 			        public init(
 			            heldBuilder: (@Sendable (any Gadget) -> Held)? = nil
 			        ) {
-			            self.heldBuilder = heldBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                heldBuilder: heldBuilder
+			            )
 			        }
 
-			        public let heldBuilder: (@Sendable (any Gadget) -> Held)?
+			        public var heldBuilder: (@Sendable (any Gadget) -> Held)? { __safeDI_storage.heldBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                heldBuilder: (@Sendable (any Gadget) -> Held)?
+			            ) {
+			                self.heldBuilder = heldBuilder
+			            }
+
+			            let heldBuilder: (@Sendable (any Gadget) -> Held)?
+			        }
 			    }
 
 			    public static func mock(
@@ -3216,10 +3777,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        public init(
 		            board: ((@escaping (Board.SafeDIMockScope_Gadget) -> any Gadget) -> Board)? = nil
 		        ) {
-		            self.board = board
+		            __safeDI_storage = __safeDI_Storage(
+		                board: board
+		            )
 		        }
 
-		        public let board: ((@escaping (Board.SafeDIMockScope_Gadget) -> any Gadget) -> Board)?
+		        public var board: ((@escaping (Board.SafeDIMockScope_Gadget) -> any Gadget) -> Board)? { __safeDI_storage.board }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                board: ((@escaping (Board.SafeDIMockScope_Gadget) -> any Gadget) -> Board)?
+		            ) {
+		                self.board = board
+		            }
+
+		            let board: ((@escaping (Board.SafeDIMockScope_Gadget) -> any Gadget) -> Board)?
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -3346,10 +3921,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            panel: Panel.SafeDIOverrides = .init()
 		        ) {
-		            self.panel = panel
+		            __safeDI_storage = __safeDI_Storage(
+		                panel: panel
+		            )
 		        }
 
-		        let panel: Panel.SafeDIOverrides
+		        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                panel: Panel.SafeDIOverrides
+		            ) {
+		                self.panel = panel
+		            }
+
+		            let panel: Panel.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -3475,10 +4064,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 			        public init(
 			            row: ((ErasedInstantiator<(), AnyGadget>) -> Row)? = nil
 			        ) {
-			            self.row = row
+			            __safeDI_storage = __safeDI_Storage(
+			                row: row
+			            )
 			        }
 
-			        public let row: ((ErasedInstantiator<(), AnyGadget>) -> Row)?
+			        public var row: ((ErasedInstantiator<(), AnyGadget>) -> Row)? { __safeDI_storage.row }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                row: ((ErasedInstantiator<(), AnyGadget>) -> Row)?
+			            ) {
+			                self.row = row
+			            }
+
+			            let row: ((ErasedInstantiator<(), AnyGadget>) -> Row)?
+			        }
 			    }
 
 			    public static func mock(
@@ -3620,27 +4223,48 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
 		        public init() {
-		            self.badge = nil
-		            self.note = nil
+		            __safeDI_storage = __safeDI_Storage(
+		                badge: nil,
+		                note: nil
+		            )
 		        }
 
 		        package init(
 		            badge: ((Thing?) -> Badge)? = nil
 		        ) {
-		            self.badge = badge
-		            self.note = nil
+		            __safeDI_storage = __safeDI_Storage(
+		                badge: badge,
+		                note: nil
+		            )
 		        }
 
 		        init(
 		            badge: ((Thing?) -> Badge)? = nil,
 		            note: ((Memo?) -> Note)? = nil
 		        ) {
-		            self.badge = badge
-		            self.note = note
+		            __safeDI_storage = __safeDI_Storage(
+		                badge: badge,
+		                note: note
+		            )
 		        }
 
-		        package let badge: ((Thing?) -> Badge)?
-		        let note: ((Memo?) -> Note)?
+		        package var badge: ((Thing?) -> Badge)? { __safeDI_storage.badge }
+		        var note: ((Memo?) -> Note)? { __safeDI_storage.note }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                badge: ((Thing?) -> Badge)?,
+		                note: ((Memo?) -> Note)?
+		            ) {
+		                self.badge = badge
+		                self.note = note
+		            }
+
+		            let badge: ((Thing?) -> Badge)?
+		            let note: ((Memo?) -> Note)?
+		        }
 		    }
 
 		    public static func mock(
@@ -3718,10 +4342,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            panel: Panel.SafeDIOverrides = .init()
 		        ) {
-		            self.panel = panel
+		            __safeDI_storage = __safeDI_Storage(
+		                panel: panel
+		            )
 		        }
 
-		        let panel: Panel.SafeDIOverrides
+		        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                panel: Panel.SafeDIOverrides
+		            ) {
+		                self.panel = panel
+		            }
+
+		            let panel: Panel.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -3828,14 +4466,34 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            logger: (() -> Logger)? = nil,
 		            detailBuilder: __safeDI_Feed_Detail_MockConfiguration = .init()
 		        ) {
-		            self.navigator = navigator
-		            self.logger = logger
-		            self.detailBuilder = detailBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                navigator: navigator,
+		                logger: logger,
+		                detailBuilder: detailBuilder
+		            )
 		        }
 
-		        public let navigator: (() -> Navigator)?
-		        public let logger: (() -> Logger)?
-		        public let detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		        public var navigator: (() -> Navigator)? { __safeDI_storage.navigator }
+		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
+		        public var detailBuilder: __safeDI_Feed_Detail_MockConfiguration { __safeDI_storage.detailBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                navigator: (() -> Navigator)?,
+		                logger: (() -> Logger)?,
+		                detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		            ) {
+		                self.navigator = navigator
+		                self.logger = logger
+		                self.detailBuilder = detailBuilder
+		            }
+
+		            let navigator: (() -> Navigator)?
+		            let logger: (() -> Logger)?
+		            let detailBuilder: __safeDI_Feed_Detail_MockConfiguration
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -3880,13 +4538,30 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        leafBuilder: ((any Api) -> Leaf)? = nil,
 		        _ safeDIBuilder: ((Instantiator<Leaf>) -> Detail)? = nil
 		    ) {
-		        self.leafBuilder = leafBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            leafBuilder: leafBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let leafBuilder: ((any Api) -> Leaf)?
+		    public var leafBuilder: ((any Api) -> Leaf)? { __safeDI_storage.leafBuilder }
 		    /// Overrides how `Detail` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		    public var safeDIBuilder: ((Instantiator<Leaf>) -> Detail)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            leafBuilder: ((any Api) -> Leaf)?,
+		            safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		        ) {
+		            self.leafBuilder = leafBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let leafBuilder: ((any Api) -> Leaf)?
+		        let safeDIBuilder: ((Instantiator<Leaf>) -> Detail)?
+		    }
 		}
 
 		extension Detail {
@@ -3915,10 +4590,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            page: Page.SafeDIOverrides = .init()
 		        ) {
-		            self.page = page
+		            __safeDI_storage = __safeDI_Storage(
+		                page: page
+		            )
 		        }
 
-		        let page: Page.SafeDIOverrides
+		        var page: Page.SafeDIOverrides { __safeDI_storage.page }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                page: Page.SafeDIOverrides
+		            ) {
+		                self.page = page
+		            }
+
+		            let page: Page.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -3975,10 +4664,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            shell: Shell.SafeDIOverrides = .init()
 		        ) {
-		            self.shell = shell
+		            __safeDI_storage = __safeDI_Storage(
+		                shell: shell
+		            )
 		        }
 
-		        let shell: Shell.SafeDIOverrides
+		        var shell: Shell.SafeDIOverrides { __safeDI_storage.shell }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                shell: Shell.SafeDIOverrides
+		            ) {
+		                self.shell = shell
+		            }
+
+		            let shell: Shell.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -4085,14 +4788,34 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            pageBuilder: __safeDI_Feed_Page_MockConfiguration = .init(),
 		            modelBuilder: ((any Api) -> Model)? = nil
 		        ) {
-		            self.navigator = navigator
-		            self.pageBuilder = pageBuilder
-		            self.modelBuilder = modelBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                navigator: navigator,
+		                pageBuilder: pageBuilder,
+		                modelBuilder: modelBuilder
+		            )
 		        }
 
-		        public let navigator: (() -> Navigator)?
-		        public let pageBuilder: __safeDI_Feed_Page_MockConfiguration
-		        public let modelBuilder: ((any Api) -> Model)?
+		        public var navigator: (() -> Navigator)? { __safeDI_storage.navigator }
+		        public var pageBuilder: __safeDI_Feed_Page_MockConfiguration { __safeDI_storage.pageBuilder }
+		        public var modelBuilder: ((any Api) -> Model)? { __safeDI_storage.modelBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                navigator: (() -> Navigator)?,
+		                pageBuilder: __safeDI_Feed_Page_MockConfiguration,
+		                modelBuilder: ((any Api) -> Model)?
+		            ) {
+		                self.navigator = navigator
+		                self.pageBuilder = pageBuilder
+		                self.modelBuilder = modelBuilder
+		            }
+
+		            let navigator: (() -> Navigator)?
+		            let pageBuilder: __safeDI_Feed_Page_MockConfiguration
+		            let modelBuilder: ((any Api) -> Model)?
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -4144,15 +4867,35 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        modelBuilder: ((any Api) -> Model)? = nil,
 		        _ safeDIBuilder: ((Token, Instantiator<Model>) -> Page)? = nil
 		    ) {
-		        self.token = token
-		        self.modelBuilder = modelBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            modelBuilder: modelBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
-		    public let modelBuilder: ((any Api) -> Model)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
+		    public var modelBuilder: ((any Api) -> Model)? { __safeDI_storage.modelBuilder }
 		    /// Overrides how `Page` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		    public var safeDIBuilder: ((Token, Instantiator<Model>) -> Page)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            modelBuilder: ((any Api) -> Model)?,
+		            safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		        ) {
+		            self.token = token
+		            self.modelBuilder = modelBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let modelBuilder: ((any Api) -> Model)?
+		        let safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		    }
 		}
 
 		extension Page {
@@ -4182,12 +4925,29 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            logger: (() -> Logger)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.logger = logger
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                logger: logger,
+		                hub: hub
+		            )
 		        }
 
-		        public let logger: (() -> Logger)?
-		        public let hub: Hub.SafeDIOverrides
+		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
+		        public var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                logger: (() -> Logger)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.logger = logger
+		                self.hub = hub
+		            }
+
+		            let logger: (() -> Logger)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    public static func mock(
@@ -4292,10 +5052,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            heldBuilder: (@Sendable (@escaping (Panel.SafeDIMockScope_Service) -> any Service) -> Panel)? = nil
 		        ) {
-		            self.heldBuilder = heldBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                heldBuilder: heldBuilder
+		            )
 		        }
 
-		        let heldBuilder: (@Sendable (@escaping (Panel.SafeDIMockScope_Service) -> any Service) -> Panel)?
+		        var heldBuilder: (@Sendable (@escaping (Panel.SafeDIMockScope_Service) -> any Service) -> Panel)? { __safeDI_storage.heldBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                heldBuilder: (@Sendable (@escaping (Panel.SafeDIMockScope_Service) -> any Service) -> Panel)?
+		            ) {
+		                self.heldBuilder = heldBuilder
+		            }
+
+		            let heldBuilder: (@Sendable (@escaping (Panel.SafeDIMockScope_Service) -> any Service) -> Panel)?
+		        }
 		    }
 
 		    static func mock(
@@ -4392,10 +5166,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            heldBuilder: (@Sendable (@escaping (Panel.SafeDIMockScope_Service) -> any Service) -> Panel)? = nil
 		        ) {
-		            self.heldBuilder = heldBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                heldBuilder: heldBuilder
+		            )
 		        }
 
-		        let heldBuilder: (@Sendable (@escaping (Panel.SafeDIMockScope_Service) -> any Service) -> Panel)?
+		        var heldBuilder: (@Sendable (@escaping (Panel.SafeDIMockScope_Service) -> any Service) -> Panel)? { __safeDI_storage.heldBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                heldBuilder: (@Sendable (@escaping (Panel.SafeDIMockScope_Service) -> any Service) -> Panel)?
+		            ) {
+		                self.heldBuilder = heldBuilder
+		            }
+
+		            let heldBuilder: (@Sendable (@escaping (Panel.SafeDIMockScope_Service) -> any Service) -> Panel)?
+		        }
 		    }
 
 		    static func mock(
@@ -4551,14 +5339,34 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            pageBuilder: __safeDI_Feed_Page_MockConfiguration = .init(),
 		            modelBuilder: ((any Api) -> Model)? = nil
 		        ) {
-		            self.navigator = navigator
-		            self.pageBuilder = pageBuilder
-		            self.modelBuilder = modelBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                navigator: navigator,
+		                pageBuilder: pageBuilder,
+		                modelBuilder: modelBuilder
+		            )
 		        }
 
-		        public let navigator: (() -> Navigator)?
-		        public let pageBuilder: __safeDI_Feed_Page_MockConfiguration
-		        public let modelBuilder: ((any Api) -> Model)?
+		        public var navigator: (() -> Navigator)? { __safeDI_storage.navigator }
+		        public var pageBuilder: __safeDI_Feed_Page_MockConfiguration { __safeDI_storage.pageBuilder }
+		        public var modelBuilder: ((any Api) -> Model)? { __safeDI_storage.modelBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                navigator: (() -> Navigator)?,
+		                pageBuilder: __safeDI_Feed_Page_MockConfiguration,
+		                modelBuilder: ((any Api) -> Model)?
+		            ) {
+		                self.navigator = navigator
+		                self.pageBuilder = pageBuilder
+		                self.modelBuilder = modelBuilder
+		            }
+
+		            let navigator: (() -> Navigator)?
+		            let pageBuilder: __safeDI_Feed_Page_MockConfiguration
+		            let modelBuilder: ((any Api) -> Model)?
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -4610,15 +5418,35 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        modelBuilder: ((any Api) -> Model)? = nil,
 		        _ safeDIBuilder: ((Token, Instantiator<Model>) -> Page)? = nil
 		    ) {
-		        self.token = token
-		        self.modelBuilder = modelBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            modelBuilder: modelBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
-		    public let modelBuilder: ((any Api) -> Model)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
+		    public var modelBuilder: ((any Api) -> Model)? { __safeDI_storage.modelBuilder }
 		    /// Overrides how `Page` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		    public var safeDIBuilder: ((Token, Instantiator<Model>) -> Page)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            modelBuilder: ((any Api) -> Model)?,
+		            safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		        ) {
+		            self.token = token
+		            self.modelBuilder = modelBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let modelBuilder: ((any Api) -> Model)?
+		        let safeDIBuilder: ((Token, Instantiator<Model>) -> Page)?
+		    }
 		}
 
 		extension Page {
@@ -4652,12 +5480,29 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            logger: (() -> Logger)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.logger = logger
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                logger: logger,
+		                hub: hub
+		            )
 		        }
 
-		        public let logger: (() -> Logger)?
-		        public let hub: Hub.SafeDIOverrides
+		        public var logger: (() -> Logger)? { __safeDI_storage.logger }
+		        public var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                logger: (() -> Logger)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.logger = logger
+		                self.hub = hub
+		            }
+
+		            let logger: (() -> Logger)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -4734,10 +5579,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            shell: Shell.SafeDIOverrides = .init()
 		        ) {
-		            self.shell = shell
+		            __safeDI_storage = __safeDI_Storage(
+		                shell: shell
+		            )
 		        }
 
-		        let shell: Shell.SafeDIOverrides
+		        var shell: Shell.SafeDIOverrides { __safeDI_storage.shell }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                shell: Shell.SafeDIOverrides
+		            ) {
+		                self.shell = shell
+		            }
+
+		            let shell: Shell.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -4876,10 +5735,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        public init(
 		            screen: __safeDI_Feat_Screen_MockConfiguration = .init()
 		        ) {
-		            self.screen = screen
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen
+		            )
 		        }
 
-		        public let screen: __safeDI_Feat_Screen_MockConfiguration
+		        public var screen: __safeDI_Feat_Screen_MockConfiguration { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: __safeDI_Feat_Screen_MockConfiguration
+		            ) {
+		                self.screen = screen
+		            }
+
+		            let screen: __safeDI_Feat_Screen_MockConfiguration
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -4928,11 +5801,25 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    public init(
 		        _ safeDIBuilder: ((any Api, Instantiator<Screen>) -> Step)? = nil
 		    ) {
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
 		    /// Overrides how `Step` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((any Api, Instantiator<Screen>) -> Step)?
+		    public var safeDIBuilder: ((any Api, Instantiator<Screen>) -> Step)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            safeDIBuilder: ((any Api, Instantiator<Screen>) -> Step)?
+		        ) {
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let safeDIBuilder: ((any Api, Instantiator<Screen>) -> Step)?
+		    }
 		}
 
 		extension Step {
@@ -4948,15 +5835,35 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        stepBuilder: __safeDI_Feat_Step_MockConfiguration = .init(),
 		        _ safeDIBuilder: ((Cache, Instantiator<Step>) -> Screen)? = nil
 		    ) {
-		        self.cache = cache
-		        self.stepBuilder = stepBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            cache: cache,
+		            stepBuilder: stepBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let cache: (() -> Cache)?
-		    public let stepBuilder: __safeDI_Feat_Step_MockConfiguration
+		    public var cache: (() -> Cache)? { __safeDI_storage.cache }
+		    public var stepBuilder: __safeDI_Feat_Step_MockConfiguration { __safeDI_storage.stepBuilder }
 		    /// Overrides how `Screen` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Cache, Instantiator<Step>) -> Screen)?
+		    public var safeDIBuilder: ((Cache, Instantiator<Step>) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            cache: (() -> Cache)?,
+		            stepBuilder: __safeDI_Feat_Step_MockConfiguration,
+		            safeDIBuilder: ((Cache, Instantiator<Step>) -> Screen)?
+		        ) {
+		            self.cache = cache
+		            self.stepBuilder = stepBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let cache: (() -> Cache)?
+		        let stepBuilder: __safeDI_Feat_Step_MockConfiguration
+		        let safeDIBuilder: ((Cache, Instantiator<Step>) -> Screen)?
+		    }
 		}
 
 		extension Screen {
@@ -4985,10 +5892,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            home: Home.SafeDIOverrides = .init()
 		        ) {
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home
+		            )
 		        }
 
-		        let home: Home.SafeDIOverrides
+		        var home: Home.SafeDIOverrides { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: Home.SafeDIOverrides
+		            ) {
+		                self.home = home
+		            }
+
+		            let home: Home.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -5130,10 +6051,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        public init(
 		            screen: __safeDI_Feat_Screen_MockConfiguration = .init()
 		        ) {
-		            self.screen = screen
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen
+		            )
 		        }
 
-		        public let screen: __safeDI_Feat_Screen_MockConfiguration
+		        public var screen: __safeDI_Feat_Screen_MockConfiguration { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: __safeDI_Feat_Screen_MockConfiguration
+		            ) {
+		                self.screen = screen
+		            }
+
+		            let screen: __safeDI_Feat_Screen_MockConfiguration
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -5182,11 +6117,25 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    public init(
 		        _ safeDIBuilder: ((any Api, Instantiator<Screen>) -> Step)? = nil
 		    ) {
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
 		    /// Overrides how `Step` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((any Api, Instantiator<Screen>) -> Step)?
+		    public var safeDIBuilder: ((any Api, Instantiator<Screen>) -> Step)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            safeDIBuilder: ((any Api, Instantiator<Screen>) -> Step)?
+		        ) {
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let safeDIBuilder: ((any Api, Instantiator<Screen>) -> Step)?
+		    }
 		}
 
 		extension Step {
@@ -5202,15 +6151,35 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        stepBuilder: __safeDI_Feat_Step_MockConfiguration = .init(),
 		        _ safeDIBuilder: ((Cache, Instantiator<Step>) -> Screen)? = nil
 		    ) {
-		        self.cache = cache
-		        self.stepBuilder = stepBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            cache: cache,
+		            stepBuilder: stepBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let cache: (() -> Cache)?
-		    public let stepBuilder: __safeDI_Feat_Step_MockConfiguration
+		    public var cache: (() -> Cache)? { __safeDI_storage.cache }
+		    public var stepBuilder: __safeDI_Feat_Step_MockConfiguration { __safeDI_storage.stepBuilder }
 		    /// Overrides how `Screen` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Cache, Instantiator<Step>) -> Screen)?
+		    public var safeDIBuilder: ((Cache, Instantiator<Step>) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            cache: (() -> Cache)?,
+		            stepBuilder: __safeDI_Feat_Step_MockConfiguration,
+		            safeDIBuilder: ((Cache, Instantiator<Step>) -> Screen)?
+		        ) {
+		            self.cache = cache
+		            self.stepBuilder = stepBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let cache: (() -> Cache)?
+		        let stepBuilder: __safeDI_Feat_Step_MockConfiguration
+		        let safeDIBuilder: ((Cache, Instantiator<Step>) -> Screen)?
+		    }
 		}
 
 		extension Screen {
@@ -5243,10 +6212,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        public init(
 		            home: Home.SafeDIOverrides = .init()
 		        ) {
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home
+		            )
 		        }
 
-		        public let home: Home.SafeDIOverrides
+		        public var home: Home.SafeDIOverrides { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: Home.SafeDIOverrides
+		            ) {
+		                self.home = home
+		            }
+
+		            let home: Home.SafeDIOverrides
+		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -5299,10 +6282,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            shell: Shell.SafeDIOverrides = .init()
 		        ) {
-		            self.shell = shell
+		            __safeDI_storage = __safeDI_Storage(
+		                shell: shell
+		            )
 		        }
 
-		        let shell: Shell.SafeDIOverrides
+		        var shell: Shell.SafeDIOverrides { __safeDI_storage.shell }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                shell: Shell.SafeDIOverrides
+		            ) {
+		                self.shell = shell
+		            }
+
+		            let shell: Shell.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -5404,10 +6401,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        init(
 		            home: Home.SafeDIOverrides = .init()
 		        ) {
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home
+		            )
 		        }
 
-		        let home: Home.SafeDIOverrides
+		        var home: Home.SafeDIOverrides { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: Home.SafeDIOverrides
+		            ) {
+		                self.home = home
+		            }
+
+		            let home: Home.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -5507,10 +6518,24 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        public init(
 		            screenBuilder: __safeDI_Feat_Screen_MockConfiguration = .init()
 		        ) {
-		            self.screenBuilder = screenBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                screenBuilder: screenBuilder
+		            )
 		        }
 
-		        public let screenBuilder: __safeDI_Feat_Screen_MockConfiguration
+		        public var screenBuilder: __safeDI_Feat_Screen_MockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screenBuilder: __safeDI_Feat_Screen_MockConfiguration
+		            ) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let screenBuilder: __safeDI_Feat_Screen_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -5556,13 +6581,30 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        cache: (() -> Cache)? = nil,
 		        _ safeDIBuilder: ((Cache, any Api, Instantiator<Screen>) -> Screen)? = nil
 		    ) {
-		        self.cache = cache
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            cache: cache,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let cache: (() -> Cache)?
+		    public var cache: (() -> Cache)? { __safeDI_storage.cache }
 		    /// Overrides how `Screen` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Cache, any Api, Instantiator<Screen>) -> Screen)?
+		    public var safeDIBuilder: ((Cache, any Api, Instantiator<Screen>) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            cache: (() -> Cache)?,
+		            safeDIBuilder: ((Cache, any Api, Instantiator<Screen>) -> Screen)?
+		        ) {
+		            self.cache = cache
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let cache: (() -> Cache)?
+		        let safeDIBuilder: ((Cache, any Api, Instantiator<Screen>) -> Screen)?
+		    }
 		}
 
 		extension Screen {
