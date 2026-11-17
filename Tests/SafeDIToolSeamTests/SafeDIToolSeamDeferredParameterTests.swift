@@ -1258,7 +1258,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    nonisolated public enum SafeDIScope_UserService {
 			        nonisolated public struct profileBuilder_Values {
 			            public var token: Token { __safeDI_token.instance }
-			            let __safeDI_token: LazilyInstantiated<Token>
+			            public let __safeDI_token: LazilyInstantiated<Token>
 
 			            init(token: LazilyInstantiated<Token>) {
 			                __safeDI_token = token

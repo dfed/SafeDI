@@ -953,8 +953,8 @@ private struct ScopeGeneratorUnderConstruction {
 		let key: String
 		let functionName: String
 		/// The fields the fill can bind: its hole's, or every place's of a case nested by type, for the fill that generates
-		/// the case's code.
-		let fields: [SeamSignature.Hole.Field]
+		/// the case's code; a deferred parameter's the fill reads from the struct, as its memo (`fillUnderConstruction`).
+		var fields: [SeamSignature.Hole.Field]
 		/// Whether the fill's code is generated (see `ScopeGenerator.fillEmitsCode`).
 		let emitsCode: Bool
 		/// The places the fill stands for: its hole, or, for the fill that generates the code of a case nested by type, every
@@ -1081,21 +1081,31 @@ private struct ScopeGeneratorUnderConstruction {
 		// caller's is: the fill reads the struct's field, as inline reads the passing-up seam's declaration.
 		let deferredLabelsBoundFromStruct = previousPassGenerator?.fillDeferredLabelsHiddenByReenteringCalls[fill.key] ?? []
 		let readsDeferredFieldsFromStruct = hole.innerSeamType != nil && self.scope.publicMockCall == nil
-		let boundFields = fill.fields.filter { !$0.isDeferredParameter || readsDeferredFieldsFromStruct || deferredLabelsBoundFromStruct.contains($0.property.label) }
+		// A deferred parameter's field it reads from the struct, it binds as the memo (`bindingItsMemo`), whose instance its tree
+		// reads where it reads the value, so the value is created when the tree reads it, as inline. The field keeps its own
+		// property, which decides what it satisfies; the memo decides only when the value is created.
+		fill.fields = fill.fields.map { $0.isDeferredParameter && (readsDeferredFieldsFromStruct || deferredLabelsBoundFromStruct.contains($0.property.label)) ? $0.bindingItsMemo : $0 }
+		let boundFields = fill.fields.filter { !$0.isDeferredParameter || $0.bindsMemo }
 		fill.boundLabels = Set(boundFields.map(\.property.label))
 		fill.callerNearestDeclarations = childNearestDeclarations
 		fill.callerLazilyInstantiatedInstanceProperties = childLazilyInstantiatedInstanceProperties
-		let fields = boundFields.map(\.property)
-		let fieldLabels = Set(fields.map(\.label))
+		let fieldLabels = Set(boundFields.map(\.property.label))
 		var fieldInstanceProperties = Set<Property>()
 		// A value the fill takes from the caller's scope is available as it would be to a pass-through of the call: one
 		// the caller's path is still building is not, so a receive of it only if available is passed `nil`. Each field
 		// the fill binds hides every declaration of its label in the caller's scope.
 		var fillNearestDeclarations = childNearestDeclarations
-		for field in fields {
-			fillNearestDeclarations.replace(field, providing: CycleParameter.forms(providedBy: field))
-			if let instanceProperty = field.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
+		for field in boundFields {
+			let property = field.property
+			fillNearestDeclarations.replace(property, providing: CycleParameter.forms(providedBy: property))
+			if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
 				fieldInstanceProperties.insert(instanceProperty)
+			}
+			// A field bound as its memo is read as the memo's instance wherever the tree reads its label, as the seam's own tree
+			// reads a deferred parameter's memo (`DependencyTreeGenerator.seamRootGenerator`): `tag: Tag` for `tag: Tag?`, and
+			// `x: X!` itself for `x: X!`, which the tree reads as `x.instance`.
+			if field.bindsMemo {
+				fieldInstanceProperties.insert(property.asUnwrappedProperty)
 			}
 		}
 		return ScopeGeneratorUnderConstruction(

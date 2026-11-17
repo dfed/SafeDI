@@ -86,7 +86,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.fillDispatchers = fillDispatchers
 		fillKey = fill?.key
 		fillStructBoundLabels = fill?.boundLabels ?? []
-		fillBindsDeferredFieldsFromStruct = fill.map { fill in fill.hole.innerSeamType != nil && fill.fields.contains { $0.isDeferredParameter && fill.boundLabels.contains($0.property.label) } } ?? false
+		fillBindsDeferredFieldsFromStruct = fill.map { fill in fill.hole.innerSeamType != nil && fill.fields.contains(where: \.bindsMemo) } ?? false
 		fillFields = fill?.fields ?? []
 		fillCaseHoles = fill?.caseHoles ?? []
 		fillEmitsCode = fill?.emitsCode ?? true
@@ -1952,7 +1952,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							var value = ownValue(of: label)
 							let readsOwnPayload = carried.contains(label)
 							if readsOwnPayload {
-								value = "\(valuesName).\(label.spelledAsMemberReference)"
+								// A target that binds a deferred parameter's memo is handed the memo, as a level function hands it.
+								value = "\(valuesName).\(dispatcherCase.values?.first { $0.property.label == label }?.memberName(bindingMemo: parameter.bindsMemo) ?? label.spelledAsMemberReference)"
 							}
 							// The payload's field is read only where the reader falls back to it: a value the reader finds on every route
 							// leaves the payload unbound.
@@ -2086,7 +2087,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					return ", \(parameter.name.spelledAsArgumentLabel): \(type.asSource)"
 				}.joined()
 			} else {
-				parameters.map { ", \($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }.joined()
+				parameters.map { ", \($0.property.label.spelledAsArgumentLabel): \($0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }.joined()
 			}
 			var lines = ["\(indent)\(isSendable ? "@Sendable " : "")func \(functionName)(_ \(parameterName): \(enumType.asSource)\(valueParameters)\(passUpParameter)) -> \(returnType.asSource) {", "\(caseIndent)switch \(parameterName) {"]
 			lines += caseLines
@@ -2122,7 +2123,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let argumentLabel = Self.isFill(target) ? label : carriedInnerScope.upName
 					return ("\(argumentLabel.spelledAsArgumentLabel): \(carriedInnerScope.upName).\(dispatcherCase.name.spelledAsMemberReference)(\(payloadName))", true)
 				} else if readsOwnPayload, dispatcherCase.carriedLabels.contains(label) {
-					return ("\(label.spelledAsArgumentLabel): \(payloadName).\(label.spelledAsMemberReference)", true)
+					// A target that binds a deferred parameter's memo is handed the memo, whose instance it reads where it reads the
+					// value.
+					let memberName = dispatcherCase.values?.first { $0.property.label == label }?.memberName(bindingMemo: parameter.bindsMemo) ?? label.spelledAsMemberReference
+					return ("\(label.spelledAsArgumentLabel): \(payloadName).\(memberName)", true)
 				} else {
 					return ("\(label.spelledAsArgumentLabel): \(ownValue(label))", false)
 				}
@@ -2175,7 +2179,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				valueParameterList.append("\(carriedInnerScope.upName.spelledAsArgumentLabel): \(TypeDescription.nested(name: ReservedName.builderStructTypeName, parentType: enumType, generics: [Self.carried(carriedInnerScope.type, through: returnType)]).asSource)")
 			}
 			let carriedNames = Set(carriedInnerScopes.map(\.name))
-			valueParameterList += parameters.filter { !carriedNames.contains($0.property.label) }.map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
+			valueParameterList += parameters.filter { !carriedNames.contains($0.property.label) }.map { "\($0.property.label.spelledAsArgumentLabel): \($0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
 			let valueParameters = valueParameterList.joined(separator: ", ")
 			let builderType = TypeDescription.nested(name: ReservedName.builderStructTypeName, parentType: enumType, generics: [returnType])
 			var lines = ["\(indent)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable, isNonisolated: true))func \(functionName)(\(valueParameters)) -> \(builderType.asSource) {"]
@@ -6189,7 +6193,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return (["\(declarationPrefix) \(name) {"] + fieldDeclarations + ["\(indent)}"]).joined(separator: "\n")
 		}
 		let memoDeclarations = memoFields.compactMap { field in
-			field.memoType.map { "\(memberIndent)let \(field.memoName): \($0.asSource)" }
+			// The memo is as visible as its field, so a fill in another module binds it and reads its instance where its tree
+			// reads the value.
+			field.memoType.map { "\(memberIndent)\(field.access.spelledOnGeneratedDeclaration) let \(field.memoName): \($0.asSource)" }
 		}
 		let initializerParameters = fields.map { field in
 			"\(field.property.label.spelledAsArgumentLabel): \((field.memoType ?? field.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)).asSource)"
@@ -6586,7 +6592,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						attributes: ["escaping"],
 					)
 				} else {
-					field.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
+					field.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 				}
 				return "\(field.property.label.spelledAsArgumentLabel): \(type.asSource)"
 			}
@@ -6602,7 +6608,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A fill of a place nested by type binds what its case's payload holds, and takes what a type further out binds.
 		let nestedByTypeValues = hole.enumPlace?.values
 		let valuesType = hole.valuesType(qualifiedBy: hole.scopeSeamType)
-		let bindings = valuesType == nil ? [] : (nestedByTypeValues ?? hole.fields).filter(isRead).map { "\(indent)let \($0.property.label) = \(scopeParameterName).\($0.property.label.spelledAsMemberReference)" }
+		// A deferred parameter's field the fill binds from the struct is bound as its memo (`bindingItsMemo`).
+		let memoBoundLabels = Set(fillFields.filter(\.bindsMemo).map(\.property.label))
+		let bindings = valuesType == nil ? [] : (nestedByTypeValues ?? hole.fields).filter(isRead).map { "\(indent)let \($0.property.label) = \(scopeParameterName).\($0.memberName(bindingMemo: memoBoundLabels.contains($0.property.label)))" }
 		var parameters = valuesType.map { ["_ \(scopeParameterName): \($0.asSource)"] } ?? []
 		if let forwardedType = hole.forwardedType {
 			let parameterType = fulfillerForwardsOneFunction && !forwardedType.isClosure
@@ -6610,7 +6618,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				: forwardedType
 			parameters.append("_ \(Self.forwardedValueParameterName(forBuilding: property)): \(parameterType.asSource)")
 		}
-		parameters += fillParameterFields.map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
+		parameters += fillParameterFields.map { "\($0.property.label.spelledAsArgumentLabel): \($0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
 		return (["\(isSendable ? "@Sendable " : "")func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {"]
 			+ bindings
 			+ body
@@ -11682,6 +11690,42 @@ extension SeamSignature.Hole.Field {
 			declarationLocation: declarationLocation,
 			isReceivedOnlyIfAvailable: isReceivedOnlyIfAvailable,
 			deferral: deferral,
+			bindsMemo: bindsMemo,
 		)
+	}
+
+	/// The field as a fill that reads it from its struct binds it: a deferred parameter's binds the memo, its
+	/// `LazilyInstantiated` (or `SendableLazilyInstantiated`), under the field's label, so the fill's tree reads its instance
+	/// where it reads the value and the value is created when the tree reads it, as inline. The field keeps its own property,
+	/// which decides what it satisfies; only the type it is bound as (`boundTypeAsFunctionParameter`) and the spelling of its
+	/// reads change (`Scope.fillUnderConstruction`).
+	var bindingItsMemo: SeamSignature.Hole.Field {
+		SeamSignature.Hole.Field(
+			property: property,
+			access: access,
+			accessCause: accessCause,
+			declaringType: declaringType,
+			declarationLocation: declarationLocation,
+			isReceivedOnlyIfAvailable: isReceivedOnlyIfAvailable,
+			parameterTakingType: parameterTakingType,
+			deferral: deferral,
+			bindsMemo: true,
+		)
+	}
+
+	/// The type a function that is handed the field takes it as: the memo's where the field `bindsMemo`, else the field's own,
+	/// as a function parameter.
+	func boundTypeAsFunctionParameter(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> TypeDescription {
+		if bindsMemo, let memoType {
+			memoType
+		} else {
+			property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
+		}
+	}
+
+	/// What code reads the field from its struct under: a deferred parameter's memo where the field `bindsMemo`, else the
+	/// field's own name.
+	func memberName(bindingMemo: Bool) -> String {
+		bindingMemo && isDeferredParameter ? memoName : property.label.spelledAsMemberReference
 	}
 }
