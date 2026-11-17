@@ -455,7 +455,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func drawnValueProbes_describeKnownRight_inFirstGraphOfEachProbedCell() async throws {
 		let seeds = GraphFuzzerCallingMockCell.firstSeeds.filter { GraphFuzzerCallingMockDraw(seed: $0).valueProbes != nil }
-		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453])
+		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531])
 		for seed in seeds {
 			var filesToDelete = [URL]()
 			defer {
@@ -1096,6 +1096,38 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(counts == ["[String]": 11, "[String: Int]": 11, "() -> Int": 7, "(Int, Int)": 11, "internal": 20, "public": 20])
 	}
 
+	/// Seed 530 draws the first graph of `seamCallerFillSharesBuilder/internal/plain`, the first of its block: a seam's own
+	/// internal mock whose fill instantiates what nothing in its module fulfills, beside places of its own of the same hole
+	/// types. It takes the twin's builders, one for a hole type and family its own places and the fill's share.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_takesTwinsBuilders_whenDrawnSeamCallersFillSharesBuilderWithItsOwnPlaces() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 530)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 530)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .seamCallerFillSharesBuilder, caller: .internal, place: .plain))
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels)
+		#expect(draw.expectedBuilders.count < (draw.fillHoles?.builders.count ?? 0) + (draw.fillHoles?.protocols.count ?? 0))
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// The seam caller's graphs share a builder between the caller's own places and the fill's, a fill that instantiates
+	/// its places as plain values outside every `@Sendable` function, in the pinned number of its twenty graphs.
+	@Test
+	func seamCallerFillSharesBuilderDraw_sharesABuilder_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .seamCallerFillSharesBuilder }
+		let sharing = draws.filter { draw in
+			guard let fillHoles = draw.fillHoles else { return false }
+			return draw.expectedBuilders.count < fillHoles.builders.count + fillHoles.protocols.count
+		}
+		print("calling-mock seam callers graphs=\(draws.count) sharing=\(sharing.count)")
+
+		#expect(draws.count == 20)
+		#expect(sharing.count == 10)
+	}
+
 	/// The graphs of the shape whose fill instantiates what nothing fulfills draw each of its variations (`FillHoles`) in
 	/// the pinned number of graphs, each value in at least ten, so that the cell test, which requires every graph's mock to
 	/// take its twin's builders, judges each.
@@ -1171,7 +1203,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 53)
+		#expect(GraphFuzzerCallingMockCell.all.count == 55)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
 		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)
