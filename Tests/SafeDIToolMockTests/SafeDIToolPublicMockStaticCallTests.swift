@@ -1817,10 +1817,98 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
-		TODO
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Detail {
+		    nonisolated public enum SafeDIMockScope_Api {
+		        nonisolated public struct api_Values {
+		            public let session: Session
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let api: (api_Values) -> __safeDI_Built
+
+		            public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                self.api = api
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.api = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    public static func mock(
+		        session: Session,
+		        apiBuilder: @escaping () -> any Api
+		    ) -> Detail {
+		        Detail.__safeDI_mock(session: session, apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        session: Session,
+		        apiBuilder __safeDI_apiBuilder: Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api>
+		    ) -> Detail {
+		        let api: any Api = __safeDI_apiBuilder.api(SafeDIMockScope_Api.api_Values(session: session))
+		        return Detail(session: session, api: api)
+		    }
+		}
+
+		extension Detail {
+		    public enum __safeDI_Detail_mock_761E40A8BF1136DD {}
+		}
+		#endif
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
-		TODO
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            detailBuilder: ((Session, @escaping () -> any Api) -> Detail)? = nil
+		        ) {
+		            self.detailBuilder = detailBuilder
+		        }
+
+		        public let detailBuilder: ((Session, @escaping () -> any Api) -> Detail)?
+		    }
+
+		    public static func mock(
+		        session: Session,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_detailBuilder() -> Detail {
+		            func __safeDI_apiBuilder_Detail_api(session: Session) -> any Api {
+		                let api: any Api = Live(session: session)
+		                return api
+		            }
+		            func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(api: { values in __safeDI_apiBuilder_Detail_api(session: values.session) })
+		            }
+		            _ = Detail.__safeDI_Detail_mock_761E40A8BF1136DD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return if let safeDIBuilder = safeDIOverrides.detailBuilder { safeDIBuilder(session, { __safeDI_apiBuilder_Detail_api(session: session) }) } else { Detail.__safeDI_mock(session: session, apiBuilder: __safeDI_apiBuilder_Detail()) }
+		        }
+		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+		        return Root(session: session, detailBuilder: detailBuilder)
+		    }
+		}
+
+		extension Root {
+		    public enum __safeDI_Root_mock_E645BF4743A7E085 {}
+		}
+		#endif
 		"""])
 		let overrideDescription = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("overrideBuildsDetail()")], filesToDelete: &filesToDelete)
 		let probe = DifferentialValueProbe("apiReadsSession()")
@@ -1847,7 +1935,20 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		    return "session is the session \\(detail.session === session), api is the stub \\(detail.api is StubApi)"
 		}
 		"""
-		let modules = Self.overrideModules(app: [Self.overrideRoot(mockGeneration: ".public")], top: [Self.host, Self.stubApi, probeSource])
+		// `Root`’s initializer is internal, so `Host`’s mock calls `Root`’s public mock.
+		let root = """
+		@Instantiable(generateMock: .public)
+		public final class Root: Instantiable {
+		    init(session: Session, detailBuilder: Instantiator<Detail>) {
+		        self.session = session
+		        self.detailBuilder = detailBuilder
+		    }
+
+		    @Received public let session: Session
+		    @Instantiated public let detailBuilder: Instantiator<Detail>
+		}
+		"""
+		let modules = Self.overrideModules(app: [root], top: [Self.host, Self.stubApi, probeSource])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		TODO
@@ -1882,10 +1983,112 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
-		TODO
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Detail {
+		    nonisolated public enum SafeDIMockScope_Api {
+		        nonisolated public struct api_Values {
+		            public let session: Session
+		            public let store: any Store
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let api: (api_Values) -> __safeDI_Built
+
+		            public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                self.api = api
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.api = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    nonisolated public enum SafeDIMockScope_Store {
+		        nonisolated public struct store_Values {
+		            public let session: Session
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let store: (store_Values) -> __safeDI_Built
+
+		            public init(store: @escaping (store_Values) -> __safeDI_Built) {
+		                self.store = store
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.store = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    public static func mock(
+		        session: Session,
+		        apiBuilder: @escaping () -> any Api,
+		        storeBuilder: @escaping () -> any Store
+		    ) -> Detail {
+		        Detail.__safeDI_mock(session: session, apiBuilder: .init(__safeDI_noScope: apiBuilder), storeBuilder: .init(__safeDI_noScope: storeBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        session: Session,
+		        apiBuilder __safeDI_apiBuilder: Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api>,
+		        storeBuilder __safeDI_storeBuilder: Detail.SafeDIMockScope_Store.__safeDI_Builder<any Store>
+		    ) -> Detail {
+		        let store: any Store = __safeDI_storeBuilder.store(SafeDIMockScope_Store.store_Values(session: session))
+		        let api: any Api = __safeDI_apiBuilder.api(SafeDIMockScope_Api.api_Values(session: session, store: store))
+		        return Detail(session: session, store: store, api: api)
+		    }
+		}
+
+		extension Detail {
+		    public enum __safeDI_Detail_mock_396CF79E0DB1FDB4 {}
+		}
+		#endif
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
-		TODO
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init() {}
+		    }
+
+		    static func mock(
+		        session: Session,
+		        storeBuilder: @escaping () -> any Store,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_detailBuilder() -> Detail {
+		            func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(api: { scope in
+		                    let store = scope.store
+		                    let api: any Api = LiveApi(store: store)
+		                    return api
+		                })
+		            }
+		            _ = Detail.__safeDI_Detail_mock_396CF79E0DB1FDB4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Detail.__safeDI_mock(session: session, apiBuilder: __safeDI_apiBuilder_Detail(), storeBuilder: .init(__safeDI_noScope: storeBuilder))
+		        }
+		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+		        return Root(session: session, detailBuilder: detailBuilder)
+		    }
+		}
+		#endif
 		"""])
 		let description = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("apiReadsDetailsStore()")], filesToDelete: &filesToDelete)
 		if compileVerificationIsEnabled {
@@ -1914,10 +2117,121 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
-		TODO
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Detail {
+		    nonisolated public enum SafeDIMockScope_Api {
+		        nonisolated public struct api_Values {
+		            public let session: Session
+		            public let store: any Store
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let api: (api_Values) -> __safeDI_Built
+
+		            public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                self.api = api
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.api = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    nonisolated public enum SafeDIMockScope_Store {
+		        nonisolated public struct store_Values {
+		            public let session: Session
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let store: (store_Values) -> __safeDI_Built
+
+		            public init(store: @escaping (store_Values) -> __safeDI_Built) {
+		                self.store = store
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.store = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    public static func mock(
+		        session: Session,
+		        apiBuilder: @escaping () -> any Api,
+		        storeBuilder: @escaping () -> any Store
+		    ) -> Detail {
+		        Detail.__safeDI_mock(session: session, apiBuilder: .init(__safeDI_noScope: apiBuilder), storeBuilder: .init(__safeDI_noScope: storeBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        session: Session,
+		        apiBuilder __safeDI_apiBuilder: Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api>,
+		        storeBuilder __safeDI_storeBuilder: Detail.SafeDIMockScope_Store.__safeDI_Builder<any Store>
+		    ) -> Detail {
+		        let store: any Store = __safeDI_storeBuilder.store(SafeDIMockScope_Store.store_Values(session: session))
+		        let api: any Api = __safeDI_apiBuilder.api(SafeDIMockScope_Api.api_Values(session: session, store: store))
+		        return Detail(session: session, store: store, api: api)
+		    }
+		}
+
+		extension Detail {
+		    public enum __safeDI_Detail_mock_396CF79E0DB1FDB4 {}
+		}
+		#endif
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
-		TODO
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init() {}
+		    }
+
+		    public static func mock(
+		        session: Session,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_detailBuilder() -> Detail {
+		            func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(api: { scope in
+		                    let store = scope.store
+		                    let api: any Api = LiveApi(store: store)
+		                    return api
+		                })
+		            }
+		            func __safeDI_storeBuilder_Detail() -> Detail.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
+		                .init(store: { _ in
+		                    let store: any Store = LiveStore()
+		                    return store
+		                })
+		            }
+		            _ = Detail.__safeDI_Detail_mock_396CF79E0DB1FDB4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Detail.__safeDI_mock(session: session, apiBuilder: __safeDI_apiBuilder_Detail(), storeBuilder: __safeDI_storeBuilder_Detail())
+		        }
+		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+		        return Root(session: session, detailBuilder: detailBuilder)
+		    }
+		}
+
+		extension Root {
+		    public enum __safeDI_Root_mock_E645BF4743A7E085 {}
+		}
+		#endif
 		"""])
 		let probe = DifferentialValueProbe("apiReadsDetailsStore()")
 		let feature = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [probe], filesToDelete: &filesToDelete)
@@ -1934,7 +2248,8 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		// `Detail` receives `mainSession` under the label `session`, and `Root`’s fill `Live` reads `session`: in `Detail`’s
 		// tree that is the main session, which `Root` holds under another label beside a `session` of its own. A closure handed
 		// a builder over the value `Root` holds as `session` would build `Live` with the wrong session, so `Root`’s overrides
-		// hold no closure that builds `Detail`: they stay, empty. `Live` holds the main session, as in one module.
+		// hold no closure that builds `Detail`. `Feature` cannot build a `Session`, so `Detail`’s mock takes no overrides of its
+		// own, and `Root`’s are left empty. `Live` holds the main session, as in one module.
 		let modules = [
 			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContent: [
 				"""
@@ -1942,8 +2257,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 
 				public protocol Api: AnyObject {}
 
-				@Instantiable
-				public final class Session: Instantiable {
+				public final class Session {
 				    public init() {}
 				}
 
@@ -1963,6 +2277,13 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 				"""
 				import Feature
 				import SafeDI
+
+				@Instantiable
+				extension Session: Instantiable {
+				    public static func instantiate() -> Session {
+				        Session()
+				    }
+				}
 
 				@Instantiable(fulfillingAdditionalTypes: [Api.self])
 				public final class Live: Instantiable, Api {
@@ -2045,10 +2366,190 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
-		TODO
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Detail {
+		    nonisolated public enum SafeDIMockScope_Api {
+		        nonisolated public struct api_Values {
+		            public let session: Session
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let api: (api_Values) -> __safeDI_Built
+
+		            public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                self.api = api
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.api = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    public static func mock(
+		        session: Session,
+		        apiBuilder: @escaping () -> any Api
+		    ) -> Detail {
+		        Detail.__safeDI_mock(session: session, apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        session: Session,
+		        apiBuilder __safeDI_apiBuilder: Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api>
+		    ) -> Detail {
+		        let api: any Api = __safeDI_apiBuilder.api(SafeDIMockScope_Api.api_Values(session: session))
+		        return Detail(session: session, api: api)
+		    }
+		}
+
+		extension Detail {
+		    public enum __safeDI_Detail_mock_761E40A8BF1136DD {}
+		}
+		#endif
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
-		TODO
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Middle {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            detailBuilder: ((Session, @escaping () -> any Api) -> Detail)? = nil
+		        ) {
+		            self.detailBuilder = detailBuilder
+		        }
+
+		        let detailBuilder: ((Session, @escaping () -> any Api) -> Detail)?
+		    }
+
+		    static func mock(
+		        apiBuilder: @escaping () -> any Api,
+		        session: Session,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Middle {
+		        _ = Detail.__safeDI_Detail_mock_761E40A8BF1136DD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_detailBuilder() -> Detail {
+		            if let safeDIBuilder = safeDIOverrides.detailBuilder { safeDIBuilder(session, apiBuilder) } else { Detail.__safeDI_mock(session: session, apiBuilder: .init(__safeDI_noScope: apiBuilder)) }
+		        }
+		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+		        return Middle(session: session, detailBuilder: detailBuilder)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    nonisolated public enum SafeDIMockScope_Api {
+		        nonisolated public struct middle_Values {
+		            public let session: Session
+		        }
+
+		        nonisolated public enum Middle_Scope {
+		            nonisolated public struct detailBuilder_Values: Sendable {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let detailBuilder: (detailBuilder_Values) -> Detail.SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>
+
+		                public init(detailBuilder: @escaping (detailBuilder_Values) -> Detail.SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>) {
+		                    self.detailBuilder = detailBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.detailBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let middle: (middle_Values) -> SafeDIMockScope_Api.Middle_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(middle: @escaping (middle_Values) -> SafeDIMockScope_Api.Middle_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.middle = middle
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.middle = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            middle: __safeDI_App_Middle_MockConfiguration = .init()
+		        ) {
+		            self.middle = middle
+		        }
+
+		        public let middle: __safeDI_App_Middle_MockConfiguration
+		    }
+
+		    public static func mock(
+		        session: Session,
+		        apiBuilder: @escaping () -> any Api,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        Root.__safeDI_mock(session: session, apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        session: Session,
+		        apiBuilder __safeDI_apiBuilder: Root.SafeDIMockScope_Api.__safeDI_Builder<any Api>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let __safeDI_apiBuilder_middle = __safeDI_apiBuilder.middle(SafeDIMockScope_Api.middle_Values(session: session))
+		        func __safeDI_middle() -> Middle {
+		            _ = Detail.__safeDI_Detail_mock_761E40A8BF1136DD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_detailBuilder() -> Detail {
+		                Detail.__safeDI_mock(session: session, apiBuilder: __safeDI_apiBuilder_middle.detailBuilder(SafeDIMockScope_Api.Middle_Scope.detailBuilder_Values()))
+		            }
+		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+		            return Middle.__safeDI_init(session: session, detailBuilder: detailBuilder, safeDIBuilder: safeDIOverrides.middle.safeDIBuilder)
+		        }
+		        let middle: Middle = __safeDI_middle()
+		        return Root(session: session, middle: middle)
+		    }
+		}
+
+		extension Root {
+		    public enum __safeDI_Root_mock_13D6C92EB036F524 {}
+		}
+		#endif
+
+		#if DEBUG
+		/// Configuration for how `Middle` is constructed within the public mock trees of module `App`.
+		nonisolated public struct __safeDI_App_Middle_MockConfiguration {
+		    public init(
+		        _ safeDIBuilder: ((Session, Instantiator<Detail>) -> Middle)? = nil
+		    ) {
+		        self.safeDIBuilder = safeDIBuilder
+		    }
+
+		    /// Overrides how `Middle` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public let safeDIBuilder: ((Session, Instantiator<Detail>) -> Middle)?
+		}
+
+		extension Middle {
+		    static func __safeDI_init(session: Session, detailBuilder: Instantiator<Detail>, safeDIBuilder: ((Session, Instantiator<Detail>) -> Middle)?) -> Middle {
+		        if let safeDIBuilder { safeDIBuilder(session, detailBuilder) } else { Middle(session: session, detailBuilder: detailBuilder) }
+		    }
+		}
+		#endif
 		"""])
 	}
 

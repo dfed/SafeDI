@@ -2552,10 +2552,10 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsOverrideClosureOverTheEnumAndCallTheStruct_whenCalledMockTakesNoOverridesOfItsOwn() async throws {
+	mutating func generate_handsOverrideClosureFunctionOverFill_whenCalledMockTakesNoOverridesOfItsOwn() async throws {
 		// `Detail` builds nothing but its place, so its mock takes no `safeDIOverrides`, and `Root`'s overrides hold a closure
-		// that builds `Detail` from the builder over its enum. That closure is still handed the dispatcher, and the call the
-		// struct converted from it.
+		// that builds `Detail` from the builder a person writes. `Root` fills the place with `Live`, which reads nothing: the
+		// closure is handed a function over that fill, and the call the root level function of the struct.
 		let modules = [
 			ModuleFixture(name: "Core", packageName: "Core", swiftFileContent: [Self.core]),
 			ModuleFixture(name: "Feed", packageName: "Feed", swiftFileContent: [
@@ -2593,9 +2593,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 		#if DEBUG
 		extension Detail {
-		    @frozen nonisolated public enum SafeDIMockScope_Api {
-		        case api(api_Values)
-
+		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public struct api_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2649,25 +2647,25 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            detail: ((@escaping (Detail.SafeDIMockScope_Api) -> any Api) -> Detail)? = nil
+		            detail: ((@escaping () -> any Api) -> Detail)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                detail: detail
 		            )
 		        }
 
-		        var detail: ((@escaping (Detail.SafeDIMockScope_Api) -> any Api) -> Detail)? { __safeDI_storage.detail }
+		        var detail: ((@escaping () -> any Api) -> Detail)? { __safeDI_storage.detail }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
-		                detail: ((@escaping (Detail.SafeDIMockScope_Api) -> any Api) -> Detail)?
+		                detail: ((@escaping () -> any Api) -> Detail)?
 		            ) {
 		                self.detail = detail
 		            }
 
-		            let detail: ((@escaping (Detail.SafeDIMockScope_Api) -> any Api) -> Detail)?
+		            let detail: ((@escaping () -> any Api) -> Detail)?
 		        }
 		    }
 
@@ -2675,15 +2673,15 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_detail() -> Detail {
-		            func __safeDI_apiBuilder_Detail(_ scope: Detail.SafeDIMockScope_Api) -> any Api {
-		                switch scope {
-		                case .api:
-		                    let api: any Api = Live()
-		                    return api
-		                }
+		            func __safeDI_apiBuilder_Detail_api() -> any Api {
+		                let api: any Api = Live()
+		                return api
+		            }
+		            func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(api: { _ in __safeDI_apiBuilder_Detail_api() })
 		            }
 		            _ = Detail.__safeDI_Detail_mock_84DC57D5B04EB47D.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return if let safeDIBuilder = safeDIOverrides.detail { safeDIBuilder(__safeDI_apiBuilder_Detail) } else { Detail.__safeDI_mock(apiBuilder: .init(api: { __safeDI_apiValues in __safeDI_apiBuilder_Detail(.api(__safeDI_apiValues)) })) }
+		            return if let safeDIBuilder = safeDIOverrides.detail { safeDIBuilder({ __safeDI_apiBuilder_Detail_api() }) } else { Detail.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Detail()) }
 		        }
 		        let detail: Detail = __safeDI_detail()
 		        return Root(detail: detail)
