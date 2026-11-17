@@ -1349,16 +1349,18 @@ jobs:
   # the same prefix and the other build's commit is an ancestor of this
   # run's. Two pushes to main do not cancel each other, so the older one's
   # run can finish last: it finds the newer build's commit ahead of its
-  # own and leaves it. The macOS prefix names no runner image and the
-  # debug prefix no Swift version, so a build an older image or release
-  # made goes when a newer commit's build exists. Deleting a
+  # own and leaves it. The macOS prefix names no runner image, so a build
+  # an older image made goes when a newer commit's build exists. "Build and
+  # Test on Latest Swift" keeps its one build per toolchain instead: a
+  # stamped build of each commit saved 2.4 of its 31 minutes (2 min 29 s
+  # to 7 s, run 44189733147) for about 1 GB more of the 10. Deleting a
   # cache takes `actions: write` and comparing two commits `contents: read`;
   # only this job has the first. It checks nothing out and calls only
   # GitHub's API, so it runs on Linux with no container. A failure warns and
   # leaves the builds for the next run or for eviction.
   prune-build-caches:
     name: Delete Older Build Directories
-    needs: [spm, linux-build, linux-latest-swift, generate-time]
+    needs: [spm, linux-build, generate-time]
     if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
@@ -1377,7 +1379,7 @@ jobs:
           REF: ${{ github.ref }}
           COMMIT: ${{ github.sha }}
         run: |
-          for prefix in spm-release-v2-macOS-xcode-26.0- spm-release-v2-Linux-swift-6.2- spm-debug-v2-Linux-swift- generate-time-build-v1-Linux-swift-6.2-; do
+          for prefix in spm-release-v2-macOS-xcode-26.0- spm-release-v2-Linux-swift-6.2- generate-time-build-v1-Linux-swift-6.2-; do
             if ! builds=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -F per_page=100 --jq '.actions_caches[] | "\(.id) \(.key)"' 2>&1); then
               echo "::warning::Listing $REF's builds under $prefix failed: $(printf '%s' "$builds" | tr '\r\n' '  ')"
               continue
@@ -2213,31 +2215,20 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
-      # For the reason "Build Tests on Linux" gives: without it, a restored
-      # build directory rebuilds every target of this package.
-      - name: Stamp Source Times
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          .github/scripts/stamp-source-times.sh
       - name: Print Swift Version
         id: swift
         run: |
           swift --version
           echo "version=$(swift --version 2>&1 | grep -m1 -oE 'Swift version [0-9.]+' | awk '{print $3}')" >> "$GITHUB_OUTPUT"
       # The toolchain floats, so the key carries the version printed
-      # above: a new release starts from an empty cache. It ends in the
-      # commit, so that each push to main saves the build a later run
-      # starts from ("Save Build Directory" below), and only a run on main
-      # saves, both for the reasons "Build Tests on Linux" gives.
-      - name: Restore Build Directory
-        id: build-cache
-        uses: actions/cache/restore@v6
+      # above: a new release starts from an empty cache.
+      - name: Cache Build Directory
+        uses: actions/cache@v6
         with:
           path: .build
-          key: spm-debug-v2-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
+          key: spm-debug-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
           restore-keys: |
-            spm-debug-v2-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}-
-            spm-debug-v2-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-
+            spm-debug-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -2258,25 +2249,9 @@ jobs:
         # times that, rounded up for the runner's variance.
         timeout-minutes: 5
         run: swift build --build-system swiftbuild --traits sourceBuild --target SafeDIToolTestSupport --scratch-path "$RUNNER_TEMP/swiftbuild-test-support"
-      # Built in a step of its own so that the build directory is saved
-      # only after a build that succeeded, and before the tests, which a
-      # failure of theirs then cannot lose. The build from nothing took 4.2
-      # minutes on the 4-core Linux runner, 2.5 minutes on a restored build
-      # whose sources were not stamped, and 7 seconds on one whose sources
-      # were, after which the test step's own build took 3 seconds (run
-      # 44189733147, 2026-11-17); the limit is about twice the first.
-      - name: Build Tests
-        timeout-minutes: 10
-        run: swift build --build-tests --traits sourceBuild
-      - name: Save Build Directory
-        if: ${{ github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v6
-        with:
-          path: .build
-          key: ${{ steps.build-cache.outputs.cache-primary-key }}
       # A time limit for the macOS job's reason: about twice the longest
-      # duration measured, from when this step also built. On 2026-11-15,
-      # eight successful runs of this step took 18.5 to 32.6 minutes (median 19.3; the longest was main's
+      # duration measured. On 2026-11-15, eight successful runs of this
+      # step took 18.5 to 32.6 minutes (median 19.3; the longest was main's
       # run 43721724778), and the step of a pull request's run 43726656460
       # reached the 35-minute limit after its tests had passed. The tests
       # alone take about 5.5 minutes; the rest is the build, and the compile
