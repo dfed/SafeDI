@@ -1103,7 +1103,9 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		try await expectValuesEqualInlineBuild(output, modules: modules, probes: [
 			DifferentialValueProbe("Root()"),
 			Cycle.instantiator.probe,
-			DifferentialValueProbe(name: "Hub.mock(apiBuilder: { LiveApi() })", expression: "Hub.mock(apiBuilder: { LiveApi() })"),
+			// The inline build has no seam, so its `Hub.mock()` takes the value; the reference is the seam's production tree,
+			// which builds an `Api` per place as the mock's builder does.
+			DifferentialValueProbe(name: "Hub.mock(apiBuilder: { LiveApi() })", expression: "Hub.mock(apiBuilder: { LiveApi() })", knownRightExpression: "Root().hub"),
 		])
 	}
 
