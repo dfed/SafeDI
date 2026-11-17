@@ -758,7 +758,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        nonisolated public struct settings_Values {
 		            public var service: Clock { __safeDI_service.instance }
 		            public let reader: Reader
-		            let __safeDI_service: LazilyInstantiated<Clock>
+		            public let __safeDI_service: LazilyInstantiated<Clock>
 
 		            init(service: LazilyInstantiated<Clock>, reader: Reader) {
 		                __safeDI_service = service
@@ -1452,8 +1452,8 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            public var alarm: Clock { __safeDI_alarm.instance }
 		            public var zone: Clock { __safeDI_zone.instance }
 		            public let reader: Reader
-		            let __safeDI_alarm: LazilyInstantiated<Clock>
-		            let __safeDI_zone: LazilyInstantiated<Clock>
+		            public let __safeDI_alarm: LazilyInstantiated<Clock>
+		            public let __safeDI_zone: LazilyInstantiated<Clock>
 
 		            init(alarm: LazilyInstantiated<Clock>, zone: LazilyInstantiated<Clock>, reader: Reader) {
 		                __safeDI_alarm = alarm
