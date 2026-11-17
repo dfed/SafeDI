@@ -5918,12 +5918,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 					forwardedInnerScopeLines = innerScopesCalledWithForwardedValue.map { "\(Self.standardIndent)let \($0) = \($0)(\(forwardedValue))" }
 				}
-				let generatedProperties = try await forwardedInnerScopeLines + memberCallLines + rebindingLines + seamGuardLines + generateProperties(
+				// Appended part by part: Linux's Swift 6.2 cannot type-check these parts joined with `+` in one expression ("the
+				// compiler is unable to type-check this expression in reasonable time").
+				var generatedProperties = forwardedInnerScopeLines
+				generatedProperties += memberCallLines
+				generatedProperties += rebindingLines
+				generatedProperties += seamGuardLines
+				generatedProperties += try await generateProperties(
 					codeGeneration: codeGeneration,
 					propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater),
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 					leadingMemberWhitespace: Self.standardIndent,
-				) + builderCallArguments.flatMap(\.declarations)
+				)
+				generatedProperties += builderCallArguments.flatMap(\.declarations)
 				// The function a lazy cycle closes on also takes the parameters its cycle-closing scopes pass.
 				let functionParameters = forwardedProperties + (isPropertyCycle ? [] : cycleParameters.map(\.property))
 				let functionArguments = if functionParameters.isEmpty {
