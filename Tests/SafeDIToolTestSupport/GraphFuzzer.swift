@@ -8003,7 +8003,8 @@ enum GraphFuzzerGenerator {
 			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
 			let fillReadsLabel = passingUpCopyRandom.percentChance(60)
 			let seamsBindLabelRoll = passingUpCopyRandom.percentChance(35)
-			let declaresHole = declarations.contains { $0.name == "\(prefix)HoleSeam" }
+			let holeSeamName = "\(self.prefix)HoleSeam"
+			let declaresHole = declarations.contains { $0.name == holeSeamName }
 			let seamsBindLabel = seamsBindLabelRoll && !(declaresHole && fillReadsLabel && sendability != .sendable)
 			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
 			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
@@ -8115,7 +8116,8 @@ enum GraphFuzzerGenerator {
 			let relayCallInSendableFill = reenteredFillRandom.percentChance(60) && callThroughRelay && sendability != .nonSendable
 			let relayCallByTypeOfAnotherModule = reenteredFillRandom.percentChance(60) && callThroughRelay && sendability != .nonSendable
 			// A graph with a hole draws the remedied read where the roll draws one of the two the tool rejects by design.
-			let declaresHole = declarations.contains { $0.name == "\(prefix)HoleSeam" }
+			let holeSeamName = "\(self.prefix)HoleSeam"
+			let declaresHole = declarations.contains { $0.name == holeSeamName }
 			let oneRouteVariant = declaresHole && oneRouteVariantRoll < 2 ? oneRouteVariantRoll + 2 : oneRouteVariantRoll
 			guard !modulesOmittingPackageName.contains(.seamModule) else { return declarations }
 			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
@@ -8156,10 +8158,12 @@ enum GraphFuzzerGenerator {
 				// The remedy the error offers a reader only if available: the seam built again carries the label itself.
 				subB.properties.insert(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "reenteredMark", type: mark.name + "?"), at: 0)
 			}
+			// `ReenteredSubA`, built in a `SendableInstantiator` where the call is made inside a `@Sendable` fill.
+			let subAProperty = relayCallInSendableFill
+				? PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubABuilder", type: "SendableInstantiator<\(subA.name)>")
+				: PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubA", type: subA.name)
 			var top = seam("ReenteredTop", module: .seamDependency, properties: (readsValueAbove ? [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredLabel", type: label.name)] : []) + [
-				relayCallInSendableFill
-					? PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubABuilder", type: "SendableInstantiator<\(subA.name)>")
-					: PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubA", type: subA.name),
+				subAProperty,
 				PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubB", type: subB.name),
 			])
 			top.additionalDeclarations.append("public protocol \(firstName)\(sendableSuffix) {}\npublic protocol \(secondName)\(sendableSuffix) {}")
