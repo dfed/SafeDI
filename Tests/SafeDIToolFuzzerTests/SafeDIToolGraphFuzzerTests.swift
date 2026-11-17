@@ -6913,7 +6913,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
-			seeds: [15, 68, 93, 94, 98, 108, 121, 164, 273, 283, 298, 304, 308, 309, 326, 347, 348, 362, 365, 407, 481, 527, 556, 594, 605, 623, 663, 670, 699, 701, 750, 797, 832, 850, 858, 876, 883, 892, 929, 930],
+			seeds: [68, 93, 94, 98, 121, 164, 273, 283, 298, 304, 308, 309, 326, 347, 348, 362, 365, 384, 481, 500, 527, 550, 556, 594, 605, 623, 669, 670, 699, 769, 791, 797, 832, 850, 858, 876, 883, 892, 905, 930],
 		),
 		// Seed 391's chain of hole draws that re-enter one another holds more wrappers than a graph compared on its own may
 		// traverse (`DifferentialValueLimits.isolatedFuzzerGraph`), so the comparator describes none of its values beneath
@@ -6929,20 +6929,12 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [311, 338, 383, 567, 595, 836, 854, 940, 948],
+			seeds: [311, 338, 567, 595, 617, 854, 940, 948],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(mockParameterAndFieldOrderReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
-			seeds: [281, 548],
-		),
-		// A fill that re-enters its own seam: the place the re-entered seam builds is handed the root dispatcher, not the
-		// fill's values, so `HoleImpl`'s only-if-available `holeNestId` is `nil` where the visible build and the inline
-		// build pass it.
-		GraphFuzzerKnownIssue(
-			reason: "\(fillReenteringItsSeamLosesValueReason); and \(seamBuilderOrderReason)",
-			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeListOrder)],
-			seeds: [600, 945],
+			seeds: [281, 300, 548],
 		),
 	]
 
@@ -7033,7 +7025,7 @@ struct SafeDIToolGraphFuzzerTests {
 		base: [],
 		labels: [],
 		sameSupply: [
-			98, 108, 135, 151, 273, 300, 326, 797, 854, 858, 929,
+			98, 135, 151, 273, 300, 326, 797, 854, 858, 990,
 		],
 		sameSupplyReason: seamMockTakesHoleValueReason,
 		sameSupplyBuilderKindFlips: [],
@@ -7536,10 +7528,6 @@ struct SafeDIToolGraphFuzzerTests {
 		"_RetainNavigator alive holding retainHome.retainDetailBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 	].map { .seamRetainsWhatInlineFrees(containing: $0) }
 
-	private static let fillReenteringItsSeamLosesValueReason = "A fill that re-enters its own seam hands the re-entered seam the root dispatcher, not its own values, so a fill there reads `nil` for an only-if-available value its visible build and its inline build pass; fixed in a later PR"
-
-	private static let fillReenteringItsSeamLosesValueDifference = "> holeService > holeNestId:\n  feature:     holeNestId: nil\n  known right: holeNestId: Int 7"
-
 	/// The shape of the builder label sort alone, `seamBuilderOrderReason` with the one signature its entries list, when
 	/// `knownIssue` lists that reason among those it joins, or `nil`. The order is sanctioned (CLAUDE.md, "What may follow
 	/// names"), so the seam smoke batch counts a graph whose renamed graph differs by it as exercising its shapes; no other
@@ -7561,9 +7549,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// at all, since the seam's draw changed their graphs, or the base corpus's mock vocabulary draw, which the seam
 	/// corpus does not draw, changed them there (154, 527, 657); the inherited lists leave them out. Observed, not
 	/// derived: a seed here that a run finds failing its inherited shape again is a new failure, and goes back. Seeds
-	/// 311 and 886, which the in-seam leak or the builder order once listed beside it, fail their inherited shape alone;
-	/// 300, 751 and 940 fail it beside the in-seam leak, and are listed with it.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 116, 154, 157, 281, 309, 311, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 548, 567, 595, 632, 657, 714, 728, 735, 768, 774, 786, 808, 836, 840, 847, 903, 912, 940, 948]
+	/// 281, 300, 311, 338, 548, 567, 595, 617, 940 and 948 fail it beside the builder order, and are listed with it;
+	/// 593, 751 and 886 no longer fail it.
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 116, 154, 157, 281, 300, 309, 311, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 548, 567, 593, 595, 617, 632, 657, 714, 728, 735, 751, 768, 774, 786, 808, 836, 840, 847, 886, 903, 912, 940, 948]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
@@ -7573,9 +7561,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
 	/// that follows label order is how mocks and initializers already work – so the oracle's label reversal
-	/// reorders them, which is expected, not a defect, as the mock's label-sorted parameters are in `knownIssues`. Seeds 330
-	/// and 809 of this shape also leak, and are listed apart.
-	private static let labelSortedPassThroughSeeds: [UInt64] = [330, 604, 788, 809, 816, 834, 928, 950]
+	/// reorders them, which is expected, not a defect, as the mock's label-sorted parameters are in `knownIssues`.
+	private static let labelSortedPassThroughSeeds: [UInt64] = [604, 809, 816, 834, 928, 950]
 
 	/// Seeds of the same shape whose generated mock also lists label-sorted parameters, so that it changes too.
 	private static let labelSortedPassThroughSeedsWhoseMockParametersAlsoChange: [UInt64] = [371, 381]
