@@ -11,6 +11,8 @@ Start
 1. Your first action is `EnterWorktree` with the worktree path from the brief (load it with ToolSearch `select:EnterWorktree`). Work nowhere else. Never run bare `git stash`.
 2. Read the files the brief names and the rules that load with them before writing code.
 3. If your session started outside that worktree, its scoped rules and nested CLAUDE.md files do not load: Read the files the root CLAUDE.md's "Where the rest lives" table lists for your area before editing.
+4. Size the brief before you begin. More than about four substantial steps (a generator change, a conversion of thirty or more tests, a fuzzer draw with its pins, a replay onto a moved parent each count as one) is more than one lane finishes: do the first steps that make one commit, and report the rest as steps to brief separately. Say so at the start, not when you run short.
+5. When the brief tells you to use a mechanism it says exists (a scope the generator creates, a map entry, a call generated code makes), confirm it first on the brief's own shape, with a test or a search that shows it. If it is not there, STOP AND REPORT before writing code: the design needs a ruling, not a workaround.
 
 Work
 - Tests first: a failing test for every behavior and every bug, with full `==` output, diagnostics with wording, location and fix-its. Then the code. Then the full suite.
