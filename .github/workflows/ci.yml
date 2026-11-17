@@ -1445,6 +1445,119 @@ jobs:
       - name: Smoke test
         run: .build/release/SafeDITool --version
 
+  # Compares how long `SafeDITool generate` takes on synthetic dependency
+  # graphs, the change's tool against the tool of the commit it is based on,
+  # both measured in this job, on this runner, in alternating runs
+  # (Scripts/generate-time-check.py). It fails when a graph takes twice as
+  # long, because a generator that slowed down several times over passed
+  # every other check and was found only by a benchmark run by hand.
+  # The base is the main commit a pull request branched from, and for a push
+  # to main the commit before the push. Its tool comes from the cache the
+  # push to main that built it saved; when the cache has none, the job builds
+  # it in this checkout first, so the change's build after it compiles only
+  # what differs.
+  generate-time:
+    name: Check Generate Time on Linux
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          # Main's history, for the merge base.
+          fetch-depth: 0
+      # Retried for the reason "Install curl for Codecov" gives.
+      - name: Install Python
+        uses: ./.github/actions/retry
+        with:
+          command: command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }
+      - name: Check the Script
+        run: python3 -I Scripts/generate-time-check.py --self-test "$RUNNER_TEMP/generate-time-self-test"
+      - name: Resolve Package Dependencies
+        uses: ./.github/actions/retry
+        with:
+          command: swift package resolve
+      - name: Name the Base Commit
+        id: commits
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          head=$(git rev-parse HEAD)
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ] && git rev-parse --verify --quiet "$BEFORE^{commit}" > /dev/null; then
+            base=$(git rev-parse "$BEFORE^{commit}")
+          else
+            base=$(git merge-base origin/main HEAD)
+          fi
+          # A run on main itself that is not a push (the weekly run) has
+          # nothing beneath it but the commit before.
+          if [ "$base" = "$head" ]; then
+            base=$(git rev-parse HEAD^)
+          fi
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head $head, base $base"
+      - name: Restore the Base Commit's SafeDITool
+        id: base-tool
+        uses: actions/cache/restore@v6
+        with:
+          path: .generate-time/cached
+          key: generate-time-tool-${{ runner.os }}-swift-6.2-${{ steps.commits.outputs.base }}
+      # The limits are about twice the slowest build: this step took 10.3 and
+      # 11.2 minutes from nothing, and the change's build after it 2 seconds
+      # where the tool's sources were the same and 6.3 minutes where the
+      # generator differed (probe runs 44053665790 and 44055931063); the
+      # change's build alone, when the cache has the base's tool, is a build
+      # from nothing.
+      - name: Build the Base Commit's SafeDITool
+        if: ${{ steps.base-tool.outputs.cache-hit != 'true' }}
+        timeout-minutes: 25
+        env:
+          BASE: ${{ steps.commits.outputs.base }}
+          HEAD: ${{ steps.commits.outputs.head }}
+        run: |
+          git checkout --quiet --detach "$BASE"
+          swift build -c release --product SafeDITool
+          mkdir -p .generate-time/cached
+          cp .build/release/SafeDITool .generate-time/cached/SafeDITool
+          git checkout --quiet --detach "$HEAD"
+      - name: Build SafeDITool
+        timeout-minutes: 25
+        run: |
+          mkdir -p .generate-time/base .generate-time/head
+          mv .generate-time/cached/SafeDITool .generate-time/base/SafeDITool
+          swift build -c release --product SafeDITool
+          cp .build/release/SafeDITool .generate-time/head/SafeDITool
+      # The comparison took 2.0 and 2.3 minutes (the same runs). The limit is
+      # more than twice that because a slower generator is what this step
+      # exists to report: the largest seam graph took 12 to 19 seconds a run
+      # in those runs, and at five times that the step takes 9 minutes.
+      - name: Compare Generate Time
+        timeout-minutes: 10
+        run: |
+          python3 -I Scripts/generate-time-check.py --summary "$GITHUB_STEP_SUMMARY" \
+            .generate-time/base/SafeDITool .generate-time/head/SafeDITool "$RUNNER_TEMP/generate-time"
+      # Main's tool, for the pull requests that branch from this commit. Saved
+      # whatever the comparison found: the tool is this commit's either way.
+      - name: Stage This Commit's SafeDITool
+        if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('.generate-time/head/SafeDITool') != '' }}
+        run: |
+          mkdir -p .generate-time/cached
+          cp .generate-time/head/SafeDITool .generate-time/cached/SafeDITool
+      - name: Save This Commit's SafeDITool
+        if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('.generate-time/head/SafeDITool') != '' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .generate-time/cached
+          key: generate-time-tool-${{ runner.os }}-swift-6.2-${{ steps.commits.outputs.head }}
+
   # Fuzzes each of the graph fuzzer's corpora whole – the base corpus, seeds
   # 0..<corpusSeedCount, the seam corpus, seeds 0..<seamCorpusSeedCount
   # drawn with the generateDependencyTree feature, and the public mock corpus,
