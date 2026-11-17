@@ -26,8 +26,8 @@ import Testing
 
 /// The neighbors of a seam that takes a builder struct: the order its declarations are read in, two bindings at one path,
 /// a path through types narrower than the seam, its tiers, a module whose declarations default to the main actor, the
-/// calls a seam that keeps its closure over its enum makes of it, a public mock beside such a call, the closures a person
-/// passes its readable initializer, and the hole types that keep their closure over the enum.
+/// calls a seam that passes up its places makes of it, a public mock beside such a call, and the closures a person passes
+/// its readable initializer.
 struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 	// MARK: Initialization
 
@@ -1071,10 +1071,10 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_rebuildsSendableCaseWithoutItsValues_whenKeptSeamPassesUpPlaceBuiltInsideSendableFunction() async throws {
-		// `Inner` holds `Innermost`'s scope and keeps its closure over its enum; the struct it hands `Innermost` rebuilds its
-		// `@Sendable` case, whose member takes no values, around the values of `Detail`'s plain level. `Outer`'s dispatchers
-		// are unchanged.
+	mutating func generate_handsInnerSeamMemberOfSendableStruct_whenOuterSeamPassesUpPlaceBuiltInsideSendableFunction() async throws {
+		// `Inner` holds `Innermost`'s scope and passes its place up, built inside a `@Sendable` function: `Inner` takes the
+		// `@Sendable` family's struct, whose member for `Innermost` returns `Innermost`'s, and `Outer`'s dispatchers over
+		// both structs are `@Sendable nonisolated`.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["deepSendable"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Inner {
@@ -1604,9 +1604,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_leavesPublicMocksAsTheyWere_whenKeptSeamWithPublicMockCallsSeamTakingBuilderStruct() async throws {
+	mutating func generate_leavesPublicMocksAsTheyWere_whenOuterSeamWithPublicMockCallsSeamTakingBuilderStruct() async throws {
 		// `Inner`'s seam side hands `Innermost` a struct; its public mock builds `Innermost`'s tree itself, and `Screen`'s mock
-		// calls `Inner`'s, both as they did when every seam took a closure over its enum.
+		// calls `Inner`'s, both in the closure over the enum that a public mock keeps.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["mockBeside"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Inner {
@@ -2368,12 +2368,11 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_reentersFunctionOfFirstOpening_whenKeptSeamPassesUpScreenThatOpensItself() async throws {
-		// `Home`'s `Screen` builds another through `next`, and `Shell` passes `Home`'s place up and keeps its closure over its
-		// enum: the member for `next` calls the function of the level the route first opened, with the wrap it was given
-		// there, so a screen four or eight levels deep keeps one `Live` alive, as inline, where `Home`'s closure over its own
-		// enum kept two.
-		let modules = Self.fixtures["nextUnderKeptShell"] ?? []
+	mutating func generate_reentersLevelsFunction_whenOuterSeamPassesUpScreenThatOpensItself() async throws {
+		// `Home`'s `Screen` builds another through `next`, and `Shell` passes `Home`'s place up: the member for `next` calls
+		// the function `Root` builds `Screen`'s level with again, so a screen four or eight levels deep keeps one `Live`
+		// alive, as inline.
+		let modules = Self.fixtures["nextUnderShell"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
 		#if canImport(Feature)
@@ -2545,11 +2544,11 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_convertsInOneExpression_whenKeptSeamPassesUpScreenThatOpensItselfInSendableInstantiator() async throws {
+	mutating func generate_buildsLevelInSendableFunction_whenOuterSeamPassesUpScreenThatOpensItselfInSendableInstantiator() async throws {
 		// `Screen` builds another in a `SendableInstantiator`, which reopens the level in a `@Sendable` function: that function
-		// calls its family's member on each entry, so the `@Sendable` root's struct holds no loop, and `Shell` converts each
-		// root in one expression, the `@Sendable` one's members rebuilding its case without values.
-		let modules = Self.fixtures["sendableLoopUnderKeptShell"] ?? []
+		// calls its family's member on each entry, so the `@Sendable` root's struct holds no loop, and `Root` builds
+		// `Screen`'s level in a `@Sendable nonisolated` function.
+		let modules = Self.fixtures["sendableLoopUnderShell"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
 		#if canImport(Feature)
@@ -2748,12 +2747,12 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_convertsInOneExpression_whenKeptSeamPassesUpCycleClosingOnFunctionBuiltByValue() async throws {
+	mutating func generate_buildsLevelInSendableFunction_whenOuterSeamPassesUpCycleClosingOnFunctionBuiltByValue() async throws {
 		// `Hub` builds `A` by value, and `B`, built in `A`'s `SendableInstantiator`, builds `A` again, which calls the function
 		// `Hub`'s tree builds `A` with from a `@Sendable` closure; `Shell` passes `Hub`'s place up. The cycle closes on a
-		// `@Sendable` function, which calls its family's member on each entry, so the struct holds no loop, and `Shell`
-		// converts it in one expression.
-		let modules = Self.fixtures["byValueLoopUnderKeptShell"] ?? []
+		// `@Sendable` function, which calls its family's member on each entry, so the struct holds no loop, and `Root`
+		// builds `B`'s level in a `@Sendable nonisolated` function.
+		let modules = Self.fixtures["byValueLoopUnderShell"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
 		#if canImport(Feature)
@@ -2914,10 +2913,11 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_writesConversionFunctionPerLevelPerRoot_whenKeptSeamPassesUpBothFamiliesOverOneLoopedLevel() async throws {
+	mutating func generate_sharesOneLevelFunctionBetweenFamilies_whenOuterSeamPassesUpBothFamiliesOverOneLoopedLevel() async throws {
 		// `Home` builds `Screen` in an `Instantiator` and in a `SendableInstantiator`, and `Screen` builds itself again through
-		// `next`: the looped level is reached from both root enums, so `Shell` converts it through a function per root.
-		let modules = Self.fixtures["bothFamiliesLoopUnderKeptShell"] ?? []
+		// `next`: the looped level is reached from both root structs, so `Root` builds it in one `@Sendable nonisolated`
+		// function that both families' members call.
+		let modules = Self.fixtures["bothFamiliesLoopUnderShell"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
 		#if canImport(Feature)
@@ -3118,10 +3118,10 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_declaresConversionFunctionsBesideDispatchers_whenKeptSeamsFillCaseCarriesCalleeWhoseLevelReopens() async throws {
-		// `Outer` fills `Inner`'s `service` with a type that holds `Outer`'s own place, so its dispatchers keep their switch
-		// over `Inner`'s enum, and `Inner`'s `Screen` builds itself again through `next`: the conversion's functions, named
-		// apart from the dispatchers, call them with the rebuilt case.
+	mutating func generate_declaresDispatcherPerCalleeLevel_whenOuterSeamsFillCaseCarriesCalleeWhoseLevelReopens() async throws {
+		// `Outer` fills `Inner`'s `service` with a type that holds `Outer`'s own place, so its dispatchers take `Inner`'s
+		// struct over `Outer`'s level struct, and `Inner`'s `Screen` builds itself again through `next`: one dispatcher per
+		// level of `Inner`'s, whose member for `next` calls its own level's dispatcher again.
 		let modules = Self.fixtures["insideFillLoop"] ?? []
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
@@ -4142,7 +4142,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		// One builder: a plain place that forwards nothing and a place held in an `Instantiator`, which forwards.
 		"plainPlaceBesideForwardingPlace": panelModules(hostDeclarations: ["@Instantiated public let panel: Panel", "@Instantiated public let held: Instantiator<Panel>"]),
 		// `Home`'s `Screen` builds another `Screen` through `next`; `Shell` passes `Home`'s place up.
-		"nextUnderKeptShell": [
+		"nextUnderShell": [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 				"public protocol Api: AnyObject {}",
 				seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Forwarded public let id: Int", "@Instantiated public let api: any Api", "@Instantiated public let next: Instantiator<Screen>"]),
@@ -4185,7 +4185,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
 		],
 		// `Home`'s `Screen` builds another `Screen` in a `SendableInstantiator`; `Shell` passes `Home`'s place up.
-		"sendableLoopUnderKeptShell": [
+		"sendableLoopUnderShell": [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 				"public protocol Api: Sendable {}",
 				seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Instantiated public let api: any Api", "@Instantiated public let again: SendableInstantiator<Screen>"], conformances: ", Sendable"),
@@ -4201,7 +4201,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		],
 		// `Hub` builds `A` by value; `B`, built in `A`'s `SendableInstantiator`, builds `A` again; `Shell` passes `Hub`'s place
 		// up.
-		"byValueLoopUnderKeptShell": [
+		"byValueLoopUnderShell": [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 				"public protocol Api: Sendable {}",
 				seamFixtureType(named: "A", declarations: ["@Instantiated public let bBuilder: SendableInstantiator<B>"], conformances: ", Sendable"),
@@ -4218,7 +4218,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		],
 		// `Home` builds `Screen` in an `Instantiator` and in a `SendableInstantiator`, and `Screen` builds itself again through
 		// `next`; `Shell` passes `Home`'s place up.
-		"bothFamiliesLoopUnderKeptShell": [
+		"bothFamiliesLoopUnderShell": [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 				"public protocol Api: Sendable {}",
 				seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Instantiated public let api: any Api", "@Instantiated public let next: Instantiator<Screen>"]),
