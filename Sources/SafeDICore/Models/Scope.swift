@@ -529,6 +529,11 @@ final class Scope: Hashable {
 		for generator in generatorsToStart ?? [] {
 			ScopeGeneratorUnderConstruction.startCodeGeneration(of: generator)
 		}
+		// The entries of a tree are kept only once its construction returns. A mock root whose construction throws keeps
+		// none, and its error, `ErasedInstantiatorForwardedPropertiesMismatchError`, the only one construction throws, ends
+		// the whole mock pass, so no later mock root reads the memo after a root that failed. A change that adds a
+		// construction error the mock pass catches owes a test that such a root, first, in the middle and last, reports
+		// the same errors, and leaves the other roots the same mocks, with the memo shared between mock roots and without it.
 		if sharesMemo {
 			constructionMemo.keepEntries(ofFirstPass: firstPassMemo)
 		}
