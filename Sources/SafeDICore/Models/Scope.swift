@@ -1805,14 +1805,15 @@ struct SeamHoles {
 			// The call's own case holds only the inner enum: no value of the calling type, so nothing it binds is captured by the
 			// builder the called type holds.
 			// Where the call's enum declares a builder struct, the call's own member returns the inner seam's struct, called on
-			// the struct the last case on its route returned, or on the builder itself.
+			// the struct the last case on its route returned, or on the builder itself: inside a fill whose call's case leads on,
+			// the struct of the fill's own level, which the fill is handed, as `bindValues` leads on from it.
 			// A fulfilling call is handed the struct of the fill's own level: the inner scope its fill is handed, or, where its fill is
 			// built in a `@Sendable` function, whose case carries no inner scope, what the case's member returns.
 			let memberCall = if callRoute.handsFillLevelStruct {
 				callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName }
 			} else {
 				callRoute.memberValuesType.map { memberValuesType in
-					"\(callRoute.route.last?.member?.bindingName ?? builderName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
+					"\(callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName } ?? builderName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
 				}
 			}
 			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(

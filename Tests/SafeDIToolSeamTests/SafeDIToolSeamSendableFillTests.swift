@@ -275,7 +275,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                func __safeDI_widget() -> DefaultWidget {
 				                    func __safeDI_part() -> Part {
 				                        _ = Part.__safeDI_Part_3BB75BFB172DAB8E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				                        return Part(__safeDI_gearBuilder: __safeDI_gearBuilder_inner_widgetBuilder.part(SafeDIScope_Gear.DefaultWidget_Scope.part_Values()))
+				                        return Part(__safeDI_gearBuilder: __safeDI_inner_widgetBuilder_gearBuilder.part(SafeDIScope_Gear.DefaultWidget_Scope.part_Values()))
 				                    }
 				                    let part: Part = __safeDI_part()
 				                    let gadget: any Gadget = __safeDI_inner_widgetBuilder_gadgetBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values(part: part))
@@ -393,7 +393,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                func __safeDI_widget() -> DefaultWidget {
 				                    func __safeDI_part() -> Part {
 				                        _ = Part.__safeDI_Part_3BB75BFB172DAB8E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				                        return Part(__safeDI_gearBuilder: __safeDI_gearSendableBuilder_shell_widgetSendableBuilder.part(SafeDIScope_Gear.DefaultWidget_Scope.part_Values()))
+				                        return Part(__safeDI_gearBuilder: __safeDI_shell_widgetSendableBuilder_gearSendableBuilder.part(SafeDIScope_Gear.DefaultWidget_Scope.part_Values()))
 				                    }
 				                    let part: Part = __safeDI_part()
 				                    let gadget: any Gadget = __safeDI_shell_widgetSendableBuilder_gadgetSendableBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values(part: part))
@@ -514,7 +514,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                func __safeDI_widget() -> DefaultWidget {
 				                    func __safeDI_part() -> Part {
 				                        _ = Part.__safeDI_Part_3BB75BFB172DAB8E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				                        return Part(__safeDI_gearBuilder: __safeDI_gearSendableBuilder_inner_widgetSendableBuilder.part(SafeDIScope_Gear.DefaultWidget_Scope.part_Values()))
+				                        return Part(__safeDI_gearBuilder: __safeDI_inner_widgetSendableBuilder_gearSendableBuilder.part(SafeDIScope_Gear.DefaultWidget_Scope.part_Values()))
 				                    }
 				                    let part: Part = __safeDI_part()
 				                    let gadget: any Gadget = __safeDI_inner_widgetSendableBuilder_gadgetSendableBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values(part: part))
@@ -635,7 +635,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                func __safeDI_widget() -> DefaultWidget {
 				                    func __safeDI_part() -> Part {
 				                        _ = Part.__safeDI_Part_3BB75BFB172DAB8E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				                        return Part(__safeDI_gearBuilder: __safeDI_gearSendableBuilder_shell_widgetSendableBuilder.part(SafeDIScope_Gear.DefaultWidget_Scope.part_Values()))
+				                        return Part(__safeDI_gearBuilder: __safeDI_shell_widgetSendableBuilder_gearSendableBuilder.part(SafeDIScope_Gear.DefaultWidget_Scope.part_Values()))
 				                    }
 				                    let part: Part = __safeDI_part()
 				                    let gadget: any Gadget = __safeDI_shell_widgetSendableBuilder_gadgetSendableBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values(part: part))
@@ -1915,7 +1915,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                func __safeDI_widget() -> DefaultWidget {
 			                    func __safeDI_hostBuilder() -> Host {
 			                        _ = Host.__safeDI_Host_35F7A69C93276690.self
-			                        return Host(__safeDI_gadgetBuilder: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder.hostBuilder(SafeDIScope_Gadget.DefaultWidget_Scope.hostBuilder_Values()), __safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable.hostBuilder_Sendable(SafeDISendableScope_Gadget.DefaultWidget_Scope.hostBuilder_Sendable_Values()))
+			                        return Host(__safeDI_gadgetBuilder: __safeDI_shell_widgetSendableBuilder.hostBuilder(SafeDIScope_Gadget.DefaultWidget_Scope.hostBuilder_Values()), __safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable.hostBuilder_Sendable(SafeDISendableScope_Gadget.DefaultWidget_Scope.hostBuilder_Sendable_Values()))
 			                    }
 			                    let hostBuilder = Instantiator<Host>(__safeDI_hostBuilder)
 			                    return DefaultWidget(hostBuilder: hostBuilder)
