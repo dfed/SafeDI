@@ -27,7 +27,8 @@ import Testing
 /// A hand-written mock that a generated mock calls must take only what the declaration declares under the build's
 /// conditions. The macro checks the mock against the dependencies of every `#if` clause, since the compiler has chosen
 /// among them, so a mock outside an `#if` can take a dependency only an inactive clause declares. SafeDITool reports such
-/// a parameter at the clause, which module info carries, rather than generate a call that does not compile.
+/// a parameter at the clause, which module info carries, rather than generate a call that does not compile, in a build
+/// that compiles the generated mocks: one that defines the mock condition, as every error test here does with `DEBUG`.
 struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 	// MARK: Initialization
 
@@ -58,6 +59,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 				swiftFileContentByFilePath: ["DefaultUserService.swift": Self.defaultUserService()],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
+				activeCompilationConditions: ["DEBUG"],
 			)
 		}
 	}
@@ -336,6 +338,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 				"""],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
+				activeCompilationConditions: ["DEBUG"],
 			)
 		}
 	}
@@ -355,7 +358,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 				swiftFileContentByFilePath: ["DefaultUserService.swift": Self.defaultUserServiceNestingFeatureInOuter],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
-				activeCompilationConditions: ["OUTER"],
+				activeCompilationConditions: ["DEBUG", "OUTER"],
 			)
 		}
 	}
@@ -375,6 +378,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 				swiftFileContentByFilePath: ["DefaultUserService.swift": Self.defaultUserServiceNestingFeatureInOuter],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
+				activeCompilationConditions: ["DEBUG"],
 			)
 		}
 	}
@@ -416,6 +420,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 				"""],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
+				activeCompilationConditions: ["DEBUG"],
 			)
 		}
 	}
@@ -442,6 +447,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 				swiftFileContentByFilePath: ["Services.swift": Self.defaultUserService(named: "ZService") + "\n\n" + Self.defaultUserService(named: "AService")],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
+				activeCompilationConditions: ["DEBUG"],
 			)
 		}
 	}
@@ -471,6 +477,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 				"""],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
+				activeCompilationConditions: ["DEBUG"],
 			)
 		}
 	}
@@ -511,7 +518,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 				"""],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
-				activeCompilationConditions: ["LEGACY"],
+				activeCompilationConditions: ["DEBUG", "LEGACY"],
 			)
 		}
 	}
@@ -533,6 +540,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 				swiftFileContentByFilePath: ["FakeUserService.swift": Self.fakeUserService()],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
+				activeCompilationConditions: ["DEBUG"],
 			)
 		}
 	}
@@ -578,6 +586,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 				"""],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
+				activeCompilationConditions: ["DEBUG"],
 			)
 		}
 	}
@@ -638,6 +647,280 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 				"""],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
+				activeCompilationConditions: ["DEBUG"],
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsEachErrorOnce_whenTwoMockRootsReachOneSuchMock() async {
+		// `BothScreen`'s tree builds `ZService` and `AService`, and `OneScreen`'s builds `ZService` alone, so each root finds
+		// `ZService`'s parameter.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Services.swift"]):3:5: error: `ZService.mock(analytics:)` takes `analytics: Analytics`, which `ZService` declares only inside `#if FEATURE`, inactive in this build, so generated code cannot call the mock. Give the parameter a default value, or move the `mock` method inside `#if FEATURE`.
+				\(fixtures["Services.swift"]):24:5: error: `AService.mock(analytics:)` takes `analytics: Analytics`, which `AService` declares only inside `#if FEATURE`, inactive in this build, so generated code cannot call the mock. Give the parameter a default value, or move the `mock` method inside `#if FEATURE`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					Self.analytics,
+					"""
+					@Instantiable(generateMock: true)
+					public final class BothScreen: Instantiable {
+					    public init(aService: AService, zService: ZService) {
+					        self.aService = aService
+					        self.zService = zService
+					    }
+
+					    @Instantiated let aService: AService
+					    @Instantiated let zService: ZService
+					}
+					""",
+					Self.screen(named: "OneScreen", building: "ZService"),
+				],
+				swiftFileContentByFilePath: ["Services.swift": Self.defaultUserService(named: "ZService") + "\n\n" + Self.defaultUserService(named: "AService")],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				activeCompilationConditions: ["DEBUG"],
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorsInMockParameterOrder_whenTwoParametersTakeDependenciesOfOneInactiveClause() async {
+		// The mock takes `logger` before `analytics`, whose label sorts first.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["DefaultUserService.swift"]):3:5: error: `DefaultUserService.mock(logger:analytics:)` takes `logger: Logger`, which `DefaultUserService` declares only inside `#if FEATURE`, inactive in this build, so generated code cannot call the mock. Give the parameter a default value, or move the `mock` method inside `#if FEATURE`.
+				\(fixtures["DefaultUserService.swift"]):3:5: error: `DefaultUserService.mock(logger:analytics:)` takes `analytics: Analytics`, which `DefaultUserService` declares only inside `#if FEATURE`, inactive in this build, so generated code cannot call the mock. Give the parameter a default value, or move the `mock` method inside `#if FEATURE`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [Self.analytics, Self.logger, Self.screen],
+				swiftFileContentByFilePath: ["DefaultUserService.swift": """
+				@Instantiable
+				public final class DefaultUserService: Instantiable {
+				    #if FEATURE
+				    public init(analytics: Analytics, logger: Logger) {
+				        self.analytics = analytics
+				        self.logger = logger
+				    }
+
+				    @Received let analytics: Analytics
+				    @Received let logger: Logger
+				    #else
+				    public init() {}
+				    #endif
+
+				    public static func mock(logger: Logger, analytics: Analytics) -> DefaultUserService {
+				        #if FEATURE
+				        DefaultUserService(analytics: analytics, logger: logger)
+				        #else
+				        DefaultUserService()
+				        #endif
+				    }
+				}
+				"""],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				activeCompilationConditions: ["DEBUG"],
+			)
+		}
+	}
+
+	// MARK: Tests – The mock condition
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesMockWithoutError_whenBuildLeavesMockConditionInactive() async throws {
+		// Only `#if DEBUG`, the mock condition, declares `analytics`. A release build compiles neither it nor the generated
+		// mock, which is under `#if DEBUG` too, so the call of `DefaultUserService.mock(analytics:)` that cannot pass it is
+		// never compiled, and a build that compiles it with `DEBUG` fails at the assertion.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(
+					name: "App",
+					packageName: "app",
+					swiftFileContent: [Self.analytics, Self.screen],
+					swiftFileContentByFilePath: ["DefaultUserService.swift": Self.defaultUserService(condition: "DEBUG")],
+					isReleaseConfiguration: true,
+				),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if DEBUG
+		#error("SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            userService: ((Analytics) -> DefaultUserService)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                userService: userService
+		            )
+		        }
+
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var userService: ((Analytics) -> DefaultUserService)? { __safeDI_storage.userService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                userService: ((Analytics) -> DefaultUserService)?
+		            ) {
+		                self.analytics = analytics
+		                self.userService = userService
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let userService: ((Analytics) -> DefaultUserService)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        let userService = if let safeDIBuilder = safeDIOverrides.userService { safeDIBuilder(safeDIOverrides.userService.analytics) } else { DefaultUserService.mock(analytics: safeDIOverrides.userService.analytics) }
+		        return Screen(analytics: analytics, userService: userService)
+		    }
+		}
+		#endif
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesDependencyToMock_whenBuildDefinesMockConditionThatDeclaresIt() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.analytics, Self.screen],
+			swiftFileContentByFilePath: ["DefaultUserService.swift": Self.defaultUserService(condition: "DEBUG")],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			activeCompilationConditions: ["DEBUG"],
+		)
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if !(DEBUG)
+		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            userService: ((Analytics) -> DefaultUserService)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                userService: userService
+		            )
+		        }
+
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var userService: ((Analytics) -> DefaultUserService)? { __safeDI_storage.userService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                userService: ((Analytics) -> DefaultUserService)?
+		            ) {
+		                self.analytics = analytics
+		                self.userService = userService
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let userService: ((Analytics) -> DefaultUserService)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        let userService = if let safeDIBuilder = safeDIOverrides.userService { safeDIBuilder(analytics) } else { DefaultUserService.mock(analytics: analytics) }
+		        return Screen(analytics: analytics, userService: userService)
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtInactiveClause_whenMocksCompileUnconditionally() async {
+		// With no mock condition, every build compiles the generated mocks.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["DefaultUserService.swift"]):3:5: error: \(Self.message(clause: "#if FEATURE"))
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [Self.analytics, Self.screen],
+				swiftFileContentByFilePath: [
+					"DefaultUserService.swift": Self.defaultUserService(),
+					"SafeDIConfiguration.swift": """
+					#SafeDIConfiguration(
+					    mockConditionalCompilation: nil
+					)
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtInactiveClause_whenBuildDefinesConfiguredMockCondition() async {
+		// The module’s mocks compile under `#if MOCKS`, which this build defines, though it leaves `DEBUG` undefined.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["DefaultUserService.swift"]):3:5: error: \(Self.message(clause: "#if FEATURE"))
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [Self.analytics, Self.screen],
+				swiftFileContentByFilePath: [
+					"DefaultUserService.swift": Self.defaultUserService(),
+					"SafeDIConfiguration.swift": """
+					#SafeDIConfiguration(
+					    mockConditionalCompilation: "MOCKS"
+					)
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				activeCompilationConditions: ["MOCKS"],
 			)
 		}
 	}
@@ -1504,7 +1787,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 			},
 		) {
 			try await executeSafeDIToolMultiModuleTest(
-				modules: Self.fillModules(),
+				modules: Self.fillModules(activeCompilationConditions: ["DEBUG"]),
 				integration: .moduleInfo,
 				filesToDelete: &filesToDelete,
 			)
@@ -1600,7 +1883,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 			},
 		) {
 			try await executeSafeDIToolMultiModuleTest(
-				modules: Self.inlineModules(),
+				modules: Self.inlineModules(activeCompilationConditions: ["DEBUG"]),
 				integration: integration,
 				filesToDelete: &filesToDelete,
 			)
@@ -1743,18 +2026,19 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 		"""
 	}
 
-	/// A type that receives `analytics` only where `FEATURE` is active, with a hand-written mock outside the `#if` that
-	/// takes `analyticsParameter`. Its `#if FEATURE` is on line 3, after `prefix`'s lines.
+	/// A type that receives `analytics` only where `condition` is active, with a hand-written mock outside the `#if` that
+	/// takes `analyticsParameter`. Its `#if <condition>` is on line 3, after `prefix`'s lines.
 	private static func defaultUserService(
 		named name: String = "DefaultUserService",
 		prefix: String = "",
 		conformances: String = "Instantiable",
 		analyticsParameter: String = "analytics: Analytics",
+		condition: String = "FEATURE",
 	) -> String {
 		"""
 		\(prefix)@Instantiable
 		public final class \(name): \(conformances) {
-		    #if FEATURE
+		    #if \(condition)
 		    public init(analytics: Analytics) {
 		        self.analytics = analytics
 		    }
@@ -1765,7 +2049,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 		    #endif
 
 		    public static func mock(\(analyticsParameter)) -> \(name) {
-		        #if FEATURE
+		        #if \(condition)
 		        \(name)(analytics: analytics)
 		        #else
 		        \(name)()
