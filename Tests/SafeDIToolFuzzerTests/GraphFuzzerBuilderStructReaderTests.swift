@@ -133,6 +133,31 @@ struct GraphFuzzerBuilderStructReaderTests {
 	}
 
 	@Test
+	func holeOutputFeatures_readsPassedUpBuilder_whenBuilderStructMemberBuildsInnerSeamsStruct() {
+		// `HoleOuter` passes up the place of `HoleSeam`, which it calls: its struct's member builds `HoleSeam`'s struct.
+		#expect(GraphFuzzerFeature.holeOutputFeatures(generatedFiles: ["FuzzFeature/HoleOuter+SafeDI.swift": Self.passingUpOuter]) == [.builderParameter, .passedUpBuilder])
+	}
+
+	@Test
+	func holeOutputFeatures_readsFillPassedToSeamPassingItsSiteUp_whenFillsLevelBuildsStructOfSeamPassingThePlaceUp() {
+		// `Root` fills the place of `FillCallShell`'s `FillCallUserService`, inside `TrackerImpl`, which fills
+		// `FillCallInner`'s place: the fill's level builds the struct of `FillCallService`, which it calls and which passes
+		// the place up, neither the place's seam nor the seam the fill is declared for.
+		#expect(GraphFuzzerFeature.holeOutputFeatures(generatedFiles: ["FuzzApp/Root+SafeDI.swift": Self.fillCallingSeamPassingPlaceUp]) == [.fillPassedToSeamPassingItsSiteUp])
+	}
+
+	@Test
+	func holeOutputFeatures_isEmpty_whenFillsLevelBuildsStructOfSeamTheFillIsDeclaredFor() {
+		let fillCallingItsOwnSeam = Self.fillCallingSeamPassingPlaceUp.replacingOccurrences(
+			of: ".init(fillCallServiceBuilder: { _ in __safeDI_fillCallUserServiceBuilder_FillCallService() })",
+			with: ".init(fillCallServiceBuilder: { _ in __safeDI_fillCallUserServiceBuilder_FillCallShell_FillCallInner() })",
+		)
+
+		#expect(fillCallingItsOwnSeam != Self.fillCallingSeamPassingPlaceUp)
+		#expect(GraphFuzzerFeature.holeOutputFeatures(generatedFiles: ["FuzzApp/Root+SafeDI.swift": fillCallingItsOwnSeam]) == [])
+	}
+
+	@Test
 	func holeOutputFeatures_readsFillPassedToItsSeam_whenFillCallsSendableLevelFunction() {
 		// The fill builds `HoleSeam` again inside a `@Sendable` function, passing the level function, `@Sendable nonisolated`,
 		// that the call it fills passes.
@@ -594,6 +619,75 @@ struct GraphFuzzerBuilderStructReaderTests {
 	        }
 	        let holeSeam: HoleSeam = __safeDI_holeSeam()
 	        self.init(holeSeam: holeSeam)
+	    }
+	}
+
+	"""
+
+	/// `HoleOuter`, which calls `HoleSeam` and passes its place of `HoleService` up: its builder struct's member builds
+	/// `HoleSeam`'s.
+	private static let passingUpOuter = """
+	extension HoleOuter {
+	    nonisolated public enum SafeDIScope_HoleService {
+	        nonisolated public struct holeSeam_Values: Sendable {}
+
+	        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+	            public let holeSeam: (holeSeam_Values) -> HoleSeam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+
+	            public init(holeSeam: @escaping (holeSeam_Values) -> HoleSeam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+	                self.holeSeam = holeSeam
+	            }
+
+	            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+	                self.holeSeam = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+	            }
+	        }
+	    }
+
+	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+	    public convenience init(__safeDI_holeServiceBuilder: SafeDIScope_HoleService.__safeDI_Builder<any HoleService>) {
+	        func __safeDI_holeSeam() -> HoleSeam {
+	            return HoleSeam(__safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.holeSeam(SafeDIScope_HoleService.holeSeam_Values()))
+	        }
+	        let holeSeam: HoleSeam = __safeDI_holeSeam()
+	        self.init(holeSeam: holeSeam)
+	    }
+	}
+
+	"""
+
+	/// `Root`'s call of `FillCallShell`, whose place of `FillCallUserService` is inside `FillCallInner`'s fill,
+	/// `FillCallTrackerImpl`, which calls `FillCallService`, which passes the place up.
+	private static let fillCallingSeamPassingPlaceUp = """
+	extension Root {
+	    public convenience init() {
+	        func __safeDI_fillCallShell() -> FillCallShell {
+	            func __safeDI_fillCallUserServiceBuilder_FillCallShell() -> FillCallShell.SafeDIScope_FillCallUserService.__safeDI_Builder<any FillCallUserService> {
+	                .init(fillCallInner_fillCallTrackerBuilder: { _ in __safeDI_fillCallUserServiceBuilder_FillCallShell_FillCallInner() })
+	            }
+	            func __safeDI_fillCallUserServiceBuilder_FillCallShell_FillCallTrackerImpl_Scope() -> FillCallShell.SafeDIScope_FillCallUserService.FillCallTrackerImpl_Scope.__safeDI_Builder<any FillCallUserService> {
+	                .init(fillCallServiceBuilder: { _ in __safeDI_fillCallUserServiceBuilder_FillCallService() })
+	            }
+	            func __safeDI_fillCallUserServiceBuilder_FillCallService() -> FillCallService.SafeDIScope_FillCallUserService.__safeDI_Builder<any FillCallUserService> {
+	                .init(fillCallProfileBuilder: { _ in __safeDI_fillCallUserServiceBuilder_FillCallService_FillCallProfile_Scope() })
+	            }
+	            func __safeDI_fillCallUserServiceBuilder_FillCallService_FillCallProfile_Scope() -> FillCallService.SafeDIScope_FillCallUserService.FillCallProfile_Scope.__safeDI_Builder<any FillCallUserService> {
+	                .init(fillCallUserService: { _ in
+	                    let fillCallUserService: any FillCallUserService = FillCallUserServiceImpl()
+	                    return fillCallUserService
+	                })
+	            }
+	            func __safeDI_fillCallUserServiceBuilder_FillCallShell_FillCallInner() -> FillCallInner.SafeDIScope_FillCallTracker.__safeDI_Builder<FillCallShell.SafeDIScope_FillCallUserService.FillCallTrackerImpl_Scope.__safeDI_Builder<any FillCallUserService>> {
+	                .init(fillCallBadgeBuilder: { _ in __safeDI_fillCallUserServiceBuilder_FillCallShell_FillCallInner_FillCallBadge_Scope() })
+	            }
+	            func __safeDI_fillCallUserServiceBuilder_FillCallShell_FillCallInner_FillCallBadge_Scope() -> FillCallInner.SafeDIScope_FillCallTracker.FillCallBadge_Scope.__safeDI_Builder<FillCallShell.SafeDIScope_FillCallUserService.FillCallTrackerImpl_Scope.__safeDI_Builder<any FillCallUserService>> {
+	                .init(fillCallTracker: { _ in __safeDI_fillCallUserServiceBuilder_FillCallShell_FillCallTrackerImpl_Scope() })
+	            }
+	            return FillCallShell(__safeDI_fillCallUserServiceBuilder: __safeDI_fillCallUserServiceBuilder_FillCallShell())
+	        }
+	        let fillCallShell: FillCallShell = __safeDI_fillCallShell()
+	        self.init(fillCallShell: fillCallShell)
 	    }
 	}
 
