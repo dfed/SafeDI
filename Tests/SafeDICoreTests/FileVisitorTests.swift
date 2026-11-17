@@ -2743,6 +2743,7 @@ struct FileVisitorTests {
 		    #if FOO
 		    protocol __safeDI_E {
 		        typealias SafeDIMockScope_F = Int
+		        associatedtype SafeDIMockScope_G
 		    }
 		    #endif
 		}

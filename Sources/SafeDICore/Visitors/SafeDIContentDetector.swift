@@ -292,7 +292,8 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	}
 
 	override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
-		// A protocol's body declares nothing SafeDI reads, but the type aliases it declares can have reserved names.
+		// A protocol's body declares nothing SafeDI reads, but the type aliases and associated types it declares can have
+		// reserved names.
 		recordPlainTypeDeclaration(
 			typeDefined(named: node.name.text),
 			access: node.modifiers.access(introducedBy: node.protocolKeyword, sourceLocationConverter: sourceLocationConverter),
