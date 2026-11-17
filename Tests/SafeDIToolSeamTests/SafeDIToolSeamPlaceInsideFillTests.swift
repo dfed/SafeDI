@@ -2541,12 +2541,12 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 	mutating func generate_throwsPlaceInsideFillOfCaseOfBothRootEnums_whenInnerBuildsTypeHoldingPlaceInsideAndOutsideSendableFunction(screenInstantiatesMark: Bool) async {
 		// `Inner` builds `Panel` at its root and inside the `@Sendable` function of its `screenBuilder`, so `Panel`'s `service`
 		// is a case both of `Inner`'s root enums reach. `Outer` fills it with `DefaultService`, whose `gadget` only `App` can
-		// build: the one function that fills the case would be handed a scope of either root enum, and the case of `gadget`
-		// can carry only one, so SafeDI reports the shape.
+		// build: the one function that fills the case would be handed the values struct of either builder struct, and the
+		// member for `gadget` can carry only one, so SafeDI reports the shape.
 		let screenDeclarations = ["@Forwarded public let id: Int"] + (screenInstantiatesMark ? ["@Instantiated public let mark: Mark"] : []) + ["@Instantiated public let panel: Panel"]
 		await assertThrowsMultiModuleError(inModule: "Middle", diagnostics: { fixtures in
 			"""
-			\(fixtures["Middle"]!["DefaultService.swift"]):9:5: error: SafeDI fills every place of the builder for `Panel`’s `service: any Service` (case `Panel_Scope.service` of `serviceBuilder`) with one function, whose tree builds `DefaultService`’s `gadget: any Gadget`, which no type that module `Middle` can see fulfills. `Inner` builds `Panel` both inside and outside a `@Sendable` function, so that function is handed a scope of either of `Inner`’s two root enums, and the case of `DefaultService`’s `gadget: any Gadget` can carry only one. To fill it, declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, or declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["DefaultService.swift"]):9:5: error: SafeDI fills every place of the builder for `Panel`’s `service: any Service` (case `Panel_Scope.service` of `serviceBuilder`) with one function, whose tree builds `DefaultService`’s `gadget: any Gadget`, which no type that module `Middle` can see fulfills. `Inner` builds `Panel` both inside and outside a `@Sendable` function, so that function is handed the values struct of either of `Inner`’s two builder structs, and the member for `DefaultService`’s `gadget: any Gadget` can carry only one. To fill it, declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, or declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Panel.swift"]):7:5: note: `Panel` instantiates `service: any Service` here.
 			"""
 		}) {
