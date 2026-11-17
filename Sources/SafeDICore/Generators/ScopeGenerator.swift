@@ -8550,8 +8550,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			self.callSiteArguments = callSiteArguments
 			// A builder closure's parameter cannot be spelled `X!`, so an implicitly unwrapped argument is taken as `X?`,
 			// as Swift types the initializer's own parameter; force-unwrapping it would trap where the value is `nil`.
+			// The override closure of a call of another module's public mock passes what it is handed on to that `mock()`, so
+			// a function spelled as a name, such as an erased instantiator's `Builder`, is handed `@escaping` where the called
+			// mock takes it so (`PublicMockCall.typesDeclaredEscaping`).
+			let builderTypesDeclaredEscaping = publicMockCall?.typesDeclaredEscaping ?? []
 			builderParameterTypes = callSiteArguments.map { argument in
-				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter.implicitlyUnwrappedOptionalSpelledAsOptional
+				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter(amongTypesDeclaredEscaping: builderTypesDeclaredEscaping).implicitlyUnwrappedOptionalSpelledAsOptional
 			}
 			needsConfigurationStruct = childItems?.containsPropertyNode == true || !defaultParameters.isEmpty || isPropertyCycle
 			subtreeCallsPublicMock = publicMockCall != nil || childItems?.propertyNodes.contains(where: \.subtreeCallsPublicMock) == true

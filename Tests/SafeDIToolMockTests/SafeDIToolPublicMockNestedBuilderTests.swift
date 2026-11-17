@@ -2300,7 +2300,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesEachPassedUpBuilderAfterItsCalledMock_whenInternalCallerCallsTwoPublicMocksWithOneHoleType() async throws {
+	mutating func generate_handsOnePassedUpBuilderToBothCalledMocks_whenInternalCallerCallsTwoPublicMocksWithOneHoleType() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(core: [
 			"""
 			import SafeDI
@@ -2718,25 +2718,25 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            host: ((ErasedInstantiator<OnTap, AnyService>.Builder, SendableErasedInstantiator<OnTap, AnyService>.Builder) -> Host)? = nil
+		            host: ((@escaping ErasedInstantiator<OnTap, AnyService>.Builder, @escaping SendableErasedInstantiator<OnTap, AnyService>.Builder) -> Host)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                host: host
 		            )
 		        }
 
-		        var host: ((@escaping () -> AnyService, @escaping @Sendable () -> AnyService) -> Host)? { __safeDI_storage.host }
+		        var host: ((@escaping ErasedInstantiator<OnTap, AnyService>.Builder, @escaping SendableErasedInstantiator<OnTap, AnyService>.Builder) -> Host)? { __safeDI_storage.host }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
-		                host: ((@escaping () -> AnyService, @escaping @Sendable () -> AnyService) -> Host)?
+		                host: ((@escaping ErasedInstantiator<OnTap, AnyService>.Builder, @escaping SendableErasedInstantiator<OnTap, AnyService>.Builder) -> Host)?
 		            ) {
 		                self.host = host
 		            }
 
-		            let host: ((@escaping () -> AnyService, @escaping @Sendable () -> AnyService) -> Host)?
+		            let host: ((@escaping ErasedInstantiator<OnTap, AnyService>.Builder, @escaping SendableErasedInstantiator<OnTap, AnyService>.Builder) -> Host)?
 		        }
 		    }
 
