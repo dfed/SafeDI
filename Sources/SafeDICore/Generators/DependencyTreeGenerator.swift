@@ -1722,7 +1722,7 @@ public actor DependencyTreeGenerator {
 				// The captures arrive in set order. Two whose errors read the same name the same wrapper on the same
 				// type, so their notes, at that declaration, read the same too, and the diagnostics come out the same.
 				captures
-					.map(Self.sourceDiagnostics(of:))
+					.map { Self.sourceDiagnostics(of: $0, among: captures) }
 					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
 					.flatMap(\.self)
 			case let .repeatedDependencyLabels(repeatedDependencyLabels):
@@ -1942,8 +1942,10 @@ public actor DependencyTreeGenerator {
 		}
 
 		/// An `error:` line that names the type declaring the wrapper, since Xcode drops notes from build-tool
-		/// output, and a `note:` at that declaration so command-line builds can navigate to it.
-		private static func sourceDiagnostics(of capture: ScopeGenerator.NonSendableWrapperCapture) -> [SourceDiagnostic] {
+		/// output, and a `note:` at that declaration so command-line builds can navigate to it. The remedy names
+		/// every type that declares a wrapper `captures` reports captured at the same receive: the receive takes one
+		/// type, so each of them must change for any of its errors to clear.
+		private static func sourceDiagnostics(of capture: ScopeGenerator.NonSendableWrapperCapture, among captures: [ScopeGenerator.NonSendableWrapperCapture]) -> [SourceDiagnostic] {
 			let wrapperProperty = capture.wrapperProperty
 			let label = wrapperProperty.label
 			let wrapperType = wrapperProperty.typeDescription.unwrapped
@@ -1955,9 +1957,18 @@ public actor DependencyTreeGenerator {
 			let fix: String
 			if let declaringType = capture.wrapperDeclaringType {
 				capturedProperty = "`\(wrapperProperty.asSource)` on `\(declaringType.asSource)`"
+				// In source order, each type once. A wrapper the tree receives from outside it is left to that capture's
+				// own error, whose remedy names no declaration.
+				let declaringTypes = captures
+					.filter { $0.declarationLocation == capture.declarationLocation && $0.receivedProperty == capture.receivedProperty }
+					.compactMap { other in other.wrapperDeclaringType.map { WrapperDeclaration(typeName: $0.asSource, location: other.wrapperDeclarationLocation) } }
+					.sorted(by: WrapperDeclaration.precedesInSourceOrder)
+					.map { "`\($0.typeName)`" }
+					.uniqued()
+					.joinedAsList
 				fix = receivesWrapper
-					? "Declare `\(label)` on `\(declaringType.asSource)`, and this property, as `\(sendableWrapperType)` to fix."
-					: "Declare `\(label)` on `\(declaringType.asSource)` as `\(sendableWrapperType)` to fix."
+					? "Declare `\(label)` on \(declaringTypes), and this property, as `\(sendableWrapperType)` to fix."
+					: "Declare `\(label)` on \(declaringTypes) as `\(sendableWrapperType)` to fix."
 			} else {
 				capturedProperty = "`\(wrapperProperty.asSource)`, which the tree of `\(capture.chain[0].asSource)` receives from outside it"
 				fix = "Declare `\(label)` as `\(sendableWrapperType)` where it is declared and where it is received as `\(wrapperType.asSource)` to fix."
@@ -2004,6 +2015,18 @@ public actor DependencyTreeGenerator {
 				]
 			} else {
 				[error]
+			}
+		}
+
+		/// A type that declares a wrapper a `@Sendable` builder function captures, and where.
+		private struct WrapperDeclaration {
+			let typeName: String
+			let location: Dependency.DeclarationLocation?
+
+			/// Orders declarations by location, and by type name where neither precedes the other: where two have no
+			/// location, as another module’s declarations that a module info file carries have none.
+			static func precedesInSourceOrder(_ lhs: Self, _ rhs: Self) -> Bool {
+				Dependency.DeclarationLocation.precedesInSourceOrder(lhs.location, rhs.location) || (!Dependency.DeclarationLocation.precedesInSourceOrder(rhs.location, lhs.location) && lhs.typeName < rhs.typeName)
 			}
 		}
 
