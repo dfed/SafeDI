@@ -412,6 +412,32 @@ public struct SeamSignature: Sendable {
 			public let reenteringType: TypeDescription
 		}
 
+		/// A declaration on the path from the root of a fill of the seam call whose tree holds this place, inside another fill
+		/// of that call, to a call inside it that builds the filled seam again and passes the fill on: inline, a receive of its
+		/// label beneath the place would read it on the route through that call, while the module that fills this place
+		/// hands the one fill the value of the outer call. Recorded by the seam whose call fills the place built again, for a
+		/// label the visible build rejects a read of (`declarationBoundOnPathToReenteringCall`): one the fill built again holds
+		/// no field of, nor any scope between that fill's root and the place declares. A field of the label bound above the
+		/// seam call does not lift it, a deliberate loss of a shape inline builds correctly, until each route is handed its own
+		/// value.
+		public struct ReenteringCallDeclaration: Sendable {
+			/// The declaration, by the type that declares it, and where.
+			public let property: Property
+			public let declaringType: TypeDescription
+			public let declarationLocation: Dependency.DeclarationLocation?
+			/// The place whose fill's tree holds the path.
+			public let pathPlace: UncarriedDeclaration.PresentedPlace
+			/// The type whose scope makes the call, the property it builds the seam under, and the seam it calls.
+			public let callingType: TypeDescription
+			public let callProperty: Property
+			public let calledSeam: TypeDescription
+			/// The place of the fill the call is passed, which holds this place, and the module of its seam.
+			public let reenteredPlace: UncarriedDeclaration.PresentedPlace
+			public let reenteredSeamModule: ModuleIdentity
+			/// The module that fills `reenteredPlace`: the module of the seam whose call the fills are.
+			public let fillingModule: ModuleIdentity
+		}
+
 		/// A type on the way from the seam that takes a hole's builder to the hole's owner, with the module that declares it.
 		public struct PathType: Sendable {
 			public init(type: TypeDescription, moduleName: String?) {
@@ -551,6 +577,10 @@ public struct SeamSignature: Sendable {
 		/// The declarations a cycle in the tree of the seam that holds the site hands the site's owner when it builds it
 		/// again, which a fill cannot read, the first of each label.
 		public let cycleReentryDeclarations: [CycleReentryDeclaration]
+		/// The declarations on the paths to calls inside fills of the seam call whose tree holds the place that build the
+		/// filled seam again, which a fill of this place cannot read (see `ReenteringCallDeclaration`), every path's, in the
+		/// order of their declarations. A copy a seam passes up keeps them all.
+		public internal(set) var reenteringCallDeclarations = [ReenteringCallDeclaration]()
 		/// The seam the tree calls that presented the hole first, when this one passes it up, or `nil` for a site of this
 		/// seam's own tree.
 		public let innerSeamType: TypeDescription?
@@ -1321,12 +1351,13 @@ public struct SeamSignature: Sendable {
 		}
 
 		/// A hole's call shape, which a hole that changes changes what the seam's callers and the seams that pass it up
-		/// compute, and the labels of its uncarried and cycle re-entry declarations, which only accumulate where a seam's tree
-		/// reaches the seam again and hands the builder back.
+		/// compute, and the labels of its uncarried, cycle re-entry and re-entering call declarations, which only accumulate
+		/// where a seam's tree reaches the seam again and hands the builder back.
 		public struct Hole: Hashable, Sendable {
 			public let callShape: CallShape.Hole
 			public let uncarriedLabels: Set<String>
 			public let cycleReentryLabels: Set<String>
+			public let reenteringCallLabels: Set<String>
 		}
 
 		public let parameters: [Parameter]
@@ -1358,7 +1389,7 @@ public struct SeamSignature: Sendable {
 		let callShape = callShape
 		return SettledContent(
 			parameters: settledContent(of: parameters),
-			holes: holes.map { SettledContent.Hole(callShape: CallShape.Hole($0), uncarriedLabels: Set($0.uncarriedDeclarations.map(\.property.label)), cycleReentryLabels: Set($0.cycleReentryDeclarations.map(\.property.label))) },
+			holes: holes.map { SettledContent.Hole(callShape: CallShape.Hole($0), uncarriedLabels: Set($0.uncarriedDeclarations.map(\.property.label)), cycleReentryLabels: Set($0.cycleReentryDeclarations.map(\.property.label)), reenteringCallLabels: Set($0.reenteringCallDeclarations.map(\.property.label))) },
 			builders: callShape.builders,
 			scopeEnums: callShape.scopeEnums,
 			tiers: tiers,
