@@ -7668,9 +7668,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let stem = stems[family.holeType, default: ""]
 			let label = labels.claim(family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
 			// A builder with no place of its own is passed up as the calls pass it up, `@Sendable` where a `@Sendable` builder
-			// function captures it.
+			// function captures it: an instantiator's `Builder` through its `Sendable` twin (`TypeDescription.asSendableBuilder`).
 			let passedUpType = passedUpOnlyPropertiesByFamily[family]?.first.map { property in
-				let type = capturedBySendableFunctions.contains(property) && !property.typeDescription.isSendableFunction ? property.typeDescription.asSendableFunction : property.typeDescription
+				let type = capturedBySendableFunctions.contains(property) && !property.typeDescription.isSendableFunction ? property.typeDescription.asSendableBuilder : property.typeDescription
 				return type.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 			}
 			return MockRootParameters.SeamMockBuilder(label: label, internalName: label, family: family, places: placesByFamily[family, default: []], fillPlaces: fillPlacesByFamily[family, default: []], passedUpProperties: passedUpPropertiesByFamily[family, default: []], passedUpType: passedUpType)
