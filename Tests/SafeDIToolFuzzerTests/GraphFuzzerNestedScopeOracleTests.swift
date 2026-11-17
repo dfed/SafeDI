@@ -293,6 +293,60 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 	}
 
 	@Test
+	func scopeDeclarations_readEachBuilderStructMemberAsTheCaseItStandsFor_whenSeamsEnumsAreNamespaces() {
+		// The tool's form of `nestedHomeScopeWithFillCase`: each enum a namespace whose `__safeDI_Builder` has a member per
+		// case, which takes the case's struct (an empty one in the `@Sendable` root, whose cases carry none) and returns the
+		// struct of the enum the case held – an inner seam's, or, for the fill's case, the filled seam's over the enum of the
+		// type the fill builds.
+		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": Self.nestedHomeScopeOfBuilderStructs])
+
+		#expect(declarations.entries == [
+			"enum Home.SafeDIScope_Service",
+			"case Home.SafeDIScope_Service.screenA(screenA_Values, SafeDIScope_Service.ScreenA_Scope)",
+			"case Home.SafeDIScope_Service.screenB(screenB_Values, SafeDIScope_Service.ScreenB_Scope)",
+			"case Home.SafeDIScope_Service.inner(inner_Values, Inner.SafeDIScope_Service)",
+			"case Home.SafeDIScope_Service.inner_gadgetBuilder(inner_gadgetBuilder_Values, Inner.SafeDIScope_Gadget, SafeDIScope_Service.DefaultGadget_Scope)",
+			"struct Home.SafeDIScope_Service.screenA_Values",
+			"struct Home.SafeDIScope_Service.screenB_Values",
+			"field Home.SafeDIScope_Service.screenB_Values: public screenA: ScreenA",
+			"struct Home.SafeDIScope_Service.inner_Values",
+			"struct Home.SafeDIScope_Service.inner_gadgetBuilder_Values",
+			"enum Home.SafeDIScope_Service.ScreenA_Scope",
+			"case Home.SafeDIScope_Service.ScreenA_Scope.shared(shared_Values, SafeDIScope_Service.Shared_Scope)",
+			"struct Home.SafeDIScope_Service.ScreenA_Scope.shared_Values",
+			"enum Home.SafeDIScope_Service.ScreenB_Scope",
+			"case Home.SafeDIScope_Service.ScreenB_Scope.service(service_Values)",
+			"case Home.SafeDIScope_Service.ScreenB_Scope.shared(shared_Values, SafeDIScope_Service.Shared_Scope)",
+			"struct Home.SafeDIScope_Service.ScreenB_Scope.service_Values",
+			"struct Home.SafeDIScope_Service.ScreenB_Scope.shared_Values",
+			"field Home.SafeDIScope_Service.ScreenB_Scope.shared_Values: public service: any Service",
+			"enum Home.SafeDIScope_Service.DefaultGadget_Scope",
+			"case Home.SafeDIScope_Service.DefaultGadget_Scope.service(service_Values)",
+			"struct Home.SafeDIScope_Service.DefaultGadget_Scope.service_Values",
+			"enum Home.SafeDIScope_Service.Shared_Scope",
+			"case Home.SafeDIScope_Service.Shared_Scope.service(service_Values)",
+			"struct Home.SafeDIScope_Service.Shared_Scope.service_Values",
+			"enum Home.SafeDISendableScope_Service",
+			"case Home.SafeDISendableScope_Service.screenA_Sendable(SafeDIScope_Service.ScreenA_Scope)",
+		])
+		#expect(declarations.undeclaredProducedCases(of: Self.sharedTypeFactsWithPlaceInsideFill) == [])
+		#expect(declarations.unproducedDeclaredCases(of: Self.sharedTypeFactsWithPlaceInsideFill) == [])
+		#expect(declarations.casesNamingNoPropertyOfTheirType(of: Self.sharedTypeFactsWithPlaceInsideFill) == [])
+	}
+
+	@Test
+	func undeclaredProducedCases_reportsCase_whenTheTypesBuilderStructLacksItsMember() {
+		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": Self.nestedHomeScopeOfBuilderStructs.replacingOccurrences(
+			of: "                public let shared: (shared_Values) -> SafeDIScope_Service.Shared_Scope.__safeDI_Builder<__safeDI_Built>\n\n                public let service:",
+			with: "                public let service:",
+		)])
+
+		#expect(declarations.undeclaredProducedCases(of: Self.sharedTypeFactsWithPlaceInsideFill) == [
+			"A place's path produces the case `shared` of `ScreenB` in the tree of `Home`, which no scope enum declares.",
+		])
+	}
+
+	@Test
 	func undeclaredProducedCases_reportsFillCase_whenTheCallsCaseHoldsTheEnumOfAnotherType() {
 		// The call's case holds `Shared`'s enum rather than that of `DefaultGadget`, the type the fill builds.
 		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": Self.nestedHomeScopeWithFillCase.replacingOccurrences(
@@ -470,6 +524,85 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 	private static let nestedHomeScopeWithFillCase = nestedHomeScope(screenBHoldsShared: true)
 		.replacingOccurrences(of: "        case inner(Inner.SafeDIScope_Service)\n", with: "        case inner(Inner.SafeDIScope_Service)\n        case inner_gadgetBuilder(inner_gadgetBuilder_Values, Inner.SafeDIScope_Gadget, SafeDIScope_Service.DefaultGadget_Scope)\n")
 		.replacingOccurrences(of: "        @frozen public enum Shared_Scope {", with: "        @frozen public enum DefaultGadget_Scope {\n            case service(service_Values)\n\n            public struct service_Values {}\n        }\n\n        @frozen public enum Shared_Scope {")
+
+	/// `nestedHomeScopeWithFillCase` as the tool declares a seam's enums that take builder structs: namespaces with no case,
+	/// each declaring `__safeDI_Builder` with a member per case, beside a `@Sendable` root whose case holds `ScreenA`'s enum.
+	/// Only what the readers read is spelled: the members, not the initializers.
+	private static let nestedHomeScopeOfBuilderStructs = """
+	extension Home {
+	    nonisolated public enum SafeDIScope_Service {
+	        nonisolated public struct screenA_Values {}
+
+	        nonisolated public struct screenB_Values {
+	            public let screenA: ScreenA
+	        }
+
+	        nonisolated public struct inner_Values {}
+
+	        nonisolated public struct inner_gadgetBuilder_Values {}
+
+	        nonisolated public enum ScreenA_Scope {
+	            nonisolated public struct shared_Values {}
+
+	            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+	                public let shared: (shared_Values) -> SafeDIScope_Service.Shared_Scope.__safeDI_Builder<__safeDI_Built>
+	            }
+	        }
+
+	        nonisolated public enum ScreenB_Scope {
+	            nonisolated public struct service_Values {}
+
+	            nonisolated public struct shared_Values {
+	                public let service: any Service
+	            }
+
+	            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+	                public let shared: (shared_Values) -> SafeDIScope_Service.Shared_Scope.__safeDI_Builder<__safeDI_Built>
+
+	                public let service: (service_Values) -> __safeDI_Built
+	            }
+	        }
+
+	        nonisolated public enum DefaultGadget_Scope {
+	            nonisolated public struct service_Values {}
+
+	            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+	                public let service: (service_Values) -> ErasedInstantiator<(), __safeDI_Built>.Builder
+	            }
+	        }
+
+	        nonisolated public enum Shared_Scope {
+	            nonisolated public struct service_Values {}
+
+	            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+	                public let service: (service_Values) -> __safeDI_Built
+	            }
+	        }
+
+	        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+	            public let screenA: (screenA_Values) -> SafeDIScope_Service.ScreenA_Scope.__safeDI_Builder<__safeDI_Built>
+	            public let screenB: (screenB_Values) -> SafeDIScope_Service.ScreenB_Scope.__safeDI_Builder<__safeDI_Built>
+	            public let inner: (inner_Values) -> Inner.SafeDIScope_Service.__safeDI_Builder<__safeDI_Built>
+	            public let inner_gadgetBuilder: (inner_gadgetBuilder_Values) -> Inner.SafeDIScope_Gadget.__safeDI_Builder<SafeDIScope_Service.DefaultGadget_Scope.__safeDI_Builder<__safeDI_Built>>
+	        }
+	    }
+
+	    nonisolated public enum SafeDISendableScope_Service {
+	        nonisolated public struct screenA_Sendable_Values: Sendable {}
+
+	        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+	            public let screenA_Sendable: @Sendable (screenA_Sendable_Values) -> SafeDIScope_Service.ScreenA_Scope.__safeDI_Builder<__safeDI_Built>
+	        }
+	    }
+	}
+
+	"""
 
 	/// `name`, an `@Instantiable` type that fulfills `fulfilledType`, declaring `declarations`.
 	private static func fulfillingType(named name: String, fulfilling fulfilledType: String, declarations: [String]) -> String {
