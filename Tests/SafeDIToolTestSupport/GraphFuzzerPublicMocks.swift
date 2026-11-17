@@ -2537,9 +2537,9 @@ extension GraphFuzzerOracle {
 	}
 
 	/// The differences of `comparison`, a `generateMockPublic` graph's, that are the shape matrix's two stated divergences,
-	/// each derived from a leaf call – a call of a `.public` type's mock (`<prefix>T<i>.mock(`) in the generated mock of the
-	/// probe's type, read from the graph's generated code – rather than from the difference's text alone, so that any
-	/// other value a leaf call builds still fails:
+	/// each derived from a leaf call – a call of a `.public` type's mock (`<prefix>T<i>.mock(`, or `.__safeDI_mock(`) in the
+	/// generated mock of the probe's type, read from the graph's generated code – rather than from the difference's text
+	/// alone, so that any other value a leaf call builds still fails:
 	/// - M8.32 (`isReWrappedHeldInstance`, `isEarlyReadHeldInstance`): a leaf call that passes `<label>.instance` of a
 	///   lazily instantiated dependency its caller holds makes the leaf wrap the instance again, a second wrapper where the
 	///   known-right path shares the caller's, whose instance the call reads before the probe's value is built. The
@@ -2581,8 +2581,9 @@ extension GraphFuzzerOracle {
 	}
 
 	/// Each call of a `.public` type's mock – `<prefix>T0` to `<prefix>T2` and `<prefix>T6`, held under `t0` to `t2` and
-	/// `t6`, or under `anyT<i>` through an eraser – in the generated mock of `typeName`, in any module. A consumer holds each
-	/// leaf it reaches under one label, so a mock wraps either every call of a leaf in the leaf's eraser or none.
+	/// `t6`, or under `anyT<i>` through an eraser – in the generated mock of `typeName`, in any module: of its `mock(`, or of
+	/// the function only generated code calls, `__safeDI_mock(`, which a call of a mock that takes builders makes. A consumer
+	/// holds each leaf it reaches under one label, so a mock wraps either every call of a leaf in the leaf's eraser or none.
 	static func leafCalls(ofMockedType typeName: String, in generatedFiles: [String: String], prefix: String) -> [PublicMockLeafCall] {
 		var calls = [PublicMockLeafCall]()
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName == "\(typeName)+SafeDIMock.swift" || fileName.hasSuffix("/\(typeName)+SafeDIMock.swift") {
@@ -2593,14 +2594,17 @@ extension GraphFuzzerOracle {
 			} ?? [])
 			let unpassedParameters = mockParametersDefaultingToNil(in: contents).subtracting(boundNames)
 			for index in [0, 1, 2, 6] {
-				let isErased = contents.contains("\(prefix)AnyT\(index)(\(prefix)T\(index).mock(")
-				for call in initializerCalls(of: "\(prefix)T\(index).mock", in: contents) {
-					let arguments = call.filter { $0.label != "safeDIOverrides" }
-					calls.append(PublicMockLeafCall(
-						leafLabel: isErased ? "anyT\(index)" : "t\(index)",
-						passedLabels: Set(arguments.filter { $0.value != "nil" && !unpassedParameters.contains($0.value) }.map(\.label)),
-						instanceLabels: Set(arguments.filter { $0.value.hasSuffix(".instance") }.map(\.label)),
-					))
+				let mockFunctionNames = ["mock", "__safeDI_mock"]
+				let isErased = mockFunctionNames.contains { contents.contains("\(prefix)AnyT\(index)(\(prefix)T\(index).\($0)(") }
+				for mockFunctionName in mockFunctionNames {
+					for call in initializerCalls(of: "\(prefix)T\(index).\(mockFunctionName)", in: contents) {
+						let arguments = call.filter { $0.label != "safeDIOverrides" }
+						calls.append(PublicMockLeafCall(
+							leafLabel: isErased ? "anyT\(index)" : "t\(index)",
+							passedLabels: Set(arguments.filter { $0.value != "nil" && !unpassedParameters.contains($0.value) }.map(\.label)),
+							instanceLabels: Set(arguments.filter { $0.value.hasSuffix(".instance") }.map(\.label)),
+						))
+					}
 				}
 			}
 		}
