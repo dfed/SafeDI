@@ -552,6 +552,44 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTwinsError_whenFillInstantiatesTypeNoDeclarationCanFulfill(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
+		// `DefaultService`, which fills both of `Panel`’s places, instantiates a type spelled as no hole can be, which no
+		// declaration fulfills: production reports it, so the calling mock reports the same error.
+		for (property, type) in [("names: [String]", "[String]"), ("lookup: [String: Int]", "[String: Int]"), ("make: () -> Int", "() -> Int"), ("pair: (Int, Int)", "(Int, Int)")] {
+			let diagnostics = { (fixtures: [String: FixturePaths]) in
+				"""
+				\(fixtures["App"]!["AppTypes.swift"]):21:5: error: No @Instantiable type or extension fulfills `\(type)`, which @Instantiated property `\(property)` instantiates. Decorate `\(type)`, or an extension of it, with @Instantiable, or list `\(type)` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it.
+				"""
+			}
+			await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
+				try await executeSafeDIToolMultiModuleTest(modules: Self.fillInstantiatingGizmoModules(caller: caller.attribute, callee: calledTypes.attribute, defaultServiceProperties: [property]), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+			}
+			await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
+				try await executeSafeDIToolMultiModuleTest(modules: Self.fillInstantiatingGizmoModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, defaultServiceProperties: [property]), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+			}
+		}
+	}
+
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func generate_fillsAsTwin_whenTypeFillInstantiatesIsFulfilledAsTheErrorSuggests(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		// The remedy of the error above: an extension of `[String]` decorated with @Instantiable fulfills it, so the mock fills
+		// both places with `DefaultService`, which builds `names` from the extension, as the twin does.
+		let result = try await GraphFuzzerCallingMockCheck.run(Self.graph(
+			named: "a fill whose fulfiller instantiates a type an extension fulfills",
+			mock: Self.fillInstantiatingGizmoModules(caller: caller.attribute, callee: calledTypes.attribute, defaultServiceProperties: ["names: [String]"], appDeclarations: Self.stringArrayExtension),
+			twin: Self.fillInstantiatingGizmoModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, defaultServiceProperties: ["names: [String]"], appDeclarations: Self.stringArrayExtension),
+			callerTypeName: "Screen",
+			caller: caller,
+			expectedTwinInitializerLabels: [],
+			valueProbes: [DifferentialValueProbe(name: "Screen", expression: "App.Screen.mock()", knownRightExpression: "App.Screen()")],
+		), seed: 0)
+
+		Self.expectFillsAsTwin(result)
+	}
+
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func generate_takesABuilderForWhatTheFillInstantiates_whenTwinDoes(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
 		// `Screen` fills both of `Panel`’s `service` places with `DefaultService`, whose `gizmo` nothing in `App` fulfills: the
 		// twin fills them and takes `gizmoBuilder`, which each `DefaultService` calls once, so the mock does too.
@@ -3057,6 +3095,18 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 	public final class DefaultGizmo: Gizmo {
 	    public init(id: Int) {}
+	}
+
+	"""
+
+	/// An extension that fulfills `[String]`, as the error for a type no declaration fulfills suggests.
+	private static let stringArrayExtension = """
+
+	@Instantiable
+	extension [String]: Instantiable {
+	    public static func instantiate() -> [String] {
+	        ["name"]
+	    }
 	}
 
 	"""

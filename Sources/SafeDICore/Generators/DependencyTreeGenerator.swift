@@ -1018,21 +1018,18 @@ public actor DependencyTreeGenerator {
 		let inlineTypeDescriptionToScopeMap = typeDescriptionToScopeMap
 		var publicMockCalls = try await publicMockCalls(in: typeDescriptionToScopeMap)
 		let generatesPublicMock = typeDescriptionToFulfillingInstantiableMap.values.contains(where: { $0.generateMock == .public })
-		// Each kind of mock takes a builder for what a fill instantiates that nothing fulfills: a public mock through a hole of
-		// its own tree, an internal mock as a seam's internal mock does (`ScopeGenerator.seamMockBuilders`). Only an internal
-		// mock refuses a fill whose tree instantiates, unfulfilled, a spelling no hole can have, so each kind fills its own places.
-		var publicMockCallsOfPublicMocks = publicMockCalls
+		// Each kind of mock fills the same places and takes a builder for what a fill instantiates that nothing fulfills: a
+		// public mock through a hole of its own tree, an internal mock as a seam's internal mock does
+		// (`ScopeGenerator.seamMockBuilders`).
 		if !publicMockCalls.isEmpty {
 			typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls)
+			let fills = holesFilled(byCallsOf: publicMockCalls, in: typeDescriptionToScopeMap)
+			// A fill whose tree instantiates a type no declaration fulfills, spelled as no hole can be, is production's error
+			// where a mock's tree reaches the call.
+			try validateFillsInstantiateOnlyWhatCanBeFulfilled(fills.typesNoDeclarationCanFulfillByCalledType, additionalMocksToGenerate: additionalMocksToGenerate)
 			// A call that fills a builder declares no dependency for it, so the map is built again with the fills.
-			if generatesPublicMock {
-				for (calledType, filledHoles) in holesFilled(byCallsOf: publicMockCalls, in: typeDescriptionToScopeMap, unfulfilledInstantiationsAreHoles: true) {
-					publicMockCallsOfPublicMocks[calledType]?.filledHoles = filledHoles
-				}
-			}
-			let filledHoles = holesFilled(byCallsOf: publicMockCalls, in: typeDescriptionToScopeMap, unfulfilledInstantiationsAreHoles: false)
-			if !filledHoles.isEmpty {
-				for (calledType, holes) in filledHoles {
+			if !fills.filledHoles.isEmpty {
+				for (calledType, holes) in fills.filledHoles {
 					publicMockCalls[calledType]?.filledHoles = holes
 				}
 				typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls)
@@ -1095,7 +1092,7 @@ public actor DependencyTreeGenerator {
 			erasedToConcreteTypeMap: erasedToConcreteTypeMap,
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 			publicMockTypeDescriptionToScopeMap: generatesPublicMock
-				? createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCallsOfPublicMocks, buildsHoles: true)
+				? createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls, buildsHoles: true)
 				: nil,
 			flatParameterMockDefaults: flatParameterMockDefaults(in: typeDescriptionToScopeMap, emittingModule: mockEmittingModule),
 			handWrittenMockLocationsByConcreteType: handWrittenMockLocationsByConcreteType,
@@ -8570,18 +8567,20 @@ public actor DependencyTreeGenerator {
 	/// error production reports (`validateFills`). Every other place is passed up: the calling mock takes it, through a case
 	/// of its own enum or as a parameter its caller passes. A place a route reaches without a value its fill reads is filled
 	/// there with the caller's, as on every other route.
-	/// - Parameter unfulfilledInstantiationsAreHoles: Whether the fills are a public mock's, whose tree is built with holes,
-	///   so a type a fill's tree instantiates that no declaration the module sees fulfills is a place of the mock's own. An
-	///   internal mock's fill binds such a type from a builder `mock()` takes (`ScopeGenerator.seamMockBuilders`), as a
-	///   seam's internal mock binds its hole, where its spelling can be a hole (`canBeHole`), and does not fill the place
-	///   where a spelling cannot be one, which only hand-written code builds, so the place is passed up.
+	///
+	/// A type a fill's tree instantiates that no declaration the module sees fulfills is a place of a public mock's own tree,
+	/// which is built with holes, and an internal mock's fill binds it from a builder `mock()` takes
+	/// (`ScopeGenerator.seamMockBuilders`), as a seam's internal mock binds its hole, where its spelling can be a hole
+	/// (`canBeHole`). Where a spelling cannot be one, which only hand-written code builds, the place is not filled, and the
+	/// type is among `typesNoDeclarationCanFulfillByCalledType`, which production reports
+	/// (`validateFillsInstantiateOnlyWhatCanBeFulfilled`).
 	private func holesFilled(
 		byCallsOf publicMockCalls: [TypeDescription: PublicMockCall],
 		in typeDescriptionToScopeMap: [TypeDescription: Scope],
-		unfulfilledInstantiationsAreHoles: Bool,
-	) -> [TypeDescription: [SeamSignature.Hole]] {
-		guard let emittingModule = emittingModuleToCheck else { return [:] }
+	) -> (filledHoles: [TypeDescription: [SeamSignature.Hole]], typesNoDeclarationCanFulfillByCalledType: [TypeDescription: Set<TypeDescription>]) {
+		guard let emittingModule = emittingModuleToCheck else { return ([:], [:]) }
 		var filledHoles = [TypeDescription: [SeamSignature.Hole]]()
+		var typesNoDeclarationCanFulfillByCalledType = [TypeDescription: Set<TypeDescription>]()
 		for calledType in publicMockCalls.keys.sorted() {
 			guard let publicMockCall = publicMockCalls[calledType] else { continue }
 			for hole in publicMockCall.holes {
@@ -8598,21 +8597,26 @@ public actor DependencyTreeGenerator {
 				      	),
 				      	from: emittingModule,
 				      	extendedTypes: extendedTypeDeclarations,
-				      ).isEmpty,
-				      unfulfilledInstantiationsAreHoles || !Self.instantiatesWhatCannotBeHole(inTreeRootedAt: fulfillingScope)
+				      ).isEmpty
 				else { continue }
+				let typesNoDeclarationCanFulfill = Self.typesThatCannotBeHoles(inTreeRootedAt: fulfillingScope)
+				guard typesNoDeclarationCanFulfill.isEmpty else {
+					typesNoDeclarationCanFulfillByCalledType[calledType, default: []].formUnion(typesNoDeclarationCanFulfill)
+					continue
+				}
 				// A route on which no level binds a value the fill reads hands the fill the caller's, as production's root
 				// dispatcher does (`PublicMockLevelFunctions`), so the place is filled on every route.
 				filledHoles[calledType, default: []].append(hole)
 			}
 		}
-		return filledHoles
+		return (filledHoles, typesNoDeclarationCanFulfillByCalledType)
 	}
 
-	/// Whether a scope of the mock tree rooted at `scope`, in a map built without holes, instantiates a property no scope
-	/// builds whose spelling cannot be a hole (`canBeHole`): one no declaration the module sees fulfills, which only
+	/// The types the scopes of the mock tree rooted at `scope`, in a map built without holes, instantiate as properties no
+	/// scope builds whose spelling cannot be a hole (`canBeHole`): types no declaration the module sees fulfills, which only
 	/// hand-written code could build.
-	private static func instantiatesWhatCannotBeHole(inTreeRootedAt scope: Scope) -> Bool {
+	private static func typesThatCannotBeHoles(inTreeRootedAt scope: Scope) -> Set<TypeDescription> {
+		var typesThatCannotBeHoles = Set<TypeDescription>()
 		var visitedScopes = Set<ObjectIdentifier>()
 		// A stack of its own, since a tree can be as deep as the module has types.
 		var scopesToVisit = [scope]
@@ -8624,10 +8628,37 @@ public actor DependencyTreeGenerator {
 				scopesToVisit.append(childScope)
 			}
 			for dependency in visitedScope.instantiable.dependencies where dependency.isInstantiated && !builtProperties.contains(dependency.property) && !canBeHole(dependency) {
-				return true
+				typesThatCannotBeHoles.insert(dependency.asInstantiatedType)
 			}
 		}
-		return false
+		return typesThatCannotBeHoles
+	}
+
+	/// Reports, as production reports a type its trees reach that no declaration fulfills (`noInstantiableFoundErrors(of:)`),
+	/// each type a fill of a call of another module's public mock instantiates that no declaration can fulfill
+	/// (`holesFilled(byCallsOf:in:)`), where a mock's tree reaches the call: the tree of a type that generates a mock, or that
+	/// the module lists in `additionalMocksToGenerate`, the dependencies each receives included, which the mock root builds.
+	private func validateFillsInstantiateOnlyWhatCanBeFulfilled(_ typesNoDeclarationCanFulfillByCalledType: [TypeDescription: Set<TypeDescription>], additionalMocksToGenerate: Set<String>) throws {
+		guard !typesNoDeclarationCanFulfillByCalledType.isEmpty else { return }
+		var typesToVisit = typeDescriptionToFulfillingInstantiableMap.values
+			.filter { $0.generatesMock || additionalMocksToGenerate.contains($0.concreteInstantiable.asSource) }
+			.map(\.concreteInstantiable)
+		var reachedTypes = Set<TypeDescription>()
+		var typesNoDeclarationCanFulfill = Set<TypeDescription>()
+		while let typeDescription = typesToVisit.popLast() {
+			guard reachedTypes.insert(typeDescription).inserted else { continue }
+			typesNoDeclarationCanFulfill.formUnion(typesNoDeclarationCanFulfillByCalledType[typeDescription, default: []])
+			for dependency in typeDescriptionToFulfillingInstantiableMap[typeDescription]?.dependencies ?? [] {
+				switch dependency.source {
+				case .instantiated, .received:
+					typesToVisit.append(dependency.asInstantiatedType)
+				case .aliased, .forwarded:
+					continue
+				}
+			}
+		}
+		guard !typesNoDeclarationCanFulfill.isEmpty else { return }
+		throw noInstantiableFoundErrors(of: typesNoDeclarationCanFulfill)
 	}
 
 	/// A collection of `@Instantiable`-decorated types that are at the roots of their respective dependency trees.
@@ -10948,6 +10979,11 @@ public actor DependencyTreeGenerator {
 		let unbuildableTypeDescriptions = (seams.isEmpty ? reachableTypeDescriptions : try typesReachableOutsideSeamTrees())
 			.filter { typeDescriptionToFulfillingInstantiableMap[$0]?.mockOnly != false }
 		guard !unbuildableTypeDescriptions.isEmpty else { return }
+		throw noInstantiableFoundErrors(of: unbuildableTypeDescriptions)
+	}
+
+	/// The error that no declaration fulfills each of `unbuildableTypeDescriptions`, at every property that instantiates it.
+	private func noInstantiableFoundErrors(of unbuildableTypeDescriptions: Set<TypeDescription>) -> DependencyTreeGeneratorError {
 		// The map's values can hold the same instantiable under several keys, so collect into sets.
 		var referencingPropertiesByType = [TypeDescription: Set<DependencyTreeGeneratorError.LocatedProperty>]()
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
@@ -10957,7 +10993,7 @@ public actor DependencyTreeGenerator {
 				)
 			}
 		}
-		throw DependencyTreeGeneratorError.independentErrors(unbuildableTypeDescriptions.map { unbuildableTypeDescription in
+		return DependencyTreeGeneratorError.independentErrors(unbuildableTypeDescriptions.map { unbuildableTypeDescription in
 			let referencingProperties = Array(referencingPropertiesByType[unbuildableTypeDescription, default: []])
 			return DependencyTreeGeneratorError.noInstantiableFound(
 				unbuildableTypeDescription,
