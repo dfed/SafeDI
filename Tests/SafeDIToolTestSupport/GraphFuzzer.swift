@@ -10633,7 +10633,10 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// (`declarationBoundOnPathToReenteringCall`), its clauses ("which `MiddleAlpha` declares on the path from the builder
 	/// for `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) to the call by which
 	/// `MiddleAlpha` instantiates `Flow` again (`flowBuilder`) and `MiddleZed` declares …, but"), each clause's places, and
-	/// its declaring types ("cannot hand it `MiddleAlpha`’s and `MiddleZed`’s values") – sorted as text, each item in its
+	/// its declaring types ("cannot hand it `MiddleAlpha`’s and `MiddleZed`’s values"), and, where a fill's seam opened again
+	/// loses a value (`fieldOfReenteringPlace`), the types the places carry it from ("carries from `AScreen` and `BScreen`,
+	/// and"), the seams and calls that open it again ("instantiates `ASeam` and `BSeam` again (`aBuilder` and `bBuilder`)"),
+	/// and the alternatives inline reads ("would read `AScreen`’s or `BScreen`’s `id` inside that `ASeam` or `BSeam`") – sorted as text, each item in its
 	/// place among the list's separators, so two diagnostics that list the same items in another order compare equal, and
 	/// any other difference, including an item added, removed or changed, still tells them apart. A place keeps its owner,
 	/// its case and the seam whose tree holds it in one item, so a place moved to another seam's tree still differs; a
@@ -10661,6 +10664,15 @@ enum GraphFuzzerToolOutcome: Equatable {
 			("\(fulfillRemedy)(?:\(separator)\(fulfillRemedy))+", fulfillRemedy),
 			("(?<=, which )\(reenteringCallClause)(?:\(separator)\(reenteringCallClause))+(?=, but )", reenteringCallClause),
 			("(?<=cannot hand it |cannot hand them )`[^`]*`’s(?:\(separator)`[^`]*`’s)+(?= values)", "`[^`]*`’s"),
+			// The error about a value a fill's seam, opened again, loses (`fieldOfReenteringPlace`): the types the places carry
+			// the value from, the seams their fills open again and the calls that open them, the types whose value inline
+			// reads, and the seams inline reads it inside. The seams its remedy declares the value on are the remedy's list
+			// above.
+			("(?<= carries from | carry from )`[^`]*`(?:\(separator)`[^`]*`)+(?=, and )", backtickedItem),
+			("(?<= instantiates )`[^`]*`(?:\(separator)`[^`]*`)+(?= again \\()", backtickedItem),
+			("(?<= again \\()`[^`]*`(?:\(separator)`[^`]*`)+(?=\\))", backtickedItem),
+			("(?<=would read )`[^`]*`’s(?:(?:, or |, | or )`[^`]*`’s)+(?= `)", "`[^`]*`’s"),
+			("(?<=inside that )`[^`]*`(?:(?:, or |, | or )`[^`]*`)+(?=, but )", backtickedItem),
 		] {
 			diagnostic = sortingItems(ofListsMatching: try! NSRegularExpression(pattern: list), item: try! NSRegularExpression(pattern: item), in: diagnostic)
 		}

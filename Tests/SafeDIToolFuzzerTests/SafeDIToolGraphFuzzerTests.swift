@@ -4780,6 +4780,19 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func differences_reportNothing_whenFieldOfReenteringPlaceListsItsTypesSeamsAndCallsInAnotherOrder() {
+		// A renaming reorders the lists of a fill's error about a value its seam, opened again, loses, which follow names. Another
+		// type, seam or call in one list still differs.
+		func outcome(_ first: String, _ second: String, call: String = "Builder") -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `\(first)Owner`’s `service: any Service` and `\(second)Owner`’s `service: any Service` carries from `\(first)Screen` and `\(second)Screen`, and each of their fills instantiates `\(first)Seam` and `\(second)Seam` again (`\(first)\(call)` and `\(second)Builder`). Inline, `Impl` would read `\(first)Screen`’s or `\(second)Screen`’s `id` inside that `\(first)Seam` or `\(second)Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `\(first)Seam` and `\(second)Seam`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+		}
+
+		#expect(GraphFuzzerToolOutcome.differences(between: outcome("A", "B"), and: outcome("B", "A")) == [])
+		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "C")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "A", call: "Factory")) == "its diagnostics")
+	}
+
+	@Test
 	func diagnosticEntries_sortsEachErrorsNotesWithTheirFixIts_whenNotesFollowAnError() {
 		// Each note keeps the fix-it line after it, the lines before an error's first note stay with the error, and notes never
 		// move to another error.
