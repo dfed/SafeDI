@@ -1297,15 +1297,16 @@ jobs:
   # the same prefix and the other build's commit is an ancestor of this
   # run's. Two pushes to main do not cancel each other, so the older one's
   # run can finish last: it finds the newer build's commit ahead of its
-  # own and leaves it. The macOS prefix names no runner image, so a build
-  # an older image made goes when a newer commit's build exists. Deleting a
+  # own and leaves it. The macOS prefix names no runner image and the
+  # debug prefix no Swift version, so a build an older image or release
+  # made goes when a newer commit's build exists. Deleting a
   # cache takes `actions: write` and comparing two commits `contents: read`;
   # only this job has the first. It checks nothing out and calls only
   # GitHub's API, so it runs on Linux with no container. A failure warns and
   # leaves the builds for the next run or for eviction.
   prune-build-caches:
     name: Delete Older Build Directories
-    needs: [spm, linux-build]
+    needs: [spm, linux-build, linux-latest-swift]
     if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
@@ -1324,7 +1325,7 @@ jobs:
           REF: ${{ github.ref }}
           COMMIT: ${{ github.sha }}
         run: |
-          for prefix in spm-release-v2-macOS-xcode-26.0- spm-release-v2-Linux-swift-6.2-; do
+          for prefix in spm-release-v2-macOS-xcode-26.0- spm-release-v2-Linux-swift-6.2- spm-debug-v2-Linux-swift-; do
             if ! builds=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -F per_page=100 --jq '.actions_caches[] | "\(.id) \(.key)"' 2>&1); then
               echo "::warning::Listing $REF's builds under $prefix failed: $(printf '%s' "$builds" | tr '\r\n' '  ')"
               continue
@@ -2096,20 +2097,31 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+      # For the reason "Build Tests on Linux" gives: without it, a restored
+      # build directory rebuilds every target of this package.
+      - name: Stamp Source Times
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          .github/scripts/stamp-source-times.sh
       - name: Print Swift Version
         id: swift
         run: |
           swift --version
           echo "version=$(swift --version 2>&1 | grep -m1 -oE 'Swift version [0-9.]+' | awk '{print $3}')" >> "$GITHUB_OUTPUT"
       # The toolchain floats, so the key carries the version printed
-      # above: a new release starts from an empty cache.
-      - name: Cache Build Directory
-        uses: actions/cache@v6
+      # above: a new release starts from an empty cache. It ends in the
+      # commit, so that each push to main saves the build a later run
+      # starts from ("Save Build Directory" below), and only a run on main
+      # saves, both for the reasons "Build Tests on Linux" gives.
+      - name: Restore Build Directory
+        id: build-cache
+        uses: actions/cache/restore@v6
         with:
           path: .build
-          key: spm-debug-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
+          key: spm-debug-v2-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
           restore-keys: |
-            spm-debug-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-
+            spm-debug-v2-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}-
+            spm-debug-v2-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -2146,6 +2158,13 @@ jobs:
       - name: Build and Test Framework
         timeout-minutes: 70
         run: swift test --traits sourceBuild
+      # Whatever the tests found: the build is this commit's either way.
+      - name: Save Build Directory
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' && hashFiles('.build/workspace-state.json') != '' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .build
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
 
   readme-validation:
     name: Check Markdown links
