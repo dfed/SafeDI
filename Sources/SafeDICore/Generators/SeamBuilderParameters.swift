@@ -2434,9 +2434,9 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				// A place a `@Sendable` function builds carries none of the seam's parameters (`fields(of:)`), so its fill reads the
 				// outer caller's value whatever the seam receives: only filling the builder in the seam's module helps.
 				let remedy = if reenteredPlace.isBuiltBySendableBuilder {
-					"The scope\(namesSeveralBuilders ? "s" : "") SafeDI hands \(namedBuilders) \(scopeCarries) only what a `@Sendable` function binds, so no value \(seamBuiltAgain) receives reaches \(builderPronoun): \(fulfillRemedies)."
+					"The values struct\(namesSeveralBuilders ? "s" : "") SafeDI hands \(namedBuilders) \(scopeCarries) only what a `@Sendable` function binds, so no value \(seamBuiltAgain) receives reaches \(builderPronoun): \(fulfillRemedies)."
 				} else {
-					"Declare `\(receive)` on \(seamBuiltAgain), so the builder’s scope carries it, or \(fulfillRemedies)."
+					"Declare `\(receive)` on \(seamBuiltAgain), so the builder’s values struct carries it, or \(fulfillRemedies)."
 				}
 				return [
 					SourceDiagnostic(severity: .error, location: location, message: "\(receives), which \(carriers). Inline, \(readerName) would read \(listedAlternatives(declaringTypes)) `\(field.property.label)` inside that \(seamBuiltAgain), but \(callsAreSeveral ? "those calls pass" : "the call passes") the builder on as \(module(fillingModule)) fills it, whose scope there does not carry `\(field.property.label)`, so \(readerName) would get \(handed). \(remedy)"),
