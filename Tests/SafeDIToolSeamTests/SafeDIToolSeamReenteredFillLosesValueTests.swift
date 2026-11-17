@@ -589,15 +589,22 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_takesBuilderForPlace_whenCallerOfPublicMockCannotFillPlaceWithoutOpeningTheSeamAgain() async throws {
-		// The fill reads `cart`, which the public mock's top-level place does not hold, so the caller passes the place up
-		// as a builder of its own mock: no generated fill opens `Checkout` again, so no value is lost.
+	mutating func mock_handsReenteredPlaceTheScreensCart_whenCallerOfPublicMockFillsPlaceWhoseFillOpensTheSeamAgain() async throws {
+		// The production twin reports `fieldOfReenteringPlace` here (the first test of this file): its seam passes the builder on
+		// as module `App` fills it. The calling mock builds `Checkout` inline, so the call inside the fill re-enters the root level
+		// function and hands it the `cart` of its own fill’s scope, `CartScreen`’s, as inline reads: it is accepted and builds
+		// inline’s values (contract rule 7’s list). The `cart` member of the overrides is the mock’s only-if-available override
+		// of the top place’s read, which nothing in `Holder`’s tree provides.
 		let checkout = Self.formBCheckout
 			.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable(generateDependencyTree: true, generateMock: .public)")
 			.replacingOccurrences(of: "    public init(payments: any Payments, cartScreenBuilder: Instantiator<CartScreen>) {", with: "    init(payments: any Payments, cartScreenBuilder: Instantiator<CartScreen>) {")
 		let modules = [
 			ModuleFixture(name: "Shared", packageName: "Shop", swiftFileContent: [checkout]),
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import SafeDI\nimport Shared\n\n" + Self.livePayments, Self.holder], dependencies: ["Shared"]),
+		]
+		let visible = [
+			ModuleFixture(name: "Shared", packageName: "Shop", swiftFileContent: [checkout, "import SafeDI\n\n" + Self.livePayments]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [Self.holder], dependencies: ["Shared"]),
 		]
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
@@ -618,14 +625,17 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 			    /// Overrides for the mock dependency tree.
 			    struct SafeDIOverrides {
 			        init(
-			            checkout: Checkout.SafeDIOverrides = .init()
+			            checkout: Checkout.SafeDIOverrides = .init(),
+			            cart: Cart? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                checkout: checkout
 			            )
+			            self.cart = cart
 			        }
 
 			        var checkout: Checkout.SafeDIOverrides { __safeDI_storage.checkout }
+			        let cart: Cart?
 
 			        private let __safeDI_storage: __safeDI_Storage
 
@@ -641,17 +651,50 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 			    }
 
 			    static func mock(
-			        paymentsBuilder: @escaping () -> any Payments,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Holder {
-			        _ = Checkout.__safeDI_Checkout_mock_359E532F0A5DC74B.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			        let checkout = Checkout.__safeDI_mock(paymentsBuilder: .init(__safeDI_noScope: paymentsBuilder), safeDIOverrides: safeDIOverrides.checkout)
+			        let cart: Cart? = safeDIOverrides.cart
+			        func __safeDI_checkout() -> Checkout {
+			            func __safeDI_paymentsBuilder_Checkout_payments(_ scope: Checkout.SafeDIMockScope_Payments.payments_Values, cart: Cart?) -> any Payments {
+			                func __safeDI_payments() -> LivePayments {
+			                    func __safeDI_retryBuilder() -> Checkout {
+			                        Checkout.__safeDI_mock(paymentsBuilder: __safeDI_paymentsBuilder_Checkout(cart: cart))
+			                    }
+			                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+			                    return LivePayments(cart: cart, retryBuilder: retryBuilder)
+			                }
+			                let payments: any Payments = __safeDI_payments()
+			                return payments
+			            }
+			            func __safeDI_paymentsBuilder_Checkout_CartScreen_Scope_payments(_ scope: Checkout.SafeDIMockScope_Payments.CartScreen_Scope.payments_Values) -> any Payments {
+			                let cart = scope.cart
+			                func __safeDI_payments() -> LivePayments {
+			                    func __safeDI_retryBuilder() -> Checkout {
+			                        Checkout.__safeDI_mock(paymentsBuilder: __safeDI_paymentsBuilder_Checkout(cart: cart))
+			                    }
+			                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+			                    return LivePayments(cart: cart, retryBuilder: retryBuilder)
+			                }
+			                let payments: any Payments = __safeDI_payments()
+			                return payments
+			            }
+			            func __safeDI_paymentsBuilder_Checkout(cart: Cart?) -> Checkout.SafeDIMockScope_Payments.__safeDI_Builder<any Payments> {
+			                .init(payments: { scope in __safeDI_paymentsBuilder_Checkout_payments(scope, cart: cart) }, cartScreenBuilder: { _ in __safeDI_paymentsBuilder_Checkout_CartScreen_Scope() })
+			            }
+			            func __safeDI_paymentsBuilder_Checkout_CartScreen_Scope() -> Checkout.SafeDIMockScope_Payments.CartScreen_Scope.__safeDI_Builder<any Payments> {
+			                .init(payments: { scope in __safeDI_paymentsBuilder_Checkout_CartScreen_Scope_payments(scope) })
+			            }
+			            _ = Checkout.__safeDI_Checkout_mock_359E532F0A5DC74B.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Checkout.__safeDI_mock(paymentsBuilder: __safeDI_paymentsBuilder_Checkout(cart: cart), safeDIOverrides: safeDIOverrides.checkout)
+			        }
+			        let checkout: Checkout = __safeDI_checkout()
 			        return Holder(checkout: checkout)
 			    }
 			}
 			#endif
 			"""#,
 		])
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visible, probe: Self.retryProbe.replacingOccurrences(of: "Root()", with: "Holder.mock()"))
 	}
 
 	// MARK: Fixtures
