@@ -1517,16 +1517,6 @@ public struct SeamCall: Sendable {
 		calledBuilders.holes
 	}
 
-	/// The builders the call passes.
-	public var builders: [SeamSignature.Builder] {
-		calledBuilders.builders
-	}
-
-	/// Every enum the call's builders reach.
-	public var scopeEnums: [SeamSignature.ScopeEnum] {
-		calledBuilders.scopeEnums
-	}
-
 	/// The `SeamSignature.guardTypeName` of the signature the call was generated from.
 	public let guardTypeName: String
 	/// The comment the call carries saying what to do when it does not compile.
