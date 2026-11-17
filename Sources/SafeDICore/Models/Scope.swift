@@ -423,6 +423,38 @@ final class Scope: Hashable {
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
 	) throws -> ScopeGenerator {
+		// Every pass reads the scopes as they are now, which nothing changes while the tree is built.
+		try ConstructionGraph(rootedAt: self).createScopeGenerator(
+			for: property,
+			nearestDeclarations: nearestDeclarations,
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			seamRoot: seamRoot,
+			mockBuilders: mockBuilders,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			forMockGeneration: forMockGeneration,
+			startsCodeGeneration: startsCodeGeneration,
+			validatesForwardedProperties: validatesForwardedProperties,
+			declaredTypeNames: declaredTypeNames,
+			constructionMemo: &constructionMemo,
+		)
+	}
+}
+
+extension ConstructionGraph {
+	/// `Scope.createScopeGenerator(for:…)` of the scope this graph is rooted at: the tree, then the memo oracle's builds of it.
+	func createScopeGenerator(
+		for property: Property?,
+		nearestDeclarations: NearestDeclarations = NearestDeclarations(),
+		lazilyInstantiatedInstanceProperties: Set<Property>,
+		seamRoot: ScopeGenerator.SeamRoot? = nil,
+		mockBuilders: DependencyTreeGenerator.ShapedBuilders? = nil,
+		erasedToConcreteExistential: Bool,
+		forMockGeneration: Bool = false,
+		startsCodeGeneration: Bool = true,
+		validatesForwardedProperties: Bool = true,
+		declaredTypeNames: DeclaredTypeNames,
+		constructionMemo: inout ConstructionMemo,
+	) throws -> ScopeGenerator {
 		let scopeGenerator = try createdTree(
 			for: property,
 			nearestDeclarations: nearestDeclarations,
@@ -436,6 +468,36 @@ final class Scope: Hashable {
 			declaredTypeNames: declaredTypeNames,
 			constructionMemo: &constructionMemo,
 		)
+		try checkWithMemoOracle(
+			for: property,
+			nearestDeclarations: nearestDeclarations,
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			seamRoot: seamRoot,
+			mockBuilders: mockBuilders,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			forMockGeneration: forMockGeneration,
+			validatesForwardedProperties: validatesForwardedProperties,
+			declaredTypeNames: declaredTypeNames,
+			constructionMemo: &constructionMemo,
+		)
+		return scopeGenerator
+	}
+
+	/// Builds the tree `createdTree(for:…)` builds twice more, with the memo oracle's memo and with no memo, and hands both to
+	/// the oracle, when one is installed. Called once for each tree created with `constructionMemo`, in the order the trees
+	/// are created, so the oracle's memo holds what it would if the trees were created one after another.
+	func checkWithMemoOracle(
+		for property: Property?,
+		nearestDeclarations: NearestDeclarations,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
+		seamRoot: ScopeGenerator.SeamRoot?,
+		mockBuilders: DependencyTreeGenerator.ShapedBuilders?,
+		erasedToConcreteExistential: Bool,
+		forMockGeneration: Bool,
+		validatesForwardedProperties: Bool,
+		declaredTypeNames: DeclaredTypeNames,
+		constructionMemo: inout ConstructionMemo,
+	) throws {
 		if let observer = ConstructionMemoOracle.observer {
 			// The oracle's two builds start no code, so nothing changes either while it is read. The build with the memo
 			// shares it across every tree created with this memo, whatever the memo's own sharing, so that the oracle judges
@@ -473,11 +535,10 @@ final class Scope: Hashable {
 			}
 			observer(treeBuiltWithMemo, treeBuiltWithoutMemo)
 		}
-		return scopeGenerator
 	}
 
 	/// The tree `createScopeGenerator` creates, in as many passes as it takes.
-	private func createdTree(
+	func createdTree(
 		for property: Property?,
 		nearestDeclarations: NearestDeclarations,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
@@ -507,8 +568,6 @@ final class Scope: Hashable {
 		// Every scope of the tree is enclosed by these, so they are held in storage each scope's copy shares.
 		let nearestDeclarations = nearestDeclarations.sharingDeclarations()
 		var startOrderChanged: Bool
-		// Every pass reads the scopes as they are now, which nothing changes while the tree is built.
-		let graph = ConstructionGraph(rootedAt: self)
 		repeat {
 			if previousPassGenerator != nil {
 				generatorsToStart = []
@@ -533,7 +592,6 @@ final class Scope: Hashable {
 				placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 				memo: &passMemo,
 				settledPassMemo: settledPassMemo,
-				graph: graph,
 			)
 			if previousPassGenerator == nil {
 				firstPassMemo = passMemo
@@ -555,9 +613,10 @@ final class Scope: Hashable {
 		}
 		// The entries of a tree are kept only once its construction returns. A mock root whose construction throws keeps
 		// none, and its error, `ErasedInstantiatorForwardedPropertiesMismatchError`, the only one construction throws, ends
-		// the whole mock pass, so no later mock root reads the memo after a root that failed. A change that adds a
-		// construction error the mock pass catches owes a test that such a root, first, in the middle and last, reports
-		// the same errors, and leaves the other roots the same mocks, with the memo shared between mock roots and without it.
+		// the whole mock pass where the root stands in type order, so no mock root after it is finished, and the roots of
+		// its wave built after it are dropped. A change that adds a construction error the mock pass catches owes a test
+		// that such a root, first, in the middle and last of a wave, and in a later wave, reports the same errors, and
+		// leaves the other roots the same mocks, with the memo shared between mock roots and without it.
 		if sharesMemo {
 			constructionMemo.keepEntries(ofFirstPass: firstPassMemo)
 		}
@@ -586,10 +645,9 @@ final class Scope: Hashable {
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?,
 		memo: inout ConstructionMemo,
 		settledPassMemo: ConstructionMemo?,
-		graph: ConstructionGraph,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
-			scope: graph.root,
+			scope: root,
 			property: property,
 			propertyStack: [],
 			concreteTypeStack: [],
@@ -599,8 +657,8 @@ final class Scope: Hashable {
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,
 			mockBuilders: mockBuilders,
-			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, parameters: $0.signature.parameters, callRoutes: $0.signature.callRoutes) }
-				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, callRoutes: $0.callRoutes) }
+			seamHoles: seamRoot.map { SeamHoles(seamType: root.instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, parameters: $0.signature.parameters, callRoutes: $0.signature.callRoutes) }
+				?? mockBuilders.map { SeamHoles(seamType: root.instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, callRoutes: $0.callRoutes) }
 				?? SeamHoles(),
 			sitePath: [],
 			erasedToConcreteExistential: erasedToConcreteExistential,

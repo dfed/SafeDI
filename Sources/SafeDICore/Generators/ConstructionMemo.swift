@@ -46,9 +46,9 @@
 /// generator a later tree reuses has started. What is constant in a pass of one tree and not across trees is either in
 /// the key (the flags) or kept to the tree (its `SeamHoles`, and the start order of a tree with holes). The list of every
 /// input and stored value and why each is covered is `.claude/rules/construction-memo.md`.
-struct ConstructionMemo {
+struct ConstructionMemo: Sendable {
 	/// Which trees a memo carries generators between.
-	enum Sharing {
+	enum Sharing: Sendable {
 		/// Each tree's passes start empty, and nothing is kept once the tree is created.
 		case perTree
 		/// Each tree's first pass starts from what the trees created before it with this memo kept.
@@ -87,8 +87,24 @@ struct ConstructionMemo {
 		}
 	}
 
+	/// Appends what `treeMemo` stored beyond `base`, the memo it started from: for each key, the entries after `base`'s, and
+	/// each generator not stored yet. Trees created at once from one memo are each merged back this way, in the order they
+	/// would have been created one after another, so the memo holds every tree's entries in that order, whichever finished
+	/// first (see `DependencyTreeGenerator.generateMockCode`).
+	mutating func appendEntries(storedBy treeMemo: ConstructionMemo, beyond base: ConstructionMemo) {
+		for (key, entries) in treeMemo.entriesByKey {
+			let baseCount = base.entriesByKey[key]?.count ?? 0
+			guard entries.count > baseCount else { continue }
+			entriesByKey[key, default: []].append(contentsOf: entries[baseCount...])
+		}
+		for (generator, keyedEntry) in treeMemo.entriesByGenerator where entriesByGenerator[generator] == nil {
+			entriesByGenerator[generator] = keyedEntry
+		}
+		keyedScopes.append(contentsOf: treeMemo.keyedScopes.dropFirst(base.keyedScopes.count))
+	}
+
 	/// What a place is built from besides the context it reads: compared whole.
-	struct Key: Hashable {
+	struct Key: Hashable, Sendable {
 		/// The scope the place builds, by its `ConstructionScopeIdentity`.
 		let scope: ObjectIdentifier
 		let property: Property
@@ -128,7 +144,7 @@ struct ConstructionMemo {
 
 	/// A finished place's generator, with the reads of the context above it its subtree made and its scope count, which
 	/// the place's parent counts as its own child's.
-	struct Entry {
+	struct Entry: Sendable {
 		let reads: ConstructionLog
 		let generator: ScopeGenerator
 		let subtreeScopeCount: Int
@@ -235,7 +251,7 @@ struct ConstructionMemo {
 }
 
 /// The context a place of a tree inherits from the scopes above it, which its subtree reads (see `ConstructionMemo`).
-struct ConstructionContext {
+struct ConstructionContext: Sendable {
 	/// The properties being built above the place, innermost first.
 	let propertyStack: [Property]
 	/// The concrete types the properties of `propertyStack` are built for, beside it.
@@ -279,7 +295,7 @@ struct ConstructionContext {
 }
 
 /// What a place's subtree read of the context above it, deduplicated by read (see `ConstructionMemo`).
-struct ConstructionLog {
+struct ConstructionLog: Sendable {
 	/// A read of a place's context.
 	enum Read: Hashable {
 		/// The nearest declaration of a label, read whole (`NearestDeclarations.build(_:)` adds to it).

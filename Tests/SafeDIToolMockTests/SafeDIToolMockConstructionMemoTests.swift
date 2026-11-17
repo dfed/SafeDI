@@ -45,10 +45,17 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 	// MARK: Tests
 
 	@Test(arguments: [
-		// `P` fails first, in the middle and last of the mock roots, which are built in type order.
+		// `P` fails first, in the middle and last of the mock roots, which are built in type order, four at a time
+		// (`DependencyTreeGenerator.mockRootsBuiltAtOnce`): first, in the middle and last of the first wave, then first, in
+		// the middle and last of the second, and first of the first wave with every other root in a later wave.
 		["Q", "R"],
 		["N", "Q"],
 		["M", "N"],
+		["M1", "M2", "M3", "M4"],
+		["M1", "M2", "M3", "M4", "Q1"],
+		["M1", "M2", "M3", "M4", "N1", "N2", "N3"],
+		["Q1", "Q2", "Q3", "Q4", "Q5"],
+		["N1", "Q1", "Q2", "Q3", "Q4"],
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_reportsSameErrorWithMemoAsWithout_whenMockRootFailingAfterItsConstructionSharesSubtreesWithOtherMockRoots(otherMockRootNames: [String]) async {
@@ -80,10 +87,17 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 	}
 
 	@Test(arguments: [
-		// `P` fails first, in the middle and last of the mock roots, which are built in type order.
+		// `P` fails first, in the middle and last of the mock roots, which are built in type order, four at a time
+		// (`DependencyTreeGenerator.mockRootsBuiltAtOnce`): first, in the middle and last of the first wave, then first, in
+		// the middle and last of the second, and first of the first wave with every other root in a later wave.
 		["Q", "R"],
 		["N", "Q"],
 		["M", "N"],
+		["M1", "M2", "M3", "M4"],
+		["M1", "M2", "M3", "M4", "Q1"],
+		["M1", "M2", "M3", "M4", "N1", "N2", "N3"],
+		["Q1", "Q2", "Q3", "Q4", "Q5"],
+		["N1", "Q1", "Q2", "Q3", "Q4"],
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_reportsSameErrorWithMemoAsWithout_whenMockRootThrowsDuringItsConstruction(otherMockRootNames: [String]) async {
@@ -110,6 +124,23 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 				}
 			}
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_generatesSameMocksWithMemoAsWithout_whenMockRootsOfSeveralWavesShareSubtrees() async throws {
+		// Nine mock roots, built four at a time, reach `G`'s subtree, each by another path: a root reuses what the roots of
+		// the waves before its own built, and builds again what the other roots of its wave build.
+		let rootNames = ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9"]
+		let fixture = [
+			seamFixtureType(named: "G", isFinalClass: true, declarations: ["@Instantiated let h: H", "@Instantiated let kBuilder: Instantiator<K>"]),
+			seamFixtureType(named: "H", isFinalClass: true, declarations: ["@Instantiated let k: K"]),
+			seamFixtureType(named: "K", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "W", isFinalClass: true, declarations: ["@Instantiated let g: G"]),
+		] + rootNames.enumerated().map { index, name in
+			Self.mockedType(named: name, declarations: index.isMultiple(of: 2) ? ["@Instantiated let g: G"] : ["@Instantiated let w: W", "@Instantiated let h: H"])
+		}
+		try await expectSameMocksInEverySetting(of: fixture)
 	}
 
 	@Test(arguments: [

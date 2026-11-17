@@ -348,6 +348,17 @@ public actor DependencyTreeGenerator {
 		if ConstructionMemoOracle.buildsMockRootsInReverseOrder {
 			mockRootCandidates.reverse()
 		}
+		// The mock roots are validated one after another, in type order, then their trees are built `mockRootsBuiltAtOnce` at a
+		// time, each from the memo as the trees before its wave left it, and finished in type order. A wave's trees are merged
+		// into the memo in type order, whichever finished first, so the memo, and the errors reported, are what building
+		// them one after another gives, but for the reuses a tree misses of the other trees of its wave.
+		enum MockRootStep {
+			case prepared(PreparedMockRoot)
+			case failed(DependencyTreeGeneratorError)
+		}
+		var mockRootSteps = [MockRootStep]()
+		// An error other than a `DependencyTreeGeneratorError` ends the mock pass where the mock root that throws it stands.
+		var errorEndingMockPass: (any Error)?
 		for instantiable in mockRootCandidates {
 			let isAdditionalMock = additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource)
 			// A public mock's tree is built from the scopes with holes.
@@ -362,7 +373,7 @@ public actor DependencyTreeGenerator {
 
 			// Each mock root reports the first error it finds, and the errors of every mock root are reported.
 			do {
-				let mockRoot = try await createMockRoot(
+				let prepared = try await prepareMockRoot(
 					for: instantiable,
 					scope: scope,
 					// A `generateMock: true` type declared in this module gets its mock whether
@@ -375,22 +386,70 @@ public actor DependencyTreeGenerator {
 					childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 					promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 					scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
-					constructionMemo: &constructionMemo,
 				)
-				if instantiable.generateMock == .public, let publicMockContext {
-					var findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: flatParameterMockDefaults)
-					if findings.isEmpty, let finding = try await callersViewFinding(of: instantiable) {
-						findings.append(finding)
-					}
-					guard findings.isEmpty else {
-						mockRootErrors.append(.publicMockCannotBeGenerated(findings))
-						continue
+				mockRootSteps.append(.prepared(prepared))
+			} catch let error as DependencyTreeGeneratorError {
+				mockRootSteps.append(.failed(error))
+			} catch {
+				errorEndingMockPass = error
+				break
+			}
+		}
+		let declaredTypeNames = declaredTypeNames
+		var waveStart = mockRootSteps.startIndex
+		while waveStart < mockRootSteps.endIndex {
+			let wave = mockRootSteps[waveStart..<min(waveStart + Self.mockRootsBuiltAtOnce, mockRootSteps.endIndex)]
+			waveStart = wave.endIndex
+			let memoBeforeWave = constructionMemo
+			let builtTrees = await withTaskGroup(of: (Int, Result<(ScopeGenerator, ConstructionMemo), any Error>).self) { taskGroup in
+				for (index, step) in zip(wave.indices, wave) {
+					switch step {
+					case let .prepared(prepared):
+						taskGroup.addTask {
+							var treeMemo = memoBeforeWave
+							return (index, Result { try (prepared.createdTree(builders: nil, declaredTypeNames: declaredTypeNames, constructionMemo: &treeMemo), treeMemo) })
+						}
+					case .failed:
+						break
 					}
 				}
-				mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
-			} catch let error as DependencyTreeGeneratorError {
-				mockRootErrors.append(error)
+				var builtTrees = [Int: Result<(ScopeGenerator, ConstructionMemo), any Error>]()
+				for await (index, builtTree) in taskGroup {
+					builtTrees[index] = builtTree
+				}
+				return builtTrees
 			}
+			for (index, step) in zip(wave.indices, wave) {
+				switch step {
+				case let .failed(error):
+					mockRootErrors.append(error)
+				case let .prepared(prepared):
+					guard let builtTree = builtTrees[index] else { continue }
+					let (mockRoot, treeMemo) = try builtTree.get()
+					constructionMemo.appendEntries(storedBy: treeMemo, beyond: memoBeforeWave)
+					try prepared.checkWithMemoOracle(builders: nil, declaredTypeNames: declaredTypeNames, constructionMemo: &constructionMemo)
+					do {
+						let instantiable = prepared.instantiable
+						let mockRoot = try await finishMockRoot(prepared, generator: mockRoot, flatParameterMockDefaults: flatParameterMockDefaults)
+						if instantiable.generateMock == .public, let publicMockContext {
+							var findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: flatParameterMockDefaults)
+							if findings.isEmpty, let finding = try await callersViewFinding(of: instantiable) {
+								findings.append(finding)
+							}
+							guard findings.isEmpty else {
+								mockRootErrors.append(.publicMockCannotBeGenerated(findings))
+								continue
+							}
+						}
+						mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
+					} catch let error as DependencyTreeGeneratorError {
+						mockRootErrors.append(error)
+					}
+				}
+			}
+		}
+		if let errorEndingMockPass {
+			throw errorEndingMockPass
 		}
 		if ConstructionMemoOracle.buildsMockRootsInReverseOrder {
 			mockRoots.reverse()
@@ -1190,6 +1249,34 @@ public actor DependencyTreeGenerator {
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
 		constructionMemo: inout ConstructionMemo,
 	) async throws -> ScopeGenerator {
+		let prepared = try await prepareMockRoot(
+			for: instantiable,
+			scope: scope,
+			generatedMockReason: generatedMockReason,
+			mockScopes: mockScopes,
+			emittingModule: emittingModule,
+			receivedPropertiesCache: &receivedPropertiesCache,
+			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
+			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
+			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+		)
+		let generator = try prepared.createScopeGenerator(builders: nil, declaredTypeNames: declaredTypeNames, constructionMemo: &constructionMemo)
+		return try await finishMockRoot(prepared, generator: generator, flatParameterMockDefaults: mockScopes.flatParameterMockDefaults)
+	}
+
+	/// Validates the mock root of `instantiable`, whose scope is `scope`, and returns what building its tree reads (see
+	/// `createMockRoot`, which builds and finishes it too).
+	private func prepareMockRoot(
+		for instantiable: Instantiable,
+		scope: Scope,
+		generatedMockReason: GeneratedMockReason?,
+		mockScopes: MockScopes,
+		emittingModule: EmittingModule?,
+		receivedPropertiesCache: inout ReceivedPropertiesCache,
+		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
+		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
+		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
+	) async throws -> PreparedMockRoot {
 		// A hand-written method also named `mock` can be confused with the
 		// generated `mock()`: identical signatures redeclare, overlapping ones
 		// make calls ambiguous or silently pick the generated method, and a
@@ -1231,18 +1318,16 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		return try await createMockRootScopeGenerator(
+		return try await prepareMockRootScope(
 			for: instantiable,
 			scope: scope,
 			typeDescriptionToScopeMap: mockScopes.typeDescriptionToScopeMap,
-			flatParameterMockDefaults: mockScopes.flatParameterMockDefaults,
 			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
 			emittingModule: emittingModule,
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
-			constructionMemo: &constructionMemo,
 		)
 	}
 
@@ -5935,19 +6020,17 @@ public actor DependencyTreeGenerator {
 	///   a scope's tree is the same whichever mock root builds it, so a tree validated once is not walked again.
 	/// - Parameter emittingModule: The module the mock's code compiles in, whose access to each type the mock constructs
 	///   is checked, or `nil` to check none.
-	private func createMockRootScopeGenerator(
+	private func prepareMockRootScope(
 		for instantiable: Instantiable,
 		scope: Scope,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
-		flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault],
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
 		emittingModule: EmittingModule?,
 		receivedPropertiesCache cache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
-		constructionMemo: inout ConstructionMemo,
-	) async throws -> ScopeGenerator {
+	) async throws -> PreparedMockRoot {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
 		// (via ObjectIdentifier) so each scope outside a cycle is visited at most once.
@@ -6330,29 +6413,80 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		// Build the final ScopeGenerator once. The mock root binds every received
-		// property it does not promote — as a `mock()` parameter or a `SafeDIOverrides`
-		// entry — so each is receivable throughout the tree.
-		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
-		// them shares the mock roots' memo.
-		func mockRootGenerator(builders: ShapedBuilders?, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
-			try mockRootScope.createScopeGenerator(
+		// The mock root binds every received property it does not promote – as a `mock()` parameter or a `SafeDIOverrides`
+		// entry – so each is receivable throughout the tree, which encloses its whole tree.
+		return PreparedMockRoot(
+			instantiable: instantiable,
+			graph: ConstructionGraph(rootedAt: mockRootScope),
+			nearestDeclarations: .binding(allReceived),
+		)
+	}
+
+	/// A mock root `prepareMockRootScope` validated, whose tree is not built yet: what building it reads, as values, so that
+	/// several mock roots' trees can be built at once.
+	/// How many mock roots' trees `generateMockCode` builds at once. Fixed, so that the work done, and so the CPU time, is
+	/// the same on every machine: a tree misses the reuses of the other trees of its wave, which it builds again.
+	static let mockRootsBuiltAtOnce = 4
+
+	struct PreparedMockRoot: Sendable {
+		let instantiable: Instantiable
+		/// The mock root's scope, with every scope its tree reaches.
+		let graph: ConstructionGraph
+		/// What the mock root binds, which encloses its whole tree.
+		let nearestDeclarations: NearestDeclarations
+
+		/// The mock root's tree built with `builders`, which the memo oracle does not check: `checkWithMemoOracle` does.
+		func createdTree(builders: ShapedBuilders?, declaredTypeNames: DeclaredTypeNames, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
+			try graph.createdTree(
 				for: nil,
-				// The mock root binds every received property it does not promote, which encloses its whole tree.
-				nearestDeclarations: .binding(allReceived),
+				nearestDeclarations: nearestDeclarations,
 				lazilyInstantiatedInstanceProperties: [],
+				seamRoot: nil,
 				mockBuilders: builders,
 				erasedToConcreteExistential: false,
 				forMockGeneration: true,
+				startsCodeGeneration: true,
+				validatesForwardedProperties: true,
 				declaredTypeNames: declaredTypeNames,
 				constructionMemo: &constructionMemo,
 			)
 		}
+
+		/// Hands the memo oracle its builds of the tree `createdTree(builders:…)` built with `constructionMemo`.
+		func checkWithMemoOracle(builders: ShapedBuilders?, declaredTypeNames: DeclaredTypeNames, constructionMemo: inout ConstructionMemo) throws {
+			try graph.checkWithMemoOracle(
+				for: nil,
+				nearestDeclarations: nearestDeclarations,
+				lazilyInstantiatedInstanceProperties: [],
+				seamRoot: nil,
+				mockBuilders: builders,
+				erasedToConcreteExistential: false,
+				forMockGeneration: true,
+				validatesForwardedProperties: true,
+				declaredTypeNames: declaredTypeNames,
+				constructionMemo: &constructionMemo,
+			)
+		}
+
+		/// The mock root's tree built with `builders`, then checked by the memo oracle.
+		func createScopeGenerator(builders: ShapedBuilders?, declaredTypeNames: DeclaredTypeNames, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
+			let generator = try createdTree(builders: builders, declaredTypeNames: declaredTypeNames, constructionMemo: &constructionMemo)
+			try checkWithMemoOracle(builders: builders, declaredTypeNames: declaredTypeNames, constructionMemo: &constructionMemo)
+			return generator
+		}
+	}
+
+	/// Finishes the mock root `prepared` describes, whose tree, built with the mock roots' memo, is `generator`: checks the
+	/// labels its lazy cycles pass, and, for a public mock whose tree holds a place or passes a builder up, builds the tree
+	/// again with the builders `mock()` takes.
+	private func finishMockRoot(_ prepared: PreparedMockRoot, generator: ScopeGenerator, flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault]) async throws -> ScopeGenerator {
+		let instantiable = prepared.instantiable
+		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
+		// them shares the mock roots' memo.
 		func mockRootGeneratorWithHoles(builders: ShapedBuilders) throws -> ScopeGenerator {
 			var memoOfTreeWithHoles = ConstructionMemo()
-			return try mockRootGenerator(builders: builders, constructionMemo: &memoOfTreeWithHoles)
+			return try prepared.createScopeGenerator(builders: builders, declaredTypeNames: declaredTypeNames, constructionMemo: &memoOfTreeWithHoles)
 		}
-		let generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
 		// A public mock's tree holds a site for each hole (see `createMockTypeDescriptionToScopeMapping`), and a call of
 		// another module's public mock passes up the places it cannot fill: `mock()` takes builders for them, shaped as a
