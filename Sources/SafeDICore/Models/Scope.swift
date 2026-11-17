@@ -1359,11 +1359,13 @@ private struct ScopeGeneratorUnderConstruction {
 				}
 				// A public mock's caller that fills no place of the builder passes up the struct it is handed: the member of its own
 				// struct for the call, or, as an internal mock, the struct of the builder it takes.
-				// An override closure of the call is handed the builder an internal caller takes, as the called `mock()` takes it.
+				// An override closure of the call is handed the builder an internal caller takes, as the called `mock()` takes it. A
+				// public mock's body holds only the struct its caller built, from which no builder a person writes can be made.
 				return .init(
 					label: label,
 					value: route == nil ? receivedLabel : publicMockUpValue,
 					builderStruct: .init(enumKey: enumKey, rootDispatcherKey: "", upValue: publicMockUpValue),
+					overrideHanding: route == nil ? .callersBuilder : .none,
 				)
 			}
 			// A seam that takes a builder struct is handed the struct its root level's function returns, but where a case of the
@@ -1386,12 +1388,14 @@ private struct ScopeGeneratorUnderConstruction {
 				// A public mock's caller passes the call of the builder's root level function, which decides per route which places
 				// it fills and passes the others up, handed the struct the caller passes up where a route does
 				// (`PublicMockLevelFunctions`).
+				// One function a person writes cannot both fill some places of the builder and hand others the builder passed up.
 				let passesUp = !reachedSites.isSubset(of: sitesFilledOnEveryRoute)
 				return .init(
 					label: label,
 					value: dispatcher,
 					isSendable: enumKey.isSendable,
 					builderStruct: .init(enumKey: enumKey, rootDispatcherKey: dispatcherKey, upValue: passesUp ? publicMockUpValue : nil),
+					overrideHanding: passesUp ? .none : .fills,
 				)
 			}
 			guard reachedSites.isSubset(of: filledSites) else {

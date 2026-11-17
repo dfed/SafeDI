@@ -45,6 +45,11 @@ struct PublicMockLevelFunctions: Sendable {
 		case fill(caseName: String, target: ScopeGenerator.FillDispatcher.Case.Target, arguments: [Argument], isIdentity: Bool)
 		/// The function of the level the case leads to, handed each value it takes.
 		case level(caseName: String, functionIndex: Int, arguments: [Argument])
+
+		/// The fill of a member that fills its case's place with nothing but the payload, or `nil`.
+		var fillTakingOnlyItsPayload: ScopeGenerator.FillDispatcher.Case.Target? {
+			if case let .fill(_, target, arguments, _) = self, arguments.isEmpty { target } else { nil }
+		}
 	}
 
 	/// A value a member hands on: the label of the parameter it is handed under, and where the member reads it.
@@ -192,6 +197,11 @@ struct PublicMockLevelFunctions: Sendable {
 		}
 	}
 
+	/// The members of the root level function of the dispatcher of `key`, or `nil` where no function is.
+	func rootMembers(ofDispatcherKeyed key: String) -> [Member]? {
+		rootFunctionIndexByKey[key].map { functions[$0].members }
+	}
+
 	/// The call of the root level function of the dispatcher of `key`, handed `up` where it takes the caller's struct.
 	func rootCall(ofDispatcherKeyed key: String, up: String?) -> String? {
 		guard let index = rootFunctionIndexByKey[key] else { return nil }
@@ -217,13 +227,13 @@ struct PublicMockLevelFunctions: Sendable {
 	}
 
 	/// The declaration of each function, indented by `indent`, `@Sendable` where `sendableKeys` holds its dispatcher's key.
-	/// A member whose fill is in `inlinedFills` holds the fill's body; a fill in `fillsReturningWrapperBuilders` is handed
+	/// A member whose fill is in `inlinedFills` holds the fill's body; a fill in `fillsTakingPayloadFields` is handed
 	/// each field of the payload it reads (`fillMemberParameterFieldsByKey`), never the payload.
 	func declarations(
 		indent: String,
 		sendableKeys: Set<String>,
 		inlinedFills: [String: ScopeGenerator.FillDispatcher.InlinedFill],
-		fillsReturningWrapperBuilders: Set<String>,
+		fillsTakingPayloadFields: Set<String>,
 		fillMemberParameterFieldsByKey: [String: [SeamSignature.Hole.Field]],
 		typesDeclaredEscaping: Set<TypeDescription>,
 	) -> [String] {
@@ -258,7 +268,7 @@ struct PublicMockLevelFunctions: Sendable {
 					if let inlinedFill = inlinedFills[target.key] {
 						let binding = inlinedFill.carriesPayload && inlinedFill.readsScope ? "scope" : "_"
 						members.append(["\(caseName.spelledAsArgumentLabel): { \(binding) in"] + inlinedFill.body.map { String($0.dropFirst(memberIndent.count)) } + ["}"])
-					} else if fillsReturningWrapperBuilders.contains(target.key) {
+					} else if fillsTakingPayloadFields.contains(target.key) {
 						let extraLabels = Set(arguments.map(\.label))
 						let payloadArguments = (fillMemberParameterFieldsByKey[target.key] ?? []).filter { !extraLabels.contains($0.property.label) }.map { field in
 							"\(field.property.label.spelledAsArgumentLabel): \(valuesName).\(field.property.label.spelledAsMemberReference)"
