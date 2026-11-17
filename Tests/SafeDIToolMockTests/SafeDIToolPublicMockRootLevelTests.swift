@@ -2515,7 +2515,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			generated = generated.replacingOccurrences(of: "(?<![A-Za-z])\(name)(?![a-z])", with: canonicalName, options: .regularExpression)
 		}
 		let lines = generated.components(separatedBy: "\n")
-		let enumLines = lines.drop { !$0.contains("@frozen public enum") }.prefix { !$0.contains("/// Overrides") && !$0.contains("public static func mock(") }
+		let enumLines = lines.drop { !$0.contains("nonisolated public enum") }.prefix { !$0.contains("/// Overrides") && !$0.contains("public static func mock(") }
 		return Array(enumLines) + lines.filter { $0.contains("let id: ") && $0.contains(" = id_") }.map { $0.trimmingCharacters(in: .whitespaces) }
 	}
 
