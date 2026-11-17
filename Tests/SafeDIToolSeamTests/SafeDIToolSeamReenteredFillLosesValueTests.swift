@@ -641,16 +641,11 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 			    }
 
 			    static func mock(
-			        paymentsBuilder: @escaping (Checkout.SafeDIMockScope_Payments) -> any Payments,
+			        paymentsBuilder: @escaping () -> any Payments,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Holder {
 			        _ = Checkout.__safeDI_Checkout_mock_359E532F0A5DC74B.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			        let checkout = Checkout.__safeDI_mock(paymentsBuilder: .init(
-			            payments: { __safeDI_paymentsValues in paymentsBuilder(.payments(__safeDI_paymentsValues)) },
-			            cartScreenBuilder: { __safeDI_cartScreenBuilderValues in
-			                .init(payments: { __safeDI_paymentsValues in paymentsBuilder(.cartScreenBuilder(__safeDI_cartScreenBuilderValues, .payments(__safeDI_paymentsValues))) })
-			            }
-			        ), safeDIOverrides: safeDIOverrides.checkout)
+			        let checkout = Checkout.__safeDI_mock(paymentsBuilder: .init(__safeDI_noScope: paymentsBuilder), safeDIOverrides: safeDIOverrides.checkout)
 			        return Holder(checkout: checkout)
 			    }
 			}
