@@ -8119,11 +8119,11 @@ enum GraphFuzzerGenerator {
 			// the graphs of it the tool accepts.
 			let placeFieldVariant: PlaceFieldVariant? = if !readsPlaceField {
 				nil
-			} else if placeFieldVariantRoll >= 8 {
+			} else if placeFieldVariantRoll >= 7 {
 				.declaredInFill
-			} else if placeFieldVariantRoll >= (placeFieldReadIsRequired ? 4 : 5) {
+			} else if placeFieldVariantRoll >= (placeFieldReadIsRequired ? 3 : 4) {
 				.receivedBySeamBuiltAgain
-			} else if placeFieldReadIsRequired || placeFieldVariantRoll >= 3 {
+			} else if placeFieldReadIsRequired || placeFieldVariantRoll >= 2 {
 				.boundAboveCall
 			} else {
 				.unremedied
