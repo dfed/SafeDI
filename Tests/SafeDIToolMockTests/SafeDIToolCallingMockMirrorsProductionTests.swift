@@ -284,12 +284,72 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		Self.expectFillsAsTwin(result)
 	}
 
-	@Test(arguments: CallingMockCaller.allCases)
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_acceptsCallingMockAndTwin_whenReceiveIsOptionalAsCycleErrorSays(caller: CallingMockCaller) async throws {
-		// The second remedy of the dependency cycle: `AppSettings` receives `feedBuilder` only if available.
-		_ = try await executeSafeDIToolMultiModuleTest(modules: Self.w4ConstantCycleOptionalModules(caller: caller.attribute, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
-		_ = try await executeSafeDIToolMultiModuleTest(modules: Self.w4ConstantCycleOptionalModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+	mutating func generate_reachesAcceptedGraphWithTwinsValues_whenCycleErrorsOptionalReceiveIsFollowedThroughEachRemedy(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		// The dependency cycle’s second remedy, followed through every error it leads to: receiving `feedBuilder` only if
+		// available draws W4’s error, whose first remedy draws two access errors, whose fix-its end in an accepted graph.
+		// Each step’s text is the twin’s; the calling mock reports the same at each step.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: Dependency cycle: @Instantiated `feedBuilder: ErasedInstantiator<(), any FeedPage>` -> @Received `settings: any SettingsPage` -> @Received `feedBuilder: ErasedInstantiator<(), any FeedPage>`. `feedBuilder: ErasedInstantiator<(), any FeedPage>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.w4ConstantCycleModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+
+		// Step 1: `AppSettings` receives `feedBuilder` only if available, as the cycle error says.
+		let w4Diagnostics = { (fixtures: [String: FixturePaths]) in
+			"""
+			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: `AppSettings` receives `feedBuilder: ErasedInstantiator<(), any FeedPage>?`, which `SignedIn`’s tree builds only after it calls the builder for `SignedIn`’s `settings: any SettingsPage` (`settings` of `settingsPageBuilder`), so that builder’s values struct does not carry it. Instantiate `feedBuilder` on a type above `SignedIn`, and receive it on `SignedIn` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `SettingsPage` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["FeatureTypes.swift"]):35:5: note: `SignedIn` declares `feedBuilder: ErasedInstantiator<(), any FeedPage>` here.
+			"""
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: w4Diagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.w4ConstantCycleOptionalModules(caller: caller.attribute, callee: calledTypes.attribute), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: w4Diagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.w4ConstantCycleOptionalModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+
+		// Step 2: `Root` instantiates `feedBuilder` and `SignedIn` receives it, as W4’s error says. `Feed` and its initializer
+		// are `internal`, which the code built in `App` cannot reach; each error’s fix-it makes them `public`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["FeatureTypes.swift"]):16:1: error: `Feed` is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Feed` `public` to fix, or declare `Feed` `public` with `generateMock: .public`.
+			\(fixtures["Feature"]!["FeatureTypes.swift"]):16:1-16:1: fixit: public\(" ")
+			\(fixtures["Feature"]!["FeatureTypes.swift"]):17:5: error: `Feed`’s initializer is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `Feed` `public` with `generateMock: .public`.
+			\(fixtures["Feature"]!["FeatureTypes.swift"]):17:5-17:5: fixit: public\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.w4ConstantCycleOptionalW4RemediedModules(caller: caller.attribute, callee: calledTypes.attribute), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["FeatureTypes.swift"]):16:1: error: `Feed` is `internal`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Feed` `public` to fix.
+			\(fixtures["Feature"]!["FeatureTypes.swift"]):16:1-16:1: fixit: public\(" ")
+			\(fixtures["Feature"]!["FeatureTypes.swift"]):17:5: error: `Feed`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(fixtures["Feature"]!["FeatureTypes.swift"]):17:5-17:5: fixit: public\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.w4ConstantCycleOptionalW4RemediedModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+
+		// Step 3: the fix-its applied. The twin takes the `settings` and `user` `Feed` receives, which nothing above `Root`
+		// builds; the mock takes `user` and builds `settings` itself (the `.public` mock also takes it, defaulted to `nil`), so
+		// the twin is handed the `settings` the mock builds.
+		let result = try await GraphFuzzerCallingMockCheck.run(Self.graph(
+			named: "the plain W4 cycle followed through each remedy",
+			mock: Self.w4ConstantCycleOptionalW4RemediedPublicFeedModules(caller: caller.attribute, callee: calledTypes.attribute),
+			twin: Self.w4ConstantCycleOptionalW4RemediedPublicFeedModules(caller: Self.twinCaller, callee: Self.twinCalledTypes),
+			callerTypeName: "Root",
+			caller: caller,
+			flatParameterLabels: caller == .public ? ["user", "settings"] : ["user"],
+			expectedTwinInitializerLabels: ["settings", "user"],
+			valueProbes: [DifferentialValueProbe(name: "Root", expression: "App.Root.mock(user: Feature.User(name: \"name\"))", knownRightExpression: "App.Root(__safeDI_settings: App.AppSettings(feedBuilder: nil), __safeDI_user: Feature.User(name: \"name\"))")],
+		), seed: 0)
+
+		Self.expectFillsAsTwin(result)
 	}
 
 	// MARK: Tests – fills where the twin fills, takes a builder where the twin takes one
@@ -1392,6 +1452,153 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				        self.signedInBuilder = signedInBuilder
 				    }
 
+				    @Instantiated private let signedInBuilder: Instantiator<SignedIn>
+				}
+				""",
+			], dependencies: ["Feature"]),
+		]
+	}
+
+	/// The plain W4 cycle with its second remedy applied, then W4’s first remedy as worded: `Root` instantiates `feedBuilder`,
+	/// and `SignedIn` receives it in place of its `@Instantiated` declaration.
+	private static func w4ConstantCycleOptionalW4RemediedModules(caller: String, callee: String) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContentByFilePath: [
+				"FeatureTypes.swift": """
+				import SafeDI
+
+				public protocol FeedPage {}
+
+				public protocol SettingsPage {}
+
+				public struct User {
+				    public init(name: String) {
+				        self.name = name
+				    }
+
+				    public let name: String
+				}
+
+				@Instantiable
+				final class Feed: FeedPage, Instantiable {
+				    init(user: User, settings: any SettingsPage) {
+				        self.user = user
+				        self.settings = settings
+				    }
+
+				    @Received private let user: User
+				    @Received private let settings: any SettingsPage
+				}
+
+				\(callee)
+				public final class SignedIn: Instantiable {
+				    init(user: User, feedBuilder: ErasedInstantiator<(), any FeedPage>, settings: any SettingsPage) {
+				        self.user = user
+				        self.feedBuilder = feedBuilder
+				        self.settings = settings
+				    }
+
+				    @Forwarded private let user: User
+				    @Received private let feedBuilder: ErasedInstantiator<(), any FeedPage>
+				    @Instantiated private let settings: any SettingsPage
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+				"AppTypes.swift": """
+				import SafeDI
+				import Feature
+
+				@Instantiable(fulfillingAdditionalTypes: [SettingsPage.self])
+				final class AppSettings: SettingsPage, Instantiable {
+				    init(feedBuilder: ErasedInstantiator<(), any FeedPage>?) {
+				        self.feedBuilder = feedBuilder
+				    }
+
+				    @Received(onlyIfAvailable: true) private let feedBuilder: ErasedInstantiator<(), any FeedPage>?
+				}
+
+				\(caller)
+				public final class Root: Instantiable {
+				    public init(feedBuilder: ErasedInstantiator<(), any FeedPage>, signedInBuilder: Instantiator<SignedIn>) {
+				        self.feedBuilder = feedBuilder
+				        self.signedInBuilder = signedInBuilder
+				    }
+
+				    @Instantiated(fulfilledByType: "Feed") private let feedBuilder: ErasedInstantiator<(), any FeedPage>
+				    @Instantiated private let signedInBuilder: Instantiator<SignedIn>
+				}
+				""",
+			], dependencies: ["Feature"]),
+		]
+	}
+
+	/// `w4ConstantCycleOptionalW4RemediedModules` with `Feed` and its initializer `public`, as its access errors’ fix-its make them.
+	private static func w4ConstantCycleOptionalW4RemediedPublicFeedModules(caller: String, callee: String) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContentByFilePath: [
+				"FeatureTypes.swift": """
+				import SafeDI
+
+				public protocol FeedPage {}
+
+				public protocol SettingsPage {}
+
+				public struct User {
+				    public init(name: String) {
+				        self.name = name
+				    }
+
+				    public let name: String
+				}
+
+				@Instantiable
+				public final class Feed: FeedPage, Instantiable {
+				    public init(user: User, settings: any SettingsPage) {
+				        self.user = user
+				        self.settings = settings
+				    }
+
+				    @Received private let user: User
+				    @Received private let settings: any SettingsPage
+				}
+
+				\(callee)
+				public final class SignedIn: Instantiable {
+				    init(user: User, feedBuilder: ErasedInstantiator<(), any FeedPage>, settings: any SettingsPage) {
+				        self.user = user
+				        self.feedBuilder = feedBuilder
+				        self.settings = settings
+				    }
+
+				    @Forwarded private let user: User
+				    @Received private let feedBuilder: ErasedInstantiator<(), any FeedPage>
+				    @Instantiated private let settings: any SettingsPage
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+				"AppTypes.swift": """
+				import SafeDI
+				import Feature
+
+				@Instantiable(fulfillingAdditionalTypes: [SettingsPage.self])
+				final class AppSettings: SettingsPage, Instantiable {
+				    init(feedBuilder: ErasedInstantiator<(), any FeedPage>?) {
+				        self.feedBuilder = feedBuilder
+				    }
+
+				    @Received(onlyIfAvailable: true) private let feedBuilder: ErasedInstantiator<(), any FeedPage>?
+				}
+
+				\(caller)
+				public final class Root: Instantiable {
+				    public init(feedBuilder: ErasedInstantiator<(), any FeedPage>, signedInBuilder: Instantiator<SignedIn>) {
+				        self.feedBuilder = feedBuilder
+				        self.signedInBuilder = signedInBuilder
+				    }
+
+				    @Instantiated(fulfilledByType: "Feed") private let feedBuilder: ErasedInstantiator<(), any FeedPage>
 				    @Instantiated private let signedInBuilder: Instantiator<SignedIn>
 				}
 				""",
