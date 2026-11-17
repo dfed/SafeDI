@@ -1998,6 +1998,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					caseLines += inlinedFill.body
 				} else if let target = dispatcherCase.target {
 					let passUpArgument = target.takesPassUp ? ", \(passUp): \(passUp)" : ""
+					// Every fill a case of a public mock's call reaches is one of the call's own, which has its channels
+					// (`fillParametersByKey`, one entry per fill of the call that emits code, however few values it takes): a call inside
+					// a fill that reaches an enclosing call's fill by the same key reaches it through that call's dispatcher of the enum,
+					// and declares none of its own for it (`dispatchers(of:)`, `enclosingDispatchers`).
 					if let channels = routePlan.fillChannelsByKey[target.key] {
 						// A fill nested by type takes each value it reads that its case's payload does not carry, in the form it reads,
 						// from this function's parameter of it (`RoutePlan.parameters(handing:from:)`): where that may be `nil`, the fill
@@ -2019,16 +2023,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							let bindings = unwrappedNames.map { "let \($0)" }.joined(separator: ", ")
 							caseLines.append("\(caseIndent)\(pattern) if \(bindings) { return \(call) } else { return \(passUp)() }")
 						}
-					} else if Self.isFill(target) {
-						// A fill nested by type that takes no value beside its case's payload: one that takes one has its channels.
-						var bound = dispatcherCase.carriesPayload ? [scopeName] : []
-						if dispatcherCase.hasForwardedValue {
-							bound.append(forwarded)
-						}
-						let arguments = bound.joined(separator: ", ")
-						caseLines.append(bound.isEmpty
-							? "\(caseIndent)case .\(dispatcherCase.name): return \(target.name)(\(arguments))"
-							: "\(caseIndent)case let .\(dispatcherCase.name)(\(bound.joined(separator: ", "))): return \(target.name)(\(arguments))")
 					} else {
 						// A case nested by type hands its dispatcher the value it wraps and each value that one takes: this case's
 						// payload's, in the form taken, `nil` where the route does not bind it in that form, or this function's own. A
