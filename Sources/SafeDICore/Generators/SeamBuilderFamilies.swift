@@ -164,7 +164,8 @@ extension DependencyTreeGenerator {
 		var reachedByHoleType = [SeamSignature.HoleType: [ReachedPlace]]()
 		var reenteringCalls = [ReachedPlace]()
 		// The fills a call inside a fill of the same call can re-enter, found once for the seam: a seam's tree re-enters them,
-		// and a public mock's, which keeps its enum form, never does.
+		// and a public mock's never does. A public mock's enums take no member for the re-entering call: they stay nested by
+		// type, keyed by the deeper seam, whichever builder form the mock's own rule gives the hole type.
 		let reenteredFillsByKey = bindsReceivesAgain ? [:] : emittingFillsByKey(inTreeRootedAt: generator)
 		for reached in placesAndCalls(in: generator, keysTheCalledSeam: !scopeTypeNames.areQualified, reenteredFillsByKey: scopeTypeNames.areQualified ? [:] : reenteredFillsByKey) {
 			switch reached {

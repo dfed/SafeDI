@@ -183,7 +183,8 @@ extension DependencyTreeGenerator {
 			}
 			// A seam's call inside a fill that passes an enclosing call's fill by name re-enters it: an edge to the type that fill
 			// builds, whose case on the calling type returns the called seam's struct over that type's level, which the enclosing
-			// call's level functions take. A public mock's call keeps its enum form, keyed by the deeper seam.
+			// call's level functions take. A public mock's enums take no member for the re-entering call: they stay nested by
+			// type, keyed by the deeper seam, whichever builder form the mock's own rule gives the hole type.
 			for reused in bindsReceivesAgain ? [] : Self.reenteredFills(by: call, in: reenteredFillsByKey) {
 				guard let fulfiller = reused.children.first, let innerKey = Self.filledRootKey(of: reused, in: call, keysTheCalledSeam: true) else { continue }
 				let inSendableFunction = call.buildsInSendableFunction || fulfiller.buildsInSendableFunction
