@@ -1080,10 +1080,10 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: withoutPackage) == [])
 	}
 
-	@Test(arguments: [(UInt64(304), GraphFuzzerSeamDrawFeature.seamDependencyReadThroughView), (347, .seamDependencyChainReadThroughView)])
+	@Test(arguments: [(UInt64(471), GraphFuzzerSeamDrawFeature.seamDependencyReadThroughView), (347, .seamDependencyChainReadThroughView)])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func integrationsDisagreeFailure_returnsNil_whenOtherPackageCallerReadsThroughViewBesideDrawRoot(seed: UInt64, feature: GraphFuzzerSeamDrawFeature) async throws {
-		// Seam corpus seed 304 moves declarations beneath the seam's module, and seed 347 draws the chain there, each in a
+		// Seam corpus seed 471 moves declarations beneath the seam's module, and seed 347 draws the chain there, each in a
 		// graph that declares a root of the draws beneath the seam's module: that root's module lists every module beneath
 		// it, while `FuzzOther` lists the seam's module alone and computes what it calls from that module's view, which the
 		// two flows compute alike.
