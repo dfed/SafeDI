@@ -52,6 +52,13 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 	/// reports the dependency cycle. Drawn with a plain place only: a deferred place's builder closes the cycle through an
 	/// instantiator, which production accepts.
 	case fillReceivesValueBuildingTheCall
+	/// The visible implementation's tree instantiates types no declaration the calling mock's module sees fulfills:
+	/// production fills the place and takes a builder for each of those types' hole types, which each type that instantiates
+	/// one calls once per build. The draw varies whether the implementation is a seam (whose holes those types are) or a
+	/// plain type, whether the called type is a seam as well as a public mock, whether the types are instantiated by the
+	/// implementation or one level beneath it, inside a `@Sendable` function or not, as a plain value or an erased
+	/// instantiator, and one or two places of one or two hole types (`FillHoles`).
+	case fillInstantiatesWhatNothingFulfills
 
 	static func < (lhs: Self, rhs: Self) -> Bool {
 		allCases.firstIndex(of: lhs) ?? 0 < allCases.firstIndex(of: rhs) ?? 0
@@ -62,7 +69,18 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 		switch self {
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall:
 			true
-		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides:
+		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillInstantiatesWhatNothingFulfills:
+			false
+		}
+	}
+
+	/// Whether the calling mock's pass-ups must be exactly the graph's `expectedPassUpLabels`: the control's hole builder,
+	/// and the builders of what the fill instantiates that nothing fulfills, which are the twin's.
+	var passesUpExactlyTheExpectedLabels: Bool {
+		switch self {
+		case .noVisibleImplementation, .fillInstantiatesWhatNothingFulfills:
+			true
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall:
 			false
 		}
 	}
@@ -71,7 +89,7 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 		switch self {
 		case .noVisibleImplementation:
 			true
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills:
 			false
 		}
 	}
@@ -135,6 +153,7 @@ struct GraphFuzzerCallingMockCell: Hashable, Comparable, CustomStringConvertible
 		cells(of: firstShapes, callers: [.internal, .public]),
 		cells(of: firstShapes, callers: [.listed]),
 		cells(of: [.fillReceivesValueBuildingTheCall], callers: Caller.allCases, places: [.plain]),
+		cells(of: [.fillInstantiatesWhatNothingFulfills], callers: [.internal, .public]),
 	]
 
 	/// Every cell, block by block.
@@ -185,6 +204,8 @@ struct GraphFuzzerCallingMockDraw {
 		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.callingMockRandomSeedMask)
 		names = Names(random: &random)
 		tickerPosition = random.element(of: TickerPosition.allCases)
+		// Drawn after every other value, and only for its shape, so the other cells' graphs are drawn as before.
+		fillHoles = cell.shape == .fillInstantiatesWhatNothingFulfills ? FillHoles(random: &random) : nil
 	}
 
 	static let callingMockRandomSeedMask: UInt64 = 0x63616C6C6D6F636B
@@ -219,14 +240,19 @@ struct GraphFuzzerCallingMockDraw {
 		switch cell.shape {
 		case .implementationReceivesWhatNothingProvides:
 			[names.token.lowercasedFirst]
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .fillReceivesValueBuildingTheCall:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills:
 			[]
 		}
 	}
 
 	/// Whether a type that fulfills the hole is visible from the calling mock's module.
 	var implementationIsVisible: Bool {
-		cell.shape != .noVisibleImplementation
+		switch cell.shape {
+		case .noVisibleImplementation, .fillInstantiatesWhatNothingFulfills:
+			false
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall:
+			true
+		}
 	}
 
 	/// The builder of the hole's place, as contract rule 8 labels it in the twin's seam initializer and the calling mock's
@@ -256,12 +282,22 @@ struct GraphFuzzerCallingMockDraw {
 			[names.token.lowercasedFirst]
 		case .noVisibleImplementation:
 			[holeBuilderLabel]
+		case .fillInstantiatesWhatNothingFulfills:
+			fillHoles?.builders.map(\.label) ?? []
 		}
 	}
 
-	/// The places the calling mock may pass up: the hole's builder where its module sees no type that fulfills the hole.
+	/// The places the calling mock may pass up: the hole's builder where its module sees no type that fulfills the hole, and
+	/// the builders of what the fill instantiates that nothing fulfills, as the twin takes them.
 	var expectedPassUpLabels: [String] {
-		implementationIsVisible ? [] : [holeBuilderLabel]
+		switch cell.shape {
+		case .noVisibleImplementation:
+			[holeBuilderLabel]
+		case .fillInstantiatesWhatNothingFulfills:
+			fillHoles?.builders.map(\.label) ?? []
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall:
+			[]
+		}
 	}
 
 	/// What the calling mock and its known-right path build where the mock fills the place: a probe calling the mock and the
@@ -280,6 +316,13 @@ struct GraphFuzzerCallingMockDraw {
 			("\(caller).mock()", "\(caller)()")
 		case .implementationReceivesWhatNothingProvides:
 			("\(caller).mock(\(token): \(names.token)())", "\(caller)(__safeDI_\(token): \(names.token)())")
+		case .fillInstantiatesWhatNothingFulfills:
+			fillHoles.map { fillHoles in
+				let builders = fillHoles.builders
+				let mockArguments = builders.map { "\($0.label): \($0.value(names.callerModuleName))" }
+				let twinArguments = builders.map { "__safeDI_\($0.label): .init(__safeDI_noScope: \($0.value(names.callerModuleName)))" }
+				return ("\(caller).mock(\(mockArguments.joined(separator: ", ")))", "\(caller)(\(twinArguments.joined(separator: ", ")))")
+			}
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .noVisibleImplementation, .fillReceivesValueBuildingTheCall:
 			nil
 		}
@@ -345,7 +388,7 @@ struct GraphFuzzerCallingMockDraw {
 			return ("\(names.outerModuleName)/\(names.outerModuleName)Types.swift", "@Received let \(names.inner.lowercasedFirst)Builder: Instantiator<\(names.inner)>")
 		case .fillReceivesValueBuildingTheCall:
 			return ("\(names.callerModuleName)/\(names.callerModuleName)Types.swift", "@Received let \(names.sibling.lowercasedFirst): \(names.sibling)")
-		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides:
+		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillInstantiatesWhatNothingFulfills:
 			return nil
 		}
 	}
@@ -355,9 +398,9 @@ struct GraphFuzzerCallingMockDraw {
 	/// The draw's files, in dependency order, with each file's content by module and file name.
 	func files(_ form: Form) -> [File] {
 		switch cell.shape {
-		case .outerSeamValue, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall:
+		case .outerSeamValue, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills:
 			[
-				File(module: names.innerModuleName, dependencies: [], content: innerModuleContent),
+				File(module: names.innerModuleName, dependencies: [], content: innerModuleContent(form)),
 				File(module: names.outerModuleName, dependencies: [names.innerModuleName], content: outerModuleContent),
 				File(module: names.callerModuleName, dependencies: [names.innerModuleName, names.outerModuleName], content: callerModuleContent(form)),
 			]
@@ -432,6 +475,77 @@ struct GraphFuzzerCallingMockDraw {
 
 	let tickerPosition: TickerPosition
 
+	/// For the shape whose fill instantiates what nothing fulfills, what it instantiates and where.
+	struct FillHoles {
+		init(random: inout GraphFuzzerRandomNumberGenerator) {
+			fulfillerIsSeam = random.element(of: [false, true])
+			calledTypeIsSeam = random.element(of: [false, true])
+			depth = random.integer(in: 1...2)
+			isInsideSendableFunction = depth == 2 && random.element(of: [false, true])
+			isErasedInstantiator = random.element(of: [false, true])
+			placeCount = random.integer(in: 1...2)
+			holeTypeCount = random.integer(in: 1...2)
+			gizmo = random.element(of: ["Gizmo", "Gadget"])
+			widget = random.element(of: ["Knob", "Dial"])
+		}
+
+		/// Whether the implementation that fills the called mock's place is a seam, whose holes the types it instantiates
+		/// are, or a plain type.
+		let fulfillerIsSeam: Bool
+		/// Whether the called type is declared a seam as well as a public mock in the calling mock's form (its twin's always is).
+		let calledTypeIsSeam: Bool
+		/// 1 where the implementation instantiates the types itself, 2 where `Part`, which it instantiates, does.
+		let depth: Int
+		/// Whether `Part` is held in a `SendableInstantiator`, so the types are built inside its `@Sendable` builder function.
+		let isInsideSendableFunction: Bool
+		/// Whether each type is instantiated as an `ErasedInstantiator<Int, any P>` that a type no declaration fulfills names,
+		/// rather than as `any P`.
+		let isErasedInstantiator: Bool
+		/// The number of places of each hole type.
+		let placeCount: Int
+		/// The number of hole types: `gizmo`'s, and `widget`'s.
+		let holeTypeCount: Int
+		let gizmo: String
+		let widget: String
+
+		/// The protocols the types are, in order.
+		var protocols: [String] {
+			Array([gizmo, widget].prefix(holeTypeCount))
+		}
+
+		/// The type an erased instantiator of `protocolName` names, and the stub a probe builds a value of it with.
+		func stub(of protocolName: String) -> String {
+			"Stub\(protocolName)"
+		}
+
+		/// The properties that instantiate the types: one or two per protocol.
+		var properties: [(label: String, type: String, attribute: String)] {
+			protocols.flatMap { protocolName in
+				(1...placeCount).map { index in
+					let suffix = index == 1 ? "" : "\(index)"
+					return isErasedInstantiator
+						? ("make\(protocolName)\(suffix)", "ErasedInstantiator<Int, any \(protocolName)>", "@Instantiated(fulfilledByType: \"\(stub(of: protocolName))\")")
+						: ("\(protocolName.lowercasedFirst)\(suffix)", "any \(protocolName)", "@Instantiated")
+				}
+			}
+		}
+
+		/// The builders the twin's seam initializer and the calling mock take, by label, each with the value a probe hands it.
+		var builders: [(label: String, value: (_ module: String) -> String)] {
+			protocols.map { protocolName in
+				let stem = isErasedInstantiator
+					? String(GraphFuzzerPublicMockDraw.builderLabel(ofTypeNamed: stub(of: protocolName)).dropLast("Builder".count)) + "_\(protocolName)"
+					: String(GraphFuzzerPublicMockDraw.builderLabel(ofTypeNamed: protocolName).dropLast("Builder".count))
+				let label = stem + (isInsideSendableFunction ? "SendableBuilder" : "Builder")
+				let stubName = stub(of: protocolName)
+				return (label, { module in isErasedInstantiator ? "{ \(module).\(stubName)(id: $0) }" : "{ \(module).\(stubName)(id: 0) }" })
+			}
+			.sorted { $0.label < $1.label }
+		}
+	}
+
+	let fillHoles: FillHoles?
+
 	// MARK: Content
 
 	private var callerIsPublic: Bool {
@@ -477,14 +591,17 @@ struct GraphFuzzerCallingMockDraw {
 		}
 	}
 
-	private var innerModuleContent: String {
+	private func innerModuleContent(_ form: Form) -> String {
 		let place = holePlace(protocolName: names.hole, fillName: names.fill)
+		let attribute = form == .mock && fillHoles?.calledTypeIsSeam == false
+			? "@Instantiable(generateMock: .public)"
+			: "@Instantiable(generateDependencyTree: true, generateMock: .public)"
 		return """
 		import SafeDI
 
 		public protocol \(names.hole): AnyObject {}
 
-		@Instantiable(generateDependencyTree: true, generateMock: .public)
+		\(attribute)
 		public final class \(names.inner): Instantiable {
 		    init(\(place.label): \(place.type)) { self.\(place.label) = \(place.label) }
 		    \(place.attribute) public let \(place.label): \(place.type)
@@ -512,6 +629,17 @@ struct GraphFuzzerCallingMockDraw {
 			public final class \(names.sibling): Instantiable {
 			    init(\(builder): Instantiator<\(names.inner)>) { self.\(builder) = \(builder) }
 			    @Received let \(builder): Instantiator<\(names.inner)>
+			}
+			"""
+		case .fillInstantiatesWhatNothingFulfills:
+			// No seam of this module builds the called type, which the calling mock's form may declare a public mock only.
+			return """
+			import SafeDI
+			import \(names.innerModuleName)
+
+			@Instantiable
+			public final class \(names.value): Instantiable {
+			    public init() {}
 			}
 			"""
 		case .outerSeamValue, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .appOnlyScreenInLoop, .seamBuiltAgain, .fillReceivesValueBuildingTheCall:
@@ -566,6 +694,64 @@ struct GraphFuzzerCallingMockDraw {
 		.replacingOccurrences(of: "\n\n}", with: "\n}")
 	}
 
+	/// The declarations of the shape whose fill instantiates what nothing fulfills: the protocols of the types nothing
+	/// fulfills and their stubs, which are no SafeDI declarations, `Part` where the types are instantiated one level beneath
+	/// the implementation, and the implementation, a seam or a plain type, that fills the called mock's place.
+	private func fillHolesDeclarations(_ fillHoles: FillHoles) -> [String] {
+		var declarations = [String]()
+		for protocolName in fillHoles.protocols {
+			declarations.append("""
+			public protocol \(protocolName): AnyObject {}
+
+			public final class \(fillHoles.stub(of: protocolName)): \(protocolName) {
+			    public init(id: Int) {}
+			}
+			""")
+		}
+		let properties = fillHoles.properties
+		let instantiating = """
+		    public init(\(properties.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) { \(properties.map { "self.\($0.label) = \($0.label)" }.joined(separator: "; ")) }
+		\(properties.map { "    \($0.attribute) let \($0.label): \($0.type)" }.joined(separator: "\n"))
+		"""
+		var fillProperties = [(label: String, type: String, attribute: String)]()
+		if fillHoles.depth == 2 {
+			declarations.append("""
+			@Instantiable
+			public final class Part: Instantiable {
+			\(instantiating)
+			}
+			""")
+			fillProperties.append(("part", fillHoles.isInsideSendableFunction ? "SendableInstantiator<Part>" : "Part", "@Instantiated"))
+		} else {
+			fillProperties = properties
+		}
+		var parameters = [String]()
+		var assignments = [String]()
+		var lines = [String]()
+		if cell.place == .deferred {
+			parameters.append("id: Int")
+			assignments.append("self.id = id")
+			lines.append("@Forwarded let id: Int")
+		}
+		for property in fillProperties {
+			parameters.append("\(property.label): \(property.type)")
+			assignments.append("self.\(property.label) = \(property.label)")
+			lines.append("\(property.attribute) let \(property.label): \(property.type)")
+		}
+		var arguments = fillHoles.fulfillerIsSeam ? ["generateDependencyTree: true"] : []
+		if cell.place == .plain {
+			arguments.append("fulfillingAdditionalTypes: [(any \(names.hole)).self]")
+		}
+		declarations.append("""
+		\(arguments.isEmpty ? "@Instantiable" : "@Instantiable(\(arguments.joined(separator: ", ")))")
+		\(callerAccess)final class \(names.fill): \(names.hole), Instantiable {
+		    \(callerAccess)init(\(parameters.joined(separator: ", "))) { \(assignments.joined(separator: "; ")) }
+		\(lines.map { "    \($0)" }.joined(separator: "\n"))
+		}
+		""")
+		return declarations
+	}
+
 	/// The caller's declaration: its properties, each `@Instantiated`, with the ticker where the draw puts it.
 	private func callerDeclaration(_ form: Form, properties: [(label: String, type: String)]) -> String {
 		var properties = properties
@@ -617,6 +803,11 @@ struct GraphFuzzerCallingMockDraw {
 		case .implementationReceivesWhatNothingProvides:
 			declarations.append("public struct \(names.token) {}")
 			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: (names.token.lowercasedFirst, names.token), isPublic: callerIsPublic))
+			declarations.append(callerDeclaration(form, properties: [(names.value.lowercasedFirst, names.value), (names.inner.lowercasedFirst, names.inner)]))
+		case .fillInstantiatesWhatNothingFulfills:
+			if let fillHoles {
+				declarations += fillHolesDeclarations(fillHoles)
+			}
 			declarations.append(callerDeclaration(form, properties: [(names.value.lowercasedFirst, names.value), (names.inner.lowercasedFirst, names.inner)]))
 		case .fillReceivesValueBuildingTheCall:
 			let sibling = names.sibling.lowercasedFirst
