@@ -1644,6 +1644,16 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `RetainLeaf`'s place is held in an erased instantiator that forwards `retainTicket`, which `RetainLive` takes: the
 	/// builder the wrapper keeps is the one the retention oracle holds.
 	case retentionSeamValueBeforeBuilderForwardingPlace
+	/// `addingRetentionLoopShapes`' tree: `RetainLoopHome`, a seam, instantiates the builders of three types that each
+	/// receive the next one's builder and hold a place of `RetainLoopApi`, a loop of builders whose levels the seam's
+	/// initializer binds in one box, which each member's function captures.
+	case retentionLoopOfBuilders
+	/// The loop has a fourth member, `RetainLoopD`.
+	case retentionLoopOfBuildersFourMembers
+	/// `RetainLoopFlow`, which the seam builds by value, declares the loop, one level beneath the seam.
+	case retentionLoopOfBuildersBeneathSeam
+	/// The builders are `SendableInstantiator`s, whose `@Sendable` functions bind their levels themselves, unboxed.
+	case retentionLoopOfBuildersSendable
 
 	/// Whether `addingCycleParameterShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
 	/// (`acceptedDrawFeatureCounts`).
@@ -1657,10 +1667,10 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 		rawValue.hasPrefix("forwardedLabelAcrossSeamCall")
 	}
 
-	/// Whether `addingRetentionShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
-	/// (`acceptedDrawFeatureCounts`), at least ten each.
+	/// Whether `addingRetentionShapes` or `addingRetentionLoopShapes` draws this shape, whose count in accepted graphs the
+	/// seam corpus pins too (`acceptedDrawFeatureCounts`), at least ten each.
 	var isRetentionShape: Bool {
-		rawValue.hasPrefix("retentionSeamValueBeforeBuilder")
+		rawValue.hasPrefix("retentionSeamValueBeforeBuilder") || rawValue.hasPrefix("retentionLoopOfBuilders")
 	}
 
 	/// Whether `addingHoleShapes` draws this place of `HoleErasureImpl`'s erasure, whose count in accepted graphs the seam
@@ -2359,6 +2369,7 @@ enum GraphFuzzerGenerator {
 			cycleParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.cycleParameterRandomSeedMask)
 			forwardedLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.forwardedLabelRandomSeedMask)
 			retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionRandomSeedMask)
+			retentionLoopRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionLoopRandomSeedMask)
 			builderReceivedBesideReceiveLeftNilRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.builderReceivedBesideReceiveLeftNilRandomSeedMask)
 			keywordLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.keywordLabelRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
@@ -2452,6 +2463,8 @@ enum GraphFuzzerGenerator {
 				finalDeclarations = addingForwardedLabelAcrossSeamCallShapes(to: finalDeclarations)
 				// Drawn after it, from a stream of its own, so that every graph the passes before it draw is drawn as before.
 				finalDeclarations = addingRetentionShapes(to: finalDeclarations)
+				// Drawn after it, from a stream of its own, so that every graph the passes before it draw is drawn as before.
+				finalDeclarations = addingRetentionLoopShapes(to: finalDeclarations)
 				presentModules = Set(finalDeclarations.compactMap(\.module))
 			}
 			// Left out after every draw, so that the graph without its second place is drawn, and split, as the graph with it.
@@ -2807,6 +2820,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingRetentionShapes`' choices: whether a split graph gains `RetainHome`'s tree, whose seam binds a
 		/// value nothing beneath its instantiator reads, and every shape of that tree.
 		private var retentionRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingRetentionLoopShapes`' choices: whether a split graph gains `RetainLoopHome`'s tree, a loop of
+		/// three or four builders around places inside a seam, and every shape of that tree.
+		private var retentionLoopRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `appendBuilderReceivedBesideReceiveLeftNilMotif`'s choices: whether a graph without another motif
 		/// ends with it, and its shapes.
 		private var builderReceivedBesideReceiveLeftNilRandom: GraphFuzzerRandomNumberGenerator
@@ -7474,6 +7490,76 @@ enum GraphFuzzerGenerator {
 
 		private static let keywordLabelRandomSeedMask: UInt64 = 0x6B6579776F72644C
 
+		/// With the `generateDependencyTree` feature on, half the graphs already split across modules gain a loop of builders
+		/// inside a seam, the shape of an app's screens that open one another: `RetainLoopHome`, a seam of the seam's module
+		/// that `RetainLoopRoot`, a root of the roots' module, builds, instantiates the builders of `RetainLoopA`,
+		/// `RetainLoopB`, `RetainLoopC` and, four times in ten, `RetainLoopD`; each receives the next one's builder and holds a
+		/// place of `RetainLoopApi`, which `RetainLoopLive`, beside the root, fills. The seam's initializer binds each member's
+		/// level before the loop's first function, in one box that every member's function captures; the retention oracle
+		/// judges that what a member's builder keeps alive once the root is released is what the inline build keeps. Four times
+		/// in ten `RetainLoopFlow`, which the seam builds by value, declares the loop, so the levels are its level's. The
+		/// builders are `Sendable` as the graph's sendability allows. No member receives a second builder, as an app's screens
+		/// do: the comparator calls each builder it meets twice, so a loop whose members each open two others has more paths
+		/// than a probe's traversals reach; unit tests cover that shape (`SafeDIToolSeamLoopLevelsTests`,
+		/// `SafeDIToolReceivedBuilderCycleRetentionTests`).
+		///
+		/// `retentionLoopRandom` draws only for this pass, which runs after every other pass of a split graph and only in a graph another pass
+		/// split, so that every graph in one module, and every other draw of a graph it draws in, draws as before.
+		private mutating func addingRetentionLoopShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree), retentionLoopRandom.percentChance(50) else { return declarations }
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let hasFourthMember = retentionLoopRandom.percentChance(40)
+			let isBeneathSeam = retentionLoopRandom.percentChance(40)
+			let sendableRoll = retentionLoopRandom.percentChance(50)
+			let isSendable = switch sendability {
+			case .nonSendable: false
+			case .sendable: true
+			case .mixed: sendableRoll
+			}
+			let instantiator = isSendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let prefix = prefix
+			func instantiable(_ suffix: String, module: GraphFuzzerModule = .seamModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			let apiName = "\(prefix)RetainLoopApi"
+			let suffixes = hasFourthMember ? ["A", "B", "C", "D"] : ["A", "B", "C"]
+			func builderProperty(_ suffix: String, attribute: String) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: attribute, label: "retainLoop\(suffix)Builder", type: "\(instantiator)<\(prefix)RetainLoop\(suffix)>")
+			}
+			var added = [TypeDeclaration]()
+			for (position, suffix) in suffixes.enumerated() {
+				let properties = [
+					PropertyDeclaration(attribute: "@Instantiated", label: "retainLoopApi", type: "any \(apiName)"),
+					builderProperty(suffixes[(position + 1) % suffixes.count], attribute: "@Received"),
+				]
+				added.append(instantiable("RetainLoop" + suffix, properties: properties))
+			}
+			let builders = suffixes.map { builderProperty($0, attribute: "@Instantiated") }
+			var home = instantiable("RetainLoopHome")
+			if isBeneathSeam {
+				let flow = instantiable("RetainLoopFlow", properties: builders)
+				home.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "retainLoopFlow", type: flow.name))
+				added.append(flow)
+			} else {
+				home.properties = builders
+			}
+			home.instantiableArguments = ["generateDependencyTree: true"]
+			home.additionalDeclarations.append("public protocol \(apiName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+			var live = instantiable("RetainLoopLive", module: .samePackageCaller)
+			live.instantiableArguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
+			live.additionalConformances.append(apiName)
+			live.fillsHole = true
+			var root = instantiable("RetainLoopRoot", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "retainLoopHome", type: home.name)])
+			root.instantiableArguments = ["isRoot: true"]
+			return declarations + added + [home, live, root]
+		}
+
+		private static let retentionLoopRandomSeedMask: UInt64 = 0x7265744C6F6F7073
+
 		// MARK: Access proof extensions
 
 		/// With the `generateDependencyTree` feature on, extends `addingAccessProofShapes`' tree with the shapes that pass
@@ -8970,8 +9056,33 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			.union(forwardedLabelAcrossSeamCallDrawFeatures(of: fixture)).union(retentionDrawFeatures(of: fixture))
 	}
 
-	/// The shapes `addingRetentionShapes` draws, read from the properties the fixture declares on the `Retain` types.
+	/// The shapes `addingRetentionShapes` and `addingRetentionLoopShapes` draw, read from the properties the fixture declares
+	/// on the `Retain` and `RetainLoop` types.
 	private static func retentionDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
+		retentionValueBeforeBuilderDrawFeatures(of: fixture).union(retentionLoopDrawFeatures(of: fixture))
+	}
+
+	/// The shapes `addingRetentionLoopShapes` draws, read from the properties the fixture declares on the `RetainLoop` types.
+	private static func retentionLoopDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
+		let prefix = fixture.typeNamePrefix
+		let (propertiesByType, _) = declaredProperties(of: fixture)
+		guard let homeProperties = propertiesByType[prefix + "RetainLoopHome"] else { return [] }
+		var features: Set<GraphFuzzerSeamDrawFeature> = [.retentionLoopOfBuilders]
+		if propertiesByType[prefix + "RetainLoopD"] != nil {
+			features.insert(.retentionLoopOfBuildersFourMembers)
+		}
+		let builderProperties = propertiesByType[prefix + "RetainLoopFlow"] ?? homeProperties
+		if builderProperties.contains(where: { $0.type.hasPrefix("SendableInstantiator<") }) {
+			features.insert(.retentionLoopOfBuildersSendable)
+		}
+		if propertiesByType[prefix + "RetainLoopFlow"] != nil {
+			features.insert(.retentionLoopOfBuildersBeneathSeam)
+		}
+		return features
+	}
+
+	/// The shapes `addingRetentionShapes` draws, read from the properties the fixture declares on the `Retain` types.
+	private static func retentionValueBeforeBuilderDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
 		let prefix = fixture.typeNamePrefix
 		let (propertiesByType, _) = declaredProperties(of: fixture)
 		guard let homeProperties = propertiesByType[prefix + "RetainHome"] else { return [] }

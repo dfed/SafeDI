@@ -54,6 +54,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillDispatchers: [FillDispatcher] = [],
 		passedUpHoles: [SeamSignature.Hole] = [],
 		valuesBindings: [SeamHoles.ValuesBinding] = [],
+		holdsLoopPayloadsInBoxes: Bool = false,
 		memberCallsInsideFunction: [SeamHoles.ValuesBinding] = [],
 		sendableFunctionsAreNonisolated: Bool = false,
 		isBuiltByFill: Bool = false,
@@ -618,6 +619,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.receivedBuilderLoops = receivedBuilderLoops
 		receivedBuilderLoopsChangedInTree = receivedBuilderLoops != (previousPassReceivedBuilderLoops ?? ReceivedBuilderLoops())
 			|| propertiesToGenerate.contains(where: \.receivedBuilderLoopsChangedInTree)
+		// In a seam's own tree, a loop whose members bind two or more payloads or levels holds them in one box, unless a
+		// member's function is `@Sendable`, which could not capture the box (see `boxedLoops`).
+		var boxedLoops = [Int: String]()
+		var loopLevelsTypesInTree = [String: String]()
+		if holdsLoopPayloadsInBoxes, !receivedBuilderLoops.loopByChildIndex.isEmpty {
+			// Each loop's bindings in index order, the order the body generates its members in (`orderedPropertiesToGenerate`).
+			var bindingsByLoop = [Int: [SeamHoles.ValuesBinding]]()
+			for (index, loop) in receivedBuilderLoops.loopByChildIndex.sorted(by: { $0.key < $1.key }) where !propertiesToGenerate[index].isAlias {
+				bindingsByLoop[loop, default: []] += propertiesToGenerate[index].valuesBindings
+			}
+			let loopsWithSendableFunction = Set(receivedBuilderLoops.loopByChildIndex.filter { propertiesToGenerate[$0.key].buildsInSendableFunction }.values)
+			for (loop, bindings) in bindingsByLoop where bindings.count > 1 && !loopsWithSendableFunction.contains(loop) {
+				let loopLevelsType = LoopLevelsType(holding: bindings)
+				boxedLoops[loop] = loopLevelsType.name
+				loopLevelsTypesInTree[loopLevelsType.name] = loopLevelsType.declaration
+			}
+		}
+		for child in propertiesToGenerate where !child.loopLevelsTypesInTree.isEmpty {
+			loopLevelsTypesInTree.merge(child.loopLevelsTypesInTree) { declaration, _ in declaration }
+		}
+		self.boxedLoops = boxedLoops
+		self.loopLevelsTypesInTree = loopLevelsTypesInTree
 		// The function rebinds what its tree receives inside its loop, in the order its body first receives each, except a
 		// label its own parameters name: the body reads the parameter.
 		if let property, let declaration, !isPropertyCycle, !reboundProperties.isEmpty {
@@ -712,6 +735,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleParametersChangedInTree = false
 		receivedBuilderLoops = ReceivedBuilderLoops()
 		receivedBuilderLoopsChangedInTree = false
+		boxedLoops = [:]
+		loopLevelsTypesInTree = [:]
 		reboundProperties = []
 		description = property.asSource
 		propertiesToGenerate = []
@@ -807,6 +832,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleParametersChangedInTree = false
 		receivedBuilderLoops = ReceivedBuilderLoops()
 		receivedBuilderLoopsChangedInTree = false
+		boxedLoops = [:]
+		loopLevelsTypesInTree = [:]
 		reboundProperties = []
 		description = holeProperty.asSource
 		propertiesToGenerate = []
@@ -3502,6 +3529,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Whether a scope in this tree found other loops among its children than the pass before, so that
 	/// `Scope.createScopeGenerator` creates the tree again.
 	let receivedBuilderLoopsChangedInTree: Bool
+	/// The loops among this scope's children (keyed as `ReceivedBuilderLoops.loopByChildIndex` keys them) whose members'
+	/// payloads and levels this scope's body binds in one box, `__safeDI_<first member's function>_loopLevels`, rather than
+	/// in a `let` each, and that each member's function unboxes at its top, each with the name of its box's class
+	/// (`LoopLevelsType`), which holds each binding in a stored property of its own.
+	/// A member's function names the functions of the members its tree receives, and a local function captures what the
+	/// functions it names capture, so in a loop, which is strongly connected, every member's function captured every
+	/// member's bindings: the compiled code grew with the square of the loop. Boxed, each captures one reference, which
+	/// reaches exactly what the bindings reached, so what the wrappers keep alive is unchanged. Only a loop that binds two
+	/// or more is boxed, and none with a `@Sendable` member function, which could not capture the class; the bindings are
+	/// those of the loop's own members, bound before its first function, so none holds a wrapper of the loop.
+	nonisolated let boxedLoops: [Int: String]
+	/// The declaration of each class of `boxedLoops` in this tree, by its name, which the seam whose tree it is declares
+	/// beside its initializers.
+	let loopLevelsTypesInTree: [String: String]
 	/// The properties of the siblings this scope's builder function rebinds, as a member of a loop of its scope (see
 	/// `ReceivedBuilderLoops`), in the order its body first receives them. Empty for nearly every scope.
 	let reboundProperties: [Property]
@@ -4269,6 +4310,63 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		valuesBindings.map { "\($0.line(readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties))\n" }.joined()
 	}
 
+	/// The payloads `valuesBindingLines` binds, each as an argument of the initializer of the class a boxed loop's box is
+	/// (`boxedLoops`), labeled with its binding's name.
+	nonisolated private var valuesBindingArguments: [String] {
+		valuesBindings.map { "\($0.bindingName): \($0.expression(readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties))" }
+	}
+
+	/// The lines at the top of a boxed loop member's builder function that unbox its own payloads under their names, so
+	/// everything beneath reads them as it reads a payload bound before the function.
+	nonisolated private func loopLevelsUnboxingLines(from loopLevelsName: String) -> [String] {
+		valuesBindings.map { "\(Self.standardIndent)let \($0.bindingName) = \(loopLevelsName).\($0.bindingName)" }
+	}
+
+	/// The binding of a boxed loop's box, `name`, an instance of `typeName` made of `arguments`, the payloads of the loop's
+	/// members in the order the body generates them (see `boxedLoops`).
+	private static func loopLevelsBinding(named name: String, ofType typeName: String, arguments: [String]) -> String {
+		var lines = ["let \(name) = \(typeName)("]
+		lines.append(arguments.map { "\(standardIndent)\($0)" }.joined(separator: ",\n"))
+		lines.append(")")
+		return lines.joined(separator: "\n") + "\n"
+	}
+
+	/// The private class a boxed loop's box is (`boxedLoops`), which the seam whose tree it is declares beside its
+	/// initializers: a local type cannot be declared in a generic context, which a seam's initializer can be, and a type
+	/// nested in the seam reaches the generic parameters of an enclosing generic type. Each binding is a stored property of
+	/// its own, so that a member's function reads its own in constant time; a tuple held behind a generic parameter was
+	/// copied whole on each read, and a walk of the loop grew with its square.
+	struct LoopLevelsType {
+		/// The class that holds `bindings`, the payloads of a loop's members, in the order the body generates them.
+		init(holding bindings: [SeamHoles.ValuesBinding]) {
+			// Named after what it holds, so that two loops that hold the same bindings share one declaration, and no other loop
+			// of the seam's tree, nor any tier, can declare another class of the name.
+			var hash = SeamSignatureHash()
+			for binding in bindings {
+				hash.combine(binding.bindingName)
+				hash.combine(binding.boundType.asSource)
+			}
+			name = "\(ReservedName.loopLevelsTypeName)_\(hash.hexadecimal)"
+			let memberIndent = ScopeGenerator.standardIndent + ScopeGenerator.standardIndent
+			var lines = [
+				"\(ScopeGenerator.standardIndent)/// Holds the payloads of a loop of builders, so that each builder function of the loop captures one reference.",
+				"\(ScopeGenerator.standardIndent)nonisolated private final class \(name) {",
+				"\(memberIndent)init(",
+			]
+			lines.append(bindings.map { "\(memberIndent)\(ScopeGenerator.standardIndent)\($0.bindingName): \($0.boundType.asSource)" }.joined(separator: ",\n"))
+			lines.append("\(memberIndent)) {")
+			lines += bindings.map { "\(memberIndent)\(ScopeGenerator.standardIndent)self.\($0.bindingName) = \($0.bindingName)" }
+			lines += ["\(memberIndent)}", ""]
+			lines += bindings.map { "\(memberIndent)let \($0.bindingName): \($0.boundType.asSource)" }
+			lines.append("\(ScopeGenerator.standardIndent)}")
+			declaration = lines.joined(separator: "\n")
+		}
+
+		let name: String
+		/// The class's declaration, indented as a member of the seam's extension.
+		let declaration: String
+	}
+
 	/// The labels two or more of this scope's children declare, each as another property. Only a mock root has any: it
 	/// promotes every form its tree receives of a label (`user: User` and `user: Draft`), and names each apart
 	/// (`user_User`, `user_Draft`), so no declaration of the label is in scope there.
@@ -4788,9 +4886,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var receivedFunctionNameByIndex = [Int: String]()
 		var memberFunctionByProperty = [Property: (property: Property, generator: ScopeGenerator, functionName: String)]()
 		// The payloads of each loop's members, in the order the body generates them, and the index of the member that binds
-		// them all: the loop's first.
+		// them all: the loop's first. A boxed loop (`boxedLoops`) binds them in its box, named in `loopLevelsNameByLoop`.
 		var valuesBindingLinesByLoop = [Int: String]()
 		var valuesBindingMemberIndexByLoop = [Int: Int]()
+		var boxedArgumentsByLoop = [Int: [String]]()
+		var loopLevelsNameByLoop = [Int: String]()
 		if !receivedBuilderLoops.loopByChildIndex.isEmpty {
 			let loopByGenerator = Dictionary(
 				receivedBuilderLoops.loopByChildIndex.map { (ObjectIdentifier(propertiesToGenerate[$0.key]), $0.value) },
@@ -4798,7 +4898,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 			for (index, child) in orderedChildren.enumerated() where !child.generator.isAlias {
 				guard let loop = loopByGenerator[ObjectIdentifier(child.generator)] else { continue }
-				valuesBindingLinesByLoop[loop, default: ""] += child.generator.valuesBindingLines
+				if boxedLoops[loop] != nil {
+					boxedArgumentsByLoop[loop, default: []] += child.generator.valuesBindingArguments
+				} else {
+					valuesBindingLinesByLoop[loop, default: ""] += child.generator.valuesBindingLines
+				}
 				if valuesBindingMemberIndexByLoop[loop] == nil {
 					valuesBindingMemberIndexByLoop[loop] = index
 				}
@@ -4818,6 +4922,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					child.generator.closedOnFunctionName(builtFor: property, enclosingFunctionNames: childBuilderFunctionNames?.enclosingFunctionNames ?? [:])
 				} else {
 					childBuilderFunctionNames?.functionName ?? Self.functionName(toBuild: property)
+				}
+				// A boxed loop's box is named after its first member's builder function, apart from every name in scope as a
+				// `_received` function is, and bound where the loop's payloads were. A public mock's loop binds each payload in a
+				// `let` of its own – in its body (`InstantiatorBindingLines.prelude`) and in its fills, which this function
+				// generates (`SeamHoles.holdsLoopPayloadsInBoxes`) – a deliberate gap: a public mock's payloads were never builder
+				// structs, so its loops capture what they captured before.
+				if let typeName = boxedLoops[loop], let arguments = boxedArgumentsByLoop[loop], valuesBindingMemberIndexByLoop[loop] == index {
+					let loopLevelsName = names.claim(ReservedName.loopLevelsName(of: functionName))
+					loopLevelsNameByLoop[loop] = loopLevelsName
+					valuesBindingLinesByLoop[loop] = Self.loopLevelsBinding(named: loopLevelsName, ofType: typeName, arguments: arguments)
 				}
 				if !child.generator.cycleParameters.isEmpty {
 					functionName = names.claim(ReservedName.receivedBuilderFunctionName(of: functionName))
@@ -4882,6 +4996,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				builderFunctionNames.receivedFunctionName = receivedFunctionNameByIndex[index]
 				if !child.generator.isAlias {
 					builderFunctionNames.loopValuesBindingLines = valuesBindingMemberIndexByLoop[loop] == index ? valuesBindingLinesByLoop[loop, default: ""] : ""
+					builderFunctionNames.loopLevelsName = loopLevelsNameByLoop[loop]
 				}
 			}
 			let code = try await child.generator.generateCode(
@@ -5320,6 +5435,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// member's, which reads that member's payload, so each is bound before the loop's first function. `nil` for every
 		/// other scope, which binds its own payloads before its builder function.
 		var loopValuesBindingLines: String?
+		/// For a member of a loop its parent boxes (`boxedLoops`), the name of the box, from which its builder function
+		/// first unboxes its own payloads and levels under their names; `nil` for every other scope.
+		var loopLevelsName: String?
 	}
 
 	/// A child scope that one generated body holds, as builder function naming sees it.
@@ -5639,7 +5757,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						builderFunctionNames.loopMemberDeclarations[reboundProperty].map(Self.indented)
 					}
 				}
-				let generatedProperties = try await memberCallLines + rebindingLines + seamGuardLines + generateProperties(
+				// A member of a boxed loop first unboxes its own payloads, which the scope bound in the loop's box.
+				let unboxingLines = builderFunctionNames.loopLevelsName.map(loopLevelsUnboxingLines(from:)) ?? []
+				let generatedProperties = try await unboxingLines + memberCallLines + rebindingLines + seamGuardLines + generateProperties(
 					codeGeneration: codeGeneration,
 					propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater),
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
@@ -6493,9 +6613,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			unreadTypeComment: seamRoot.unreadTypeComment,
 			namesForwardedTypes: signature.tiers.first == .public,
 		)
+		// The class each of the tree's boxes is, after the initializers, in the order of their names (`boxedLoops`).
+		var members = scopeTypes + initializers
+		for (_, declaration) in loopLevelsTypesInTree.sorted(by: { $0.key < $1.key }) {
+			members.append(declaration)
+		}
 		return """
 		extension \(typeName) {
-		\((scopeTypes + initializers).joined(separator: "\n\n"))
+		\(members.joined(separator: "\n\n"))
 		}
 
 		extension \(typeName) {
@@ -11045,7 +11170,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 
 			let functionReturnType = node.instantiatedTypeDescription.asSource
-			// The payloads of the cases on the routes to the places beneath this function, bound before it.
+			// The payloads of the cases on the routes to the places beneath this function, bound before it. A loop's members
+			// each bind theirs in a `let`, which every member's function captures, here and in the mock's fills
+			// (`SeamHoles.holdsLoopPayloadsInBoxes`), where a seam's tree holds a loop's in one box (`ScopeGenerator.boxedLoops`):
+			// a deliberate gap, since a public mock's payloads were never builder structs, so its loops capture what they
+			// captured before.
 			for valuesBinding in node.valuesBindings {
 				lines.prelude.append("\(indent)\(valuesBinding.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames))")
 			}

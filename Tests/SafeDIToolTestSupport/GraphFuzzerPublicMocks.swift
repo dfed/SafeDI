@@ -243,6 +243,10 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case placeInsidePublicMockFillOnForwardingRoute
 	case placeInsidePublicMockFillReadsOuterValue
 	case placeInsidePublicMockFillReadsForwardedValue
+	/// `PlaceInFillDefault` also instantiates the builders of `PlaceInFillLoopA` and `PlaceInFillLoopB`, each of which
+	/// receives the other's and holds a place of `PlaceInFillGadget`: a loop of builders inside the fill, whose members'
+	/// payloads a public mock binds in a `let` each, where a seam's tree holds them in one box.
+	case placeInsidePublicMockFillHoldsLoopOfBuilders
 	/// On a stream of its own (`publicMockRetentionRandomSeedMask`), the shape the retention oracle judges a calling mock's
 	/// fill by: `RetainHome`, a `.public` type of the declaring module, binds `retainNavigator` and then builds
 	/// `RetainDetail` through an instantiator, beneath which `RetainLeaf` holds a place of `RetainApi`; `RetainApp`, a mocked
@@ -1911,8 +1915,10 @@ struct GraphFuzzerPublicMockDraw {
 	/// and `PlaceInFillLive` beside it fills that place, or, one draw in four, nothing does and its mock takes the
 	/// builder. Now and then `PlaceInFillInner` also builds `PlaceInFillInnerScreen` through an instantiator that
 	/// forwards `placeInFillId`, with a place of its own, which the fill reads only if available, and
-	/// `PlaceInFillOuter` binds `placeInFillTag` before `PlaceInFillInner`, which the fill reads. Every roll is made
-	/// before any is read.
+	/// `PlaceInFillOuter` binds `placeInFillTag` before `PlaceInFillInner`, which the fill reads. Seven draws in twenty,
+	/// `PlaceInFillDefault` also instantiates the builders of `PlaceInFillLoopA` and `PlaceInFillLoopB`, which receive each
+	/// other's and each hold a place of `PlaceInFillGadget`: a loop of builders inside the fill. Every roll is made before
+	/// any is read.
 	private mutating func drawPlaceInsidePublicMockFill(random: inout GraphFuzzerRandomNumberGenerator) {
 		let drawsShape = random.percentChance(40)
 		let drawsScreen = random.percentChance(40)
@@ -1922,6 +1928,7 @@ struct GraphFuzzerPublicMockDraw {
 		let fillsInConsumer = random.percentChance(75)
 		let innerInitializerRoll = random.integer(in: 0...9)
 		let consumerModuleRoll = random.integer(in: 0...1)
+		let fillHoldsLoop = random.percentChance(35)
 		let consumerModules = consumerModules
 		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
 		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
@@ -1955,6 +1962,16 @@ struct GraphFuzzerPublicMockDraw {
 		}
 		outer.properties.append(Property(attribute: "@Instantiated", label: "placeInFillInner", type: inner.name))
 		declaringModuleDeclarations.insert(Self.renderer(of: outer), at: 1)
+		if fillHoldsLoop {
+			var loopA = InstantiableClass(name: name("PlaceInFillLoopA"), conformances: conformances)
+			var loopB = InstantiableClass(name: name("PlaceInFillLoopB"), conformances: conformances)
+			let loopABuilder = Property(attribute: "@Instantiated", label: "placeInFillLoopABuilder", type: "Instantiator<\(loopA.name)>")
+			let loopBBuilder = Property(attribute: "@Instantiated", label: "placeInFillLoopBBuilder", type: "Instantiator<\(loopB.name)>")
+			fill.properties += [loopABuilder, loopBBuilder]
+			loopA.properties = [fill.properties[0], Property(attribute: "@Received", label: loopBBuilder.label, type: loopBBuilder.type)]
+			loopB.properties = [fill.properties[0], Property(attribute: "@Received", label: loopABuilder.label, type: loopABuilder.type)]
+			declaringModuleDeclarations += [Self.renderer(of: loopA), Self.renderer(of: loopB)]
+		}
 		declaringModuleDeclarations.append(Self.renderer(of: fill))
 		var app = InstantiableClass(name: name("PlaceInFillApp"), conformances: conformances)
 		app.mockGeneration = "true"
@@ -3226,6 +3243,9 @@ extension GraphFuzzerPublicMockDraw {
 			}
 			if types.declarations["\(prefix)PlaceInFillInnerScreen"] != nil {
 				features.insert(.placeInsidePublicMockFillOnForwardingRoute)
+			}
+			if types.declarations["\(prefix)PlaceInFillLoopA"] != nil {
+				features.insert(.placeInsidePublicMockFillHoldsLoopOfBuilders)
 			}
 		}
 		if let keywordApp = types.declarations["\(prefix)KeywordApp"] {
