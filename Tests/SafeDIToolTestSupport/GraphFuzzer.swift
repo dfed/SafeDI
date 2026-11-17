@@ -298,21 +298,54 @@ struct GraphFuzzerFixture: Equatable {
 		return [DifferentialValueSample(type: "\(screenName).ForwardedProperties", expression: "7")]
 	}
 
-	/// Whether every module of this graph lists every module beneath it, as the tool asks of a module that declares a root,
-	/// a seam's included, whose tree reaches a place through a seam beneath the seam's module ("A module that declares a
-	/// root lists every module beneath it"): a graph of `addingFillCallShapes`, `addingCarriedLevelShapes` or
-	/// `addingReenteredFillShapes`, read from the roots they declare, whatever a renaming does to the prefix. Every other
-	/// graph's modules list the modules they import alone.
-	var modulesListEveryModuleBeneath: Bool {
-		swiftFileContent.contains { content in
-			GraphFuzzerSourceLine.lines(of: content).contains { line in
-				guard let name = line.declaredTypeName else { return false }
-				return Self.rootsOfDrawsBeneathTheSeamsModule.contains { name.hasSuffix("_" + $0) }
-			}
+	/// Whether this graph declares a root of `addingFillCallShapes`, `addingCarriedLevelShapes` or
+	/// `addingReenteredFillShapes`, whose tree reaches a place through a seam beneath the seam's module, read from the
+	/// roots' names whatever a renaming does to the prefix.
+	var declaresRootOfDrawBeneathSeamsModule: Bool {
+		swiftFileContent.contains(where: Self.declaresRootOfDrawBeneathSeamsModule(in:))
+	}
+
+	/// The modules of this graph that list every module beneath them, as the tool asks of a module that declares a root, a
+	/// seam's included, whose tree reaches a place through a seam beneath the seam's module (the Manual's "Which modules to
+	/// list"): in a graph that declares a root of the draws beneath the seam's module
+	/// (`declaresRootOfDrawBeneathSeamsModule`), each module that declares one of those roots and each module beneath the
+	/// callers, which declare the draws' seams. Every other module, a caller that declares none of those roots among them,
+	/// lists what it lists in any other graph, so that it reads what lies beneath the seam's module through the seam's
+	/// module's view (`GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of:)`). Empty for any other graph.
+	var modulesListingEveryModuleBeneath: Set<GraphFuzzerModule> {
+		let rootModules = Set(swiftFileContent.filter(Self.declaresRootOfDrawBeneathSeamsModule(in:)).map { GraphFuzzerModule(declaredIn: $0) ?? .samePackageCaller })
+		guard !rootModules.isEmpty else { return [] }
+		return rootModules.union((modules ?? []).filter { !$0.isCaller })
+	}
+
+	/// The modules each module of this graph, split across `modules`, lists when SafeDITool runs over it as `integration`
+	/// runs it: every module beneath it with `listsTransitiveDependencies`, as 2.2.0 asked, and for each of
+	/// `modulesListingEveryModuleBeneath`; otherwise, under the module-info flow, the modules it imports and each module
+	/// beneath whose types its mocks build (`GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of:modules:)`), and under
+	/// the SwiftPM plugin flow, which reads every module beneath a module itself, the modules it imports. Each list holds
+	/// only present modules, in dependency order.
+	func dependencyLists(modules: [GraphFuzzerModule], integration: MultiModuleIntegration, listsTransitiveDependencies: Bool) -> [GraphFuzzerModule: [GraphFuzzerModule]] {
+		let presentModules = Set(modules)
+		let modulesListingEveryModuleBeneath = listsTransitiveDependencies ? presentModules : modulesListingEveryModuleBeneath
+		let moduleInfoDependencies = integration == .moduleInfo && !presentModules.isSubset(of: modulesListingEveryModuleBeneath)
+			? GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: self, modules: modules)
+			: [:]
+		var lists = [GraphFuzzerModule: [GraphFuzzerModule]]()
+		for module in presentModules {
+			lists[module] = (modulesListingEveryModuleBeneath.contains(module) ? module.transitiveDependencies : moduleInfoDependencies[module] ?? module.dependencies).filter(presentModules.contains)
+		}
+		return lists
+	}
+
+	/// Whether `content`, a file of a graph, declares a root `declaresRootOfDrawBeneathSeamsModule` reads.
+	private static func declaresRootOfDrawBeneathSeamsModule(in content: String) -> Bool {
+		GraphFuzzerSourceLine.lines(of: content).contains { line in
+			guard let name = line.declaredTypeName else { return false }
+			return rootsOfDrawsBeneathTheSeamsModule.contains { name.hasSuffix("_" + $0) }
 		}
 	}
 
-	/// The roots `modulesListEveryModuleBeneath` reads.
+	/// The roots `declaresRootOfDrawBeneathSeamsModule` reads.
 	private static let rootsOfDrawsBeneathTheSeamsModule = ["FillCallRoot", "CarriedRoot", "ReenteredRoot"]
 
 	/// The visible build of a graph with a hole: every file whose first line says it fills a hole declared in the seam's
@@ -1224,6 +1257,13 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// A chain of seams two modules deep beneath the seam's module, `ChainLink` and `ChainBase`
 	/// (`GraphFuzzerSeamDependencyDraw.chainPercent`).
 	case seamDependencyChain
+	/// `seamDependency` in a graph with a caller that reads the moved declarations only through the seam's module's view,
+	/// which the oracle compares across the two integrations (`GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of:)`):
+	/// what the integrations' comparison (`integrationsDisagree`) checks of a move.
+	case seamDependencyReadThroughView
+	/// `seamDependencyChain` in a graph with a caller that reads the chain only through the seam's module's view, as for
+	/// `seamDependencyReadThroughView`: the shape of cell 5b, which the integrations' comparison checks.
+	case seamDependencyChainReadThroughView
 	/// A seam, `HoleSeam`, whose module cannot see `HoleImpl`, the type that fulfills `HoleService`, which a property of
 	/// its tree instantiates: the seam takes a builder for it, which the roots' module fills.
 	case hole
@@ -1810,6 +1850,14 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 		default:
 			["fillCallReadsOwnLevel", "carriedLevel", "passingUpCopies", "reenteredFill"].contains { rawValue.hasPrefix($0) }
 		}
+	}
+
+	/// Whether this is a shape beneath the seam's module that a caller reads only through the seam's module's view, in a
+	/// graph the oracle compares across the two integrations (`integrationsDisagree`), whose count in accepted graphs the
+	/// seam corpus pins (`acceptedDrawFeatureCounts`), at least ten each, so that the comparison keeps judging moved
+	/// declarations and chains: `seamDependencyReadThroughView` and `seamDependencyChainReadThroughView`.
+	var isReadThroughViewShape: Bool {
+		self == .seamDependencyReadThroughView || self == .seamDependencyChainReadThroughView
 	}
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
@@ -10562,11 +10610,18 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		if fixture.modules != nil {
 			features.insert(.moduleSplit)
 			let seamDependencyDraw = GraphFuzzerSeamDependencyDraw.drawn(in: fixture)
+			let readsThroughView = (seamDependencyDraw.movesDeclaration || seamDependencyDraw.drawsChain) && !GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: fixture).isEmpty
 			if seamDependencyDraw.movesDeclaration {
 				features.insert(.seamDependency)
+				if readsThroughView {
+					features.insert(.seamDependencyReadThroughView)
+				}
 			}
 			if seamDependencyDraw.drawsChain {
 				features.insert(.seamDependencyChain)
+				if readsThroughView {
+					features.insert(.seamDependencyChainReadThroughView)
+				}
 			}
 		}
 		if classAccess[prefix + "ProofOtherRoot"] != nil {
@@ -14139,13 +14194,13 @@ enum GraphFuzzerOracle {
 	/// (`.moduleInfo`), one `generate` per module, in dependency order, each reading the `.safedi` files of the modules it
 	/// depends on and naming its module and package, writes one combined output, which is decomposed into the files one
 	/// module writes; as the SwiftPM plugin runs it (`.swiftPackagePlugin`), `scan` and `generate` per module read the
-	/// module's own files and its dependencies' and write those files. Each module lists the modules it imports and, under
-	/// `.moduleInfo`, each module beneath whose types its mocks build
-	/// (`GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of:modules:)`), or, with `listsTransitiveDependencies`, every
-	/// module it depends on, as 2.2.0 asked. Each generated file is keyed by its
-	/// module's name and its own (`FuzzFeature/Type+SafeDI.swift`), and the outcome is the first module's error, if any,
-	/// with that module's name. Every module of a graph whose roots reach a place through a seam beneath the seam's module
-	/// lists every module beneath it (`GraphFuzzerFixture.modulesListEveryModuleBeneath`).
+	/// module's own files and its dependencies' and write those files. Each module lists what
+	/// `GraphFuzzerFixture.dependencyLists(modules:integration:listsTransitiveDependencies:)` gives it: the modules it
+	/// imports and, under `.moduleInfo`, each module beneath whose types its mocks build, or every module it depends on,
+	/// with `listsTransitiveDependencies`, as 2.2.0 asked, and where it declares a root, a seam's included, whose tree
+	/// reaches a place through a seam beneath the seam's module (`GraphFuzzerFixture.modulesListingEveryModuleBeneath`).
+	/// Each generated file is keyed by its module's name and its own (`FuzzFeature/Type+SafeDI.swift`), and the outcome is
+	/// the first module's error, if any, with that module's name.
 	private static func splitToolRun(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], fileNames: [String], integration: MultiModuleIntegration, listsTransitiveDependencies: Bool) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
 		var filesToDelete = [URL]()
 		defer {
@@ -14154,18 +14209,13 @@ enum GraphFuzzerOracle {
 			}
 		}
 		let presentModules = Set(modules)
-		let listsTransitiveDependencies = listsTransitiveDependencies || fixture.modulesListEveryModuleBeneath
-		// Under the module-info flow, a module also lists each module beneath it whose types its mocks build, as the Manual
-		// tells an adopter to; the SwiftPM plugin flow reads every module beneath a module itself.
-		let moduleInfoDependencies = integration == .moduleInfo && !listsTransitiveDependencies
-			? GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: fixture, modules: modules)
-			: [:]
+		let dependencyLists = fixture.dependencyLists(modules: modules, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies)
 		let moduleFixtures = GraphFuzzerModule.allCases.filter(presentModules.contains).map { module in
 			ModuleFixture(
 				name: module.name,
 				packageName: module.packageName,
 				swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: modules.indices.filter { modules[$0] == module }.map { (fileNames[$0], fixture.swiftFileContent[$0]) }),
-				dependencies: (listsTransitiveDependencies ? module.transitiveDependencies : moduleInfoDependencies[module] ?? module.dependencies).filter(presentModules.contains).map(\.name),
+				dependencies: (dependencyLists[module] ?? []).map(\.name),
 				omitsPackageName: fixture.modulesOmittingPackageName.contains(module),
 			)
 		}

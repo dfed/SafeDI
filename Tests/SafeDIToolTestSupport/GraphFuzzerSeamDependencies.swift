@@ -234,6 +234,21 @@ enum GraphFuzzerSeamDependencyDraw {
 		return dependencies
 	}
 
+	/// The callers of `fixture`, a graph split across modules, that read what lies beneath the seam's module only through
+	/// the seam's module's `.safedi` view, in the graph the oracle compares across the two integrations: every module
+	/// names its package, so the SwiftPM plugin flow runs too, and the caller's list under the module-info flow
+	/// (`GraphFuzzerFixture.dependencyLists(modules:integration:listsTransitiveDependencies:)`) leaves out the module
+	/// beneath the seam's module, which the plugin flow reads. Empty for a graph in one module, and for one in which every
+	/// caller lists that module: a caller that declares a root of the draws beneath the seam's module
+	/// (`GraphFuzzerFixture.modulesListingEveryModuleBeneath`), or whose mocks build its types.
+	static func callersReadingThroughView(of fixture: GraphFuzzerFixture) -> [GraphFuzzerModule] {
+		guard let modules = fixture.modules, fixture.modulesOmittingPackageName.isEmpty, modules.contains(.seamDependency) else { return [] }
+		let lists = fixture.dependencyLists(modules: modules, integration: .moduleInfo, listsTransitiveDependencies: false)
+		return Set(modules).filter { module in
+			module.isCaller && lists[module]?.contains(.seamDependency) == false
+		}.sorted()
+	}
+
 	/// The module each of `units` moves to, in the order given, or `nil` for one that stays. Empty when the draw
 	/// moves nothing: the roll against `drawPercent` fails, or no file can move.
 	static func destinations(of units: [Unit], typeNamePrefix prefix: String, random: inout GraphFuzzerRandomNumberGenerator) -> [GraphFuzzerModule?] {
