@@ -11,6 +11,13 @@ let safeDICoreDependencies: [PackageDescription.Target.Dependency] = [
 	.product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
 ]
 
+/// Compiles a test target without optimization in every configuration. CI builds the tests in release, and the
+/// optimizer spent about 40% of the build of the five `SafeDITool` test targets on test bodies that only call helpers
+/// and compare strings. What those tests run, SafeDI's own targets and `SafeDIToolTestSupport`, stays optimized.
+/// SwiftPM refuses unsafe flags only in a target that a package depending on SafeDI builds, and none builds a test
+/// target.
+let unoptimizedTestBodies: SwiftSetting = .unsafeFlags(["-Onone"])
+
 let package = Package(
 	name: "SafeDI",
 	platforms: [
@@ -231,6 +238,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
+				unoptimizedTestBodies,
 			],
 		),
 		.testTarget(
@@ -242,6 +250,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
+				unoptimizedTestBodies,
 			],
 		),
 		.testTarget(
@@ -252,6 +261,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
+				unoptimizedTestBodies,
 			],
 		),
 		.testTarget(
@@ -262,6 +272,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
+				unoptimizedTestBodies,
 			],
 		),
 		.testTarget(
@@ -272,6 +283,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
+				unoptimizedTestBodies,
 			],
 		),
 
