@@ -557,6 +557,7 @@ private struct ScopeGeneratorUnderConstruction {
 		sitePath: [Property],
 		enclosingFills: [String: String] = [:],
 		enclosingFillNames: GenerationWork.Shared<Set<String>> = .init([]),
+		enclosingCarriedInnerScopes: [String: [ScopeGenerator.FillDispatcher.CarriedInnerScope]] = [:],
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
 		startsCodeGeneration: Bool,
@@ -752,6 +753,7 @@ private struct ScopeGeneratorUnderConstruction {
 		// by name, so every instance of the seam calls the same fills with its own scopes.
 		self.enclosingFills = enclosingFills
 		self.enclosingFillNames = enclosingFillNames
+		self.enclosingCarriedInnerScopes = enclosingCarriedInnerScopes
 		holeArguments = isPropertyCycle ? [] : scope.holeArguments
 		// The call's own fills are those no enclosing call fills, and its own dispatchers those no enclosing call declares. One
 		// pass names both, fills first, then dispatchers, apart from what encloses the call: the
@@ -891,6 +893,11 @@ private struct ScopeGeneratorUnderConstruction {
 			GenerationWork.record(enclosingFillsOfThisCall.count, by: .gatheringFillsOfACall)
 		}
 		self.enclosingFillsOfThisCall = GenerationWork.Shared(enclosingFillsOfThisCall)
+		var enclosingCarriedInnerScopesOfThisCall = enclosingCarriedInnerScopes
+		for dispatcher in dispatchersOfThisCall where !dispatcher.carriedInnerScopes.isEmpty {
+			enclosingCarriedInnerScopesOfThisCall[dispatcher.key] = dispatcher.carriedInnerScopes
+		}
+		self.enclosingCarriedInnerScopesOfThisCall = enclosingCarriedInnerScopesOfThisCall
 		// The names of those fills, which a call inside one of them avoids, gathered once for the call's fills to share.
 		if fillsOfThisCall.isEmpty {
 			enclosingFillNamesOfThisCall = enclosingFillNames
@@ -1104,6 +1111,7 @@ private struct ScopeGeneratorUnderConstruction {
 			sitePath: sitePath + hole.pathBeforePropertyInItsFill,
 			enclosingFills: GenerationWork.taking(enclosingFillsOfThisCall, by: .gatheringFillsOfACall),
 			enclosingFillNames: enclosingFillNamesOfThisCall,
+			enclosingCarriedInnerScopes: enclosingCarriedInnerScopesOfThisCall,
 			erasedToConcreteExistential: hole.erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
 			startsCodeGeneration: startsCodeGeneration,
@@ -1163,6 +1171,7 @@ private struct ScopeGeneratorUnderConstruction {
 			sitePath: sitePath,
 			enclosingFills: enclosingFills,
 			enclosingFillNames: enclosingFillNames,
+			enclosingCarriedInnerScopes: enclosingCarriedInnerScopes,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
 			startsCodeGeneration: startsCodeGeneration,
@@ -1250,7 +1259,8 @@ private struct ScopeGeneratorUnderConstruction {
 	/// lazily, or `nil`.
 	private static func callerReads(of fill: Fill, child: ScopeGenerator) -> ScopeGenerator.FillCallerReads {
 		var reads = ScopeGenerator.FillCallerReads()
-		// The inner scope, only where the fill's tree builds a place or a call that passes one up, whose case carries it.
+		// The inner scope, only where the fill's tree builds a place or a call that passes one up, whose case carries it, or a
+		// call that re-enters an enclosing call's fill, whose case's member is called on it.
 		if child.readsFillInnerScopes {
 			reads.innerScopeParameters = fill.innerScopeParameters
 		}
@@ -1388,10 +1398,17 @@ private struct ScopeGeneratorUnderConstruction {
 			guard !returnsBuilderStruct else {
 				// The root level's function of a route to a place inside a fill is handed the struct the case of this seam's enum for
 				// the call returns.
-				let rootDispatcher = dispatchersOfThisCall.first { $0.key == dispatcherKey }
-				let upArgument = (rootDispatcher?.carriedInnerScopes ?? []).compactMap { carriedInnerScope in
-					seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, innerScopeName: carriedInnerScope.name).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
-				}.joined(separator: ", ")
+				// A call that re-enters an enclosing call's level function hands it, for each struct it takes, what the member of the
+				// call's own case of that struct's level returns.
+				let upArgument = if let carriedInnerScopes = enclosingFill == nil ? nil : enclosingCarriedInnerScopes[dispatcherKey] {
+					carriedInnerScopes.compactMap { carriedInnerScope in
+						seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, carrying: carriedInnerScope.type).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
+					}.joined(separator: ", ")
+				} else {
+					(dispatchersOfThisCall.first { $0.key == dispatcherKey }?.carriedInnerScopes ?? []).compactMap { carriedInnerScope in
+						seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, innerScopeName: carriedInnerScope.name).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
+					}.joined(separator: ", ")
+				}
 				return .init(label: label, value: "\(dispatcher)(\(upArgument))", enclosingFill: enclosingFill, isSendable: enumKey.isSendable)
 			}
 			let conversion = ScopeGenerator.builderStructConversion(ofEnumOf: enumKey, enumsByKey: enumsByKey, holesBySite: holesBySite, builtType: builtType, reservedNames: seamHoles.namesBoundForBuilders.union([dispatcher]), names: &names) { "\(dispatcher)(\($0))" }
@@ -1618,6 +1635,12 @@ private struct ScopeGeneratorUnderConstruction {
 	private let enclosingFillsOfThisCall: GenerationWork.Shared<[String: String]>
 	/// The function names of `enclosingFillsOfThisCall`, shared by each of this call's fills.
 	private let enclosingFillNamesOfThisCall: GenerationWork.Shared<Set<String>>
+	/// The structs each level function of `enclosingFills` takes from its caller (`FillDispatcher.carriedInnerScopes`), by its
+	/// key: a call that re-enters it hands it each from a member of its own case (`SeamHoles.carriedStruct`).
+	private let enclosingCarriedInnerScopes: [String: [ScopeGenerator.FillDispatcher.CarriedInnerScope]]
+	/// The structs the level functions a fill of this call can refer to take: those of enclosing calls, and this call's, by
+	/// the level function's key, gathered once for the call.
+	private let enclosingCarriedInnerScopesOfThisCall: [String: [ScopeGenerator.FillDispatcher.CarriedInnerScope]]
 	/// The index in `fillsOfThisCall` of the next fill to create a generator for.
 	private var nextFillIndex = 0
 	private let erasedToConcreteExistential: Bool
@@ -1806,6 +1829,9 @@ struct SeamHoles {
 		for callRoute in callRoutes {
 			guard let builderName = internalNameByEnum[callRoute.rootKey] else { continue }
 			bindValues(of: callRoute.route, rootBuilderName: builderName)
+			// A call that re-enters an enclosing call's fill hands up nothing: it passes the enclosing call's level function the
+			// struct its last case's member returns (`carriedStruct(at:innerKey:carrying:)`).
+			guard !callRoute.reentersEnclosingFill else { continue }
 			// The call's own case holds only the inner enum: no value of the calling type, so nothing it binds is captured by the
 			// builder the called type holds.
 			// Where the call's enum declares a builder struct, the call's own member returns the inner seam's struct, called on
@@ -2051,6 +2077,13 @@ struct SeamHoles {
 	/// of the fill's own level of one hole type and family of this seam.
 	func carriedStruct(at sitePath: [Property], innerKey: SeamSignature.ScopeEnum.Key, innerScopeName: String) -> String? {
 		carriedStructsByCall.isEmpty ? nil : carriedStructsByCall[RouteCall(sitePath: sitePath, innerKey: innerKey)]?[innerScopeName]
+	}
+
+	/// The name the seam's tree binds the struct of type `structType` under that the case of the call at the end of `sitePath`,
+	/// a call that re-enters an enclosing call's fill, returns for its builder whose root enum is `innerKey`'s: the called
+	/// seam's struct over the struct of the reused fill's own level, which that call's level function takes as `structType`.
+	func carriedStruct(at sitePath: [Property], innerKey: SeamSignature.ScopeEnum.Key, carrying structType: TypeDescription) -> String? {
+		innerScopes(at: sitePath, innerKey: innerKey).first { $0.enumType == structType }.flatMap { carriedStruct(at: sitePath, innerKey: innerKey, innerScopeName: $0.name) }
 	}
 
 	/// A seam call in the tree and the inner enum it carries.

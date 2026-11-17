@@ -2457,6 +2457,23 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 
 			extension Host {
 			    nonisolated public enum SafeDIScope_Gadget {
+			        nonisolated public enum DefaultFirst_Scope {
+			            nonisolated public struct subB_secondBuilder_Values {}
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let subB_secondBuilder: (subB_secondBuilder_Values) -> SubB.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>
+
+			                public init(subB_secondBuilder: @escaping (subB_secondBuilder_Values) -> SubB.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
+			                    self.subB_secondBuilder = subB_secondBuilder
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.subB_secondBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                }
+			            }
+			        }
+
 			        nonisolated public enum DefaultSecond_Scope {
 			            nonisolated public struct gadget_Values {}
 
@@ -2476,17 +2493,22 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    }
 
 			    nonisolated public enum SafeDISendableScope_Gadget {
+			        nonisolated public struct topBuilder_firstBuilder_Values: Sendable {}
+
 			        nonisolated public struct topBuilder_secondBuilder_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let topBuilder_firstBuilder: @Sendable (topBuilder_firstBuilder_Values) -> Top.SafeDIScope_First.__safeDI_Builder<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>
 			            public let topBuilder_secondBuilder: @Sendable (topBuilder_secondBuilder_Values) -> Top.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>
 
-			            public init(topBuilder_secondBuilder: @escaping @Sendable (topBuilder_secondBuilder_Values) -> Top.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
+			            public init(topBuilder_firstBuilder: @escaping @Sendable (topBuilder_firstBuilder_Values) -> Top.SafeDIScope_First.__safeDI_Builder<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, topBuilder_secondBuilder: @escaping @Sendable (topBuilder_secondBuilder_Values) -> Top.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
+			                self.topBuilder_firstBuilder = topBuilder_firstBuilder
 			                self.topBuilder_secondBuilder = topBuilder_secondBuilder
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                self.topBuilder_firstBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
 			                self.topBuilder_secondBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
 			            }
 			        }
@@ -2496,13 +2518,15 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
 			        @Sendable nonisolated func __safeDI_topBuilder() -> Top {
+			            let __safeDI_gadgetSendableBuilder_topBuilder_firstBuilder = __safeDI_gadgetSendableBuilder.topBuilder_firstBuilder(SafeDISendableScope_Gadget.topBuilder_firstBuilder_Values())
 			            let __safeDI_gadgetSendableBuilder_topBuilder_secondBuilder = __safeDI_gadgetSendableBuilder.topBuilder_secondBuilder(SafeDISendableScope_Gadget.topBuilder_secondBuilder_Values())
 			            _ = Top.__safeDI_Top_333CA8E405D3F446.self\(seamCallComment(seam: "Top", module: "Feature"))
-			            func __safeDI_firstBuilder_SubA_first(_ scope: SubA.SafeDIScope_First.first_Values) -> any First {
+			            func __safeDI_firstBuilder_SubA_first(_ scope: SubA.SafeDIScope_First.first_Values, __safeDI_topBuilder_firstBuilder: SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>) -> any First {
 			                func __safeDI_first() -> DefaultFirst {
+			                    let __safeDI_gadgetSendableBuilder_subB_secondBuilder = __safeDI_topBuilder_firstBuilder.subB_secondBuilder(SafeDIScope_Gadget.DefaultFirst_Scope.subB_secondBuilder_Values())
 			                    func __safeDI_subB() -> SubB {
-			                        _ = SubB.__safeDI_SubB_7CCD5CF6807E942D.self\(seamCallComment(seam: "Top", module: "Feature"))
-			                        return SubB(__safeDI_secondBuilder: __safeDI_secondBuilder_SubB())
+			                        _ = SubB.__safeDI_SubB_7CCD5CF6807E942D.self\(seamCallComment(seam: "SubB", module: "Feature"))
+			                        return SubB(__safeDI_secondBuilder: __safeDI_secondBuilder_SubB(up: __safeDI_gadgetSendableBuilder_subB_secondBuilder))
 			                    }
 			                    let subB: SubB = __safeDI_subB()
 			                    return DefaultFirst(subB: subB)
@@ -2518,11 +2542,11 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                let second: any Second = __safeDI_second()
 			                return second
 			            }
-			            func __safeDI_firstBuilder_Top() -> Top.SafeDIScope_First.__safeDI_Builder<any First> {
-			                .init(subA: { _ in __safeDI_firstBuilder_SubA() })
+			            func __safeDI_firstBuilder_Top(up: Top.SafeDIScope_First.__safeDI_Builder<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>>) -> Top.SafeDIScope_First.__safeDI_Builder<any First> {
+			                .init(subA: { values in __safeDI_firstBuilder_SubA(up: up.subA(values)) })
 			            }
-			            func __safeDI_firstBuilder_SubA() -> SubA.SafeDIScope_First.__safeDI_Builder<any First> {
-			                .init(first: { scope in __safeDI_firstBuilder_SubA_first(scope) })
+			            func __safeDI_firstBuilder_SubA(up: SubA.SafeDIScope_First.__safeDI_Builder<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>>) -> SubA.SafeDIScope_First.__safeDI_Builder<any First> {
+			                .init(first: { scope in __safeDI_firstBuilder_SubA_first(scope, __safeDI_topBuilder_firstBuilder: up.first(scope)) })
 			            }
 			            func __safeDI_secondBuilder_Top(up: Top.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> Top.SafeDIScope_Second.__safeDI_Builder<any Second> {
 			                .init(subB: { values in __safeDI_secondBuilder_SubB(up: up.subB(values)) })
@@ -2530,7 +2554,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            func __safeDI_secondBuilder_SubB(up: SubB.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> SubB.SafeDIScope_Second.__safeDI_Builder<any Second> {
 			                .init(second: { scope in __safeDI_secondBuilder_SubB_second(scope, __safeDI_topBuilder_secondBuilder: up.second(scope)) })
 			            }
-			            return Top(__safeDI_firstBuilder: __safeDI_firstBuilder_Top(), __safeDI_secondBuilder: __safeDI_secondBuilder_Top(up: __safeDI_gadgetSendableBuilder_topBuilder_secondBuilder))
+			            return Top(__safeDI_firstBuilder: __safeDI_firstBuilder_Top(up: __safeDI_gadgetSendableBuilder_topBuilder_firstBuilder), __safeDI_secondBuilder: __safeDI_secondBuilder_Top(up: __safeDI_gadgetSendableBuilder_topBuilder_secondBuilder))
 			        }
 			        let topBuilder = SendableInstantiator<Top>(__safeDI_topBuilder)
 			        self.init(topBuilder: topBuilder)
@@ -2538,7 +2562,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_17DE2EBFFC4AFA8F {}
+			    public enum __safeDI_Host_473DE6BDA2E85B39 {}
 			}
 			""",
 		])
