@@ -1030,17 +1030,17 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_acceptPlaceForwardingNothingBesidePlainPlace_whenSeamCorpusDeclaresHoleImplInNamespace() async throws {
-		// Seed 311 declares `HoleImpl` in an extension of `HoleNamespace` and holds a place that forwards nothing beside the
+		// Seed 153 declares `HoleImpl` in an extension of `HoleNamespace` and holds a place that forwards nothing beside the
 		// plain place of `any HoleService`, of the same builder: the place names `HoleImpl` as its declaration spells it,
 		// `HoleNamespace.HoleImpl`, which the calling module's fill declares, so the tool accepts the graph.
-		let fixture = GraphFuzzerGenerator.fixture(forSeed: 311, features: [.generateDependencyTree])
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 153, features: [.generateDependencyTree])
 		#expect(GraphFuzzerFeature.seamDrawFeatures(of: fixture).isSuperset(of: [.holeImplInNamespace, .holeNothingForwardedPlaceBesidePlain]))
-		#expect(fixture.swiftFileContent.contains { $0.contains("@Instantiated(fulfilledByType: \"S311_HoleNamespace.S311_HoleImpl\") let holeServiceLater") })
+		#expect(fixture.swiftFileContent.contains { $0.contains("@Instantiated(fulfilledByType: \"S153_HoleNamespace.S153_HoleImpl\") let holeServiceLater") })
 
 		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
 
 		guard case .accepted = runs.firstOutcome else {
-			Issue.record("Seed 311 is expected to be accepted:\n\(runs.firstOutcome.description)")
+			Issue.record("Seed 153 is expected to be accepted:\n\(runs.firstOutcome.description)")
 			return
 		}
 	}
@@ -6913,7 +6913,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
-			seeds: [68, 93, 94, 98, 121, 164, 273, 283, 298, 304, 308, 309, 326, 347, 348, 362, 365, 384, 481, 500, 527, 550, 556, 594, 605, 623, 669, 670, 699, 769, 791, 797, 832, 850, 858, 876, 883, 892, 905, 930],
+			seeds: [93, 94, 98, 121, 164, 273, 283, 298, 304, 308, 309, 326, 347, 348, 362, 365, 384, 481, 500, 527, 550, 556, 594, 605, 623, 669, 670, 699, 769, 791, 797, 832, 850, 858, 876, 883, 892, 905, 930],
 		),
 		// Seed 391's chain of hole draws that re-enter one another holds more wrappers than a graph compared on its own may
 		// traverse (`DifferentialValueLimits.isolatedFuzzerGraph`), so the comparator describes none of its values beneath
