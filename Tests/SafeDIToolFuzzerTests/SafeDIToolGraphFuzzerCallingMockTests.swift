@@ -755,7 +755,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			await sitesByShape[shape, default: []].append(try GraphFuzzerCallingMockCheck.run(GraphFuzzerCallingMockDraw(seed: seed).graph, seed: seed).twinSites)
 		}
 
-		#expect(sitesByShape.keys.sorted() == [.outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall])
+		#expect(sitesByShape.keys.sorted() == [.outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill])
 		#expect(sitesByShape.values.allSatisfy { $0.allSatisfy { $0 != nil } })
 		for (shape, sites) in sitesByShape {
 			for (otherShape, otherSites) in sitesByShape where otherShape != shape {
@@ -1047,12 +1047,45 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 	}
 
+	/// Seed 490 draws the first graph of `fillInstantiatesTypeNoDeclarationCanFulfill/internal/plain`, the first of its block:
+	/// an internal calling mock whose fill's implementation instantiates a type spelled as no hole can be, which no
+	/// declaration fulfills. It reports production's error at the same site, where it passed the place up before
+	/// (`DependencyTreeGenerator.validateFillsInstantiateOnlyWhatCanBeFulfilled`), which the check reports as acceptance where
+	/// the twin is rejected.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_reportsTwinsError_whenDrawnFillInstantiatesTypeNoDeclarationCanFulfill() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 490)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 490)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillInstantiatesTypeNoDeclarationCanFulfill, caller: .internal, place: .plain))
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.mockSites != nil && result.mockSites == result.twinSites)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// The graphs of the shape whose fill instantiates a type no declaration can fulfill draw each spelling no hole can have
+	/// in the pinned number of graphs, and both caller kinds in twenty.
+	@Test
+	func fillInstantiatesTypeNoDeclarationCanFulfillDraw_drawsEachSpelling_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .fillInstantiatesTypeNoDeclarationCanFulfill }
+		var counts = [String: Int]()
+		for draw in draws {
+			counts[draw.fillHoles?.spellingNoHoleCanHave?.type ?? "none", default: 0] += 1
+			counts[draw.cell.caller.rawValue, default: 0] += 1
+		}
+		print("calling-mock spellings no hole can have \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+		#expect(counts == ["[String]": 11, "[String: Int]": 11, "() -> Int": 7, "(Int, Int)": 11, "internal": 20, "public": 20])
+	}
+
 	/// The graphs of the shape whose fill instantiates what nothing fulfills draw each of its variations (`FillHoles`) in
 	/// the pinned number of graphs, each value in at least ten, so that the cell test, which requires every graph's mock to
 	/// take its twin's builders, judges each.
 	@Test
 	func fillInstantiatesWhatNothingFulfillsDraw_drawsEachVariation_inPinnedNumberOfGraphs() {
-		let fillHoles = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).compactMap { GraphFuzzerCallingMockDraw(seed: $0).fillHoles }
+		let fillHoles = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .fillInstantiatesWhatNothingFulfills }.compactMap(\.fillHoles)
 		let counts = [
 			"graphs": fillHoles.count,
 			"fulfillerIsSeam": fillHoles.count(where: \.fulfillerIsSeam),
@@ -1122,7 +1155,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 49)
+		#expect(GraphFuzzerCallingMockCell.all.count == 53)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
 		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)
