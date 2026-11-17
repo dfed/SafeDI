@@ -181,17 +181,39 @@ struct DifferentialValueOutputMemoTests: ~Copyable {
 	// MARK: Tests – Reading and keeping
 
 	@Test
-	func output_returnsWhatWasRecorded_whenAnotherMemoOfTheDirectoryRecordedTheKey() throws {
+	func output_returnsWhatWasRecorded_whenAnotherMemoOfTheDirectoryRecordedTheKey() {
 		let memoDirectory = directory.appendingPathComponent("not-made-yet/value-outputs")
 		let first = DifferentialValueOutputMemo(directory: memoDirectory)
 		#expect(first.output(for: "key") == nil)
-		try first.record("probe a\n<1> Root\n", for: "key")
+		first.record("probe a\n<1> Root\n", for: "key")
 		let second = DifferentialValueOutputMemo(directory: memoDirectory)
 		#expect(second.output(for: "key") == "probe a\n<1> Root\n")
 		#expect(second.output(for: "another key") == nil)
 		second.countRunWithoutAKey()
 		#expect(first.tallyLine == "Value comparison programs: 1 compiled and run, 0 read from an earlier run (\(memoDirectory.path)).")
 		#expect(second.tallyLine == "Value comparison programs: 1 compiled and run, 1 read from an earlier run, 1 compiled and run without being looked up or recorded because what they depend on could not be described (\(memoDirectory.path)).")
+	}
+
+	@Test(arguments: ["a fixture root", "a UUID"])
+	func record_keepsNothing_whenTheOutputSpellsWhatTheKeyRewrites(spelled: String) {
+		// The key is the same under another fixture root and other UUIDs, so an output that spells this run's would be
+		// read as the next run's.
+		let memo = DifferentialValueOutputMemo(directory: directory.appendingPathComponent("value-outputs"))
+		let output = spelled == "a fixture root" ? "probe a\n  file: /run-root/Root.swift\n" : "probe a\n  identifier: \(UUID().uuidString)\n"
+		memo.record(output, for: "key", fixtureRoots: ["/run-root"])
+		#expect(memo.output(for: "key") == nil)
+		#expect(memo.tallyLine == "Value comparison programs: 1 compiled and run, 0 read from an earlier run, 1 not kept because what they printed spells a path or a UUID of this run or could not be written (\(memo.directory.path)).")
+	}
+
+	@Test
+	func record_keepsNothingAndThrowsNothing_whenTheDirectoryCannotBeMade() throws {
+		// A file stands where the directory would be.
+		let blocked = directory.appendingPathComponent("a-file")
+		try "".write(to: blocked, atomically: true, encoding: .utf8)
+		let memo = DifferentialValueOutputMemo(directory: blocked.appendingPathComponent("value-outputs"))
+		memo.record("probe a\n", for: "key")
+		#expect(memo.output(for: "key") == nil)
+		#expect(memo.tallyLine == "Value comparison programs: 1 compiled and run, 0 read from an earlier run, 1 not kept because what they printed spells a path or a UUID of this run or could not be written (\(memo.directory.path)).")
 	}
 
 	// MARK: Tests – The comparator

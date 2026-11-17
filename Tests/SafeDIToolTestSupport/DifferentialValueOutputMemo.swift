@@ -73,9 +73,22 @@ struct DifferentialValueOutputMemo: Sendable {
 
 	/// Writes `output` as what the program whose key is `key` printed, making the directory when it does not exist
 	/// yet. The file is written beside its place and moved there, so that a test process never reads half of one.
-	func record(_ output: String, for key: String) throws {
-		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-		try output.write(to: file(for: key), atomically: true, encoding: .utf8)
+	///
+	/// Keeps nothing, and counts it, when `output` spells one of `fixtureRoots` or a UUID: the key rewrites both, so
+	/// the next run of the same key would read this run's paths. Keeps nothing, and counts it, when the file cannot
+	/// be written: the memo only saves time, so a full disk or a directory that cannot be written fails no test.
+	func record(_ output: String, for key: String, fixtureRoots: [String] = PassedCompileCheckCache.currentFixtureRoots) {
+		var normalization = CompileCheckTextNormalization(fixtureRoots: fixtureRoots)
+		guard normalization.normalizing(output) == output else {
+			tally.countNotKept()
+			return
+		}
+		do {
+			try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+			try output.write(to: file(for: key), atomically: true, encoding: .utf8)
+		} catch {
+			tally.countNotKept()
+		}
 	}
 
 	/// The key of the program that links `path`'s modules with `main` into `executableModuleName`: the SHA-256 of a
@@ -178,6 +191,9 @@ struct DifferentialValueOutputMemo: Sendable {
 		if counts.runWithoutAKey > 0 {
 			line += ", \(counts.runWithoutAKey) compiled and run without being looked up or recorded because what they depend on could not be described"
 		}
+		if counts.notKept > 0 {
+			line += ", \(counts.notKept) not kept because what they printed spells a path or a UUID of this run or could not be written"
+		}
 		line += " (\(directory.path))."
 		return line
 	}
@@ -222,8 +238,12 @@ private struct ProgramDescription: Encodable {
 
 /// How many programs a memo ran and read, counted from the tests that run in parallel.
 private final class DifferentialValueOutputMemoTally: Sendable {
-	var counts: (run: Int, read: Int, runWithoutAKey: Int) {
-		lock.withLock { (run, read, runWithoutAKey) }
+	var counts: (run: Int, read: Int, runWithoutAKey: Int, notKept: Int) {
+		lock.withLock { (run, read, runWithoutAKey, notKept) }
+	}
+
+	func countNotKept() {
+		lock.withLock { notKept += 1 }
 	}
 
 	func countRun() {
@@ -242,4 +262,5 @@ private final class DifferentialValueOutputMemoTally: Sendable {
 	nonisolated(unsafe) private var run = 0
 	nonisolated(unsafe) private var read = 0
 	nonisolated(unsafe) private var runWithoutAKey = 0
+	nonisolated(unsafe) private var notKept = 0
 }
