@@ -48,6 +48,10 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 	/// parameter and fills the place from: the calling mock passes the place up, which no permanent reason explains (the
 	/// reason that once did is withdrawn).
 	case implementationReceivesWhatNothingProvides
+	/// The fill receives the caller's own value whose tree calls the seam, which is still being built there: production
+	/// reports the dependency cycle. Drawn with a plain place only: a deferred place's builder closes the cycle through an
+	/// instantiator, which production accepts.
+	case fillReceivesValueBuildingTheCall
 
 	static func < (lhs: Self, rhs: Self) -> Bool {
 		allCases.firstIndex(of: lhs) ?? 0 < allCases.firstIndex(of: rhs) ?? 0
@@ -56,7 +60,7 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 	/// Whether production rejects the shape with an error of its own, which the calling mock must report too.
 	var twinRejects: Bool {
 		switch self {
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall:
 			true
 		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides:
 			false
@@ -67,13 +71,13 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 		switch self {
 		case .noVisibleImplementation:
 			true
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall:
 			false
 		}
 	}
 }
 
-/// One cell of the calling-mock draw: a shape, with an internal or a `.public` calling mock, and a plain place
+/// One cell of the calling-mock draw: a shape, with an internal, a `.public` or a listed calling mock, and a plain place
 /// (`let api: any Api`) or a deferred one (an `ErasedInstantiator` whose fill forwards a value). The app-only screen's
 /// loop closes only through builders, so there its plain place is the canonical one, a builder that forwards nothing
 /// (`ErasedInstantiator<(), any SettingsPage>`).
@@ -84,27 +88,85 @@ struct GraphFuzzerCallingMockCell: Hashable, Comparable, CustomStringConvertible
 		case deferred
 	}
 
+	/// How the caller's module asks for the calling mock.
+	enum Caller: String, CaseIterable {
+		/// `@Instantiable(generateMock: true)`.
+		case `internal`
+		/// `@Instantiable(generateMock: .public)`.
+		case `public`
+		/// A plain `@Instantiable` the caller's module lists in `additionalMocksToGenerate`, whose generated `mock()` is
+		/// internal.
+		case listed
+	}
+
 	let shape: GraphFuzzerCallingMockShape
-	let callerIsPublic: Bool
+	let caller: Caller
 	let place: Place
 
+	var callerIsPublic: Bool {
+		caller == .public
+	}
+
 	static func < (lhs: Self, rhs: Self) -> Bool {
-		(lhs.shape, lhs.callerIsPublic ? 1 : 0, lhs.place.rawValue) < (rhs.shape, rhs.callerIsPublic ? 1 : 0, rhs.place.rawValue)
+		let callerIndex = { (cell: Self) in Caller.allCases.firstIndex(of: cell.caller) ?? 0 }
+		return (lhs.shape, callerIndex(lhs), lhs.place.rawValue) < (rhs.shape, callerIndex(rhs), rhs.place.rawValue)
 	}
 
 	var description: String {
-		"\(shape.rawValue)/\(callerIsPublic ? "public" : "internal")/\(place.rawValue)"
+		"\(shape.rawValue)/\(caller.rawValue)/\(place.rawValue)"
 	}
 
-	/// Every cell, shape by shape.
-	static let all: [Self] = GraphFuzzerCallingMockShape.allCases.flatMap { shape in
-		[false, true].flatMap { callerIsPublic in
-			Place.allCases.map { Self(shape: shape, callerIsPublic: callerIsPublic, place: $0) }
+	/// The cells of `shapes`, `callers` and `places`, shape by shape.
+	private static func cells(of shapes: [GraphFuzzerCallingMockShape], callers: [Caller], places: [Place] = Place.allCases) -> [Self] {
+		shapes.flatMap { shape in
+			callers.flatMap { caller in
+				places.map { Self(shape: shape, caller: caller, place: $0) }
+			}
 		}
 	}
 
-	/// The cells the draw fills, in order: a seed's cell is `drawnCells[seed % drawnCells.count]`.
+	/// The shapes drawn before the listed callers' block.
+	private static let firstShapes: [GraphFuzzerCallingMockShape] = [.outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides]
+
+	/// The draw's blocks of cells, each drawn `graphsPerCell` times in a range of seeds of its own after the blocks before
+	/// it, so a block added later draws no earlier seed anew: the internal and `.public` callers' cells; the listed
+	/// callers'; and the fill that receives the value building the call, for every caller, with a plain place.
+	static let blocks: [[Self]] = [
+		cells(of: firstShapes, callers: [.internal, .public]),
+		cells(of: firstShapes, callers: [.listed]),
+		cells(of: [.fillReceivesValueBuildingTheCall], callers: Caller.allCases, places: [.plain]),
+	]
+
+	/// Every cell, block by block.
+	static let all: [Self] = blocks.flatMap { $0 }
+
+	/// The cells the draw fills, in order.
 	static let drawnCells = all
+
+	/// The graphs the corpus draws of each cell.
+	static let graphsPerCell = 10
+
+	/// The cell seed `seed` draws: in its block's range of seeds, `block[(seed - start) % block.count]`, so each block's
+	/// first `block.count` seeds draw each of its cells once. A seed past the corpus wraps around it.
+	static func cell(ofSeed seed: UInt64) -> Self {
+		var offset = Int(seed % UInt64(all.count * graphsPerCell))
+		for block in blocks {
+			guard offset >= block.count * graphsPerCell else { return block[offset % block.count] }
+			offset -= block.count * graphsPerCell
+		}
+		return all[offset % all.count]
+	}
+
+	/// The first seed that draws each cell, in the order of `all`.
+	static let firstSeeds: [UInt64] = {
+		var seeds = [UInt64]()
+		var start = 0
+		for block in blocks {
+			seeds += (start..<(start + block.count)).map { UInt64($0) }
+			start += block.count * graphsPerCell
+		}
+		return seeds
+	}()
 }
 
 // MARK: - Draw
@@ -114,7 +176,7 @@ struct GraphFuzzerCallingMockCell: Hashable, Comparable, CustomStringConvertible
 /// the calling mock passes up. Drawn from a stream of its own, so no other corpus graph changes.
 struct GraphFuzzerCallingMockDraw {
 	init(seed: UInt64) {
-		self.init(seed: seed, cell: GraphFuzzerCallingMockCell.drawnCells[Int(seed % UInt64(GraphFuzzerCallingMockCell.drawnCells.count))])
+		self.init(seed: seed, cell: GraphFuzzerCallingMockCell.cell(ofSeed: seed))
 	}
 
 	init(seed: UInt64, cell: GraphFuzzerCallingMockCell) {
@@ -135,6 +197,7 @@ struct GraphFuzzerCallingMockDraw {
 			twinFiles: files(.twin),
 			callerTypeName: names.caller,
 			callerIsPublic: cell.callerIsPublic,
+			mockConfiguration: mockConfiguration,
 			flatParameterLabels: flatParameterLabels,
 			implementationIsVisible: implementationIsVisible,
 			expectedTwinInitializerLabels: expectedTwinInitializerLabels,
@@ -156,7 +219,7 @@ struct GraphFuzzerCallingMockDraw {
 		switch cell.shape {
 		case .implementationReceivesWhatNothingProvides:
 			[names.token.lowercasedFirst]
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .fillReceivesValueBuildingTheCall:
 			[]
 		}
 	}
@@ -185,7 +248,7 @@ struct GraphFuzzerCallingMockDraw {
 	/// the place is visible.
 	var expectedTwinInitializerLabels: [String]? {
 		switch cell.shape {
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall:
 			nil
 		case .callersOwnValue:
 			[]
@@ -217,7 +280,7 @@ struct GraphFuzzerCallingMockDraw {
 			("\(caller).mock()", "\(caller)()")
 		case .implementationReceivesWhatNothingProvides:
 			("\(caller).mock(\(token): \(names.token)())", "\(caller)(__safeDI_\(token): \(names.token)())")
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .noVisibleImplementation:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .noVisibleImplementation, .fillReceivesValueBuildingTheCall:
 			nil
 		}
 		guard let calls else { return nil }
@@ -280,6 +343,8 @@ struct GraphFuzzerCallingMockDraw {
 			return ("App/AppTypes.swift", "@Received let \(names.value.lowercasedFirst): \(names.value)")
 		case .loopThroughInnerSeamBuilder:
 			return ("\(names.outerModuleName)/\(names.outerModuleName)Types.swift", "@Received let \(names.inner.lowercasedFirst)Builder: Instantiator<\(names.inner)>")
+		case .fillReceivesValueBuildingTheCall:
+			return ("\(names.callerModuleName)/\(names.callerModuleName)Types.swift", "@Received let \(names.sibling.lowercasedFirst): \(names.sibling)")
 		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides:
 			return nil
 		}
@@ -290,7 +355,7 @@ struct GraphFuzzerCallingMockDraw {
 	/// The draw's files, in dependency order, with each file's content by module and file name.
 	func files(_ form: Form) -> [File] {
 		switch cell.shape {
-		case .outerSeamValue, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides:
+		case .outerSeamValue, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall:
 			[
 				File(module: names.innerModuleName, dependencies: [], content: innerModuleContent),
 				File(module: names.outerModuleName, dependencies: [names.innerModuleName], content: outerModuleContent),
@@ -379,11 +444,25 @@ struct GraphFuzzerCallingMockDraw {
 	}
 
 	private func callerAttribute(_ form: Form) -> String {
-		switch form {
-		case .mock:
-			callerIsPublic ? "@Instantiable(generateMock: .public)" : "@Instantiable(generateMock: true)"
-		case .twin:
+		switch (form, cell.caller) {
+		case (.mock, .internal):
+			"@Instantiable(generateMock: true)"
+		case (.mock, .public):
+			"@Instantiable(generateMock: .public)"
+		case (.mock, .listed):
+			"@Instantiable"
+		case (.twin, .internal), (.twin, .public), (.twin, .listed):
 			"@Instantiable(generateDependencyTree: true)"
+		}
+	}
+
+	/// The `SafeDIConfiguration.swift` of the calling mock's module that lists a listed caller, or `nil`.
+	var mockConfiguration: String? {
+		switch cell.caller {
+		case .listed:
+			"import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"\(names.caller)\"])\n"
+		case .internal, .public:
+			nil
 		}
 	}
 
@@ -435,7 +514,7 @@ struct GraphFuzzerCallingMockDraw {
 			    @Received let \(builder): Instantiator<\(names.inner)>
 			}
 			"""
-		case .outerSeamValue, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .appOnlyScreenInLoop, .seamBuiltAgain:
+		case .outerSeamValue, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .appOnlyScreenInLoop, .seamBuiltAgain, .fillReceivesValueBuildingTheCall:
 			let value = names.value.lowercasedFirst
 			let inner = names.inner.lowercasedFirst
 			return """
@@ -539,6 +618,18 @@ struct GraphFuzzerCallingMockDraw {
 			declarations.append("public struct \(names.token) {}")
 			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: (names.token.lowercasedFirst, names.token), isPublic: callerIsPublic))
 			declarations.append(callerDeclaration(form, properties: [(names.value.lowercasedFirst, names.value), (names.inner.lowercasedFirst, names.inner)]))
+		case .fillReceivesValueBuildingTheCall:
+			let sibling = names.sibling.lowercasedFirst
+			let inner = names.inner.lowercasedFirst
+			declarations.append("""
+			@Instantiable
+			\(callerAccess)final class \(names.sibling): Instantiable {
+			    \(callerAccess)init(\(inner): \(names.inner)) { self.\(inner) = \(inner) }
+			    @Instantiated let \(inner): \(names.inner)
+			}
+			""")
+			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: (sibling, names.sibling), isPublic: callerIsPublic))
+			declarations.append(callerDeclaration(form, properties: [(sibling, names.sibling)]))
 		case .appOnlyScreenInLoop, .seamBuiltAgain:
 			break
 		}
@@ -715,6 +806,9 @@ struct GraphFuzzerCallingMockGraph {
 	/// The package every module belongs to.
 	static let packageName = "Probe"
 
+	/// The name of the file that holds `mockConfiguration` in the caller's module.
+	static let configurationFileName = "SafeDIConfiguration.swift"
+
 	let name: String
 	/// The modules' files in dependency order, the calling mock's module last.
 	let mockFiles: [File]
@@ -723,6 +817,9 @@ struct GraphFuzzerCallingMockGraph {
 	let twinFiles: [File]
 	let callerTypeName: String
 	let callerIsPublic: Bool
+	/// The `SafeDIConfiguration.swift` the calling mock's module holds beside its file, which the twin's does not: one that
+	/// lists the caller in `additionalMocksToGenerate`, or `nil`.
+	let mockConfiguration: String?
 	/// The parameters of the calling mock's `mock()` that its own `@Forwarded` values and the received values its tree
 	/// cannot build account for: every other parameter but `safeDIOverrides` is a place it passes up.
 	let flatParameterLabels: Set<String>
@@ -759,12 +856,26 @@ struct GraphFuzzerCallingMockGraph {
 
 	func modules(_ form: Form) -> [ModuleFixture] {
 		files(form).map { file in
-			ModuleFixture(
+			var contentByFileName = [file.fileName: file.content]
+			if let configuration = configuration(of: form), file.module == callerModule {
+				contentByFileName[Self.configurationFileName] = configuration
+			}
+			return ModuleFixture(
 				name: file.module,
 				packageName: Self.packageName,
-				swiftFileContentByFilePath: [file.fileName: file.content],
+				swiftFileContentByFilePath: contentByFileName,
 				dependencies: file.dependencies,
 			)
+		}
+	}
+
+	/// The configuration the caller's module holds in `form`.
+	private func configuration(of form: Form) -> String? {
+		switch form {
+		case .mock:
+			mockConfiguration
+		case .twin:
+			nil
 		}
 	}
 
@@ -799,6 +910,9 @@ struct GraphFuzzerCallingMockGraph {
 		for file in files(form) {
 			contentByRelativePath[file.relativePath] = file.content
 		}
+		if let configuration = configuration(of: form) {
+			contentByRelativePath["\(callerModule)/\(Self.configurationFileName)"] = configuration
+		}
 		return contentByRelativePath
 	}
 
@@ -809,6 +923,7 @@ struct GraphFuzzerCallingMockGraph {
 		mockFiles: [File],
 		callerTypeName: String,
 		callerIsPublic: Bool,
+		mockConfiguration: String? = nil,
 		flatParameterLabels: Set<String> = [],
 		implementationIsVisible: Bool = true,
 		expectedTwinInitializerLabels: [String]? = nil,
@@ -832,6 +947,7 @@ struct GraphFuzzerCallingMockGraph {
 			twinFiles: twinFiles,
 			callerTypeName: callerTypeName,
 			callerIsPublic: callerIsPublic,
+			mockConfiguration: mockConfiguration,
 			flatParameterLabels: flatParameterLabels,
 			implementationIsVisible: implementationIsVisible,
 			expectedTwinInitializerLabels: expectedTwinInitializerLabels,
@@ -847,6 +963,7 @@ struct GraphFuzzerCallingMockGraph {
 		twinFiles: [File],
 		callerTypeName: String,
 		callerIsPublic: Bool,
+		mockConfiguration: String? = nil,
 		flatParameterLabels: Set<String>,
 		implementationIsVisible: Bool,
 		expectedTwinInitializerLabels: [String]?,
@@ -859,6 +976,7 @@ struct GraphFuzzerCallingMockGraph {
 		self.twinFiles = twinFiles
 		self.callerTypeName = callerTypeName
 		self.callerIsPublic = callerIsPublic
+		self.mockConfiguration = mockConfiguration
 		self.flatParameterLabels = flatParameterLabels
 		self.implementationIsVisible = implementationIsVisible
 		self.expectedTwinInitializerLabels = expectedTwinInitializerLabels
