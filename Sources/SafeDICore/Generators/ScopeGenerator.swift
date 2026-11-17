@@ -9846,9 +9846,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// value and the mock calls it where it builds the type, which evaluates the default once per
 				// construction, as production does. The initializer takes the value as an autoclosure, so a
 				// caller still passes a value. Swift rejects `@Sendable` on a typealias, so a typealiased function
-				// type is stored this way too, even when the parameter is declared `@escaping`.
-				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping @Sendable () -> \(typeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
-				appendField(named: defaultParameter.label, typeSource: "@Sendable () -> \(typeSource)", parameterTypeSource: "@escaping @Sendable () -> \(typeSource)", isProvenSendable: true)
+				// type is stored this way too, even when the parameter is declared `@escaping`. A closure's return type
+				// cannot be spelled `X!`, so an implicitly unwrapped value is returned as `X?`, which the parameter accepts.
+				let returnTypeSource = defaultParameter.valueTypeDescription.implicitlyUnwrappedOptionalSpelledAsOptional.asSource
+				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping @Sendable () -> \(returnTypeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
+				appendField(named: defaultParameter.label, typeSource: "@Sendable () -> \(returnTypeSource)", parameterTypeSource: "@escaping @Sendable () -> \(returnTypeSource)", isProvenSendable: true)
 			} else {
 				// A parameter declared `@escaping` is of a function type, which the initializer stores, so it takes the
 				// value `@escaping` too, also when the type is a typealias of a function type.
