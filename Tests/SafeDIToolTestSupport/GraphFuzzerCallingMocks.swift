@@ -138,7 +138,7 @@ struct GraphFuzzerCallingMockCell: Hashable, Comparable, CustomStringConvertible
 	]
 
 	/// Every cell, block by block.
-	static let all: [Self] = blocks.flatMap { $0 }
+	static let all: [Self] = blocks.flatMap(\.self)
 
 	/// The cells the draw fills, in order.
 	static let drawnCells = all
