@@ -57,7 +57,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
 
 		#expect(result.twinInitializerLabels == [])
-		Self.expectMirrorsTwin(result, failingOnMainAs: .callingMockPassesUpUnclassifiedPlace, reason: Self.callersOwnValueReason)
+		Self.expectMirrorsTwin(result)
 	}
 
 	@Test
@@ -99,10 +99,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
 
 		#expect(result.twinInitializerLabels == ["token"])
-		withKnownIssue("\(Self.passesUpPlaceItsTwinFillsFromParameterReason)") {
-			#expect(result.passUps.isEmpty)
-		}
-		Self.expectMirrorsTwin(result, failingOnMainAs: .callingMockPassesUpUnclassifiedPlace, reason: Self.passesUpPlaceItsTwinFillsFromParameterReason)
+		#expect(result.passUps.isEmpty)
+		Self.expectMirrorsTwin(result)
 	}
 
 	@Test
@@ -187,7 +185,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			GraphFuzzerDiagnosticSite(severity: "error", file: "Tests/TestsTypes.swift", line: 8, declaration: "@Received let database: Database"),
 			GraphFuzzerDiagnosticSite(severity: "note", file: "FeatureModule/FeatureModuleTypes.swift", line: 12, declaration: "@Instantiated public let database: Database"),
 		])
-		Self.expectMirrorsTwin(result, failingOnMainAs: .callingMockAcceptedWhereTwinReportsShapeError, reason: Self.outerSeamValueReason)
+		Self.expectMirrorsTwin(result)
 	}
 
 	@Test
@@ -250,7 +248,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			GraphFuzzerDiagnosticSite(severity: "error", file: "App/AppTypes.swift", line: 7, declaration: "@Received private let feedBuilder: ErasedInstantiator<(), any FeedPage>"),
 			GraphFuzzerDiagnosticSite(severity: "note", file: "Feature/FeatureTypes.swift", line: 22, declaration: "@Instantiated(fulfilledByType: \"Feed\") private let feedBuilder: ErasedInstantiator<(), any FeedPage>"),
 		])
-		Self.expectMirrorsTwin(result, failingOnMainAs: .callingMockAcceptedWhereTwinReportsShapeError, reason: Self.appOnlyScreenInLoopReason)
+		Self.expectMirrorsTwin(result)
 	}
 
 	@Test
@@ -312,7 +310,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.twinSites == [
 			GraphFuzzerDiagnosticSite(severity: "error", file: "App/AppTypes.swift", line: 7, declaration: "@Received private let feedBuilder: ErasedInstantiator<(), any FeedPage>"),
 		])
-		Self.expectMirrorsTwin(result, failingOnMainAs: .callingMockAcceptedWhereTwinReportsShapeError, reason: Self.appOnlyScreenBuiltByValueReason)
+		Self.expectMirrorsTwin(result)
 	}
 
 	@Test
@@ -326,7 +324,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			GraphFuzzerDiagnosticSite(severity: "error", file: "App/AppTypes.swift", line: 7, declaration: "@Received let logger: Logger"),
 			GraphFuzzerDiagnosticSite(severity: "note", file: "Feature/FeatureTypes.swift", line: 20, declaration: "@Instantiated let logger: Logger"),
 		])
-		Self.expectMirrorsTwin(result, failingOnMainAs: .callingMockAcceptedWhereTwinReportsShapeError, reason: Self.seamBuiltAgainReason)
+		Self.expectFailsAsKnownIssue(result, failingAs: .callingMockAcceptedWhereTwinReportsShapeError, reason: Self.seamBuiltAgainReason)
 	}
 
 	/// Main's calling mock fills the place a seam built again passes up with `LiveGadget(logger: logger)` from the caller's
@@ -350,9 +348,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		)
 
 		let compilation = try #require(output.compilation)
-		withKnownIssue("\(Self.seamBuiltAgainReason)") {
-			#expect(compilation.failure == nil)
-		}
+		#expect(compilation.failure == nil)
 	}
 
 	@Test
@@ -407,15 +403,20 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.twinSites == [
 			GraphFuzzerDiagnosticSite(severity: "error", file: "FeatureModule/FeatureModuleTypes.swift", line: 14, declaration: "@Received let innerBuilder: Instantiator<Inner>"),
 		])
-		Self.expectMirrorsTwin(result, failingOnMainAs: .callingMockAcceptedWhereTwinReportsShapeError, reason: Self.loopThroughInnerSeamBuilderReason)
+		Self.expectMirrorsTwin(result)
 	}
 
-	/// Expects the twin to give the graph's intended outcome and the calling mock to mirror it, which main's does not: until
-	/// the fix, the mock must fail as `knownKind`, the kind the shape's known issue lists, so a mock that begins to fail
-	/// another way is not absorbed as the known issue.
-	private static func expectMirrorsTwin(
+	/// Expects the twin to give the graph's intended outcome and the calling mock to mirror it.
+	private static func expectMirrorsTwin(_ result: GraphFuzzerCallingMockResult, sourceLocation: SourceLocation = #_sourceLocation) {
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")", sourceLocation: sourceLocation)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")", sourceLocation: sourceLocation)
+	}
+
+	/// Expects the twin to give the graph's intended outcome and the calling mock to fail only as `knownKind`, the kind the
+	/// shape's known issue lists, so a mock that begins to fail another way is not absorbed as the known issue.
+	private static func expectFailsAsKnownIssue(
 		_ result: GraphFuzzerCallingMockResult,
-		failingOnMainAs knownKind: GraphFuzzerFailure.Kind,
+		failingAs knownKind: GraphFuzzerFailure.Kind,
 		reason: String,
 		sourceLocation: SourceLocation = #_sourceLocation,
 	) {
@@ -1296,32 +1297,10 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		return seeds
 	}()
 
-	static let outerSeamValueReason = "A calling mock fills, or passes up as a required builder, a place whose fill receives a value an outer seam builds, where its production twin reports that the outer seam passes the builder on from its own caller; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
-	static let appOnlyScreenInLoopReason = "A calling mock passes up the place of an app-only screen in a loop of the seam's screens, where its production twin reports the loop (the seam's tree builds the screen's received builder only after it calls the screen's builder); the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
-	static let appOnlyScreenBuiltByValueReason = "A calling mock passes up the place of an app-only screen built by value whose loop through the seam's screens is a constant cycle, where its production twin reports the cycle; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
 	static let seamBuiltAgainReason = "A calling mock fills or passes up a place of a seam its tree builds again, whose fill reads a value of the level in between, where its production twin reports that the second build passes the builder on unchanged; main's internal mock fills it from the caller's own value and does not compile; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
-	static let loopThroughInnerSeamBuilderReason = "A calling mock passes up a place whose fill receives a sibling that receives the inner seam's builder, where its production twin reports the loop as a dependency cycle; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
-	static let callersOwnValueReason = "A calling mock passes up as a required builder a place whose fill receives a value the caller itself builds, where its production twin fills the place from that value; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock fill it"
-	static let passesUpPlaceItsTwinFillsFromParameterReason = "A calling mock passes up a place whose fill receives a value nothing in its tree builds, where its production twin takes that value as a parameter and fills the place from it; no permanent reason explains it; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock fill it"
 
-	/// One entry per cell that fails on main, with the cell's ten seeds.
+	/// One entry per cell that fails, with the cell's ten seeds.
 	static let callingMockKnownIssues: [GraphFuzzerKnownIssue] = [
-		// outerSeamValue/internal/plain
-		GraphFuzzerKnownIssue(reason: outerSeamValueReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [0, 28, 56, 84, 112, 140, 168, 196, 224, 252]),
-		// outerSeamValue/internal/deferred
-		GraphFuzzerKnownIssue(reason: outerSeamValueReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [1, 29, 57, 85, 113, 141, 169, 197, 225, 253]),
-		// outerSeamValue/public/plain
-		GraphFuzzerKnownIssue(reason: outerSeamValueReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [2, 30, 58, 86, 114, 142, 170, 198, 226, 254]),
-		// outerSeamValue/public/deferred
-		GraphFuzzerKnownIssue(reason: outerSeamValueReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [3, 31, 59, 87, 115, 143, 171, 199, 227, 255]),
-		// appOnlyScreenInLoop/internal/plain
-		GraphFuzzerKnownIssue(reason: appOnlyScreenInLoopReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [4, 32, 60, 88, 116, 144, 172, 200, 228, 256]),
-		// appOnlyScreenInLoop/internal/deferred
-		GraphFuzzerKnownIssue(reason: appOnlyScreenInLoopReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [5, 33, 61, 89, 117, 145, 173, 201, 229, 257]),
-		// appOnlyScreenInLoop/public/plain
-		GraphFuzzerKnownIssue(reason: appOnlyScreenInLoopReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [6, 34, 62, 90, 118, 146, 174, 202, 230, 258]),
-		// appOnlyScreenInLoop/public/deferred
-		GraphFuzzerKnownIssue(reason: appOnlyScreenInLoopReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [7, 35, 63, 91, 119, 147, 175, 203, 231, 259]),
 		// seamBuiltAgain/internal/plain
 		GraphFuzzerKnownIssue(reason: seamBuiltAgainReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [8, 36, 64, 92, 120, 148, 176, 204, 232, 260]),
 		// seamBuiltAgain/internal/deferred
@@ -1330,29 +1309,5 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		GraphFuzzerKnownIssue(reason: seamBuiltAgainReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [10, 38, 66, 94, 122, 150, 178, 206, 234, 262]),
 		// seamBuiltAgain/public/deferred
 		GraphFuzzerKnownIssue(reason: seamBuiltAgainReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [11, 39, 67, 95, 123, 151, 179, 207, 235, 263]),
-		// loopThroughInnerSeamBuilder/internal/plain
-		GraphFuzzerKnownIssue(reason: loopThroughInnerSeamBuilderReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [12, 40, 68, 96, 124, 152, 180, 208, 236, 264]),
-		// loopThroughInnerSeamBuilder/internal/deferred
-		GraphFuzzerKnownIssue(reason: loopThroughInnerSeamBuilderReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [13, 41, 69, 97, 125, 153, 181, 209, 237, 265]),
-		// loopThroughInnerSeamBuilder/public/plain
-		GraphFuzzerKnownIssue(reason: loopThroughInnerSeamBuilderReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [14, 42, 70, 98, 126, 154, 182, 210, 238, 266]),
-		// loopThroughInnerSeamBuilder/public/deferred
-		GraphFuzzerKnownIssue(reason: loopThroughInnerSeamBuilderReason, signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [15, 43, 71, 99, 127, 155, 183, 211, 239, 267]),
-		// callersOwnValue/internal/plain
-		GraphFuzzerKnownIssue(reason: callersOwnValueReason, signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [16, 44, 72, 100, 128, 156, 184, 212, 240, 268]),
-		// callersOwnValue/internal/deferred
-		GraphFuzzerKnownIssue(reason: callersOwnValueReason, signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [17, 45, 73, 101, 129, 157, 185, 213, 241, 269]),
-		// callersOwnValue/public/plain
-		GraphFuzzerKnownIssue(reason: callersOwnValueReason, signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [18, 46, 74, 102, 130, 158, 186, 214, 242, 270]),
-		// callersOwnValue/public/deferred
-		GraphFuzzerKnownIssue(reason: callersOwnValueReason, signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [19, 47, 75, 103, 131, 159, 187, 215, 243, 271]),
-		// implementationReceivesWhatNothingProvides/internal/plain
-		GraphFuzzerKnownIssue(reason: passesUpPlaceItsTwinFillsFromParameterReason, signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [24, 52, 80, 108, 136, 164, 192, 220, 248, 276]),
-		// implementationReceivesWhatNothingProvides/internal/deferred
-		GraphFuzzerKnownIssue(reason: passesUpPlaceItsTwinFillsFromParameterReason, signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [25, 53, 81, 109, 137, 165, 193, 221, 249, 277]),
-		// implementationReceivesWhatNothingProvides/public/plain
-		GraphFuzzerKnownIssue(reason: passesUpPlaceItsTwinFillsFromParameterReason, signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [26, 54, 82, 110, 138, 166, 194, 222, 250, 278]),
-		// implementationReceivesWhatNothingProvides/public/deferred
-		GraphFuzzerKnownIssue(reason: passesUpPlaceItsTwinFillsFromParameterReason, signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [27, 55, 83, 111, 139, 167, 195, 223, 251, 279]),
 	]
 }
