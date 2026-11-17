@@ -3461,10 +3461,24 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        init(
 			            clock: (() -> Clock)? = nil
 			        ) {
-			            self.clock = clock
+			            __safeDI_storage = __safeDI_Storage(
+			                clock: clock
+			            )
 			        }
 
-			        let clock: (() -> Clock)?
+			        var clock: (() -> Clock)? { __safeDI_storage.clock }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                clock: (() -> Clock)?
+			            ) {
+			                self.clock = clock
+			            }
+
+			            let clock: (() -> Clock)?
+			        }
 			    }
 
 			    static func mock(

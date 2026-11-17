@@ -148,6 +148,7 @@ struct PassedCompileCheckCache: Sendable {
 				swiftLanguageMode: module.sources.compilerSettings.swiftLanguageMode,
 				upcomingFeatures: module.sources.compilerSettings.upcomingFeatures,
 				defaultIsolation: module.sources.compilerSettings.defaultIsolation,
+				memoryLimitInMegabytes: module.sources.compilerSettings.memoryLimitInMegabytes,
 				inputFiles: files(module.staged.inputFiles),
 				generatedFiles: files(module.staged.generatedFiles.sorted { $0.lastPathComponent < $1.lastPathComponent }),
 			))
@@ -405,6 +406,8 @@ private struct CompileCheckDescription: Encodable {
 		let upcomingFeatures: [String]
 		/// Encoded only when set, so that a check that sets none keeps the key it had before the setting existed.
 		let defaultIsolation: String?
+		/// Encoded only when set, as `defaultIsolation` is: a limit decides whether a compile that needs more memory passes.
+		let memoryLimitInMegabytes: Int?
 		let inputFiles: [File]
 		let generatedFiles: [File]
 	}

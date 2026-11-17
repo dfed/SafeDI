@@ -5677,12 +5677,29 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            analytics: (() -> Analytics)? = nil,
 		            profile: ((any UserService, Analytics) -> Profile)? = nil
 		        ) {
-		            self.analytics = analytics
-		            self.profile = profile
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                profile: profile
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
-		        let profile: ((any UserService, Analytics) -> Profile)?
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var profile: ((any UserService, Analytics) -> Profile)? { __safeDI_storage.profile }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                profile: ((any UserService, Analytics) -> Profile)?
+		            ) {
+		                self.analytics = analytics
+		                self.profile = profile
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let profile: ((any UserService, Analytics) -> Profile)?
+		        }
 		    }
 
 		    static func mock(

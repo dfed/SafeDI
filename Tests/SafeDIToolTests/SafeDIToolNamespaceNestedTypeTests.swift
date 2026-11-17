@@ -165,10 +165,24 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			        init(
 			            child: Feature.Child.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.child = child
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child
+			            )
 			        }
 
-			        let child: Feature.Child.SafeDIMockConfiguration
+			        var child: Feature.Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: Feature.Child.SafeDIMockConfiguration
+			            ) {
+			                self.child = child
+			            }
+
+			            let child: Feature.Child.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -192,13 +206,30 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			            mode: Feature.Mode = .fast,
 			            _ safeDIBuilder: ((Feature.Mode) -> Feature.Child)? = nil
 			        ) {
-			            self.mode = mode
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                mode: mode,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let mode: Feature.Mode
+			        var mode: Feature.Mode { __safeDI_storage.mode }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Feature.Mode) -> Feature.Child)?
+			        var safeDIBuilder: ((Feature.Mode) -> Feature.Child)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                mode: Feature.Mode,
+			                safeDIBuilder: ((Feature.Mode) -> Feature.Child)?
+			            ) {
+			                self.mode = mode
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let mode: Feature.Mode
+			            let safeDIBuilder: ((Feature.Mode) -> Feature.Child)?
+			        }
 			    }
 			}
 			#endif
@@ -284,10 +315,24 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			        init(
 			            childBuilder: ((Feature.Mode, Feature.Mode?) -> Feature.Child)? = nil
 			        ) {
-			            self.childBuilder = childBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                childBuilder: childBuilder
+			            )
 			        }
 
-			        let childBuilder: ((Feature.Mode, Feature.Mode?) -> Feature.Child)?
+			        var childBuilder: ((Feature.Mode, Feature.Mode?) -> Feature.Child)? { __safeDI_storage.childBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                childBuilder: ((Feature.Mode, Feature.Mode?) -> Feature.Child)?
+			            ) {
+			                self.childBuilder = childBuilder
+			            }
+
+			            let childBuilder: ((Feature.Mode, Feature.Mode?) -> Feature.Child)?
+			        }
 			    }
 
 			    static func mock(
@@ -377,10 +422,24 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			        init(
 			            child: ((Feature.Mode) -> Feature.Child)? = nil
 			        ) {
-			            self.child = child
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child
+			            )
 			        }
 
-			        let child: ((Feature.Mode) -> Feature.Child)?
+			        var child: ((Feature.Mode) -> Feature.Child)? { __safeDI_storage.child }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: ((Feature.Mode) -> Feature.Child)?
+			            ) {
+			                self.child = child
+			            }
+
+			            let child: ((Feature.Mode) -> Feature.Child)?
+			        }
 			    }
 
 			    static func mock(
@@ -401,13 +460,30 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			            child: ((Feature.Mode) -> Feature.Child)? = nil,
 			            _ safeDIBuilder: ((Feature.Mode, Feature.Child) -> Feature.Parent)? = nil
 			        ) {
-			            self.child = child
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let child: ((Feature.Mode) -> Feature.Child)?
+			        var child: ((Feature.Mode) -> Feature.Child)? { __safeDI_storage.child }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Feature.Mode, Feature.Child) -> Feature.Parent)?
+			        var safeDIBuilder: ((Feature.Mode, Feature.Child) -> Feature.Parent)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: ((Feature.Mode) -> Feature.Child)?,
+			                safeDIBuilder: ((Feature.Mode, Feature.Child) -> Feature.Parent)?
+			            ) {
+			                self.child = child
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let child: ((Feature.Mode) -> Feature.Child)?
+			            let safeDIBuilder: ((Feature.Mode, Feature.Child) -> Feature.Parent)?
+			        }
 			    }
 			}
 			#endif
@@ -434,10 +510,24 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			        init(
 			            parentBuilder: Feature.Parent.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.parentBuilder = parentBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                parentBuilder: parentBuilder
+			            )
 			        }
 
-			        let parentBuilder: Feature.Parent.SafeDIMockConfiguration
+			        var parentBuilder: Feature.Parent.SafeDIMockConfiguration { __safeDI_storage.parentBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                parentBuilder: Feature.Parent.SafeDIMockConfiguration
+			            ) {
+			                self.parentBuilder = parentBuilder
+			            }
+
+			            let parentBuilder: Feature.Parent.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -526,10 +616,24 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			        init(
 			            childBuilder: Feature.Child.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.childBuilder = childBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                childBuilder: childBuilder
+			            )
 			        }
 
-			        let childBuilder: Feature.Child.SafeDIMockConfiguration
+			        var childBuilder: Feature.Child.SafeDIMockConfiguration { __safeDI_storage.childBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                childBuilder: Feature.Child.SafeDIMockConfiguration
+			            ) {
+			                self.childBuilder = childBuilder
+			            }
+
+			            let childBuilder: Feature.Child.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -555,13 +659,30 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			            style: Feature.Child.Style = .plain,
 			            _ safeDIBuilder: ((Feature.Child.Mode, Feature.Child.Style) -> Feature.Child)? = nil
 			        ) {
-			            self.style = style
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                style: style,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let style: Feature.Child.Style
+			        var style: Feature.Child.Style { __safeDI_storage.style }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Feature.Child.Mode, Feature.Child.Style) -> Feature.Child)?
+			        var safeDIBuilder: ((Feature.Child.Mode, Feature.Child.Style) -> Feature.Child)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                style: Feature.Child.Style,
+			                safeDIBuilder: ((Feature.Child.Mode, Feature.Child.Style) -> Feature.Child)?
+			            ) {
+			                self.style = style
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let style: Feature.Child.Style
+			            let safeDIBuilder: ((Feature.Child.Mode, Feature.Child.Style) -> Feature.Child)?
+			        }
 			    }
 			}
 			#endif
@@ -638,10 +759,24 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			        init(
 			            parent: Feature.Parent.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.parent = parent
+			            __safeDI_storage = __safeDI_Storage(
+			                parent: parent
+			            )
 			        }
 
-			        let parent: Feature.Parent.SafeDIMockConfiguration
+			        var parent: Feature.Parent.SafeDIMockConfiguration { __safeDI_storage.parent }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                parent: Feature.Parent.SafeDIMockConfiguration
+			            ) {
+			                self.parent = parent
+			            }
+
+			            let parent: Feature.Parent.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -666,13 +801,30 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			            service: (() -> Feature.AnyService)? = nil,
 			            _ safeDIBuilder: ((Feature.AnyService) -> Feature.Parent)? = nil
 			        ) {
-			            self.service = service
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                service: service,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let service: (() -> Feature.AnyService)?
+			        var service: (() -> Feature.AnyService)? { __safeDI_storage.service }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Feature.AnyService) -> Feature.Parent)?
+			        var safeDIBuilder: ((Feature.AnyService) -> Feature.Parent)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                service: (() -> Feature.AnyService)?,
+			                safeDIBuilder: ((Feature.AnyService) -> Feature.Parent)?
+			            ) {
+			                self.service = service
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let service: (() -> Feature.AnyService)?
+			            let safeDIBuilder: ((Feature.AnyService) -> Feature.Parent)?
+			        }
 			    }
 			}
 			#endif
@@ -840,13 +992,30 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			            other: Feature.Mode = .fast,
 			            _ safeDIBuilder: ((Feature.Mode, Feature.Mode) -> Feature.Child)? = nil
 			        ) {
-			            self.other = other
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                other: other,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let other: Feature.Mode
+			        var other: Feature.Mode { __safeDI_storage.other }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Feature.Mode, Feature.Mode) -> Feature.Child)?
+			        var safeDIBuilder: ((Feature.Mode, Feature.Mode) -> Feature.Child)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                other: Feature.Mode,
+			                safeDIBuilder: ((Feature.Mode, Feature.Mode) -> Feature.Child)?
+			            ) {
+			                self.other = other
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let other: Feature.Mode
+			            let safeDIBuilder: ((Feature.Mode, Feature.Mode) -> Feature.Child)?
+			        }
 			    }
 			}
 			#endif
@@ -872,10 +1041,24 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			        init(
 			            childBuilder: Feature.Child.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.childBuilder = childBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                childBuilder: childBuilder
+			            )
 			        }
 
-			        let childBuilder: Feature.Child.SafeDIMockConfiguration
+			        var childBuilder: Feature.Child.SafeDIMockConfiguration { __safeDI_storage.childBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                childBuilder: Feature.Child.SafeDIMockConfiguration
+			            ) {
+			                self.childBuilder = childBuilder
+			            }
+
+			            let childBuilder: Feature.Child.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -977,13 +1160,30 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			            style: Feature.Gadget.Style = .plain,
 			            _ safeDIBuilder: ((Mode, Feature.Gadget.Style) -> Feature.Gadget)? = nil
 			        ) {
-			            self.style = style
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                style: style,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let style: Feature.Gadget.Style
+			        var style: Feature.Gadget.Style { __safeDI_storage.style }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Mode, Feature.Gadget.Style) -> Feature.Gadget)?
+			        var safeDIBuilder: ((Mode, Feature.Gadget.Style) -> Feature.Gadget)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                style: Feature.Gadget.Style,
+			                safeDIBuilder: ((Mode, Feature.Gadget.Style) -> Feature.Gadget)?
+			            ) {
+			                self.style = style
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let style: Feature.Gadget.Style
+			            let safeDIBuilder: ((Mode, Feature.Gadget.Style) -> Feature.Gadget)?
+			        }
 			    }
 			}
 			#endif
@@ -1010,10 +1210,24 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			        init(
 			            gadget: Feature.Gadget.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.gadget = gadget
+			            __safeDI_storage = __safeDI_Storage(
+			                gadget: gadget
+			            )
 			        }
 
-			        let gadget: Feature.Gadget.SafeDIMockConfiguration
+			        var gadget: Feature.Gadget.SafeDIMockConfiguration { __safeDI_storage.gadget }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                gadget: Feature.Gadget.SafeDIMockConfiguration
+			            ) {
+			                self.gadget = gadget
+			            }
+
+			            let gadget: Feature.Gadget.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1037,13 +1251,30 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			            gadget: Feature.Gadget.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((Mode, Feature.Gadget) -> Parent)? = nil
 			        ) {
-			            self.gadget = gadget
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                gadget: gadget,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let gadget: Feature.Gadget.SafeDIMockConfiguration
+			        var gadget: Feature.Gadget.SafeDIMockConfiguration { __safeDI_storage.gadget }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Mode, Feature.Gadget) -> Parent)?
+			        var safeDIBuilder: ((Mode, Feature.Gadget) -> Parent)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                gadget: Feature.Gadget.SafeDIMockConfiguration,
+			                safeDIBuilder: ((Mode, Feature.Gadget) -> Parent)?
+			            ) {
+			                self.gadget = gadget
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let gadget: Feature.Gadget.SafeDIMockConfiguration
+			            let safeDIBuilder: ((Mode, Feature.Gadget) -> Parent)?
+			        }
 			    }
 			}
 			#endif
@@ -1055,10 +1286,24 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			        init(
 			            parentBuilder: Parent.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.parentBuilder = parentBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                parentBuilder: parentBuilder
+			            )
 			        }
 
-			        let parentBuilder: Parent.SafeDIMockConfiguration
+			        var parentBuilder: Parent.SafeDIMockConfiguration { __safeDI_storage.parentBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                parentBuilder: Parent.SafeDIMockConfiguration
+			            ) {
+			                self.parentBuilder = parentBuilder
+			            }
+
+			            let parentBuilder: Parent.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1417,12 +1662,29 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			            service: (() -> Feature.ServiceProtocol)? = nil,
 			            consumer: ((Feature.ServiceProtocol) -> Feature.Consumer)? = nil
 			        ) {
-			            self.service = service
-			            self.consumer = consumer
+			            __safeDI_storage = __safeDI_Storage(
+			                service: service,
+			                consumer: consumer
+			            )
 			        }
 
-			        let service: (() -> Feature.ServiceProtocol)?
-			        let consumer: ((Feature.ServiceProtocol) -> Feature.Consumer)?
+			        var service: (() -> Feature.ServiceProtocol)? { __safeDI_storage.service }
+			        var consumer: ((Feature.ServiceProtocol) -> Feature.Consumer)? { __safeDI_storage.consumer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                service: (() -> Feature.ServiceProtocol)?,
+			                consumer: ((Feature.ServiceProtocol) -> Feature.Consumer)?
+			            ) {
+			                self.service = service
+			                self.consumer = consumer
+			            }
+
+			            let service: (() -> Feature.ServiceProtocol)?
+			            let consumer: ((Feature.ServiceProtocol) -> Feature.Consumer)?
+			        }
 			    }
 
 			    static func mock(

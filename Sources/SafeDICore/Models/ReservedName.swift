@@ -116,6 +116,13 @@ public enum ReservedName: Hashable, Sendable {
 	/// member can be named `builder`.
 	static let noScopeParameterName = "\(builderFunctionNamePrefix)builder"
 
+	/// The name of the final class each generated configuration (`SafeDIOverrides`, `SafeDIMockConfiguration`, a public
+	/// mock's module-level configuration) keeps its fields in, so that a copy of the configuration is one reference.
+	static let configurationStorageTypeName = "\(builderFunctionNamePrefix)Storage"
+
+	/// The name of the property through which a generated configuration holds its `configurationStorageTypeName`.
+	static let configurationStoragePropertyName = "\(builderFunctionNamePrefix)storage"
+
 	/// The names of the types generated code constructs by name: the wrapper of each kind of property that is not
 	/// a constant, which generated code builds with its builder function.
 	static let constructedTypeNames = Set(Property.PropertyType.allCases.compactMap(\.wrapperTypeName))

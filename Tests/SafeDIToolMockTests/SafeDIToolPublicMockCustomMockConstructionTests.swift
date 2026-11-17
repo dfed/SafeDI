@@ -70,12 +70,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			            t3: (() -> T3)? = nil,
 			            analytics: (() -> Analytics)? = nil
 			        ) {
-			            self.t3 = t3
-			            self.analytics = analytics
+			            __safeDI_storage = __safeDI_Storage(
+			                t3: t3,
+			                analytics: analytics
+			            )
 			        }
 
-			        public let t3: (() -> T3)?
-			        public let analytics: (() -> Analytics)?
+			        public var t3: (() -> T3)? { __safeDI_storage.t3 }
+			        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                t3: (() -> T3)?,
+			                analytics: (() -> Analytics)?
+			            ) {
+			                self.t3 = t3
+			                self.analytics = analytics
+			            }
+
+			            let t3: (() -> T3)?
+			            let analytics: (() -> Analytics)?
+			        }
 			    }
 
 			    public static func mock(
@@ -112,12 +129,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			            analytics: (() -> Analytics)? = nil,
 			            anyT0: __safeDI_Other_T0_MockConfiguration = .init()
 			        ) {
-			            self.analytics = analytics
-			            self.anyT0 = anyT0
+			            __safeDI_storage = __safeDI_Storage(
+			                analytics: analytics,
+			                anyT0: anyT0
+			            )
 			        }
 
-			        public let analytics: (() -> Analytics)?
-			        public let anyT0: __safeDI_Other_T0_MockConfiguration
+			        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+			        public var anyT0: __safeDI_Other_T0_MockConfiguration { __safeDI_storage.anyT0 }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                analytics: (() -> Analytics)?,
+			                anyT0: __safeDI_Other_T0_MockConfiguration
+			            ) {
+			                self.analytics = analytics
+			                self.anyT0 = anyT0
+			            }
+
+			            let analytics: (() -> Analytics)?
+			            let anyT0: __safeDI_Other_T0_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -149,13 +183,30 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			        t3: (() -> T3)? = nil,
 			        _ safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)? = nil
 			    ) {
-			        self.t3 = t3
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            t3: t3,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let t3: (() -> T3)?
+			    public var t3: (() -> T3)? { __safeDI_storage.t3 }
 			    /// Overrides how `T0` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+			    public var safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            t3: (() -> T3)?,
+			            safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+			        ) {
+			            self.t3 = t3
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let t3: (() -> T3)?
+			        let safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+			    }
 			}
 
 			extension T0 {
@@ -181,12 +232,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 				            t3: (() -> T3)? = nil,
 				            analytics: (() -> Analytics)? = nil
 				        ) {
-				            self.t3 = t3
-				            self.analytics = analytics
+				            __safeDI_storage = __safeDI_Storage(
+				                t3: t3,
+				                analytics: analytics
+				            )
 				        }
 
-				        public let t3: (() -> T3)?
-				        public let analytics: (() -> Analytics)?
+				        public var t3: (() -> T3)? { __safeDI_storage.t3 }
+				        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                t3: (() -> T3)?,
+				                analytics: (() -> Analytics)?
+				            ) {
+				                self.t3 = t3
+				                self.analytics = analytics
+				            }
+
+				            let t3: (() -> T3)?
+				            let analytics: (() -> Analytics)?
+				        }
 				    }
 
 				    public static func mock(
@@ -232,12 +300,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 				            analytics: (() -> Analytics)? = nil,
 				            anyT0: __safeDI_Other_T0_MockConfiguration = .init()
 				        ) {
-				            self.analytics = analytics
-				            self.anyT0 = anyT0
+				            __safeDI_storage = __safeDI_Storage(
+				                analytics: analytics,
+				                anyT0: anyT0
+				            )
 				        }
 
-				        public let analytics: (() -> Analytics)?
-				        public let anyT0: __safeDI_Other_T0_MockConfiguration
+				        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+				        public var anyT0: __safeDI_Other_T0_MockConfiguration { __safeDI_storage.anyT0 }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                analytics: (() -> Analytics)?,
+				                anyT0: __safeDI_Other_T0_MockConfiguration
+				            ) {
+				                self.analytics = analytics
+				                self.anyT0 = anyT0
+				            }
+
+				            let analytics: (() -> Analytics)?
+				            let anyT0: __safeDI_Other_T0_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -277,13 +362,30 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 				        t3: (() -> T3)? = nil,
 				        _ safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)? = nil
 				    ) {
-				        self.t3 = t3
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            t3: t3,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
-				    public let t3: (() -> T3)?
+				    public var t3: (() -> T3)? { __safeDI_storage.t3 }
 				    /// Overrides how `T0` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+				    public var safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            t3: (() -> T3)?,
+				            safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+				        ) {
+				            self.t3 = t3
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let t3: (() -> T3)?
+				        let safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+				    }
 				}
 
 				extension T0 {
@@ -337,12 +439,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			            t3: (() -> T3)? = nil,
 			            analytics: (() -> Analytics)? = nil
 			        ) {
-			            self.t3 = t3
-			            self.analytics = analytics
+			            __safeDI_storage = __safeDI_Storage(
+			                t3: t3,
+			                analytics: analytics
+			            )
 			        }
 
-			        public let t3: (() -> T3)?
-			        public let analytics: (() -> Analytics)?
+			        public var t3: (() -> T3)? { __safeDI_storage.t3 }
+			        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                t3: (() -> T3)?,
+			                analytics: (() -> Analytics)?
+			            ) {
+			                self.t3 = t3
+			                self.analytics = analytics
+			            }
+
+			            let t3: (() -> T3)?
+			            let analytics: (() -> Analytics)?
+			        }
 			    }
 
 			    public static func mock(
@@ -376,12 +495,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			            analytics: (() -> Analytics)? = nil,
 			            anyT0: __safeDI_T0_MockConfiguration = .init()
 			        ) {
-			            self.analytics = analytics
-			            self.anyT0 = anyT0
+			            __safeDI_storage = __safeDI_Storage(
+			                analytics: analytics,
+			                anyT0: anyT0
+			            )
 			        }
 
-			        public let analytics: (() -> Analytics)?
-			        public let anyT0: __safeDI_T0_MockConfiguration
+			        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+			        public var anyT0: __safeDI_T0_MockConfiguration { __safeDI_storage.anyT0 }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                analytics: (() -> Analytics)?,
+			                anyT0: __safeDI_T0_MockConfiguration
+			            ) {
+			                self.analytics = analytics
+			                self.anyT0 = anyT0
+			            }
+
+			            let analytics: (() -> Analytics)?
+			            let anyT0: __safeDI_T0_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -418,13 +554,30 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			        t3: (() -> T3)? = nil,
 			        _ safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)? = nil
 			    ) {
-			        self.t3 = t3
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            t3: t3,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let t3: (() -> T3)?
+			    public var t3: (() -> T3)? { __safeDI_storage.t3 }
 			    /// Overrides how `T0` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+			    public var safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            t3: (() -> T3)?,
+			            safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+			        ) {
+			            self.t3 = t3
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let t3: (() -> T3)?
+			        let safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+			    }
 			}
 
 			extension T0 {
@@ -476,12 +629,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		            t3: (() -> T3)? = nil,
 		            analytics: (() -> Analytics)? = nil
 		        ) {
-		            self.t3 = t3
-		            self.analytics = analytics
+		            __safeDI_storage = __safeDI_Storage(
+		                t3: t3,
+		                analytics: analytics
+		            )
 		        }
 
-		        public let t3: (() -> T3)?
-		        public let analytics: (() -> Analytics)?
+		        public var t3: (() -> T3)? { __safeDI_storage.t3 }
+		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                t3: (() -> T3)?,
+		                analytics: (() -> Analytics)?
+		            ) {
+		                self.t3 = t3
+		                self.analytics = analytics
+		            }
+
+		            let t3: (() -> T3)?
+		            let analytics: (() -> Analytics)?
+		        }
 		    }
 
 		    public static func mock(
@@ -518,12 +688,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		            analytics: (() -> Analytics)? = nil,
 		            anyT0Builder: __safeDI_Other_T0_MockConfiguration = .init()
 		        ) {
-		            self.analytics = analytics
-		            self.anyT0Builder = anyT0Builder
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                anyT0Builder: anyT0Builder
+		            )
 		        }
 
-		        public let analytics: (() -> Analytics)?
-		        public let anyT0Builder: __safeDI_Other_T0_MockConfiguration
+		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        public var anyT0Builder: __safeDI_Other_T0_MockConfiguration { __safeDI_storage.anyT0Builder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                anyT0Builder: __safeDI_Other_T0_MockConfiguration
+		            ) {
+		                self.analytics = analytics
+		                self.anyT0Builder = anyT0Builder
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let anyT0Builder: __safeDI_Other_T0_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -555,13 +742,30 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		        t3: (() -> T3)? = nil,
 		        _ safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)? = nil
 		    ) {
-		        self.t3 = t3
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            t3: t3,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let t3: (() -> T3)?
+		    public var t3: (() -> T3)? { __safeDI_storage.t3 }
 		    /// Overrides how `T0` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+		    public var safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            t3: (() -> T3)?,
+		            safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+		        ) {
+		            self.t3 = t3
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let t3: (() -> T3)?
+		        let safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+		    }
 		}
 
 		extension T0 {
@@ -625,12 +829,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		            t3: (() -> T3)? = nil,
 		            analytics: (() -> Analytics)? = nil
 		        ) {
-		            self.t3 = t3
-		            self.analytics = analytics
+		            __safeDI_storage = __safeDI_Storage(
+		                t3: t3,
+		                analytics: analytics
+		            )
 		        }
 
-		        public let t3: (() -> T3)?
-		        public let analytics: (() -> Analytics)?
+		        public var t3: (() -> T3)? { __safeDI_storage.t3 }
+		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                t3: (() -> T3)?,
+		                analytics: (() -> Analytics)?
+		            ) {
+		                self.t3 = t3
+		                self.analytics = analytics
+		            }
+
+		            let t3: (() -> T3)?
+		            let analytics: (() -> Analytics)?
+		        }
 		    }
 
 		    public static func mock(
@@ -667,12 +888,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		            analytics: (() -> Analytics)? = nil,
 		            t0: __safeDI_Other_T0_MockConfiguration = .init()
 		        ) {
-		            self.analytics = analytics
-		            self.t0 = t0
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                t0: t0
+		            )
 		        }
 
-		        public let analytics: (() -> Analytics)?
-		        public let t0: __safeDI_Other_T0_MockConfiguration
+		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        public var t0: __safeDI_Other_T0_MockConfiguration { __safeDI_storage.t0 }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                t0: __safeDI_Other_T0_MockConfiguration
+		            ) {
+		                self.analytics = analytics
+		                self.t0 = t0
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let t0: __safeDI_Other_T0_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -705,12 +943,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		            analytics: (() -> Analytics)? = nil,
 		            t0: __safeDI_Other_T0_MockConfiguration = .init()
 		        ) {
-		            self.analytics = analytics
-		            self.t0 = t0
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                t0: t0
+		            )
 		        }
 
-		        public let analytics: (() -> Analytics)?
-		        public let t0: __safeDI_Other_T0_MockConfiguration
+		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        public var t0: __safeDI_Other_T0_MockConfiguration { __safeDI_storage.t0 }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                t0: __safeDI_Other_T0_MockConfiguration
+		            ) {
+		                self.analytics = analytics
+		                self.t0 = t0
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let t0: __safeDI_Other_T0_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -742,13 +997,30 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		        t3: (() -> T3)? = nil,
 		        _ safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)? = nil
 		    ) {
-		        self.t3 = t3
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            t3: t3,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let t3: (() -> T3)?
+		    public var t3: (() -> T3)? { __safeDI_storage.t3 }
 		    /// Overrides how `T0` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+		    public var safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            t3: (() -> T3)?,
+		            safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+		        ) {
+		            self.t3 = t3
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let t3: (() -> T3)?
+		        let safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+		    }
 		}
 
 		extension T0 {
@@ -799,12 +1071,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		            t3: (() -> T3)? = nil,
 		            analytics: (() -> Analytics)? = nil
 		        ) {
-		            self.t3 = t3
-		            self.analytics = analytics
+		            __safeDI_storage = __safeDI_Storage(
+		                t3: t3,
+		                analytics: analytics
+		            )
 		        }
 
-		        public let t3: (() -> T3)?
-		        public let analytics: (() -> Analytics)?
+		        public var t3: (() -> T3)? { __safeDI_storage.t3 }
+		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                t3: (() -> T3)?,
+		                analytics: (() -> Analytics)?
+		            ) {
+		                self.t3 = t3
+		                self.analytics = analytics
+		            }
+
+		            let t3: (() -> T3)?
+		            let analytics: (() -> Analytics)?
+		        }
 		    }
 
 		    public static func mock(
@@ -841,12 +1130,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		            analytics: (() -> Analytics)? = nil,
 		            anyT0: T0.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.analytics = analytics
-		            self.anyT0 = anyT0
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                anyT0: anyT0
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
-		        let anyT0: T0.SafeDIMockConfiguration
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var anyT0: T0.SafeDIMockConfiguration { __safeDI_storage.anyT0 }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                anyT0: T0.SafeDIMockConfiguration
+		            ) {
+		                self.analytics = analytics
+		                self.anyT0 = anyT0
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let anyT0: T0.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -874,13 +1180,30 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		            t3: (() -> T3)? = nil,
 		            _ safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)? = nil
 		        ) {
-		            self.t3 = t3
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                t3: t3,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let t3: (() -> T3)?
+		        var t3: (() -> T3)? { __safeDI_storage.t3 }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+		        var safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                t3: (() -> T3)?,
+		                safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+		            ) {
+		                self.t3 = t3
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let t3: (() -> T3)?
+		            let safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+		        }
 		    }
 		}
 		#endif
@@ -948,12 +1271,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		            t3: (() -> T3)? = nil,
 		            analytics: (() -> Analytics)? = nil
 		        ) {
-		            self.t3 = t3
-		            self.analytics = analytics
+		            __safeDI_storage = __safeDI_Storage(
+		                t3: t3,
+		                analytics: analytics
+		            )
 		        }
 
-		        public let t3: (() -> T3)?
-		        public let analytics: (() -> Analytics)?
+		        public var t3: (() -> T3)? { __safeDI_storage.t3 }
+		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                t3: (() -> T3)?,
+		                analytics: (() -> Analytics)?
+		            ) {
+		                self.t3 = t3
+		                self.analytics = analytics
+		            }
+
+		            let t3: (() -> T3)?
+		            let analytics: (() -> Analytics)?
+		        }
 		    }
 
 		    public static func mock(
@@ -990,12 +1330,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		            analytics: (() -> Analytics)? = nil,
 		            anyT0: __safeDI_Other_T0_MockConfiguration = .init()
 		        ) {
-		            self.analytics = analytics
-		            self.anyT0 = anyT0
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                anyT0: anyT0
+		            )
 		        }
 
-		        public let analytics: (() -> Analytics)?
-		        public let anyT0: __safeDI_Other_T0_MockConfiguration
+		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        public var anyT0: __safeDI_Other_T0_MockConfiguration { __safeDI_storage.anyT0 }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                anyT0: __safeDI_Other_T0_MockConfiguration
+		            ) {
+		                self.analytics = analytics
+		                self.anyT0 = anyT0
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let anyT0: __safeDI_Other_T0_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -1027,13 +1384,30 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		        t3: (() -> T3)? = nil,
 		        _ safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)? = nil
 		    ) {
-		        self.t3 = t3
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            t3: t3,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let t3: (() -> T3)?
+		    public var t3: (() -> T3)? { __safeDI_storage.t3 }
 		    /// Overrides how `T0` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+		    public var safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            t3: (() -> T3)?,
+		            safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+		        ) {
+		            self.t3 = t3
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let t3: (() -> T3)?
+		        let safeDIBuilder: ((T3, LazilyInstantiated<Analytics>) -> T0)?
+		    }
 		}
 
 		extension T0 {
@@ -1112,12 +1486,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		            service: __safeDI_Other_ConcreteService_MockConfiguration = .init(),
 		            serviceBuilder: __safeDI_Other_ConcreteService_MockConfiguration = .init()
 		        ) {
-		            self.service = service
-		            self.serviceBuilder = serviceBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                serviceBuilder: serviceBuilder
+		            )
 		        }
 
-		        public let service: __safeDI_Other_ConcreteService_MockConfiguration
-		        public let serviceBuilder: __safeDI_Other_ConcreteService_MockConfiguration
+		        public var service: __safeDI_Other_ConcreteService_MockConfiguration { __safeDI_storage.service }
+		        public var serviceBuilder: __safeDI_Other_ConcreteService_MockConfiguration { __safeDI_storage.serviceBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: __safeDI_Other_ConcreteService_MockConfiguration,
+		                serviceBuilder: __safeDI_Other_ConcreteService_MockConfiguration
+		            ) {
+		                self.service = service
+		                self.serviceBuilder = serviceBuilder
+		            }
+
+		            let service: __safeDI_Other_ConcreteService_MockConfiguration
+		            let serviceBuilder: __safeDI_Other_ConcreteService_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -1147,14 +1538,31 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		        name: String? = nil,
 		        _ safeDIBuilder: ((String) -> ConcreteService)? = nil
 		    ) {
-		        self.name = name
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            name: name,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
 		    /// `nil` keeps the default of `ConcreteService`’s `name`.
-		    public let name: String?
+		    public var name: String? { __safeDI_storage.name }
 		    /// Overrides how `ConcreteService` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((String) -> ConcreteService)?
+		    public var safeDIBuilder: ((String) -> ConcreteService)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            name: String?,
+		            safeDIBuilder: ((String) -> ConcreteService)?
+		        ) {
+		            self.name = name
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let name: String?
+		        let safeDIBuilder: ((String) -> ConcreteService)?
+		    }
 		}
 
 		extension ConcreteService {
@@ -1257,12 +1665,29 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		            anyT0: __safeDI_Other_T0_MockConfiguration = .init(),
 		            analytics: (() -> Analytics)? = nil
 		        ) {
-		            self.anyT0 = anyT0
-		            self.analytics = analytics
+		            __safeDI_storage = __safeDI_Storage(
+		                anyT0: anyT0,
+		                analytics: analytics
+		            )
 		        }
 
-		        public let anyT0: __safeDI_Other_T0_MockConfiguration
-		        public let analytics: (() -> Analytics)?
+		        public var anyT0: __safeDI_Other_T0_MockConfiguration { __safeDI_storage.anyT0 }
+		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                anyT0: __safeDI_Other_T0_MockConfiguration,
+		                analytics: (() -> Analytics)?
+		            ) {
+		                self.anyT0 = anyT0
+		                self.analytics = analytics
+		            }
+
+		            let anyT0: __safeDI_Other_T0_MockConfiguration
+		            let analytics: (() -> Analytics)?
+		        }
 		    }
 
 		    public static func mock(
@@ -1293,14 +1718,31 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		        name: String? = nil,
 		        _ safeDIBuilder: ((String) -> T0)? = nil
 		    ) {
-		        self.name = name
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            name: name,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
 		    /// `nil` keeps the default of `T0`’s `name`.
-		    public let name: String?
+		    public var name: String? { __safeDI_storage.name }
 		    /// Overrides how `T0` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((String) -> T0)?
+		    public var safeDIBuilder: ((String) -> T0)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            name: String?,
+		            safeDIBuilder: ((String) -> T0)?
+		        ) {
+		            self.name = name
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let name: String?
+		        let safeDIBuilder: ((String) -> T0)?
+		    }
 		}
 
 		extension T0 {

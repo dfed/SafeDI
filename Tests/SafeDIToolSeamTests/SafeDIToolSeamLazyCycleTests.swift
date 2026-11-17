@@ -1097,10 +1097,24 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        init(
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1135,11 +1149,25 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        init(
 		            _ safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)? = nil
 		        ) {
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		        var safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		        }
 		    }
 		}
 
@@ -1151,15 +1179,35 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            midBuilder: Mid.SafeDIMockConfiguration = .init(),
 		            _ safeDIBuilder: ((Service, Instantiator<Mid>) -> A)? = nil
 		        ) {
-		            self.service = service
-		            self.midBuilder = midBuilder
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                midBuilder: midBuilder,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let service: Service.SafeDIOverrides
-		        let midBuilder: Mid.SafeDIMockConfiguration
+		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
+		        var midBuilder: Mid.SafeDIMockConfiguration { __safeDI_storage.midBuilder }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        var safeDIBuilder: ((Service, Instantiator<Mid>) -> A)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: Service.SafeDIOverrides,
+		                midBuilder: Mid.SafeDIMockConfiguration,
+		                safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		            ) {
+		                self.service = service
+		                self.midBuilder = midBuilder
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let service: Service.SafeDIOverrides
+		            let midBuilder: Mid.SafeDIMockConfiguration
+		            let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        }
 		    }
 		}
 		#endif
@@ -1191,10 +1239,24 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        init(
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1229,11 +1291,25 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        init(
 		            _ safeDIBuilder: ((Instantiator<Filter>, Instantiator<A>) -> Mid)? = nil
 		        ) {
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<Filter>, Instantiator<A>) -> Mid)?
+		        var safeDIBuilder: ((Instantiator<Filter>, Instantiator<A>) -> Mid)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                safeDIBuilder: ((Instantiator<Filter>, Instantiator<A>) -> Mid)?
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let safeDIBuilder: ((Instantiator<Filter>, Instantiator<A>) -> Mid)?
+		        }
 		    }
 		}
 
@@ -1245,15 +1321,35 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            midBuilder: Mid.SafeDIMockConfiguration = .init(),
 		            _ safeDIBuilder: ((Service, Instantiator<Mid>) -> A)? = nil
 		        ) {
-		            self.service = service
-		            self.midBuilder = midBuilder
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                midBuilder: midBuilder,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let service: Service.SafeDIOverrides
-		        let midBuilder: Mid.SafeDIMockConfiguration
+		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
+		        var midBuilder: Mid.SafeDIMockConfiguration { __safeDI_storage.midBuilder }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        var safeDIBuilder: ((Service, Instantiator<Mid>) -> A)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: Service.SafeDIOverrides,
+		                midBuilder: Mid.SafeDIMockConfiguration,
+		                safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		            ) {
+		                self.service = service
+		                self.midBuilder = midBuilder
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let service: Service.SafeDIOverrides
+		            let midBuilder: Mid.SafeDIMockConfiguration
+		            let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        }
 		    }
 		}
 		#endif
@@ -1295,10 +1391,24 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        init(
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1335,11 +1445,25 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        init(
 		            _ safeDIBuilder: ((Instantiator<A>) -> AppFilter)? = nil
 		        ) {
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<A>) -> AppFilter)?
+		        var safeDIBuilder: ((Instantiator<A>) -> AppFilter)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                safeDIBuilder: ((Instantiator<A>) -> AppFilter)?
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let safeDIBuilder: ((Instantiator<A>) -> AppFilter)?
+		        }
 		    }
 		}
 
@@ -1350,13 +1474,30 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            filter: AppFilter.SafeDIMockConfiguration = .init(),
 		            _ safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)? = nil
 		        ) {
-		            self.filter = filter
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let filter: AppFilter.SafeDIMockConfiguration
+		        var filter: AppFilter.SafeDIMockConfiguration { __safeDI_storage.filter }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)?
+		        var safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: AppFilter.SafeDIMockConfiguration,
+		                safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)?
+		            ) {
+		                self.filter = filter
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let filter: AppFilter.SafeDIMockConfiguration
+		            let safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)?
+		        }
 		    }
 		}
 
@@ -1368,15 +1509,35 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            midBuilder: Mid.SafeDIMockConfiguration = .init(),
 		            _ safeDIBuilder: ((Service, Instantiator<Mid>) -> A)? = nil
 		        ) {
-		            self.service = service
-		            self.midBuilder = midBuilder
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                midBuilder: midBuilder,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let service: Service.SafeDIOverrides
-		        let midBuilder: Mid.SafeDIMockConfiguration
+		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
+		        var midBuilder: Mid.SafeDIMockConfiguration { __safeDI_storage.midBuilder }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        var safeDIBuilder: ((Service, Instantiator<Mid>) -> A)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: Service.SafeDIOverrides,
+		                midBuilder: Mid.SafeDIMockConfiguration,
+		                safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		            ) {
+		                self.service = service
+		                self.midBuilder = midBuilder
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let service: Service.SafeDIOverrides
+		            let midBuilder: Mid.SafeDIMockConfiguration
+		            let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        }
 		    }
 		}
 		#endif
@@ -1426,10 +1587,24 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        public init(
 		            aBuilder: __safeDI_App_A_MockConfiguration = .init()
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        public let aBuilder: __safeDI_App_A_MockConfiguration
+		        public var aBuilder: __safeDI_App_A_MockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: __safeDI_App_A_MockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: __safeDI_App_A_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -1469,11 +1644,25 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    public init(
 		        _ safeDIBuilder: ((Instantiator<A>) -> AppFilter)? = nil
 		    ) {
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
 		    /// Overrides how `AppFilter` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Instantiator<A>) -> AppFilter)?
+		    public var safeDIBuilder: ((Instantiator<A>) -> AppFilter)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            safeDIBuilder: ((Instantiator<A>) -> AppFilter)?
+		        ) {
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let safeDIBuilder: ((Instantiator<A>) -> AppFilter)?
+		    }
 		}
 
 		extension AppFilter {
@@ -1487,21 +1676,40 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    public init(
 		        filter: __safeDI_App_AppFilter_MockConfiguration = .init()
 		    ) {
-		        self.filter = filter
-		        self.safeDIBuilder = nil
+		        __safeDI_storage = __safeDI_Storage(
+		            filter: filter,
+		            safeDIBuilder: nil
+		        )
 		    }
 
 		    init(
 		        filter: __safeDI_App_AppFilter_MockConfiguration = .init(),
 		        _ safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)? = nil
 		    ) {
-		        self.filter = filter
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            filter: filter,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let filter: __safeDI_App_AppFilter_MockConfiguration
+		    public var filter: __safeDI_App_AppFilter_MockConfiguration { __safeDI_storage.filter }
 		    /// Overrides how `Mid` is constructed. Parameters match the type’s initializer or custom mock method.
-		    let safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)?
+		    var safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            filter: __safeDI_App_AppFilter_MockConfiguration,
+		            safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)?
+		        ) {
+		            self.filter = filter
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let filter: __safeDI_App_AppFilter_MockConfiguration
+		        let safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)?
+		    }
 		}
 
 		extension Mid {
@@ -1517,15 +1725,35 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        midBuilder: __safeDI_App_Mid_MockConfiguration = .init(),
 		        _ safeDIBuilder: ((Service, Instantiator<Mid>) -> A)? = nil
 		    ) {
-		        self.service = service
-		        self.midBuilder = midBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            service: service,
+		            midBuilder: midBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let service: Service.SafeDIOverrides
-		    public let midBuilder: __safeDI_App_Mid_MockConfiguration
+		    public var service: Service.SafeDIOverrides { __safeDI_storage.service }
+		    public var midBuilder: __safeDI_App_Mid_MockConfiguration { __safeDI_storage.midBuilder }
 		    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		    public var safeDIBuilder: ((Service, Instantiator<Mid>) -> A)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            service: Service.SafeDIOverrides,
+		            midBuilder: __safeDI_App_Mid_MockConfiguration,
+		            safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        ) {
+		            self.service = service
+		            self.midBuilder = midBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let service: Service.SafeDIOverrides
+		        let midBuilder: __safeDI_App_Mid_MockConfiguration
+		        let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		    }
 		}
 
 		extension A {
@@ -1586,10 +1814,24 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        init(
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1624,11 +1866,25 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        init(
 		            _ safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)? = nil
 		        ) {
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		        var safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		        }
 		    }
 		}
 
@@ -1640,15 +1896,35 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            midBuilder: Mid.SafeDIMockConfiguration = .init(),
 		            _ safeDIBuilder: ((Service, Instantiator<Mid>) -> A)? = nil
 		        ) {
-		            self.service = service
-		            self.midBuilder = midBuilder
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                midBuilder: midBuilder,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let service: Service.SafeDIOverrides
-		        let midBuilder: Mid.SafeDIMockConfiguration
+		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
+		        var midBuilder: Mid.SafeDIMockConfiguration { __safeDI_storage.midBuilder }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        var safeDIBuilder: ((Service, Instantiator<Mid>) -> A)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: Service.SafeDIOverrides,
+		                midBuilder: Mid.SafeDIMockConfiguration,
+		                safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		            ) {
+		                self.service = service
+		                self.midBuilder = midBuilder
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let service: Service.SafeDIOverrides
+		            let midBuilder: Mid.SafeDIMockConfiguration
+		            let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        }
 		    }
 		}
 		#endif
@@ -1679,10 +1955,24 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        init(
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1718,11 +2008,25 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        init(
 		            _ safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)? = nil
 		        ) {
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		        var safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		        }
 		    }
 		}
 
@@ -1734,15 +2038,35 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            midBuilder: Mid.SafeDIMockConfiguration = .init(),
 		            _ safeDIBuilder: ((Service, Instantiator<Mid>) -> A)? = nil
 		        ) {
-		            self.service = service
-		            self.midBuilder = midBuilder
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                midBuilder: midBuilder,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let service: Service.SafeDIOverrides
-		        let midBuilder: Mid.SafeDIMockConfiguration
+		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
+		        var midBuilder: Mid.SafeDIMockConfiguration { __safeDI_storage.midBuilder }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        var safeDIBuilder: ((Service, Instantiator<Mid>) -> A)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: Service.SafeDIOverrides,
+		                midBuilder: Mid.SafeDIMockConfiguration,
+		                safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		            ) {
+		                self.service = service
+		                self.midBuilder = midBuilder
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let service: Service.SafeDIOverrides
+		            let midBuilder: Mid.SafeDIMockConfiguration
+		            let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        }
 		    }
 		}
 		#endif
@@ -1775,12 +2099,26 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            aBuilder: A.SafeDIMockConfiguration = .init(),
 		            filter: Filter? = nil
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		            self.filter = filter
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
 		        let filter: Filter?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1816,11 +2154,25 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        init(
 		            _ safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)? = nil
 		        ) {
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		        var safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		        }
 		    }
 		}
 
@@ -1832,15 +2184,35 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            midBuilder: Mid.SafeDIMockConfiguration = .init(),
 		            _ safeDIBuilder: ((Filter?, Service, Instantiator<Mid>) -> A)? = nil
 		        ) {
-		            self.service = service
-		            self.midBuilder = midBuilder
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                midBuilder: midBuilder,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let service: Service.SafeDIOverrides
-		        let midBuilder: Mid.SafeDIMockConfiguration
+		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
+		        var midBuilder: Mid.SafeDIMockConfiguration { __safeDI_storage.midBuilder }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Filter?, Service, Instantiator<Mid>) -> A)?
+		        var safeDIBuilder: ((Filter?, Service, Instantiator<Mid>) -> A)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: Service.SafeDIOverrides,
+		                midBuilder: Mid.SafeDIMockConfiguration,
+		                safeDIBuilder: ((Filter?, Service, Instantiator<Mid>) -> A)?
+		            ) {
+		                self.service = service
+		                self.midBuilder = midBuilder
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let service: Service.SafeDIOverrides
+		            let midBuilder: Mid.SafeDIMockConfiguration
+		            let safeDIBuilder: ((Filter?, Service, Instantiator<Mid>) -> A)?
+		        }
 		    }
 		}
 		#endif
@@ -1872,10 +2244,24 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        public init(
 		            aBuilder: __safeDI_App_A_MockConfiguration = .init()
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        public let aBuilder: __safeDI_App_A_MockConfiguration
+		        public var aBuilder: __safeDI_App_A_MockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: __safeDI_App_A_MockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: __safeDI_App_A_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -1914,11 +2300,25 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    public init(
 		        _ safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)? = nil
 		    ) {
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
 		    /// Overrides how `Mid` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		    public var safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		        ) {
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		    }
 		}
 
 		extension Mid {
@@ -1934,15 +2334,35 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        midBuilder: __safeDI_App_Mid_MockConfiguration = .init(),
 		        _ safeDIBuilder: ((Service, Instantiator<Mid>) -> A)? = nil
 		    ) {
-		        self.service = service
-		        self.midBuilder = midBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            service: service,
+		            midBuilder: midBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let service: Service.SafeDIOverrides
-		    public let midBuilder: __safeDI_App_Mid_MockConfiguration
+		    public var service: Service.SafeDIOverrides { __safeDI_storage.service }
+		    public var midBuilder: __safeDI_App_Mid_MockConfiguration { __safeDI_storage.midBuilder }
 		    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		    public var safeDIBuilder: ((Service, Instantiator<Mid>) -> A)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            service: Service.SafeDIOverrides,
+		            midBuilder: __safeDI_App_Mid_MockConfiguration,
+		            safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        ) {
+		            self.service = service
+		            self.midBuilder = midBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let service: Service.SafeDIOverrides
+		        let midBuilder: __safeDI_App_Mid_MockConfiguration
+		        let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		    }
 		}
 
 		extension A {

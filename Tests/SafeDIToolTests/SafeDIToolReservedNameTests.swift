@@ -93,12 +93,26 @@ struct SafeDIToolReservedNameTests: ~Copyable {
 		            home: ((LazilyInstantiated<Analytics>?) -> Home)? = nil,
 		            instance: Analytics? = nil
 		        ) {
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home
+		            )
 		            self.instance = instance
 		        }
 
-		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        var home: ((LazilyInstantiated<Analytics>?) -> Home)? { __safeDI_storage.home }
 		        let instance: Analytics?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		            ) {
+		                self.home = home
+		            }
+
+		            let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        }
 		    }
 
 		    static func mock(
@@ -181,14 +195,34 @@ struct SafeDIToolReservedNameTests: ~Copyable {
 		            mock: (() -> Leaf)? = nil,
 		            formBuilder: ((String) -> Form)? = nil
 		        ) {
-		            self.SafeDIOverrides = SafeDIOverrides
-		            self.mock = mock
-		            self.formBuilder = formBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                SafeDIOverrides: SafeDIOverrides,
+		                mock: mock,
+		                formBuilder: formBuilder
+		            )
 		        }
 
-		        let SafeDIOverrides: Child.SafeDIMockConfiguration
-		        let mock: (() -> Leaf)?
-		        let formBuilder: ((String) -> Form)?
+		        var SafeDIOverrides: Child.SafeDIMockConfiguration { __safeDI_storage.SafeDIOverrides }
+		        var mock: (() -> Leaf)? { __safeDI_storage.mock }
+		        var formBuilder: ((String) -> Form)? { __safeDI_storage.formBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                SafeDIOverrides: Child.SafeDIMockConfiguration,
+		                mock: (() -> Leaf)?,
+		                formBuilder: ((String) -> Form)?
+		            ) {
+		                self.SafeDIOverrides = SafeDIOverrides
+		                self.mock = mock
+		                self.formBuilder = formBuilder
+		            }
+
+		            let SafeDIOverrides: Child.SafeDIMockConfiguration
+		            let mock: (() -> Leaf)?
+		            let formBuilder: ((String) -> Form)?
+		        }
 		    }
 
 		    static func mock(
@@ -224,13 +258,30 @@ struct SafeDIToolReservedNameTests: ~Copyable {
 		            SafeDIMockConfiguration: (() -> Leaf)? = nil,
 		            _ safeDIBuilder: ((Leaf) -> Child)? = nil
 		        ) {
-		            self.SafeDIMockConfiguration = SafeDIMockConfiguration
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                SafeDIMockConfiguration: SafeDIMockConfiguration,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let SafeDIMockConfiguration: (() -> Leaf)?
+		        var SafeDIMockConfiguration: (() -> Leaf)? { __safeDI_storage.SafeDIMockConfiguration }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Leaf) -> Child)?
+		        var safeDIBuilder: ((Leaf) -> Child)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                SafeDIMockConfiguration: (() -> Leaf)?,
+		                safeDIBuilder: ((Leaf) -> Child)?
+		            ) {
+		                self.SafeDIMockConfiguration = SafeDIMockConfiguration
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let SafeDIMockConfiguration: (() -> Leaf)?
+		            let safeDIBuilder: ((Leaf) -> Child)?
+		        }
 		    }
 		}
 		#endif

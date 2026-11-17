@@ -80,10 +80,24 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			        init(
 			            player: Player.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.player = player
+			            __safeDI_storage = __safeDI_Storage(
+			                player: player
+			            )
 			        }
 
-			        let player: Player.SafeDIMockConfiguration
+			        var player: Player.SafeDIMockConfiguration { __safeDI_storage.player }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                player: Player.SafeDIMockConfiguration
+			            ) {
+			                self.player = player
+			            }
+
+			            let player: Player.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -114,13 +128,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            player: Player.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((Player, String) -> CachedItem)? = nil
 			        ) {
-			            self.player = player
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                player: player,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let player: Player.SafeDIMockConfiguration
+			        var player: Player.SafeDIMockConfiguration { __safeDI_storage.player }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Player, String) -> CachedItem)?
+			        var safeDIBuilder: ((Player, String) -> CachedItem)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                player: Player.SafeDIMockConfiguration,
+			                safeDIBuilder: ((Player, String) -> CachedItem)?
+			            ) {
+			                self.player = player
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let player: Player.SafeDIMockConfiguration
+			            let safeDIBuilder: ((Player, String) -> CachedItem)?
+			        }
 			    }
 			}
 			#endif
@@ -133,10 +164,24 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			        init(
 			            cachedItemBuilder: CachedItem.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.cachedItemBuilder = cachedItemBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                cachedItemBuilder: cachedItemBuilder
+			            )
 			        }
 
-			        let cachedItemBuilder: CachedItem.SafeDIMockConfiguration
+			        var cachedItemBuilder: CachedItem.SafeDIMockConfiguration { __safeDI_storage.cachedItemBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                cachedItemBuilder: CachedItem.SafeDIMockConfiguration
+			            ) {
+			                self.cachedItemBuilder = cachedItemBuilder
+			            }
+
+			            let cachedItemBuilder: CachedItem.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -167,11 +212,25 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			        init(
 			            _ safeDIBuilder: ((Instantiator<CachedItem>) -> Player)? = nil
 			        ) {
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Instantiator<CachedItem>) -> Player)?
+			        var safeDIBuilder: ((Instantiator<CachedItem>) -> Player)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                safeDIBuilder: ((Instantiator<CachedItem>) -> Player)?
+			            ) {
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let safeDIBuilder: ((Instantiator<CachedItem>) -> Player)?
+			        }
 			    }
 			}
 			#endif
@@ -1704,10 +1763,24 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			        init(
 			            x: X.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.x = x
+			            __safeDI_storage = __safeDI_Storage(
+			                x: x
+			            )
 			        }
 
-			        let x: X.SafeDIMockConfiguration
+			        var x: X.SafeDIMockConfiguration { __safeDI_storage.x }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                x: X.SafeDIMockConfiguration
+			            ) {
+			                self.x = x
+			            }
+
+			            let x: X.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1750,13 +1823,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            d: ((X?) -> D)? = nil,
 			            _ safeDIBuilder: ((X?, D) -> C)? = nil
 			        ) {
-			            self.d = d
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                d: d,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let d: ((X?) -> D)?
+			        var d: ((X?) -> D)? { __safeDI_storage.d }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((X?, D) -> C)?
+			        var safeDIBuilder: ((X?, D) -> C)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                d: ((X?) -> D)?,
+			                safeDIBuilder: ((X?, D) -> C)?
+			            ) {
+			                self.d = d
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let d: ((X?) -> D)?
+			            let safeDIBuilder: ((X?, D) -> C)?
+			        }
 			    }
 			}
 
@@ -1767,13 +1857,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            c: C.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((X?, C) -> B)? = nil
 			        ) {
-			            self.c = c
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                c: c,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let c: C.SafeDIMockConfiguration
+			        var c: C.SafeDIMockConfiguration { __safeDI_storage.c }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((X?, C) -> B)?
+			        var safeDIBuilder: ((X?, C) -> B)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                c: C.SafeDIMockConfiguration,
+			                safeDIBuilder: ((X?, C) -> B)?
+			            ) {
+			                self.c = c
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let c: C.SafeDIMockConfiguration
+			            let safeDIBuilder: ((X?, C) -> B)?
+			        }
 			    }
 			}
 
@@ -1784,13 +1891,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            b: B.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((B) -> X)? = nil
 			        ) {
-			            self.b = b
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                b: b,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let b: B.SafeDIMockConfiguration
+			        var b: B.SafeDIMockConfiguration { __safeDI_storage.b }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((B) -> X)?
+			        var safeDIBuilder: ((B) -> X)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                b: B.SafeDIMockConfiguration,
+			                safeDIBuilder: ((B) -> X)?
+			            ) {
+			                self.b = b
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let b: B.SafeDIMockConfiguration
+			            let safeDIBuilder: ((B) -> X)?
+			        }
 			    }
 			}
 			#endif
@@ -1860,10 +1984,24 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			        init(
 			            x: X.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.x = x
+			            __safeDI_storage = __safeDI_Storage(
+			                x: x
+			            )
 			        }
 
-			        let x: X.SafeDIMockConfiguration
+			        var x: X.SafeDIMockConfiguration { __safeDI_storage.x }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                x: X.SafeDIMockConfiguration
+			            ) {
+			                self.x = x
+			            }
+
+			            let x: X.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1906,13 +2044,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            d: ((X?) -> D)? = nil,
 			            _ safeDIBuilder: ((X?, D) -> C)? = nil
 			        ) {
-			            self.d = d
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                d: d,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let d: ((X?) -> D)?
+			        var d: ((X?) -> D)? { __safeDI_storage.d }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((X?, D) -> C)?
+			        var safeDIBuilder: ((X?, D) -> C)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                d: ((X?) -> D)?,
+			                safeDIBuilder: ((X?, D) -> C)?
+			            ) {
+			                self.d = d
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let d: ((X?) -> D)?
+			            let safeDIBuilder: ((X?, D) -> C)?
+			        }
 			    }
 			}
 
@@ -1923,13 +2078,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            c: C.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((X?, C) -> B)? = nil
 			        ) {
-			            self.c = c
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                c: c,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let c: C.SafeDIMockConfiguration
+			        var c: C.SafeDIMockConfiguration { __safeDI_storage.c }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((X?, C) -> B)?
+			        var safeDIBuilder: ((X?, C) -> B)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                c: C.SafeDIMockConfiguration,
+			                safeDIBuilder: ((X?, C) -> B)?
+			            ) {
+			                self.c = c
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let c: C.SafeDIMockConfiguration
+			            let safeDIBuilder: ((X?, C) -> B)?
+			        }
 			    }
 			}
 
@@ -1940,13 +2112,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            b: B.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((B) -> X)? = nil
 			        ) {
-			            self.b = b
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                b: b,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let b: B.SafeDIMockConfiguration
+			        var b: B.SafeDIMockConfiguration { __safeDI_storage.b }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((B) -> X)?
+			        var safeDIBuilder: ((B) -> X)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                b: B.SafeDIMockConfiguration,
+			                safeDIBuilder: ((B) -> X)?
+			            ) {
+			                self.b = b
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let b: B.SafeDIMockConfiguration
+			            let safeDIBuilder: ((B) -> X)?
+			        }
 			    }
 			}
 			#endif
@@ -2749,10 +2938,24 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		        init(
 		            bar: (() -> Bar)? = nil
 		        ) {
-		            self.bar = bar
+		            __safeDI_storage = __safeDI_Storage(
+		                bar: bar
+		            )
 		        }
 
-		        let bar: (() -> Bar)?
+		        var bar: (() -> Bar)? { __safeDI_storage.bar }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                bar: (() -> Bar)?
+		            ) {
+		                self.bar = bar
+		            }
+
+		            let bar: (() -> Bar)?
+		        }
 		    }
 
 		    static func mock(
@@ -3007,13 +3210,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            c: ((Instantiator<A>?) -> C)? = nil,
 			            _ safeDIBuilder: ((Instantiator<A>?, C) -> B)? = nil
 			        ) {
-			            self.c = c
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                c: c,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let c: ((Instantiator<A>?) -> C)?
+			        var c: ((Instantiator<A>?) -> C)? { __safeDI_storage.c }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Instantiator<A>?, C) -> B)?
+			        var safeDIBuilder: ((Instantiator<A>?, C) -> B)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                c: ((Instantiator<A>?) -> C)?,
+			                safeDIBuilder: ((Instantiator<A>?, C) -> B)?
+			            ) {
+			                self.c = c
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let c: ((Instantiator<A>?) -> C)?
+			            let safeDIBuilder: ((Instantiator<A>?, C) -> B)?
+			        }
 			    }
 			}
 
@@ -3024,13 +3244,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            b: B.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((B) -> A)? = nil
 			        ) {
-			            self.b = b
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                b: b,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let b: B.SafeDIMockConfiguration
+			        var b: B.SafeDIMockConfiguration { __safeDI_storage.b }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((B) -> A)?
+			        var safeDIBuilder: ((B) -> A)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                b: B.SafeDIMockConfiguration,
+			                safeDIBuilder: ((B) -> A)?
+			            ) {
+			                self.b = b
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let b: B.SafeDIMockConfiguration
+			            let safeDIBuilder: ((B) -> A)?
+			        }
 			    }
 			}
 			#endif
@@ -3048,10 +3285,24 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			        init(
 			            aBuilder: A.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.aBuilder = aBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                aBuilder: aBuilder
+			            )
 			        }
 
-			        let aBuilder: A.SafeDIMockConfiguration
+			        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                aBuilder: A.SafeDIMockConfiguration
+			            ) {
+			                self.aBuilder = aBuilder
+			            }
+
+			            let aBuilder: A.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -3145,13 +3396,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            c: ((Instantiator<A>?) -> C)? = nil,
 			            _ safeDIBuilder: ((Instantiator<A>?, C) -> B)? = nil
 			        ) {
-			            self.c = c
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                c: c,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let c: ((Instantiator<A>?) -> C)?
+			        var c: ((Instantiator<A>?) -> C)? { __safeDI_storage.c }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Instantiator<A>?, C) -> B)?
+			        var safeDIBuilder: ((Instantiator<A>?, C) -> B)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                c: ((Instantiator<A>?) -> C)?,
+			                safeDIBuilder: ((Instantiator<A>?, C) -> B)?
+			            ) {
+			                self.c = c
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let c: ((Instantiator<A>?) -> C)?
+			            let safeDIBuilder: ((Instantiator<A>?, C) -> B)?
+			        }
 			    }
 			}
 
@@ -3162,13 +3430,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            b: B.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((B) -> A)? = nil
 			        ) {
-			            self.b = b
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                b: b,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let b: B.SafeDIMockConfiguration
+			        var b: B.SafeDIMockConfiguration { __safeDI_storage.b }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((B) -> A)?
+			        var safeDIBuilder: ((B) -> A)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                b: B.SafeDIMockConfiguration,
+			                safeDIBuilder: ((B) -> A)?
+			            ) {
+			                self.b = b
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let b: B.SafeDIMockConfiguration
+			            let safeDIBuilder: ((B) -> A)?
+			        }
 			    }
 			}
 			#endif
@@ -3186,10 +3471,24 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			        init(
 			            aBuilder: A.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.aBuilder = aBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                aBuilder: aBuilder
+			            )
 			        }
 
-			        let aBuilder: A.SafeDIMockConfiguration
+			        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                aBuilder: A.SafeDIMockConfiguration
+			            ) {
+			                self.aBuilder = aBuilder
+			            }
+
+			            let aBuilder: A.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -3305,13 +3604,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            leaf: ((Tracker?) -> Leaf)? = nil,
 			            _ safeDIBuilder: ((Tracker?, Leaf) -> Inner)? = nil
 			        ) {
-			            self.leaf = leaf
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                leaf: leaf,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let leaf: ((Tracker?) -> Leaf)?
+			        var leaf: ((Tracker?) -> Leaf)? { __safeDI_storage.leaf }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			        var safeDIBuilder: ((Tracker?, Leaf) -> Inner)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leaf: ((Tracker?) -> Leaf)?,
+			                safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			            ) {
+			                self.leaf = leaf
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let leaf: ((Tracker?) -> Leaf)?
+			            let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			        }
 			    }
 			}
 
@@ -3322,13 +3638,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            inner: Inner.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((Inner) -> Tracker)? = nil
 			        ) {
-			            self.inner = inner
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                inner: inner,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let inner: Inner.SafeDIMockConfiguration
+			        var inner: Inner.SafeDIMockConfiguration { __safeDI_storage.inner }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Inner) -> Tracker)?
+			        var safeDIBuilder: ((Inner) -> Tracker)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                inner: Inner.SafeDIMockConfiguration,
+			                safeDIBuilder: ((Inner) -> Tracker)?
+			            ) {
+			                self.inner = inner
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let inner: Inner.SafeDIMockConfiguration
+			            let safeDIBuilder: ((Inner) -> Tracker)?
+			        }
 			    }
 			}
 			#endif
@@ -3348,14 +3681,34 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            home: ((LazilyInstantiated<Tracker>?) -> Home)? = nil,
 			            settings: ((Tracker?) -> Settings)? = nil
 			        ) {
-			            self.tracker = tracker
-			            self.home = home
-			            self.settings = settings
+			            __safeDI_storage = __safeDI_Storage(
+			                tracker: tracker,
+			                home: home,
+			                settings: settings
+			            )
 			        }
 
-			        let tracker: Tracker.SafeDIMockConfiguration
-			        let home: ((LazilyInstantiated<Tracker>?) -> Home)?
-			        let settings: ((Tracker?) -> Settings)?
+			        var tracker: Tracker.SafeDIMockConfiguration { __safeDI_storage.tracker }
+			        var home: ((LazilyInstantiated<Tracker>?) -> Home)? { __safeDI_storage.home }
+			        var settings: ((Tracker?) -> Settings)? { __safeDI_storage.settings }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                tracker: Tracker.SafeDIMockConfiguration,
+			                home: ((LazilyInstantiated<Tracker>?) -> Home)?,
+			                settings: ((Tracker?) -> Settings)?
+			            ) {
+			                self.tracker = tracker
+			                self.home = home
+			                self.settings = settings
+			            }
+
+			            let tracker: Tracker.SafeDIMockConfiguration
+			            let home: ((LazilyInstantiated<Tracker>?) -> Home)?
+			            let settings: ((Tracker?) -> Settings)?
+			        }
 			    }
 
 			    static func mock(
@@ -3472,13 +3825,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            leaf: ((Tracker?) -> Leaf)? = nil,
 			            _ safeDIBuilder: ((Tracker?, Leaf) -> Inner)? = nil
 			        ) {
-			            self.leaf = leaf
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                leaf: leaf,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let leaf: ((Tracker?) -> Leaf)?
+			        var leaf: ((Tracker?) -> Leaf)? { __safeDI_storage.leaf }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			        var safeDIBuilder: ((Tracker?, Leaf) -> Inner)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leaf: ((Tracker?) -> Leaf)?,
+			                safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			            ) {
+			                self.leaf = leaf
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let leaf: ((Tracker?) -> Leaf)?
+			            let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			        }
 			    }
 			}
 
@@ -3489,13 +3859,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            inner: Inner.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((Inner) -> Tracker)? = nil
 			        ) {
-			            self.inner = inner
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                inner: inner,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let inner: Inner.SafeDIMockConfiguration
+			        var inner: Inner.SafeDIMockConfiguration { __safeDI_storage.inner }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Inner) -> Tracker)?
+			        var safeDIBuilder: ((Inner) -> Tracker)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                inner: Inner.SafeDIMockConfiguration,
+			                safeDIBuilder: ((Inner) -> Tracker)?
+			            ) {
+			                self.inner = inner
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let inner: Inner.SafeDIMockConfiguration
+			            let safeDIBuilder: ((Inner) -> Tracker)?
+			        }
 			    }
 			}
 			#endif
@@ -3515,14 +3902,34 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            home: ((LazilyInstantiated<Tracker>?) -> Home)? = nil,
 			            settings: ((Tracker) -> Settings)? = nil
 			        ) {
-			            self.tracker = tracker
-			            self.home = home
-			            self.settings = settings
+			            __safeDI_storage = __safeDI_Storage(
+			                tracker: tracker,
+			                home: home,
+			                settings: settings
+			            )
 			        }
 
-			        let tracker: Tracker.SafeDIMockConfiguration
-			        let home: ((LazilyInstantiated<Tracker>?) -> Home)?
-			        let settings: ((Tracker) -> Settings)?
+			        var tracker: Tracker.SafeDIMockConfiguration { __safeDI_storage.tracker }
+			        var home: ((LazilyInstantiated<Tracker>?) -> Home)? { __safeDI_storage.home }
+			        var settings: ((Tracker) -> Settings)? { __safeDI_storage.settings }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                tracker: Tracker.SafeDIMockConfiguration,
+			                home: ((LazilyInstantiated<Tracker>?) -> Home)?,
+			                settings: ((Tracker) -> Settings)?
+			            ) {
+			                self.tracker = tracker
+			                self.home = home
+			                self.settings = settings
+			            }
+
+			            let tracker: Tracker.SafeDIMockConfiguration
+			            let home: ((LazilyInstantiated<Tracker>?) -> Home)?
+			            let settings: ((Tracker) -> Settings)?
+			        }
 			    }
 
 			    static func mock(
@@ -3628,13 +4035,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            leaf: ((Tracker?) -> Leaf)? = nil,
 			            _ safeDIBuilder: ((Tracker?, Leaf) -> Inner)? = nil
 			        ) {
-			            self.leaf = leaf
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                leaf: leaf,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let leaf: ((Tracker?) -> Leaf)?
+			        var leaf: ((Tracker?) -> Leaf)? { __safeDI_storage.leaf }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			        var safeDIBuilder: ((Tracker?, Leaf) -> Inner)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leaf: ((Tracker?) -> Leaf)?,
+			                safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			            ) {
+			                self.leaf = leaf
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let leaf: ((Tracker?) -> Leaf)?
+			            let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			        }
 			    }
 			}
 
@@ -3645,13 +4069,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            inner: Inner.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((Inner) -> Tracker)? = nil
 			        ) {
-			            self.inner = inner
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                inner: inner,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let inner: Inner.SafeDIMockConfiguration
+			        var inner: Inner.SafeDIMockConfiguration { __safeDI_storage.inner }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Inner) -> Tracker)?
+			        var safeDIBuilder: ((Inner) -> Tracker)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                inner: Inner.SafeDIMockConfiguration,
+			                safeDIBuilder: ((Inner) -> Tracker)?
+			            ) {
+			                self.inner = inner
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let inner: Inner.SafeDIMockConfiguration
+			            let safeDIBuilder: ((Inner) -> Tracker)?
+			        }
 			    }
 			}
 			#endif
@@ -3670,12 +4111,29 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            tracker: Tracker.SafeDIMockConfiguration = .init(),
 			            home: ((LazilyInstantiated<Tracker>) -> Home)? = nil
 			        ) {
-			            self.tracker = tracker
-			            self.home = home
+			            __safeDI_storage = __safeDI_Storage(
+			                tracker: tracker,
+			                home: home
+			            )
 			        }
 
-			        let tracker: Tracker.SafeDIMockConfiguration
-			        let home: ((LazilyInstantiated<Tracker>) -> Home)?
+			        var tracker: Tracker.SafeDIMockConfiguration { __safeDI_storage.tracker }
+			        var home: ((LazilyInstantiated<Tracker>) -> Home)? { __safeDI_storage.home }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                tracker: Tracker.SafeDIMockConfiguration,
+			                home: ((LazilyInstantiated<Tracker>) -> Home)?
+			            ) {
+			                self.tracker = tracker
+			                self.home = home
+			            }
+
+			            let tracker: Tracker.SafeDIMockConfiguration
+			            let home: ((LazilyInstantiated<Tracker>) -> Home)?
+			        }
 			    }
 
 			    static func mock(
@@ -3769,13 +4227,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            leaf: ((Tracker?) -> Leaf)? = nil,
 			            _ safeDIBuilder: ((Tracker?, Leaf) -> Inner)? = nil
 			        ) {
-			            self.leaf = leaf
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                leaf: leaf,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let leaf: ((Tracker?) -> Leaf)?
+			        var leaf: ((Tracker?) -> Leaf)? { __safeDI_storage.leaf }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			        var safeDIBuilder: ((Tracker?, Leaf) -> Inner)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leaf: ((Tracker?) -> Leaf)?,
+			                safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			            ) {
+			                self.leaf = leaf
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let leaf: ((Tracker?) -> Leaf)?
+			            let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			        }
 			    }
 			}
 
@@ -3786,13 +4261,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            inner: Inner.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((Inner) -> Tracker)? = nil
 			        ) {
-			            self.inner = inner
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                inner: inner,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let inner: Inner.SafeDIMockConfiguration
+			        var inner: Inner.SafeDIMockConfiguration { __safeDI_storage.inner }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Inner) -> Tracker)?
+			        var safeDIBuilder: ((Inner) -> Tracker)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                inner: Inner.SafeDIMockConfiguration,
+			                safeDIBuilder: ((Inner) -> Tracker)?
+			            ) {
+			                self.inner = inner
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let inner: Inner.SafeDIMockConfiguration
+			            let safeDIBuilder: ((Inner) -> Tracker)?
+			        }
 			    }
 			}
 			#endif
@@ -3810,10 +4302,24 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			        init(
 			            tracker: Tracker.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.tracker = tracker
+			            __safeDI_storage = __safeDI_Storage(
+			                tracker: tracker
+			            )
 			        }
 
-			        let tracker: Tracker.SafeDIMockConfiguration
+			        var tracker: Tracker.SafeDIMockConfiguration { __safeDI_storage.tracker }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                tracker: Tracker.SafeDIMockConfiguration
+			            ) {
+			                self.tracker = tracker
+			            }
+
+			            let tracker: Tracker.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -3938,13 +4444,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            leaf: ((Tracker?) -> Leaf)? = nil,
 			            _ safeDIBuilder: ((Tracker?, Leaf) -> Inner)? = nil
 			        ) {
-			            self.leaf = leaf
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                leaf: leaf,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let leaf: ((Tracker?) -> Leaf)?
+			        var leaf: ((Tracker?) -> Leaf)? { __safeDI_storage.leaf }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			        var safeDIBuilder: ((Tracker?, Leaf) -> Inner)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leaf: ((Tracker?) -> Leaf)?,
+			                safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			            ) {
+			                self.leaf = leaf
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let leaf: ((Tracker?) -> Leaf)?
+			            let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			        }
 			    }
 			}
 
@@ -3955,13 +4478,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            inner: Inner.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((Inner) -> Tracker)? = nil
 			        ) {
-			            self.inner = inner
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                inner: inner,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let inner: Inner.SafeDIMockConfiguration
+			        var inner: Inner.SafeDIMockConfiguration { __safeDI_storage.inner }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Inner) -> Tracker)?
+			        var safeDIBuilder: ((Inner) -> Tracker)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                inner: Inner.SafeDIMockConfiguration,
+			                safeDIBuilder: ((Inner) -> Tracker)?
+			            ) {
+			                self.inner = inner
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let inner: Inner.SafeDIMockConfiguration
+			            let safeDIBuilder: ((Inner) -> Tracker)?
+			        }
 			    }
 			}
 
@@ -3972,13 +4512,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            tracker: Tracker.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((LazilyInstantiated<Tracker>) -> A)? = nil
 			        ) {
-			            self.tracker = tracker
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                tracker: tracker,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let tracker: Tracker.SafeDIMockConfiguration
+			        var tracker: Tracker.SafeDIMockConfiguration { __safeDI_storage.tracker }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((LazilyInstantiated<Tracker>) -> A)?
+			        var safeDIBuilder: ((LazilyInstantiated<Tracker>) -> A)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                tracker: Tracker.SafeDIMockConfiguration,
+			                safeDIBuilder: ((LazilyInstantiated<Tracker>) -> A)?
+			            ) {
+			                self.tracker = tracker
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let tracker: Tracker.SafeDIMockConfiguration
+			            let safeDIBuilder: ((LazilyInstantiated<Tracker>) -> A)?
+			        }
 			    }
 			}
 			#endif
@@ -3999,16 +4556,36 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            other: ((Tracker?) -> Other)? = nil,
 			            tracker: Tracker? = nil
 			        ) {
-			            self.a = a
-			            self.home = home
-			            self.other = other
+			            __safeDI_storage = __safeDI_Storage(
+			                a: a,
+			                home: home,
+			                other: other
+			            )
 			            self.tracker = tracker
 			        }
 
-			        let a: A.SafeDIMockConfiguration
-			        let home: ((A) -> Home)?
-			        let other: ((Tracker?) -> Other)?
+			        var a: A.SafeDIMockConfiguration { __safeDI_storage.a }
+			        var home: ((A) -> Home)? { __safeDI_storage.home }
+			        var other: ((Tracker?) -> Other)? { __safeDI_storage.other }
 			        let tracker: Tracker?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                a: A.SafeDIMockConfiguration,
+			                home: ((A) -> Home)?,
+			                other: ((Tracker?) -> Other)?
+			            ) {
+			                self.a = a
+			                self.home = home
+			                self.other = other
+			            }
+
+			            let a: A.SafeDIMockConfiguration
+			            let home: ((A) -> Home)?
+			            let other: ((Tracker?) -> Other)?
+			        }
 			    }
 
 			    static func mock(
@@ -4139,13 +4716,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            leaf: ((Tracker?) -> Leaf)? = nil,
 			            _ safeDIBuilder: ((Tracker?, Leaf) -> Inner)? = nil
 			        ) {
-			            self.leaf = leaf
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                leaf: leaf,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let leaf: ((Tracker?) -> Leaf)?
+			        var leaf: ((Tracker?) -> Leaf)? { __safeDI_storage.leaf }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			        var safeDIBuilder: ((Tracker?, Leaf) -> Inner)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leaf: ((Tracker?) -> Leaf)?,
+			                safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			            ) {
+			                self.leaf = leaf
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let leaf: ((Tracker?) -> Leaf)?
+			            let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			        }
 			    }
 			}
 
@@ -4156,13 +4750,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            inner: Inner.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((Inner) -> Tracker)? = nil
 			        ) {
-			            self.inner = inner
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                inner: inner,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let inner: Inner.SafeDIMockConfiguration
+			        var inner: Inner.SafeDIMockConfiguration { __safeDI_storage.inner }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Inner) -> Tracker)?
+			        var safeDIBuilder: ((Inner) -> Tracker)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                inner: Inner.SafeDIMockConfiguration,
+			                safeDIBuilder: ((Inner) -> Tracker)?
+			            ) {
+			                self.inner = inner
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let inner: Inner.SafeDIMockConfiguration
+			            let safeDIBuilder: ((Inner) -> Tracker)?
+			        }
 			    }
 			}
 
@@ -4173,13 +4784,30 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            tracker: Tracker.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((Tracker) -> A)? = nil
 			        ) {
-			            self.tracker = tracker
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                tracker: tracker,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let tracker: Tracker.SafeDIMockConfiguration
+			        var tracker: Tracker.SafeDIMockConfiguration { __safeDI_storage.tracker }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Tracker) -> A)?
+			        var safeDIBuilder: ((Tracker) -> A)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                tracker: Tracker.SafeDIMockConfiguration,
+			                safeDIBuilder: ((Tracker) -> A)?
+			            ) {
+			                self.tracker = tracker
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let tracker: Tracker.SafeDIMockConfiguration
+			            let safeDIBuilder: ((Tracker) -> A)?
+			        }
 			    }
 			}
 			#endif
@@ -4200,16 +4828,36 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			            other: ((Tracker?) -> Other)? = nil,
 			            tracker: Tracker? = nil
 			        ) {
-			            self.a = a
-			            self.home = home
-			            self.other = other
+			            __safeDI_storage = __safeDI_Storage(
+			                a: a,
+			                home: home,
+			                other: other
+			            )
 			            self.tracker = tracker
 			        }
 
-			        let a: A.SafeDIMockConfiguration
-			        let home: ((A) -> Home)?
-			        let other: ((Tracker?) -> Other)?
+			        var a: A.SafeDIMockConfiguration { __safeDI_storage.a }
+			        var home: ((A) -> Home)? { __safeDI_storage.home }
+			        var other: ((Tracker?) -> Other)? { __safeDI_storage.other }
 			        let tracker: Tracker?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                a: A.SafeDIMockConfiguration,
+			                home: ((A) -> Home)?,
+			                other: ((Tracker?) -> Other)?
+			            ) {
+			                self.a = a
+			                self.home = home
+			                self.other = other
+			            }
+
+			            let a: A.SafeDIMockConfiguration
+			            let home: ((A) -> Home)?
+			            let other: ((Tracker?) -> Other)?
+			        }
 			    }
 
 			    static func mock(

@@ -84,12 +84,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			            user: (() -> User)? = nil,
 			            x: __safeDI_Feature_X_MockConfiguration = .init()
 			        ) {
-			            self.user = user
-			            self.x = x
+			            __safeDI_storage = __safeDI_Storage(
+			                user: user,
+			                x: x
+			            )
 			        }
 
-			        public let user: (() -> User)?
-			        public let x: __safeDI_Feature_X_MockConfiguration
+			        public var user: (() -> User)? { __safeDI_storage.user }
+			        public var x: __safeDI_Feature_X_MockConfiguration { __safeDI_storage.x }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                user: (() -> User)?,
+			                x: __safeDI_Feature_X_MockConfiguration
+			            ) {
+			                self.user = user
+			                self.x = x
+			            }
+
+			            let user: (() -> User)?
+			            let x: __safeDI_Feature_X_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -129,13 +146,30 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			        x: __safeDI_Feature_X_MockConfiguration = .init(),
 			        _ safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)? = nil
 			    ) {
-			        self.x = x
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            x: x,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let x: __safeDI_Feature_X_MockConfiguration
+			    public var x: __safeDI_Feature_X_MockConfiguration { __safeDI_storage.x }
 			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)?
+			    public var safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            x: __safeDI_Feature_X_MockConfiguration,
+			            safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)?
+			        ) {
+			            self.x = x
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let x: __safeDI_Feature_X_MockConfiguration
+			        let safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)?
+			    }
 			}
 
 			extension B {
@@ -149,11 +183,25 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			    public init(
 			        _ safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)? = nil
 			    ) {
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// Overrides how `X` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)?
+			    public var safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)?
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)?
+			    }
 			}
 
 			extension X {
@@ -181,12 +229,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		            user: (() -> User)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.user = user
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                hub: hub
+		            )
 		        }
 
-		        let user: (() -> User)?
-		        let hub: Hub.SafeDIOverrides
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.user = user
+		                self.hub = hub
+		            }
+
+		            let user: (() -> User)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -227,12 +292,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		            user: (() -> User)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.user = user
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                hub: hub
+		            )
 		        }
 
-		        let user: (() -> User)?
-		        let hub: Hub.SafeDIOverrides
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.user = user
+		                self.hub = hub
+		            }
+
+		            let user: (() -> User)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -310,12 +392,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			            user: (() -> User)? = nil,
 			            x: __safeDI_Feature_X_MockConfiguration = .init()
 			        ) {
-			            self.user = user
-			            self.x = x
+			            __safeDI_storage = __safeDI_Storage(
+			                user: user,
+			                x: x
+			            )
 			        }
 
-			        public let user: (() -> User)?
-			        public let x: __safeDI_Feature_X_MockConfiguration
+			        public var user: (() -> User)? { __safeDI_storage.user }
+			        public var x: __safeDI_Feature_X_MockConfiguration { __safeDI_storage.x }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                user: (() -> User)?,
+			                x: __safeDI_Feature_X_MockConfiguration
+			            ) {
+			                self.user = user
+			                self.x = x
+			            }
+
+			            let user: (() -> User)?
+			            let x: __safeDI_Feature_X_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -355,13 +454,30 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			        x: __safeDI_Feature_X_MockConfiguration = .init(),
 			        _ safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)? = nil
 			    ) {
-			        self.x = x
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            x: x,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let x: __safeDI_Feature_X_MockConfiguration
+			    public var x: __safeDI_Feature_X_MockConfiguration { __safeDI_storage.x }
 			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)?
+			    public var safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            x: __safeDI_Feature_X_MockConfiguration,
+			            safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)?
+			        ) {
+			            self.x = x
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let x: __safeDI_Feature_X_MockConfiguration
+			        let safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)?
+			    }
 			}
 
 			extension B {
@@ -375,11 +491,25 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			    public init(
 			        _ safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)? = nil
 			    ) {
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// Overrides how `X` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)?
+			    public var safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)?
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)?
+			    }
 			}
 
 			extension X {
@@ -407,12 +537,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		            user: (() -> User)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.user = user
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                hub: hub
+		            )
 		        }
 
-		        let user: (() -> User)?
-		        let hub: Hub.SafeDIOverrides
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.user = user
+		                self.hub = hub
+		            }
+
+		            let user: (() -> User)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -453,12 +600,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		            user: (() -> User)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.user = user
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                hub: hub
+		            )
 		        }
 
-		        let user: (() -> User)?
-		        let hub: Hub.SafeDIOverrides
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.user = user
+		                self.hub = hub
+		            }
+
+		            let user: (() -> User)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -531,12 +695,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			            user: (() -> User)? = nil,
 			            bBuilder: (@Sendable (any Api, Draft) -> B)? = nil
 			        ) {
-			            self.user = user
-			            self.bBuilder = bBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                user: user,
+			                bBuilder: bBuilder
+			            )
 			        }
 
-			        public let user: (() -> User)?
-			        public let bBuilder: (@Sendable (any Api, Draft) -> B)?
+			        public var user: (() -> User)? { __safeDI_storage.user }
+			        public var bBuilder: (@Sendable (any Api, Draft) -> B)? { __safeDI_storage.bBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                user: (() -> User)?,
+			                bBuilder: (@Sendable (any Api, Draft) -> B)?
+			            ) {
+			                self.user = user
+			                self.bBuilder = bBuilder
+			            }
+
+			            let user: (() -> User)?
+			            let bBuilder: (@Sendable (any Api, Draft) -> B)?
+			        }
 			    }
 
 			    public static func mock(
@@ -581,12 +762,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		            user: (() -> User)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.user = user
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                hub: hub
+		            )
 		        }
 
-		        let user: (() -> User)?
-		        let hub: Hub.SafeDIOverrides
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.user = user
+		                self.hub = hub
+		            }
+
+		            let user: (() -> User)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -648,12 +846,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			            user: (() -> User)? = nil,
 			            x: __safeDI_Feature_X_MockConfiguration = .init()
 			        ) {
-			            self.user = user
-			            self.x = x
+			            __safeDI_storage = __safeDI_Storage(
+			                user: user,
+			                x: x
+			            )
 			        }
 
-			        public let user: (() -> User)?
-			        public let x: __safeDI_Feature_X_MockConfiguration
+			        public var user: (() -> User)? { __safeDI_storage.user }
+			        public var x: __safeDI_Feature_X_MockConfiguration { __safeDI_storage.x }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                user: (() -> User)?,
+			                x: __safeDI_Feature_X_MockConfiguration
+			            ) {
+			                self.user = user
+			                self.x = x
+			            }
+
+			            let user: (() -> User)?
+			            let x: __safeDI_Feature_X_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -694,13 +909,30 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			        x: __safeDI_Feature_X_MockConfiguration = .init(),
 			        _ safeDIBuilder: ((any Api, X, Draft) -> B)? = nil
 			    ) {
-			        self.x = x
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            x: x,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let x: __safeDI_Feature_X_MockConfiguration
+			    public var x: __safeDI_Feature_X_MockConfiguration { __safeDI_storage.x }
 			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((any Api, X, Draft) -> B)?
+			    public var safeDIBuilder: ((any Api, X, Draft) -> B)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            x: __safeDI_Feature_X_MockConfiguration,
+			            safeDIBuilder: ((any Api, X, Draft) -> B)?
+			        ) {
+			            self.x = x
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let x: __safeDI_Feature_X_MockConfiguration
+			        let safeDIBuilder: ((any Api, X, Draft) -> B)?
+			    }
 			}
 
 			extension B {
@@ -714,11 +946,25 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			    public init(
 			        _ safeDIBuilder: ((Instantiator<B>) -> X)? = nil
 			    ) {
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// Overrides how `X` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((Instantiator<B>) -> X)?
+			    public var safeDIBuilder: ((Instantiator<B>) -> X)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            safeDIBuilder: ((Instantiator<B>) -> X)?
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let safeDIBuilder: ((Instantiator<B>) -> X)?
+			    }
 			}
 
 			extension X {
@@ -746,12 +992,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		            user: (() -> User)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.user = user
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                hub: hub
+		            )
 		        }
 
-		        let user: (() -> User)?
-		        let hub: Hub.SafeDIOverrides
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.user = user
+		                self.hub = hub
+		            }
+
+		            let user: (() -> User)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -792,12 +1055,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		            user: (() -> User)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.user = user
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                hub: hub
+		            )
 		        }
 
-		        let user: (() -> User)?
-		        let hub: Hub.SafeDIOverrides
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.user = user
+		                self.hub = hub
+		            }
+
+		            let user: (() -> User)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -872,12 +1152,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			            user: (() -> User)? = nil,
 			            bBuilder: ((any Api, Draft) -> B)? = nil
 			        ) {
-			            self.user = user
-			            self.bBuilder = bBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                user: user,
+			                bBuilder: bBuilder
+			            )
 			        }
 
-			        public let user: (() -> User)?
-			        public let bBuilder: ((any Api, Draft) -> B)?
+			        public var user: (() -> User)? { __safeDI_storage.user }
+			        public var bBuilder: ((any Api, Draft) -> B)? { __safeDI_storage.bBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                user: (() -> User)?,
+			                bBuilder: ((any Api, Draft) -> B)?
+			            ) {
+			                self.user = user
+			                self.bBuilder = bBuilder
+			            }
+
+			            let user: (() -> User)?
+			            let bBuilder: ((any Api, Draft) -> B)?
+			        }
 			    }
 
 			    public static func mock(
@@ -922,12 +1219,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		            user: (() -> User)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.user = user
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                hub: hub
+		            )
 		        }
 
-		        let user: (() -> User)?
-		        let hub: Hub.SafeDIOverrides
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.user = user
+		                self.hub = hub
+		            }
+
+		            let user: (() -> User)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -968,12 +1282,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		            user: (() -> User)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.user = user
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                hub: hub
+		            )
 		        }
 
-		        let user: (() -> User)?
-		        let hub: Hub.SafeDIOverrides
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.user = user
+		                self.hub = hub
+		            }
+
+		            let user: (() -> User)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -1030,12 +1361,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		            user: (() -> User)? = nil,
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.user = user
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                hub: hub
+		            )
 		        }
 
-		        let user: (() -> User)?
-		        let hub: Hub.SafeDIOverrides
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.user = user
+		                self.hub = hub
+		            }
+
+		            let user: (() -> User)?
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -1245,12 +1593,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	            user: (() -> User)? = nil,
 	            x: __safeDI_Feature_X_MockConfiguration = .init()
 	        ) {
-	            self.user = user
-	            self.x = x
+	            __safeDI_storage = __safeDI_Storage(
+	                user: user,
+	                x: x
+	            )
 	        }
 
-	        public let user: (() -> User)?
-	        public let x: __safeDI_Feature_X_MockConfiguration
+	        public var user: (() -> User)? { __safeDI_storage.user }
+	        public var x: __safeDI_Feature_X_MockConfiguration { __safeDI_storage.x }
+
+	        private let __safeDI_storage: __safeDI_Storage
+
+	        private final class __safeDI_Storage {
+	            init(
+	                user: (() -> User)?,
+	                x: __safeDI_Feature_X_MockConfiguration
+	            ) {
+	                self.user = user
+	                self.x = x
+	            }
+
+	            let user: (() -> User)?
+	            let x: __safeDI_Feature_X_MockConfiguration
+	        }
 	    }
 
 	    public static func mock(
@@ -1290,13 +1655,30 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	        x: __safeDI_Feature_X_MockConfiguration = .init(),
 	        _ safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)? = nil
 	    ) {
-	        self.x = x
-	        self.safeDIBuilder = safeDIBuilder
+	        __safeDI_storage = __safeDI_Storage(
+	            x: x,
+	            safeDIBuilder: safeDIBuilder
+	        )
 	    }
 
-	    public let x: __safeDI_Feature_X_MockConfiguration
+	    public var x: __safeDI_Feature_X_MockConfiguration { __safeDI_storage.x }
 	    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-	    public let safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)?
+	    public var safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)? { __safeDI_storage.safeDIBuilder }
+
+	    private let __safeDI_storage: __safeDI_Storage
+
+	    private final class __safeDI_Storage {
+	        init(
+	            x: __safeDI_Feature_X_MockConfiguration,
+	            safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)?
+	        ) {
+	            self.x = x
+	            self.safeDIBuilder = safeDIBuilder
+	        }
+
+	        let x: __safeDI_Feature_X_MockConfiguration
+	        let safeDIBuilder: (@Sendable (any Api, X, Draft) -> B)?
+	    }
 	}
 
 	extension B {
@@ -1310,11 +1692,25 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	    public init(
 	        _ safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)? = nil
 	    ) {
-	        self.safeDIBuilder = safeDIBuilder
+	        __safeDI_storage = __safeDI_Storage(
+	            safeDIBuilder: safeDIBuilder
+	        )
 	    }
 
 	    /// Overrides how `X` is constructed. Parameters match the type’s initializer or custom mock method.
-	    public let safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)?
+	    public var safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)? { __safeDI_storage.safeDIBuilder }
+
+	    private let __safeDI_storage: __safeDI_Storage
+
+	    private final class __safeDI_Storage {
+	        init(
+	            safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)?
+	        ) {
+	            self.safeDIBuilder = safeDIBuilder
+	        }
+
+	        let safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> X)?
+	    }
 	}
 
 	extension X {
@@ -1369,12 +1765,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	            user: (() -> User)? = nil,
 	            x: __safeDI_Feature_X_MockConfiguration = .init()
 	        ) {
-	            self.user = user
-	            self.x = x
+	            __safeDI_storage = __safeDI_Storage(
+	                user: user,
+	                x: x
+	            )
 	        }
 
-	        public let user: (() -> User)?
-	        public let x: __safeDI_Feature_X_MockConfiguration
+	        public var user: (() -> User)? { __safeDI_storage.user }
+	        public var x: __safeDI_Feature_X_MockConfiguration { __safeDI_storage.x }
+
+	        private let __safeDI_storage: __safeDI_Storage
+
+	        private final class __safeDI_Storage {
+	            init(
+	                user: (() -> User)?,
+	                x: __safeDI_Feature_X_MockConfiguration
+	            ) {
+	                self.user = user
+	                self.x = x
+	            }
+
+	            let user: (() -> User)?
+	            let x: __safeDI_Feature_X_MockConfiguration
+	        }
 	    }
 
 	    public static func mock(
@@ -1415,13 +1828,30 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	        x: __safeDI_Feature_X_MockConfiguration = .init(),
 	        _ safeDIBuilder: ((any Api, X, Draft) -> B)? = nil
 	    ) {
-	        self.x = x
-	        self.safeDIBuilder = safeDIBuilder
+	        __safeDI_storage = __safeDI_Storage(
+	            x: x,
+	            safeDIBuilder: safeDIBuilder
+	        )
 	    }
 
-	    public let x: __safeDI_Feature_X_MockConfiguration
+	    public var x: __safeDI_Feature_X_MockConfiguration { __safeDI_storage.x }
 	    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-	    public let safeDIBuilder: ((any Api, X, Draft) -> B)?
+	    public var safeDIBuilder: ((any Api, X, Draft) -> B)? { __safeDI_storage.safeDIBuilder }
+
+	    private let __safeDI_storage: __safeDI_Storage
+
+	    private final class __safeDI_Storage {
+	        init(
+	            x: __safeDI_Feature_X_MockConfiguration,
+	            safeDIBuilder: ((any Api, X, Draft) -> B)?
+	        ) {
+	            self.x = x
+	            self.safeDIBuilder = safeDIBuilder
+	        }
+
+	        let x: __safeDI_Feature_X_MockConfiguration
+	        let safeDIBuilder: ((any Api, X, Draft) -> B)?
+	    }
 	}
 
 	extension B {
@@ -1435,11 +1865,25 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	    public init(
 	        _ safeDIBuilder: ((Instantiator<B>) -> X)? = nil
 	    ) {
-	        self.safeDIBuilder = safeDIBuilder
+	        __safeDI_storage = __safeDI_Storage(
+	            safeDIBuilder: safeDIBuilder
+	        )
 	    }
 
 	    /// Overrides how `X` is constructed. Parameters match the type’s initializer or custom mock method.
-	    public let safeDIBuilder: ((Instantiator<B>) -> X)?
+	    public var safeDIBuilder: ((Instantiator<B>) -> X)? { __safeDI_storage.safeDIBuilder }
+
+	    private let __safeDI_storage: __safeDI_Storage
+
+	    private final class __safeDI_Storage {
+	        init(
+	            safeDIBuilder: ((Instantiator<B>) -> X)?
+	        ) {
+	            self.safeDIBuilder = safeDIBuilder
+	        }
+
+	        let safeDIBuilder: ((Instantiator<B>) -> X)?
+	    }
 	}
 
 	extension X {
@@ -1484,12 +1928,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	            user: (() -> User)? = nil,
 	            bBuilder: ((any Api, Draft) -> B)? = nil
 	        ) {
-	            self.user = user
-	            self.bBuilder = bBuilder
+	            __safeDI_storage = __safeDI_Storage(
+	                user: user,
+	                bBuilder: bBuilder
+	            )
 	        }
 
-	        public let user: (() -> User)?
-	        public let bBuilder: ((any Api, Draft) -> B)?
+	        public var user: (() -> User)? { __safeDI_storage.user }
+	        public var bBuilder: ((any Api, Draft) -> B)? { __safeDI_storage.bBuilder }
+
+	        private let __safeDI_storage: __safeDI_Storage
+
+	        private final class __safeDI_Storage {
+	            init(
+	                user: (() -> User)?,
+	                bBuilder: ((any Api, Draft) -> B)?
+	            ) {
+	                self.user = user
+	                self.bBuilder = bBuilder
+	            }
+
+	            let user: (() -> User)?
+	            let bBuilder: ((any Api, Draft) -> B)?
+	        }
 	    }
 
 	    public static func mock(
@@ -1558,12 +2019,29 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	            user: (() -> User)? = nil,
 	            x: __safeDI_Feature_X_MockConfiguration = .init()
 	        ) {
-	            self.user = user
-	            self.x = x
+	            __safeDI_storage = __safeDI_Storage(
+	                user: user,
+	                x: x
+	            )
 	        }
 
-	        public let user: (() -> User)?
-	        public let x: __safeDI_Feature_X_MockConfiguration
+	        public var user: (() -> User)? { __safeDI_storage.user }
+	        public var x: __safeDI_Feature_X_MockConfiguration { __safeDI_storage.x }
+
+	        private let __safeDI_storage: __safeDI_Storage
+
+	        private final class __safeDI_Storage {
+	            init(
+	                user: (() -> User)?,
+	                x: __safeDI_Feature_X_MockConfiguration
+	            ) {
+	                self.user = user
+	                self.x = x
+	            }
+
+	            let user: (() -> User)?
+	            let x: __safeDI_Feature_X_MockConfiguration
+	        }
 	    }
 
 	    public static func mock(
@@ -1604,13 +2082,30 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	        x: __safeDI_Feature_X_MockConfiguration = .init(),
 	        _ safeDIBuilder: ((any Api, X, Draft?) -> B)? = nil
 	    ) {
-	        self.x = x
-	        self.safeDIBuilder = safeDIBuilder
+	        __safeDI_storage = __safeDI_Storage(
+	            x: x,
+	            safeDIBuilder: safeDIBuilder
+	        )
 	    }
 
-	    public let x: __safeDI_Feature_X_MockConfiguration
+	    public var x: __safeDI_Feature_X_MockConfiguration { __safeDI_storage.x }
 	    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-	    public let safeDIBuilder: ((any Api, X, Draft?) -> B)?
+	    public var safeDIBuilder: ((any Api, X, Draft?) -> B)? { __safeDI_storage.safeDIBuilder }
+
+	    private let __safeDI_storage: __safeDI_Storage
+
+	    private final class __safeDI_Storage {
+	        init(
+	            x: __safeDI_Feature_X_MockConfiguration,
+	            safeDIBuilder: ((any Api, X, Draft?) -> B)?
+	        ) {
+	            self.x = x
+	            self.safeDIBuilder = safeDIBuilder
+	        }
+
+	        let x: __safeDI_Feature_X_MockConfiguration
+	        let safeDIBuilder: ((any Api, X, Draft?) -> B)?
+	    }
 	}
 
 	extension B {
@@ -1624,11 +2119,25 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	    public init(
 	        _ safeDIBuilder: ((Instantiator<B>) -> X)? = nil
 	    ) {
-	        self.safeDIBuilder = safeDIBuilder
+	        __safeDI_storage = __safeDI_Storage(
+	            safeDIBuilder: safeDIBuilder
+	        )
 	    }
 
 	    /// Overrides how `X` is constructed. Parameters match the type’s initializer or custom mock method.
-	    public let safeDIBuilder: ((Instantiator<B>) -> X)?
+	    public var safeDIBuilder: ((Instantiator<B>) -> X)? { __safeDI_storage.safeDIBuilder }
+
+	    private let __safeDI_storage: __safeDI_Storage
+
+	    private final class __safeDI_Storage {
+	        init(
+	            safeDIBuilder: ((Instantiator<B>) -> X)?
+	        ) {
+	            self.safeDIBuilder = safeDIBuilder
+	        }
+
+	        let safeDIBuilder: ((Instantiator<B>) -> X)?
+	    }
 	}
 
 	extension X {

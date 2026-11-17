@@ -61,12 +61,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            aBuilder: ((Instantiator<B>) -> A)? = nil,
 			            bBuilder: ((Instantiator<A>) -> B)? = nil
 			        ) {
-			            self.aBuilder = aBuilder
-			            self.bBuilder = bBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                aBuilder: aBuilder,
+			                bBuilder: bBuilder
+			            )
 			        }
 
-			        let aBuilder: ((Instantiator<B>) -> A)?
-			        let bBuilder: ((Instantiator<A>) -> B)?
+			        var aBuilder: ((Instantiator<B>) -> A)? { __safeDI_storage.aBuilder }
+			        var bBuilder: ((Instantiator<A>) -> B)? { __safeDI_storage.bBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                aBuilder: ((Instantiator<B>) -> A)?,
+			                bBuilder: ((Instantiator<A>) -> B)?
+			            ) {
+			                self.aBuilder = aBuilder
+			                self.bBuilder = bBuilder
+			            }
+
+			            let aBuilder: ((Instantiator<B>) -> A)?
+			            let bBuilder: ((Instantiator<A>) -> B)?
+			        }
 			    }
 
 			    static func mock(
@@ -128,56 +145,139 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            s22Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil,
 			            s23Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? = nil
 			        ) {
-			            self.s0Builder = s0Builder
-			            self.s1Builder = s1Builder
-			            self.s2Builder = s2Builder
-			            self.s3Builder = s3Builder
-			            self.s4Builder = s4Builder
-			            self.s5Builder = s5Builder
-			            self.s6Builder = s6Builder
-			            self.s7Builder = s7Builder
-			            self.s8Builder = s8Builder
-			            self.s9Builder = s9Builder
-			            self.s10Builder = s10Builder
-			            self.s11Builder = s11Builder
-			            self.s12Builder = s12Builder
-			            self.s13Builder = s13Builder
-			            self.s14Builder = s14Builder
-			            self.s15Builder = s15Builder
-			            self.s16Builder = s16Builder
-			            self.s17Builder = s17Builder
-			            self.s18Builder = s18Builder
-			            self.s19Builder = s19Builder
-			            self.s20Builder = s20Builder
-			            self.s21Builder = s21Builder
-			            self.s22Builder = s22Builder
-			            self.s23Builder = s23Builder
+			            __safeDI_storage = __safeDI_Storage(
+			                s0Builder: s0Builder,
+			                s1Builder: s1Builder,
+			                s2Builder: s2Builder,
+			                s3Builder: s3Builder,
+			                s4Builder: s4Builder,
+			                s5Builder: s5Builder,
+			                s6Builder: s6Builder,
+			                s7Builder: s7Builder,
+			                s8Builder: s8Builder,
+			                s9Builder: s9Builder,
+			                s10Builder: s10Builder,
+			                s11Builder: s11Builder,
+			                s12Builder: s12Builder,
+			                s13Builder: s13Builder,
+			                s14Builder: s14Builder,
+			                s15Builder: s15Builder,
+			                s16Builder: s16Builder,
+			                s17Builder: s17Builder,
+			                s18Builder: s18Builder,
+			                s19Builder: s19Builder,
+			                s20Builder: s20Builder,
+			                s21Builder: s21Builder,
+			                s22Builder: s22Builder,
+			                s23Builder: s23Builder
+			            )
 			        }
 
-			        let s0Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s1Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s2Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s3Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s4Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s5Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s6Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s7Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s8Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s9Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s10Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s11Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s12Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s13Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s14Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s15Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s16Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s17Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s18Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s19Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s20Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s21Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s22Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
-			        let s23Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        var s0Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s0Builder }
+			        var s1Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s1Builder }
+			        var s2Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s2Builder }
+			        var s3Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s3Builder }
+			        var s4Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s4Builder }
+			        var s5Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s5Builder }
+			        var s6Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s6Builder }
+			        var s7Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s7Builder }
+			        var s8Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s8Builder }
+			        var s9Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s9Builder }
+			        var s10Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s10Builder }
+			        var s11Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s11Builder }
+			        var s12Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s12Builder }
+			        var s13Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s13Builder }
+			        var s14Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s14Builder }
+			        var s15Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s15Builder }
+			        var s16Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s16Builder }
+			        var s17Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s17Builder }
+			        var s18Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s18Builder }
+			        var s19Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s19Builder }
+			        var s20Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s20Builder }
+			        var s21Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s21Builder }
+			        var s22Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s22Builder }
+			        var s23Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)? { __safeDI_storage.s23Builder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                s0Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s1Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s2Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s3Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s4Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s5Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s6Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s7Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s8Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s9Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s10Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s11Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s12Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s13Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s14Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s15Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s16Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s17Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s18Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s19Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s20Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s21Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s22Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?,
+			                s23Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            ) {
+			                self.s0Builder = s0Builder
+			                self.s1Builder = s1Builder
+			                self.s2Builder = s2Builder
+			                self.s3Builder = s3Builder
+			                self.s4Builder = s4Builder
+			                self.s5Builder = s5Builder
+			                self.s6Builder = s6Builder
+			                self.s7Builder = s7Builder
+			                self.s8Builder = s8Builder
+			                self.s9Builder = s9Builder
+			                self.s10Builder = s10Builder
+			                self.s11Builder = s11Builder
+			                self.s12Builder = s12Builder
+			                self.s13Builder = s13Builder
+			                self.s14Builder = s14Builder
+			                self.s15Builder = s15Builder
+			                self.s16Builder = s16Builder
+			                self.s17Builder = s17Builder
+			                self.s18Builder = s18Builder
+			                self.s19Builder = s19Builder
+			                self.s20Builder = s20Builder
+			                self.s21Builder = s21Builder
+			                self.s22Builder = s22Builder
+			                self.s23Builder = s23Builder
+			            }
+
+			            let s0Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s1Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s2Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s3Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s4Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s5Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s6Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s7Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s8Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s9Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s10Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s11Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s12Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s13Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s14Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s15Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s16Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s17Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s18Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s19Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s20Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s21Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s22Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			            let s23Builder: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?
+			        }
 			    }
 
 			    static func mock(
@@ -416,14 +516,34 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            t3: T3.SafeDIMockConfiguration = .init(),
 			            t2Builder: ((T3?) -> T2)? = nil
 			        ) {
-			            self.t4Builder = t4Builder
-			            self.t3 = t3
-			            self.t2Builder = t2Builder
+			            __safeDI_storage = __safeDI_Storage(
+			                t4Builder: t4Builder,
+			                t3: t3,
+			                t2Builder: t2Builder
+			            )
 			        }
 
-			        let t4Builder: ((Instantiator<T4>, Instantiator<T2>?) -> T4)?
-			        let t3: T3.SafeDIMockConfiguration
-			        let t2Builder: ((T3?) -> T2)?
+			        var t4Builder: ((Instantiator<T4>, Instantiator<T2>?) -> T4)? { __safeDI_storage.t4Builder }
+			        var t3: T3.SafeDIMockConfiguration { __safeDI_storage.t3 }
+			        var t2Builder: ((T3?) -> T2)? { __safeDI_storage.t2Builder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                t4Builder: ((Instantiator<T4>, Instantiator<T2>?) -> T4)?,
+			                t3: T3.SafeDIMockConfiguration,
+			                t2Builder: ((T3?) -> T2)?
+			            ) {
+			                self.t4Builder = t4Builder
+			                self.t3 = t3
+			                self.t2Builder = t2Builder
+			            }
+
+			            let t4Builder: ((Instantiator<T4>, Instantiator<T2>?) -> T4)?
+			            let t3: T3.SafeDIMockConfiguration
+			            let t2Builder: ((T3?) -> T2)?
+			        }
 			    }
 
 			    static func mock(
@@ -491,14 +611,34 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            t3: ((Instantiator<T4>) -> T3)? = nil,
 			            t2Builder: ((T3?) -> T2)? = nil
 			        ) {
-			            self.t4Builder = t4Builder
-			            self.t3 = t3
-			            self.t2Builder = t2Builder
+			            __safeDI_storage = __safeDI_Storage(
+			                t4Builder: t4Builder,
+			                t3: t3,
+			                t2Builder: t2Builder
+			            )
 			        }
 
-			        let t4Builder: ((Instantiator<T4>?, Instantiator<T2>?) -> T4)?
-			        let t3: ((Instantiator<T4>) -> T3)?
-			        let t2Builder: ((T3?) -> T2)?
+			        var t4Builder: ((Instantiator<T4>?, Instantiator<T2>?) -> T4)? { __safeDI_storage.t4Builder }
+			        var t3: ((Instantiator<T4>) -> T3)? { __safeDI_storage.t3 }
+			        var t2Builder: ((T3?) -> T2)? { __safeDI_storage.t2Builder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                t4Builder: ((Instantiator<T4>?, Instantiator<T2>?) -> T4)?,
+			                t3: ((Instantiator<T4>) -> T3)?,
+			                t2Builder: ((T3?) -> T2)?
+			            ) {
+			                self.t4Builder = t4Builder
+			                self.t3 = t3
+			                self.t2Builder = t2Builder
+			            }
+
+			            let t4Builder: ((Instantiator<T4>?, Instantiator<T2>?) -> T4)?
+			            let t3: ((Instantiator<T4>) -> T3)?
+			            let t2Builder: ((T3?) -> T2)?
+			        }
 			    }
 
 			    static func mock(
@@ -549,12 +689,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            bBuilder: ((Instantiator<A>) -> B)? = nil,
 			            aBuilder: ((Instantiator<B>) -> A)? = nil
 			        ) {
-			            self.bBuilder = bBuilder
-			            self.aBuilder = aBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                bBuilder: bBuilder,
+			                aBuilder: aBuilder
+			            )
 			        }
 
-			        let bBuilder: ((Instantiator<A>) -> B)?
-			        let aBuilder: ((Instantiator<B>) -> A)?
+			        var bBuilder: ((Instantiator<A>) -> B)? { __safeDI_storage.bBuilder }
+			        var aBuilder: ((Instantiator<B>) -> A)? { __safeDI_storage.aBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                bBuilder: ((Instantiator<A>) -> B)?,
+			                aBuilder: ((Instantiator<B>) -> A)?
+			            ) {
+			                self.bBuilder = bBuilder
+			                self.aBuilder = aBuilder
+			            }
+
+			            let bBuilder: ((Instantiator<A>) -> B)?
+			            let aBuilder: ((Instantiator<B>) -> A)?
+			        }
 			    }
 
 			    static func mock(
@@ -594,12 +751,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            aBuilder: ((Instantiator<A>, Instantiator<B>) -> A)? = nil,
 			            bBuilder: ((Instantiator<A>) -> B)? = nil
 			        ) {
-			            self.aBuilder = aBuilder
-			            self.bBuilder = bBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                aBuilder: aBuilder,
+			                bBuilder: bBuilder
+			            )
 			        }
 
-			        let aBuilder: ((Instantiator<A>, Instantiator<B>) -> A)?
-			        let bBuilder: ((Instantiator<A>) -> B)?
+			        var aBuilder: ((Instantiator<A>, Instantiator<B>) -> A)? { __safeDI_storage.aBuilder }
+			        var bBuilder: ((Instantiator<A>) -> B)? { __safeDI_storage.bBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                aBuilder: ((Instantiator<A>, Instantiator<B>) -> A)?,
+			                bBuilder: ((Instantiator<A>) -> B)?
+			            ) {
+			                self.aBuilder = aBuilder
+			                self.bBuilder = bBuilder
+			            }
+
+			            let aBuilder: ((Instantiator<A>, Instantiator<B>) -> A)?
+			            let bBuilder: ((Instantiator<A>) -> B)?
+			        }
 			    }
 
 			    static func mock(
@@ -639,10 +813,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            screenBuilder: ((Instantiator<Screen>) -> Screen)? = nil
 			        ) {
-			            self.screenBuilder = screenBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                screenBuilder: screenBuilder
+			            )
 			        }
 
-			        let screenBuilder: ((Instantiator<Screen>) -> Screen)?
+			        var screenBuilder: ((Instantiator<Screen>) -> Screen)? { __safeDI_storage.screenBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                screenBuilder: ((Instantiator<Screen>) -> Screen)?
+			            ) {
+			                self.screenBuilder = screenBuilder
+			            }
+
+			            let screenBuilder: ((Instantiator<Screen>) -> Screen)?
+			        }
 			    }
 
 			    static func mock(
@@ -680,14 +868,34 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            x_Instantiator__X: ((Instantiator<B>) -> X)? = nil,
 			            x_X: ((Instantiator<B>) -> X)? = nil
 			        ) {
-			            self.bBuilder = bBuilder
-			            self.x_Instantiator__X = x_Instantiator__X
-			            self.x_X = x_X
+			            __safeDI_storage = __safeDI_Storage(
+			                bBuilder: bBuilder,
+			                x_Instantiator__X: x_Instantiator__X,
+			                x_X: x_X
+			            )
 			        }
 
-			        let bBuilder: ((Instantiator<X>) -> B)?
-			        let x_Instantiator__X: ((Instantiator<B>) -> X)?
-			        let x_X: ((Instantiator<B>) -> X)?
+			        var bBuilder: ((Instantiator<X>) -> B)? { __safeDI_storage.bBuilder }
+			        var x_Instantiator__X: ((Instantiator<B>) -> X)? { __safeDI_storage.x_Instantiator__X }
+			        var x_X: ((Instantiator<B>) -> X)? { __safeDI_storage.x_X }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                bBuilder: ((Instantiator<X>) -> B)?,
+			                x_Instantiator__X: ((Instantiator<B>) -> X)?,
+			                x_X: ((Instantiator<B>) -> X)?
+			            ) {
+			                self.bBuilder = bBuilder
+			                self.x_Instantiator__X = x_Instantiator__X
+			                self.x_X = x_X
+			            }
+
+			            let bBuilder: ((Instantiator<X>) -> B)?
+			            let x_Instantiator__X: ((Instantiator<B>) -> X)?
+			            let x_X: ((Instantiator<B>) -> X)?
+			        }
 			    }
 
 			    static func mock(
@@ -729,12 +937,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            bBuilder: (@Sendable (SendableInstantiator<A>) -> B)? = nil,
 			            aBuilder: (@Sendable (SendableInstantiator<B>) -> A)? = nil
 			        ) {
-			            self.bBuilder = bBuilder
-			            self.aBuilder = aBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                bBuilder: bBuilder,
+			                aBuilder: aBuilder
+			            )
 			        }
 
-			        let bBuilder: (@Sendable (SendableInstantiator<A>) -> B)?
-			        let aBuilder: (@Sendable (SendableInstantiator<B>) -> A)?
+			        var bBuilder: (@Sendable (SendableInstantiator<A>) -> B)? { __safeDI_storage.bBuilder }
+			        var aBuilder: (@Sendable (SendableInstantiator<B>) -> A)? { __safeDI_storage.aBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage: Sendable {
+			            init(
+			                bBuilder: (@Sendable (SendableInstantiator<A>) -> B)?,
+			                aBuilder: (@Sendable (SendableInstantiator<B>) -> A)?
+			            ) {
+			                self.bBuilder = bBuilder
+			                self.aBuilder = aBuilder
+			            }
+
+			            let bBuilder: (@Sendable (SendableInstantiator<A>) -> B)?
+			            let aBuilder: (@Sendable (SendableInstantiator<B>) -> A)?
+			        }
 			    }
 
 			    static func mock(
@@ -775,10 +1000,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            nodeBuilder: ((Instantiator<Node>) -> Node)? = nil
 			        ) {
-			            self.nodeBuilder = nodeBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                nodeBuilder: nodeBuilder
+			            )
 			        }
 
-			        let nodeBuilder: ((Instantiator<Node>) -> Node)?
+			        var nodeBuilder: ((Instantiator<Node>) -> Node)? { __safeDI_storage.nodeBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                nodeBuilder: ((Instantiator<Node>) -> Node)?
+			            ) {
+			                self.nodeBuilder = nodeBuilder
+			            }
+
+			            let nodeBuilder: ((Instantiator<Node>) -> Node)?
+			        }
 			    }
 
 			    static func mock(
@@ -824,12 +1063,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            bBuilder: ((Instantiator<X>) -> B)? = nil,
 			            xBuilder: ((Instantiator<B>) -> X)? = nil
 			        ) {
-			            self.bBuilder = bBuilder
-			            self.xBuilder = xBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                bBuilder: bBuilder,
+			                xBuilder: xBuilder
+			            )
 			        }
 
-			        let bBuilder: ((Instantiator<X>) -> B)?
-			        let xBuilder: ((Instantiator<B>) -> X)?
+			        var bBuilder: ((Instantiator<X>) -> B)? { __safeDI_storage.bBuilder }
+			        var xBuilder: ((Instantiator<B>) -> X)? { __safeDI_storage.xBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                bBuilder: ((Instantiator<X>) -> B)?,
+			                xBuilder: ((Instantiator<B>) -> X)?
+			            ) {
+			                self.bBuilder = bBuilder
+			                self.xBuilder = xBuilder
+			            }
+
+			            let bBuilder: ((Instantiator<X>) -> B)?
+			            let xBuilder: ((Instantiator<B>) -> X)?
+			        }
 			    }
 
 			    static func mock(
@@ -871,12 +1127,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            bBuilder: ((Instantiator<X>) -> B)? = nil,
 			            xBuilder: ((Instantiator<B>) -> X)? = nil
 			        ) {
-			            self.bBuilder = bBuilder
-			            self.xBuilder = xBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                bBuilder: bBuilder,
+			                xBuilder: xBuilder
+			            )
 			        }
 
-			        let bBuilder: ((Instantiator<X>) -> B)?
-			        let xBuilder: ((Instantiator<B>) -> X)?
+			        var bBuilder: ((Instantiator<X>) -> B)? { __safeDI_storage.bBuilder }
+			        var xBuilder: ((Instantiator<B>) -> X)? { __safeDI_storage.xBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                bBuilder: ((Instantiator<X>) -> B)?,
+			                xBuilder: ((Instantiator<B>) -> X)?
+			            ) {
+			                self.bBuilder = bBuilder
+			                self.xBuilder = xBuilder
+			            }
+
+			            let bBuilder: ((Instantiator<X>) -> B)?
+			            let xBuilder: ((Instantiator<B>) -> X)?
+			        }
 			    }
 
 			    static func mock(
@@ -921,12 +1194,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            bBuilder: (@Sendable (SendableInstantiator<X>) -> B)? = nil,
 			            xBuilder: (@Sendable (SendableInstantiator<B>) -> X)? = nil
 			        ) {
-			            self.bBuilder = bBuilder
-			            self.xBuilder = xBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                bBuilder: bBuilder,
+			                xBuilder: xBuilder
+			            )
 			        }
 
-			        let bBuilder: (@Sendable (SendableInstantiator<X>) -> B)?
-			        let xBuilder: (@Sendable (SendableInstantiator<B>) -> X)?
+			        var bBuilder: (@Sendable (SendableInstantiator<X>) -> B)? { __safeDI_storage.bBuilder }
+			        var xBuilder: (@Sendable (SendableInstantiator<B>) -> X)? { __safeDI_storage.xBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage: Sendable {
+			            init(
+			                bBuilder: (@Sendable (SendableInstantiator<X>) -> B)?,
+			                xBuilder: (@Sendable (SendableInstantiator<B>) -> X)?
+			            ) {
+			                self.bBuilder = bBuilder
+			                self.xBuilder = xBuilder
+			            }
+
+			            let bBuilder: (@Sendable (SendableInstantiator<X>) -> B)?
+			            let xBuilder: (@Sendable (SendableInstantiator<B>) -> X)?
+			        }
 			    }
 
 			    static func mock(
@@ -972,14 +1262,34 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            xBuilder: ((Instantiator<B>) -> X)? = nil,
 			            c: ((Instantiator<X>) -> C)? = nil
 			        ) {
-			            self.bBuilder = bBuilder
-			            self.xBuilder = xBuilder
-			            self.c = c
+			            __safeDI_storage = __safeDI_Storage(
+			                bBuilder: bBuilder,
+			                xBuilder: xBuilder,
+			                c: c
+			            )
 			        }
 
-			        let bBuilder: ((Instantiator<X>) -> B)?
-			        let xBuilder: ((Instantiator<B>) -> X)?
-			        let c: ((Instantiator<X>) -> C)?
+			        var bBuilder: ((Instantiator<X>) -> B)? { __safeDI_storage.bBuilder }
+			        var xBuilder: ((Instantiator<B>) -> X)? { __safeDI_storage.xBuilder }
+			        var c: ((Instantiator<X>) -> C)? { __safeDI_storage.c }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                bBuilder: ((Instantiator<X>) -> B)?,
+			                xBuilder: ((Instantiator<B>) -> X)?,
+			                c: ((Instantiator<X>) -> C)?
+			            ) {
+			                self.bBuilder = bBuilder
+			                self.xBuilder = xBuilder
+			                self.c = c
+			            }
+
+			            let bBuilder: ((Instantiator<X>) -> B)?
+			            let xBuilder: ((Instantiator<B>) -> X)?
+			            let c: ((Instantiator<X>) -> C)?
+			        }
 			    }
 
 			    static func mock(
@@ -1024,12 +1334,26 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            b: ((Instantiator<A>?) -> B)? = nil,
 			            aBuilder: Instantiator<A>? = nil
 			        ) {
-			            self.b = b
+			            __safeDI_storage = __safeDI_Storage(
+			                b: b
+			            )
 			            self.aBuilder = aBuilder
 			        }
 
-			        let b: ((Instantiator<A>?) -> B)?
+			        var b: ((Instantiator<A>?) -> B)? { __safeDI_storage.b }
 			        let aBuilder: Instantiator<A>?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                b: ((Instantiator<A>?) -> B)?
+			            ) {
+			                self.b = b
+			            }
+
+			            let b: ((Instantiator<A>?) -> B)?
+			        }
 			    }
 
 			    static func mock(
@@ -1063,12 +1387,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            aBuilder: ((Instantiator<B>?) -> A)? = nil,
 			            bBuilder: ((Instantiator<A>?) -> B)? = nil
 			        ) {
-			            self.aBuilder = aBuilder
-			            self.bBuilder = bBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                aBuilder: aBuilder,
+			                bBuilder: bBuilder
+			            )
 			        }
 
-			        let aBuilder: ((Instantiator<B>?) -> A)?
-			        let bBuilder: ((Instantiator<A>?) -> B)?
+			        var aBuilder: ((Instantiator<B>?) -> A)? { __safeDI_storage.aBuilder }
+			        var bBuilder: ((Instantiator<A>?) -> B)? { __safeDI_storage.bBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                aBuilder: ((Instantiator<B>?) -> A)?,
+			                bBuilder: ((Instantiator<A>?) -> B)?
+			            ) {
+			                self.aBuilder = aBuilder
+			                self.bBuilder = bBuilder
+			            }
+
+			            let aBuilder: ((Instantiator<B>?) -> A)?
+			            let bBuilder: ((Instantiator<A>?) -> B)?
+			        }
 			    }
 
 			    static func mock(
@@ -1133,14 +1474,34 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            peerBuilder: ((Instantiator<Child>?) -> Peer)? = nil,
 			            childBuilder_Instantiator__Child_Optional: ((Instantiator<Peer>) -> Child)? = nil
 			        ) {
-			            self.childBuilder_Instantiator__Child = childBuilder_Instantiator__Child
-			            self.peerBuilder = peerBuilder
-			            self.childBuilder_Instantiator__Child_Optional = childBuilder_Instantiator__Child_Optional
+			            __safeDI_storage = __safeDI_Storage(
+			                childBuilder_Instantiator__Child: childBuilder_Instantiator__Child,
+			                peerBuilder: peerBuilder,
+			                childBuilder_Instantiator__Child_Optional: childBuilder_Instantiator__Child_Optional
+			            )
 			        }
 
-			        let childBuilder_Instantiator__Child: ((Instantiator<Peer>) -> Child)?
-			        let peerBuilder: ((Instantiator<Child>?) -> Peer)?
-			        let childBuilder_Instantiator__Child_Optional: ((Instantiator<Peer>) -> Child)?
+			        var childBuilder_Instantiator__Child: ((Instantiator<Peer>) -> Child)? { __safeDI_storage.childBuilder_Instantiator__Child }
+			        var peerBuilder: ((Instantiator<Child>?) -> Peer)? { __safeDI_storage.peerBuilder }
+			        var childBuilder_Instantiator__Child_Optional: ((Instantiator<Peer>) -> Child)? { __safeDI_storage.childBuilder_Instantiator__Child_Optional }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                childBuilder_Instantiator__Child: ((Instantiator<Peer>) -> Child)?,
+			                peerBuilder: ((Instantiator<Child>?) -> Peer)?,
+			                childBuilder_Instantiator__Child_Optional: ((Instantiator<Peer>) -> Child)?
+			            ) {
+			                self.childBuilder_Instantiator__Child = childBuilder_Instantiator__Child
+			                self.peerBuilder = peerBuilder
+			                self.childBuilder_Instantiator__Child_Optional = childBuilder_Instantiator__Child_Optional
+			            }
+
+			            let childBuilder_Instantiator__Child: ((Instantiator<Peer>) -> Child)?
+			            let peerBuilder: ((Instantiator<Child>?) -> Peer)?
+			            let childBuilder_Instantiator__Child_Optional: ((Instantiator<Peer>) -> Child)?
+			        }
 			    }
 
 			    static func mock(
@@ -1193,34 +1554,84 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            c4Builder_Instantiator__C4_Optional: ((Instantiator<Peer>) -> C4)? = nil,
 			            c5Builder_Instantiator__C5_Optional: ((Instantiator<Peer>) -> C5)? = nil
 			        ) {
-			            self.c0Builder_Instantiator__C0 = c0Builder_Instantiator__C0
-			            self.c1Builder_Instantiator__C1 = c1Builder_Instantiator__C1
-			            self.c2Builder_Instantiator__C2 = c2Builder_Instantiator__C2
-			            self.c3Builder_Instantiator__C3 = c3Builder_Instantiator__C3
-			            self.c4Builder_Instantiator__C4 = c4Builder_Instantiator__C4
-			            self.c5Builder_Instantiator__C5 = c5Builder_Instantiator__C5
-			            self.peerBuilder = peerBuilder
-			            self.c0Builder_Instantiator__C0_Optional = c0Builder_Instantiator__C0_Optional
-			            self.c1Builder_Instantiator__C1_Optional = c1Builder_Instantiator__C1_Optional
-			            self.c2Builder_Instantiator__C2_Optional = c2Builder_Instantiator__C2_Optional
-			            self.c3Builder_Instantiator__C3_Optional = c3Builder_Instantiator__C3_Optional
-			            self.c4Builder_Instantiator__C4_Optional = c4Builder_Instantiator__C4_Optional
-			            self.c5Builder_Instantiator__C5_Optional = c5Builder_Instantiator__C5_Optional
+			            __safeDI_storage = __safeDI_Storage(
+			                c0Builder_Instantiator__C0: c0Builder_Instantiator__C0,
+			                c1Builder_Instantiator__C1: c1Builder_Instantiator__C1,
+			                c2Builder_Instantiator__C2: c2Builder_Instantiator__C2,
+			                c3Builder_Instantiator__C3: c3Builder_Instantiator__C3,
+			                c4Builder_Instantiator__C4: c4Builder_Instantiator__C4,
+			                c5Builder_Instantiator__C5: c5Builder_Instantiator__C5,
+			                peerBuilder: peerBuilder,
+			                c0Builder_Instantiator__C0_Optional: c0Builder_Instantiator__C0_Optional,
+			                c1Builder_Instantiator__C1_Optional: c1Builder_Instantiator__C1_Optional,
+			                c2Builder_Instantiator__C2_Optional: c2Builder_Instantiator__C2_Optional,
+			                c3Builder_Instantiator__C3_Optional: c3Builder_Instantiator__C3_Optional,
+			                c4Builder_Instantiator__C4_Optional: c4Builder_Instantiator__C4_Optional,
+			                c5Builder_Instantiator__C5_Optional: c5Builder_Instantiator__C5_Optional
+			            )
 			        }
 
-			        let c0Builder_Instantiator__C0: ((Instantiator<Peer>) -> C0)?
-			        let c1Builder_Instantiator__C1: ((Instantiator<Peer>) -> C1)?
-			        let c2Builder_Instantiator__C2: ((Instantiator<Peer>) -> C2)?
-			        let c3Builder_Instantiator__C3: ((Instantiator<Peer>) -> C3)?
-			        let c4Builder_Instantiator__C4: ((Instantiator<Peer>) -> C4)?
-			        let c5Builder_Instantiator__C5: ((Instantiator<Peer>) -> C5)?
-			        let peerBuilder: ((Instantiator<C0>?, Instantiator<C1>?, Instantiator<C2>?, Instantiator<C3>?, Instantiator<C4>?, Instantiator<C5>?) -> Peer)?
-			        let c0Builder_Instantiator__C0_Optional: ((Instantiator<Peer>) -> C0)?
-			        let c1Builder_Instantiator__C1_Optional: ((Instantiator<Peer>) -> C1)?
-			        let c2Builder_Instantiator__C2_Optional: ((Instantiator<Peer>) -> C2)?
-			        let c3Builder_Instantiator__C3_Optional: ((Instantiator<Peer>) -> C3)?
-			        let c4Builder_Instantiator__C4_Optional: ((Instantiator<Peer>) -> C4)?
-			        let c5Builder_Instantiator__C5_Optional: ((Instantiator<Peer>) -> C5)?
+			        var c0Builder_Instantiator__C0: ((Instantiator<Peer>) -> C0)? { __safeDI_storage.c0Builder_Instantiator__C0 }
+			        var c1Builder_Instantiator__C1: ((Instantiator<Peer>) -> C1)? { __safeDI_storage.c1Builder_Instantiator__C1 }
+			        var c2Builder_Instantiator__C2: ((Instantiator<Peer>) -> C2)? { __safeDI_storage.c2Builder_Instantiator__C2 }
+			        var c3Builder_Instantiator__C3: ((Instantiator<Peer>) -> C3)? { __safeDI_storage.c3Builder_Instantiator__C3 }
+			        var c4Builder_Instantiator__C4: ((Instantiator<Peer>) -> C4)? { __safeDI_storage.c4Builder_Instantiator__C4 }
+			        var c5Builder_Instantiator__C5: ((Instantiator<Peer>) -> C5)? { __safeDI_storage.c5Builder_Instantiator__C5 }
+			        var peerBuilder: ((Instantiator<C0>?, Instantiator<C1>?, Instantiator<C2>?, Instantiator<C3>?, Instantiator<C4>?, Instantiator<C5>?) -> Peer)? { __safeDI_storage.peerBuilder }
+			        var c0Builder_Instantiator__C0_Optional: ((Instantiator<Peer>) -> C0)? { __safeDI_storage.c0Builder_Instantiator__C0_Optional }
+			        var c1Builder_Instantiator__C1_Optional: ((Instantiator<Peer>) -> C1)? { __safeDI_storage.c1Builder_Instantiator__C1_Optional }
+			        var c2Builder_Instantiator__C2_Optional: ((Instantiator<Peer>) -> C2)? { __safeDI_storage.c2Builder_Instantiator__C2_Optional }
+			        var c3Builder_Instantiator__C3_Optional: ((Instantiator<Peer>) -> C3)? { __safeDI_storage.c3Builder_Instantiator__C3_Optional }
+			        var c4Builder_Instantiator__C4_Optional: ((Instantiator<Peer>) -> C4)? { __safeDI_storage.c4Builder_Instantiator__C4_Optional }
+			        var c5Builder_Instantiator__C5_Optional: ((Instantiator<Peer>) -> C5)? { __safeDI_storage.c5Builder_Instantiator__C5_Optional }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                c0Builder_Instantiator__C0: ((Instantiator<Peer>) -> C0)?,
+			                c1Builder_Instantiator__C1: ((Instantiator<Peer>) -> C1)?,
+			                c2Builder_Instantiator__C2: ((Instantiator<Peer>) -> C2)?,
+			                c3Builder_Instantiator__C3: ((Instantiator<Peer>) -> C3)?,
+			                c4Builder_Instantiator__C4: ((Instantiator<Peer>) -> C4)?,
+			                c5Builder_Instantiator__C5: ((Instantiator<Peer>) -> C5)?,
+			                peerBuilder: ((Instantiator<C0>?, Instantiator<C1>?, Instantiator<C2>?, Instantiator<C3>?, Instantiator<C4>?, Instantiator<C5>?) -> Peer)?,
+			                c0Builder_Instantiator__C0_Optional: ((Instantiator<Peer>) -> C0)?,
+			                c1Builder_Instantiator__C1_Optional: ((Instantiator<Peer>) -> C1)?,
+			                c2Builder_Instantiator__C2_Optional: ((Instantiator<Peer>) -> C2)?,
+			                c3Builder_Instantiator__C3_Optional: ((Instantiator<Peer>) -> C3)?,
+			                c4Builder_Instantiator__C4_Optional: ((Instantiator<Peer>) -> C4)?,
+			                c5Builder_Instantiator__C5_Optional: ((Instantiator<Peer>) -> C5)?
+			            ) {
+			                self.c0Builder_Instantiator__C0 = c0Builder_Instantiator__C0
+			                self.c1Builder_Instantiator__C1 = c1Builder_Instantiator__C1
+			                self.c2Builder_Instantiator__C2 = c2Builder_Instantiator__C2
+			                self.c3Builder_Instantiator__C3 = c3Builder_Instantiator__C3
+			                self.c4Builder_Instantiator__C4 = c4Builder_Instantiator__C4
+			                self.c5Builder_Instantiator__C5 = c5Builder_Instantiator__C5
+			                self.peerBuilder = peerBuilder
+			                self.c0Builder_Instantiator__C0_Optional = c0Builder_Instantiator__C0_Optional
+			                self.c1Builder_Instantiator__C1_Optional = c1Builder_Instantiator__C1_Optional
+			                self.c2Builder_Instantiator__C2_Optional = c2Builder_Instantiator__C2_Optional
+			                self.c3Builder_Instantiator__C3_Optional = c3Builder_Instantiator__C3_Optional
+			                self.c4Builder_Instantiator__C4_Optional = c4Builder_Instantiator__C4_Optional
+			                self.c5Builder_Instantiator__C5_Optional = c5Builder_Instantiator__C5_Optional
+			            }
+
+			            let c0Builder_Instantiator__C0: ((Instantiator<Peer>) -> C0)?
+			            let c1Builder_Instantiator__C1: ((Instantiator<Peer>) -> C1)?
+			            let c2Builder_Instantiator__C2: ((Instantiator<Peer>) -> C2)?
+			            let c3Builder_Instantiator__C3: ((Instantiator<Peer>) -> C3)?
+			            let c4Builder_Instantiator__C4: ((Instantiator<Peer>) -> C4)?
+			            let c5Builder_Instantiator__C5: ((Instantiator<Peer>) -> C5)?
+			            let peerBuilder: ((Instantiator<C0>?, Instantiator<C1>?, Instantiator<C2>?, Instantiator<C3>?, Instantiator<C4>?, Instantiator<C5>?) -> Peer)?
+			            let c0Builder_Instantiator__C0_Optional: ((Instantiator<Peer>) -> C0)?
+			            let c1Builder_Instantiator__C1_Optional: ((Instantiator<Peer>) -> C1)?
+			            let c2Builder_Instantiator__C2_Optional: ((Instantiator<Peer>) -> C2)?
+			            let c3Builder_Instantiator__C3_Optional: ((Instantiator<Peer>) -> C3)?
+			            let c4Builder_Instantiator__C4_Optional: ((Instantiator<Peer>) -> C4)?
+			            let c5Builder_Instantiator__C5_Optional: ((Instantiator<Peer>) -> C5)?
+			        }
 			    }
 
 			    static func mock(
@@ -1325,12 +1736,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            session: (() -> Session)? = nil,
 			            screenBuilder: Screen.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.session = session
-			            self.screenBuilder = screenBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                session: session,
+			                screenBuilder: screenBuilder
+			            )
 			        }
 
-			        let session: (() -> Session)?
-			        let screenBuilder: Screen.SafeDIMockConfiguration
+			        var session: (() -> Session)? { __safeDI_storage.session }
+			        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                session: (() -> Session)?,
+			                screenBuilder: Screen.SafeDIMockConfiguration
+			            ) {
+			                self.session = session
+			                self.screenBuilder = screenBuilder
+			            }
+
+			            let session: (() -> Session)?
+			            let screenBuilder: Screen.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1384,12 +1812,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            otherBuilder: ((Instantiator<Screen>) -> Other)? = nil,
 			            screenBuilder: Screen.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.otherBuilder = otherBuilder
-			            self.screenBuilder = screenBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                otherBuilder: otherBuilder,
+			                screenBuilder: screenBuilder
+			            )
 			        }
 
-			        let otherBuilder: ((Instantiator<Screen>) -> Other)?
-			        let screenBuilder: Screen.SafeDIMockConfiguration
+			        var otherBuilder: ((Instantiator<Screen>) -> Other)? { __safeDI_storage.otherBuilder }
+			        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                otherBuilder: ((Instantiator<Screen>) -> Other)?,
+			                screenBuilder: Screen.SafeDIMockConfiguration
+			            ) {
+			                self.otherBuilder = otherBuilder
+			                self.screenBuilder = screenBuilder
+			            }
+
+			            let otherBuilder: ((Instantiator<Screen>) -> Other)?
+			            let screenBuilder: Screen.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1455,14 +1900,34 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            screenBuilder: Screen.SafeDIMockConfiguration = .init(),
 			            screenBuilder_received: (() -> Other)? = nil
 			        ) {
-			            self.session = session
-			            self.screenBuilder = screenBuilder
-			            self.screenBuilder_received = screenBuilder_received
+			            __safeDI_storage = __safeDI_Storage(
+			                session: session,
+			                screenBuilder: screenBuilder,
+			                screenBuilder_received: screenBuilder_received
+			            )
 			        }
 
-			        let session: (() -> Session)?
-			        let screenBuilder: Screen.SafeDIMockConfiguration
-			        let screenBuilder_received: (() -> Other)?
+			        var session: (() -> Session)? { __safeDI_storage.session }
+			        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+			        var screenBuilder_received: (() -> Other)? { __safeDI_storage.screenBuilder_received }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                session: (() -> Session)?,
+			                screenBuilder: Screen.SafeDIMockConfiguration,
+			                screenBuilder_received: (() -> Other)?
+			            ) {
+			                self.session = session
+			                self.screenBuilder = screenBuilder
+			                self.screenBuilder_received = screenBuilder_received
+			            }
+
+			            let session: (() -> Session)?
+			            let screenBuilder: Screen.SafeDIMockConfiguration
+			            let screenBuilder_received: (() -> Other)?
+			        }
 			    }
 
 			    static func mock(
@@ -1523,10 +1988,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            screenBuilder_received: Flow.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.screenBuilder_received = screenBuilder_received
+			            __safeDI_storage = __safeDI_Storage(
+			                screenBuilder_received: screenBuilder_received
+			            )
 			        }
 
-			        let screenBuilder_received: Flow.SafeDIMockConfiguration
+			        var screenBuilder_received: Flow.SafeDIMockConfiguration { __safeDI_storage.screenBuilder_received }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                screenBuilder_received: Flow.SafeDIMockConfiguration
+			            ) {
+			                self.screenBuilder_received = screenBuilder_received
+			            }
+
+			            let screenBuilder_received: Flow.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1595,14 +2074,34 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            screenBuilder: Screen.SafeDIMockConfiguration = .init(),
 			            peerBuilder: Peer.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.session = session
-			            self.screenBuilder = screenBuilder
-			            self.peerBuilder = peerBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                session: session,
+			                screenBuilder: screenBuilder,
+			                peerBuilder: peerBuilder
+			            )
 			        }
 
-			        let session: (() -> Session)?
-			        let screenBuilder: Screen.SafeDIMockConfiguration
-			        let peerBuilder: Peer.SafeDIMockConfiguration
+			        var session: (() -> Session)? { __safeDI_storage.session }
+			        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+			        var peerBuilder: Peer.SafeDIMockConfiguration { __safeDI_storage.peerBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                session: (() -> Session)?,
+			                screenBuilder: Screen.SafeDIMockConfiguration,
+			                peerBuilder: Peer.SafeDIMockConfiguration
+			            ) {
+			                self.session = session
+			                self.screenBuilder = screenBuilder
+			                self.peerBuilder = peerBuilder
+			            }
+
+			            let session: (() -> Session)?
+			            let screenBuilder: Screen.SafeDIMockConfiguration
+			            let peerBuilder: Peer.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1667,14 +2166,34 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            `some thing`: Screen.SafeDIMockConfiguration = .init(),
 			            peer: ((Instantiator<Screen>) -> Peer)? = nil
 			        ) {
-			            self.`c d` = `c d`
-			            self.`some thing` = `some thing`
-			            self.peer = peer
+			            __safeDI_storage = __safeDI_Storage(
+			                `c d`: `c d`,
+			                `some thing`: `some thing`,
+			                peer: peer
+			            )
 			        }
 
-			        let `c d`: (() -> Session)?
-			        let `some thing`: Screen.SafeDIMockConfiguration
-			        let peer: ((Instantiator<Screen>) -> Peer)?
+			        var `c d`: (() -> Session)? { __safeDI_storage.`c d` }
+			        var `some thing`: Screen.SafeDIMockConfiguration { __safeDI_storage.`some thing` }
+			        var peer: ((Instantiator<Screen>) -> Peer)? { __safeDI_storage.peer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                `c d`: (() -> Session)?,
+			                `some thing`: Screen.SafeDIMockConfiguration,
+			                peer: ((Instantiator<Screen>) -> Peer)?
+			            ) {
+			                self.`c d` = `c d`
+			                self.`some thing` = `some thing`
+			                self.peer = peer
+			            }
+
+			            let `c d`: (() -> Session)?
+			            let `some thing`: Screen.SafeDIMockConfiguration
+			            let peer: ((Instantiator<Screen>) -> Peer)?
+			        }
 			    }
 
 			    static func mock(
@@ -1734,12 +2253,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            bBuilder: ((Instantiator<A>) -> B)? = nil,
 			            aBuilder: ((Instantiator<B>) -> A)? = nil
 			        ) {
-			            self.bBuilder = bBuilder
-			            self.aBuilder = aBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                bBuilder: bBuilder,
+			                aBuilder: aBuilder
+			            )
 			        }
 
-			        public let bBuilder: ((Instantiator<A>) -> B)?
-			        public let aBuilder: ((Instantiator<B>) -> A)?
+			        public var bBuilder: ((Instantiator<A>) -> B)? { __safeDI_storage.bBuilder }
+			        public var aBuilder: ((Instantiator<B>) -> A)? { __safeDI_storage.aBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                bBuilder: ((Instantiator<A>) -> B)?,
+			                aBuilder: ((Instantiator<B>) -> A)?
+			            ) {
+			                self.bBuilder = bBuilder
+			                self.aBuilder = aBuilder
+			            }
+
+			            let bBuilder: ((Instantiator<A>) -> B)?
+			            let aBuilder: ((Instantiator<B>) -> A)?
+			        }
 			    }
 
 			    public static func mock(
@@ -1810,12 +2346,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            aBuilder: A.SafeDIMockConfiguration = .init(),
 			            b: ((Instantiator<A>) -> B)? = nil
 			        ) {
-			            self.aBuilder = aBuilder
-			            self.b = b
+			            __safeDI_storage = __safeDI_Storage(
+			                aBuilder: aBuilder,
+			                b: b
+			            )
 			        }
 
-			        let aBuilder: A.SafeDIMockConfiguration
-			        let b: ((Instantiator<A>) -> B)?
+			        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+			        var b: ((Instantiator<A>) -> B)? { __safeDI_storage.b }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                aBuilder: A.SafeDIMockConfiguration,
+			                b: ((Instantiator<A>) -> B)?
+			            ) {
+			                self.aBuilder = aBuilder
+			                self.b = b
+			            }
+
+			            let aBuilder: A.SafeDIMockConfiguration
+			            let b: ((Instantiator<A>) -> B)?
+			        }
 			    }
 
 			    static func mock(
@@ -1841,13 +2394,30 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            b: ((Instantiator<A>) -> B)? = nil,
 			            _ safeDIBuilder: ((B) -> A)? = nil
 			        ) {
-			            self.b = b
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                b: b,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let b: ((Instantiator<A>) -> B)?
+			        var b: ((Instantiator<A>) -> B)? { __safeDI_storage.b }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((B) -> A)?
+			        var safeDIBuilder: ((B) -> A)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                b: ((Instantiator<A>) -> B)?,
+			                safeDIBuilder: ((B) -> A)?
+			            ) {
+			                self.b = b
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let b: ((Instantiator<A>) -> B)?
+			            let safeDIBuilder: ((B) -> A)?
+			        }
 			    }
 			}
 			#endif
@@ -1860,10 +2430,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            aBuilder: A.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.aBuilder = aBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                aBuilder: aBuilder
+			            )
 			        }
 
-			        let aBuilder: A.SafeDIMockConfiguration
+			        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                aBuilder: A.SafeDIMockConfiguration
+			            ) {
+			                self.aBuilder = aBuilder
+			            }
+
+			            let aBuilder: A.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1888,10 +2472,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            aBuilder: A.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.aBuilder = aBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                aBuilder: aBuilder
+			            )
 			        }
 
-			        let aBuilder: A.SafeDIMockConfiguration
+			        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                aBuilder: A.SafeDIMockConfiguration
+			            ) {
+			                self.aBuilder = aBuilder
+			            }
+
+			            let aBuilder: A.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1945,12 +2543,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            aBuilder: A.SafeDIMockConfiguration = .init(),
 			            b: ((Instantiator<A>) -> B)? = nil
 			        ) {
-			            self.aBuilder = aBuilder
-			            self.b = b
+			            __safeDI_storage = __safeDI_Storage(
+			                aBuilder: aBuilder,
+			                b: b
+			            )
 			        }
 
-			        let aBuilder: A.SafeDIMockConfiguration
-			        let b: ((Instantiator<A>) -> B)?
+			        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+			        var b: ((Instantiator<A>) -> B)? { __safeDI_storage.b }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                aBuilder: A.SafeDIMockConfiguration,
+			                b: ((Instantiator<A>) -> B)?
+			            ) {
+			                self.aBuilder = aBuilder
+			                self.b = b
+			            }
+
+			            let aBuilder: A.SafeDIMockConfiguration
+			            let b: ((Instantiator<A>) -> B)?
+			        }
 			    }
 
 			    static func mock(
@@ -1976,13 +2591,30 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            b: ((Instantiator<A>) -> B)? = nil,
 			            _ safeDIBuilder: ((B) -> A)? = nil
 			        ) {
-			            self.b = b
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                b: b,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let b: ((Instantiator<A>) -> B)?
+			        var b: ((Instantiator<A>) -> B)? { __safeDI_storage.b }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((B) -> A)?
+			        var safeDIBuilder: ((B) -> A)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                b: ((Instantiator<A>) -> B)?,
+			                safeDIBuilder: ((B) -> A)?
+			            ) {
+			                self.b = b
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let b: ((Instantiator<A>) -> B)?
+			            let safeDIBuilder: ((B) -> A)?
+			        }
 			    }
 			}
 			#endif
@@ -1995,10 +2627,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            aBuilder: A.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.aBuilder = aBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                aBuilder: aBuilder
+			            )
 			        }
 
-			        let aBuilder: A.SafeDIMockConfiguration
+			        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                aBuilder: A.SafeDIMockConfiguration
+			            ) {
+			                self.aBuilder = aBuilder
+			            }
+
+			            let aBuilder: A.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -2063,12 +2709,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            aBuilder: ((Instantiator<B>) -> A)? = nil,
 			            bBuilder: ((Instantiator<A>) -> B)? = nil
 			        ) {
-			            self.aBuilder = aBuilder
-			            self.bBuilder = bBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                aBuilder: aBuilder,
+			                bBuilder: bBuilder
+			            )
 			        }
 
-			        let aBuilder: ((Instantiator<B>) -> A)?
-			        let bBuilder: ((Instantiator<A>) -> B)?
+			        var aBuilder: ((Instantiator<B>) -> A)? { __safeDI_storage.aBuilder }
+			        var bBuilder: ((Instantiator<A>) -> B)? { __safeDI_storage.bBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                aBuilder: ((Instantiator<B>) -> A)?,
+			                bBuilder: ((Instantiator<A>) -> B)?
+			            ) {
+			                self.aBuilder = aBuilder
+			                self.bBuilder = bBuilder
+			            }
+
+			            let aBuilder: ((Instantiator<B>) -> A)?
+			            let bBuilder: ((Instantiator<A>) -> B)?
+			        }
 			    }
 
 			    static func mock(
@@ -2144,10 +2807,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            holder: Holder.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.holder = holder
+			            __safeDI_storage = __safeDI_Storage(
+			                holder: holder
+			            )
 			        }
 
-			        let holder: Holder.SafeDIMockConfiguration
+			        var holder: Holder.SafeDIMockConfiguration { __safeDI_storage.holder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                holder: Holder.SafeDIMockConfiguration
+			            ) {
+			                self.holder = holder
+			            }
+
+			            let holder: Holder.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -2232,14 +2909,34 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            qBuilder: ((Instantiator<B>) -> Q)? = nil,
 			            aBuilder: A.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.bBuilder = bBuilder
-			            self.qBuilder = qBuilder
-			            self.aBuilder = aBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                bBuilder: bBuilder,
+			                qBuilder: qBuilder,
+			                aBuilder: aBuilder
+			            )
 			        }
 
-			        let bBuilder: B.SafeDIMockConfiguration
-			        let qBuilder: ((Instantiator<B>) -> Q)?
-			        let aBuilder: A.SafeDIMockConfiguration
+			        var bBuilder: B.SafeDIMockConfiguration { __safeDI_storage.bBuilder }
+			        var qBuilder: ((Instantiator<B>) -> Q)? { __safeDI_storage.qBuilder }
+			        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                bBuilder: B.SafeDIMockConfiguration,
+			                qBuilder: ((Instantiator<B>) -> Q)?,
+			                aBuilder: A.SafeDIMockConfiguration
+			            ) {
+			                self.bBuilder = bBuilder
+			                self.qBuilder = qBuilder
+			                self.aBuilder = aBuilder
+			            }
+
+			            let bBuilder: B.SafeDIMockConfiguration
+			            let qBuilder: ((Instantiator<B>) -> Q)?
+			            let aBuilder: A.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -2336,14 +3033,34 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            x_Abc: Abc.SafeDIMockConfiguration = .init(),
 			            consumer: ((Abc) -> Consumer)? = nil
 			        ) {
-			            self.x_Instantiator__Abc = x_Instantiator__Abc
-			            self.x_Abc = x_Abc
-			            self.consumer = consumer
+			            __safeDI_storage = __safeDI_Storage(
+			                x_Instantiator__Abc: x_Instantiator__Abc,
+			                x_Abc: x_Abc,
+			                consumer: consumer
+			            )
 			        }
 
-			        let x_Instantiator__Abc: Abc.SafeDIMockConfiguration
-			        let x_Abc: Abc.SafeDIMockConfiguration
-			        let consumer: ((Abc) -> Consumer)?
+			        var x_Instantiator__Abc: Abc.SafeDIMockConfiguration { __safeDI_storage.x_Instantiator__Abc }
+			        var x_Abc: Abc.SafeDIMockConfiguration { __safeDI_storage.x_Abc }
+			        var consumer: ((Abc) -> Consumer)? { __safeDI_storage.consumer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                x_Instantiator__Abc: Abc.SafeDIMockConfiguration,
+			                x_Abc: Abc.SafeDIMockConfiguration,
+			                consumer: ((Abc) -> Consumer)?
+			            ) {
+			                self.x_Instantiator__Abc = x_Instantiator__Abc
+			                self.x_Abc = x_Abc
+			                self.consumer = consumer
+			            }
+
+			            let x_Instantiator__Abc: Abc.SafeDIMockConfiguration
+			            let x_Abc: Abc.SafeDIMockConfiguration
+			            let consumer: ((Abc) -> Consumer)?
+			        }
 			    }
 
 			    static func mock(
@@ -2431,14 +3148,34 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            x_Xyz: Xyz.SafeDIMockConfiguration = .init(),
 			            consumer: ((Xyz) -> Consumer)? = nil
 			        ) {
-			            self.x_Instantiator__Xyz = x_Instantiator__Xyz
-			            self.x_Xyz = x_Xyz
-			            self.consumer = consumer
+			            __safeDI_storage = __safeDI_Storage(
+			                x_Instantiator__Xyz: x_Instantiator__Xyz,
+			                x_Xyz: x_Xyz,
+			                consumer: consumer
+			            )
 			        }
 
-			        let x_Instantiator__Xyz: Xyz.SafeDIMockConfiguration
-			        let x_Xyz: Xyz.SafeDIMockConfiguration
-			        let consumer: ((Xyz) -> Consumer)?
+			        var x_Instantiator__Xyz: Xyz.SafeDIMockConfiguration { __safeDI_storage.x_Instantiator__Xyz }
+			        var x_Xyz: Xyz.SafeDIMockConfiguration { __safeDI_storage.x_Xyz }
+			        var consumer: ((Xyz) -> Consumer)? { __safeDI_storage.consumer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                x_Instantiator__Xyz: Xyz.SafeDIMockConfiguration,
+			                x_Xyz: Xyz.SafeDIMockConfiguration,
+			                consumer: ((Xyz) -> Consumer)?
+			            ) {
+			                self.x_Instantiator__Xyz = x_Instantiator__Xyz
+			                self.x_Xyz = x_Xyz
+			                self.consumer = consumer
+			            }
+
+			            let x_Instantiator__Xyz: Xyz.SafeDIMockConfiguration
+			            let x_Xyz: Xyz.SafeDIMockConfiguration
+			            let consumer: ((Xyz) -> Consumer)?
+			        }
 			    }
 
 			    static func mock(
@@ -2660,10 +3397,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            nodeBuilder: ((Instantiator<Node>) -> Node)? = nil
 			        ) {
-			            self.nodeBuilder = nodeBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                nodeBuilder: nodeBuilder
+			            )
 			        }
 
-			        let nodeBuilder: ((Instantiator<Node>) -> Node)?
+			        var nodeBuilder: ((Instantiator<Node>) -> Node)? { __safeDI_storage.nodeBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                nodeBuilder: ((Instantiator<Node>) -> Node)?
+			            ) {
+			                self.nodeBuilder = nodeBuilder
+			            }
+
+			            let nodeBuilder: ((Instantiator<Node>) -> Node)?
+			        }
 			    }
 
 			    static func mock(
@@ -2713,10 +3464,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            nodeBuilder: (@Sendable (SendableInstantiator<Node>) -> Node)? = nil
 			        ) {
-			            self.nodeBuilder = nodeBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                nodeBuilder: nodeBuilder
+			            )
 			        }
 
-			        let nodeBuilder: (@Sendable (SendableInstantiator<Node>) -> Node)?
+			        var nodeBuilder: (@Sendable (SendableInstantiator<Node>) -> Node)? { __safeDI_storage.nodeBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage: Sendable {
+			            init(
+			                nodeBuilder: (@Sendable (SendableInstantiator<Node>) -> Node)?
+			            ) {
+			                self.nodeBuilder = nodeBuilder
+			            }
+
+			            let nodeBuilder: (@Sendable (SendableInstantiator<Node>) -> Node)?
+			        }
 			    }
 
 			    static func mock(
@@ -2785,10 +3550,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            nodeBuilder: ((AnyNodeFactory) -> AnyNode)? = nil
 			        ) {
-			            self.nodeBuilder = nodeBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                nodeBuilder: nodeBuilder
+			            )
 			        }
 
-			        let nodeBuilder: ((AnyNodeFactory) -> AnyNode)?
+			        var nodeBuilder: ((AnyNodeFactory) -> AnyNode)? { __safeDI_storage.nodeBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                nodeBuilder: ((AnyNodeFactory) -> AnyNode)?
+			            ) {
+			                self.nodeBuilder = nodeBuilder
+			            }
+
+			            let nodeBuilder: ((AnyNodeFactory) -> AnyNode)?
+			        }
 			    }
 
 			    static func mock(
@@ -2850,12 +3629,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            nodeBuilder: Node.SafeDIMockConfiguration = .init(),
 			            child: ((Instantiator<Node>) -> Child)? = nil
 			        ) {
-			            self.nodeBuilder = nodeBuilder
-			            self.child = child
+			            __safeDI_storage = __safeDI_Storage(
+			                nodeBuilder: nodeBuilder,
+			                child: child
+			            )
 			        }
 
-			        let nodeBuilder: Node.SafeDIMockConfiguration
-			        let child: ((Instantiator<Node>) -> Child)?
+			        var nodeBuilder: Node.SafeDIMockConfiguration { __safeDI_storage.nodeBuilder }
+			        var child: ((Instantiator<Node>) -> Child)? { __safeDI_storage.child }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                nodeBuilder: Node.SafeDIMockConfiguration,
+			                child: ((Instantiator<Node>) -> Child)?
+			            ) {
+			                self.nodeBuilder = nodeBuilder
+			                self.child = child
+			            }
+
+			            let nodeBuilder: Node.SafeDIMockConfiguration
+			            let child: ((Instantiator<Node>) -> Child)?
+			        }
 			    }
 
 			    static func mock(
@@ -2899,13 +3695,30 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            child: ((Instantiator<Node>) -> Child)? = nil,
 			            _ safeDIBuilder: ((Instantiator<Node>, Child) -> Node)? = nil
 			        ) {
-			            self.child = child
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let child: ((Instantiator<Node>) -> Child)?
+			        var child: ((Instantiator<Node>) -> Child)? { __safeDI_storage.child }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Instantiator<Node>, Child) -> Node)?
+			        var safeDIBuilder: ((Instantiator<Node>, Child) -> Node)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: ((Instantiator<Node>) -> Child)?,
+			                safeDIBuilder: ((Instantiator<Node>, Child) -> Node)?
+			            ) {
+			                self.child = child
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let child: ((Instantiator<Node>) -> Child)?
+			            let safeDIBuilder: ((Instantiator<Node>, Child) -> Node)?
+			        }
 			    }
 			}
 			#endif
@@ -2954,10 +3767,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            nodeBuilder: Node.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.nodeBuilder = nodeBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                nodeBuilder: nodeBuilder
+			            )
 			        }
 
-			        let nodeBuilder: Node.SafeDIMockConfiguration
+			        var nodeBuilder: Node.SafeDIMockConfiguration { __safeDI_storage.nodeBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                nodeBuilder: Node.SafeDIMockConfiguration
+			            ) {
+			                self.nodeBuilder = nodeBuilder
+			            }
+
+			            let nodeBuilder: Node.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -3031,10 +3858,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            nodeBuilder: ((Instantiator<Node>) -> Node)? = nil
 			        ) {
-			            self.nodeBuilder = nodeBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                nodeBuilder: nodeBuilder
+			            )
 			        }
 
-			        let nodeBuilder: ((Instantiator<Node>) -> Node)?
+			        var nodeBuilder: ((Instantiator<Node>) -> Node)? { __safeDI_storage.nodeBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                nodeBuilder: ((Instantiator<Node>) -> Node)?
+			            ) {
+			                self.nodeBuilder = nodeBuilder
+			            }
+
+			            let nodeBuilder: ((Instantiator<Node>) -> Node)?
+			        }
 			    }
 
 			    static func mock(
@@ -3082,14 +3923,34 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            middleBuilder: (() -> Tool)? = nil,
 			            other: ((Tool) -> Other)? = nil
 			        ) {
-			            self.nodeBuilder = nodeBuilder
-			            self.middleBuilder = middleBuilder
-			            self.other = other
+			            __safeDI_storage = __safeDI_Storage(
+			                nodeBuilder: nodeBuilder,
+			                middleBuilder: middleBuilder,
+			                other: other
+			            )
 			        }
 
-			        let nodeBuilder: ((Instantiator<Node>) -> Node)?
-			        let middleBuilder: (() -> Tool)?
-			        let other: ((Tool) -> Other)?
+			        var nodeBuilder: ((Instantiator<Node>) -> Node)? { __safeDI_storage.nodeBuilder }
+			        var middleBuilder: (() -> Tool)? { __safeDI_storage.middleBuilder }
+			        var other: ((Tool) -> Other)? { __safeDI_storage.other }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                nodeBuilder: ((Instantiator<Node>) -> Node)?,
+			                middleBuilder: (() -> Tool)?,
+			                other: ((Tool) -> Other)?
+			            ) {
+			                self.nodeBuilder = nodeBuilder
+			                self.middleBuilder = middleBuilder
+			                self.other = other
+			            }
+
+			            let nodeBuilder: ((Instantiator<Node>) -> Node)?
+			            let middleBuilder: (() -> Tool)?
+			            let other: ((Tool) -> Other)?
+			        }
 			    }
 
 			    static func mock(
@@ -3137,10 +3998,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            bBuilder: B.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.bBuilder = bBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                bBuilder: bBuilder
+			            )
 			        }
 
-			        let bBuilder: B.SafeDIMockConfiguration
+			        var bBuilder: B.SafeDIMockConfiguration { __safeDI_storage.bBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                bBuilder: B.SafeDIMockConfiguration
+			            ) {
+			                self.bBuilder = bBuilder
+			            }
+
+			            let bBuilder: B.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -3184,10 +4059,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            bBuilder: B.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.bBuilder = bBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                bBuilder: bBuilder
+			            )
 			        }
 
-			        let bBuilder: B.SafeDIMockConfiguration
+			        var bBuilder: B.SafeDIMockConfiguration { __safeDI_storage.bBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                bBuilder: B.SafeDIMockConfiguration
+			            ) {
+			                self.bBuilder = bBuilder
+			            }
+
+			            let bBuilder: B.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -3231,10 +4120,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            bBuilder: B.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.bBuilder = bBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                bBuilder: bBuilder
+			            )
 			        }
 
-			        let bBuilder: B.SafeDIMockConfiguration
+			        var bBuilder: B.SafeDIMockConfiguration { __safeDI_storage.bBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                bBuilder: B.SafeDIMockConfiguration
+			            ) {
+			                self.bBuilder = bBuilder
+			            }
+
+			            let bBuilder: B.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -3280,10 +4183,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        init(
 			            bBuilder: B.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.bBuilder = bBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                bBuilder: bBuilder
+			            )
 			        }
 
-			        let bBuilder: B.SafeDIMockConfiguration
+			        var bBuilder: B.SafeDIMockConfiguration { __safeDI_storage.bBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                bBuilder: B.SafeDIMockConfiguration
+			            ) {
+			                self.bBuilder = bBuilder
+			            }
+
+			            let bBuilder: B.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(

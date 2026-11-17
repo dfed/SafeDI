@@ -212,10 +212,24 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 		        init(
 		            child: (() -> Child)? = nil
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: (() -> Child)?
+		        var child: (() -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: (() -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: (() -> Child)?
+		        }
 		    }
 
 		    @MainActor static func mock(
@@ -269,10 +283,24 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 		        init(
 		            childBuilder: (() -> Child)? = nil
 		        ) {
-		            self.childBuilder = childBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder
+		            )
 		        }
 
-		        let childBuilder: (() -> Child)?
+		        var childBuilder: (() -> Child)? { __safeDI_storage.childBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childBuilder: (() -> Child)?
+		            ) {
+		                self.childBuilder = childBuilder
+		            }
+
+		            let childBuilder: (() -> Child)?
+		        }
 		    }
 
 		    @MainActor static func mock(
@@ -333,10 +361,24 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 		        init(
 		            child: (() -> Child)? = nil
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: (() -> Child)?
+		        var child: (() -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: (() -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: (() -> Child)?
+		        }
 		    }
 
 		    @MainActor static func mock(
@@ -542,10 +584,24 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			        init(
 			            presenter: (() -> Presenter)? = nil
 			        ) {
-			            self.presenter = presenter
+			            __safeDI_storage = __safeDI_Storage(
+			                presenter: presenter
+			            )
 			        }
 
-			        let presenter: (() -> Presenter)?
+			        var presenter: (() -> Presenter)? { __safeDI_storage.presenter }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                presenter: (() -> Presenter)?
+			            ) {
+			                self.presenter = presenter
+			            }
+
+			            let presenter: (() -> Presenter)?
+			        }
 			    }
 
 			    @MainActor static func mock(
@@ -793,10 +849,24 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			        init(
 			            presenter: (() -> Presenter)? = nil
 			        ) {
-			            self.presenter = presenter
+			            __safeDI_storage = __safeDI_Storage(
+			                presenter: presenter
+			            )
 			        }
 
-			        let presenter: (() -> Presenter)?
+			        var presenter: (() -> Presenter)? { __safeDI_storage.presenter }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                presenter: (() -> Presenter)?
+			            ) {
+			                self.presenter = presenter
+			            }
+
+			            let presenter: (() -> Presenter)?
+			        }
 			    }
 
 			    @MainActor static func mock(

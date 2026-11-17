@@ -530,10 +530,24 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		        init(
 		            sessionBuilder: ((Token) -> Session)? = nil
 		        ) {
-		            self.sessionBuilder = sessionBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                sessionBuilder: sessionBuilder
+		            )
 		        }
 
-		        let sessionBuilder: ((Token) -> Session)?
+		        var sessionBuilder: ((Token) -> Session)? { __safeDI_storage.sessionBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                sessionBuilder: ((Token) -> Session)?
+		            ) {
+		                self.sessionBuilder = sessionBuilder
+		            }
+
+		            let sessionBuilder: ((Token) -> Session)?
+		        }
 		    }
 
 		    static func mock(
@@ -1096,10 +1110,24 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 			        init(
 			            consumer: ((Session?) -> Consumer)? = nil
 			        ) {
-			            self.consumer = consumer
+			            __safeDI_storage = __safeDI_Storage(
+			                consumer: consumer
+			            )
 			        }
 
-			        let consumer: ((Session?) -> Consumer)?
+			        var consumer: ((Session?) -> Consumer)? { __safeDI_storage.consumer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                consumer: ((Session?) -> Consumer)?
+			            ) {
+			                self.consumer = consumer
+			            }
+
+			            let consumer: ((Session?) -> Consumer)?
+			        }
 			    }
 
 			    static func mock(
@@ -1131,10 +1159,24 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 			        init(
 			            consumer: ((Session?) -> Consumer)? = nil
 			        ) {
-			            self.consumer = consumer
+			            __safeDI_storage = __safeDI_Storage(
+			                consumer: consumer
+			            )
 			        }
 
-			        let consumer: ((Session?) -> Consumer)?
+			        var consumer: ((Session?) -> Consumer)? { __safeDI_storage.consumer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                consumer: ((Session?) -> Consumer)?
+			            ) {
+			                self.consumer = consumer
+			            }
+
+			            let consumer: ((Session?) -> Consumer)?
+			        }
 			    }
 
 			    static func mock(

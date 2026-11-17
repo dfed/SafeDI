@@ -1436,12 +1436,29 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            exportService: (() -> ExportService)? = nil,
 			            screenBuilder: ((ExportService) -> ExportScreen)? = nil
 			        ) {
-			            self.exportService = exportService
-			            self.screenBuilder = screenBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                exportService: exportService,
+			                screenBuilder: screenBuilder
+			            )
 			        }
 
-			        public let exportService: (() -> ExportService)?
-			        public let screenBuilder: ((ExportService) -> ExportScreen)?
+			        public var exportService: (() -> ExportService)? { __safeDI_storage.exportService }
+			        public var screenBuilder: ((ExportService) -> ExportScreen)? { __safeDI_storage.screenBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                exportService: (() -> ExportService)?,
+			                screenBuilder: ((ExportService) -> ExportScreen)?
+			            ) {
+			                self.exportService = exportService
+			                self.screenBuilder = screenBuilder
+			            }
+
+			            let exportService: (() -> ExportService)?
+			            let screenBuilder: ((ExportService) -> ExportScreen)?
+			        }
 			    }
 
 			    public static func mock(
@@ -1531,12 +1548,29 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            exportService: (() -> ExportService)? = nil,
 			            screenBuilder: ((ExportService) -> ExportScreen)? = nil
 			        ) {
-			            self.exportService = exportService
-			            self.screenBuilder = screenBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                exportService: exportService,
+			                screenBuilder: screenBuilder
+			            )
 			        }
 
-			        public let exportService: (() -> ExportService)?
-			        public let screenBuilder: ((ExportService) -> ExportScreen)?
+			        public var exportService: (() -> ExportService)? { __safeDI_storage.exportService }
+			        public var screenBuilder: ((ExportService) -> ExportScreen)? { __safeDI_storage.screenBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                exportService: (() -> ExportService)?,
+			                screenBuilder: ((ExportService) -> ExportScreen)?
+			            ) {
+			                self.exportService = exportService
+			                self.screenBuilder = screenBuilder
+			            }
+
+			            let exportService: (() -> ExportService)?
+			            let screenBuilder: ((ExportService) -> ExportScreen)?
+			        }
 			    }
 
 			    public static func mock(

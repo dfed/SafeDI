@@ -110,10 +110,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        init(
 		            screenBuilder: ((@escaping OnTap) -> Screen)? = nil
 		        ) {
-		            self.screenBuilder = screenBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                screenBuilder: screenBuilder
+		            )
 		        }
 
-		        let screenBuilder: ((@escaping OnTap) -> Screen)?
+		        var screenBuilder: ((@escaping OnTap) -> Screen)? { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screenBuilder: ((@escaping OnTap) -> Screen)?
+		            ) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let screenBuilder: ((@escaping OnTap) -> Screen)?
+		        }
 		    }
 
 		    static func mock(
@@ -213,10 +227,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        init(
 		            screen: ((@escaping OnTap) -> Screen)? = nil
 		        ) {
-		            self.screen = screen
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen
+		            )
 		        }
 
-		        let screen: ((@escaping OnTap) -> Screen)?
+		        var screen: ((@escaping OnTap) -> Screen)? { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: ((@escaping OnTap) -> Screen)?
+		            ) {
+		                self.screen = screen
+		            }
+
+		            let screen: ((@escaping OnTap) -> Screen)?
+		        }
 		    }
 
 		    static func mock(
@@ -238,13 +266,30 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            screen: ((@escaping OnTap) -> Screen)? = nil,
 		            _ safeDIBuilder: ((@escaping OnTap, Int, Screen) -> Parent)? = nil
 		        ) {
-		            self.screen = screen
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let screen: ((@escaping OnTap) -> Screen)?
+		        var screen: ((@escaping OnTap) -> Screen)? { __safeDI_storage.screen }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((@escaping OnTap, Int, Screen) -> Parent)?
+		        var safeDIBuilder: ((@escaping OnTap, Int, Screen) -> Parent)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: ((@escaping OnTap) -> Screen)?,
+		                safeDIBuilder: ((@escaping OnTap, Int, Screen) -> Parent)?
+		            ) {
+		                self.screen = screen
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let screen: ((@escaping OnTap) -> Screen)?
+		            let safeDIBuilder: ((@escaping OnTap, Int, Screen) -> Parent)?
+		        }
 		    }
 		}
 		#endif
@@ -261,10 +306,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        init(
 		            parentBuilder: Parent.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.parentBuilder = parentBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                parentBuilder: parentBuilder
+		            )
 		        }
 
-		        let parentBuilder: Parent.SafeDIMockConfiguration
+		        var parentBuilder: Parent.SafeDIMockConfiguration { __safeDI_storage.parentBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                parentBuilder: Parent.SafeDIMockConfiguration
+		            ) {
+		                self.parentBuilder = parentBuilder
+		            }
+
+		            let parentBuilder: Parent.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -338,10 +397,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        init(
 		            screen: ((@escaping OnTap) -> Screen)? = nil
 		        ) {
-		            self.screen = screen
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen
+		            )
 		        }
 
-		        let screen: ((@escaping OnTap) -> Screen)?
+		        var screen: ((@escaping OnTap) -> Screen)? { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: ((@escaping OnTap) -> Screen)?
+		            ) {
+		                self.screen = screen
+		            }
+
+		            let screen: ((@escaping OnTap) -> Screen)?
+		        }
 		    }
 
 		    static func mock(
@@ -459,10 +532,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        init(
 		            screen: ((@escaping () -> Void) -> Screen)? = nil
 		        ) {
-		            self.screen = screen
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen
+		            )
 		        }
 
-		        let screen: ((@escaping () -> Void) -> Screen)?
+		        var screen: ((@escaping () -> Void) -> Screen)? { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: ((@escaping () -> Void) -> Screen)?
+		            ) {
+		                self.screen = screen
+		            }
+
+		            let screen: ((@escaping () -> Void) -> Screen)?
+		        }
 		    }
 
 		    static func mock(
@@ -483,13 +570,30 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            screen: ((@escaping () -> Void) -> Screen)? = nil,
 		            _ safeDIBuilder: ((@escaping () -> Void, Screen) -> Parent)? = nil
 		        ) {
-		            self.screen = screen
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let screen: ((@escaping () -> Void) -> Screen)?
+		        var screen: ((@escaping () -> Void) -> Screen)? { __safeDI_storage.screen }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((@escaping () -> Void, Screen) -> Parent)?
+		        var safeDIBuilder: ((@escaping () -> Void, Screen) -> Parent)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: ((@escaping () -> Void) -> Screen)?,
+		                safeDIBuilder: ((@escaping () -> Void, Screen) -> Parent)?
+		            ) {
+		                self.screen = screen
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let screen: ((@escaping () -> Void) -> Screen)?
+		            let safeDIBuilder: ((@escaping () -> Void, Screen) -> Parent)?
+		        }
 		    }
 		}
 		#endif
@@ -506,10 +610,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        init(
 		            parentBuilder: Parent.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.parentBuilder = parentBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                parentBuilder: parentBuilder
+		            )
 		        }
 
-		        let parentBuilder: Parent.SafeDIMockConfiguration
+		        var parentBuilder: Parent.SafeDIMockConfiguration { __safeDI_storage.parentBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                parentBuilder: Parent.SafeDIMockConfiguration
+		            ) {
+		                self.parentBuilder = parentBuilder
+		            }
+
+		            let parentBuilder: Parent.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -612,10 +730,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        init(
 		            screen: ((@escaping OnTap) -> Screen)? = nil
 		        ) {
-		            self.screen = screen
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen
+		            )
 		        }
 
-		        let screen: ((@escaping OnTap) -> Screen)?
+		        var screen: ((@escaping OnTap) -> Screen)? { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: ((@escaping OnTap) -> Screen)?
+		            ) {
+		                self.screen = screen
+		            }
+
+		            let screen: ((@escaping OnTap) -> Screen)?
+		        }
 		    }
 
 		    static func mock(
@@ -636,13 +768,30 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            screen: ((@escaping OnTap) -> Screen)? = nil,
 		            _ safeDIBuilder: ((@escaping OnTap, Screen) -> Parent)? = nil
 		        ) {
-		            self.screen = screen
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let screen: ((@escaping OnTap) -> Screen)?
+		        var screen: ((@escaping OnTap) -> Screen)? { __safeDI_storage.screen }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((@escaping OnTap, Screen) -> Parent)?
+		        var safeDIBuilder: ((@escaping OnTap, Screen) -> Parent)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: ((@escaping OnTap) -> Screen)?,
+		                safeDIBuilder: ((@escaping OnTap, Screen) -> Parent)?
+		            ) {
+		                self.screen = screen
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let screen: ((@escaping OnTap) -> Screen)?
+		            let safeDIBuilder: ((@escaping OnTap, Screen) -> Parent)?
+		        }
 		    }
 		}
 		#endif
@@ -659,10 +808,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        init(
 		            parentBuilder: Parent.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.parentBuilder = parentBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                parentBuilder: parentBuilder
+		            )
 		        }
 
-		        let parentBuilder: Parent.SafeDIMockConfiguration
+		        var parentBuilder: Parent.SafeDIMockConfiguration { __safeDI_storage.parentBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                parentBuilder: Parent.SafeDIMockConfiguration
+		            ) {
+		                self.parentBuilder = parentBuilder
+		            }
+
+		            let parentBuilder: Parent.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -826,10 +989,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        init(
 		            screen: ((@escaping OnTap) -> Screen)? = nil
 		        ) {
-		            self.screen = screen
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen
+		            )
 		        }
 
-		        let screen: ((@escaping OnTap) -> Screen)?
+		        var screen: ((@escaping OnTap) -> Screen)? { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: ((@escaping OnTap) -> Screen)?
+		            ) {
+		                self.screen = screen
+		            }
+
+		            let screen: ((@escaping OnTap) -> Screen)?
+		        }
 		    }
 
 		    static func mock(
@@ -871,10 +1048,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        init(
 				            inner: Inner.SafeDIOverrides = .init()
 				        ) {
-				            self.inner = inner
+				            __safeDI_storage = __safeDI_Storage(
+				                inner: inner
+				            )
 				        }
 
-				        let inner: Inner.SafeDIOverrides
+				        var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                inner: Inner.SafeDIOverrides
+				            ) {
+				                self.inner = inner
+				            }
+
+				            let inner: Inner.SafeDIOverrides
+				        }
 				    }
 
 				    static func mock(
@@ -903,10 +1094,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        init(
 				            inner: Inner.SafeDIOverrides = .init()
 				        ) {
-				            self.inner = inner
+				            __safeDI_storage = __safeDI_Storage(
+				                inner: inner
+				            )
 				        }
 
-				        let inner: Inner.SafeDIOverrides
+				        var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                inner: Inner.SafeDIOverrides
+				            ) {
+				                self.inner = inner
+				            }
+
+				            let inner: Inner.SafeDIOverrides
+				        }
 				    }
 
 				    static func mock(
@@ -957,10 +1162,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        public init(
 				            inner: Inner.SafeDIOverrides = .init()
 				        ) {
-				            self.inner = inner
+				            __safeDI_storage = __safeDI_Storage(
+				                inner: inner
+				            )
 				        }
 
-				        public let inner: Inner.SafeDIOverrides
+				        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                inner: Inner.SafeDIOverrides
+				            ) {
+				                self.inner = inner
+				            }
+
+				            let inner: Inner.SafeDIOverrides
+				        }
 				    }
 
 				    public static func mock(
@@ -993,10 +1212,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        public init(
 				            inner: Inner.SafeDIOverrides = .init()
 				        ) {
-				            self.inner = inner
+				            __safeDI_storage = __safeDI_Storage(
+				                inner: inner
+				            )
 				        }
 
-				        public let inner: Inner.SafeDIOverrides
+				        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                inner: Inner.SafeDIOverrides
+				            ) {
+				                self.inner = inner
+				            }
+
+				            let inner: Inner.SafeDIOverrides
+				        }
 				    }
 
 				    public static func mock(
@@ -1051,10 +1284,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        init(
 				            inner: Inner.SafeDIOverrides = .init()
 				        ) {
-				            self.inner = inner
+				            __safeDI_storage = __safeDI_Storage(
+				                inner: inner
+				            )
 				        }
 
-				        let inner: Inner.SafeDIOverrides
+				        var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                inner: Inner.SafeDIOverrides
+				            ) {
+				                self.inner = inner
+				            }
+
+				            let inner: Inner.SafeDIOverrides
+				        }
 				    }
 
 				    static func mock(
@@ -1083,10 +1330,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        init(
 				            inner: Inner.SafeDIOverrides = .init()
 				        ) {
-				            self.inner = inner
+				            __safeDI_storage = __safeDI_Storage(
+				                inner: inner
+				            )
 				        }
 
-				        let inner: Inner.SafeDIOverrides
+				        var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                inner: Inner.SafeDIOverrides
+				            ) {
+				                self.inner = inner
+				            }
+
+				            let inner: Inner.SafeDIOverrides
+				        }
 				    }
 
 				    static func mock(
@@ -1137,10 +1398,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        init(
 				            innerBuilder: Inner.SafeDIOverrides = .init()
 				        ) {
-				            self.innerBuilder = innerBuilder
+				            __safeDI_storage = __safeDI_Storage(
+				                innerBuilder: innerBuilder
+				            )
 				        }
 
-				        let innerBuilder: Inner.SafeDIOverrides
+				        var innerBuilder: Inner.SafeDIOverrides { __safeDI_storage.innerBuilder }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                innerBuilder: Inner.SafeDIOverrides
+				            ) {
+				                self.innerBuilder = innerBuilder
+				            }
+
+				            let innerBuilder: Inner.SafeDIOverrides
+				        }
 				    }
 
 				    static func mock(
@@ -1172,10 +1447,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        init(
 				            innerBuilder: Inner.SafeDIOverrides = .init()
 				        ) {
-				            self.innerBuilder = innerBuilder
+				            __safeDI_storage = __safeDI_Storage(
+				                innerBuilder: innerBuilder
+				            )
 				        }
 
-				        let innerBuilder: Inner.SafeDIOverrides
+				        var innerBuilder: Inner.SafeDIOverrides { __safeDI_storage.innerBuilder }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                innerBuilder: Inner.SafeDIOverrides
+				            ) {
+				                self.innerBuilder = innerBuilder
+				            }
+
+				            let innerBuilder: Inner.SafeDIOverrides
+				        }
 				    }
 
 				    static func mock(
@@ -1229,10 +1518,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        init(
 				            inner: Inner.SafeDIOverrides = .init()
 				        ) {
-				            self.inner = inner
+				            __safeDI_storage = __safeDI_Storage(
+				                inner: inner
+				            )
 				        }
 
-				        let inner: Inner.SafeDIOverrides
+				        var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                inner: Inner.SafeDIOverrides
+				            ) {
+				                self.inner = inner
+				            }
+
+				            let inner: Inner.SafeDIOverrides
+				        }
 				    }
 
 				    static func mock(
@@ -1261,10 +1564,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        init(
 				            inner: Inner.SafeDIOverrides = .init()
 				        ) {
-				            self.inner = inner
+				            __safeDI_storage = __safeDI_Storage(
+				                inner: inner
+				            )
 				        }
 
-				        let inner: Inner.SafeDIOverrides
+				        var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                inner: Inner.SafeDIOverrides
+				            ) {
+				                self.inner = inner
+				            }
+
+				            let inner: Inner.SafeDIOverrides
+				        }
 				    }
 
 				    static func mock(
@@ -1331,10 +1648,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        init(
 				            middle: Middle.SafeDIOverrides = .init()
 				        ) {
-				            self.middle = middle
+				            __safeDI_storage = __safeDI_Storage(
+				                middle: middle
+				            )
 				        }
 
-				        let middle: Middle.SafeDIOverrides
+				        var middle: Middle.SafeDIOverrides { __safeDI_storage.middle }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                middle: Middle.SafeDIOverrides
+				            ) {
+				                self.middle = middle
+				            }
+
+				            let middle: Middle.SafeDIOverrides
+				        }
 				    }
 
 				    static func mock(
@@ -1366,10 +1697,24 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        init(
 				            middle: Middle.SafeDIOverrides = .init()
 				        ) {
-				            self.middle = middle
+				            __safeDI_storage = __safeDI_Storage(
+				                middle: middle
+				            )
 				        }
 
-				        let middle: Middle.SafeDIOverrides
+				        var middle: Middle.SafeDIOverrides { __safeDI_storage.middle }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                middle: Middle.SafeDIOverrides
+				            ) {
+				                self.middle = middle
+				            }
+
+				            let middle: Middle.SafeDIOverrides
+				        }
 				    }
 
 				    static func mock(

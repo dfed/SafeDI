@@ -1759,12 +1759,29 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            navigator: (() -> Navigator)? = nil,
 		            innermost: __safeDI_Feature_Innermost_MockConfiguration = .init()
 		        ) {
-		            self.navigator = navigator
-		            self.innermost = innermost
+		            __safeDI_storage = __safeDI_Storage(
+		                navigator: navigator,
+		                innermost: innermost
+		            )
 		        }
 
-		        public let navigator: (() -> Navigator)?
-		        public let innermost: __safeDI_Feature_Innermost_MockConfiguration
+		        public var navigator: (() -> Navigator)? { __safeDI_storage.navigator }
+		        public var innermost: __safeDI_Feature_Innermost_MockConfiguration { __safeDI_storage.innermost }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                navigator: (() -> Navigator)?,
+		                innermost: __safeDI_Feature_Innermost_MockConfiguration
+		            ) {
+		                self.navigator = navigator
+		                self.innermost = innermost
+		            }
+
+		            let navigator: (() -> Navigator)?
+		            let innermost: __safeDI_Feature_Innermost_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -1802,15 +1819,35 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        detailBuilder: ((any Service) -> Detail)? = nil,
 		        _ safeDIBuilder: ((Logger, Instantiator<Detail>) -> Innermost)? = nil
 		    ) {
-		        self.logger = logger
-		        self.detailBuilder = detailBuilder
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            logger: logger,
+		            detailBuilder: detailBuilder,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let logger: (() -> Logger)?
-		    public let detailBuilder: ((any Service) -> Detail)?
+		    public var logger: (() -> Logger)? { __safeDI_storage.logger }
+		    public var detailBuilder: ((any Service) -> Detail)? { __safeDI_storage.detailBuilder }
 		    /// Overrides how `Innermost` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Logger, Instantiator<Detail>) -> Innermost)?
+		    public var safeDIBuilder: ((Logger, Instantiator<Detail>) -> Innermost)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            logger: (() -> Logger)?,
+		            detailBuilder: ((any Service) -> Detail)?,
+		            safeDIBuilder: ((Logger, Instantiator<Detail>) -> Innermost)?
+		        ) {
+		            self.logger = logger
+		            self.detailBuilder = detailBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let logger: (() -> Logger)?
+		        let detailBuilder: ((any Service) -> Detail)?
+		        let safeDIBuilder: ((Logger, Instantiator<Detail>) -> Innermost)?
+		    }
 		}
 
 		extension Innermost {
@@ -1865,10 +1902,24 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        init(
 		            inner: Inner.SafeDIOverrides = .init()
 		        ) {
-		            self.inner = inner
+		            __safeDI_storage = __safeDI_Storage(
+		                inner: inner
+		            )
 		        }
 
-		        let inner: Inner.SafeDIOverrides
+		        var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                inner: Inner.SafeDIOverrides
+		            ) {
+		                self.inner = inner
+		            }
+
+		            let inner: Inner.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(

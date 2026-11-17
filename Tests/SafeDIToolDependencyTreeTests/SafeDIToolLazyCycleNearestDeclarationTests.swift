@@ -174,12 +174,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            session: (() -> Session)? = nil,
 		            t3Builder: T3.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.session = session
-		            self.t3Builder = t3Builder
+		            __safeDI_storage = __safeDI_Storage(
+		                session: session,
+		                t3Builder: t3Builder
+		            )
 		        }
 
-		        let session: (() -> Session)?
-		        let t3Builder: T3.SafeDIMockConfiguration
+		        var session: (() -> Session)? { __safeDI_storage.session }
+		        var t3Builder: T3.SafeDIMockConfiguration { __safeDI_storage.t3Builder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session: (() -> Session)?,
+		                t3Builder: T3.SafeDIMockConfiguration
+		            ) {
+		                self.session = session
+		                self.t3Builder = t3Builder
+		            }
+
+		            let session: (() -> Session)?
+		            let t3Builder: T3.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -451,14 +468,34 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            t3Builder: T3.SafeDIMockConfiguration = .init(),
 		            logger: ((Instantiator<T3>?) -> Logger)? = nil
 		        ) {
-		            self.session = session
-		            self.t3Builder = t3Builder
-		            self.logger = logger
+		            __safeDI_storage = __safeDI_Storage(
+		                session: session,
+		                t3Builder: t3Builder,
+		                logger: logger
+		            )
 		        }
 
-		        let session: (() -> Session)?
-		        let t3Builder: T3.SafeDIMockConfiguration
-		        let logger: ((Instantiator<T3>?) -> Logger)?
+		        var session: (() -> Session)? { __safeDI_storage.session }
+		        var t3Builder: T3.SafeDIMockConfiguration { __safeDI_storage.t3Builder }
+		        var logger: ((Instantiator<T3>?) -> Logger)? { __safeDI_storage.logger }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session: (() -> Session)?,
+		                t3Builder: T3.SafeDIMockConfiguration,
+		                logger: ((Instantiator<T3>?) -> Logger)?
+		            ) {
+		                self.session = session
+		                self.t3Builder = t3Builder
+		                self.logger = logger
+		            }
+
+		            let session: (() -> Session)?
+		            let t3Builder: T3.SafeDIMockConfiguration
+		            let logger: ((Instantiator<T3>?) -> Logger)?
+		        }
 		    }
 
 		    static func mock(
@@ -973,12 +1010,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            session: (() -> Session)? = nil,
 		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.session = session
-		            self.screenBuilder = screenBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                session: session,
+		                screenBuilder: screenBuilder
+		            )
 		        }
 
-		        let session: (() -> Session)?
-		        let screenBuilder: Screen.SafeDIMockConfiguration
+		        var session: (() -> Session)? { __safeDI_storage.session }
+		        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session: (() -> Session)?,
+		                screenBuilder: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.session = session
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let session: (() -> Session)?
+		            let screenBuilder: Screen.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1062,12 +1116,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            session: (() -> Session)? = nil,
 		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.session = session
-		            self.screenBuilder = screenBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                session: session,
+		                screenBuilder: screenBuilder
+		            )
 		        }
 
-		        let session: (() -> Session)?
-		        let screenBuilder: Screen.SafeDIMockConfiguration
+		        var session: (() -> Session)? { __safeDI_storage.session }
+		        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session: (() -> Session)?,
+		                screenBuilder: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.session = session
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let session: (() -> Session)?
+		            let screenBuilder: Screen.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1183,12 +1254,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            session: (() -> Session)? = nil,
 		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.session = session
-		            self.screenBuilder = screenBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                session: session,
+		                screenBuilder: screenBuilder
+		            )
 		        }
 
-		        let session: (() -> Session)?
-		        let screenBuilder: Screen.SafeDIMockConfiguration
+		        var session: (() -> Session)? { __safeDI_storage.session }
+		        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session: (() -> Session)?,
+		                screenBuilder: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.session = session
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let session: (() -> Session)?
+		            let screenBuilder: Screen.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1295,12 +1383,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            session: (() -> Session)? = nil,
 		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.session = session
-		            self.screenBuilder = screenBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                session: session,
+		                screenBuilder: screenBuilder
+		            )
 		        }
 
-		        let session: (() -> Session)?
-		        let screenBuilder: Screen.SafeDIMockConfiguration
+		        var session: (() -> Session)? { __safeDI_storage.session }
+		        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session: (() -> Session)?,
+		                screenBuilder: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.session = session
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let session: (() -> Session)?
+		            let screenBuilder: Screen.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1468,14 +1573,34 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			            t3Builder: T3.SafeDIMockConfiguration = .init(),
 			            t1Builder_T1: (() -> T1)? = nil
 			        ) {
-			            self.t1Builder_Instantiator__T1 = t1Builder_Instantiator__T1
-			            self.t3Builder = t3Builder
-			            self.t1Builder_T1 = t1Builder_T1
+			            __safeDI_storage = __safeDI_Storage(
+			                t1Builder_Instantiator__T1: t1Builder_Instantiator__T1,
+			                t3Builder: t3Builder,
+			                t1Builder_T1: t1Builder_T1
+			            )
 			        }
 
-			        let t1Builder_Instantiator__T1: (() -> T1)?
-			        let t3Builder: T3.SafeDIMockConfiguration
-			        let t1Builder_T1: (() -> T1)?
+			        var t1Builder_Instantiator__T1: (() -> T1)? { __safeDI_storage.t1Builder_Instantiator__T1 }
+			        var t3Builder: T3.SafeDIMockConfiguration { __safeDI_storage.t3Builder }
+			        var t1Builder_T1: (() -> T1)? { __safeDI_storage.t1Builder_T1 }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                t1Builder_Instantiator__T1: (() -> T1)?,
+			                t3Builder: T3.SafeDIMockConfiguration,
+			                t1Builder_T1: (() -> T1)?
+			            ) {
+			                self.t1Builder_Instantiator__T1 = t1Builder_Instantiator__T1
+			                self.t3Builder = t3Builder
+			                self.t1Builder_T1 = t1Builder_T1
+			            }
+
+			            let t1Builder_Instantiator__T1: (() -> T1)?
+			            let t3Builder: T3.SafeDIMockConfiguration
+			            let t1Builder_T1: (() -> T1)?
+			        }
 			    }
 
 			    static func mock(
@@ -1517,12 +1642,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			            t1Builder: (() -> T1)? = nil,
 			            t3Builder: T3.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.t1Builder = t1Builder
-			            self.t3Builder = t3Builder
+			            __safeDI_storage = __safeDI_Storage(
+			                t1Builder: t1Builder,
+			                t3Builder: t3Builder
+			            )
 			        }
 
-			        let t1Builder: (() -> T1)?
-			        let t3Builder: T3.SafeDIMockConfiguration
+			        var t1Builder: (() -> T1)? { __safeDI_storage.t1Builder }
+			        var t3Builder: T3.SafeDIMockConfiguration { __safeDI_storage.t3Builder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                t1Builder: (() -> T1)?,
+			                t3Builder: T3.SafeDIMockConfiguration
+			            ) {
+			                self.t1Builder = t1Builder
+			                self.t3Builder = t3Builder
+			            }
+
+			            let t1Builder: (() -> T1)?
+			            let t3Builder: T3.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1610,10 +1752,24 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        init(
 		            hostBuilder: Host.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.hostBuilder = hostBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                hostBuilder: hostBuilder
+		            )
 		        }
 
-		        let hostBuilder: Host.SafeDIMockConfiguration
+		        var hostBuilder: Host.SafeDIMockConfiguration { __safeDI_storage.hostBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                hostBuilder: Host.SafeDIMockConfiguration
+		            ) {
+		                self.hostBuilder = hostBuilder
+		            }
+
+		            let hostBuilder: Host.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1779,12 +1935,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            renamed: ((X?) -> X)? = nil,
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.renamed = renamed
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                renamed: renamed,
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let renamed: ((X?) -> X)?
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var renamed: ((X?) -> X)? { __safeDI_storage.renamed }
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                renamed: ((X?) -> X)?,
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.renamed = renamed
+		                self.aBuilder = aBuilder
+		            }
+
+		            let renamed: ((X?) -> X)?
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1871,12 +2044,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            renamed: ((X?) -> X)? = nil,
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.renamed = renamed
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                renamed: renamed,
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let renamed: ((X?) -> X)?
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var renamed: ((X?) -> X)? { __safeDI_storage.renamed }
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                renamed: ((X?) -> X)?,
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.renamed = renamed
+		                self.aBuilder = aBuilder
+		            }
+
+		            let renamed: ((X?) -> X)?
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1965,12 +2155,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            x0: ((X?) -> X)? = nil,
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.x0 = x0
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                x0: x0,
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let x0: ((X?) -> X)?
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var x0: ((X?) -> X)? { __safeDI_storage.x0 }
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                x0: ((X?) -> X)?,
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.x0 = x0
+		                self.aBuilder = aBuilder
+		            }
+
+		            let x0: ((X?) -> X)?
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2059,12 +2266,26 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            aBuilder: A.SafeDIMockConfiguration = .init(),
 		            renamed: X? = nil
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		            self.renamed = renamed
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
 		        let renamed: X?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2153,12 +2374,26 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            aBuilder: A.SafeDIMockConfiguration = .init(),
 		            renamed: Instantiator<X>? = nil
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		            self.renamed = renamed
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
 		        let renamed: Instantiator<X>?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2247,12 +2482,26 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            aBuilder: A.SafeDIMockConfiguration = .init(),
 		            renamed: (any XProtocol)? = nil
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		            self.renamed = renamed
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
 		        let renamed: (any XProtocol)?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2385,12 +2634,26 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            aBuilder: A.SafeDIMockConfiguration = .init(),
 		            renamed: X? = nil
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		            self.renamed = renamed
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
 		        let renamed: X?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2500,10 +2763,24 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        init(
 		            renamed: X.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.renamed = renamed
+		            __safeDI_storage = __safeDI_Storage(
+		                renamed: renamed
+		            )
 		        }
 
-		        let renamed: X.SafeDIMockConfiguration
+		        var renamed: X.SafeDIMockConfiguration { __safeDI_storage.renamed }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                renamed: X.SafeDIMockConfiguration
+		            ) {
+		                self.renamed = renamed
+		            }
+
+		            let renamed: X.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2649,12 +2926,26 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            aBuilder: A.SafeDIMockConfiguration = .init(),
 		            renamed: X? = nil
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		            self.renamed = renamed
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
 		        let renamed: X?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2734,12 +3025,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            renamed: ((X?) -> X)? = nil,
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.renamed = renamed
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                renamed: renamed,
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let renamed: ((X?) -> X)?
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var renamed: ((X?) -> X)? { __safeDI_storage.renamed }
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                renamed: ((X?) -> X)?,
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.renamed = renamed
+		                self.aBuilder = aBuilder
+		            }
+
+		            let renamed: ((X?) -> X)?
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2829,12 +3137,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            renamed: X.SafeDIMockConfiguration = .init(),
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.renamed = renamed
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                renamed: renamed,
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let renamed: X.SafeDIMockConfiguration
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var renamed: X.SafeDIMockConfiguration { __safeDI_storage.renamed }
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                renamed: X.SafeDIMockConfiguration,
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.renamed = renamed
+		                self.aBuilder = aBuilder
+		            }
+
+		            let renamed: X.SafeDIMockConfiguration
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2927,12 +3252,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            renamed: ((X?) -> X)? = nil,
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.renamed = renamed
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                renamed: renamed,
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let renamed: ((X?) -> X)?
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var renamed: ((X?) -> X)? { __safeDI_storage.renamed }
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                renamed: ((X?) -> X)?,
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.renamed = renamed
+		                self.aBuilder = aBuilder
+		            }
+
+		            let renamed: ((X?) -> X)?
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -3030,12 +3372,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            renamed: ((X?) -> X)? = nil,
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.renamed = renamed
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                renamed: renamed,
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let renamed: ((X?) -> X)?
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var renamed: ((X?) -> X)? { __safeDI_storage.renamed }
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                renamed: ((X?) -> X)?,
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.renamed = renamed
+		                self.aBuilder = aBuilder
+		            }
+
+		            let renamed: ((X?) -> X)?
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -3167,12 +3526,26 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            aBuilder: A.SafeDIMockConfiguration = .init(),
 		            renamed: X? = nil
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		            self.renamed = renamed
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
 		        let renamed: X?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -3293,12 +3666,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            renamed: ((X?) -> X)? = nil,
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.renamed = renamed
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                renamed: renamed,
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let renamed: ((X?) -> X)?
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var renamed: ((X?) -> X)? { __safeDI_storage.renamed }
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                renamed: ((X?) -> X)?,
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.renamed = renamed
+		                self.aBuilder = aBuilder
+		            }
+
+		            let renamed: ((X?) -> X)?
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -3421,12 +3811,26 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            aBuilder: A.SafeDIMockConfiguration = .init(),
 		            renamed: X? = nil
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		            self.renamed = renamed
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
 		        let renamed: X?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -3544,12 +3948,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            renamed: ((X?) -> X)? = nil,
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.renamed = renamed
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                renamed: renamed,
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let renamed: ((X?) -> X)?
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var renamed: ((X?) -> X)? { __safeDI_storage.renamed }
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                renamed: ((X?) -> X)?,
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.renamed = renamed
+		                self.aBuilder = aBuilder
+		            }
+
+		            let renamed: ((X?) -> X)?
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -3674,10 +4095,24 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        init(
 		            renamed: X.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.renamed = renamed
+		            __safeDI_storage = __safeDI_Storage(
+		                renamed: renamed
+		            )
 		        }
 
-		        let renamed: X.SafeDIMockConfiguration
+		        var renamed: X.SafeDIMockConfiguration { __safeDI_storage.renamed }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                renamed: X.SafeDIMockConfiguration
+		            ) {
+		                self.renamed = renamed
+		            }
+
+		            let renamed: X.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -3773,12 +4208,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            other: ((X?) -> X)? = nil,
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.other = other
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                other: other,
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let other: ((X?) -> X)?
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var other: ((X?) -> X)? { __safeDI_storage.other }
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                other: ((X?) -> X)?,
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.other = other
+		                self.aBuilder = aBuilder
+		            }
+
+		            let other: ((X?) -> X)?
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -4867,12 +5319,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            renamed: ((X?) -> X)? = nil,
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.renamed = renamed
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                renamed: renamed,
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let renamed: ((X?) -> X)?
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var renamed: ((X?) -> X)? { __safeDI_storage.renamed }
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                renamed: ((X?) -> X)?,
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.renamed = renamed
+		                self.aBuilder = aBuilder
+		            }
+
+		            let renamed: ((X?) -> X)?
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -4990,12 +5459,26 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            aBuilder: A.SafeDIMockConfiguration = .init(),
 		            renamed: \(type)? = nil
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		            self.renamed = renamed
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
 		        let renamed: \(type)?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5120,12 +5603,26 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            aBuilder: A.SafeDIMockConfiguration = .init(),
 		            renamed: X? = nil
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		            self.renamed = renamed
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
 		        let renamed: X?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage\(wrapper.isSendable ? ": Sendable" : "") {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(

@@ -357,10 +357,24 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		        init(
 		            feedScreen: ((Clock) -> FeedScreen)? = nil
 		        ) {
-		            self.feedScreen = feedScreen
+		            __safeDI_storage = __safeDI_Storage(
+		                feedScreen: feedScreen
+		            )
 		        }
 
-		        let feedScreen: ((Clock) -> FeedScreen)?
+		        var feedScreen: ((Clock) -> FeedScreen)? { __safeDI_storage.feedScreen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feedScreen: ((Clock) -> FeedScreen)?
+		            ) {
+		                self.feedScreen = feedScreen
+		            }
+
+		            let feedScreen: ((Clock) -> FeedScreen)?
+		        }
 		    }
 
 		    static func mock(
@@ -451,10 +465,24 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			        init(
 			            feedScreen: FeedScreen.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.feedScreen = feedScreen
+			            __safeDI_storage = __safeDI_Storage(
+			                feedScreen: feedScreen
+			            )
 			        }
 
-			        let feedScreen: FeedScreen.SafeDIMockConfiguration
+			        var feedScreen: FeedScreen.SafeDIMockConfiguration { __safeDI_storage.feedScreen }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                feedScreen: FeedScreen.SafeDIMockConfiguration
+			            ) {
+			                self.feedScreen = feedScreen
+			            }
+
+			            let feedScreen: FeedScreen.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -478,13 +506,30 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			            clock: (() -> Clock)? = nil,
 			            _ safeDIBuilder: ((Clock) -> FeedScreen)? = nil
 			        ) {
-			            self.clock = clock
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                clock: clock,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let clock: (() -> Clock)?
+			        var clock: (() -> Clock)? { __safeDI_storage.clock }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Clock) -> FeedScreen)?
+			        var safeDIBuilder: ((Clock) -> FeedScreen)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                clock: (() -> Clock)?,
+			                safeDIBuilder: ((Clock) -> FeedScreen)?
+			            ) {
+			                self.clock = clock
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let clock: (() -> Clock)?
+			            let safeDIBuilder: ((Clock) -> FeedScreen)?
+			        }
 			    }
 			}
 			#endif
@@ -675,10 +720,24 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		        public init(
 		            innerScreen: ((Clock) -> InnerScreen)? = nil
 		        ) {
-		            self.innerScreen = innerScreen
+		            __safeDI_storage = __safeDI_Storage(
+		                innerScreen: innerScreen
+		            )
 		        }
 
-		        public let innerScreen: ((Clock) -> InnerScreen)?
+		        public var innerScreen: ((Clock) -> InnerScreen)? { __safeDI_storage.innerScreen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                innerScreen: ((Clock) -> InnerScreen)?
+		            ) {
+		                self.innerScreen = innerScreen
+		            }
+
+		            let innerScreen: ((Clock) -> InnerScreen)?
+		        }
 		    }
 
 		    public static func mock(
@@ -740,10 +799,24 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		        init(
 		            feedScreen: FeedScreen.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.feedScreen = feedScreen
+		            __safeDI_storage = __safeDI_Storage(
+		                feedScreen: feedScreen
+		            )
 		        }
 
-		        let feedScreen: FeedScreen.SafeDIMockConfiguration
+		        var feedScreen: FeedScreen.SafeDIMockConfiguration { __safeDI_storage.feedScreen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feedScreen: FeedScreen.SafeDIMockConfiguration
+		            ) {
+		                self.feedScreen = feedScreen
+		            }
+
+		            let feedScreen: FeedScreen.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -771,13 +844,30 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		            clock: (() -> Clock)? = nil,
 		            _ safeDIBuilder: ((Clock) -> InnerScreen)? = nil
 		        ) {
-		            self.clock = clock
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                clock: clock,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let clock: (() -> Clock)?
+		        var clock: (() -> Clock)? { __safeDI_storage.clock }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Clock) -> InnerScreen)?
+		        var safeDIBuilder: ((Clock) -> InnerScreen)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                clock: (() -> Clock)?,
+		                safeDIBuilder: ((Clock) -> InnerScreen)?
+		            ) {
+		                self.clock = clock
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let clock: (() -> Clock)?
+		            let safeDIBuilder: ((Clock) -> InnerScreen)?
+		        }
 		    }
 		}
 
@@ -788,13 +878,30 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		            innerScreen: InnerScreen.SafeDIMockConfiguration = .init(),
 		            _ safeDIBuilder: ((InnerScreen) -> FeedScreen)? = nil
 		        ) {
-		            self.innerScreen = innerScreen
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                innerScreen: innerScreen,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let innerScreen: InnerScreen.SafeDIMockConfiguration
+		        var innerScreen: InnerScreen.SafeDIMockConfiguration { __safeDI_storage.innerScreen }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((InnerScreen) -> FeedScreen)?
+		        var safeDIBuilder: ((InnerScreen) -> FeedScreen)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                innerScreen: InnerScreen.SafeDIMockConfiguration,
+		                safeDIBuilder: ((InnerScreen) -> FeedScreen)?
+		            ) {
+		                self.innerScreen = innerScreen
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let innerScreen: InnerScreen.SafeDIMockConfiguration
+		            let safeDIBuilder: ((InnerScreen) -> FeedScreen)?
+		        }
 		    }
 		}
 		#endif
@@ -1856,10 +1963,24 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			        init(
 			            thing: (() -> AnyThing)? = nil
 			        ) {
-			            self.thing = thing
+			            __safeDI_storage = __safeDI_Storage(
+			                thing: thing
+			            )
 			        }
 
-			        let thing: (() -> AnyThing)?
+			        var thing: (() -> AnyThing)? { __safeDI_storage.thing }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                thing: (() -> AnyThing)?
+			            ) {
+			                self.thing = thing
+			            }
+
+			            let thing: (() -> AnyThing)?
+			        }
 			    }
 
 			    static func mock(

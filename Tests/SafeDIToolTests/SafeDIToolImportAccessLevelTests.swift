@@ -401,10 +401,24 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			        public init(
 			            gaugeBuilder: (() -> Gauge)? = nil
 			        ) {
-			            self.gaugeBuilder = gaugeBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                gaugeBuilder: gaugeBuilder
+			            )
 			        }
 
-			        public let gaugeBuilder: (() -> Gauge)?
+			        public var gaugeBuilder: (() -> Gauge)? { __safeDI_storage.gaugeBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                gaugeBuilder: (() -> Gauge)?
+			            ) {
+			                self.gaugeBuilder = gaugeBuilder
+			            }
+
+			            let gaugeBuilder: (() -> Gauge)?
+			        }
 			    }
 
 			    public static func mock(
@@ -1767,10 +1781,24 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			        public init(
 			            child: __safeDI_Feature_Child_MockConfiguration = .init()
 			        ) {
-			            self.child = child
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child
+			            )
 			        }
 
-			        public let child: __safeDI_Feature_Child_MockConfiguration
+			        public var child: __safeDI_Feature_Child_MockConfiguration { __safeDI_storage.child }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: __safeDI_Feature_Child_MockConfiguration
+			            ) {
+			                self.child = child
+			            }
+
+			            let child: __safeDI_Feature_Child_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -1801,14 +1829,31 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			        date: Date? = nil,
 			        _ safeDIBuilder: ((Date) -> Child)? = nil
 			    ) {
-			        self.date = date
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            date: date,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// `nil` keeps the default of `Child`’s `date`.
-			    public let date: Date?
+			    public var date: Date? { __safeDI_storage.date }
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((Date) -> Child)?
+			    public var safeDIBuilder: ((Date) -> Child)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            date: Date?,
+			            safeDIBuilder: ((Date) -> Child)?
+			        ) {
+			            self.date = date
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let date: Date?
+			        let safeDIBuilder: ((Date) -> Child)?
+			    }
 			}
 
 			extension Child {
@@ -1908,13 +1953,30 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 				            date: Date = Date(),
 				            _ safeDIBuilder: ((Date) -> Child)? = nil
 				        ) {
-				            self.date = date
-				            self.safeDIBuilder = safeDIBuilder
+				            __safeDI_storage = __safeDI_Storage(
+				                date: date,
+				                safeDIBuilder: safeDIBuilder
+				            )
 				        }
 
-				        let date: Date
+				        var date: Date { __safeDI_storage.date }
 				        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-				        let safeDIBuilder: ((Date) -> Child)?
+				        var safeDIBuilder: ((Date) -> Child)? { __safeDI_storage.safeDIBuilder }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                date: Date,
+				                safeDIBuilder: ((Date) -> Child)?
+				            ) {
+				                self.date = date
+				                self.safeDIBuilder = safeDIBuilder
+				            }
+
+				            let date: Date
+				            let safeDIBuilder: ((Date) -> Child)?
+				        }
 				    }
 				}
 				#endif
@@ -1956,12 +2018,29 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			            child: \(childOverride) = \(childOverrideDefault),
 			            panel: Panel.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.child = child
-			            self.panel = panel
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child,
+			                panel: panel
+			            )
 			        }
 
-			        let child: \(childOverride)
-			        let panel: Panel.SafeDIMockConfiguration
+			        var child: \(childOverride) { __safeDI_storage.child }
+			        var panel: Panel.SafeDIMockConfiguration { __safeDI_storage.panel }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: \(childOverride),
+			                panel: Panel.SafeDIMockConfiguration
+			            ) {
+			                self.child = child
+			                self.panel = panel
+			            }
+
+			            let child: \(childOverride)
+			            let panel: Panel.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -2101,13 +2180,30 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 	            gauge: (() -> Gauge)? = nil,
 	            _ safeDIBuilder: ((Gauge) -> Panel)? = nil
 	        ) {
-	            self.gauge = gauge
-	            self.safeDIBuilder = safeDIBuilder
+	            __safeDI_storage = __safeDI_Storage(
+	                gauge: gauge,
+	                safeDIBuilder: safeDIBuilder
+	            )
 	        }
 
-	        let gauge: (() -> Gauge)?
+	        var gauge: (() -> Gauge)? { __safeDI_storage.gauge }
 	        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-	        let safeDIBuilder: ((Gauge) -> Panel)?
+	        var safeDIBuilder: ((Gauge) -> Panel)? { __safeDI_storage.safeDIBuilder }
+
+	        private let __safeDI_storage: __safeDI_Storage
+
+	        private final class __safeDI_Storage {
+	            init(
+	                gauge: (() -> Gauge)?,
+	                safeDIBuilder: ((Gauge) -> Panel)?
+	            ) {
+	                self.gauge = gauge
+	                self.safeDIBuilder = safeDIBuilder
+	            }
+
+	            let gauge: (() -> Gauge)?
+	            let safeDIBuilder: ((Gauge) -> Panel)?
+	        }
 	    }
 	}
 	#endif
@@ -2203,10 +2299,24 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		        public init(
 		            service: Service.SafeDIOverrides = .init()
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        public let service: Service.SafeDIOverrides
+		        public var service: Service.SafeDIOverrides { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: Service.SafeDIOverrides
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: Service.SafeDIOverrides
+		        }
 		    }
 
 		\(unreadTypeComment)    public static func mock(
@@ -2286,10 +2396,24 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 	        init(
 	            child: Child.SafeDIMockConfiguration = .init()
 	        ) {
-	            self.child = child
+	            __safeDI_storage = __safeDI_Storage(
+	                child: child
+	            )
 	        }
 
-	        let child: Child.SafeDIMockConfiguration
+	        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+	        private let __safeDI_storage: __safeDI_Storage
+
+	        private final class __safeDI_Storage {
+	            init(
+	                child: Child.SafeDIMockConfiguration
+	            ) {
+	                self.child = child
+	            }
+
+	            let child: Child.SafeDIMockConfiguration
+	        }
 	    }
 
 	    static func mock(
@@ -2314,13 +2438,30 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 	            date: Date = Date(),
 	            _ safeDIBuilder: ((Date) -> Child)? = nil
 	        ) {
-	            self.date = date
-	            self.safeDIBuilder = safeDIBuilder
+	            __safeDI_storage = __safeDI_Storage(
+	                date: date,
+	                safeDIBuilder: safeDIBuilder
+	            )
 	        }
 
-	        let date: Date
+	        var date: Date { __safeDI_storage.date }
 	        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-	        let safeDIBuilder: ((Date) -> Child)?
+	        var safeDIBuilder: ((Date) -> Child)? { __safeDI_storage.safeDIBuilder }
+
+	        private let __safeDI_storage: __safeDI_Storage
+
+	        private final class __safeDI_Storage {
+	            init(
+	                date: Date,
+	                safeDIBuilder: ((Date) -> Child)?
+	            ) {
+	                self.date = date
+	                self.safeDIBuilder = safeDIBuilder
+	            }
+
+	            let date: Date
+	            let safeDIBuilder: ((Date) -> Child)?
+	        }
 	    }
 	}
 	#endif

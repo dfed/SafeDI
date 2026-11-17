@@ -202,6 +202,10 @@ struct VerificationCompilerSettings {
 	/// SafeDI, as one that gives an import an access level must, since an import without one beside it is ambiguous,
 	/// passes `false`, and its generated files import SafeDI as the fixture's files do.
 	var prependsSafeDIImport = true
+	/// The virtual memory, in megabytes, the compiler may use on Linux (`ulimit -v`), past which it fails rather than
+	/// take the machine's memory, or `nil` for no limit. macOS does not enforce the limit, so there the compile runs
+	/// without one.
+	var memoryLimitInMegabytes: Int?
 }
 
 /// What one module's compile is given: its sources, which `stageCompileSources` stages, and how the compiler
@@ -359,6 +363,7 @@ private func compileModule(
 			swiftLanguageMode: module.compilerSettings.swiftLanguageMode,
 			upcomingFeatures: module.compilerSettings.upcomingFeatures,
 			defaultIsolation: module.compilerSettings.defaultIsolation,
+			memoryLimitInMegabytes: module.compilerSettings.memoryLimitInMegabytes,
 		)
 	}
 
@@ -661,6 +666,8 @@ func stageCompileSources(
 ///   - upcomingFeatures: The upcoming features to enable, each passed as `-enable-upcoming-feature`.
 ///   - defaultIsolation: The isolation the module's declarations default to, passed as `-default-isolation`, or `nil`
 ///     to pass none.
+///   - memoryLimitInMegabytes: The virtual memory the compiler may use on Linux, set with `ulimit -v` in a shell that
+///     then runs it, or `nil` for no limit. macOS does not enforce `ulimit -v`, so there the compile has no limit.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func compileSwift(
 	sources: [URL],
@@ -677,6 +684,7 @@ func compileSwift(
 	swiftLanguageMode: String = "6",
 	upcomingFeatures: [String] = [],
 	defaultIsolation: String? = nil,
+	memoryLimitInMegabytes: Int? = nil,
 ) async throws -> SwiftCompileResult {
 	var arguments = swiftCompilerCommand.arguments
 	arguments.append(contentsOf: [
@@ -716,6 +724,15 @@ func compileSwift(
 	}
 	arguments.append(contentsOf: Set(activeCompilationConditions).subtracting(["DEBUG"]).sorted().map { "-D\($0)" })
 	arguments.append(contentsOf: sources.map(\.path))
+	#if os(Linux)
+		if let memoryLimitInMegabytes {
+			// The shell sets the limit, which the compiler and every process it starts inherit, and then becomes the compiler.
+			return try await runProcess(
+				URL(fileURLWithPath: "/bin/sh"),
+				arguments: ["-c", "ulimit -v \(memoryLimitInMegabytes * 1_024) && exec \"$@\"", "sh", swiftCompilerCommand.executable.path] + arguments,
+			)
+		}
+	#endif
 	return try await runProcess(swiftCompilerCommand.executable, arguments: arguments)
 }
 

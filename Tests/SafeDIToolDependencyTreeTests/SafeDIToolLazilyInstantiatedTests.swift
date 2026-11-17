@@ -3822,14 +3822,34 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            settingsBuilder: ((Analytics) -> Settings)? = nil,
 		            home: ((LazilyInstantiated<Analytics>) -> Home)? = nil
 		        ) {
-		            self.analytics = analytics
-		            self.settingsBuilder = settingsBuilder
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                settingsBuilder: settingsBuilder,
+		                home: home
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
-		        let settingsBuilder: ((Analytics) -> Settings)?
-		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var settingsBuilder: ((Analytics) -> Settings)? { __safeDI_storage.settingsBuilder }
+		        var home: ((LazilyInstantiated<Analytics>) -> Home)? { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                settingsBuilder: ((Analytics) -> Settings)?,
+		                home: ((LazilyInstantiated<Analytics>) -> Home)?
+		            ) {
+		                self.analytics = analytics
+		                self.settingsBuilder = settingsBuilder
+		                self.home = home
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let settingsBuilder: ((Analytics) -> Settings)?
+		            let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		        }
 		    }
 
 		    static func mock(
@@ -3889,10 +3909,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            analytics: (() -> Analytics)? = nil
 		        ) {
-		            self.analytics = analytics
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?
+		            ) {
+		                self.analytics = analytics
+		            }
+
+		            let analytics: (() -> Analytics)?
+		        }
 		    }
 
 		    static func mock(
@@ -3970,14 +4004,34 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            home: ((LazilyInstantiated<Analytics>) -> Home)? = nil,
 		            settings: ((Analytics) -> Settings)? = nil
 		        ) {
-		            self.analytics = analytics
-		            self.home = home
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                home: home,
+		                settings: settings
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
-		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
-		        let settings: ((Analytics) -> Settings)?
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var home: ((LazilyInstantiated<Analytics>) -> Home)? { __safeDI_storage.home }
+		        var settings: ((Analytics) -> Settings)? { __safeDI_storage.settings }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                home: ((LazilyInstantiated<Analytics>) -> Home)?,
+		                settings: ((Analytics) -> Settings)?
+		            ) {
+		                self.analytics = analytics
+		                self.home = home
+		                self.settings = settings
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		            let settings: ((Analytics) -> Settings)?
+		        }
 		    }
 
 		    static func mock(
@@ -4182,10 +4236,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            nodeBuilder: ((LazilyInstantiated<Node>?) -> Node)? = nil
 		        ) {
-		            self.nodeBuilder = nodeBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                nodeBuilder: nodeBuilder
+		            )
 		        }
 
-		        let nodeBuilder: ((LazilyInstantiated<Node>?) -> Node)?
+		        var nodeBuilder: ((LazilyInstantiated<Node>?) -> Node)? { __safeDI_storage.nodeBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                nodeBuilder: ((LazilyInstantiated<Node>?) -> Node)?
+		            ) {
+		                self.nodeBuilder = nodeBuilder
+		            }
+
+		            let nodeBuilder: ((LazilyInstantiated<Node>?) -> Node)?
+		        }
 		    }
 
 		    static func mock(
@@ -4389,12 +4457,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            analytics: (() -> Analytics)? = nil,
 		            home: ((LazilyInstantiated<Analytics>) -> Home)? = nil
 		        ) {
-		            self.analytics = analytics
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                home: home
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
-		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var home: ((LazilyInstantiated<Analytics>) -> Home)? { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                home: ((LazilyInstantiated<Analytics>) -> Home)?
+		            ) {
+		                self.analytics = analytics
+		                self.home = home
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		        }
 		    }
 
 		    static func mock(
@@ -4453,10 +4538,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            analytics: (() -> Analytics)? = nil
 		        ) {
-		            self.analytics = analytics
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?
+		            ) {
+		                self.analytics = analytics
+		            }
+
+		            let analytics: (() -> Analytics)?
+		        }
 		    }
 
 		    static func mock(
@@ -4517,10 +4616,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            analytics: (() -> Analytics)? = nil
 		        ) {
-		            self.analytics = analytics
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?
+		            ) {
+		                self.analytics = analytics
+		            }
+
+		            let analytics: (() -> Analytics)?
+		        }
 		    }
 
 		    static func mock(
@@ -4591,12 +4704,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            analytics: (() -> Analytics)? = nil,
 		            logger: ((Analytics) -> Logger)? = nil
 		        ) {
-		            self.analytics = analytics
-		            self.logger = logger
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                logger: logger
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
-		        let logger: ((Analytics) -> Logger)?
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var logger: ((Analytics) -> Logger)? { __safeDI_storage.logger }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                logger: ((Analytics) -> Logger)?
+		            ) {
+		                self.analytics = analytics
+		                self.logger = logger
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let logger: ((Analytics) -> Logger)?
+		        }
 		    }
 
 		    static func mock(
@@ -4676,14 +4806,34 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            home: ((LazilyInstantiated<Analytics>?) -> Home)? = nil,
 		            settings: ((Analytics) -> Settings)? = nil
 		        ) {
-		            self.analytics = analytics
-		            self.home = home
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                home: home,
+		                settings: settings
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
-		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
-		        let settings: ((Analytics) -> Settings)?
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var home: ((LazilyInstantiated<Analytics>?) -> Home)? { __safeDI_storage.home }
+		        var settings: ((Analytics) -> Settings)? { __safeDI_storage.settings }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                home: ((LazilyInstantiated<Analytics>?) -> Home)?,
+		                settings: ((Analytics) -> Settings)?
+		            ) {
+		                self.analytics = analytics
+		                self.home = home
+		                self.settings = settings
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		            let settings: ((Analytics) -> Settings)?
+		        }
 		    }
 
 		    static func mock(
@@ -4765,14 +4915,34 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            home: ((LazilyInstantiated<Tracker>?) -> Home)? = nil,
 		            settings: ((Tracker?) -> Settings)? = nil
 		        ) {
-		            self.tracker = tracker
-		            self.home = home
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                tracker: tracker,
+		                home: home,
+		                settings: settings
+		            )
 		        }
 
-		        let tracker: (() -> Tracker)?
-		        let home: ((LazilyInstantiated<Tracker>?) -> Home)?
-		        let settings: ((Tracker?) -> Settings)?
+		        var tracker: (() -> Tracker)? { __safeDI_storage.tracker }
+		        var home: ((LazilyInstantiated<Tracker>?) -> Home)? { __safeDI_storage.home }
+		        var settings: ((Tracker?) -> Settings)? { __safeDI_storage.settings }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                tracker: (() -> Tracker)?,
+		                home: ((LazilyInstantiated<Tracker>?) -> Home)?,
+		                settings: ((Tracker?) -> Settings)?
+		            ) {
+		                self.tracker = tracker
+		                self.home = home
+		                self.settings = settings
+		            }
+
+		            let tracker: (() -> Tracker)?
+		            let home: ((LazilyInstantiated<Tracker>?) -> Home)?
+		            let settings: ((Tracker?) -> Settings)?
+		        }
 		    }
 
 		    static func mock(
@@ -4854,14 +5024,34 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            home: ((LazilyInstantiated<Tracker>?) -> Home)? = nil,
 		            settings: ((Tracker?) -> Settings)? = nil
 		        ) {
-		            self.tracker = tracker
-		            self.home = home
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                tracker: tracker,
+		                home: home,
+		                settings: settings
+		            )
 		        }
 
-		        let tracker: (() -> Tracker)?
-		        let home: ((LazilyInstantiated<Tracker>?) -> Home)?
-		        let settings: ((Tracker?) -> Settings)?
+		        var tracker: (() -> Tracker)? { __safeDI_storage.tracker }
+		        var home: ((LazilyInstantiated<Tracker>?) -> Home)? { __safeDI_storage.home }
+		        var settings: ((Tracker?) -> Settings)? { __safeDI_storage.settings }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                tracker: (() -> Tracker)?,
+		                home: ((LazilyInstantiated<Tracker>?) -> Home)?,
+		                settings: ((Tracker?) -> Settings)?
+		            ) {
+		                self.tracker = tracker
+		                self.home = home
+		                self.settings = settings
+		            }
+
+		            let tracker: (() -> Tracker)?
+		            let home: ((LazilyInstantiated<Tracker>?) -> Home)?
+		            let settings: ((Tracker?) -> Settings)?
+		        }
 		    }
 
 		    static func mock(
@@ -4943,14 +5133,34 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            home: ((LazilyInstantiated<Tracker>) -> Home)? = nil,
 		            settings: ((Tracker?) -> Settings)? = nil
 		        ) {
-		            self.tracker = tracker
-		            self.home = home
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                tracker: tracker,
+		                home: home,
+		                settings: settings
+		            )
 		        }
 
-		        let tracker: (() -> Tracker)?
-		        let home: ((LazilyInstantiated<Tracker>) -> Home)?
-		        let settings: ((Tracker?) -> Settings)?
+		        var tracker: (() -> Tracker)? { __safeDI_storage.tracker }
+		        var home: ((LazilyInstantiated<Tracker>) -> Home)? { __safeDI_storage.home }
+		        var settings: ((Tracker?) -> Settings)? { __safeDI_storage.settings }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                tracker: (() -> Tracker)?,
+		                home: ((LazilyInstantiated<Tracker>) -> Home)?,
+		                settings: ((Tracker?) -> Settings)?
+		            ) {
+		                self.tracker = tracker
+		                self.home = home
+		                self.settings = settings
+		            }
+
+		            let tracker: (() -> Tracker)?
+		            let home: ((LazilyInstantiated<Tracker>) -> Home)?
+		            let settings: ((Tracker?) -> Settings)?
+		        }
 		    }
 
 		    static func mock(
@@ -5031,14 +5241,34 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            home: ((LazilyInstantiated<Tracker>?) -> Home)? = nil,
 		            settings: ((Tracker) -> Settings)? = nil
 		        ) {
-		            self.tracker = tracker
-		            self.home = home
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                tracker: tracker,
+		                home: home,
+		                settings: settings
+		            )
 		        }
 
-		        let tracker: (() -> Tracker)?
-		        let home: ((LazilyInstantiated<Tracker>?) -> Home)?
-		        let settings: ((Tracker) -> Settings)?
+		        var tracker: (() -> Tracker)? { __safeDI_storage.tracker }
+		        var home: ((LazilyInstantiated<Tracker>?) -> Home)? { __safeDI_storage.home }
+		        var settings: ((Tracker) -> Settings)? { __safeDI_storage.settings }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                tracker: (() -> Tracker)?,
+		                home: ((LazilyInstantiated<Tracker>?) -> Home)?,
+		                settings: ((Tracker) -> Settings)?
+		            ) {
+		                self.tracker = tracker
+		                self.home = home
+		                self.settings = settings
+		            }
+
+		            let tracker: (() -> Tracker)?
+		            let home: ((LazilyInstantiated<Tracker>?) -> Home)?
+		            let settings: ((Tracker) -> Settings)?
+		        }
 		    }
 
 		    static func mock(
@@ -5120,14 +5350,34 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            home: ((LazilyInstantiated<Tracker>?) -> Home)? = nil,
 		            settings: ((Tracker?) -> Settings)? = nil
 		        ) {
-		            self.tracker = tracker
-		            self.home = home
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                tracker: tracker,
+		                home: home,
+		                settings: settings
+		            )
 		        }
 
-		        let tracker: (() -> Tracker)?
-		        let home: ((LazilyInstantiated<Tracker>?) -> Home)?
-		        let settings: ((Tracker?) -> Settings)?
+		        var tracker: (() -> Tracker)? { __safeDI_storage.tracker }
+		        var home: ((LazilyInstantiated<Tracker>?) -> Home)? { __safeDI_storage.home }
+		        var settings: ((Tracker?) -> Settings)? { __safeDI_storage.settings }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                tracker: (() -> Tracker)?,
+		                home: ((LazilyInstantiated<Tracker>?) -> Home)?,
+		                settings: ((Tracker?) -> Settings)?
+		            ) {
+		                self.tracker = tracker
+		                self.home = home
+		                self.settings = settings
+		            }
+
+		            let tracker: (() -> Tracker)?
+		            let home: ((LazilyInstantiated<Tracker>?) -> Home)?
+		            let settings: ((Tracker?) -> Settings)?
+		        }
 		    }
 
 		    static func mock(
@@ -5208,14 +5458,34 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            home: ((SendableLazilyInstantiated<Tracker>?) -> Home)? = nil,
 		            settings: ((Tracker?) -> Settings)? = nil
 		        ) {
-		            self.tracker = tracker
-		            self.home = home
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                tracker: tracker,
+		                home: home,
+		                settings: settings
+		            )
 		        }
 
-		        let tracker: (@Sendable () -> Tracker)?
-		        let home: ((SendableLazilyInstantiated<Tracker>?) -> Home)?
-		        let settings: ((Tracker?) -> Settings)?
+		        var tracker: (@Sendable () -> Tracker)? { __safeDI_storage.tracker }
+		        var home: ((SendableLazilyInstantiated<Tracker>?) -> Home)? { __safeDI_storage.home }
+		        var settings: ((Tracker?) -> Settings)? { __safeDI_storage.settings }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                tracker: (@Sendable () -> Tracker)?,
+		                home: ((SendableLazilyInstantiated<Tracker>?) -> Home)?,
+		                settings: ((Tracker?) -> Settings)?
+		            ) {
+		                self.tracker = tracker
+		                self.home = home
+		                self.settings = settings
+		            }
+
+		            let tracker: (@Sendable () -> Tracker)?
+		            let home: ((SendableLazilyInstantiated<Tracker>?) -> Home)?
+		            let settings: ((Tracker?) -> Settings)?
+		        }
 		    }
 
 		    static func mock(
@@ -5300,16 +5570,36 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            settings: ((LazilyInstantiated<Tracker>?) -> Settings)? = nil,
 		            tracker_LazilyInstantiated__Tracker: LazilyInstantiated<Tracker>? = nil
 		        ) {
-		            self.tracker = tracker
-		            self.home = home
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                tracker: tracker,
+		                home: home,
+		                settings: settings
+		            )
 		            self.tracker_LazilyInstantiated__Tracker = tracker_LazilyInstantiated__Tracker
 		        }
 
-		        let tracker: (@Sendable () -> Tracker)?
-		        let home: ((SendableLazilyInstantiated<Tracker>) -> Home)?
-		        let settings: ((LazilyInstantiated<Tracker>?) -> Settings)?
+		        var tracker: (@Sendable () -> Tracker)? { __safeDI_storage.tracker }
+		        var home: ((SendableLazilyInstantiated<Tracker>) -> Home)? { __safeDI_storage.home }
+		        var settings: ((LazilyInstantiated<Tracker>?) -> Settings)? { __safeDI_storage.settings }
 		        let tracker_LazilyInstantiated__Tracker: LazilyInstantiated<Tracker>?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                tracker: (@Sendable () -> Tracker)?,
+		                home: ((SendableLazilyInstantiated<Tracker>) -> Home)?,
+		                settings: ((LazilyInstantiated<Tracker>?) -> Settings)?
+		            ) {
+		                self.tracker = tracker
+		                self.home = home
+		                self.settings = settings
+		            }
+
+		            let tracker: (@Sendable () -> Tracker)?
+		            let home: ((SendableLazilyInstantiated<Tracker>) -> Home)?
+		            let settings: ((LazilyInstantiated<Tracker>?) -> Settings)?
+		        }
 		    }
 
 		    static func mock(
@@ -5404,14 +5694,34 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            settings: ((Analytics) -> Settings)? = nil,
 		            profile: ((LazilyInstantiated<Analytics>?) -> Profile)? = nil
 		        ) {
-		            self.home = home
-		            self.settings = settings
-		            self.profile = profile
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home,
+		                settings: settings,
+		                profile: profile
+		            )
 		        }
 
-		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
-		        let settings: ((Analytics) -> Settings)?
-		        let profile: ((LazilyInstantiated<Analytics>?) -> Profile)?
+		        var home: ((LazilyInstantiated<Analytics>) -> Home)? { __safeDI_storage.home }
+		        var settings: ((Analytics) -> Settings)? { __safeDI_storage.settings }
+		        var profile: ((LazilyInstantiated<Analytics>?) -> Profile)? { __safeDI_storage.profile }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: ((LazilyInstantiated<Analytics>) -> Home)?,
+		                settings: ((Analytics) -> Settings)?,
+		                profile: ((LazilyInstantiated<Analytics>?) -> Profile)?
+		            ) {
+		                self.home = home
+		                self.settings = settings
+		                self.profile = profile
+		            }
+
+		            let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		            let settings: ((Analytics) -> Settings)?
+		            let profile: ((LazilyInstantiated<Analytics>?) -> Profile)?
+		        }
 		    }
 
 		    static func mock(
@@ -5618,14 +5928,31 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            settings: ((Analytics?) -> Settings)? = nil,
 		            analytics: Analytics? = nil
 		        ) {
-		            self.home = home
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home,
+		                settings: settings
+		            )
 		            self.analytics = analytics
 		        }
 
-		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
-		        let settings: ((Analytics?) -> Settings)?
+		        var home: ((LazilyInstantiated<Analytics>?) -> Home)? { __safeDI_storage.home }
+		        var settings: ((Analytics?) -> Settings)? { __safeDI_storage.settings }
 		        let analytics: Analytics?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: ((LazilyInstantiated<Analytics>?) -> Home)?,
+		                settings: ((Analytics?) -> Settings)?
+		            ) {
+		                self.home = home
+		                self.settings = settings
+		            }
+
+		            let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		            let settings: ((Analytics?) -> Settings)?
+		        }
 		    }
 
 		    static func mock(
@@ -5698,10 +6025,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            userService: (() -> AnyUserService)? = nil
 		        ) {
-		            self.userService = userService
+		            __safeDI_storage = __safeDI_Storage(
+		                userService: userService
+		            )
 		        }
 
-		        let userService: (() -> AnyUserService)?
+		        var userService: (() -> AnyUserService)? { __safeDI_storage.userService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                userService: (() -> AnyUserService)?
+		            ) {
+		                self.userService = userService
+		            }
+
+		            let userService: (() -> AnyUserService)?
+		        }
 		    }
 
 		    static func mock(
@@ -5764,10 +6105,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            child: ((Analytics) -> Child)? = nil
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: ((Analytics) -> Child)?
+		        var child: ((Analytics) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((Analytics) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: ((Analytics) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -5843,10 +6198,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            uploader: ((Analytics) -> Uploader)? = nil
 		        ) {
-		            self.uploader = uploader
+		            __safeDI_storage = __safeDI_Storage(
+		                uploader: uploader
+		            )
 		        }
 
-		        let uploader: ((Analytics) -> Uploader)?
+		        var uploader: ((Analytics) -> Uploader)? { __safeDI_storage.uploader }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                uploader: ((Analytics) -> Uploader)?
+		            ) {
+		                self.uploader = uploader
+		            }
+
+		            let uploader: ((Analytics) -> Uploader)?
+		        }
 		    }
 
 		    static func mock(
@@ -5911,12 +6280,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            analytics: (() -> Analytics)? = nil,
 		            child: ((Analytics) -> Child)? = nil
 		        ) {
-		            self.analytics = analytics
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                child: child
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
-		        let child: ((Analytics) -> Child)?
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var child: ((Analytics) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                child: ((Analytics) -> Child)?
+		            ) {
+		                self.analytics = analytics
+		                self.child = child
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let child: ((Analytics) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -5983,10 +6369,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            service: (() -> ServiceProtocol)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> ServiceProtocol)?
+		        var service: (() -> ServiceProtocol)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> ServiceProtocol)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -6055,12 +6455,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            analytics: (() -> Analytics)? = nil,
 		            logger: ((LazilyInstantiated<Analytics>) -> Logger)? = nil
 		        ) {
-		            self.analytics = analytics
-		            self.logger = logger
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                logger: logger
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
-		        let logger: ((LazilyInstantiated<Analytics>) -> Logger)?
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var logger: ((LazilyInstantiated<Analytics>) -> Logger)? { __safeDI_storage.logger }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                logger: ((LazilyInstantiated<Analytics>) -> Logger)?
+		            ) {
+		                self.analytics = analytics
+		                self.logger = logger
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let logger: ((LazilyInstantiated<Analytics>) -> Logger)?
+		        }
 		    }
 
 		    static func mock(
@@ -6160,18 +6577,44 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            analytics_Legacy: (() -> Legacy)? = nil,
 		            other: ((Legacy) -> Other)? = nil
 		        ) {
-		            self.analytics_Analytics = analytics_Analytics
-		            self.home = home
-		            self.settingsBuilder = settingsBuilder
-		            self.analytics_Legacy = analytics_Legacy
-		            self.other = other
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics_Analytics: analytics_Analytics,
+		                home: home,
+		                settingsBuilder: settingsBuilder,
+		                analytics_Legacy: analytics_Legacy,
+		                other: other
+		            )
 		        }
 
-		        let analytics_Analytics: (() -> Analytics)?
-		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
-		        let settingsBuilder: ((Analytics) -> Settings)?
-		        let analytics_Legacy: (() -> Legacy)?
-		        let other: ((Legacy) -> Other)?
+		        var analytics_Analytics: (() -> Analytics)? { __safeDI_storage.analytics_Analytics }
+		        var home: ((LazilyInstantiated<Analytics>) -> Home)? { __safeDI_storage.home }
+		        var settingsBuilder: ((Analytics) -> Settings)? { __safeDI_storage.settingsBuilder }
+		        var analytics_Legacy: (() -> Legacy)? { __safeDI_storage.analytics_Legacy }
+		        var other: ((Legacy) -> Other)? { __safeDI_storage.other }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics_Analytics: (() -> Analytics)?,
+		                home: ((LazilyInstantiated<Analytics>) -> Home)?,
+		                settingsBuilder: ((Analytics) -> Settings)?,
+		                analytics_Legacy: (() -> Legacy)?,
+		                other: ((Legacy) -> Other)?
+		            ) {
+		                self.analytics_Analytics = analytics_Analytics
+		                self.home = home
+		                self.settingsBuilder = settingsBuilder
+		                self.analytics_Legacy = analytics_Legacy
+		                self.other = other
+		            }
+
+		            let analytics_Analytics: (() -> Analytics)?
+		            let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		            let settingsBuilder: ((Analytics) -> Settings)?
+		            let analytics_Legacy: (() -> Legacy)?
+		            let other: ((Legacy) -> Other)?
+		        }
 		    }
 
 		    static func mock(
@@ -6273,16 +6716,39 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            analytics_Legacy: (() -> Legacy)? = nil,
 		            other: ((Legacy) -> Other)? = nil
 		        ) {
-		            self.analytics_Analytics = analytics_Analytics
-		            self.home = home
-		            self.analytics_Legacy = analytics_Legacy
-		            self.other = other
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics_Analytics: analytics_Analytics,
+		                home: home,
+		                analytics_Legacy: analytics_Legacy,
+		                other: other
+		            )
 		        }
 
-		        let analytics_Analytics: (() -> Analytics)?
-		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
-		        let analytics_Legacy: (() -> Legacy)?
-		        let other: ((Legacy) -> Other)?
+		        var analytics_Analytics: (() -> Analytics)? { __safeDI_storage.analytics_Analytics }
+		        var home: ((LazilyInstantiated<Analytics>) -> Home)? { __safeDI_storage.home }
+		        var analytics_Legacy: (() -> Legacy)? { __safeDI_storage.analytics_Legacy }
+		        var other: ((Legacy) -> Other)? { __safeDI_storage.other }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics_Analytics: (() -> Analytics)?,
+		                home: ((LazilyInstantiated<Analytics>) -> Home)?,
+		                analytics_Legacy: (() -> Legacy)?,
+		                other: ((Legacy) -> Other)?
+		            ) {
+		                self.analytics_Analytics = analytics_Analytics
+		                self.home = home
+		                self.analytics_Legacy = analytics_Legacy
+		                self.other = other
+		            }
+
+		            let analytics_Analytics: (() -> Analytics)?
+		            let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		            let analytics_Legacy: (() -> Legacy)?
+		            let other: ((Legacy) -> Other)?
+		        }
 		    }
 
 		    static func mock(
@@ -6376,12 +6842,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            analytics: Analytics.SafeDIMockConfiguration = .init(),
 		            screen: Screen.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.analytics = analytics
-		            self.screen = screen
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                screen: screen
+		            )
 		        }
 
-		        let analytics: Analytics.SafeDIMockConfiguration
-		        let screen: Screen.SafeDIMockConfiguration
+		        var analytics: Analytics.SafeDIMockConfiguration { __safeDI_storage.analytics }
+		        var screen: Screen.SafeDIMockConfiguration { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: Analytics.SafeDIMockConfiguration,
+		                screen: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.analytics = analytics
+		                self.screen = screen
+		            }
+
+		            let analytics: Analytics.SafeDIMockConfiguration
+		            let screen: Screen.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6469,12 +6952,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            analytics: Analytics.SafeDIMockConfiguration = .init(),
 		            screen: Screen.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.analytics = analytics
-		            self.screen = screen
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                screen: screen
+		            )
 		        }
 
-		        let analytics: Analytics.SafeDIMockConfiguration
-		        let screen: Screen.SafeDIMockConfiguration
+		        var analytics: Analytics.SafeDIMockConfiguration { __safeDI_storage.analytics }
+		        var screen: Screen.SafeDIMockConfiguration { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: Analytics.SafeDIMockConfiguration,
+		                screen: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.analytics = analytics
+		                self.screen = screen
+		            }
+
+		            let analytics: Analytics.SafeDIMockConfiguration
+		            let screen: Screen.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6552,12 +7052,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            analytics: Analytics.SafeDIMockConfiguration = .init(),
 		            logger: ((LazilyInstantiated<Analytics>?) -> Logger)? = nil
 		        ) {
-		            self.analytics = analytics
-		            self.logger = logger
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                logger: logger
+		            )
 		        }
 
-		        let analytics: Analytics.SafeDIMockConfiguration
-		        let logger: ((LazilyInstantiated<Analytics>?) -> Logger)?
+		        var analytics: Analytics.SafeDIMockConfiguration { __safeDI_storage.analytics }
+		        var logger: ((LazilyInstantiated<Analytics>?) -> Logger)? { __safeDI_storage.logger }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: Analytics.SafeDIMockConfiguration,
+		                logger: ((LazilyInstantiated<Analytics>?) -> Logger)?
+		            ) {
+		                self.analytics = analytics
+		                self.logger = logger
+		            }
+
+		            let analytics: Analytics.SafeDIMockConfiguration
+		            let logger: ((LazilyInstantiated<Analytics>?) -> Logger)?
+		        }
 		    }
 
 		    static func mock(
@@ -6638,12 +7155,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            home: ((LazilyInstantiated<Analytics>?) -> Home)? = nil,
 		            settings: ((Analytics?) -> Settings)? = nil
 		        ) {
-		            self.home = home
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home,
+		                settings: settings
+		            )
 		        }
 
-		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
-		        let settings: ((Analytics?) -> Settings)?
+		        var home: ((LazilyInstantiated<Analytics>?) -> Home)? { __safeDI_storage.home }
+		        var settings: ((Analytics?) -> Settings)? { __safeDI_storage.settings }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: ((LazilyInstantiated<Analytics>?) -> Home)?,
+		                settings: ((Analytics?) -> Settings)?
+		            ) {
+		                self.home = home
+		                self.settings = settings
+		            }
+
+		            let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		            let settings: ((Analytics?) -> Settings)?
+		        }
 		    }
 
 		    static func mock(
@@ -6715,10 +7249,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            childBuilder: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.childBuilder = childBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder
+		            )
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        var childBuilder: Child.SafeDIMockConfiguration { __safeDI_storage.childBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childBuilder: Child.SafeDIMockConfiguration
+		            ) {
+		                self.childBuilder = childBuilder
+		            }
+
+		            let childBuilder: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6796,10 +7344,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            childBuilder: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.childBuilder = childBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder
+		            )
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        var childBuilder: Child.SafeDIMockConfiguration { __safeDI_storage.childBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childBuilder: Child.SafeDIMockConfiguration
+		            ) {
+		                self.childBuilder = childBuilder
+		            }
+
+		            let childBuilder: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6883,10 +7445,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6967,10 +7543,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -7051,10 +7641,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            childBuilder: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.childBuilder = childBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder
+		            )
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        var childBuilder: Child.SafeDIMockConfiguration { __safeDI_storage.childBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childBuilder: Child.SafeDIMockConfiguration
+		            ) {
+		                self.childBuilder = childBuilder
+		            }
+
+		            let childBuilder: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -7138,10 +7742,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            childBuilder: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.childBuilder = childBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder
+		            )
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        var childBuilder: Child.SafeDIMockConfiguration { __safeDI_storage.childBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childBuilder: Child.SafeDIMockConfiguration
+		            ) {
+		                self.childBuilder = childBuilder
+		            }
+
+		            let childBuilder: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -7225,10 +7843,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -7308,10 +7940,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -7434,10 +8080,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            home: ((LazilyInstantiated<Analytics>?) -> Home)? = nil
 		        ) {
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home
+		            )
 		        }
 
-		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        var home: ((LazilyInstantiated<Analytics>?) -> Home)? { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		            ) {
+		                self.home = home
+		            }
+
+		            let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        }
 		    }
 
 		    static func mock(
@@ -7501,10 +8161,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            home: ((LazilyInstantiated<Analytics>?) -> Home)? = nil
 		        ) {
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home
+		            )
 		        }
 
-		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        var home: ((LazilyInstantiated<Analytics>?) -> Home)? { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		            ) {
+		                self.home = home
+		            }
+
+		            let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        }
 		    }
 
 		    static func mock(
@@ -7579,10 +8253,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            home: Home.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home
+		            )
 		        }
 
-		        let home: Home.SafeDIMockConfiguration
+		        var home: Home.SafeDIMockConfiguration { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: Home.SafeDIMockConfiguration
+		            ) {
+		                self.home = home
+		            }
+
+		            let home: Home.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -7650,10 +8338,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            home: ((LazilyInstantiated<Analytics>, Analytics) -> Home)? = nil
 		        ) {
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home
+		            )
 		        }
 
-		        let home: ((LazilyInstantiated<Analytics>, Analytics) -> Home)?
+		        var home: ((LazilyInstantiated<Analytics>, Analytics) -> Home)? { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: ((LazilyInstantiated<Analytics>, Analytics) -> Home)?
+		            ) {
+		                self.home = home
+		            }
+
+		            let home: ((LazilyInstantiated<Analytics>, Analytics) -> Home)?
+		        }
 		    }
 
 		    static func mock(
@@ -7746,16 +8448,39 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            logger: ((Analytics) -> Logger)? = nil,
 		            tracker: ((LazilyInstantiated<Analytics>) -> Tracker)? = nil
 		        ) {
-		            self.analytics_Legacy = analytics_Legacy
-		            self.analytics_Analytics = analytics_Analytics
-		            self.logger = logger
-		            self.tracker = tracker
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics_Legacy: analytics_Legacy,
+		                analytics_Analytics: analytics_Analytics,
+		                logger: logger,
+		                tracker: tracker
+		            )
 		        }
 
-		        let analytics_Legacy: (() -> Legacy)?
-		        let analytics_Analytics: (() -> Analytics)?
-		        let logger: ((Analytics) -> Logger)?
-		        let tracker: ((LazilyInstantiated<Analytics>) -> Tracker)?
+		        var analytics_Legacy: (() -> Legacy)? { __safeDI_storage.analytics_Legacy }
+		        var analytics_Analytics: (() -> Analytics)? { __safeDI_storage.analytics_Analytics }
+		        var logger: ((Analytics) -> Logger)? { __safeDI_storage.logger }
+		        var tracker: ((LazilyInstantiated<Analytics>) -> Tracker)? { __safeDI_storage.tracker }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics_Legacy: (() -> Legacy)?,
+		                analytics_Analytics: (() -> Analytics)?,
+		                logger: ((Analytics) -> Logger)?,
+		                tracker: ((LazilyInstantiated<Analytics>) -> Tracker)?
+		            ) {
+		                self.analytics_Legacy = analytics_Legacy
+		                self.analytics_Analytics = analytics_Analytics
+		                self.logger = logger
+		                self.tracker = tracker
+		            }
+
+		            let analytics_Legacy: (() -> Legacy)?
+		            let analytics_Analytics: (() -> Analytics)?
+		            let logger: ((Analytics) -> Logger)?
+		            let tracker: ((LazilyInstantiated<Analytics>) -> Tracker)?
+		        }
 		    }
 
 		    static func mock(
@@ -7855,16 +8580,39 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            logger: ((LazilyInstantiated<Analytics>?, Analytics) -> Logger)? = nil,
 		            tracker: ((LazilyInstantiated<Analytics>) -> Tracker)? = nil
 		        ) {
-		            self.analytics_Legacy = analytics_Legacy
-		            self.analytics_Analytics = analytics_Analytics
-		            self.logger = logger
-		            self.tracker = tracker
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics_Legacy: analytics_Legacy,
+		                analytics_Analytics: analytics_Analytics,
+		                logger: logger,
+		                tracker: tracker
+		            )
 		        }
 
-		        let analytics_Legacy: (() -> Legacy)?
-		        let analytics_Analytics: (() -> Analytics)?
-		        let logger: ((LazilyInstantiated<Analytics>?, Analytics) -> Logger)?
-		        let tracker: ((LazilyInstantiated<Analytics>) -> Tracker)?
+		        var analytics_Legacy: (() -> Legacy)? { __safeDI_storage.analytics_Legacy }
+		        var analytics_Analytics: (() -> Analytics)? { __safeDI_storage.analytics_Analytics }
+		        var logger: ((LazilyInstantiated<Analytics>?, Analytics) -> Logger)? { __safeDI_storage.logger }
+		        var tracker: ((LazilyInstantiated<Analytics>) -> Tracker)? { __safeDI_storage.tracker }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics_Legacy: (() -> Legacy)?,
+		                analytics_Analytics: (() -> Analytics)?,
+		                logger: ((LazilyInstantiated<Analytics>?, Analytics) -> Logger)?,
+		                tracker: ((LazilyInstantiated<Analytics>) -> Tracker)?
+		            ) {
+		                self.analytics_Legacy = analytics_Legacy
+		                self.analytics_Analytics = analytics_Analytics
+		                self.logger = logger
+		                self.tracker = tracker
+		            }
+
+		            let analytics_Legacy: (() -> Legacy)?
+		            let analytics_Analytics: (() -> Analytics)?
+		            let logger: ((LazilyInstantiated<Analytics>?, Analytics) -> Logger)?
+		            let tracker: ((LazilyInstantiated<Analytics>) -> Tracker)?
+		        }
 		    }
 
 		    static func mock(
@@ -7962,12 +8710,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            userService: (() -> AnyUserService)? = nil,
 		            home: ((LazilyInstantiated<AnyUserService>?) -> Home)? = nil
 		        ) {
-		            self.userService = userService
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                userService: userService,
+		                home: home
+		            )
 		        }
 
-		        let userService: (() -> AnyUserService)?
-		        let home: ((LazilyInstantiated<AnyUserService>?) -> Home)?
+		        var userService: (() -> AnyUserService)? { __safeDI_storage.userService }
+		        var home: ((LazilyInstantiated<AnyUserService>?) -> Home)? { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                userService: (() -> AnyUserService)?,
+		                home: ((LazilyInstantiated<AnyUserService>?) -> Home)?
+		            ) {
+		                self.userService = userService
+		                self.home = home
+		            }
+
+		            let userService: (() -> AnyUserService)?
+		            let home: ((LazilyInstantiated<AnyUserService>?) -> Home)?
+		        }
 		    }
 
 		    static func mock(
@@ -8053,12 +8818,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            userService: (() -> AnyUserService)? = nil,
 		            home: ((LazilyInstantiated<AnyUserService>) -> Home)? = nil
 		        ) {
-		            self.userService = userService
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                userService: userService,
+		                home: home
+		            )
 		        }
 
-		        let userService: (() -> AnyUserService)?
-		        let home: ((LazilyInstantiated<AnyUserService>) -> Home)?
+		        var userService: (() -> AnyUserService)? { __safeDI_storage.userService }
+		        var home: ((LazilyInstantiated<AnyUserService>) -> Home)? { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                userService: (() -> AnyUserService)?,
+		                home: ((LazilyInstantiated<AnyUserService>) -> Home)?
+		            ) {
+		                self.userService = userService
+		                self.home = home
+		            }
+
+		            let userService: (() -> AnyUserService)?
+		            let home: ((LazilyInstantiated<AnyUserService>) -> Home)?
+		        }
 		    }
 
 		    static func mock(
@@ -8123,10 +8905,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            home: ((LazilyInstantiated<Analytics>) -> Home)? = nil
 		        ) {
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home
+		            )
 		        }
 
-		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		        var home: ((LazilyInstantiated<Analytics>) -> Home)? { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: ((LazilyInstantiated<Analytics>) -> Home)?
+		            ) {
+		                self.home = home
+		            }
+
+		            let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		        }
 		    }
 
 		    static func mock(
@@ -8205,12 +9001,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            a: ((LazilyInstantiated<SessionA>) -> A)? = nil,
 		            b: ((LazilyInstantiated<SessionB>) -> B)? = nil
 		        ) {
-		            self.a = a
-		            self.b = b
+		            __safeDI_storage = __safeDI_Storage(
+		                a: a,
+		                b: b
+		            )
 		        }
 
-		        let a: ((LazilyInstantiated<SessionA>) -> A)?
-		        let b: ((LazilyInstantiated<SessionB>) -> B)?
+		        var a: ((LazilyInstantiated<SessionA>) -> A)? { __safeDI_storage.a }
+		        var b: ((LazilyInstantiated<SessionB>) -> B)? { __safeDI_storage.b }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                a: ((LazilyInstantiated<SessionA>) -> A)?,
+		                b: ((LazilyInstantiated<SessionB>) -> B)?
+		            ) {
+		                self.a = a
+		                self.b = b
+		            }
+
+		            let a: ((LazilyInstantiated<SessionA>) -> A)?
+		            let b: ((LazilyInstantiated<SessionB>) -> B)?
+		        }
 		    }
 
 		    static func mock(
@@ -8308,14 +9121,31 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            b: ((LazilyInstantiated<SessionB>) -> B)? = nil,
 		            session: SessionA? = nil
 		        ) {
-		            self.a = a
-		            self.b = b
+		            __safeDI_storage = __safeDI_Storage(
+		                a: a,
+		                b: b
+		            )
 		            self.session = session
 		        }
 
-		        let a: ((LazilyInstantiated<SessionA>?) -> A)?
-		        let b: ((LazilyInstantiated<SessionB>) -> B)?
+		        var a: ((LazilyInstantiated<SessionA>?) -> A)? { __safeDI_storage.a }
+		        var b: ((LazilyInstantiated<SessionB>) -> B)? { __safeDI_storage.b }
 		        let session: SessionA?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                a: ((LazilyInstantiated<SessionA>?) -> A)?,
+		                b: ((LazilyInstantiated<SessionB>) -> B)?
+		            ) {
+		                self.a = a
+		                self.b = b
+		            }
+
+		            let a: ((LazilyInstantiated<SessionA>?) -> A)?
+		            let b: ((LazilyInstantiated<SessionB>) -> B)?
+		        }
 		    }
 
 		    static func mock(
@@ -8392,12 +9222,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            a: ((LazilyInstantiated<SessionA>) -> A)? = nil,
 		            b: ((SessionB, LazilyInstantiated<SessionB>) -> B)? = nil
 		        ) {
-		            self.a = a
-		            self.b = b
+		            __safeDI_storage = __safeDI_Storage(
+		                a: a,
+		                b: b
+		            )
 		        }
 
-		        let a: ((LazilyInstantiated<SessionA>) -> A)?
-		        let b: ((SessionB, LazilyInstantiated<SessionB>) -> B)?
+		        var a: ((LazilyInstantiated<SessionA>) -> A)? { __safeDI_storage.a }
+		        var b: ((SessionB, LazilyInstantiated<SessionB>) -> B)? { __safeDI_storage.b }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                a: ((LazilyInstantiated<SessionA>) -> A)?,
+		                b: ((SessionB, LazilyInstantiated<SessionB>) -> B)?
+		            ) {
+		                self.a = a
+		                self.b = b
+		            }
+
+		            let a: ((LazilyInstantiated<SessionA>) -> A)?
+		            let b: ((SessionB, LazilyInstantiated<SessionB>) -> B)?
+		        }
 		    }
 
 		    static func mock(
@@ -8513,12 +9360,26 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            composer: ((LazilyInstantiated<Draft>, Int?) -> Composer)? = nil,
 		            draft_lazilyInstantiated: Int? = nil
 		        ) {
-		            self.composer = composer
+		            __safeDI_storage = __safeDI_Storage(
+		                composer: composer
+		            )
 		            self.draft_lazilyInstantiated = draft_lazilyInstantiated
 		        }
 
-		        let composer: ((LazilyInstantiated<Draft>, Int?) -> Composer)?
+		        var composer: ((LazilyInstantiated<Draft>, Int?) -> Composer)? { __safeDI_storage.composer }
 		        let draft_lazilyInstantiated: Int?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                composer: ((LazilyInstantiated<Draft>, Int?) -> Composer)?
+		            ) {
+		                self.composer = composer
+		            }
+
+		            let composer: ((LazilyInstantiated<Draft>, Int?) -> Composer)?
+		        }
 		    }
 
 		    static func mock(
@@ -8580,10 +9441,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            child: ((LazilyInstantiated<Value>?) -> Child)? = nil
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: ((LazilyInstantiated<Value>?) -> Child)?
+		        var child: ((LazilyInstantiated<Value>?) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((LazilyInstantiated<Value>?) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: ((LazilyInstantiated<Value>?) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -8649,12 +9524,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            session_LazilyInstantiated__Session: (() -> Session)? = nil,
 		            feed: ((LazilyInstantiated<Session>) -> Feed)? = nil
 		        ) {
-		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                session_LazilyInstantiated__Session: session_LazilyInstantiated__Session,
+		                feed: feed
+		            )
 		        }
 
-		        let session_LazilyInstantiated__Session: (() -> Session)?
-		        let feed: ((LazilyInstantiated<Session>) -> Feed)?
+		        var session_LazilyInstantiated__Session: (() -> Session)? { __safeDI_storage.session_LazilyInstantiated__Session }
+		        var feed: ((LazilyInstantiated<Session>) -> Feed)? { __safeDI_storage.feed }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session_LazilyInstantiated__Session: (() -> Session)?,
+		                feed: ((LazilyInstantiated<Session>) -> Feed)?
+		            ) {
+		                self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
+		                self.feed = feed
+		            }
+
+		            let session_LazilyInstantiated__Session: (() -> Session)?
+		            let feed: ((LazilyInstantiated<Session>) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -8725,12 +9617,26 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            feed: ((LazilyInstantiated<Session>?) -> Feed)? = nil,
 		            session_LazilyInstantiated__Session: Session? = nil
 		        ) {
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed
+		            )
 		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
-		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        var feed: ((LazilyInstantiated<Session>?) -> Feed)? { __safeDI_storage.feed }
 		        let session_LazilyInstantiated__Session: Session?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		            ) {
+		                self.feed = feed
+		            }
+
+		            let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -8813,14 +9719,31 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            uploader: ((Session) -> Uploader)? = nil,
 		            session_LazilyInstantiated__Session: Session? = nil
 		        ) {
-		            self.feed = feed
-		            self.uploader = uploader
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed,
+		                uploader: uploader
+		            )
 		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
-		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
-		        let uploader: ((Session) -> Uploader)?
+		        var feed: ((LazilyInstantiated<Session>?) -> Feed)? { __safeDI_storage.feed }
+		        var uploader: ((Session) -> Uploader)? { __safeDI_storage.uploader }
 		        let session_LazilyInstantiated__Session: Session?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: ((LazilyInstantiated<Session>?) -> Feed)?,
+		                uploader: ((Session) -> Uploader)?
+		            ) {
+		                self.feed = feed
+		                self.uploader = uploader
+		            }
+
+		            let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		            let uploader: ((Session) -> Uploader)?
+		        }
 		    }
 
 		    static func mock(
@@ -8897,14 +9820,31 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            cache: ((Session?) -> Cache)? = nil,
 		            session_LazilyInstantiated__Session: Session? = nil
 		        ) {
-		            self.feed = feed
-		            self.cache = cache
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed,
+		                cache: cache
+		            )
 		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
-		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
-		        let cache: ((Session?) -> Cache)?
+		        var feed: ((LazilyInstantiated<Session>?) -> Feed)? { __safeDI_storage.feed }
+		        var cache: ((Session?) -> Cache)? { __safeDI_storage.cache }
 		        let session_LazilyInstantiated__Session: Session?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: ((LazilyInstantiated<Session>?) -> Feed)?,
+		                cache: ((Session?) -> Cache)?
+		            ) {
+		                self.feed = feed
+		                self.cache = cache
+		            }
+
+		            let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		            let cache: ((Session?) -> Cache)?
+		        }
 		    }
 
 		    static func mock(
@@ -8981,14 +9921,31 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            cache: ((Session?) -> Cache)? = nil,
 		            session_LazilyInstantiated__Session: Session? = nil
 		        ) {
-		            self.feed = feed
-		            self.cache = cache
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed,
+		                cache: cache
+		            )
 		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
-		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
-		        let cache: ((Session?) -> Cache)?
+		        var feed: ((LazilyInstantiated<Session>?) -> Feed)? { __safeDI_storage.feed }
+		        var cache: ((Session?) -> Cache)? { __safeDI_storage.cache }
 		        let session_LazilyInstantiated__Session: Session?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: ((LazilyInstantiated<Session>?) -> Feed)?,
+		                cache: ((Session?) -> Cache)?
+		            ) {
+		                self.feed = feed
+		                self.cache = cache
+		            }
+
+		            let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		            let cache: ((Session?) -> Cache)?
+		        }
 		    }
 
 		    static func mock(
@@ -9048,10 +10005,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            feed: ((LazilyInstantiated<User>) -> Feed)? = nil
 		        ) {
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed
+		            )
 		        }
 
-		        let feed: ((LazilyInstantiated<User>) -> Feed)?
+		        var feed: ((LazilyInstantiated<User>) -> Feed)? { __safeDI_storage.feed }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: ((LazilyInstantiated<User>) -> Feed)?
+		            ) {
+		                self.feed = feed
+		            }
+
+		            let feed: ((LazilyInstantiated<User>) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -9117,12 +10088,26 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            feed: ((LazilyInstantiated<Session>?) -> Feed)? = nil,
 		            session_LazilyInstantiated__Session: Session? = nil
 		        ) {
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed
+		            )
 		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
-		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        var feed: ((LazilyInstantiated<Session>?) -> Feed)? { __safeDI_storage.feed }
 		        let session_LazilyInstantiated__Session: Session?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		            ) {
+		                self.feed = feed
+		            }
+
+		            let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -9189,12 +10174,26 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            feed: ((SendableLazilyInstantiated<Session>?) -> Feed)? = nil,
 		            session_SendableLazilyInstantiated__Session: Session? = nil
 		        ) {
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed
+		            )
 		            self.session_SendableLazilyInstantiated__Session = session_SendableLazilyInstantiated__Session
 		        }
 
-		        let feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
+		        var feed: ((SendableLazilyInstantiated<Session>?) -> Feed)? { __safeDI_storage.feed }
 		        let session_SendableLazilyInstantiated__Session: Session?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
+		            ) {
+		                self.feed = feed
+		            }
+
+		            let feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -9262,12 +10261,26 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            feed: ((LazilyInstantiated<Session>?) -> Feed)? = nil,
 		            session_LazilyInstantiated__Session: Session? = nil
 		        ) {
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed
+		            )
 		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
-		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        var feed: ((LazilyInstantiated<Session>?) -> Feed)? { __safeDI_storage.feed }
 		        let session_LazilyInstantiated__Session: Session?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		            ) {
+		                self.feed = feed
+		            }
+
+		            let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -9329,10 +10342,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            feed: ((SendableLazilyInstantiated<Session>?) -> Feed)? = nil
 		        ) {
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed
+		            )
 		        }
 
-		        let feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
+		        var feed: ((SendableLazilyInstantiated<Session>?) -> Feed)? { __safeDI_storage.feed }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
+		            ) {
+		                self.feed = feed
+		            }
+
+		            let feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -9393,10 +10420,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            feed: ((SendableLazilyInstantiated<Session>) -> Feed)? = nil
 		        ) {
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed
+		            )
 		        }
 
-		        let feed: ((SendableLazilyInstantiated<Session>) -> Feed)?
+		        var feed: ((SendableLazilyInstantiated<Session>) -> Feed)? { __safeDI_storage.feed }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: ((SendableLazilyInstantiated<Session>) -> Feed)?
+		            ) {
+		                self.feed = feed
+		            }
+
+		            let feed: ((SendableLazilyInstantiated<Session>) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -9464,12 +10505,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)? = nil,
 		            feed: ((SendableLazilyInstantiated<Session>) -> Feed)? = nil
 		        ) {
-		            self.session_SendableLazilyInstantiated__Session = session_SendableLazilyInstantiated__Session
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                session_SendableLazilyInstantiated__Session: session_SendableLazilyInstantiated__Session,
+		                feed: feed
+		            )
 		        }
 
-		        let session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)?
-		        let feed: ((SendableLazilyInstantiated<Session>) -> Feed)?
+		        var session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)? { __safeDI_storage.session_SendableLazilyInstantiated__Session }
+		        var feed: ((SendableLazilyInstantiated<Session>) -> Feed)? { __safeDI_storage.feed }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)?,
+		                feed: ((SendableLazilyInstantiated<Session>) -> Feed)?
+		            ) {
+		                self.session_SendableLazilyInstantiated__Session = session_SendableLazilyInstantiated__Session
+		                self.feed = feed
+		            }
+
+		            let session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)?
+		            let feed: ((SendableLazilyInstantiated<Session>) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -9556,14 +10614,31 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            uploader: ((Session) -> Uploader)? = nil,
 		            session_SendableLazilyInstantiated__Session: Session? = nil
 		        ) {
-		            self.feed = feed
-		            self.uploader = uploader
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed,
+		                uploader: uploader
+		            )
 		            self.session_SendableLazilyInstantiated__Session = session_SendableLazilyInstantiated__Session
 		        }
 
-		        let feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
-		        let uploader: ((Session) -> Uploader)?
+		        var feed: ((SendableLazilyInstantiated<Session>?) -> Feed)? { __safeDI_storage.feed }
+		        var uploader: ((Session) -> Uploader)? { __safeDI_storage.uploader }
 		        let session_SendableLazilyInstantiated__Session: Session?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?,
+		                uploader: ((Session) -> Uploader)?
+		            ) {
+		                self.feed = feed
+		                self.uploader = uploader
+		            }
+
+		            let feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
+		            let uploader: ((Session) -> Uploader)?
+		        }
 		    }
 
 		    static func mock(
@@ -9627,12 +10702,26 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            feed: ((SendableLazilyInstantiated<Session?>?) -> Feed)? = nil,
 		            session_Session: Session?? = nil
 		        ) {
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed
+		            )
 		            self.session_Session = session_Session
 		        }
 
-		        let feed: ((SendableLazilyInstantiated<Session?>?) -> Feed)?
+		        var feed: ((SendableLazilyInstantiated<Session?>?) -> Feed)? { __safeDI_storage.feed }
 		        let session_Session: Session??
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: ((SendableLazilyInstantiated<Session?>?) -> Feed)?
+		            ) {
+		                self.feed = feed
+		            }
+
+		            let feed: ((SendableLazilyInstantiated<Session?>?) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -9694,10 +10783,24 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        init(
 		            feed: ((LazilyInstantiated<Session?>) -> Feed)? = nil
 		        ) {
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed
+		            )
 		        }
 
-		        let feed: ((LazilyInstantiated<Session?>) -> Feed)?
+		        var feed: ((LazilyInstantiated<Session?>) -> Feed)? { __safeDI_storage.feed }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: ((LazilyInstantiated<Session?>) -> Feed)?
+		            ) {
+		                self.feed = feed
+		            }
+
+		            let feed: ((LazilyInstantiated<Session?>) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -9767,12 +10870,26 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            feed: ((SendableLazilyInstantiated<Session>?, LazilyInstantiated<Analytics>) -> Feed)? = nil,
 		            session_SendableLazilyInstantiated__Session: Session? = nil
 		        ) {
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed
+		            )
 		            self.session_SendableLazilyInstantiated__Session = session_SendableLazilyInstantiated__Session
 		        }
 
-		        let feed: ((SendableLazilyInstantiated<Session>?, LazilyInstantiated<Analytics>) -> Feed)?
+		        var feed: ((SendableLazilyInstantiated<Session>?, LazilyInstantiated<Analytics>) -> Feed)? { __safeDI_storage.feed }
 		        let session_SendableLazilyInstantiated__Session: Session?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: ((SendableLazilyInstantiated<Session>?, LazilyInstantiated<Analytics>) -> Feed)?
+		            ) {
+		                self.feed = feed
+		            }
+
+		            let feed: ((SendableLazilyInstantiated<Session>?, LazilyInstantiated<Analytics>) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -9841,12 +10958,29 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            analytics: (() -> Analytics)? = nil,
 		            logger: ((LazilyInstantiated<Analytics>?) -> Logger)? = nil
 		        ) {
-		            self.analytics = analytics
-		            self.logger = logger
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                logger: logger
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
-		        let logger: ((LazilyInstantiated<Analytics>?) -> Logger)?
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var logger: ((LazilyInstantiated<Analytics>?) -> Logger)? { __safeDI_storage.logger }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                logger: ((LazilyInstantiated<Analytics>?) -> Logger)?
+		            ) {
+		                self.analytics = analytics
+		                self.logger = logger
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let logger: ((LazilyInstantiated<Analytics>?) -> Logger)?
+		        }
 		    }
 
 		    static func mock(
@@ -9935,16 +11069,39 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            logger: ((LazilyInstantiated<Analytics>) -> Logger)? = nil,
 		            uploader: ((Analytics) -> Uploader)? = nil
 		        ) {
-		            self.config = config
-		            self.analytics = analytics
-		            self.logger = logger
-		            self.uploader = uploader
+		            __safeDI_storage = __safeDI_Storage(
+		                config: config,
+		                analytics: analytics,
+		                logger: logger,
+		                uploader: uploader
+		            )
 		        }
 
-		        let config: (() -> Config)?
-		        let analytics: ((Config) -> Analytics)?
-		        let logger: ((LazilyInstantiated<Analytics>) -> Logger)?
-		        let uploader: ((Analytics) -> Uploader)?
+		        var config: (() -> Config)? { __safeDI_storage.config }
+		        var analytics: ((Config) -> Analytics)? { __safeDI_storage.analytics }
+		        var logger: ((LazilyInstantiated<Analytics>) -> Logger)? { __safeDI_storage.logger }
+		        var uploader: ((Analytics) -> Uploader)? { __safeDI_storage.uploader }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                config: (() -> Config)?,
+		                analytics: ((Config) -> Analytics)?,
+		                logger: ((LazilyInstantiated<Analytics>) -> Logger)?,
+		                uploader: ((Analytics) -> Uploader)?
+		            ) {
+		                self.config = config
+		                self.analytics = analytics
+		                self.logger = logger
+		                self.uploader = uploader
+		            }
+
+		            let config: (() -> Config)?
+		            let analytics: ((Config) -> Analytics)?
+		            let logger: ((LazilyInstantiated<Analytics>) -> Logger)?
+		            let uploader: ((Analytics) -> Uploader)?
+		        }
 		    }
 
 		    static func mock(
@@ -10024,14 +11181,34 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            logger: ((LazilyInstantiated<Analytics>) -> Logger)? = nil,
 		            first: ((Logger) -> First)? = nil
 		        ) {
-		            self.analytics = analytics
-		            self.logger = logger
-		            self.first = first
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                logger: logger,
+		                first: first
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
-		        let logger: ((LazilyInstantiated<Analytics>) -> Logger)?
-		        let first: ((Logger) -> First)?
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var logger: ((LazilyInstantiated<Analytics>) -> Logger)? { __safeDI_storage.logger }
+		        var first: ((Logger) -> First)? { __safeDI_storage.first }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                logger: ((LazilyInstantiated<Analytics>) -> Logger)?,
+		                first: ((Logger) -> First)?
+		            ) {
+		                self.analytics = analytics
+		                self.logger = logger
+		                self.first = first
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let logger: ((LazilyInstantiated<Analytics>) -> Logger)?
+		            let first: ((Logger) -> First)?
+		        }
 		    }
 
 		    static func mock(

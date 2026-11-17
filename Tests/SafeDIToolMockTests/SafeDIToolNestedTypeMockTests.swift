@@ -94,10 +94,24 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		        init(
 		            consumer: Feature.Consumer.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.consumer = consumer
+		            __safeDI_storage = __safeDI_Storage(
+		                consumer: consumer
+		            )
 		        }
 
-		        let consumer: Feature.Consumer.SafeDIMockConfiguration
+		        var consumer: Feature.Consumer.SafeDIMockConfiguration { __safeDI_storage.consumer }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                consumer: Feature.Consumer.SafeDIMockConfiguration
+		            ) {
+		                self.consumer = consumer
+		            }
+
+		            let consumer: Feature.Consumer.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -161,10 +175,24 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		        init(
 		            consumer: (() -> Feature.Detail.Consumer)? = nil
 		        ) {
-		            self.consumer = consumer
+		            __safeDI_storage = __safeDI_Storage(
+		                consumer: consumer
+		            )
 		        }
 
-		        let consumer: (() -> Feature.Detail.Consumer)?
+		        var consumer: (() -> Feature.Detail.Consumer)? { __safeDI_storage.consumer }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                consumer: (() -> Feature.Detail.Consumer)?
+		            ) {
+		                self.consumer = consumer
+		            }
+
+		            let consumer: (() -> Feature.Detail.Consumer)?
+		        }
 		    }
 
 		    static func mock(
@@ -222,10 +250,24 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		        init(
 		            consumer: (() -> Feature.Consumer)? = nil
 		        ) {
-		            self.consumer = consumer
+		            __safeDI_storage = __safeDI_Storage(
+		                consumer: consumer
+		            )
 		        }
 
-		        let consumer: (() -> Feature.Consumer)?
+		        var consumer: (() -> Feature.Consumer)? { __safeDI_storage.consumer }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                consumer: (() -> Feature.Consumer)?
+		            ) {
+		                self.consumer = consumer
+		            }
+
+		            let consumer: (() -> Feature.Consumer)?
+		        }
 		    }
 
 		    static func mock(
@@ -283,10 +325,24 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		        init(
 		            consumer: (() -> Feature.Consumer)? = nil
 		        ) {
-		            self.consumer = consumer
+		            __safeDI_storage = __safeDI_Storage(
+		                consumer: consumer
+		            )
 		        }
 
-		        let consumer: (() -> Feature.Consumer)?
+		        var consumer: (() -> Feature.Consumer)? { __safeDI_storage.consumer }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                consumer: (() -> Feature.Consumer)?
+		            ) {
+		                self.consumer = consumer
+		            }
+
+		            let consumer: (() -> Feature.Consumer)?
+		        }
 		    }
 
 		    static func mock(
@@ -381,10 +437,24 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		        init(
 		            consumer: (() -> Feature.Consumer)? = nil
 		        ) {
-		            self.consumer = consumer
+		            __safeDI_storage = __safeDI_Storage(
+		                consumer: consumer
+		            )
 		        }
 
-		        let consumer: (() -> Feature.Consumer)?
+		        var consumer: (() -> Feature.Consumer)? { __safeDI_storage.consumer }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                consumer: (() -> Feature.Consumer)?
+		            ) {
+		                self.consumer = consumer
+		            }
+
+		            let consumer: (() -> Feature.Consumer)?
+		        }
 		    }
 
 		    static func mock(
@@ -446,10 +516,24 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		        init(
 		            consumer: (() -> Feature.Consumer)? = nil
 		        ) {
-		            self.consumer = consumer
+		            __safeDI_storage = __safeDI_Storage(
+		                consumer: consumer
+		            )
 		        }
 
-		        let consumer: (() -> Feature.Consumer)?
+		        var consumer: (() -> Feature.Consumer)? { __safeDI_storage.consumer }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                consumer: (() -> Feature.Consumer)?
+		            ) {
+		                self.consumer = consumer
+		            }
+
+		            let consumer: (() -> Feature.Consumer)?
+		        }
 		    }
 
 		    static func mock(
@@ -516,10 +600,24 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		        init(
 		            consumer: (() -> Feature.ConsumerProtocol)? = nil
 		        ) {
-		            self.consumer = consumer
+		            __safeDI_storage = __safeDI_Storage(
+		                consumer: consumer
+		            )
 		        }
 
-		        let consumer: (() -> Feature.ConsumerProtocol)?
+		        var consumer: (() -> Feature.ConsumerProtocol)? { __safeDI_storage.consumer }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                consumer: (() -> Feature.ConsumerProtocol)?
+		            ) {
+		                self.consumer = consumer
+		            }
+
+		            let consumer: (() -> Feature.ConsumerProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -593,12 +691,29 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		            service: (() -> Feature.Service)? = nil,
 		            consumer: ((Feature.Service) -> Feature.Consumer)? = nil
 		        ) {
-		            self.service = service
-		            self.consumer = consumer
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                consumer: consumer
+		            )
 		        }
 
-		        let service: (() -> Feature.Service)?
-		        let consumer: ((Feature.Service) -> Feature.Consumer)?
+		        var service: (() -> Feature.Service)? { __safeDI_storage.service }
+		        var consumer: ((Feature.Service) -> Feature.Consumer)? { __safeDI_storage.consumer }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Feature.Service)?,
+		                consumer: ((Feature.Service) -> Feature.Consumer)?
+		            ) {
+		                self.service = service
+		                self.consumer = consumer
+		            }
+
+		            let service: (() -> Feature.Service)?
+		            let consumer: ((Feature.Service) -> Feature.Consumer)?
+		        }
 		    }
 
 		    static func mock(
@@ -673,12 +788,29 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		            service: (() -> Feature.Service)? = nil,
 		            consumer: ((Feature.Service) -> Feature.Consumer)? = nil
 		        ) {
-		            self.service = service
-		            self.consumer = consumer
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                consumer: consumer
+		            )
 		        }
 
-		        let service: (() -> Feature.Service)?
-		        let consumer: ((Feature.Service) -> Feature.Consumer)?
+		        var service: (() -> Feature.Service)? { __safeDI_storage.service }
+		        var consumer: ((Feature.Service) -> Feature.Consumer)? { __safeDI_storage.consumer }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Feature.Service)?,
+		                consumer: ((Feature.Service) -> Feature.Consumer)?
+		            ) {
+		                self.service = service
+		                self.consumer = consumer
+		            }
+
+		            let service: (() -> Feature.Service)?
+		            let consumer: ((Feature.Service) -> Feature.Consumer)?
+		        }
 		    }
 
 		    static func mock(

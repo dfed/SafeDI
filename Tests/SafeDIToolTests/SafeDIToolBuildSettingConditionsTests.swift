@@ -1772,10 +1772,24 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 	        init(
 	            logger: (() -> Logger)? = nil
 	        ) {
-	            self.logger = logger
+	            __safeDI_storage = __safeDI_Storage(
+	                logger: logger
+	            )
 	        }
 
-	        let logger: (() -> Logger)?
+	        var logger: (() -> Logger)? { __safeDI_storage.logger }
+
+	        private let __safeDI_storage: __safeDI_Storage
+
+	        private final class __safeDI_Storage {
+	            init(
+	                logger: (() -> Logger)?
+	            ) {
+	                self.logger = logger
+	            }
+
+	            let logger: (() -> Logger)?
+	        }
 	    }
 
 	    static func mock(

@@ -98,10 +98,24 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        init(
 		            childB: (() -> Other)? = nil
 		        ) {
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childB: childB
+		            )
 		        }
 
-		        let childB: (() -> Other)?
+		        var childB: (() -> Other)? { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childB: (() -> Other)?
+		            ) {
+		                self.childB = childB
+		            }
+
+		            let childB: (() -> Other)?
+		        }
 		    }
 
 		    static func mock(
@@ -124,13 +138,30 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childB: (() -> Other)? = nil,
 		            _ safeDIBuilder: ((Instantiator<Other>) -> ChildA)? = nil
 		        ) {
-		            self.childB = childB
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childB: childB,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let childB: (() -> Other)?
+		        var childB: (() -> Other)? { __safeDI_storage.childB }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<Other>) -> ChildA)?
+		        var safeDIBuilder: ((Instantiator<Other>) -> ChildA)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childB: (() -> Other)?,
+		                safeDIBuilder: ((Instantiator<Other>) -> ChildA)?
+		            ) {
+		                self.childB = childB
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let childB: (() -> Other)?
+		            let safeDIBuilder: ((Instantiator<Other>) -> ChildA)?
+		        }
 		    }
 		}
 		#endif
@@ -177,12 +208,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childA: ChildA.SafeDIMockConfiguration = .init(),
 		            childB: (() -> ChildB)? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB
+		            )
 		        }
 
-		        let childA: ChildA.SafeDIMockConfiguration
-		        let childB: (() -> ChildB)?
+		        var childA: ChildA.SafeDIMockConfiguration { __safeDI_storage.childA }
+		        var childB: (() -> ChildB)? { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ChildA.SafeDIMockConfiguration,
+		                childB: (() -> ChildB)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		            }
+
+		            let childA: ChildA.SafeDIMockConfiguration
+		            let childB: (() -> ChildB)?
+		        }
 		    }
 
 		    static func mock(
@@ -272,12 +320,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childA: ChildA.SafeDIMockConfiguration = .init(),
 		            childB: ChildB.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB
+		            )
 		        }
 
-		        let childA: ChildA.SafeDIMockConfiguration
-		        let childB: ChildB.SafeDIMockConfiguration
+		        var childA: ChildA.SafeDIMockConfiguration { __safeDI_storage.childA }
+		        var childB: ChildB.SafeDIMockConfiguration { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ChildA.SafeDIMockConfiguration,
+		                childB: ChildB.SafeDIMockConfiguration
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		            }
+
+		            let childA: ChildA.SafeDIMockConfiguration
+		            let childB: ChildB.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -360,14 +425,31 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childB: ((LocalService?) -> ChildB)? = nil,
 		            service: LocalService? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB
+		            )
 		            self.service = service
 		        }
 
-		        let childA: ((ExternalService) -> ChildA)?
-		        let childB: ((LocalService?) -> ChildB)?
+		        var childA: ((ExternalService) -> ChildA)? { __safeDI_storage.childA }
+		        var childB: ((LocalService?) -> ChildB)? { __safeDI_storage.childB }
 		        let service: LocalService?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ((ExternalService) -> ChildA)?,
+		                childB: ((LocalService?) -> ChildB)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		            }
+
+		            let childA: ((ExternalService) -> ChildA)?
+		            let childB: ((LocalService?) -> ChildB)?
+		        }
 		    }
 
 		    static func mock(
@@ -447,14 +529,31 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childB: ((Service?) -> ChildB)? = nil,
 		            service: Service? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB
+		            )
 		            self.service = service
 		        }
 
-		        let childA: ChildA.SafeDIMockConfiguration
-		        let childB: ((Service?) -> ChildB)?
+		        var childA: ChildA.SafeDIMockConfiguration { __safeDI_storage.childA }
+		        var childB: ((Service?) -> ChildB)? { __safeDI_storage.childB }
 		        let service: Service?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ChildA.SafeDIMockConfiguration,
+		                childB: ((Service?) -> ChildB)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		            }
+
+		            let childA: ChildA.SafeDIMockConfiguration
+		            let childB: ((Service?) -> ChildB)?
+		        }
 		    }
 
 		    static func mock(
@@ -540,12 +639,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childABuilder: ((String, PresenterA) -> ChildA)? = nil,
 		            childB: ((PresenterB) -> ChildB)? = nil
 		        ) {
-		            self.childABuilder = childABuilder
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childABuilder: childABuilder,
+		                childB: childB
+		            )
 		        }
 
-		        let childABuilder: ((String, PresenterA) -> ChildA)?
-		        let childB: ((PresenterB) -> ChildB)?
+		        var childABuilder: ((String, PresenterA) -> ChildA)? { __safeDI_storage.childABuilder }
+		        var childB: ((PresenterB) -> ChildB)? { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childABuilder: ((String, PresenterA) -> ChildA)?,
+		                childB: ((PresenterB) -> ChildB)?
+		            ) {
+		                self.childABuilder = childABuilder
+		                self.childB = childB
+		            }
+
+		            let childABuilder: ((String, PresenterA) -> ChildA)?
+		            let childB: ((PresenterB) -> ChildB)?
+		        }
 		    }
 
 		    static func mock(
@@ -634,12 +750,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            parentBuilder: ((String, ConfigA) -> Parent)? = nil,
 		            childB: ((ConfigB) -> ChildB)? = nil
 		        ) {
-		            self.parentBuilder = parentBuilder
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                parentBuilder: parentBuilder,
+		                childB: childB
+		            )
 		        }
 
-		        let parentBuilder: ((String, ConfigA) -> Parent)?
-		        let childB: ((ConfigB) -> ChildB)?
+		        var parentBuilder: ((String, ConfigA) -> Parent)? { __safeDI_storage.parentBuilder }
+		        var childB: ((ConfigB) -> ChildB)? { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                parentBuilder: ((String, ConfigA) -> Parent)?,
+		                childB: ((ConfigB) -> ChildB)?
+		            ) {
+		                self.parentBuilder = parentBuilder
+		                self.childB = childB
+		            }
+
+		            let parentBuilder: ((String, ConfigA) -> Parent)?
+		            let childB: ((ConfigB) -> ChildB)?
+		        }
 		    }
 
 		    static func mock(
@@ -724,12 +857,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            parent: ((EngineA) -> Parent)? = nil,
 		            child: ((EngineB) -> Child)? = nil
 		        ) {
-		            self.parent = parent
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                parent: parent,
+		                child: child
+		            )
 		        }
 
-		        let parent: ((EngineA) -> Parent)?
-		        let child: ((EngineB) -> Child)?
+		        var parent: ((EngineA) -> Parent)? { __safeDI_storage.parent }
+		        var child: ((EngineB) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                parent: ((EngineA) -> Parent)?,
+		                child: ((EngineB) -> Child)?
+		            ) {
+		                self.parent = parent
+		                self.child = child
+		            }
+
+		            let parent: ((EngineA) -> Parent)?
+		            let child: ((EngineB) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -812,14 +962,31 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childB: ((LocalService?) -> ChildB)? = nil,
 		            service: LocalService? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB
+		            )
 		            self.service = service
 		        }
 
-		        let childA: ((ExternalService) -> ChildA)?
-		        let childB: ((LocalService?) -> ChildB)?
+		        var childA: ((ExternalService) -> ChildA)? { __safeDI_storage.childA }
+		        var childB: ((LocalService?) -> ChildB)? { __safeDI_storage.childB }
 		        let service: LocalService?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ((ExternalService) -> ChildA)?,
+		                childB: ((LocalService?) -> ChildB)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		            }
+
+		            let childA: ((ExternalService) -> ChildA)?
+		            let childB: ((LocalService?) -> ChildB)?
+		        }
 		    }
 
 		    static func mock(
@@ -890,12 +1057,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childA: ChildA.SafeDIMockConfiguration = .init(),
 		            childB: ChildB.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB
+		            )
 		        }
 
-		        let childA: ChildA.SafeDIMockConfiguration
-		        let childB: ChildB.SafeDIMockConfiguration
+		        var childA: ChildA.SafeDIMockConfiguration { __safeDI_storage.childA }
+		        var childB: ChildB.SafeDIMockConfiguration { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ChildA.SafeDIMockConfiguration,
+		                childB: ChildB.SafeDIMockConfiguration
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		            }
+
+		            let childA: ChildA.SafeDIMockConfiguration
+		            let childB: ChildB.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -987,14 +1171,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childB: ((ServiceB) -> ChildB)? = nil,
 		            childC: ((ServiceC) -> ChildC)? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
-		            self.childC = childC
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB,
+		                childC: childC
+		            )
 		        }
 
-		        let childA: ((ServiceA) -> ChildA)?
-		        let childB: ((ServiceB) -> ChildB)?
-		        let childC: ((ServiceC) -> ChildC)?
+		        var childA: ((ServiceA) -> ChildA)? { __safeDI_storage.childA }
+		        var childB: ((ServiceB) -> ChildB)? { __safeDI_storage.childB }
+		        var childC: ((ServiceC) -> ChildC)? { __safeDI_storage.childC }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ((ServiceA) -> ChildA)?,
+		                childB: ((ServiceB) -> ChildB)?,
+		                childC: ((ServiceC) -> ChildC)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		                self.childC = childC
+		            }
+
+		            let childA: ((ServiceA) -> ChildA)?
+		            let childB: ((ServiceB) -> ChildB)?
+		            let childC: ((ServiceC) -> ChildC)?
+		        }
 		    }
 
 		    static func mock(
@@ -1105,14 +1309,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            parentBuilder: Parent.SafeDIMockConfiguration = .init(),
 		            other: Other.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.childBuilder = childBuilder
-		            self.parentBuilder = parentBuilder
-		            self.other = other
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder,
+		                parentBuilder: parentBuilder,
+		                other: other
+		            )
 		        }
 
-		        let childBuilder: ((String) -> ChildA)?
-		        let parentBuilder: Parent.SafeDIMockConfiguration
-		        let other: Other.SafeDIMockConfiguration
+		        var childBuilder: ((String) -> ChildA)? { __safeDI_storage.childBuilder }
+		        var parentBuilder: Parent.SafeDIMockConfiguration { __safeDI_storage.parentBuilder }
+		        var other: Other.SafeDIMockConfiguration { __safeDI_storage.other }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childBuilder: ((String) -> ChildA)?,
+		                parentBuilder: Parent.SafeDIMockConfiguration,
+		                other: Other.SafeDIMockConfiguration
+		            ) {
+		                self.childBuilder = childBuilder
+		                self.parentBuilder = parentBuilder
+		                self.other = other
+		            }
+
+		            let childBuilder: ((String) -> ChildA)?
+		            let parentBuilder: Parent.SafeDIMockConfiguration
+		            let other: Other.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1241,20 +1465,49 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            service_UserService: (() -> OtherType)? = nil,
 		            childC: ((OtherType) -> ChildC)? = nil
 		        ) {
-		            self.service_UserService_ = service_UserService_
-		            self.childA = childA
-		            self.service_AdminService = service_AdminService
-		            self.childB = childB
-		            self.service_UserService = service_UserService
-		            self.childC = childC
+		            __safeDI_storage = __safeDI_Storage(
+		                service_UserService_: service_UserService_,
+		                childA: childA,
+		                service_AdminService: service_AdminService,
+		                childB: childB,
+		                service_UserService: service_UserService,
+		                childC: childC
+		            )
 		        }
 
-		        let service_UserService_: (() -> UserService)?
-		        let childA: ((UserService) -> ChildA)?
-		        let service_AdminService: (() -> AdminService)?
-		        let childB: ((AdminService) -> ChildB)?
-		        let service_UserService: (() -> OtherType)?
-		        let childC: ((OtherType) -> ChildC)?
+		        var service_UserService_: (() -> UserService)? { __safeDI_storage.service_UserService_ }
+		        var childA: ((UserService) -> ChildA)? { __safeDI_storage.childA }
+		        var service_AdminService: (() -> AdminService)? { __safeDI_storage.service_AdminService }
+		        var childB: ((AdminService) -> ChildB)? { __safeDI_storage.childB }
+		        var service_UserService: (() -> OtherType)? { __safeDI_storage.service_UserService }
+		        var childC: ((OtherType) -> ChildC)? { __safeDI_storage.childC }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service_UserService_: (() -> UserService)?,
+		                childA: ((UserService) -> ChildA)?,
+		                service_AdminService: (() -> AdminService)?,
+		                childB: ((AdminService) -> ChildB)?,
+		                service_UserService: (() -> OtherType)?,
+		                childC: ((OtherType) -> ChildC)?
+		            ) {
+		                self.service_UserService_ = service_UserService_
+		                self.childA = childA
+		                self.service_AdminService = service_AdminService
+		                self.childB = childB
+		                self.service_UserService = service_UserService
+		                self.childC = childC
+		            }
+
+		            let service_UserService_: (() -> UserService)?
+		            let childA: ((UserService) -> ChildA)?
+		            let service_AdminService: (() -> AdminService)?
+		            let childB: ((AdminService) -> ChildB)?
+		            let service_UserService: (() -> OtherType)?
+		            let childC: ((OtherType) -> ChildC)?
+		        }
 		    }
 
 		    static func mock(
@@ -1344,12 +1597,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            child: Child.SafeDIMockConfiguration = .init(),
 		            service: (() -> TypeA)? = nil
 		        ) {
-		            self.child = child
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child,
+		                service: service
+		            )
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
-		        let service: (() -> TypeA)?
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+		        var service: (() -> TypeA)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration,
+		                service: (() -> TypeA)?
+		            ) {
+		                self.child = child
+		                self.service = service
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		            let service: (() -> TypeA)?
+		        }
 		    }
 
 		    static func mock(
@@ -1451,12 +1721,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childA: ChildA.SafeDIMockConfiguration = .init(),
 		            childB: ChildB.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB
+		            )
 		        }
 
-		        let childA: ChildA.SafeDIMockConfiguration
-		        let childB: ChildB.SafeDIMockConfiguration
+		        var childA: ChildA.SafeDIMockConfiguration { __safeDI_storage.childA }
+		        var childB: ChildB.SafeDIMockConfiguration { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ChildA.SafeDIMockConfiguration,
+		                childB: ChildB.SafeDIMockConfiguration
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		            }
+
+		            let childA: ChildA.SafeDIMockConfiguration
+		            let childB: ChildB.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1563,14 +1850,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childB: ChildB.SafeDIMockConfiguration = .init(),
 		            childC: ChildC.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
-		            self.childC = childC
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB,
+		                childC: childC
+		            )
 		        }
 
-		        let childA: ChildA.SafeDIMockConfiguration
-		        let childB: ChildB.SafeDIMockConfiguration
-		        let childC: ChildC.SafeDIMockConfiguration
+		        var childA: ChildA.SafeDIMockConfiguration { __safeDI_storage.childA }
+		        var childB: ChildB.SafeDIMockConfiguration { __safeDI_storage.childB }
+		        var childC: ChildC.SafeDIMockConfiguration { __safeDI_storage.childC }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ChildA.SafeDIMockConfiguration,
+		                childB: ChildB.SafeDIMockConfiguration,
+		                childC: ChildC.SafeDIMockConfiguration
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		                self.childC = childC
+		            }
+
+		            let childA: ChildA.SafeDIMockConfiguration
+		            let childB: ChildB.SafeDIMockConfiguration
+		            let childC: ChildC.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1674,16 +1981,39 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            service_AdminService: (() -> AdminService)? = nil,
 		            childB: ((AdminService) -> ChildB)? = nil
 		        ) {
-		            self.service_UserService = service_UserService
-		            self.childA = childA
-		            self.service_AdminService = service_AdminService
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                service_UserService: service_UserService,
+		                childA: childA,
+		                service_AdminService: service_AdminService,
+		                childB: childB
+		            )
 		        }
 
-		        let service_UserService: (() -> UserService)?
-		        let childA: ((UserService) -> ChildA)?
-		        let service_AdminService: (() -> AdminService)?
-		        let childB: ((AdminService) -> ChildB)?
+		        var service_UserService: (() -> UserService)? { __safeDI_storage.service_UserService }
+		        var childA: ((UserService) -> ChildA)? { __safeDI_storage.childA }
+		        var service_AdminService: (() -> AdminService)? { __safeDI_storage.service_AdminService }
+		        var childB: ((AdminService) -> ChildB)? { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service_UserService: (() -> UserService)?,
+		                childA: ((UserService) -> ChildA)?,
+		                service_AdminService: (() -> AdminService)?,
+		                childB: ((AdminService) -> ChildB)?
+		            ) {
+		                self.service_UserService = service_UserService
+		                self.childA = childA
+		                self.service_AdminService = service_AdminService
+		                self.childB = childB
+		            }
+
+		            let service_UserService: (() -> UserService)?
+		            let childA: ((UserService) -> ChildA)?
+		            let service_AdminService: (() -> AdminService)?
+		            let childB: ((AdminService) -> ChildB)?
+		        }
 		    }
 
 		    static func mock(
@@ -1756,10 +2086,24 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        init(
 		            childBuilder: (() -> Child)? = nil
 		        ) {
-		            self.childBuilder = childBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder
+		            )
 		        }
 
-		        let childBuilder: (() -> Child)?
+		        var childBuilder: (() -> Child)? { __safeDI_storage.childBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childBuilder: (() -> Child)?
+		            ) {
+		                self.childBuilder = childBuilder
+		            }
+
+		            let childBuilder: (() -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -1828,10 +2172,24 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        init(
 		            child: ((ExternalService) -> Child)? = nil
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: ((ExternalService) -> Child)?
+		        var child: ((ExternalService) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((ExternalService) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: ((ExternalService) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -1917,18 +2275,44 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            y: ((ServiceB) -> Y)? = nil,
 		            z: ((ServiceA?) -> Z)? = nil
 		        ) {
-		            self.service_ServiceA = service_ServiceA
-		            self.x = x
-		            self.service_ServiceB = service_ServiceB
-		            self.y = y
-		            self.z = z
+		            __safeDI_storage = __safeDI_Storage(
+		                service_ServiceA: service_ServiceA,
+		                x: x,
+		                service_ServiceB: service_ServiceB,
+		                y: y,
+		                z: z
+		            )
 		        }
 
-		        let service_ServiceA: (() -> ServiceA)?
-		        let x: ((ServiceA) -> X)?
-		        let service_ServiceB: (() -> ServiceB)?
-		        let y: ((ServiceB) -> Y)?
-		        let z: ((ServiceA?) -> Z)?
+		        var service_ServiceA: (() -> ServiceA)? { __safeDI_storage.service_ServiceA }
+		        var x: ((ServiceA) -> X)? { __safeDI_storage.x }
+		        var service_ServiceB: (() -> ServiceB)? { __safeDI_storage.service_ServiceB }
+		        var y: ((ServiceB) -> Y)? { __safeDI_storage.y }
+		        var z: ((ServiceA?) -> Z)? { __safeDI_storage.z }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service_ServiceA: (() -> ServiceA)?,
+		                x: ((ServiceA) -> X)?,
+		                service_ServiceB: (() -> ServiceB)?,
+		                y: ((ServiceB) -> Y)?,
+		                z: ((ServiceA?) -> Z)?
+		            ) {
+		                self.service_ServiceA = service_ServiceA
+		                self.x = x
+		                self.service_ServiceB = service_ServiceB
+		                self.y = y
+		                self.z = z
+		            }
+
+		            let service_ServiceA: (() -> ServiceA)?
+		            let x: ((ServiceA) -> X)?
+		            let service_ServiceB: (() -> ServiceB)?
+		            let y: ((ServiceB) -> Y)?
+		            let z: ((ServiceA?) -> Z)?
+		        }
 		    }
 
 		    static func mock(
@@ -2022,14 +2406,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            y: ((ExternalB) -> Y)? = nil,
 		            z: ((ExternalA?) -> Z)? = nil
 		        ) {
-		            self.x = x
-		            self.y = y
-		            self.z = z
+		            __safeDI_storage = __safeDI_Storage(
+		                x: x,
+		                y: y,
+		                z: z
+		            )
 		        }
 
-		        let x: ((ExternalA) -> X)?
-		        let y: ((ExternalB) -> Y)?
-		        let z: ((ExternalA?) -> Z)?
+		        var x: ((ExternalA) -> X)? { __safeDI_storage.x }
+		        var y: ((ExternalB) -> Y)? { __safeDI_storage.y }
+		        var z: ((ExternalA?) -> Z)? { __safeDI_storage.z }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                x: ((ExternalA) -> X)?,
+		                y: ((ExternalB) -> Y)?,
+		                z: ((ExternalA?) -> Z)?
+		            ) {
+		                self.x = x
+		                self.y = y
+		                self.z = z
+		            }
+
+		            let x: ((ExternalA) -> X)?
+		            let y: ((ExternalB) -> Y)?
+		            let z: ((ExternalA?) -> Z)?
+		        }
 		    }
 
 		    static func mock(
@@ -2131,18 +2535,44 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            service_ServiceB: (() -> ServiceB)? = nil,
 		            y: ((ServiceB) -> Y)? = nil
 		        ) {
-		            self.z = z
-		            self.service_ServiceA = service_ServiceA
-		            self.x = x
-		            self.service_ServiceB = service_ServiceB
-		            self.y = y
+		            __safeDI_storage = __safeDI_Storage(
+		                z: z,
+		                service_ServiceA: service_ServiceA,
+		                x: x,
+		                service_ServiceB: service_ServiceB,
+		                y: y
+		            )
 		        }
 
-		        let z: ((ServiceA?) -> Z)?
-		        let service_ServiceA: ((Z) -> ServiceA)?
-		        let x: ((ServiceA) -> X)?
-		        let service_ServiceB: (() -> ServiceB)?
-		        let y: ((ServiceB) -> Y)?
+		        var z: ((ServiceA?) -> Z)? { __safeDI_storage.z }
+		        var service_ServiceA: ((Z) -> ServiceA)? { __safeDI_storage.service_ServiceA }
+		        var x: ((ServiceA) -> X)? { __safeDI_storage.x }
+		        var service_ServiceB: (() -> ServiceB)? { __safeDI_storage.service_ServiceB }
+		        var y: ((ServiceB) -> Y)? { __safeDI_storage.y }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                z: ((ServiceA?) -> Z)?,
+		                service_ServiceA: ((Z) -> ServiceA)?,
+		                x: ((ServiceA) -> X)?,
+		                service_ServiceB: (() -> ServiceB)?,
+		                y: ((ServiceB) -> Y)?
+		            ) {
+		                self.z = z
+		                self.service_ServiceA = service_ServiceA
+		                self.x = x
+		                self.service_ServiceB = service_ServiceB
+		                self.y = y
+		            }
+
+		            let z: ((ServiceA?) -> Z)?
+		            let service_ServiceA: ((Z) -> ServiceA)?
+		            let x: ((ServiceA) -> X)?
+		            let service_ServiceB: (() -> ServiceB)?
+		            let y: ((ServiceB) -> Y)?
+		        }
 		    }
 
 		    static func mock(
@@ -2220,12 +2650,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            home: (([String]) -> Home)? = nil,
 		            settings: ((Set<String>) -> Settings)? = nil
 		        ) {
-		            self.home = home
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home,
+		                settings: settings
+		            )
 		        }
 
-		        let home: (([String]) -> Home)?
-		        let settings: ((Set<String>) -> Settings)?
+		        var home: (([String]) -> Home)? { __safeDI_storage.home }
+		        var settings: ((Set<String>) -> Settings)? { __safeDI_storage.settings }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: (([String]) -> Home)?,
+		                settings: ((Set<String>) -> Settings)?
+		            ) {
+		                self.home = home
+		                self.settings = settings
+		            }
+
+		            let home: (([String]) -> Home)?
+		            let settings: ((Set<String>) -> Settings)?
+		        }
 		    }
 
 		    static func mock(
@@ -2300,14 +2747,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            x_Instantiator__X: (() -> X)? = nil,
 		            b: ((Instantiator<X>) -> B)? = nil
 		        ) {
-		            self.x_X = x_X
-		            self.x_Instantiator__X = x_Instantiator__X
-		            self.b = b
+		            __safeDI_storage = __safeDI_Storage(
+		                x_X: x_X,
+		                x_Instantiator__X: x_Instantiator__X,
+		                b: b
+		            )
 		        }
 
-		        let x_X: (() -> X)?
-		        let x_Instantiator__X: (() -> X)?
-		        let b: ((Instantiator<X>) -> B)?
+		        var x_X: (() -> X)? { __safeDI_storage.x_X }
+		        var x_Instantiator__X: (() -> X)? { __safeDI_storage.x_Instantiator__X }
+		        var b: ((Instantiator<X>) -> B)? { __safeDI_storage.b }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                x_X: (() -> X)?,
+		                x_Instantiator__X: (() -> X)?,
+		                b: ((Instantiator<X>) -> B)?
+		            ) {
+		                self.x_X = x_X
+		                self.x_Instantiator__X = x_Instantiator__X
+		                self.b = b
+		            }
+
+		            let x_X: (() -> X)?
+		            let x_Instantiator__X: (() -> X)?
+		            let b: ((Instantiator<X>) -> B)?
+		        }
 		    }
 
 		    static func mock(
@@ -2396,16 +2863,39 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            service_Service: (() -> Service)? = nil,
 		            childB: ((Service) -> ChildB)? = nil
 		        ) {
-		            self.service_Outer_Service = service_Outer_Service
-		            self.childA = childA
-		            self.service_Service = service_Service
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                service_Outer_Service: service_Outer_Service,
+		                childA: childA,
+		                service_Service: service_Service,
+		                childB: childB
+		            )
 		        }
 
-		        let service_Outer_Service: (() -> Outer.Service)?
-		        let childA: ((Outer.Service) -> ChildA)?
-		        let service_Service: (() -> Service)?
-		        let childB: ((Service) -> ChildB)?
+		        var service_Outer_Service: (() -> Outer.Service)? { __safeDI_storage.service_Outer_Service }
+		        var childA: ((Outer.Service) -> ChildA)? { __safeDI_storage.childA }
+		        var service_Service: (() -> Service)? { __safeDI_storage.service_Service }
+		        var childB: ((Service) -> ChildB)? { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service_Outer_Service: (() -> Outer.Service)?,
+		                childA: ((Outer.Service) -> ChildA)?,
+		                service_Service: (() -> Service)?,
+		                childB: ((Service) -> ChildB)?
+		            ) {
+		                self.service_Outer_Service = service_Outer_Service
+		                self.childA = childA
+		                self.service_Service = service_Service
+		                self.childB = childB
+		            }
+
+		            let service_Outer_Service: (() -> Outer.Service)?
+		            let childA: ((Outer.Service) -> ChildA)?
+		            let service_Service: (() -> Service)?
+		            let childB: ((Service) -> ChildB)?
+		        }
 		    }
 
 		    static func mock(
@@ -2551,24 +3041,59 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childG: ((Result<Int, any Error>) -> ChildG)? = nil,
 		            childH: ((Outer.Inner) -> ChildH)? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
-		            self.childC = childC
-		            self.childD = childD
-		            self.childE = childE
-		            self.childF = childF
-		            self.childG = childG
-		            self.childH = childH
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB,
+		                childC: childC,
+		                childD: childD,
+		                childE: childE,
+		                childF: childF,
+		                childG: childG,
+		                childH: childH
+		            )
 		        }
 
-		        let childA: (([String: Int]) -> ChildA)?
-		        let childB: (((Int, String)) -> ChildB)?
-		        let childC: ((any Proto) -> ChildC)?
-		        let childD: ((Proto & OtherProto) -> ChildD)?
-		        let childE: ((Int.Type) -> ChildE)?
-		        let childF: ((Int?) -> ChildF)?
-		        let childG: ((Result<Int, any Error>) -> ChildG)?
-		        let childH: ((Outer.Inner) -> ChildH)?
+		        var childA: (([String: Int]) -> ChildA)? { __safeDI_storage.childA }
+		        var childB: (((Int, String)) -> ChildB)? { __safeDI_storage.childB }
+		        var childC: ((any Proto) -> ChildC)? { __safeDI_storage.childC }
+		        var childD: ((Proto & OtherProto) -> ChildD)? { __safeDI_storage.childD }
+		        var childE: ((Int.Type) -> ChildE)? { __safeDI_storage.childE }
+		        var childF: ((Int?) -> ChildF)? { __safeDI_storage.childF }
+		        var childG: ((Result<Int, any Error>) -> ChildG)? { __safeDI_storage.childG }
+		        var childH: ((Outer.Inner) -> ChildH)? { __safeDI_storage.childH }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: (([String: Int]) -> ChildA)?,
+		                childB: (((Int, String)) -> ChildB)?,
+		                childC: ((any Proto) -> ChildC)?,
+		                childD: ((Proto & OtherProto) -> ChildD)?,
+		                childE: ((Int.Type) -> ChildE)?,
+		                childF: ((Int?) -> ChildF)?,
+		                childG: ((Result<Int, any Error>) -> ChildG)?,
+		                childH: ((Outer.Inner) -> ChildH)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		                self.childC = childC
+		                self.childD = childD
+		                self.childE = childE
+		                self.childF = childF
+		                self.childG = childG
+		                self.childH = childH
+		            }
+
+		            let childA: (([String: Int]) -> ChildA)?
+		            let childB: (((Int, String)) -> ChildB)?
+		            let childC: ((any Proto) -> ChildC)?
+		            let childD: ((Proto & OtherProto) -> ChildD)?
+		            let childE: ((Int.Type) -> ChildE)?
+		            let childF: ((Int?) -> ChildF)?
+		            let childG: ((Result<Int, any Error>) -> ChildG)?
+		            let childH: ((Outer.Inner) -> ChildH)?
+		        }
 		    }
 
 		    static func mock(
@@ -2689,14 +3214,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childB: ((@escaping @Sendable () -> Void) -> ChildB)? = nil,
 		            childC: ((@escaping (Int) async throws -> String) -> ChildC)? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
-		            self.childC = childC
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB,
+		                childC: childC
+		            )
 		        }
 
-		        let childA: ((@escaping () -> Void) -> ChildA)?
-		        let childB: ((@escaping @Sendable () -> Void) -> ChildB)?
-		        let childC: ((@escaping (Int) async throws -> String) -> ChildC)?
+		        var childA: ((@escaping () -> Void) -> ChildA)? { __safeDI_storage.childA }
+		        var childB: ((@escaping @Sendable () -> Void) -> ChildB)? { __safeDI_storage.childB }
+		        var childC: ((@escaping (Int) async throws -> String) -> ChildC)? { __safeDI_storage.childC }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ((@escaping () -> Void) -> ChildA)?,
+		                childB: ((@escaping @Sendable () -> Void) -> ChildB)?,
+		                childC: ((@escaping (Int) async throws -> String) -> ChildC)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		                self.childC = childC
+		            }
+
+		            let childA: ((@escaping () -> Void) -> ChildA)?
+		            let childB: ((@escaping @Sendable () -> Void) -> ChildB)?
+		            let childC: ((@escaping (Int) async throws -> String) -> ChildC)?
+		        }
 		    }
 
 		    static func mock(
@@ -2777,12 +3322,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childA: ((nonisolated(nonsending) @escaping () async -> Void) -> ChildA)? = nil,
 		            childB: ((@escaping () async -> Void) -> ChildB)? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB
+		            )
 		        }
 
-		        let childA: ((nonisolated(nonsending) @escaping () async -> Void) -> ChildA)?
-		        let childB: ((@escaping () async -> Void) -> ChildB)?
+		        var childA: ((nonisolated(nonsending) @escaping () async -> Void) -> ChildA)? { __safeDI_storage.childA }
+		        var childB: ((@escaping () async -> Void) -> ChildB)? { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ((nonisolated(nonsending) @escaping () async -> Void) -> ChildA)?,
+		                childB: ((@escaping () async -> Void) -> ChildB)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		            }
+
+		            let childA: ((nonisolated(nonsending) @escaping () async -> Void) -> ChildA)?
+		            let childB: ((@escaping () async -> Void) -> ChildB)?
+		        }
 		    }
 
 		    static func mock(
@@ -2918,24 +3480,59 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childG: ((@escaping (consuming Int) async -> Void) -> ChildG)? = nil,
 		            childH: ((@escaping (sending Int) async -> Void) -> ChildH)? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
-		            self.childC = childC
-		            self.childD = childD
-		            self.childE = childE
-		            self.childF = childF
-		            self.childG = childG
-		            self.childH = childH
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB,
+		                childC: childC,
+		                childD: childD,
+		                childE: childE,
+		                childF: childF,
+		                childG: childG,
+		                childH: childH
+		            )
 		        }
 
-		        let childA: ((@escaping (Int) async -> Void) -> ChildA)?
-		        let childB: ((nonisolated(nonsending) @escaping (Int) async -> Void) -> ChildB)?
-		        let childC: ((@escaping @MainActor (Int) async -> Void) -> ChildC)?
-		        let childD: ((@escaping @isolated(any) (Int) async -> Void) -> ChildD)?
-		        let childE: ((@escaping (inout Int) async -> Void) -> ChildE)?
-		        let childF: ((@escaping (borrowing Int) async -> Void) -> ChildF)?
-		        let childG: ((@escaping (consuming Int) async -> Void) -> ChildG)?
-		        let childH: ((@escaping (sending Int) async -> Void) -> ChildH)?
+		        var childA: ((@escaping (Int) async -> Void) -> ChildA)? { __safeDI_storage.childA }
+		        var childB: ((nonisolated(nonsending) @escaping (Int) async -> Void) -> ChildB)? { __safeDI_storage.childB }
+		        var childC: ((@escaping @MainActor (Int) async -> Void) -> ChildC)? { __safeDI_storage.childC }
+		        var childD: ((@escaping @isolated(any) (Int) async -> Void) -> ChildD)? { __safeDI_storage.childD }
+		        var childE: ((@escaping (inout Int) async -> Void) -> ChildE)? { __safeDI_storage.childE }
+		        var childF: ((@escaping (borrowing Int) async -> Void) -> ChildF)? { __safeDI_storage.childF }
+		        var childG: ((@escaping (consuming Int) async -> Void) -> ChildG)? { __safeDI_storage.childG }
+		        var childH: ((@escaping (sending Int) async -> Void) -> ChildH)? { __safeDI_storage.childH }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ((@escaping (Int) async -> Void) -> ChildA)?,
+		                childB: ((nonisolated(nonsending) @escaping (Int) async -> Void) -> ChildB)?,
+		                childC: ((@escaping @MainActor (Int) async -> Void) -> ChildC)?,
+		                childD: ((@escaping @isolated(any) (Int) async -> Void) -> ChildD)?,
+		                childE: ((@escaping (inout Int) async -> Void) -> ChildE)?,
+		                childF: ((@escaping (borrowing Int) async -> Void) -> ChildF)?,
+		                childG: ((@escaping (consuming Int) async -> Void) -> ChildG)?,
+		                childH: ((@escaping (sending Int) async -> Void) -> ChildH)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		                self.childC = childC
+		                self.childD = childD
+		                self.childE = childE
+		                self.childF = childF
+		                self.childG = childG
+		                self.childH = childH
+		            }
+
+		            let childA: ((@escaping (Int) async -> Void) -> ChildA)?
+		            let childB: ((nonisolated(nonsending) @escaping (Int) async -> Void) -> ChildB)?
+		            let childC: ((@escaping @MainActor (Int) async -> Void) -> ChildC)?
+		            let childD: ((@escaping @isolated(any) (Int) async -> Void) -> ChildD)?
+		            let childE: ((@escaping (inout Int) async -> Void) -> ChildE)?
+		            let childF: ((@escaping (borrowing Int) async -> Void) -> ChildF)?
+		            let childG: ((@escaping (consuming Int) async -> Void) -> ChildG)?
+		            let childH: ((@escaping (sending Int) async -> Void) -> ChildH)?
+		        }
 		    }
 
 		    static func mock(
@@ -3054,12 +3651,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childA: ((Outer.Inner) -> ChildA)? = nil,
 		            childB: ((Outer_Inner) -> ChildB)? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB
+		            )
 		        }
 
-		        let childA: ((Outer.Inner) -> ChildA)?
-		        let childB: ((Outer_Inner) -> ChildB)?
+		        var childA: ((Outer.Inner) -> ChildA)? { __safeDI_storage.childA }
+		        var childB: ((Outer_Inner) -> ChildB)? { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ((Outer.Inner) -> ChildA)?,
+		                childB: ((Outer_Inner) -> ChildB)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		            }
+
+		            let childA: ((Outer.Inner) -> ChildA)?
+		            let childB: ((Outer_Inner) -> ChildB)?
+		        }
 		    }
 
 		    static func mock(
@@ -3133,12 +3747,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childA: ((String) -> ChildA)? = nil,
 		            childB: ((Int) -> ChildB)? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB
+		            )
 		        }
 
-		        let childA: ((String) -> ChildA)?
-		        let childB: ((Int) -> ChildB)?
+		        var childA: ((String) -> ChildA)? { __safeDI_storage.childA }
+		        var childB: ((Int) -> ChildB)? { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ((String) -> ChildA)?,
+		                childB: ((Int) -> ChildB)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		            }
+
+		            let childA: ((String) -> ChildA)?
+		            let childB: ((Int) -> ChildB)?
+		        }
 		    }
 
 		    static func mock(
@@ -3208,12 +3839,26 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            editorBuilder: ((Draft?) -> Editor)? = nil,
 		            draft: Draft? = nil
 		        ) {
-		            self.editorBuilder = editorBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                editorBuilder: editorBuilder
+		            )
 		            self.draft = draft
 		        }
 
-		        let editorBuilder: ((Draft?) -> Editor)?
+		        var editorBuilder: ((Draft?) -> Editor)? { __safeDI_storage.editorBuilder }
 		        let draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                editorBuilder: ((Draft?) -> Editor)?
+		            ) {
+		                self.editorBuilder = editorBuilder
+		            }
+
+		            let editorBuilder: ((Draft?) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -3278,12 +3923,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            service: (() -> Service)? = nil,
 		            editor: ((Service) -> Editor)? = nil
 		        ) {
-		            self.service = service
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                editor: editor
+		            )
 		        }
 
-		        let service: (() -> Service)?
-		        let editor: ((Service) -> Editor)?
+		        var service: (() -> Service)? { __safeDI_storage.service }
+		        var editor: ((Service) -> Editor)? { __safeDI_storage.editor }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Service)?,
+		                editor: ((Service) -> Editor)?
+		            ) {
+		                self.service = service
+		                self.editor = editor
+		            }
+
+		            let service: (() -> Service)?
+		            let editor: ((Service) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -3344,12 +4006,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            service: (() -> Service)? = nil,
 		            editor: ((Service?) -> Editor)? = nil
 		        ) {
-		            self.service = service
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                editor: editor
+		            )
 		        }
 
-		        let service: (() -> Service)?
-		        let editor: ((Service?) -> Editor)?
+		        var service: (() -> Service)? { __safeDI_storage.service }
+		        var editor: ((Service?) -> Editor)? { __safeDI_storage.editor }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Service)?,
+		                editor: ((Service?) -> Editor)?
+		            ) {
+		                self.service = service
+		                self.editor = editor
+		            }
+
+		            let service: (() -> Service)?
+		            let editor: ((Service?) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -3410,12 +4089,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            service: (() -> Service)? = nil,
 		            editor: ((Service?) -> Editor)? = nil
 		        ) {
-		            self.service = service
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                editor: editor
+		            )
 		        }
 
-		        let service: (() -> Service)?
-		        let editor: ((Service?) -> Editor)?
+		        var service: (() -> Service)? { __safeDI_storage.service }
+		        var editor: ((Service?) -> Editor)? { __safeDI_storage.editor }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Service)?,
+		                editor: ((Service?) -> Editor)?
+		            ) {
+		                self.service = service
+		                self.editor = editor
+		            }
+
+		            let service: (() -> Service)?
+		            let editor: ((Service?) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -3509,20 +4205,46 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            childC: ((Draft?) -> ChildC)? = nil,
 		            service: Draft? = nil
 		        ) {
-		            self.service_ServiceA = service_ServiceA
-		            self.childA = childA
-		            self.service_ServiceB = service_ServiceB
-		            self.childB = childB
-		            self.childC = childC
+		            __safeDI_storage = __safeDI_Storage(
+		                service_ServiceA: service_ServiceA,
+		                childA: childA,
+		                service_ServiceB: service_ServiceB,
+		                childB: childB,
+		                childC: childC
+		            )
 		            self.service = service
 		        }
 
-		        let service_ServiceA: (() -> ServiceA)?
-		        let childA: ((ServiceA) -> ChildA)?
-		        let service_ServiceB: (() -> ServiceB)?
-		        let childB: ((ServiceB) -> ChildB)?
-		        let childC: ((Draft?) -> ChildC)?
+		        var service_ServiceA: (() -> ServiceA)? { __safeDI_storage.service_ServiceA }
+		        var childA: ((ServiceA) -> ChildA)? { __safeDI_storage.childA }
+		        var service_ServiceB: (() -> ServiceB)? { __safeDI_storage.service_ServiceB }
+		        var childB: ((ServiceB) -> ChildB)? { __safeDI_storage.childB }
+		        var childC: ((Draft?) -> ChildC)? { __safeDI_storage.childC }
 		        let service: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service_ServiceA: (() -> ServiceA)?,
+		                childA: ((ServiceA) -> ChildA)?,
+		                service_ServiceB: (() -> ServiceB)?,
+		                childB: ((ServiceB) -> ChildB)?,
+		                childC: ((Draft?) -> ChildC)?
+		            ) {
+		                self.service_ServiceA = service_ServiceA
+		                self.childA = childA
+		                self.service_ServiceB = service_ServiceB
+		                self.childB = childB
+		                self.childC = childC
+		            }
+
+		            let service_ServiceA: (() -> ServiceA)?
+		            let childA: ((ServiceA) -> ChildA)?
+		            let service_ServiceB: (() -> ServiceB)?
+		            let childB: ((ServiceB) -> ChildB)?
+		            let childC: ((Draft?) -> ChildC)?
+		        }
 		    }
 
 		    static func mock(
@@ -3600,14 +4322,31 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            editor: ((User) -> Editor)? = nil,
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.user = user
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                editor: editor
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let user: (() -> User)?
-		        let editor: ((User) -> Editor)?
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var editor: ((User) -> Editor)? { __safeDI_storage.editor }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                editor: ((User) -> Editor)?
+		            ) {
+		                self.user = user
+		                self.editor = editor
+		            }
+
+		            let user: (() -> User)?
+		            let editor: ((User) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -3671,14 +4410,31 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            editor: ((Instantiator<User>) -> Editor)? = nil,
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.user = user
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                editor: editor
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let user: (() -> User)?
-		        let editor: ((Instantiator<User>) -> Editor)?
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var editor: ((Instantiator<User>) -> Editor)? { __safeDI_storage.editor }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                editor: ((Instantiator<User>) -> Editor)?
+		            ) {
+		                self.user = user
+		                self.editor = editor
+		            }
+
+		            let user: (() -> User)?
+		            let editor: ((Instantiator<User>) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -3756,18 +4512,38 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            user_Draft: Draft? = nil,
 		            user_Note: Note? = nil
 		        ) {
-		            self.notes = notes
-		            self.user = user
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                notes: notes,
+		                user: user,
+		                editor: editor
+		            )
 		            self.user_Draft = user_Draft
 		            self.user_Note = user_Note
 		        }
 
-		        let notes: ((Note?) -> Notes)?
-		        let user: (() -> User)?
-		        let editor: ((User) -> Editor)?
+		        var notes: ((Note?) -> Notes)? { __safeDI_storage.notes }
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var editor: ((User) -> Editor)? { __safeDI_storage.editor }
 		        let user_Draft: Draft?
 		        let user_Note: Note?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                notes: ((Note?) -> Notes)?,
+		                user: (() -> User)?,
+		                editor: ((User) -> Editor)?
+		            ) {
+		                self.notes = notes
+		                self.user = user
+		                self.editor = editor
+		            }
+
+		            let notes: ((Note?) -> Notes)?
+		            let user: (() -> User)?
+		            let editor: ((User) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -3833,12 +4609,26 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            editorBuilder: ((Draft?) -> Editor)? = nil,
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.editorBuilder = editorBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                editorBuilder: editorBuilder
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let editorBuilder: ((Draft?) -> Editor)?
+		        var editorBuilder: ((Draft?) -> Editor)? { __safeDI_storage.editorBuilder }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                editorBuilder: ((Draft?) -> Editor)?
+		            ) {
+		                self.editorBuilder = editorBuilder
+		            }
+
+		            let editorBuilder: ((Draft?) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -3901,14 +4691,28 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            user_Draft: Draft? = nil,
 		            user_User: User? = nil
 		        ) {
-		            self.editorBuilder = editorBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                editorBuilder: editorBuilder
+		            )
 		            self.user_Draft = user_Draft
 		            self.user_User = user_User
 		        }
 
-		        let editorBuilder: ((Draft?) -> Editor)?
+		        var editorBuilder: ((Draft?) -> Editor)? { __safeDI_storage.editorBuilder }
 		        let user_Draft: Draft?
 		        let user_User: User?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                editorBuilder: ((Draft?) -> Editor)?
+		            ) {
+		                self.editorBuilder = editorBuilder
+		            }
+
+		            let editorBuilder: ((Draft?) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -3987,18 +4791,35 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            user_Note: Note? = nil,
 		            user_User: User? = nil
 		        ) {
-		            self.editorBuilder = editorBuilder
-		            self.notesBuilder = notesBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                editorBuilder: editorBuilder,
+		                notesBuilder: notesBuilder
+		            )
 		            self.user_Draft = user_Draft
 		            self.user_Note = user_Note
 		            self.user_User = user_User
 		        }
 
-		        let editorBuilder: ((Draft?) -> Editor)?
-		        let notesBuilder: ((Note?) -> Notes)?
+		        var editorBuilder: ((Draft?) -> Editor)? { __safeDI_storage.editorBuilder }
+		        var notesBuilder: ((Note?) -> Notes)? { __safeDI_storage.notesBuilder }
 		        let user_Draft: Draft?
 		        let user_Note: Note?
 		        let user_User: User?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                editorBuilder: ((Draft?) -> Editor)?,
+		                notesBuilder: ((Note?) -> Notes)?
+		            ) {
+		                self.editorBuilder = editorBuilder
+		                self.notesBuilder = notesBuilder
+		            }
+
+		            let editorBuilder: ((Draft?) -> Editor)?
+		            let notesBuilder: ((Note?) -> Notes)?
+		        }
 		    }
 
 		    static func mock(
@@ -4067,12 +4888,26 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            editor: ((Draft?) -> Editor)? = nil,
 		            editor_Draft: Draft? = nil
 		        ) {
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                editor: editor
+		            )
 		            self.editor_Draft = editor_Draft
 		        }
 
-		        let editor: ((Draft?) -> Editor)?
+		        var editor: ((Draft?) -> Editor)? { __safeDI_storage.editor }
 		        let editor_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                editor: ((Draft?) -> Editor)?
+		            ) {
+		                self.editor = editor
+		            }
+
+		            let editor: ((Draft?) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -4139,12 +4974,26 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            editor: Editor.SafeDIMockConfiguration = .init(),
 		            editor_Draft: Draft? = nil
 		        ) {
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                editor: editor
+		            )
 		            self.editor_Draft = editor_Draft
 		        }
 
-		        let editor: Editor.SafeDIMockConfiguration
+		        var editor: Editor.SafeDIMockConfiguration { __safeDI_storage.editor }
 		        let editor_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                editor: Editor.SafeDIMockConfiguration
+		            ) {
+		                self.editor = editor
+		            }
+
+		            let editor: Editor.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -4217,14 +5066,31 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            editor: ((Draft?) -> Editor)? = nil,
 		            user: Draft? = nil
 		        ) {
-		            self.account = account
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                account: account,
+		                editor: editor
+		            )
 		            self.user = user
 		        }
 
-		        let account: (() -> Account)?
-		        let editor: ((Draft?) -> Editor)?
+		        var account: (() -> Account)? { __safeDI_storage.account }
+		        var editor: ((Draft?) -> Editor)? { __safeDI_storage.editor }
 		        let user: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                account: (() -> Account)?,
+		                editor: ((Draft?) -> Editor)?
+		            ) {
+		                self.account = account
+		                self.editor = editor
+		            }
+
+		            let account: (() -> Account)?
+		            let editor: ((Draft?) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -4309,14 +5175,31 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            editor: ((Draft?) -> Editor)? = nil,
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.composer = composer
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                composer: composer,
+		                editor: editor
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let composer: Composer.SafeDIMockConfiguration
-		        let editor: ((Draft?) -> Editor)?
+		        var composer: Composer.SafeDIMockConfiguration { __safeDI_storage.composer }
+		        var editor: ((Draft?) -> Editor)? { __safeDI_storage.editor }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                composer: Composer.SafeDIMockConfiguration,
+		                editor: ((Draft?) -> Editor)?
+		            ) {
+		                self.composer = composer
+		                self.editor = editor
+		            }
+
+		            let composer: Composer.SafeDIMockConfiguration
+		            let editor: ((Draft?) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -4409,14 +5292,31 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            editor: ((Draft?) -> Editor)? = nil,
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.composer = composer
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                composer: composer,
+		                editor: editor
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let composer: Composer.SafeDIMockConfiguration
-		        let editor: ((Draft?) -> Editor)?
+		        var composer: Composer.SafeDIMockConfiguration { __safeDI_storage.composer }
+		        var editor: ((Draft?) -> Editor)? { __safeDI_storage.editor }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                composer: Composer.SafeDIMockConfiguration,
+		                editor: ((Draft?) -> Editor)?
+		            ) {
+		                self.composer = composer
+		                self.editor = editor
+		            }
+
+		            let composer: Composer.SafeDIMockConfiguration
+		            let editor: ((Draft?) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -4507,14 +5407,31 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            settings: ((Analytics?) -> Settings)? = nil,
 		            analytics_Analytics: Analytics? = nil
 		        ) {
-		            self.home = home
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home,
+		                settings: settings
+		            )
 		            self.analytics_Analytics = analytics_Analytics
 		        }
 
-		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
-		        let settings: ((Analytics?) -> Settings)?
+		        var home: ((LazilyInstantiated<Analytics>?) -> Home)? { __safeDI_storage.home }
+		        var settings: ((Analytics?) -> Settings)? { __safeDI_storage.settings }
 		        let analytics_Analytics: Analytics?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: ((LazilyInstantiated<Analytics>?) -> Home)?,
+		                settings: ((Analytics?) -> Settings)?
+		            ) {
+		                self.home = home
+		                self.settings = settings
+		            }
+
+		            let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		            let settings: ((Analytics?) -> Settings)?
+		        }
 		    }
 
 		    static func mock(
@@ -4597,14 +5514,31 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            notes: ((Draft?) -> Notes)? = nil,
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.editorBuilder = editorBuilder
-		            self.notes = notes
+		            __safeDI_storage = __safeDI_Storage(
+		                editorBuilder: editorBuilder,
+		                notes: notes
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let editorBuilder: Editor.SafeDIMockConfiguration
-		        let notes: ((Draft?) -> Notes)?
+		        var editorBuilder: Editor.SafeDIMockConfiguration { __safeDI_storage.editorBuilder }
+		        var notes: ((Draft?) -> Notes)? { __safeDI_storage.notes }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                editorBuilder: Editor.SafeDIMockConfiguration,
+		                notes: ((Draft?) -> Notes)?
+		            ) {
+		                self.editorBuilder = editorBuilder
+		                self.notes = notes
+		            }
+
+		            let editorBuilder: Editor.SafeDIMockConfiguration
+		            let notes: ((Draft?) -> Notes)?
+		        }
 		    }
 
 		    static func mock(
@@ -4682,12 +5616,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            user: (() -> User)? = nil,
 		            editor: ((User) -> Editor)? = nil
 		        ) {
-		            self.user = user
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                editor: editor
+		            )
 		        }
 
-		        let user: (() -> User)?
-		        let editor: ((User) -> Editor)?
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var editor: ((User) -> Editor)? { __safeDI_storage.editor }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                editor: ((User) -> Editor)?
+		            ) {
+		                self.user = user
+		                self.editor = editor
+		            }
+
+		            let user: (() -> User)?
+		            let editor: ((User) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -4752,12 +5703,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            service: (() -> ConcreteService)? = nil,
 		            editor: ((ConcreteService) -> Editor)? = nil
 		        ) {
-		            self.service = service
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                editor: editor
+		            )
 		        }
 
-		        let service: (() -> ConcreteService)?
-		        let editor: ((ConcreteService) -> Editor)?
+		        var service: (() -> ConcreteService)? { __safeDI_storage.service }
+		        var editor: ((ConcreteService) -> Editor)? { __safeDI_storage.editor }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> ConcreteService)?,
+		                editor: ((ConcreteService) -> Editor)?
+		            ) {
+		                self.service = service
+		                self.editor = editor
+		            }
+
+		            let service: (() -> ConcreteService)?
+		            let editor: ((ConcreteService) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -4820,12 +5788,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            user: (() -> User)? = nil,
 		            editor: ((Instantiator<User>) -> Editor)? = nil
 		        ) {
-		            self.user = user
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                editor: editor
+		            )
 		        }
 
-		        let user: (() -> User)?
-		        let editor: ((Instantiator<User>) -> Editor)?
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var editor: ((Instantiator<User>) -> Editor)? { __safeDI_storage.editor }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                editor: ((Instantiator<User>) -> Editor)?
+		            ) {
+		                self.user = user
+		                self.editor = editor
+		            }
+
+		            let user: (() -> User)?
+		            let editor: ((Instantiator<User>) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -4901,14 +5886,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            editor: ((User) -> Editor)? = nil,
 		            notes: ((Note) -> Notes)? = nil
 		        ) {
-		            self.user = user
-		            self.editor = editor
-		            self.notes = notes
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                editor: editor,
+		                notes: notes
+		            )
 		        }
 
-		        let user: (() -> User)?
-		        let editor: ((User) -> Editor)?
-		        let notes: ((Note) -> Notes)?
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var editor: ((User) -> Editor)? { __safeDI_storage.editor }
+		        var notes: ((Note) -> Notes)? { __safeDI_storage.notes }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                editor: ((User) -> Editor)?,
+		                notes: ((Note) -> Notes)?
+		            ) {
+		                self.user = user
+		                self.editor = editor
+		                self.notes = notes
+		            }
+
+		            let user: (() -> User)?
+		            let editor: ((User) -> Editor)?
+		            let notes: ((Note) -> Notes)?
+		        }
 		    }
 
 		    static func mock(
@@ -4970,10 +5975,24 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        init(
 		            editor: ((Draft) -> Editor)? = nil
 		        ) {
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                editor: editor
+		            )
 		        }
 
-		        let editor: ((Draft) -> Editor)?
+		        var editor: ((Draft) -> Editor)? { __safeDI_storage.editor }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                editor: ((Draft) -> Editor)?
+		            ) {
+		                self.editor = editor
+		            }
+
+		            let editor: ((Draft) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -5039,10 +6058,24 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        init(
 		            editor: Editor.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                editor: editor
+		            )
 		        }
 
-		        let editor: Editor.SafeDIMockConfiguration
+		        var editor: Editor.SafeDIMockConfiguration { __safeDI_storage.editor }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                editor: Editor.SafeDIMockConfiguration
+		            ) {
+		                self.editor = editor
+		            }
+
+		            let editor: Editor.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5137,16 +6170,36 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            profileViewBuilder: ProfileView.SafeDIMockConfiguration = .init(),
 		            service: Service? = nil
 		        ) {
-		            self.sessionBuilder = sessionBuilder
-		            self.editor = editor
-		            self.profileViewBuilder = profileViewBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                sessionBuilder: sessionBuilder,
+		                editor: editor,
+		                profileViewBuilder: profileViewBuilder
+		            )
 		            self.service = service
 		        }
 
-		        let sessionBuilder: Session.SafeDIMockConfiguration
-		        let editor: Editor.SafeDIMockConfiguration
-		        let profileViewBuilder: ProfileView.SafeDIMockConfiguration
+		        var sessionBuilder: Session.SafeDIMockConfiguration { __safeDI_storage.sessionBuilder }
+		        var editor: Editor.SafeDIMockConfiguration { __safeDI_storage.editor }
+		        var profileViewBuilder: ProfileView.SafeDIMockConfiguration { __safeDI_storage.profileViewBuilder }
 		        let service: Service?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                sessionBuilder: Session.SafeDIMockConfiguration,
+		                editor: Editor.SafeDIMockConfiguration,
+		                profileViewBuilder: ProfileView.SafeDIMockConfiguration
+		            ) {
+		                self.sessionBuilder = sessionBuilder
+		                self.editor = editor
+		                self.profileViewBuilder = profileViewBuilder
+		            }
+
+		            let sessionBuilder: Session.SafeDIMockConfiguration
+		            let editor: Editor.SafeDIMockConfiguration
+		            let profileViewBuilder: ProfileView.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5209,11 +6262,25 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        init(
 		            _ safeDIBuilder: ((Instantiator<ProfileView>, ServiceProtocol?, Editor?, Instantiator<Session>?) -> ProfileView)? = nil
 		        ) {
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<ProfileView>, ServiceProtocol?, Editor?, Instantiator<Session>?) -> ProfileView)?
+		        var safeDIBuilder: ((Instantiator<ProfileView>, ServiceProtocol?, Editor?, Instantiator<Session>?) -> ProfileView)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                safeDIBuilder: ((Instantiator<ProfileView>, ServiceProtocol?, Editor?, Instantiator<Session>?) -> ProfileView)?
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let safeDIBuilder: ((Instantiator<ProfileView>, ServiceProtocol?, Editor?, Instantiator<Session>?) -> ProfileView)?
+		        }
 		    }
 		}
 		#endif
@@ -5278,14 +6345,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            x_C: (() -> C)? = nil,
 		            y: ((C) -> B)? = nil
 		        ) {
-		            self.x_A = x_A
-		            self.x_C = x_C
-		            self.y = y
+		            __safeDI_storage = __safeDI_Storage(
+		                x_A: x_A,
+		                x_C: x_C,
+		                y: y
+		            )
 		        }
 
-		        let x_A: (() -> A)?
-		        let x_C: (() -> C)?
-		        let y: ((C) -> B)?
+		        var x_A: (() -> A)? { __safeDI_storage.x_A }
+		        var x_C: (() -> C)? { __safeDI_storage.x_C }
+		        var y: ((C) -> B)? { __safeDI_storage.y }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                x_A: (() -> A)?,
+		                x_C: (() -> C)?,
+		                y: ((C) -> B)?
+		            ) {
+		                self.x_A = x_A
+		                self.x_C = x_C
+		                self.y = y
+		            }
+
+		            let x_A: (() -> A)?
+		            let x_C: (() -> C)?
+		            let y: ((C) -> B)?
+		        }
 		    }
 
 		    static func mock(
@@ -5356,14 +6443,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            b: ((C) -> B)? = nil,
 		            x_A: ((B) -> A)? = nil
 		        ) {
-		            self.x_C = x_C
-		            self.b = b
-		            self.x_A = x_A
+		            __safeDI_storage = __safeDI_Storage(
+		                x_C: x_C,
+		                b: b,
+		                x_A: x_A
+		            )
 		        }
 
-		        let x_C: (() -> C)?
-		        let b: ((C) -> B)?
-		        let x_A: ((B) -> A)?
+		        var x_C: (() -> C)? { __safeDI_storage.x_C }
+		        var b: ((C) -> B)? { __safeDI_storage.b }
+		        var x_A: ((B) -> A)? { __safeDI_storage.x_A }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                x_C: (() -> C)?,
+		                b: ((C) -> B)?,
+		                x_A: ((B) -> A)?
+		            ) {
+		                self.x_C = x_C
+		                self.b = b
+		                self.x_A = x_A
+		            }
+
+		            let x_C: (() -> C)?
+		            let b: ((C) -> B)?
+		            let x_A: ((B) -> A)?
+		        }
 		    }
 
 		    static func mock(
@@ -5435,14 +6542,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            b: ((Instantiator<C>) -> B)? = nil,
 		            xBuilder_A: ((B) -> A)? = nil
 		        ) {
-		            self.xBuilder_C = xBuilder_C
-		            self.b = b
-		            self.xBuilder_A = xBuilder_A
+		            __safeDI_storage = __safeDI_Storage(
+		                xBuilder_C: xBuilder_C,
+		                b: b,
+		                xBuilder_A: xBuilder_A
+		            )
 		        }
 
-		        let xBuilder_C: (() -> C)?
-		        let b: ((Instantiator<C>) -> B)?
-		        let xBuilder_A: ((B) -> A)?
+		        var xBuilder_C: (() -> C)? { __safeDI_storage.xBuilder_C }
+		        var b: ((Instantiator<C>) -> B)? { __safeDI_storage.b }
+		        var xBuilder_A: ((B) -> A)? { __safeDI_storage.xBuilder_A }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                xBuilder_C: (() -> C)?,
+		                b: ((Instantiator<C>) -> B)?,
+		                xBuilder_A: ((B) -> A)?
+		            ) {
+		                self.xBuilder_C = xBuilder_C
+		                self.b = b
+		                self.xBuilder_A = xBuilder_A
+		            }
+
+		            let xBuilder_C: (() -> C)?
+		            let b: ((Instantiator<C>) -> B)?
+		            let xBuilder_A: ((B) -> A)?
+		        }
 		    }
 
 		    static func mock(
@@ -5530,14 +6657,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            nodeBuilder_Leaf: (() -> Leaf)? = nil,
 		            other: ((Instantiator<Leaf>) -> Other)? = nil
 		        ) {
-		            self.nodeBuilder_Node = nodeBuilder_Node
-		            self.nodeBuilder_Leaf = nodeBuilder_Leaf
-		            self.other = other
+		            __safeDI_storage = __safeDI_Storage(
+		                nodeBuilder_Node: nodeBuilder_Node,
+		                nodeBuilder_Leaf: nodeBuilder_Leaf,
+		                other: other
+		            )
 		        }
 
-		        let nodeBuilder_Node: Node.SafeDIMockConfiguration
-		        let nodeBuilder_Leaf: (() -> Leaf)?
-		        let other: ((Instantiator<Leaf>) -> Other)?
+		        var nodeBuilder_Node: Node.SafeDIMockConfiguration { __safeDI_storage.nodeBuilder_Node }
+		        var nodeBuilder_Leaf: (() -> Leaf)? { __safeDI_storage.nodeBuilder_Leaf }
+		        var other: ((Instantiator<Leaf>) -> Other)? { __safeDI_storage.other }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                nodeBuilder_Node: Node.SafeDIMockConfiguration,
+		                nodeBuilder_Leaf: (() -> Leaf)?,
+		                other: ((Instantiator<Leaf>) -> Other)?
+		            ) {
+		                self.nodeBuilder_Node = nodeBuilder_Node
+		                self.nodeBuilder_Leaf = nodeBuilder_Leaf
+		                self.other = other
+		            }
+
+		            let nodeBuilder_Node: Node.SafeDIMockConfiguration
+		            let nodeBuilder_Leaf: (() -> Leaf)?
+		            let other: ((Instantiator<Leaf>) -> Other)?
+		        }
 		    }
 
 		    static func mock(
@@ -5618,14 +6765,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            lazyX: ((B) -> A)? = nil,
 		            x_A: ((B) -> A)? = nil
 		        ) {
-		            self.x_B = x_B
-		            self.lazyX = lazyX
-		            self.x_A = x_A
+		            __safeDI_storage = __safeDI_Storage(
+		                x_B: x_B,
+		                lazyX: lazyX,
+		                x_A: x_A
+		            )
 		        }
 
-		        let x_B: (() -> B)?
-		        let lazyX: ((B) -> A)?
-		        let x_A: ((B) -> A)?
+		        var x_B: (() -> B)? { __safeDI_storage.x_B }
+		        var lazyX: ((B) -> A)? { __safeDI_storage.lazyX }
+		        var x_A: ((B) -> A)? { __safeDI_storage.x_A }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                x_B: (() -> B)?,
+		                lazyX: ((B) -> A)?,
+		                x_A: ((B) -> A)?
+		            ) {
+		                self.x_B = x_B
+		                self.lazyX = lazyX
+		                self.x_A = x_A
+		            }
+
+		            let x_B: (() -> B)?
+		            let lazyX: ((B) -> A)?
+		            let x_A: ((B) -> A)?
+		        }
 		    }
 
 		    static func mock(
@@ -5715,16 +6882,39 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            y: ((C) -> B)? = nil,
 		            z: ((A) -> Z)? = nil
 		        ) {
-		            self.x_A = x_A
-		            self.x_C = x_C
-		            self.y = y
-		            self.z = z
+		            __safeDI_storage = __safeDI_Storage(
+		                x_A: x_A,
+		                x_C: x_C,
+		                y: y,
+		                z: z
+		            )
 		        }
 
-		        let x_A: (() -> A)?
-		        let x_C: (() -> C)?
-		        let y: ((C) -> B)?
-		        let z: ((A) -> Z)?
+		        var x_A: (() -> A)? { __safeDI_storage.x_A }
+		        var x_C: (() -> C)? { __safeDI_storage.x_C }
+		        var y: ((C) -> B)? { __safeDI_storage.y }
+		        var z: ((A) -> Z)? { __safeDI_storage.z }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                x_A: (() -> A)?,
+		                x_C: (() -> C)?,
+		                y: ((C) -> B)?,
+		                z: ((A) -> Z)?
+		            ) {
+		                self.x_A = x_A
+		                self.x_C = x_C
+		                self.y = y
+		                self.z = z
+		            }
+
+		            let x_A: (() -> A)?
+		            let x_C: (() -> C)?
+		            let y: ((C) -> B)?
+		            let z: ((A) -> Z)?
+		        }
 		    }
 
 		    static func mock(
@@ -5825,12 +7015,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            accountView: ((AccountSession) -> AccountView)? = nil,
 		            guestView: GuestView.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.accountView = accountView
-		            self.guestView = guestView
+		            __safeDI_storage = __safeDI_Storage(
+		                accountView: accountView,
+		                guestView: guestView
+		            )
 		        }
 
-		        let accountView: ((AccountSession) -> AccountView)?
-		        let guestView: GuestView.SafeDIMockConfiguration
+		        var accountView: ((AccountSession) -> AccountView)? { __safeDI_storage.accountView }
+		        var guestView: GuestView.SafeDIMockConfiguration { __safeDI_storage.guestView }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                accountView: ((AccountSession) -> AccountView)?,
+		                guestView: GuestView.SafeDIMockConfiguration
+		            ) {
+		                self.accountView = accountView
+		                self.guestView = guestView
+		            }
+
+		            let accountView: ((AccountSession) -> AccountView)?
+		            let guestView: GuestView.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5930,12 +7137,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            accountView: ((AccountSession) -> AccountView)? = nil,
 		            guestViewBuilder: GuestView.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.accountView = accountView
-		            self.guestViewBuilder = guestViewBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                accountView: accountView,
+		                guestViewBuilder: guestViewBuilder
+		            )
 		        }
 
-		        let accountView: ((AccountSession) -> AccountView)?
-		        let guestViewBuilder: GuestView.SafeDIMockConfiguration
+		        var accountView: ((AccountSession) -> AccountView)? { __safeDI_storage.accountView }
+		        var guestViewBuilder: GuestView.SafeDIMockConfiguration { __safeDI_storage.guestViewBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                accountView: ((AccountSession) -> AccountView)?,
+		                guestViewBuilder: GuestView.SafeDIMockConfiguration
+		            ) {
+		                self.accountView = accountView
+		                self.guestViewBuilder = guestViewBuilder
+		            }
+
+		            let accountView: ((AccountSession) -> AccountView)?
+		            let guestViewBuilder: GuestView.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6054,16 +7278,36 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            editor: ((Draft?) -> Editor)? = nil,
 		            user: Draft? = nil
 		        ) {
-		            self.account = account
-		            self.home = home
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                account: account,
+		                home: home,
+		                editor: editor
+		            )
 		            self.user = user
 		        }
 
-		        let account: (() -> Account)?
-		        let home: Home.SafeDIMockConfiguration
-		        let editor: ((Draft?) -> Editor)?
+		        var account: (() -> Account)? { __safeDI_storage.account }
+		        var home: Home.SafeDIMockConfiguration { __safeDI_storage.home }
+		        var editor: ((Draft?) -> Editor)? { __safeDI_storage.editor }
 		        let user: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                account: (() -> Account)?,
+		                home: Home.SafeDIMockConfiguration,
+		                editor: ((Draft?) -> Editor)?
+		            ) {
+		                self.account = account
+		                self.home = home
+		                self.editor = editor
+		            }
+
+		            let account: (() -> Account)?
+		            let home: Home.SafeDIMockConfiguration
+		            let editor: ((Draft?) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -6155,10 +7399,24 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        init(
 		            garage: Garage.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.garage = garage
+		            __safeDI_storage = __safeDI_Storage(
+		                garage: garage
+		            )
 		        }
 
-		        let garage: Garage.SafeDIMockConfiguration
+		        var garage: Garage.SafeDIMockConfiguration { __safeDI_storage.garage }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                garage: Garage.SafeDIMockConfiguration
+		            ) {
+		                self.garage = garage
+		            }
+
+		            let garage: Garage.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6236,12 +7494,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            car: ((Engine) -> Car)? = nil,
 		            boat: ((Motor) -> Boat)? = nil
 		        ) {
-		            self.car = car
-		            self.boat = boat
+		            __safeDI_storage = __safeDI_Storage(
+		                car: car,
+		                boat: boat
+		            )
 		        }
 
-		        let car: ((Engine) -> Car)?
-		        let boat: ((Motor) -> Boat)?
+		        var car: ((Engine) -> Car)? { __safeDI_storage.car }
+		        var boat: ((Motor) -> Boat)? { __safeDI_storage.boat }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                car: ((Engine) -> Car)?,
+		                boat: ((Motor) -> Boat)?
+		            ) {
+		                self.car = car
+		                self.boat = boat
+		            }
+
+		            let car: ((Engine) -> Car)?
+		            let boat: ((Motor) -> Boat)?
+		        }
 		    }
 
 		    static func mock(
@@ -6305,10 +7580,24 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        init(
 		            boat: ((Motor) -> Boat)? = nil
 		        ) {
-		            self.boat = boat
+		            __safeDI_storage = __safeDI_Storage(
+		                boat: boat
+		            )
 		        }
 
-		        let boat: ((Motor) -> Boat)?
+		        var boat: ((Motor) -> Boat)? { __safeDI_storage.boat }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                boat: ((Motor) -> Boat)?
+		            ) {
+		                self.boat = boat
+		            }
+
+		            let boat: ((Motor) -> Boat)?
+		        }
 		    }
 
 		    static func mock(
@@ -6372,10 +7661,24 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        init(
 		            boat: ((Motor) -> Boat)? = nil
 		        ) {
-		            self.boat = boat
+		            __safeDI_storage = __safeDI_Storage(
+		                boat: boat
+		            )
 		        }
 
-		        let boat: ((Motor) -> Boat)?
+		        var boat: ((Motor) -> Boat)? { __safeDI_storage.boat }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                boat: ((Motor) -> Boat)?
+		            ) {
+		                self.boat = boat
+		            }
+
+		            let boat: ((Motor) -> Boat)?
+		        }
 		    }
 
 		    static func mock(
@@ -6454,10 +7757,24 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        init(
 		            garage: Garage.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.garage = garage
+		            __safeDI_storage = __safeDI_Storage(
+		                garage: garage
+		            )
 		        }
 
-		        let garage: Garage.SafeDIMockConfiguration
+		        var garage: Garage.SafeDIMockConfiguration { __safeDI_storage.garage }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                garage: Garage.SafeDIMockConfiguration
+		            ) {
+		                self.garage = garage
+		            }
+
+		            let garage: Garage.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6537,12 +7854,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            engine: (() -> Toolbox)? = nil,
 		            garage: ((Toolbox) -> Garage)? = nil
 		        ) {
-		            self.engine = engine
-		            self.garage = garage
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine,
+		                garage: garage
+		            )
 		        }
 
-		        let engine: (() -> Toolbox)?
-		        let garage: ((Toolbox) -> Garage)?
+		        var engine: (() -> Toolbox)? { __safeDI_storage.engine }
+		        var garage: ((Toolbox) -> Garage)? { __safeDI_storage.garage }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Toolbox)?,
+		                garage: ((Toolbox) -> Garage)?
+		            ) {
+		                self.engine = engine
+		                self.garage = garage
+		            }
+
+		            let engine: (() -> Toolbox)?
+		            let garage: ((Toolbox) -> Garage)?
+		        }
 		    }
 
 		    static func mock(
@@ -6612,12 +7946,26 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            boat: ((Motor) -> Boat)? = nil,
 		            engine: Toolbox? = nil
 		        ) {
-		            self.boat = boat
+		            __safeDI_storage = __safeDI_Storage(
+		                boat: boat
+		            )
 		            self.engine = engine
 		        }
 
-		        let boat: ((Motor) -> Boat)?
+		        var boat: ((Motor) -> Boat)? { __safeDI_storage.boat }
 		        let engine: Toolbox?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                boat: ((Motor) -> Boat)?
+		            ) {
+		                self.boat = boat
+		            }
+
+		            let boat: ((Motor) -> Boat)?
+		        }
 		    }
 
 		    static func mock(
@@ -6700,16 +8048,39 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            x_Instantiator__Xyz: (() -> Xyz)? = nil,
 		            consumerB: ((Instantiator<Xyz>) -> ConsumerB)? = nil
 		        ) {
-		            self.x_Xyz = x_Xyz
-		            self.consumerA = consumerA
-		            self.x_Instantiator__Xyz = x_Instantiator__Xyz
-		            self.consumerB = consumerB
+		            __safeDI_storage = __safeDI_Storage(
+		                x_Xyz: x_Xyz,
+		                consumerA: consumerA,
+		                x_Instantiator__Xyz: x_Instantiator__Xyz,
+		                consumerB: consumerB
+		            )
 		        }
 
-		        let x_Xyz: (() -> Xyz)?
-		        let consumerA: ((Xyz) -> ConsumerA)?
-		        let x_Instantiator__Xyz: (() -> Xyz)?
-		        let consumerB: ((Instantiator<Xyz>) -> ConsumerB)?
+		        var x_Xyz: (() -> Xyz)? { __safeDI_storage.x_Xyz }
+		        var consumerA: ((Xyz) -> ConsumerA)? { __safeDI_storage.consumerA }
+		        var x_Instantiator__Xyz: (() -> Xyz)? { __safeDI_storage.x_Instantiator__Xyz }
+		        var consumerB: ((Instantiator<Xyz>) -> ConsumerB)? { __safeDI_storage.consumerB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                x_Xyz: (() -> Xyz)?,
+		                consumerA: ((Xyz) -> ConsumerA)?,
+		                x_Instantiator__Xyz: (() -> Xyz)?,
+		                consumerB: ((Instantiator<Xyz>) -> ConsumerB)?
+		            ) {
+		                self.x_Xyz = x_Xyz
+		                self.consumerA = consumerA
+		                self.x_Instantiator__Xyz = x_Instantiator__Xyz
+		                self.consumerB = consumerB
+		            }
+
+		            let x_Xyz: (() -> Xyz)?
+		            let consumerA: ((Xyz) -> ConsumerA)?
+		            let x_Instantiator__Xyz: (() -> Xyz)?
+		            let consumerB: ((Instantiator<Xyz>) -> ConsumerB)?
+		        }
 		    }
 
 		    static func mock(
@@ -6841,20 +8212,49 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            x_AnyXyz: (() -> AnyXyz)? = nil,
 		            consumerC: ((AnyXyzFactory) -> ConsumerC)? = nil
 		        ) {
-		            self.x_Xyz = x_Xyz
-		            self.consumerA = consumerA
-		            self.x_Instantiator__Xyz = x_Instantiator__Xyz
-		            self.consumerB = consumerB
-		            self.x_AnyXyz = x_AnyXyz
-		            self.consumerC = consumerC
+		            __safeDI_storage = __safeDI_Storage(
+		                x_Xyz: x_Xyz,
+		                consumerA: consumerA,
+		                x_Instantiator__Xyz: x_Instantiator__Xyz,
+		                consumerB: consumerB,
+		                x_AnyXyz: x_AnyXyz,
+		                consumerC: consumerC
+		            )
 		        }
 
-		        let x_Xyz: (() -> Xyz)?
-		        let consumerA: ((Xyz) -> ConsumerA)?
-		        let x_Instantiator__Xyz: (() -> Xyz)?
-		        let consumerB: ((Instantiator<Xyz>) -> ConsumerB)?
-		        let x_AnyXyz: (() -> AnyXyz)?
-		        let consumerC: ((AnyXyzFactory) -> ConsumerC)?
+		        var x_Xyz: (() -> Xyz)? { __safeDI_storage.x_Xyz }
+		        var consumerA: ((Xyz) -> ConsumerA)? { __safeDI_storage.consumerA }
+		        var x_Instantiator__Xyz: (() -> Xyz)? { __safeDI_storage.x_Instantiator__Xyz }
+		        var consumerB: ((Instantiator<Xyz>) -> ConsumerB)? { __safeDI_storage.consumerB }
+		        var x_AnyXyz: (() -> AnyXyz)? { __safeDI_storage.x_AnyXyz }
+		        var consumerC: ((AnyXyzFactory) -> ConsumerC)? { __safeDI_storage.consumerC }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                x_Xyz: (() -> Xyz)?,
+		                consumerA: ((Xyz) -> ConsumerA)?,
+		                x_Instantiator__Xyz: (() -> Xyz)?,
+		                consumerB: ((Instantiator<Xyz>) -> ConsumerB)?,
+		                x_AnyXyz: (() -> AnyXyz)?,
+		                consumerC: ((AnyXyzFactory) -> ConsumerC)?
+		            ) {
+		                self.x_Xyz = x_Xyz
+		                self.consumerA = consumerA
+		                self.x_Instantiator__Xyz = x_Instantiator__Xyz
+		                self.consumerB = consumerB
+		                self.x_AnyXyz = x_AnyXyz
+		                self.consumerC = consumerC
+		            }
+
+		            let x_Xyz: (() -> Xyz)?
+		            let consumerA: ((Xyz) -> ConsumerA)?
+		            let x_Instantiator__Xyz: (() -> Xyz)?
+		            let consumerB: ((Instantiator<Xyz>) -> ConsumerB)?
+		            let x_AnyXyz: (() -> AnyXyz)?
+		            let consumerC: ((AnyXyzFactory) -> ConsumerC)?
+		        }
 		    }
 
 		    static func mock(
@@ -6957,14 +8357,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            consumerA: ((Xyz) -> ConsumerA)? = nil,
 		            consumerB: ((Xyz?) -> ConsumerB)? = nil
 		        ) {
-		            self.x = x
-		            self.consumerA = consumerA
-		            self.consumerB = consumerB
+		            __safeDI_storage = __safeDI_Storage(
+		                x: x,
+		                consumerA: consumerA,
+		                consumerB: consumerB
+		            )
 		        }
 
-		        let x: (() -> Xyz)?
-		        let consumerA: ((Xyz) -> ConsumerA)?
-		        let consumerB: ((Xyz?) -> ConsumerB)?
+		        var x: (() -> Xyz)? { __safeDI_storage.x }
+		        var consumerA: ((Xyz) -> ConsumerA)? { __safeDI_storage.consumerA }
+		        var consumerB: ((Xyz?) -> ConsumerB)? { __safeDI_storage.consumerB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                x: (() -> Xyz)?,
+		                consumerA: ((Xyz) -> ConsumerA)?,
+		                consumerB: ((Xyz?) -> ConsumerB)?
+		            ) {
+		                self.x = x
+		                self.consumerA = consumerA
+		                self.consumerB = consumerB
+		            }
+
+		            let x: (() -> Xyz)?
+		            let consumerA: ((Xyz) -> ConsumerA)?
+		            let consumerB: ((Xyz?) -> ConsumerB)?
+		        }
 		    }
 
 		    static func mock(
@@ -7045,14 +8465,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            consumerA: ((any Service) -> ConsumerA)? = nil,
 		            consumerB: (((any Service)?) -> ConsumerB)? = nil
 		        ) {
-		            self.x = x
-		            self.consumerA = consumerA
-		            self.consumerB = consumerB
+		            __safeDI_storage = __safeDI_Storage(
+		                x: x,
+		                consumerA: consumerA,
+		                consumerB: consumerB
+		            )
 		        }
 
-		        let x: (() -> Service)?
-		        let consumerA: ((any Service) -> ConsumerA)?
-		        let consumerB: (((any Service)?) -> ConsumerB)?
+		        var x: (() -> Service)? { __safeDI_storage.x }
+		        var consumerA: ((any Service) -> ConsumerA)? { __safeDI_storage.consumerA }
+		        var consumerB: (((any Service)?) -> ConsumerB)? { __safeDI_storage.consumerB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                x: (() -> Service)?,
+		                consumerA: ((any Service) -> ConsumerA)?,
+		                consumerB: (((any Service)?) -> ConsumerB)?
+		            ) {
+		                self.x = x
+		                self.consumerA = consumerA
+		                self.consumerB = consumerB
+		            }
+
+		            let x: (() -> Service)?
+		            let consumerA: ((any Service) -> ConsumerA)?
+		            let consumerB: (((any Service)?) -> ConsumerB)?
+		        }
 		    }
 
 		    static func mock(
@@ -7132,16 +8572,39 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            x_Instantiator__Xyz_Optional: (() -> Xyz)? = nil,
 		            consumerB: ((Instantiator<Xyz>?) -> ConsumerB)? = nil
 		        ) {
-		            self.x_Xyz_Optional = x_Xyz_Optional
-		            self.consumerA = consumerA
-		            self.x_Instantiator__Xyz_Optional = x_Instantiator__Xyz_Optional
-		            self.consumerB = consumerB
+		            __safeDI_storage = __safeDI_Storage(
+		                x_Xyz_Optional: x_Xyz_Optional,
+		                consumerA: consumerA,
+		                x_Instantiator__Xyz_Optional: x_Instantiator__Xyz_Optional,
+		                consumerB: consumerB
+		            )
 		        }
 
-		        let x_Xyz_Optional: (() -> Xyz)?
-		        let consumerA: ((Xyz?) -> ConsumerA)?
-		        let x_Instantiator__Xyz_Optional: (() -> Xyz)?
-		        let consumerB: ((Instantiator<Xyz>?) -> ConsumerB)?
+		        var x_Xyz_Optional: (() -> Xyz)? { __safeDI_storage.x_Xyz_Optional }
+		        var consumerA: ((Xyz?) -> ConsumerA)? { __safeDI_storage.consumerA }
+		        var x_Instantiator__Xyz_Optional: (() -> Xyz)? { __safeDI_storage.x_Instantiator__Xyz_Optional }
+		        var consumerB: ((Instantiator<Xyz>?) -> ConsumerB)? { __safeDI_storage.consumerB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                x_Xyz_Optional: (() -> Xyz)?,
+		                consumerA: ((Xyz?) -> ConsumerA)?,
+		                x_Instantiator__Xyz_Optional: (() -> Xyz)?,
+		                consumerB: ((Instantiator<Xyz>?) -> ConsumerB)?
+		            ) {
+		                self.x_Xyz_Optional = x_Xyz_Optional
+		                self.consumerA = consumerA
+		                self.x_Instantiator__Xyz_Optional = x_Instantiator__Xyz_Optional
+		                self.consumerB = consumerB
+		            }
+
+		            let x_Xyz_Optional: (() -> Xyz)?
+		            let consumerA: ((Xyz?) -> ConsumerA)?
+		            let x_Instantiator__Xyz_Optional: (() -> Xyz)?
+		            let consumerB: ((Instantiator<Xyz>?) -> ConsumerB)?
+		        }
 		    }
 
 		    static func mock(
@@ -7248,18 +8711,44 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            x_Instantiator__Xyz: (() -> Xyz)? = nil,
 		            consumerC: ((Instantiator<Xyz>) -> ConsumerC)? = nil
 		        ) {
-		            self.x_LazilyInstantiated__Xyz = x_LazilyInstantiated__Xyz
-		            self.consumerA = consumerA
-		            self.consumerB = consumerB
-		            self.x_Instantiator__Xyz = x_Instantiator__Xyz
-		            self.consumerC = consumerC
+		            __safeDI_storage = __safeDI_Storage(
+		                x_LazilyInstantiated__Xyz: x_LazilyInstantiated__Xyz,
+		                consumerA: consumerA,
+		                consumerB: consumerB,
+		                x_Instantiator__Xyz: x_Instantiator__Xyz,
+		                consumerC: consumerC
+		            )
 		        }
 
-		        let x_LazilyInstantiated__Xyz: (() -> Xyz)?
-		        let consumerA: ((LazilyInstantiated<Xyz>) -> ConsumerA)?
-		        let consumerB: ((Xyz) -> ConsumerB)?
-		        let x_Instantiator__Xyz: (() -> Xyz)?
-		        let consumerC: ((Instantiator<Xyz>) -> ConsumerC)?
+		        var x_LazilyInstantiated__Xyz: (() -> Xyz)? { __safeDI_storage.x_LazilyInstantiated__Xyz }
+		        var consumerA: ((LazilyInstantiated<Xyz>) -> ConsumerA)? { __safeDI_storage.consumerA }
+		        var consumerB: ((Xyz) -> ConsumerB)? { __safeDI_storage.consumerB }
+		        var x_Instantiator__Xyz: (() -> Xyz)? { __safeDI_storage.x_Instantiator__Xyz }
+		        var consumerC: ((Instantiator<Xyz>) -> ConsumerC)? { __safeDI_storage.consumerC }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                x_LazilyInstantiated__Xyz: (() -> Xyz)?,
+		                consumerA: ((LazilyInstantiated<Xyz>) -> ConsumerA)?,
+		                consumerB: ((Xyz) -> ConsumerB)?,
+		                x_Instantiator__Xyz: (() -> Xyz)?,
+		                consumerC: ((Instantiator<Xyz>) -> ConsumerC)?
+		            ) {
+		                self.x_LazilyInstantiated__Xyz = x_LazilyInstantiated__Xyz
+		                self.consumerA = consumerA
+		                self.consumerB = consumerB
+		                self.x_Instantiator__Xyz = x_Instantiator__Xyz
+		                self.consumerC = consumerC
+		            }
+
+		            let x_LazilyInstantiated__Xyz: (() -> Xyz)?
+		            let consumerA: ((LazilyInstantiated<Xyz>) -> ConsumerA)?
+		            let consumerB: ((Xyz) -> ConsumerB)?
+		            let x_Instantiator__Xyz: (() -> Xyz)?
+		            let consumerC: ((Instantiator<Xyz>) -> ConsumerC)?
+		        }
 		    }
 
 		    static func mock(
@@ -7376,16 +8865,39 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            x: ((String) -> Xyz)? = nil,
 		            consumerC: ((Instantiator<Xyz>) -> ConsumerC)? = nil
 		        ) {
-		            self.consumerA = consumerA
-		            self.consumerB = consumerB
-		            self.x = x
-		            self.consumerC = consumerC
+		            __safeDI_storage = __safeDI_Storage(
+		                consumerA: consumerA,
+		                consumerB: consumerB,
+		                x: x,
+		                consumerC: consumerC
+		            )
 		        }
 
-		        let consumerA: ((LazilyInstantiated<Xyz>) -> ConsumerA)?
-		        let consumerB: ((Xyz) -> ConsumerB)?
-		        let x: ((String) -> Xyz)?
-		        let consumerC: ((Instantiator<Xyz>) -> ConsumerC)?
+		        var consumerA: ((LazilyInstantiated<Xyz>) -> ConsumerA)? { __safeDI_storage.consumerA }
+		        var consumerB: ((Xyz) -> ConsumerB)? { __safeDI_storage.consumerB }
+		        var x: ((String) -> Xyz)? { __safeDI_storage.x }
+		        var consumerC: ((Instantiator<Xyz>) -> ConsumerC)? { __safeDI_storage.consumerC }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                consumerA: ((LazilyInstantiated<Xyz>) -> ConsumerA)?,
+		                consumerB: ((Xyz) -> ConsumerB)?,
+		                x: ((String) -> Xyz)?,
+		                consumerC: ((Instantiator<Xyz>) -> ConsumerC)?
+		            ) {
+		                self.consumerA = consumerA
+		                self.consumerB = consumerB
+		                self.x = x
+		                self.consumerC = consumerC
+		            }
+
+		            let consumerA: ((LazilyInstantiated<Xyz>) -> ConsumerA)?
+		            let consumerB: ((Xyz) -> ConsumerB)?
+		            let x: ((String) -> Xyz)?
+		            let consumerC: ((Instantiator<Xyz>) -> ConsumerC)?
+		        }
 		    }
 
 		    static func mock(
@@ -7467,12 +8979,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            x: (() -> Xyz)? = nil,
 		            child: ((LazilyInstantiated<Xyz>?) -> Child)? = nil
 		        ) {
-		            self.x = x
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                x: x,
+		                child: child
+		            )
 		        }
 
-		        let x: (() -> Xyz)?
-		        let child: ((LazilyInstantiated<Xyz>?) -> Child)?
+		        var x: (() -> Xyz)? { __safeDI_storage.x }
+		        var child: ((LazilyInstantiated<Xyz>?) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                x: (() -> Xyz)?,
+		                child: ((LazilyInstantiated<Xyz>?) -> Child)?
+		            ) {
+		                self.x = x
+		                self.child = child
+		            }
+
+		            let x: (() -> Xyz)?
+		            let child: ((LazilyInstantiated<Xyz>?) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -7548,12 +9077,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            consumerA: ((Xyz) -> ConsumerA)? = nil,
 		            consumerB: ((Instantiator<Xyz>) -> ConsumerB)? = nil
 		        ) {
-		            self.consumerA = consumerA
-		            self.consumerB = consumerB
+		            __safeDI_storage = __safeDI_Storage(
+		                consumerA: consumerA,
+		                consumerB: consumerB
+		            )
 		        }
 
-		        let consumerA: ((Xyz) -> ConsumerA)?
-		        let consumerB: ((Instantiator<Xyz>) -> ConsumerB)?
+		        var consumerA: ((Xyz) -> ConsumerA)? { __safeDI_storage.consumerA }
+		        var consumerB: ((Instantiator<Xyz>) -> ConsumerB)? { __safeDI_storage.consumerB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                consumerA: ((Xyz) -> ConsumerA)?,
+		                consumerB: ((Instantiator<Xyz>) -> ConsumerB)?
+		            ) {
+		                self.consumerA = consumerA
+		                self.consumerB = consumerB
+		            }
+
+		            let consumerA: ((Xyz) -> ConsumerA)?
+		            let consumerB: ((Instantiator<Xyz>) -> ConsumerB)?
+		        }
 		    }
 
 		    static func mock(
@@ -7643,16 +9189,33 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            x_Xyz: Xyz? = nil,
 		            x_Instantiator__Xyz: Instantiator<Xyz>? = nil
 		        ) {
-		            self.consumerA = consumerA
-		            self.consumerB = consumerB
+		            __safeDI_storage = __safeDI_Storage(
+		                consumerA: consumerA,
+		                consumerB: consumerB
+		            )
 		            self.x_Xyz = x_Xyz
 		            self.x_Instantiator__Xyz = x_Instantiator__Xyz
 		        }
 
-		        let consumerA: ((Xyz?) -> ConsumerA)?
-		        let consumerB: ((Instantiator<Xyz>?) -> ConsumerB)?
+		        var consumerA: ((Xyz?) -> ConsumerA)? { __safeDI_storage.consumerA }
+		        var consumerB: ((Instantiator<Xyz>?) -> ConsumerB)? { __safeDI_storage.consumerB }
 		        let x_Xyz: Xyz?
 		        let x_Instantiator__Xyz: Instantiator<Xyz>?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                consumerA: ((Xyz?) -> ConsumerA)?,
+		                consumerB: ((Instantiator<Xyz>?) -> ConsumerB)?
+		            ) {
+		                self.consumerA = consumerA
+		                self.consumerB = consumerB
+		            }
+
+		            let consumerA: ((Xyz?) -> ConsumerA)?
+		            let consumerB: ((Instantiator<Xyz>?) -> ConsumerB)?
+		        }
 		    }
 
 		    static func mock(
@@ -7725,12 +9288,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            session_Instantiator__Session: (() -> Session)? = nil,
 		            feed: ((Instantiator<Session>) -> Feed)? = nil
 		        ) {
-		            self.session_Instantiator__Session = session_Instantiator__Session
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                session_Instantiator__Session: session_Instantiator__Session,
+		                feed: feed
+		            )
 		        }
 
-		        let session_Instantiator__Session: (() -> Session)?
-		        let feed: ((Instantiator<Session>) -> Feed)?
+		        var session_Instantiator__Session: (() -> Session)? { __safeDI_storage.session_Instantiator__Session }
+		        var feed: ((Instantiator<Session>) -> Feed)? { __safeDI_storage.feed }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session_Instantiator__Session: (() -> Session)?,
+		                feed: ((Instantiator<Session>) -> Feed)?
+		            ) {
+		                self.session_Instantiator__Session = session_Instantiator__Session
+		                self.feed = feed
+		            }
+
+		            let session_Instantiator__Session: (() -> Session)?
+		            let feed: ((Instantiator<Session>) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -7808,14 +9388,34 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            cache: ((Session?) -> Cache)? = nil,
 		            feed: ((Instantiator<Session>, Cache) -> Feed)? = nil
 		        ) {
-		            self.session_Instantiator__Session = session_Instantiator__Session
-		            self.cache = cache
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                session_Instantiator__Session: session_Instantiator__Session,
+		                cache: cache,
+		                feed: feed
+		            )
 		        }
 
-		        let session_Instantiator__Session: (() -> Session)?
-		        let cache: ((Session?) -> Cache)?
-		        let feed: ((Instantiator<Session>, Cache) -> Feed)?
+		        var session_Instantiator__Session: (() -> Session)? { __safeDI_storage.session_Instantiator__Session }
+		        var cache: ((Session?) -> Cache)? { __safeDI_storage.cache }
+		        var feed: ((Instantiator<Session>, Cache) -> Feed)? { __safeDI_storage.feed }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session_Instantiator__Session: (() -> Session)?,
+		                cache: ((Session?) -> Cache)?,
+		                feed: ((Instantiator<Session>, Cache) -> Feed)?
+		            ) {
+		                self.session_Instantiator__Session = session_Instantiator__Session
+		                self.cache = cache
+		                self.feed = feed
+		            }
+
+		            let session_Instantiator__Session: (() -> Session)?
+		            let cache: ((Session?) -> Cache)?
+		            let feed: ((Instantiator<Session>, Cache) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -7885,12 +9485,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            session_Instantiator__Session: (() -> Session)? = nil,
 		            feed: ((Instantiator<Session>) -> Feed)? = nil
 		        ) {
-		            self.session_Instantiator__Session = session_Instantiator__Session
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                session_Instantiator__Session: session_Instantiator__Session,
+		                feed: feed
+		            )
 		        }
 
-		        let session_Instantiator__Session: (() -> Session)?
-		        let feed: ((Instantiator<Session>) -> Feed)?
+		        var session_Instantiator__Session: (() -> Session)? { __safeDI_storage.session_Instantiator__Session }
+		        var feed: ((Instantiator<Session>) -> Feed)? { __safeDI_storage.feed }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session_Instantiator__Session: (() -> Session)?,
+		                feed: ((Instantiator<Session>) -> Feed)?
+		            ) {
+		                self.session_Instantiator__Session = session_Instantiator__Session
+		                self.feed = feed
+		            }
+
+		            let session_Instantiator__Session: (() -> Session)?
+		            let feed: ((Instantiator<Session>) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -7962,12 +9579,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            user_Draft: (() -> Draft)? = nil,
 		            editor: ((Draft) -> Editor)? = nil
 		        ) {
-		            self.user_Draft = user_Draft
-		            self.editor = editor
+		            __safeDI_storage = __safeDI_Storage(
+		                user_Draft: user_Draft,
+		                editor: editor
+		            )
 		        }
 
-		        let user_Draft: (() -> Draft)?
-		        let editor: ((Draft) -> Editor)?
+		        var user_Draft: (() -> Draft)? { __safeDI_storage.user_Draft }
+		        var editor: ((Draft) -> Editor)? { __safeDI_storage.editor }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user_Draft: (() -> Draft)?,
+		                editor: ((Draft) -> Editor)?
+		            ) {
+		                self.user_Draft = user_Draft
+		                self.editor = editor
+		            }
+
+		            let user_Draft: (() -> Draft)?
+		            let editor: ((Draft) -> Editor)?
+		        }
 		    }
 
 		    static func mock(
@@ -8032,12 +9666,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            session_Session: (() -> Session)? = nil,
 		            feed: ((Session) -> Feed)? = nil
 		        ) {
-		            self.session_Session = session_Session
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                session_Session: session_Session,
+		                feed: feed
+		            )
 		        }
 
-		        let session_Session: (() -> Session)?
-		        let feed: ((Session) -> Feed)?
+		        var session_Session: (() -> Session)? { __safeDI_storage.session_Session }
+		        var feed: ((Session) -> Feed)? { __safeDI_storage.feed }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session_Session: (() -> Session)?,
+		                feed: ((Session) -> Feed)?
+		            ) {
+		                self.session_Session = session_Session
+		                self.feed = feed
+		            }
+
+		            let session_Session: (() -> Session)?
+		            let feed: ((Session) -> Feed)?
+		        }
 		    }
 
 		    static func mock(
@@ -8121,16 +9772,36 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            cache: ((Instantiator<Session>) -> Cache)? = nil,
 		            session_LazilyInstantiated__Session: Session? = nil
 		        ) {
-		            self.feed = feed
-		            self.session_Instantiator__Session = session_Instantiator__Session
-		            self.cache = cache
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed,
+		                session_Instantiator__Session: session_Instantiator__Session,
+		                cache: cache
+		            )
 		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
-		        let feed: Feed.SafeDIMockConfiguration
-		        let session_Instantiator__Session: (() -> Session)?
-		        let cache: ((Instantiator<Session>) -> Cache)?
+		        var feed: Feed.SafeDIMockConfiguration { __safeDI_storage.feed }
+		        var session_Instantiator__Session: (() -> Session)? { __safeDI_storage.session_Instantiator__Session }
+		        var cache: ((Instantiator<Session>) -> Cache)? { __safeDI_storage.cache }
 		        let session_LazilyInstantiated__Session: Session?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: Feed.SafeDIMockConfiguration,
+		                session_Instantiator__Session: (() -> Session)?,
+		                cache: ((Instantiator<Session>) -> Cache)?
+		            ) {
+		                self.feed = feed
+		                self.session_Instantiator__Session = session_Instantiator__Session
+		                self.cache = cache
+		            }
+
+		            let feed: Feed.SafeDIMockConfiguration
+		            let session_Instantiator__Session: (() -> Session)?
+		            let cache: ((Instantiator<Session>) -> Cache)?
+		        }
 		    }
 
 		    static func mock(
@@ -8222,12 +9893,29 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            session_Instantiator__Session: (() -> Session)? = nil,
 		            feed: Feed.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.session_Instantiator__Session = session_Instantiator__Session
-		            self.feed = feed
+		            __safeDI_storage = __safeDI_Storage(
+		                session_Instantiator__Session: session_Instantiator__Session,
+		                feed: feed
+		            )
 		        }
 
-		        let session_Instantiator__Session: (() -> Session)?
-		        let feed: Feed.SafeDIMockConfiguration
+		        var session_Instantiator__Session: (() -> Session)? { __safeDI_storage.session_Instantiator__Session }
+		        var feed: Feed.SafeDIMockConfiguration { __safeDI_storage.feed }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session_Instantiator__Session: (() -> Session)?,
+		                feed: Feed.SafeDIMockConfiguration
+		            ) {
+		                self.session_Instantiator__Session = session_Instantiator__Session
+		                self.feed = feed
+		            }
+
+		            let session_Instantiator__Session: (() -> Session)?
+		            let feed: Feed.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(

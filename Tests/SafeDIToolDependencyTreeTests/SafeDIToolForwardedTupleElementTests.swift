@@ -119,10 +119,24 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		        init(
 		            childBuilder: ((Int?, String) -> Screen)? = nil
 		        ) {
-		            self.childBuilder = childBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder
+		            )
 		        }
 
-		        let childBuilder: ((Int?, String) -> Screen)?
+		        var childBuilder: ((Int?, String) -> Screen)? { __safeDI_storage.childBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childBuilder: ((Int?, String) -> Screen)?
+		            ) {
+		                self.childBuilder = childBuilder
+		            }
+
+		            let childBuilder: ((Int?, String) -> Screen)?
+		        }
 		    }
 
 		    static func mock(
@@ -499,10 +513,24 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		        init(
 		            childBuilder: (() -> Screen)? = nil
 		        ) {
-		            self.childBuilder = childBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder
+		            )
 		        }
 
-		        let childBuilder: (() -> Screen)?
+		        var childBuilder: (() -> Screen)? { __safeDI_storage.childBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childBuilder: (() -> Screen)?
+		            ) {
+		                self.childBuilder = childBuilder
+		            }
+
+		            let childBuilder: (() -> Screen)?
+		        }
 		    }
 
 		    static func mock(
@@ -646,10 +674,24 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		        init(
 		            childBuilder: ((@escaping () throws(Failure) -> Void, String) -> Screen)? = nil
 		        ) {
-		            self.childBuilder = childBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder
+		            )
 		        }
 
-		        let childBuilder: ((@escaping () throws(Failure) -> Void, String) -> Screen)?
+		        var childBuilder: ((@escaping () throws(Failure) -> Void, String) -> Screen)? { __safeDI_storage.childBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childBuilder: ((@escaping () throws(Failure) -> Void, String) -> Screen)?
+		            ) {
+		                self.childBuilder = childBuilder
+		            }
+
+		            let childBuilder: ((@escaping () throws(Failure) -> Void, String) -> Screen)?
+		        }
 		    }
 
 		    static func mock(
@@ -786,10 +828,24 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		        init(
 		            childBuilder: ((nonisolated(nonsending) @escaping () async -> Void, String) -> Screen)? = nil
 		        ) {
-		            self.childBuilder = childBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder
+		            )
 		        }
 
-		        let childBuilder: ((nonisolated(nonsending) @escaping () async -> Void, String) -> Screen)?
+		        var childBuilder: ((nonisolated(nonsending) @escaping () async -> Void, String) -> Screen)? { __safeDI_storage.childBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childBuilder: ((nonisolated(nonsending) @escaping () async -> Void, String) -> Screen)?
+		            ) {
+		                self.childBuilder = childBuilder
+		            }
+
+		            let childBuilder: ((nonisolated(nonsending) @escaping () async -> Void, String) -> Screen)?
+		        }
 		    }
 
 		    static func mock(
@@ -1722,14 +1778,34 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		            x: ((Int, String) -> Child)? = nil,
 		            receiverB: ((Instantiator<Child>) -> ReceiverB)? = nil
 		        ) {
-		            self.receiverA = receiverA
-		            self.x = x
-		            self.receiverB = receiverB
+		            __safeDI_storage = __safeDI_Storage(
+		                receiverA: receiverA,
+		                x: x,
+		                receiverB: receiverB
+		            )
 		        }
 
-		        let receiverA: ((ErasedInstantiator<Child.ForwardedProperties, Screen>) -> ReceiverA)?
-		        let x: ((Int, String) -> Child)?
-		        let receiverB: ((Instantiator<Child>) -> ReceiverB)?
+		        var receiverA: ((ErasedInstantiator<Child.ForwardedProperties, Screen>) -> ReceiverA)? { __safeDI_storage.receiverA }
+		        var x: ((Int, String) -> Child)? { __safeDI_storage.x }
+		        var receiverB: ((Instantiator<Child>) -> ReceiverB)? { __safeDI_storage.receiverB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                receiverA: ((ErasedInstantiator<Child.ForwardedProperties, Screen>) -> ReceiverA)?,
+		                x: ((Int, String) -> Child)?,
+		                receiverB: ((Instantiator<Child>) -> ReceiverB)?
+		            ) {
+		                self.receiverA = receiverA
+		                self.x = x
+		                self.receiverB = receiverB
+		            }
+
+		            let receiverA: ((ErasedInstantiator<Child.ForwardedProperties, Screen>) -> ReceiverA)?
+		            let x: ((Int, String) -> Child)?
+		            let receiverB: ((Instantiator<Child>) -> ReceiverB)?
+		        }
 		    }
 
 		    static func mock(
@@ -1829,16 +1905,36 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		            sub: ((ErasedInstantiator<Child.ForwardedProperties, Screen>?) -> Sub)? = nil,
 		            editor_ErasedInstantiator__Child_ForwardedProperties__Screen: ErasedInstantiator<Child.ForwardedProperties, Screen>? = nil
 		        ) {
-		            self.editor = editor
-		            self.holder = holder
-		            self.sub = sub
+		            __safeDI_storage = __safeDI_Storage(
+		                editor: editor,
+		                holder: holder,
+		                sub: sub
+		            )
 		            self.editor_ErasedInstantiator__Child_ForwardedProperties__Screen = editor_ErasedInstantiator__Child_ForwardedProperties__Screen
 		        }
 
-		        let editor: (() -> EditorNode)?
-		        let holder: ((EditorNode) -> Holder)?
-		        let sub: ((ErasedInstantiator<Child.ForwardedProperties, Screen>?) -> Sub)?
+		        var editor: (() -> EditorNode)? { __safeDI_storage.editor }
+		        var holder: ((EditorNode) -> Holder)? { __safeDI_storage.holder }
+		        var sub: ((ErasedInstantiator<Child.ForwardedProperties, Screen>?) -> Sub)? { __safeDI_storage.sub }
 		        let editor_ErasedInstantiator__Child_ForwardedProperties__Screen: ErasedInstantiator<Child.ForwardedProperties, Screen>?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                editor: (() -> EditorNode)?,
+		                holder: ((EditorNode) -> Holder)?,
+		                sub: ((ErasedInstantiator<Child.ForwardedProperties, Screen>?) -> Sub)?
+		            ) {
+		                self.editor = editor
+		                self.holder = holder
+		                self.sub = sub
+		            }
+
+		            let editor: (() -> EditorNode)?
+		            let holder: ((EditorNode) -> Holder)?
+		            let sub: ((ErasedInstantiator<Child.ForwardedProperties, Screen>?) -> Sub)?
+		        }
 		    }
 
 		    static func mock(

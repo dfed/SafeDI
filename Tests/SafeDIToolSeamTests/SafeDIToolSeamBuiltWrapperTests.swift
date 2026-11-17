@@ -1671,10 +1671,24 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			        public init(
 			            analytics: (() -> Analytics)? = nil
 			        ) {
-			            self.analytics = analytics
+			            __safeDI_storage = __safeDI_Storage(
+			                analytics: analytics
+			            )
 			        }
 
-			        public let analytics: (() -> Analytics)?
+			        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                analytics: (() -> Analytics)?
+			            ) {
+			                self.analytics = analytics
+			            }
+
+			            let analytics: (() -> Analytics)?
+			        }
 			    }
 
 			    public static func mock(
@@ -1763,10 +1777,24 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public init(
 		            again: __safeDI_Middle_MockConfiguration = .init()
 		        ) {
-		            self.again = again
+		            __safeDI_storage = __safeDI_Storage(
+		                again: again
+		            )
 		        }
 
-		        public let again: __safeDI_Middle_MockConfiguration
+		        public var again: __safeDI_Middle_MockConfiguration { __safeDI_storage.again }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                again: __safeDI_Middle_MockConfiguration
+		            ) {
+		                self.again = again
+		            }
+
+		            let again: __safeDI_Middle_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(

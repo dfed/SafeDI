@@ -918,10 +918,24 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			        public init(
 			            user: (() -> User)? = nil
 			        ) {
-			            self.user = user
+			            __safeDI_storage = __safeDI_Storage(
+			                user: user
+			            )
 			        }
 
-			        public let user: (() -> User)?
+			        public var user: (() -> User)? { __safeDI_storage.user }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                user: (() -> User)?
+			            ) {
+			                self.user = user
+			            }
+
+			            let user: (() -> User)?
+			        }
 			    }
 
 			\(integration == .moduleInfo ? "    // SafeDI counts `User` as `public`: no module it reads declares it narrower. If `User` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n" : "")    public static func mock(
@@ -951,10 +965,24 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			        public init(
 			            user: (() -> User)? = nil
 			        ) {
-			            self.user = user
+			            __safeDI_storage = __safeDI_Storage(
+			                user: user
+			            )
 			        }
 
-			        public let user: (() -> User)?
+			        public var user: (() -> User)? { __safeDI_storage.user }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                user: (() -> User)?
+			            ) {
+			                self.user = user
+			            }
+
+			            let user: (() -> User)?
+			        }
 			    }
 
 			\(integration == .moduleInfo ? "    // SafeDI counts `User` as `public`: no module it reads declares it narrower. If `User` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n" : "")    public static func mock(
@@ -2657,16 +2685,32 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
 		        public init() {
-		            self.badgeBuilder = nil
+		            __safeDI_storage = __safeDI_Storage(
+		                badgeBuilder: nil
+		            )
 		        }
 
 		        init(
 		            badgeBuilder: ((Image, Brush) -> Badge)? = nil
 		        ) {
-		            self.badgeBuilder = badgeBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                badgeBuilder: badgeBuilder
+		            )
 		        }
 
-		        let badgeBuilder: ((Image, Brush) -> Badge)?
+		        var badgeBuilder: ((Image, Brush) -> Badge)? { __safeDI_storage.badgeBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                badgeBuilder: ((Image, Brush) -> Badge)?
+		            ) {
+		                self.badgeBuilder = badgeBuilder
+		            }
+
+		            let badgeBuilder: ((Image, Brush) -> Badge)?
+		        }
 		    }
 
 		    public static func mock(
@@ -2843,16 +2887,32 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
 		        public init() {
-		            self.badge = nil
+		            __safeDI_storage = __safeDI_Storage(
+		                badge: nil
+		            )
 		        }
 
 		        init(
 		            badge: ((Window) -> Badge)? = nil
 		        ) {
-		            self.badge = badge
+		            __safeDI_storage = __safeDI_Storage(
+		                badge: badge
+		            )
 		        }
 
-		        let badge: ((Window) -> Badge)?
+		        var badge: ((Window) -> Badge)? { __safeDI_storage.badge }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                badge: ((Window) -> Badge)?
+		            ) {
+		                self.badge = badge
+		            }
+
+		            let badge: ((Window) -> Badge)?
+		        }
 		    }
 
 		    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.

@@ -101,12 +101,29 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            leaf: (() -> Leaf)? = nil,
 			            promoted: ((LeafProtocol) -> Promoted)? = nil
 			        ) {
-			            self.leaf = leaf
-			            self.promoted = promoted
+			            __safeDI_storage = __safeDI_Storage(
+			                leaf: leaf,
+			                promoted: promoted
+			            )
 			        }
 
-			        let leaf: (() -> Leaf)?
-			        let promoted: ((LeafProtocol) -> Promoted)?
+			        var leaf: (() -> Leaf)? { __safeDI_storage.leaf }
+			        var promoted: ((LeafProtocol) -> Promoted)? { __safeDI_storage.promoted }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leaf: (() -> Leaf)?,
+			                promoted: ((LeafProtocol) -> Promoted)?
+			            ) {
+			                self.leaf = leaf
+			                self.promoted = promoted
+			            }
+
+			            let leaf: (() -> Leaf)?
+			            let promoted: ((LeafProtocol) -> Promoted)?
+			        }
 			    }
 
 			    static func mock(
@@ -179,12 +196,29 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            leaf: (() -> Leaf)? = nil,
 			            promoted: ((OtherProtocol) -> Promoted)? = nil
 			        ) {
-			            self.leaf = leaf
-			            self.promoted = promoted
+			            __safeDI_storage = __safeDI_Storage(
+			                leaf: leaf,
+			                promoted: promoted
+			            )
 			        }
 
-			        let leaf: (() -> Leaf)?
-			        let promoted: ((OtherProtocol) -> Promoted)?
+			        var leaf: (() -> Leaf)? { __safeDI_storage.leaf }
+			        var promoted: ((OtherProtocol) -> Promoted)? { __safeDI_storage.promoted }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leaf: (() -> Leaf)?,
+			                promoted: ((OtherProtocol) -> Promoted)?
+			            ) {
+			                self.leaf = leaf
+			                self.promoted = promoted
+			            }
+
+			            let leaf: (() -> Leaf)?
+			            let promoted: ((OtherProtocol) -> Promoted)?
+			        }
 			    }
 
 			    static func mock(
@@ -258,14 +292,31 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            promoted: ((OtherProtocol?) -> Promoted)? = nil,
 			            leafProtocol: OtherProtocol? = nil
 			        ) {
-			            self.leaf = leaf
-			            self.promoted = promoted
+			            __safeDI_storage = __safeDI_Storage(
+			                leaf: leaf,
+			                promoted: promoted
+			            )
 			            self.leafProtocol = leafProtocol
 			        }
 
-			        let leaf: (() -> Leaf)?
-			        let promoted: ((OtherProtocol?) -> Promoted)?
+			        var leaf: (() -> Leaf)? { __safeDI_storage.leaf }
+			        var promoted: ((OtherProtocol?) -> Promoted)? { __safeDI_storage.promoted }
 			        let leafProtocol: OtherProtocol?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leaf: (() -> Leaf)?,
+			                promoted: ((OtherProtocol?) -> Promoted)?
+			            ) {
+			                self.leaf = leaf
+			                self.promoted = promoted
+			            }
+
+			            let leaf: (() -> Leaf)?
+			            let promoted: ((OtherProtocol?) -> Promoted)?
+			        }
 			    }
 
 			    static func mock(
@@ -329,12 +380,26 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            promoted: ((ErasedInstantiator<(), AnyValue>) -> Promoted)? = nil,
 			            valueBuilder: ErasedInstantiator<(), AnyValue>? = nil
 			        ) {
-			            self.promoted = promoted
+			            __safeDI_storage = __safeDI_Storage(
+			                promoted: promoted
+			            )
 			            self.valueBuilder = valueBuilder
 			        }
 
-			        let promoted: ((ErasedInstantiator<(), AnyValue>) -> Promoted)?
+			        var promoted: ((ErasedInstantiator<(), AnyValue>) -> Promoted)? { __safeDI_storage.promoted }
 			        let valueBuilder: ErasedInstantiator<(), AnyValue>?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                promoted: ((ErasedInstantiator<(), AnyValue>) -> Promoted)?
+			            ) {
+			                self.promoted = promoted
+			            }
+
+			            let promoted: ((ErasedInstantiator<(), AnyValue>) -> Promoted)?
+			        }
 			    }
 
 			    static func mock(
@@ -416,12 +481,29 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            leaf: (() -> Leaf)? = nil,
 			            promoted: Promoted.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.leaf = leaf
-			            self.promoted = promoted
+			            __safeDI_storage = __safeDI_Storage(
+			                leaf: leaf,
+			                promoted: promoted
+			            )
 			        }
 
-			        let leaf: (() -> Leaf)?
-			        let promoted: Promoted.SafeDIMockConfiguration
+			        var leaf: (() -> Leaf)? { __safeDI_storage.leaf }
+			        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leaf: (() -> Leaf)?,
+			                promoted: Promoted.SafeDIMockConfiguration
+			            ) {
+			                self.leaf = leaf
+			                self.promoted = promoted
+			            }
+
+			            let leaf: (() -> Leaf)?
+			            let promoted: Promoted.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -498,12 +580,29 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            leafBuilder: (@Sendable () -> Leaf)? = nil,
 			            promoted: ((SendableInstantiator<Leaf>?, SendableInstantiator<Leaf>?) -> Promoted)? = nil
 			        ) {
-			            self.leafBuilder = leafBuilder
-			            self.promoted = promoted
+			            __safeDI_storage = __safeDI_Storage(
+			                leafBuilder: leafBuilder,
+			                promoted: promoted
+			            )
 			        }
 
-			        let leafBuilder: (@Sendable () -> Leaf)?
-			        let promoted: ((SendableInstantiator<Leaf>?, SendableInstantiator<Leaf>?) -> Promoted)?
+			        var leafBuilder: (@Sendable () -> Leaf)? { __safeDI_storage.leafBuilder }
+			        var promoted: ((SendableInstantiator<Leaf>?, SendableInstantiator<Leaf>?) -> Promoted)? { __safeDI_storage.promoted }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leafBuilder: (@Sendable () -> Leaf)?,
+			                promoted: ((SendableInstantiator<Leaf>?, SendableInstantiator<Leaf>?) -> Promoted)?
+			            ) {
+			                self.leafBuilder = leafBuilder
+			                self.promoted = promoted
+			            }
+
+			            let leafBuilder: (@Sendable () -> Leaf)?
+			            let promoted: ((SendableInstantiator<Leaf>?, SendableInstantiator<Leaf>?) -> Promoted)?
+			        }
 			    }
 
 			    static func mock(
@@ -574,12 +673,29 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            leafBuilder: (() -> Leaf)? = nil,
 			            promoted: ((Instantiator<Leaf>?) -> Promoted)? = nil
 			        ) {
-			            self.leafBuilder = leafBuilder
-			            self.promoted = promoted
+			            __safeDI_storage = __safeDI_Storage(
+			                leafBuilder: leafBuilder,
+			                promoted: promoted
+			            )
 			        }
 
-			        let leafBuilder: (() -> Leaf)?
-			        let promoted: ((Instantiator<Leaf>?) -> Promoted)?
+			        var leafBuilder: (() -> Leaf)? { __safeDI_storage.leafBuilder }
+			        var promoted: ((Instantiator<Leaf>?) -> Promoted)? { __safeDI_storage.promoted }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leafBuilder: (() -> Leaf)?,
+			                promoted: ((Instantiator<Leaf>?) -> Promoted)?
+			            ) {
+			                self.leafBuilder = leafBuilder
+			                self.promoted = promoted
+			            }
+
+			            let leafBuilder: (() -> Leaf)?
+			            let promoted: ((Instantiator<Leaf>?) -> Promoted)?
+			        }
 			    }
 
 			    static func mock(
@@ -651,12 +767,29 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            leaf: (() -> Leaf)? = nil,
 			            promoted: ((Leaf?) -> Promoted)? = nil
 			        ) {
-			            self.leaf = leaf
-			            self.promoted = promoted
+			            __safeDI_storage = __safeDI_Storage(
+			                leaf: leaf,
+			                promoted: promoted
+			            )
 			        }
 
-			        let leaf: (() -> Leaf)?
-			        let promoted: ((Leaf?) -> Promoted)?
+			        var leaf: (() -> Leaf)? { __safeDI_storage.leaf }
+			        var promoted: ((Leaf?) -> Promoted)? { __safeDI_storage.promoted }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leaf: (() -> Leaf)?,
+			                promoted: ((Leaf?) -> Promoted)?
+			            ) {
+			                self.leaf = leaf
+			                self.promoted = promoted
+			            }
+
+			            let leaf: (() -> Leaf)?
+			            let promoted: ((Leaf?) -> Promoted)?
+			        }
 			    }
 
 			    static func mock(
@@ -725,12 +858,29 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            leaf: (() -> Leaf)? = nil,
 			            promoted: ((Leaf?) -> Promoted)? = nil
 			        ) {
-			            self.leaf = leaf
-			            self.promoted = promoted
+			            __safeDI_storage = __safeDI_Storage(
+			                leaf: leaf,
+			                promoted: promoted
+			            )
 			        }
 
-			        let leaf: (() -> Leaf)?
-			        let promoted: ((Leaf?) -> Promoted)?
+			        var leaf: (() -> Leaf)? { __safeDI_storage.leaf }
+			        var promoted: ((Leaf?) -> Promoted)? { __safeDI_storage.promoted }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leaf: (() -> Leaf)?,
+			                promoted: ((Leaf?) -> Promoted)?
+			            ) {
+			                self.leaf = leaf
+			                self.promoted = promoted
+			            }
+
+			            let leaf: (() -> Leaf)?
+			            let promoted: ((Leaf?) -> Promoted)?
+			        }
 			    }
 
 			    static func mock(

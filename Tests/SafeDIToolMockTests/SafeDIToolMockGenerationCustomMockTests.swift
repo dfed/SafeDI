@@ -118,10 +118,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            dependency: (() -> Dependency)? = nil
 		        ) {
-		            self.dependency = dependency
+		            __safeDI_storage = __safeDI_Storage(
+		                dependency: dependency
+		            )
 		        }
 
-		        let dependency: (() -> Dependency)?
+		        var dependency: (() -> Dependency)? { __safeDI_storage.dependency }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                dependency: (() -> Dependency)?
+		            ) {
+		                self.dependency = dependency
+		            }
+
+		            let dependency: (() -> Dependency)?
+		        }
 		    }
 
 		    static func mock(
@@ -240,12 +254,29 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            dependency: (() -> Dependency)? = nil,
 		            child: ((Dependency) -> Child)? = nil
 		        ) {
-		            self.dependency = dependency
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                dependency: dependency,
+		                child: child
+		            )
 		        }
 
-		        let dependency: (() -> Dependency)?
-		        let child: ((Dependency) -> Child)?
+		        var dependency: (() -> Dependency)? { __safeDI_storage.dependency }
+		        var child: ((Dependency) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                dependency: (() -> Dependency)?,
+		                child: ((Dependency) -> Child)?
+		            ) {
+		                self.dependency = dependency
+		                self.child = child
+		            }
+
+		            let dependency: (() -> Dependency)?
+		            let child: ((Dependency) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -272,10 +303,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            dependency: (() -> Dependency)? = nil
 		        ) {
-		            self.dependency = dependency
+		            __safeDI_storage = __safeDI_Storage(
+		                dependency: dependency
+		            )
 		        }
 
-		        let dependency: (() -> Dependency)?
+		        var dependency: (() -> Dependency)? { __safeDI_storage.dependency }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                dependency: (() -> Dependency)?
+		            ) {
+		                self.dependency = dependency
+		            }
+
+		            let dependency: (() -> Dependency)?
+		        }
 		    }
 
 		    static func mock(
@@ -343,12 +388,29 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            serviceA: (() -> ServiceA)? = nil,
 		            serviceB: (() -> ServiceB)? = nil
 		        ) {
-		            self.serviceA = serviceA
-		            self.serviceB = serviceB
+		            __safeDI_storage = __safeDI_Storage(
+		                serviceA: serviceA,
+		                serviceB: serviceB
+		            )
 		        }
 
-		        let serviceA: (() -> ServiceA)?
-		        let serviceB: (() -> ServiceB)?
+		        var serviceA: (() -> ServiceA)? { __safeDI_storage.serviceA }
+		        var serviceB: (() -> ServiceB)? { __safeDI_storage.serviceB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                serviceA: (() -> ServiceA)?,
+		                serviceB: (() -> ServiceB)?
+		            ) {
+		                self.serviceA = serviceA
+		                self.serviceB = serviceB
+		            }
+
+		            let serviceA: (() -> ServiceA)?
+		            let serviceB: (() -> ServiceB)?
+		        }
 		    }
 
 		    static func mock(
@@ -426,12 +488,29 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            service: (() -> Service)? = nil,
 		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.service = service
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                child: child
+		            )
 		        }
 
-		        let service: (() -> Service)?
-		        let child: Child.SafeDIMockConfiguration
+		        var service: (() -> Service)? { __safeDI_storage.service }
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Service)?,
+		                child: Child.SafeDIMockConfiguration
+		            ) {
+		                self.service = service
+		                self.child = child
+		            }
+
+		            let service: (() -> Service)?
+		            let child: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -510,12 +589,29 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            service: (() -> Service)? = nil,
 		            child: ((Service) -> Child)? = nil
 		        ) {
-		            self.service = service
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                child: child
+		            )
 		        }
 
-		        let service: (() -> Service)?
-		        let child: ((Service) -> Child)?
+		        var service: (() -> Service)? { __safeDI_storage.service }
+		        var child: ((Service) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Service)?,
+		                child: ((Service) -> Child)?
+		            ) {
+		                self.service = service
+		                self.child = child
+		            }
+
+		            let service: (() -> Service)?
+		            let child: ((Service) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -588,12 +684,29 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            service: (() -> Service)? = nil,
 		            child: ((Service) -> Child)? = nil
 		        ) {
-		            self.service = service
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                child: child
+		            )
 		        }
 
-		        let service: (() -> Service)?
-		        let child: ((Service) -> Child)?
+		        var service: (() -> Service)? { __safeDI_storage.service }
+		        var child: ((Service) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Service)?,
+		                child: ((Service) -> Child)?
+		            ) {
+		                self.service = service
+		                self.child = child
+		            }
+
+		            let service: (() -> Service)?
+		            let child: ((Service) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -671,14 +784,34 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            serviceB: (() -> ServiceB)? = nil,
 		            child: ((ServiceA, ServiceB) -> Child)? = nil
 		        ) {
-		            self.serviceA = serviceA
-		            self.serviceB = serviceB
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                serviceA: serviceA,
+		                serviceB: serviceB,
+		                child: child
+		            )
 		        }
 
-		        let serviceA: (() -> ServiceA)?
-		        let serviceB: (() -> ServiceB)?
-		        let child: ((ServiceA, ServiceB) -> Child)?
+		        var serviceA: (() -> ServiceA)? { __safeDI_storage.serviceA }
+		        var serviceB: (() -> ServiceB)? { __safeDI_storage.serviceB }
+		        var child: ((ServiceA, ServiceB) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                serviceA: (() -> ServiceA)?,
+		                serviceB: (() -> ServiceB)?,
+		                child: ((ServiceA, ServiceB) -> Child)?
+		            ) {
+		                self.serviceA = serviceA
+		                self.serviceB = serviceB
+		                self.child = child
+		            }
+
+		            let serviceA: (() -> ServiceA)?
+		            let serviceB: (() -> ServiceB)?
+		            let child: ((ServiceA, ServiceB) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -748,12 +881,29 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            serviceA: (() -> ServiceA)? = nil,
 		            serviceB: (() -> ServiceB)? = nil
 		        ) {
-		            self.serviceA = serviceA
-		            self.serviceB = serviceB
+		            __safeDI_storage = __safeDI_Storage(
+		                serviceA: serviceA,
+		                serviceB: serviceB
+		            )
 		        }
 
-		        let serviceA: (() -> ServiceA)?
-		        let serviceB: (() -> ServiceB)?
+		        var serviceA: (() -> ServiceA)? { __safeDI_storage.serviceA }
+		        var serviceB: (() -> ServiceB)? { __safeDI_storage.serviceB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                serviceA: (() -> ServiceA)?,
+		                serviceB: (() -> ServiceB)?
+		            ) {
+		                self.serviceA = serviceA
+		                self.serviceB = serviceB
+		            }
+
+		            let serviceA: (() -> ServiceA)?
+		            let serviceB: (() -> ServiceB)?
+		        }
 		    }
 
 		    static func mock(
@@ -832,10 +982,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            child: ((String) -> Child)? = nil
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: ((String) -> Child)?
+		        var child: ((String) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((String) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: ((String) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -901,10 +1065,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -983,10 +1161,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            childService: ChildService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.childService = childService
+		            __safeDI_storage = __safeDI_Storage(
+		                childService: childService
+		            )
 		        }
 
-		        let childService: ChildService.SafeDIMockConfiguration
+		        var childService: ChildService.SafeDIMockConfiguration { __safeDI_storage.childService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childService: ChildService.SafeDIMockConfiguration
+		            ) {
+		                self.childService = childService
+		            }
+
+		            let childService: ChildService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1067,10 +1259,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            service: (() -> Service)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> Service)?
+		        var service: (() -> Service)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Service)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> Service)?
+		        }
 		    }
 
 		    static func mock(
@@ -1125,10 +1331,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            service: (() -> Service)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> Service)?
+		        var service: (() -> Service)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Service)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> Service)?
+		        }
 		    }
 
 		    static func mock(
@@ -1189,10 +1409,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1270,10 +1504,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1341,12 +1589,26 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            child: ((Service?) -> Child)? = nil,
 		            service: Service? = nil
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		            self.service = service
 		        }
 
-		        let child: ((Service?) -> Child)?
+		        var child: ((Service?) -> Child)? { __safeDI_storage.child }
 		        let service: Service?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((Service?) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: ((Service?) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -1417,12 +1679,29 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            engine: (() -> Engine)? = nil,
 		            childService: ((Engine) -> ChildServiceProtocol)? = nil
 		        ) {
-		            self.engine = engine
-		            self.childService = childService
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine,
+		                childService: childService
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
-		        let childService: ((Engine) -> ChildServiceProtocol)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
+		        var childService: ((Engine) -> ChildServiceProtocol)? { __safeDI_storage.childService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?,
+		                childService: ((Engine) -> ChildServiceProtocol)?
+		            ) {
+		                self.engine = engine
+		                self.childService = childService
+		            }
+
+		            let engine: (() -> Engine)?
+		            let childService: ((Engine) -> ChildServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -1495,12 +1774,29 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            engine: (() -> Engine)? = nil,
 		            childService: ((Engine) -> ChildServiceProtocol)? = nil
 		        ) {
-		            self.engine = engine
-		            self.childService = childService
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine,
+		                childService: childService
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
-		        let childService: ((Engine) -> ChildServiceProtocol)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
+		        var childService: ((Engine) -> ChildServiceProtocol)? { __safeDI_storage.childService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?,
+		                childService: ((Engine) -> ChildServiceProtocol)?
+		            ) {
+		                self.engine = engine
+		                self.childService = childService
+		            }
+
+		            let engine: (() -> Engine)?
+		            let childService: ((Engine) -> ChildServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -1533,10 +1829,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            engine: (() -> Engine)? = nil
 		        ) {
-		            self.engine = engine
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?
+		            ) {
+		                self.engine = engine
+		            }
+
+		            let engine: (() -> Engine)?
+		        }
 		    }
 
 		    static func mock(
@@ -1608,12 +1918,29 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            engine: (() -> Engine)? = nil,
 		            childServiceBuilder: ((Engine) -> ChildServiceProtocol)? = nil
 		        ) {
-		            self.engine = engine
-		            self.childServiceBuilder = childServiceBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine,
+		                childServiceBuilder: childServiceBuilder
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
-		        let childServiceBuilder: ((Engine) -> ChildServiceProtocol)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
+		        var childServiceBuilder: ((Engine) -> ChildServiceProtocol)? { __safeDI_storage.childServiceBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?,
+		                childServiceBuilder: ((Engine) -> ChildServiceProtocol)?
+		            ) {
+		                self.engine = engine
+		                self.childServiceBuilder = childServiceBuilder
+		            }
+
+		            let engine: (() -> Engine)?
+		            let childServiceBuilder: ((Engine) -> ChildServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -1689,12 +2016,29 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            engine: (() -> Engine)? = nil,
 		            childServiceBuilder: (@Sendable (Engine) -> ChildServiceProtocol)? = nil
 		        ) {
-		            self.engine = engine
-		            self.childServiceBuilder = childServiceBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine,
+		                childServiceBuilder: childServiceBuilder
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
-		        let childServiceBuilder: (@Sendable (Engine) -> ChildServiceProtocol)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
+		        var childServiceBuilder: (@Sendable (Engine) -> ChildServiceProtocol)? { __safeDI_storage.childServiceBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?,
+		                childServiceBuilder: (@Sendable (Engine) -> ChildServiceProtocol)?
+		            ) {
+		                self.engine = engine
+		                self.childServiceBuilder = childServiceBuilder
+		            }
+
+		            let engine: (() -> Engine)?
+		            let childServiceBuilder: (@Sendable (Engine) -> ChildServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -1761,10 +2105,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            childService: (() -> ChildServiceProtocol)? = nil
 		        ) {
-		            self.childService = childService
+		            __safeDI_storage = __safeDI_Storage(
+		                childService: childService
+		            )
 		        }
 
-		        let childService: (() -> ChildServiceProtocol)?
+		        var childService: (() -> ChildServiceProtocol)? { __safeDI_storage.childService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childService: (() -> ChildServiceProtocol)?
+		            ) {
+		                self.childService = childService
+		            }
+
+		            let childService: (() -> ChildServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -1837,12 +2195,29 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            engine: (() -> Engine)? = nil,
 		            childService: ((Engine) -> ChildService)? = nil
 		        ) {
-		            self.engine = engine
-		            self.childService = childService
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine,
+		                childService: childService
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
-		        let childService: ((Engine) -> ChildService)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
+		        var childService: ((Engine) -> ChildService)? { __safeDI_storage.childService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?,
+		                childService: ((Engine) -> ChildService)?
+		            ) {
+		                self.engine = engine
+		                self.childService = childService
+		            }
+
+		            let engine: (() -> Engine)?
+		            let childService: ((Engine) -> ChildService)?
+		        }
 		    }
 
 		    static func mock(
@@ -1873,10 +2248,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            engine: (() -> Engine)? = nil
 		        ) {
-		            self.engine = engine
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?
+		            ) {
+		                self.engine = engine
+		            }
+
+		            let engine: (() -> Engine)?
+		        }
 		    }
 
 		    static func mock(
@@ -1937,10 +2326,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            engine: (() -> Engine)? = nil
 		        ) {
-		            self.engine = engine
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?
+		            ) {
+		                self.engine = engine
+		            }
+
+		            let engine: (() -> Engine)?
+		        }
 		    }
 
 		    static func mock(
@@ -1960,13 +2363,30 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            engine: (() -> Engine)? = nil,
 		            _ safeDIBuilder: ((Engine) -> Service)? = nil
 		        ) {
-		            self.engine = engine
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Engine) -> Service)?
+		        var safeDIBuilder: ((Engine) -> Service)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?,
+		                safeDIBuilder: ((Engine) -> Service)?
+		            ) {
+		                self.engine = engine
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let engine: (() -> Engine)?
+		            let safeDIBuilder: ((Engine) -> Service)?
+		        }
 		    }
 		}
 		#endif
@@ -2025,10 +2445,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            engine: (() -> Engine)? = nil
 		        ) {
-		            self.engine = engine
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?
+		            ) {
+		                self.engine = engine
+		            }
+
+		            let engine: (() -> Engine)?
+		        }
 		    }
 
 		    static func mock(
@@ -2048,13 +2482,30 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            engine: (() -> Engine)? = nil,
 		            _ safeDIBuilder: ((Engine) -> Service)? = nil
 		        ) {
-		            self.engine = engine
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Engine) -> Service)?
+		        var safeDIBuilder: ((Engine) -> Service)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?,
+		                safeDIBuilder: ((Engine) -> Service)?
+		            ) {
+		                self.engine = engine
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let engine: (() -> Engine)?
+		            let safeDIBuilder: ((Engine) -> Service)?
+		        }
 		    }
 		}
 		#endif
@@ -2074,10 +2525,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            service: Service.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: Service.SafeDIMockConfiguration
+		        var service: Service.SafeDIMockConfiguration { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: Service.SafeDIMockConfiguration
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: Service.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2148,10 +2613,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            engine: (() -> Engine)? = nil
 		        ) {
-		            self.engine = engine
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?
+		            ) {
+		                self.engine = engine
+		            }
+
+		            let engine: (() -> Engine)?
+		        }
 		    }
 
 		    static func mock(
@@ -2173,15 +2652,35 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            showDebugInfo: Bool = false,
 		            _ safeDIBuilder: ((Engine, Bool) -> Service)? = nil
 		        ) {
-		            self.engine = engine
-		            self.showDebugInfo = showDebugInfo
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine,
+		                showDebugInfo: showDebugInfo,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
-		        let showDebugInfo: Bool
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
+		        var showDebugInfo: Bool { __safeDI_storage.showDebugInfo }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Engine, Bool) -> Service)?
+		        var safeDIBuilder: ((Engine, Bool) -> Service)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?,
+		                showDebugInfo: Bool,
+		                safeDIBuilder: ((Engine, Bool) -> Service)?
+		            ) {
+		                self.engine = engine
+		                self.showDebugInfo = showDebugInfo
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let engine: (() -> Engine)?
+		            let showDebugInfo: Bool
+		            let safeDIBuilder: ((Engine, Bool) -> Service)?
+		        }
 		    }
 		}
 		#endif
@@ -2240,10 +2739,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            engine: (() -> Engine)? = nil
 		        ) {
-		            self.engine = engine
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?
+		            ) {
+		                self.engine = engine
+		            }
+
+		            let engine: (() -> Engine)?
+		        }
 		    }
 
 		    static func mock(
@@ -2312,10 +2825,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            child: ((String) -> Child)? = nil
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: ((String) -> Child)?
+		        var child: ((String) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((String) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: ((String) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -2336,13 +2863,30 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            child: ((String) -> Child)? = nil,
 		            _ safeDIBuilder: ((Child, String) -> Feature)? = nil
 		        ) {
-		            self.child = child
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let child: ((String) -> Child)?
+		        var child: ((String) -> Child)? { __safeDI_storage.child }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Child, String) -> Feature)?
+		        var safeDIBuilder: ((Child, String) -> Feature)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((String) -> Child)?,
+		                safeDIBuilder: ((Child, String) -> Feature)?
+		            ) {
+		                self.child = child
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let child: ((String) -> Child)?
+		            let safeDIBuilder: ((Child, String) -> Feature)?
+		        }
 		    }
 		}
 		#endif
@@ -2429,12 +2973,29 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            childA: ((String) -> ChildA)? = nil,
 		            childB: ((String) -> ChildB)? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB
+		            )
 		        }
 
-		        let childA: ((String) -> ChildA)?
-		        let childB: ((String) -> ChildB)?
+		        var childA: ((String) -> ChildA)? { __safeDI_storage.childA }
+		        var childB: ((String) -> ChildB)? { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ((String) -> ChildA)?,
+		                childB: ((String) -> ChildB)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		            }
+
+		            let childA: ((String) -> ChildA)?
+		            let childB: ((String) -> ChildB)?
+		        }
 		    }
 
 		    static func mock(
@@ -2457,15 +3018,35 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            childB: ((String) -> ChildB)? = nil,
 		            _ safeDIBuilder: ((ChildA, ChildB, String) -> Feature)? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let childA: ((String) -> ChildA)?
-		        let childB: ((String) -> ChildB)?
+		        var childA: ((String) -> ChildA)? { __safeDI_storage.childA }
+		        var childB: ((String) -> ChildB)? { __safeDI_storage.childB }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((ChildA, ChildB, String) -> Feature)?
+		        var safeDIBuilder: ((ChildA, ChildB, String) -> Feature)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ((String) -> ChildA)?,
+		                childB: ((String) -> ChildB)?,
+		                safeDIBuilder: ((ChildA, ChildB, String) -> Feature)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let childA: ((String) -> ChildA)?
+		            let childB: ((String) -> ChildB)?
+		            let safeDIBuilder: ((ChildA, ChildB, String) -> Feature)?
+		        }
 		    }
 		}
 		#endif
@@ -2551,12 +3132,29 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            childA: ChildA.SafeDIMockConfiguration = .init(),
 		            childB: ((String) -> ChildB)? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB
+		            )
 		        }
 
-		        let childA: ChildA.SafeDIMockConfiguration
-		        let childB: ((String) -> ChildB)?
+		        var childA: ChildA.SafeDIMockConfiguration { __safeDI_storage.childA }
+		        var childB: ((String) -> ChildB)? { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ChildA.SafeDIMockConfiguration,
+		                childB: ((String) -> ChildB)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		            }
+
+		            let childA: ChildA.SafeDIMockConfiguration
+		            let childB: ((String) -> ChildB)?
+		        }
 		    }
 
 		    static func mock(
@@ -2583,15 +3181,35 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            childB: ((String) -> ChildB)? = nil,
 		            _ safeDIBuilder: ((ChildA, ChildB, String) -> Feature)? = nil
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let childA: ChildA.SafeDIMockConfiguration
-		        let childB: ((String) -> ChildB)?
+		        var childA: ChildA.SafeDIMockConfiguration { __safeDI_storage.childA }
+		        var childB: ((String) -> ChildB)? { __safeDI_storage.childB }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((ChildA, ChildB, String) -> Feature)?
+		        var safeDIBuilder: ((ChildA, ChildB, String) -> Feature)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ChildA.SafeDIMockConfiguration,
+		                childB: ((String) -> ChildB)?,
+		                safeDIBuilder: ((ChildA, ChildB, String) -> Feature)?
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let childA: ChildA.SafeDIMockConfiguration
+		            let childB: ((String) -> ChildB)?
+		            let safeDIBuilder: ((ChildA, ChildB, String) -> Feature)?
+		        }
 		    }
 		}
 		#endif
@@ -2649,10 +3267,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            child: ((String) -> Child)? = nil
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: ((String) -> Child)?
+		        var child: ((String) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((String) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: ((String) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -2673,13 +3305,30 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            child: ((String) -> Child)? = nil,
 		            _ safeDIBuilder: ((Child, String) -> Feature)? = nil
 		        ) {
-		            self.child = child
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let child: ((String) -> Child)?
+		        var child: ((String) -> Child)? { __safeDI_storage.child }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Child, String) -> Feature)?
+		        var safeDIBuilder: ((Child, String) -> Feature)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((String) -> Child)?,
+		                safeDIBuilder: ((Child, String) -> Feature)?
+		            ) {
+		                self.child = child
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let child: ((String) -> Child)?
+		            let safeDIBuilder: ((Child, String) -> Feature)?
+		        }
 		    }
 		}
 		#endif
@@ -2756,12 +3405,29 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		            childA: ChildA.SafeDIMockConfiguration = .init(),
 		            childB: ChildB.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.childA = childA
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                childA: childA,
+		                childB: childB
+		            )
 		        }
 
-		        let childA: ChildA.SafeDIMockConfiguration
-		        let childB: ChildB.SafeDIMockConfiguration
+		        var childA: ChildA.SafeDIMockConfiguration { __safeDI_storage.childA }
+		        var childB: ChildB.SafeDIMockConfiguration { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childA: ChildA.SafeDIMockConfiguration,
+		                childB: ChildB.SafeDIMockConfiguration
+		            ) {
+		                self.childA = childA
+		                self.childB = childB
+		            }
+
+		            let childA: ChildA.SafeDIMockConfiguration
+		            let childB: ChildB.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2842,10 +3508,24 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        init(
 		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(

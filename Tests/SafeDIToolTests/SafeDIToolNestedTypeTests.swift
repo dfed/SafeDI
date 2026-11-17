@@ -942,10 +942,24 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		        init(
 		            serviceBuilder: (() -> Feature.Service)? = nil
 		        ) {
-		            self.serviceBuilder = serviceBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                serviceBuilder: serviceBuilder
+		            )
 		        }
 
-		        let serviceBuilder: (() -> Feature.Service)?
+		        var serviceBuilder: (() -> Feature.Service)? { __safeDI_storage.serviceBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                serviceBuilder: (() -> Feature.Service)?
+		            ) {
+		                self.serviceBuilder = serviceBuilder
+		            }
+
+		            let serviceBuilder: (() -> Feature.Service)?
+		        }
 		    }
 
 		    static func mock(
@@ -1001,10 +1015,24 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		        init(
 		            serviceBuilder: (() -> Feature.Service)? = nil
 		        ) {
-		            self.serviceBuilder = serviceBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                serviceBuilder: serviceBuilder
+		            )
 		        }
 
-		        let serviceBuilder: (() -> Feature.Service)?
+		        var serviceBuilder: (() -> Feature.Service)? { __safeDI_storage.serviceBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                serviceBuilder: (() -> Feature.Service)?
+		            ) {
+		                self.serviceBuilder = serviceBuilder
+		            }
+
+		            let serviceBuilder: (() -> Feature.Service)?
+		        }
 		    }
 
 		    static func mock(
@@ -1063,10 +1091,24 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		        init(
 		            service: (() -> Consumer.ServiceProtocol)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> Consumer.ServiceProtocol)?
+		        var service: (() -> Consumer.ServiceProtocol)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Consumer.ServiceProtocol)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> Consumer.ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -1324,10 +1366,24 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		        init(
 		            service: (() -> Feature.Service)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> Feature.Service)?
+		        var service: (() -> Feature.Service)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Feature.Service)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> Feature.Service)?
+		        }
 		    }
 
 		    static func mock(
@@ -1383,10 +1439,24 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		        init(
 		            service: (() -> Feature.Service)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> Feature.Service)?
+		        var service: (() -> Feature.Service)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Feature.Service)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> Feature.Service)?
+		        }
 		    }
 
 		    static func mock(
@@ -1466,10 +1536,24 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		        init(
 		            childBuilder: ((Child.Config) -> Child)? = nil
 		        ) {
-		            self.childBuilder = childBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder
+		            )
 		        }
 
-		        let childBuilder: ((Child.Config) -> Child)?
+		        var childBuilder: ((Child.Config) -> Child)? { __safeDI_storage.childBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childBuilder: ((Child.Config) -> Child)?
+		            ) {
+		                self.childBuilder = childBuilder
+		            }
+
+		            let childBuilder: ((Child.Config) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -1534,10 +1618,24 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		        init(
 		            child: ((Child.Config) -> Child)? = nil
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: ((Child.Config) -> Child)?
+		        var child: ((Child.Config) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((Child.Config) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: ((Child.Config) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -1616,10 +1714,24 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		        init(
 		            childBuilder: ((Feature.Child.Config) -> Feature.Child)? = nil
 		        ) {
-		            self.childBuilder = childBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder
+		            )
 		        }
 
-		        let childBuilder: ((Feature.Child.Config) -> Feature.Child)?
+		        var childBuilder: ((Feature.Child.Config) -> Feature.Child)? { __safeDI_storage.childBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childBuilder: ((Feature.Child.Config) -> Feature.Child)?
+		            ) {
+		                self.childBuilder = childBuilder
+		            }
+
+		            let childBuilder: ((Feature.Child.Config) -> Feature.Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -1704,10 +1816,24 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		        init(
 		            childBuilder: (([Child.Service]) -> Child)? = nil
 		        ) {
-		            self.childBuilder = childBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder
+		            )
 		        }
 
-		        let childBuilder: (([Child.Service]) -> Child)?
+		        var childBuilder: (([Child.Service]) -> Child)? { __safeDI_storage.childBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                childBuilder: (([Child.Service]) -> Child)?
+		            ) {
+		                self.childBuilder = childBuilder
+		            }
+
+		            let childBuilder: (([Child.Service]) -> Child)?
+		        }
 		    }
 
 		    static func mock(

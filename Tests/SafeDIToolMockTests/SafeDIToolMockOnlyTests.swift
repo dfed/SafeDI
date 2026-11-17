@@ -732,10 +732,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> ExternalService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> ExternalService)?
+		        var service: (() -> ExternalService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> ExternalService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> ExternalService)?
+		        }
 		    }
 
 		    static func mock(
@@ -844,10 +858,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> MyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> MyService)?
+		        var service: (() -> MyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> MyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> MyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -905,10 +933,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> MyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> MyService)?
+		        var service: (() -> MyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> MyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> MyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -975,10 +1017,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> MyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> MyService)?
+		        var service: (() -> MyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> MyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> MyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -1046,10 +1102,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> MyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> MyService)?
+		        var service: (() -> MyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> MyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> MyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -1117,10 +1187,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> MyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> MyService)?
+		        var service: (() -> MyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> MyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> MyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -1209,10 +1293,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: MyService.SafeDIMockConfiguration
+		        var service: MyService.SafeDIMockConfiguration { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1243,15 +1341,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            repository: ((Database) -> Repository)? = nil,
 		            _ safeDIBuilder: ((Repository) -> MyService)? = nil
 		        ) {
-		            self.database = database
-		            self.repository = repository
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                repository: repository,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let database: (() -> Database)?
-		        let repository: ((Database) -> Repository)?
+		        var database: (() -> Database)? { __safeDI_storage.database }
+		        var repository: ((Database) -> Repository)? { __safeDI_storage.repository }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Repository) -> MyService)?
+		        var safeDIBuilder: ((Repository) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                repository: ((Database) -> Repository)?,
+		                safeDIBuilder: ((Repository) -> MyService)?
+		            ) {
+		                self.database = database
+		                self.repository = repository
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let database: (() -> Database)?
+		            let repository: ((Database) -> Repository)?
+		            let safeDIBuilder: ((Repository) -> MyService)?
+		        }
 		    }
 		}
 		#endif
@@ -1317,10 +1435,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: MyService.SafeDIMockConfiguration
+		        var service: MyService.SafeDIMockConfiguration { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1352,13 +1484,30 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            store: (() -> Store)? = nil,
 		            _ safeDIBuilder: ((Reader) -> MyService)? = nil
 		        ) {
-		            self.store = store
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                store: store,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let store: (() -> Store)?
+		        var store: (() -> Store)? { __safeDI_storage.store }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Reader) -> MyService)?
+		        var safeDIBuilder: ((Reader) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                store: (() -> Store)?,
+		                safeDIBuilder: ((Reader) -> MyService)?
+		            ) {
+		                self.store = store
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let store: (() -> Store)?
+		            let safeDIBuilder: ((Reader) -> MyService)?
+		        }
 		    }
 		}
 		#endif
@@ -1436,10 +1585,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: MyService.SafeDIMockConfiguration
+		        var service: MyService.SafeDIMockConfiguration { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1468,13 +1631,30 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            repository: (() -> Repository)? = nil,
 		            _ safeDIBuilder: ((Repository) -> MyService)? = nil
 		        ) {
-		            self.repository = repository
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                repository: repository,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let repository: (() -> Repository)?
+		        var repository: (() -> Repository)? { __safeDI_storage.repository }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Repository) -> MyService)?
+		        var safeDIBuilder: ((Repository) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                repository: (() -> Repository)?,
+		                safeDIBuilder: ((Repository) -> MyService)?
+		            ) {
+		                self.repository = repository
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let repository: (() -> Repository)?
+		            let safeDIBuilder: ((Repository) -> MyService)?
+		        }
 		    }
 		}
 		#endif
@@ -1549,12 +1729,29 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            database: (() -> Database)? = nil,
 		            service: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.database = database
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                service: service
+		            )
 		        }
 
-		        let database: (() -> Database)?
-		        let service: MyService.SafeDIMockConfiguration
+		        var database: (() -> Database)? { __safeDI_storage.database }
+		        var service: MyService.SafeDIMockConfiguration { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                service: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.database = database
+		                self.service = service
+		            }
+
+		            let database: (() -> Database)?
+		            let service: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1584,13 +1781,30 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            repository: ((Database) -> Repository)? = nil,
 		            _ safeDIBuilder: ((Repository) -> MyService)? = nil
 		        ) {
-		            self.repository = repository
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                repository: repository,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let repository: ((Database) -> Repository)?
+		        var repository: ((Database) -> Repository)? { __safeDI_storage.repository }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Repository) -> MyService)?
+		        var safeDIBuilder: ((Repository) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                repository: ((Database) -> Repository)?,
+		                safeDIBuilder: ((Repository) -> MyService)?
+		            ) {
+		                self.repository = repository
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let repository: ((Database) -> Repository)?
+		            let safeDIBuilder: ((Repository) -> MyService)?
+		        }
 		    }
 		}
 		#endif
@@ -1701,10 +1915,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            serviceBuilder: (() -> MyService)? = nil
 		        ) {
-		            self.serviceBuilder = serviceBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                serviceBuilder: serviceBuilder
+		            )
 		        }
 
-		        let serviceBuilder: (() -> MyService)?
+		        var serviceBuilder: (() -> MyService)? { __safeDI_storage.serviceBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                serviceBuilder: (() -> MyService)?
+		            ) {
+		                self.serviceBuilder = serviceBuilder
+		            }
+
+		            let serviceBuilder: (() -> MyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -1780,10 +2008,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> ServiceProtocol)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> ServiceProtocol)?
+		        var service: (() -> ServiceProtocol)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> ServiceProtocol)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -1857,12 +2099,29 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            service: (() -> ServiceProtocol)? = nil,
 		            concreteService: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.service = service
-		            self.concreteService = concreteService
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                concreteService: concreteService
+		            )
 		        }
 
-		        let service: (() -> ServiceProtocol)?
-		        let concreteService: MyService.SafeDIMockConfiguration
+		        var service: (() -> ServiceProtocol)? { __safeDI_storage.service }
+		        var concreteService: MyService.SafeDIMockConfiguration { __safeDI_storage.concreteService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> ServiceProtocol)?,
+		                concreteService: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.service = service
+		                self.concreteService = concreteService
+		            }
+
+		            let service: (() -> ServiceProtocol)?
+		            let concreteService: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1892,13 +2151,30 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            database: (() -> Database)? = nil,
 		            _ safeDIBuilder: ((Database) -> MyService)? = nil
 		        ) {
-		            self.database = database
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let database: (() -> Database)?
+		        var database: (() -> Database)? { __safeDI_storage.database }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Database) -> MyService)?
+		        var safeDIBuilder: ((Database) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                safeDIBuilder: ((Database) -> MyService)?
+		            ) {
+		                self.database = database
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let database: (() -> Database)?
+		            let safeDIBuilder: ((Database) -> MyService)?
+		        }
 		    }
 		}
 		#endif
@@ -2064,10 +2340,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> MyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> MyService)?
+		        var service: (() -> MyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> MyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> MyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -2132,10 +2422,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> ServiceProtocol)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> ServiceProtocol)?
+		        var service: (() -> ServiceProtocol)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> ServiceProtocol)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -2393,10 +2697,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> Service)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> Service)?
+		        var service: (() -> Service)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Service)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> Service)?
+		        }
 		    }
 
 		    static func mock(
@@ -2473,10 +2791,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> ServiceProtocol)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> ServiceProtocol)?
+		        var service: (() -> ServiceProtocol)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> ServiceProtocol)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -2538,10 +2870,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> AnyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> AnyService)?
+		        var service: (() -> AnyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> AnyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> AnyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -2609,10 +2955,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> AnyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> AnyService)?
+		        var service: (() -> AnyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> AnyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> AnyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -2671,10 +3031,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> AnyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> AnyService)?
+		        var service: (() -> AnyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> AnyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> AnyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -2735,10 +3109,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> ServiceProtocol)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> ServiceProtocol)?
+		        var service: (() -> ServiceProtocol)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> ServiceProtocol)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -2855,10 +3243,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> MyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> MyService)?
+		        var service: (() -> MyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> MyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> MyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -2930,10 +3332,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> MyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> MyService)?
+		        var service: (() -> MyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> MyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> MyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -3012,10 +3428,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> MyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> MyService)?
+		        var service: (() -> MyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> MyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> MyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -3091,10 +3521,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> ServiceProtocol)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> ServiceProtocol)?
+		        var service: (() -> ServiceProtocol)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> ServiceProtocol)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -3169,10 +3613,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> MyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> MyService)?
+		        var service: (() -> MyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> MyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> MyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -3299,10 +3757,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> ServiceProtocol)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> ServiceProtocol)?
+		        var service: (() -> ServiceProtocol)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> ServiceProtocol)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -3430,10 +3902,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: MyService.SafeDIMockConfiguration
+		        var service: MyService.SafeDIMockConfiguration { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -3504,10 +3990,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> ServiceProtocol)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> ServiceProtocol)?
+		        var service: (() -> ServiceProtocol)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> ServiceProtocol)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -3570,10 +4070,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            serviceBuilder: ((String) -> ServiceProtocol)? = nil
 		        ) {
-		            self.serviceBuilder = serviceBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                serviceBuilder: serviceBuilder
+		            )
 		        }
 
-		        let serviceBuilder: ((String) -> ServiceProtocol)?
+		        var serviceBuilder: ((String) -> ServiceProtocol)? { __safeDI_storage.serviceBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                serviceBuilder: ((String) -> ServiceProtocol)?
+		            ) {
+		                self.serviceBuilder = serviceBuilder
+		            }
+
+		            let serviceBuilder: ((String) -> ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -3697,10 +4211,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            other: (() -> OtherProtocol)? = nil
 		        ) {
-		            self.other = other
+		            __safeDI_storage = __safeDI_Storage(
+		                other: other
+		            )
 		        }
 
-		        let other: (() -> OtherProtocol)?
+		        var other: (() -> OtherProtocol)? { __safeDI_storage.other }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                other: (() -> OtherProtocol)?
+		            ) {
+		                self.other = other
+		            }
+
+		            let other: (() -> OtherProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -3763,10 +4291,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            other: (() -> OtherProtocol)? = nil
 		        ) {
-		            self.other = other
+		            __safeDI_storage = __safeDI_Storage(
+		                other: other
+		            )
 		        }
 
-		        let other: (() -> OtherProtocol)?
+		        var other: (() -> OtherProtocol)? { __safeDI_storage.other }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                other: (() -> OtherProtocol)?
+		            ) {
+		                self.other = other
+		            }
+
+		            let other: (() -> OtherProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -3828,10 +4370,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            other: (() -> OtherProtocol)? = nil
 		        ) {
-		            self.other = other
+		            __safeDI_storage = __safeDI_Storage(
+		                other: other
+		            )
 		        }
 
-		        let other: (() -> OtherProtocol)?
+		        var other: (() -> OtherProtocol)? { __safeDI_storage.other }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                other: (() -> OtherProtocol)?
+		            ) {
+		                self.other = other
+		            }
+
+		            let other: (() -> OtherProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -3903,10 +4459,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            other: (() -> OtherProtocol)? = nil
 		        ) {
-		            self.other = other
+		            __safeDI_storage = __safeDI_Storage(
+		                other: other
+		            )
 		        }
 
-		        let other: (() -> OtherProtocol)?
+		        var other: (() -> OtherProtocol)? { __safeDI_storage.other }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                other: (() -> OtherProtocol)?
+		            ) {
+		                self.other = other
+		            }
+
+		            let other: (() -> OtherProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -3986,10 +4556,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> MyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> MyService)?
+		        var service: (() -> MyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> MyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> MyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -4064,10 +4648,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> MyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> MyService)?
+		        var service: (() -> MyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> MyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> MyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -4135,10 +4733,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> MyService)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> MyService)?
+		        var service: (() -> MyService)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> MyService)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> MyService)?
+		        }
 		    }
 
 		    static func mock(
@@ -4204,10 +4816,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> ServiceProtocol)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> ServiceProtocol)?
+		        var service: (() -> ServiceProtocol)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> ServiceProtocol)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -4289,10 +4915,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> ServiceProtocol)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> ServiceProtocol)?
+		        var service: (() -> ServiceProtocol)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> ServiceProtocol)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -4411,10 +5051,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            engine: (() -> Engine)? = nil
 		        ) {
-		            self.engine = engine
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?
+		            ) {
+		                self.engine = engine
+		            }
+
+		            let engine: (() -> Engine)?
+		        }
 		    }
 
 		    static func mock(
@@ -4551,10 +5205,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: ((Engine) -> ServiceProtocol)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: ((Engine) -> ServiceProtocol)?
+		        var service: ((Engine) -> ServiceProtocol)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: ((Engine) -> ServiceProtocol)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: ((Engine) -> ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -4642,10 +5310,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: ((Engine) -> ServiceProtocol)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: ((Engine) -> ServiceProtocol)?
+		        var service: ((Engine) -> ServiceProtocol)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: ((Engine) -> ServiceProtocol)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: ((Engine) -> ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -4714,10 +5396,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: (() -> ServiceProtocol)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> ServiceProtocol)?
+		        var service: (() -> ServiceProtocol)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> ServiceProtocol)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> ServiceProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -4787,10 +5483,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            other: (() -> OtherProtocol)? = nil
 		        ) {
-		            self.other = other
+		            __safeDI_storage = __safeDI_Storage(
+		                other: other
+		            )
 		        }
 
-		        let other: (() -> OtherProtocol)?
+		        var other: (() -> OtherProtocol)? { __safeDI_storage.other }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                other: (() -> OtherProtocol)?
+		            ) {
+		                self.other = other
+		            }
+
+		            let other: (() -> OtherProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -4863,12 +5573,29 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            service: MyService.SafeDIMockConfiguration = .init(),
 		            concreteService: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.service = service
-		            self.concreteService = concreteService
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                concreteService: concreteService
+		            )
 		        }
 
-		        let service: MyService.SafeDIMockConfiguration
-		        let concreteService: MyService.SafeDIMockConfiguration
+		        var service: MyService.SafeDIMockConfiguration { __safeDI_storage.service }
+		        var concreteService: MyService.SafeDIMockConfiguration { __safeDI_storage.concreteService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: MyService.SafeDIMockConfiguration,
+		                concreteService: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.service = service
+		                self.concreteService = concreteService
+		            }
+
+		            let service: MyService.SafeDIMockConfiguration
+		            let concreteService: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -4902,13 +5629,30 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            database: (() -> Database)? = nil,
 		            _ safeDIBuilder: ((Database) -> MyService)? = nil
 		        ) {
-		            self.database = database
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let database: (() -> Database)?
+		        var database: (() -> Database)? { __safeDI_storage.database }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Database) -> MyService)?
+		        var safeDIBuilder: ((Database) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                safeDIBuilder: ((Database) -> MyService)?
+		            ) {
+		                self.database = database
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let database: (() -> Database)?
+		            let safeDIBuilder: ((Database) -> MyService)?
+		        }
 		    }
 		}
 		#endif
@@ -4969,12 +5713,29 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            service: MyService.SafeDIMockConfiguration = .init(),
 		            concreteService: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.service = service
-		            self.concreteService = concreteService
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                concreteService: concreteService
+		            )
 		        }
 
-		        let service: MyService.SafeDIMockConfiguration
-		        let concreteService: MyService.SafeDIMockConfiguration
+		        var service: MyService.SafeDIMockConfiguration { __safeDI_storage.service }
+		        var concreteService: MyService.SafeDIMockConfiguration { __safeDI_storage.concreteService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: MyService.SafeDIMockConfiguration,
+		                concreteService: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.service = service
+		                self.concreteService = concreteService
+		            }
+
+		            let service: MyService.SafeDIMockConfiguration
+		            let concreteService: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5006,13 +5767,30 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            title: String = "production",
 		            _ safeDIBuilder: ((String) -> MyService)? = nil
 		        ) {
-		            self.title = title
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                title: title,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let title: String
+		        var title: String { __safeDI_storage.title }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((String) -> MyService)?
+		        var safeDIBuilder: ((String) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                title: String,
+		                safeDIBuilder: ((String) -> MyService)?
+		            ) {
+		                self.title = title
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let title: String
+		            let safeDIBuilder: ((String) -> MyService)?
+		        }
 		    }
 		}
 		#endif
@@ -5087,12 +5865,29 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            service: MyService.SafeDIMockConfiguration = .init(),
 		            concreteService: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.service = service
-		            self.concreteService = concreteService
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service,
+		                concreteService: concreteService
+		            )
 		        }
 
-		        let service: MyService.SafeDIMockConfiguration
-		        let concreteService: MyService.SafeDIMockConfiguration
+		        var service: MyService.SafeDIMockConfiguration { __safeDI_storage.service }
+		        var concreteService: MyService.SafeDIMockConfiguration { __safeDI_storage.concreteService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: MyService.SafeDIMockConfiguration,
+		                concreteService: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.service = service
+		                self.concreteService = concreteService
+		            }
+
+		            let service: MyService.SafeDIMockConfiguration
+		            let concreteService: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5126,13 +5921,30 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            database: (() -> Database)? = nil,
 		            _ safeDIBuilder: ((Database) -> MyService)? = nil
 		        ) {
-		            self.database = database
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let database: (() -> Database)?
+		        var database: (() -> Database)? { __safeDI_storage.database }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Database) -> MyService)?
+		        var safeDIBuilder: ((Database) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                safeDIBuilder: ((Database) -> MyService)?
+		            ) {
+		                self.database = database
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let database: (() -> Database)?
+		            let safeDIBuilder: ((Database) -> MyService)?
+		        }
 		    }
 		}
 		#endif
@@ -5235,10 +6047,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            concreteService: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.concreteService = concreteService
+		            __safeDI_storage = __safeDI_Storage(
+		                concreteService: concreteService
+		            )
 		        }
 
-		        let concreteService: MyService.SafeDIMockConfiguration
+		        var concreteService: MyService.SafeDIMockConfiguration { __safeDI_storage.concreteService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                concreteService: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.concreteService = concreteService
+		            }
+
+		            let concreteService: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5267,10 +6093,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            second: Second.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.second = second
+		            __safeDI_storage = __safeDI_Storage(
+		                second: second
+		            )
 		        }
 
-		        let second: Second.SafeDIMockConfiguration
+		        var second: Second.SafeDIMockConfiguration { __safeDI_storage.second }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                second: Second.SafeDIMockConfiguration
+		            ) {
+		                self.second = second
+		            }
+
+		            let second: Second.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5313,15 +6153,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            logger: (() -> Logger)? = nil,
 		            _ safeDIBuilder: ((Database, Logger) -> MyService)? = nil
 		        ) {
-		            self.database = database
-		            self.logger = logger
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                logger: logger,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let database: (() -> Database)?
-		        let logger: (() -> Logger)?
+		        var database: (() -> Database)? { __safeDI_storage.database }
+		        var logger: (() -> Logger)? { __safeDI_storage.logger }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Database, Logger) -> MyService)?
+		        var safeDIBuilder: ((Database, Logger) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                logger: (() -> Logger)?,
+		                safeDIBuilder: ((Database, Logger) -> MyService)?
+		            ) {
+		                self.database = database
+		                self.logger = logger
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let database: (() -> Database)?
+		            let logger: (() -> Logger)?
+		            let safeDIBuilder: ((Database, Logger) -> MyService)?
+		        }
 		    }
 		}
 
@@ -5333,15 +6193,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            service: MyService.SafeDIMockConfiguration = .init(),
 		            _ safeDIBuilder: ((Instantiator<Second>, ServiceProtocol) -> First)? = nil
 		        ) {
-		            self.secondBuilder = secondBuilder
-		            self.service = service
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                secondBuilder: secondBuilder,
+		                service: service,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let secondBuilder: Second.SafeDIMockConfiguration
-		        let service: MyService.SafeDIMockConfiguration
+		        var secondBuilder: Second.SafeDIMockConfiguration { __safeDI_storage.secondBuilder }
+		        var service: MyService.SafeDIMockConfiguration { __safeDI_storage.service }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<Second>, ServiceProtocol) -> First)?
+		        var safeDIBuilder: ((Instantiator<Second>, ServiceProtocol) -> First)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                secondBuilder: Second.SafeDIMockConfiguration,
+		                service: MyService.SafeDIMockConfiguration,
+		                safeDIBuilder: ((Instantiator<Second>, ServiceProtocol) -> First)?
+		            ) {
+		                self.secondBuilder = secondBuilder
+		                self.service = service
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let secondBuilder: Second.SafeDIMockConfiguration
+		            let service: MyService.SafeDIMockConfiguration
+		            let safeDIBuilder: ((Instantiator<Second>, ServiceProtocol) -> First)?
+		        }
 		    }
 		}
 
@@ -5351,11 +6231,25 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            _ safeDIBuilder: ((Instantiator<First>) -> Second)? = nil
 		        ) {
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<First>) -> Second)?
+		        var safeDIBuilder: ((Instantiator<First>) -> Second)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                safeDIBuilder: ((Instantiator<First>) -> Second)?
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let safeDIBuilder: ((Instantiator<First>) -> Second)?
+		        }
 		    }
 		}
 		#endif
@@ -5458,10 +6352,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            second: Second.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.second = second
+		            __safeDI_storage = __safeDI_Storage(
+		                second: second
+		            )
 		        }
 
-		        let second: Second.SafeDIMockConfiguration
+		        var second: Second.SafeDIMockConfiguration { __safeDI_storage.second }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                second: Second.SafeDIMockConfiguration
+		            ) {
+		                self.second = second
+		            }
+
+		            let second: Second.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5502,10 +6410,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            concreteService: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.concreteService = concreteService
+		            __safeDI_storage = __safeDI_Storage(
+		                concreteService: concreteService
+		            )
 		        }
 
-		        let concreteService: MyService.SafeDIMockConfiguration
+		        var concreteService: MyService.SafeDIMockConfiguration { __safeDI_storage.concreteService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                concreteService: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.concreteService = concreteService
+		            }
+
+		            let concreteService: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5536,15 +6458,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            logger: (() -> Logger)? = nil,
 		            _ safeDIBuilder: ((Database, Logger) -> MyService)? = nil
 		        ) {
-		            self.database = database
-		            self.logger = logger
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                logger: logger,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let database: (() -> Database)?
-		        let logger: (() -> Logger)?
+		        var database: (() -> Database)? { __safeDI_storage.database }
+		        var logger: (() -> Logger)? { __safeDI_storage.logger }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Database, Logger) -> MyService)?
+		        var safeDIBuilder: ((Database, Logger) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                logger: (() -> Logger)?,
+		                safeDIBuilder: ((Database, Logger) -> MyService)?
+		            ) {
+		                self.database = database
+		                self.logger = logger
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let database: (() -> Database)?
+		            let logger: (() -> Logger)?
+		            let safeDIBuilder: ((Database, Logger) -> MyService)?
+		        }
 		    }
 		}
 
@@ -5556,15 +6498,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            service: MyService.SafeDIMockConfiguration = .init(),
 		            _ safeDIBuilder: ((Instantiator<Second>, ServiceProtocol) -> First)? = nil
 		        ) {
-		            self.secondBuilder = secondBuilder
-		            self.service = service
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                secondBuilder: secondBuilder,
+		                service: service,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let secondBuilder: Second.SafeDIMockConfiguration
-		        let service: MyService.SafeDIMockConfiguration
+		        var secondBuilder: Second.SafeDIMockConfiguration { __safeDI_storage.secondBuilder }
+		        var service: MyService.SafeDIMockConfiguration { __safeDI_storage.service }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<Second>, ServiceProtocol) -> First)?
+		        var safeDIBuilder: ((Instantiator<Second>, ServiceProtocol) -> First)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                secondBuilder: Second.SafeDIMockConfiguration,
+		                service: MyService.SafeDIMockConfiguration,
+		                safeDIBuilder: ((Instantiator<Second>, ServiceProtocol) -> First)?
+		            ) {
+		                self.secondBuilder = secondBuilder
+		                self.service = service
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let secondBuilder: Second.SafeDIMockConfiguration
+		            let service: MyService.SafeDIMockConfiguration
+		            let safeDIBuilder: ((Instantiator<Second>, ServiceProtocol) -> First)?
+		        }
 		    }
 		}
 
@@ -5574,11 +6536,25 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            _ safeDIBuilder: ((Instantiator<First>) -> Second)? = nil
 		        ) {
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<First>) -> Second)?
+		        var safeDIBuilder: ((Instantiator<First>) -> Second)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                safeDIBuilder: ((Instantiator<First>) -> Second)?
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let safeDIBuilder: ((Instantiator<First>) -> Second)?
+		        }
 		    }
 		}
 		#endif
@@ -5647,12 +6623,29 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            concreteService: MyService.SafeDIMockConfiguration = .init(),
 		            service: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.concreteService = concreteService
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                concreteService: concreteService,
+		                service: service
+		            )
 		        }
 
-		        let concreteService: MyService.SafeDIMockConfiguration
-		        let service: MyService.SafeDIMockConfiguration
+		        var concreteService: MyService.SafeDIMockConfiguration { __safeDI_storage.concreteService }
+		        var service: MyService.SafeDIMockConfiguration { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                concreteService: MyService.SafeDIMockConfiguration,
+		                service: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.concreteService = concreteService
+		                self.service = service
+		            }
+
+		            let concreteService: MyService.SafeDIMockConfiguration
+		            let service: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5687,15 +6680,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            name: String = "mock",
 		            _ safeDIBuilder: ((Database, String) -> MyService)? = nil
 		        ) {
-		            self.database = database
-		            self.name = name
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                name: name,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let database: (() -> Database)?
-		        let name: String
+		        var database: (() -> Database)? { __safeDI_storage.database }
+		        var name: String { __safeDI_storage.name }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Database, String) -> MyService)?
+		        var safeDIBuilder: ((Database, String) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                name: String,
+		                safeDIBuilder: ((Database, String) -> MyService)?
+		            ) {
+		                self.database = database
+		                self.name = name
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let database: (() -> Database)?
+		            let name: String
+		            let safeDIBuilder: ((Database, String) -> MyService)?
+		        }
 		    }
 		}
 		#endif
@@ -5768,10 +6781,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            concreteService: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.concreteService = concreteService
+		            __safeDI_storage = __safeDI_Storage(
+		                concreteService: concreteService
+		            )
 		        }
 
-		        let concreteService: MyService.SafeDIMockConfiguration
+		        var concreteService: MyService.SafeDIMockConfiguration { __safeDI_storage.concreteService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                concreteService: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.concreteService = concreteService
+		            }
+
+		            let concreteService: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5799,10 +6826,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: MyService.SafeDIMockConfiguration
+		        var service: MyService.SafeDIMockConfiguration { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5832,15 +6873,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            name: String = "mock",
 		            _ safeDIBuilder: ((Database, String) -> MyService)? = nil
 		        ) {
-		            self.database = database
-		            self.name = name
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                name: name,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let database: (() -> Database)?
-		        let name: String
+		        var database: (() -> Database)? { __safeDI_storage.database }
+		        var name: String { __safeDI_storage.name }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Database, String) -> MyService)?
+		        var safeDIBuilder: ((Database, String) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                name: String,
+		                safeDIBuilder: ((Database, String) -> MyService)?
+		            ) {
+		                self.database = database
+		                self.name = name
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let database: (() -> Database)?
+		            let name: String
+		            let safeDIBuilder: ((Database, String) -> MyService)?
+		        }
 		    }
 		}
 		#endif
@@ -5913,10 +6974,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            service: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: MyService.SafeDIMockConfiguration
+		        var service: MyService.SafeDIMockConfiguration { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5944,10 +7019,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            concreteService: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.concreteService = concreteService
+		            __safeDI_storage = __safeDI_Storage(
+		                concreteService: concreteService
+		            )
 		        }
 
-		        let concreteService: MyService.SafeDIMockConfiguration
+		        var concreteService: MyService.SafeDIMockConfiguration { __safeDI_storage.concreteService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                concreteService: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.concreteService = concreteService
+		            }
+
+		            let concreteService: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -5977,15 +7066,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            name: String = "mock",
 		            _ safeDIBuilder: ((Database, String) -> MyService)? = nil
 		        ) {
-		            self.database = database
-		            self.name = name
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                name: name,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let database: (() -> Database)?
-		        let name: String
+		        var database: (() -> Database)? { __safeDI_storage.database }
+		        var name: String { __safeDI_storage.name }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Database, String) -> MyService)?
+		        var safeDIBuilder: ((Database, String) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                name: String,
+		                safeDIBuilder: ((Database, String) -> MyService)?
+		            ) {
+		                self.database = database
+		                self.name = name
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let database: (() -> Database)?
+		            let name: String
+		            let safeDIBuilder: ((Database, String) -> MyService)?
+		        }
 		    }
 		}
 		#endif
@@ -6049,10 +7158,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            concreteService: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.concreteService = concreteService
+		            __safeDI_storage = __safeDI_Storage(
+		                concreteService: concreteService
+		            )
 		        }
 
-		        let concreteService: MyService.SafeDIMockConfiguration
+		        var concreteService: MyService.SafeDIMockConfiguration { __safeDI_storage.concreteService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                concreteService: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.concreteService = concreteService
+		            }
+
+		            let concreteService: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6082,15 +7205,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            name: String = "mock",
 		            _ safeDIBuilder: ((Database, String) -> MyService)? = nil
 		        ) {
-		            self.database = database
-		            self.name = name
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                name: name,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let database: (() -> Database)?
-		        let name: String
+		        var database: (() -> Database)? { __safeDI_storage.database }
+		        var name: String { __safeDI_storage.name }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Database, String) -> MyService)?
+		        var safeDIBuilder: ((Database, String) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                name: String,
+		                safeDIBuilder: ((Database, String) -> MyService)?
+		            ) {
+		                self.database = database
+		                self.name = name
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let database: (() -> Database)?
+		            let name: String
+		            let safeDIBuilder: ((Database, String) -> MyService)?
+		        }
 		    }
 		}
 		#endif
@@ -6155,10 +7298,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            concreteService: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.concreteService = concreteService
+		            __safeDI_storage = __safeDI_Storage(
+		                concreteService: concreteService
+		            )
 		        }
 
-		        let concreteService: MyService.SafeDIMockConfiguration
+		        var concreteService: MyService.SafeDIMockConfiguration { __safeDI_storage.concreteService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                concreteService: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.concreteService = concreteService
+		            }
+
+		            let concreteService: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6188,15 +7345,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            count: Int = 3,
 		            _ safeDIBuilder: ((Database, Int) -> MyService)? = nil
 		        ) {
-		            self.database = database
-		            self.count = count
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                count: count,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let database: (() -> Database)?
-		        let count: Int
+		        var database: (() -> Database)? { __safeDI_storage.database }
+		        var count: Int { __safeDI_storage.count }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Database, Int) -> MyService)?
+		        var safeDIBuilder: ((Database, Int) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                count: Int,
+		                safeDIBuilder: ((Database, Int) -> MyService)?
+		            ) {
+		                self.database = database
+		                self.count = count
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let database: (() -> Database)?
+		            let count: Int
+		            let safeDIBuilder: ((Database, Int) -> MyService)?
+		        }
 		    }
 		}
 		#endif
@@ -6257,12 +7434,29 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            concreteService: MyService.SafeDIMockConfiguration = .init(),
 		            service: MyService.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.concreteService = concreteService
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                concreteService: concreteService,
+		                service: service
+		            )
 		        }
 
-		        let concreteService: MyService.SafeDIMockConfiguration
-		        let service: MyService.SafeDIMockConfiguration
+		        var concreteService: MyService.SafeDIMockConfiguration { __safeDI_storage.concreteService }
+		        var service: MyService.SafeDIMockConfiguration { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                concreteService: MyService.SafeDIMockConfiguration,
+		                service: MyService.SafeDIMockConfiguration
+		            ) {
+		                self.concreteService = concreteService
+		                self.service = service
+		            }
+
+		            let concreteService: MyService.SafeDIMockConfiguration
+		            let service: MyService.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6297,15 +7491,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            name: String = "production",
 		            _ safeDIBuilder: ((Database, String) -> MyService)? = nil
 		        ) {
-		            self.database = database
-		            self.name = name
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                name: name,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let database: (() -> Database)?
-		        let name: String
+		        var database: (() -> Database)? { __safeDI_storage.database }
+		        var name: String { __safeDI_storage.name }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Database, String) -> MyService)?
+		        var safeDIBuilder: ((Database, String) -> MyService)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                name: String,
+		                safeDIBuilder: ((Database, String) -> MyService)?
+		            ) {
+		                self.database = database
+		                self.name = name
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let database: (() -> Database)?
+		            let name: String
+		            let safeDIBuilder: ((Database, String) -> MyService)?
+		        }
 		    }
 		}
 		#endif
@@ -6372,10 +7586,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            bBuilder: B.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.bBuilder = bBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                bBuilder: bBuilder
+		            )
 		        }
 
-		        let bBuilder: B.SafeDIMockConfiguration
+		        var bBuilder: B.SafeDIMockConfiguration { __safeDI_storage.bBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                bBuilder: B.SafeDIMockConfiguration
+		            ) {
+		                self.bBuilder = bBuilder
+		            }
+
+		            let bBuilder: B.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6405,15 +7633,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            label: String = "mock",
 		            _ safeDIBuilder: ((Instantiator<B>, String) -> A)? = nil
 		        ) {
-		            self.bBuilder = bBuilder
-		            self.label = label
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                bBuilder: bBuilder,
+		                label: label,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let bBuilder: B.SafeDIMockConfiguration
-		        let label: String
+		        var bBuilder: B.SafeDIMockConfiguration { __safeDI_storage.bBuilder }
+		        var label: String { __safeDI_storage.label }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<B>, String) -> A)?
+		        var safeDIBuilder: ((Instantiator<B>, String) -> A)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                bBuilder: B.SafeDIMockConfiguration,
+		                label: String,
+		                safeDIBuilder: ((Instantiator<B>, String) -> A)?
+		            ) {
+		                self.bBuilder = bBuilder
+		                self.label = label
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let bBuilder: B.SafeDIMockConfiguration
+		            let label: String
+		            let safeDIBuilder: ((Instantiator<B>, String) -> A)?
+		        }
 		    }
 		}
 		#endif
@@ -6430,10 +7678,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6460,11 +7722,25 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            _ safeDIBuilder: ((Instantiator<A>) -> B)? = nil
 		        ) {
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<A>) -> B)?
+		        var safeDIBuilder: ((Instantiator<A>) -> B)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                safeDIBuilder: ((Instantiator<A>) -> B)?
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let safeDIBuilder: ((Instantiator<A>) -> B)?
+		        }
 		    }
 		}
 		#endif
@@ -6532,10 +7808,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            bBuilder: B.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.bBuilder = bBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                bBuilder: bBuilder
+		            )
 		        }
 
-		        let bBuilder: B.SafeDIMockConfiguration
+		        var bBuilder: B.SafeDIMockConfiguration { __safeDI_storage.bBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                bBuilder: B.SafeDIMockConfiguration
+		            ) {
+		                self.bBuilder = bBuilder
+		            }
+
+		            let bBuilder: B.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6565,15 +7855,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            label: String = mockLabel,
 		            _ safeDIBuilder: ((Instantiator<B>, String) -> A)? = nil
 		        ) {
-		            self.bBuilder = bBuilder
-		            self.label = label
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                bBuilder: bBuilder,
+		                label: label,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let bBuilder: B.SafeDIMockConfiguration
-		        let label: String
+		        var bBuilder: B.SafeDIMockConfiguration { __safeDI_storage.bBuilder }
+		        var label: String { __safeDI_storage.label }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<B>, String) -> A)?
+		        var safeDIBuilder: ((Instantiator<B>, String) -> A)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                bBuilder: B.SafeDIMockConfiguration,
+		                label: String,
+		                safeDIBuilder: ((Instantiator<B>, String) -> A)?
+		            ) {
+		                self.bBuilder = bBuilder
+		                self.label = label
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let bBuilder: B.SafeDIMockConfiguration
+		            let label: String
+		            let safeDIBuilder: ((Instantiator<B>, String) -> A)?
+		        }
 		    }
 		}
 		#endif
@@ -6590,10 +7900,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6620,11 +7944,25 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            _ safeDIBuilder: ((Instantiator<A>) -> B)? = nil
 		        ) {
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<A>) -> B)?
+		        var safeDIBuilder: ((Instantiator<A>) -> B)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                safeDIBuilder: ((Instantiator<A>) -> B)?
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let safeDIBuilder: ((Instantiator<A>) -> B)?
+		        }
 		    }
 		}
 		#endif
@@ -6690,10 +8028,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            bBuilder: B.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.bBuilder = bBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                bBuilder: bBuilder
+		            )
 		        }
 
-		        let bBuilder: B.SafeDIMockConfiguration
+		        var bBuilder: B.SafeDIMockConfiguration { __safeDI_storage.bBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                bBuilder: B.SafeDIMockConfiguration
+		            ) {
+		                self.bBuilder = bBuilder
+		            }
+
+		            let bBuilder: B.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6723,15 +8075,35 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            count: Int = 3,
 		            _ safeDIBuilder: ((Instantiator<B>, Int) -> A)? = nil
 		        ) {
-		            self.bBuilder = bBuilder
-		            self.count = count
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                bBuilder: bBuilder,
+		                count: count,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let bBuilder: B.SafeDIMockConfiguration
-		        let count: Int
+		        var bBuilder: B.SafeDIMockConfiguration { __safeDI_storage.bBuilder }
+		        var count: Int { __safeDI_storage.count }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<B>, Int) -> A)?
+		        var safeDIBuilder: ((Instantiator<B>, Int) -> A)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                bBuilder: B.SafeDIMockConfiguration,
+		                count: Int,
+		                safeDIBuilder: ((Instantiator<B>, Int) -> A)?
+		            ) {
+		                self.bBuilder = bBuilder
+		                self.count = count
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let bBuilder: B.SafeDIMockConfiguration
+		            let count: Int
+		            let safeDIBuilder: ((Instantiator<B>, Int) -> A)?
+		        }
 		    }
 		}
 		#endif
@@ -6748,10 +8120,24 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            aBuilder: A.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -6778,11 +8164,25 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        init(
 		            _ safeDIBuilder: ((Instantiator<A>) -> B)? = nil
 		        ) {
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<A>) -> B)?
+		        var safeDIBuilder: ((Instantiator<A>) -> B)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                safeDIBuilder: ((Instantiator<A>) -> B)?
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let safeDIBuilder: ((Instantiator<A>) -> B)?
+		        }
 		    }
 		}
 		#endif

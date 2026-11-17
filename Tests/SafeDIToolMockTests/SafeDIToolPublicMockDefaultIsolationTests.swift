@@ -89,12 +89,29 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 				            service: __safeDI_Core_Service_MockConfiguration = .init(),
 				            leaf: ((Service) -> Leaf)? = nil
 				        ) {
-				            self.service = service
-				            self.leaf = leaf
+				            __safeDI_storage = __safeDI_Storage(
+				                service: service,
+				                leaf: leaf
+				            )
 				        }
 
-				        public let service: __safeDI_Core_Service_MockConfiguration
-				        public let leaf: ((Service) -> Leaf)?
+				        public var service: __safeDI_Core_Service_MockConfiguration { __safeDI_storage.service }
+				        public var leaf: ((Service) -> Leaf)? { __safeDI_storage.leaf }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                service: __safeDI_Core_Service_MockConfiguration,
+				                leaf: ((Service) -> Leaf)?
+				            ) {
+				                self.service = service
+				                self.leaf = leaf
+				            }
+
+				            let service: __safeDI_Core_Service_MockConfiguration
+				            let leaf: ((Service) -> Leaf)?
+				        }
 				    }
 
 				    public static func mock(
@@ -121,14 +138,31 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 				        name: String? = nil,
 				        _ safeDIBuilder: ((String) -> Service)? = nil
 				    ) {
-				        self.name = name
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            name: name,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// `nil` keeps the default of `Service`’s `name`.
-				    public let name: String?
+				    public var name: String? { __safeDI_storage.name }
 				    /// Overrides how `Service` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String) -> Service)?
+				    public var safeDIBuilder: ((String) -> Service)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            name: String?,
+				            safeDIBuilder: ((String) -> Service)?
+				        ) {
+				            self.name = name
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let name: String?
+				        let safeDIBuilder: ((String) -> Service)?
+				    }
 				}
 
 				extension Service {
@@ -155,14 +189,31 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 				        name: String? = nil,
 				        _ safeDIBuilder: ((String) -> Service)? = nil
 				    ) {
-				        self.name = name
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            name: name,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// `nil` keeps the default of `Service`’s `name`.
-				    public let name: String?
+				    public var name: String? { __safeDI_storage.name }
 				    /// Overrides how `Service` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String) -> Service)?
+				    public var safeDIBuilder: ((String) -> Service)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            name: String?,
+				            safeDIBuilder: ((String) -> Service)?
+				        ) {
+				            self.name = name
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let name: String?
+				        let safeDIBuilder: ((String) -> Service)?
+				    }
 				}
 
 				extension Service {
@@ -187,12 +238,29 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 				            service: __safeDI_Core_Service_MockConfiguration = .init(),
 				            leaf: ((Service) -> Leaf)? = nil
 				        ) {
-				            self.service = service
-				            self.leaf = leaf
+				            __safeDI_storage = __safeDI_Storage(
+				                service: service,
+				                leaf: leaf
+				            )
 				        }
 
-				        public let service: __safeDI_Core_Service_MockConfiguration
-				        public let leaf: ((Service) -> Leaf)?
+				        public var service: __safeDI_Core_Service_MockConfiguration { __safeDI_storage.service }
+				        public var leaf: ((Service) -> Leaf)? { __safeDI_storage.leaf }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                service: __safeDI_Core_Service_MockConfiguration,
+				                leaf: ((Service) -> Leaf)?
+				            ) {
+				                self.service = service
+				                self.leaf = leaf
+				            }
+
+				            let service: __safeDI_Core_Service_MockConfiguration
+				            let leaf: ((Service) -> Leaf)?
+				        }
 				    }
 
 				    public static func mock(
@@ -256,10 +324,24 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 			        public init(
 			            screen: __safeDI_App_Screen_MockConfiguration = .init()
 			        ) {
-			            self.screen = screen
+			            __safeDI_storage = __safeDI_Storage(
+			                screen: screen
+			            )
 			        }
 
-			        public let screen: __safeDI_App_Screen_MockConfiguration
+			        public var screen: __safeDI_App_Screen_MockConfiguration { __safeDI_storage.screen }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                screen: __safeDI_App_Screen_MockConfiguration
+			            ) {
+			                self.screen = screen
+			            }
+
+			            let screen: __safeDI_App_Screen_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -292,14 +374,31 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 			        name: String? = nil,
 			        _ safeDIBuilder: ((String) -> Service)? = nil
 			    ) {
-			        self.name = name
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            name: name,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// `nil` keeps the default of `Service`’s `name`.
-			    public let name: String?
+			    public var name: String? { __safeDI_storage.name }
 			    /// Overrides how `Service` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((String) -> Service)?
+			    public var safeDIBuilder: ((String) -> Service)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            name: String?,
+			            safeDIBuilder: ((String) -> Service)?
+			        ) {
+			            self.name = name
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let name: String?
+			        let safeDIBuilder: ((String) -> Service)?
+			    }
 			}
 
 			extension Service {
@@ -316,15 +415,35 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 			        leaf: ((Service) -> Leaf)? = nil,
 			        _ safeDIBuilder: ((Service, Leaf) -> Screen)? = nil
 			    ) {
-			        self.service = service
-			        self.leaf = leaf
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            service: service,
+			            leaf: leaf,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let service: __safeDI_App_Service_MockConfiguration
-			    public let leaf: ((Service) -> Leaf)?
+			    public var service: __safeDI_App_Service_MockConfiguration { __safeDI_storage.service }
+			    public var leaf: ((Service) -> Leaf)? { __safeDI_storage.leaf }
 			    /// Overrides how `Screen` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((Service, Leaf) -> Screen)?
+			    public var safeDIBuilder: ((Service, Leaf) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            service: __safeDI_App_Service_MockConfiguration,
+			            leaf: ((Service) -> Leaf)?,
+			            safeDIBuilder: ((Service, Leaf) -> Screen)?
+			        ) {
+			            self.service = service
+			            self.leaf = leaf
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let service: __safeDI_App_Service_MockConfiguration
+			        let leaf: ((Service) -> Leaf)?
+			        let safeDIBuilder: ((Service, Leaf) -> Screen)?
+			    }
 			}
 
 			extension Screen {
@@ -374,10 +493,24 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 			        public init(
 			            theme: (() -> Theme)? = nil
 			        ) {
-			            self.theme = theme
+			            __safeDI_storage = __safeDI_Storage(
+			                theme: theme
+			            )
 			        }
 
-			        public let theme: (() -> Theme)?
+			        public var theme: (() -> Theme)? { __safeDI_storage.theme }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                theme: (() -> Theme)?
+			            ) {
+			                self.theme = theme
+			            }
+
+			            let theme: (() -> Theme)?
+			        }
 			    }
 
 			    public static func mock(
@@ -412,10 +545,24 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 			        public init(
 			            panel: __safeDI_App_Panel_MockConfiguration = .init()
 			        ) {
-			            self.panel = panel
+			            __safeDI_storage = __safeDI_Storage(
+			                panel: panel
+			            )
 			        }
 
-			        public let panel: __safeDI_App_Panel_MockConfiguration
+			        public var panel: __safeDI_App_Panel_MockConfiguration { __safeDI_storage.panel }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                panel: __safeDI_App_Panel_MockConfiguration
+			            ) {
+			                self.panel = panel
+			            }
+
+			            let panel: __safeDI_App_Panel_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -444,16 +591,36 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 			        name: String? = nil,
 			        _ safeDIBuilder: ((Card, String) -> Panel)? = nil
 			    ) {
-			        self.card = card
-			        self.name = name
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            card: card,
+			            name: name,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let card: Card.SafeDIOverrides
+			    public var card: Card.SafeDIOverrides { __safeDI_storage.card }
 			    /// `nil` keeps the default of `Panel`’s `name`.
-			    public let name: String?
+			    public var name: String? { __safeDI_storage.name }
 			    /// Overrides how `Panel` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((Card, String) -> Panel)?
+			    public var safeDIBuilder: ((Card, String) -> Panel)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            card: Card.SafeDIOverrides,
+			            name: String?,
+			            safeDIBuilder: ((Card, String) -> Panel)?
+			        ) {
+			            self.card = card
+			            self.name = name
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let card: Card.SafeDIOverrides
+			        let name: String?
+			        let safeDIBuilder: ((Card, String) -> Panel)?
+			    }
 			}
 
 			extension Panel {

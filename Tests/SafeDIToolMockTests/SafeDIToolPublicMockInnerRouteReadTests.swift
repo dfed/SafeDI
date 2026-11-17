@@ -105,12 +105,29 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		            wrapper: __safeDI_Middle_Wrapper_MockConfiguration = .init(),
 		            token: ((Wrapper) -> Receipt)? = nil
 		        ) {
-		            self.wrapper = wrapper
-		            self.token = token
+		            __safeDI_storage = __safeDI_Storage(
+		                wrapper: wrapper,
+		                token: token
+		            )
 		        }
 
-		        public let wrapper: __safeDI_Middle_Wrapper_MockConfiguration
-		        public let token: ((Wrapper) -> Receipt)?
+		        public var wrapper: __safeDI_Middle_Wrapper_MockConfiguration { __safeDI_storage.wrapper }
+		        public var token: ((Wrapper) -> Receipt)? { __safeDI_storage.token }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                wrapper: __safeDI_Middle_Wrapper_MockConfiguration,
+		                token: ((Wrapper) -> Receipt)?
+		            ) {
+		                self.wrapper = wrapper
+		                self.token = token
+		            }
+
+		            let wrapper: __safeDI_Middle_Wrapper_MockConfiguration
+		            let token: ((Wrapper) -> Receipt)?
+		        }
 		    }
 
 		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -169,13 +186,30 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		        inner: Inner.SafeDIOverrides = .init(),
 		        _ safeDIBuilder: ((Inner) -> Wrapper)? = nil
 		    ) {
-		        self.inner = inner
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            inner: inner,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let inner: Inner.SafeDIOverrides
+		    public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
 		    /// Overrides how `Wrapper` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Inner) -> Wrapper)?
+		    public var safeDIBuilder: ((Inner) -> Wrapper)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            inner: Inner.SafeDIOverrides,
+		            safeDIBuilder: ((Inner) -> Wrapper)?
+		        ) {
+		            self.inner = inner
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let inner: Inner.SafeDIOverrides
+		        let safeDIBuilder: ((Inner) -> Wrapper)?
+		    }
 		}
 
 		extension Wrapper {
@@ -201,10 +235,24 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		        init(
 		            outer: Outer.SafeDIOverrides = .init()
 		        ) {
-		            self.outer = outer
+		            __safeDI_storage = __safeDI_Storage(
+		                outer: outer
+		            )
 		        }
 
-		        let outer: Outer.SafeDIOverrides
+		        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                outer: Outer.SafeDIOverrides
+		            ) {
+		                self.outer = outer
+		            }
+
+		            let outer: Outer.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -309,10 +357,24 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		        public init(
 		            deeper: Deeper.SafeDIOverrides = .init()
 		        ) {
-		            self.deeper = deeper
+		            __safeDI_storage = __safeDI_Storage(
+		                deeper: deeper
+		            )
 		        }
 
-		        public let deeper: Deeper.SafeDIOverrides
+		        public var deeper: Deeper.SafeDIOverrides { __safeDI_storage.deeper }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                deeper: Deeper.SafeDIOverrides
+		            ) {
+		                self.deeper = deeper
+		            }
+
+		            let deeper: Deeper.SafeDIOverrides
+		        }
 		    }
 
 		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -379,10 +441,24 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		        public init(
 		            inner: Inner.SafeDIOverrides = .init()
 		        ) {
-		            self.inner = inner
+		            __safeDI_storage = __safeDI_Storage(
+		                inner: inner
+		            )
 		        }
 
-		        public let inner: Inner.SafeDIOverrides
+		        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                inner: Inner.SafeDIOverrides
+		            ) {
+		                self.inner = inner
+		            }
+
+		            let inner: Inner.SafeDIOverrides
+		        }
 		    }
 
 		    // SafeDI counts `Thing` as `public`: no module it reads declares it narrower. If `Thing` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -440,10 +516,24 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		        init(
 		            outer: Outer.SafeDIOverrides = .init()
 		        ) {
-		            self.outer = outer
+		            __safeDI_storage = __safeDI_Storage(
+		                outer: outer
+		            )
 		        }
 
-		        let outer: Outer.SafeDIOverrides
+		        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                outer: Outer.SafeDIOverrides
+		            ) {
+		                self.outer = outer
+		            }
+
+		            let outer: Outer.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
