@@ -8129,8 +8129,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				!Self.isElidedInCallSite(argument, dependencyInnerLabels: dependencyInnerLabels)
 			}
 			self.callSiteArguments = callSiteArguments
+			// The override closure of a call of another module's public mock passes what it is handed on to that `mock()`, so
+			// a function spelled as a name, such as an erased instantiator's `Builder`, is handed `@escaping` where the called
+			// mock takes it so (`PublicMockCall.typesDeclaredEscaping`).
+			let builderTypesDeclaredEscaping = publicMockCall?.typesDeclaredEscaping ?? []
 			builderParameterTypes = callSiteArguments.map { argument in
-				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter
+				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter(amongTypesDeclaredEscaping: builderTypesDeclaredEscaping)
 			}
 			needsConfigurationStruct = childItems?.containsPropertyNode == true || !defaultParameters.isEmpty || isPropertyCycle
 			subtreeCallsPublicMock = publicMockCall != nil || childItems?.propertyNodes.contains(where: \.subtreeCallsPublicMock) == true

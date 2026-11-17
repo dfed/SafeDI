@@ -1977,7 +1977,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesEachPassedUpBuilderAfterItsCalledMock_whenInternalCallerCallsTwoPublicMocksWithOneHoleType() async throws {
+	mutating func generate_handsOnePassedUpBuilderToBothCalledMocks_whenInternalCallerCallsTwoPublicMocksWithOneHoleType() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(core: [
 			"""
 			import SafeDI
@@ -2341,12 +2341,12 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            host: ((ErasedInstantiator<OnTap, AnyService>.Builder, SendableErasedInstantiator<OnTap, AnyService>.Builder) -> Host)? = nil
+		            host: ((@escaping ErasedInstantiator<OnTap, AnyService>.Builder, @escaping SendableErasedInstantiator<OnTap, AnyService>.Builder) -> Host)? = nil
 		        ) {
 		            self.host = host
 		        }
 
-		        let host: ((ErasedInstantiator<OnTap, AnyService>.Builder, SendableErasedInstantiator<OnTap, AnyService>.Builder) -> Host)?
+		        let host: ((@escaping ErasedInstantiator<OnTap, AnyService>.Builder, @escaping SendableErasedInstantiator<OnTap, AnyService>.Builder) -> Host)?
 		    }
 
 		    static func mock(
