@@ -713,6 +713,22 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(GraphFuzzerCallingMockCheck.initializerParameterLabels(ofType: "Host", inGeneratedFile: "extension Host {\n    init() {}\n}") == [])
 	}
 
+	@Test
+	func initializerParameterLabels_readOnlyTheTypesOwnInitializers_whenItsExtensionNestsABuilderStruct() {
+		let generatedFile = """
+		extension Host {
+		    public enum SafeDIScope_FeedService {
+		        public struct __safeDI_Builder<T> {
+		            public init(panel: @escaping () -> T) {}
+		            public init(__safeDI_noScope: @escaping () -> T) {}
+		        }
+		    }
+		    public init(__safeDI_feedServiceBuilder: SafeDIScope_FeedService.__safeDI_Builder<any FeedService>) {}
+		}
+		"""
+		#expect(GraphFuzzerCallingMockCheck.initializerParameterLabels(ofType: "Host", inGeneratedFile: generatedFile) == ["feedServiceBuilder"])
+	}
+
 	private static func sites(_ diagnostics: String) -> [GraphFuzzerDiagnosticSite] {
 		GraphFuzzerDiagnosticSite.sites(
 			inDiagnostics: diagnostics,

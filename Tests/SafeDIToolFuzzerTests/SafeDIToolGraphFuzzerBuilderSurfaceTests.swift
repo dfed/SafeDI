@@ -729,19 +729,19 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 	// MARK: Edits
 
 	@Test(arguments: [
-		(GraphFuzzerBuilderSurfaceEdit.secondPlaceInAnotherType, GraphFuzzerGeneratorFeature.generateDependencyTree, UInt64(15)),
-		(.placeBehindLazilyInstantiated, .generateDependencyTree, 15),
-		(.placeForwardingOtherValuesRemedied, .generateDependencyTree, 15),
+		(GraphFuzzerBuilderSurfaceEdit.secondPlaceInAnotherType, GraphFuzzerGeneratorFeature.generateDependencyTree, UInt64(59)),
+		(.placeBehindLazilyInstantiated, .generateDependencyTree, 59),
+		(.placeForwardingOtherValuesRemedied, .generateDependencyTree, 59),
 		(.secondPlaceInInnerSeamOfAnotherModule, .generateDependencyTree, 135),
 		(.holderMovedToInnerSeamOfAnotherModule, .generateDependencyTree, 135),
 		(.placeOfNewBuilderInInnerSeamOfAnotherModule, .generateDependencyTree, 135),
 		(.placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied, .generateDependencyTree, 135),
-		// Seed 15 holds `HoleHanded`, which forwards nothing, in an `Instantiator` on `HoleHandedHolder`.
-		(.instantiatorPlaceMovedToPlainPlace, .generateDependencyTree, 15),
-		(.instantiatorChangedToErasedInstantiator, .generateDependencyTree, 15),
-		(.instantiatorMadeSendable, .generateDependencyTree, 15),
-		(.sendableInstantiatorPlaceMovedToPlainPlace, .generateDependencyTree, 15),
-		(.sendableInstantiatorChangedToSendableErasedInstantiator, .generateDependencyTree, 15),
+		// Seed 59 holds `HoleHanded`, which forwards nothing, in an `Instantiator` on `HoleHandedHolder`.
+		(.instantiatorPlaceMovedToPlainPlace, .generateDependencyTree, 59),
+		(.instantiatorChangedToErasedInstantiator, .generateDependencyTree, 59),
+		(.instantiatorMadeSendable, .generateDependencyTree, 59),
+		(.sendableInstantiatorPlaceMovedToPlainPlace, .generateDependencyTree, 59),
+		(.sendableInstantiatorChangedToSendableErasedInstantiator, .generateDependencyTree, 59),
 		(.placeBehindLazilyInstantiated, .generateMockPublic, 3),
 		(.instantiatorPlaceMovedToPlainPlace, .generateMockPublic, 18),
 		(.instantiatorChangedToErasedInstantiator, .generateMockPublic, 18),
