@@ -1457,6 +1457,11 @@ jobs:
       # suites a change selects and which lines of a run it reports.
       - name: Check the Touched Suites Script Against Its Fixtures
         run: python3 -I .claude/skills/verify-touched/verify-touched.py --self-test
+      # .claude/skills/pre-review/pre-review.py prints the block a hand-back
+      # carries, so it proves on fixtures which changes owe a pins run, which
+      # run it accepts as one, and what makes a block say it is not ready.
+      - name: Check the Pre-Review Script Against Its Fixtures
+        run: python3 -I .claude/skills/pre-review/pre-review.py --self-test
       # The check is the only thing between an unexecuted line and main, so
       # its script proves on fixtures that it unions the platforms, resolves
       # symbolic links and refuses missing data before it reads the reports.

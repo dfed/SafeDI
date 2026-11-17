@@ -193,13 +193,13 @@ def tests_run(lines):
 
 
 def failures_of_output(lines):
-    """The lines of a swift-testing or XCTest run that report a failure, and the run's last summary line."""
+    """The lines of a swift-testing or XCTest run that report a failure, and each summary line the run printed."""
     failures = []
-    summary = None
+    summaries = []
     for line in lines:
         stripped = line.rstrip("\n")
         if "Test run with " in stripped or stripped.startswith("Executed "):
-            summary = stripped
+            summaries.append(stripped)
             continue
         if " recorded a known issue" in stripped or stripped.startswith("✘ Suite "):
             continue
@@ -207,7 +207,7 @@ def failures_of_output(lines):
             failures.append(stripped)
         elif re.search(r": error: ", stripped) or stripped.startswith("error: "):
             failures.append(stripped)
-    return failures, summary
+    return failures, summaries
 
 
 def git(*arguments):
@@ -320,15 +320,19 @@ def run(arguments):
         signal.signal(signal_number, end)
     with log.open("w", encoding="utf-8") as output:
         # A session of its own, so that ending this script ends `swift test` and everything it started.
-        started.append(subprocess.Popen(command, env=environment, stdout=output, stderr=subprocess.STDOUT, start_new_session=True))
+        # Open descriptors are kept, so that a lock a caller handed this script (the `pre-review` skill's, on its
+        # scratch worktree) is held for as long as `swift test` runs, even when this script is killed.
+        started.append(subprocess.Popen(command, env=environment, stdout=output, stderr=subprocess.STDOUT, start_new_session=True, close_fds=False))
         status = started[0].wait()
     shutil.rmtree(temporary_directory, ignore_errors=True)
     with log.open(encoding="utf-8", errors="replace") as output:
         lines = output.readlines()
-    failures, summary = failures_of_output(lines)
+    failures, summaries = failures_of_output(lines)
     for line in failures:
         print(line)
-    print(summary if summary else f"No summary line; read {log}.")
+    # Each of them: XCTest and swift-testing print one each, and the last alone can hide a failing one.
+    for summary in summaries or [f"No summary line; read {log}."]:
+        print(summary)
     if status == 0 and tests_run(lines) == 0:
         print("The run passed and ran no test: a filter matched nothing. Read --list.")
         return 1
@@ -438,8 +442,9 @@ def self_test():
             expect(str(reason), path, "the whole suite names the path that reaches it")
         else:
             expect(None, path, "a helper, the manifest, an unlisted source directory or a path no rule matches runs the whole suite")
-    failures, summary = failures_of_output(
+    failures, summaries = failures_of_output(
         [
+            "Executed 2 tests, with 1 failure (0 unexpected) in 0.1 (0.1) seconds\n",
             "✔ Test a() passed after 0.1 seconds.\n",
             "✘ Test b() recorded an issue at A.swift:3:5: Expectation failed: x == y\n",
             "✘ Test c() recorded a known issue at A.swift:9:5: Issue recorded\n",
@@ -459,7 +464,7 @@ def self_test():
         ],
         "failures keep issues, failed tests and compiler errors, and drop known issues, suites and the summary",
     )
-    expect(summary, "✘ Test run with 3 tests in 1 suite failed after 0.2 seconds with 1 issue.", "the summary line")
+    expect(summaries, ["Executed 2 tests, with 1 failure (0 unexpected) in 0.1 (0.1) seconds", "✘ Test run with 3 tests in 1 suite failed after 0.2 seconds with 1 issue."], "every summary line")
     print("verify-touched: self-test passed")
     return 0
 
