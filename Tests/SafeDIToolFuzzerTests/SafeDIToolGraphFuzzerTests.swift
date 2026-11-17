@@ -4825,8 +4825,8 @@ struct SafeDIToolGraphFuzzerTests {
 		let ownerPlace = "`S566_HoleOwner`’s `holeService: any S566_HoleService`"
 		let ownerLazyPlace = "`S566_HoleOwner`’s `holeServiceLazy: LazilyInstantiated<any S566_HoleService>`"
 		let nestPlace = "`S566_HoleNestImpl`’s `holeService: any S566_HoleService`"
-		let firstSeamPlace = "`S1_Profile`’s `service: any S1_Service` (member `S1_Profile_Scope.service` of `serviceBuilder`) in `S1_SeamA`’s tree"
-		let secondSeamPlace = "`S1_Account`’s `service: any S1_Service` (member `S1_Account_Scope.service` of `serviceBuilder`) in `S1_SeamB`’s tree"
+		let firstSeamPlace = "`S1_Profile`’s `service: any S1_Service` (`service` of `serviceBuilder`) in `S1_SeamA`’s tree"
+		let secondSeamPlace = "`S1_Account`’s `service: any S1_Service` (`service` of `serviceBuilder`) in `S1_SeamB`’s tree"
 
 		#expect(GraphFuzzerToolOutcome.difference(between: reenteringCallDiagnostics(places: "\(nestPlace), \(ownerPlace), and \(ownerLazyPlace)"), and: reenteringCallDiagnostics(places: "\(ownerPlace), \(ownerLazyPlace), and \(nestPlace)")) == nil)
 		#expect(GraphFuzzerToolOutcome.difference(between: reenteringCallDiagnostics(places: "\(nestPlace) and \(ownerPlace)"), and: reenteringCallDiagnostics(places: "\(ownerPlace) and \(nestPlace)")) == nil)
