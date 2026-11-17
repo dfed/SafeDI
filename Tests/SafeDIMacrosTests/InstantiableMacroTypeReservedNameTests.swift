@@ -229,6 +229,62 @@ import Testing
 		}
 
 		@Test
+		func declaration_producesReservedTypeNameDiagnosticAtEachSpelling_whenModuleCallingSeamDeclaresTypeNamedLikeSeamsRootEnum() {
+			// A module that calls a seam declares `SafeDIScope_Api`, the name of the seam’s root enum, and a fulfiller that
+			// instantiates it: the declaration and each spelling of it are rejected.
+			assertMacroExpansion(
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [Api.self])
+				public final class LiveApi: Instantiable, Api {
+				    public init(local: SafeDIScope_Api) {
+				        self.local = local
+				    }
+
+				    @Instantiated public let local: SafeDIScope_Api
+				}
+
+				@Instantiable
+				public final class SafeDIScope_Api: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public final class LiveApi: Instantiable, Api {
+				    public init(local: SafeDIScope_Api) {
+				        self.local = local
+				    }
+
+				    public let local: SafeDIScope_Api
+				}
+				public final class SafeDIScope_Api: Instantiable {
+				    public init() {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Api` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 3,
+						column: 24,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Api` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 7,
+						column: 37,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Api` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 11,
+						column: 20,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func declaration_producesReservedTypeNameDiagnosticAtEachNestedType_whenSeamDeclaresNestedTypesNamedWithItsGuardEnumsPrefix() {
 			// The enum a seam’s module generates beside the seam’s initializer is named `__safeDI_<Seam>_<hash>`. A type the
 			// seam declares with that prefix is rejected whatever follows it, the exact hashed name included.
