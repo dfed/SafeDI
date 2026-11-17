@@ -7372,8 +7372,6 @@ struct SafeDIToolGraphFuzzerTests {
 		.configurationStruct: 34,
 		.constructionFunction: 84,
 		.consumerCall: 82,
-		// pins: derive on CI
-		.consumerConvertsClosureOverEnum: 0,
 		.consumerErasedCall: 19,
 		.consumerErasedInline: 3,
 		.consumerFillReentersPublicMock: 2,
@@ -7445,10 +7443,12 @@ struct SafeDIToolGraphFuzzerTests {
 	/// and, without that check, fills with `T6`'s at every level (seed 555), and a graph whose fill reads `T6`'s
 	/// `holeContext` under that loop, which the loop does not declare again (seed 836); declarations moved
 	/// beneath the declaring module (seed 98) and a chain of public mocks through the three modules beneath it (seed 208),
-	/// which a consumer computes from the declaring module's view (`GraphFuzzerSeamDependencyDraw`). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
+	/// which a consumer computes from the declaring module's view (`GraphFuzzerSeamDependencyDraw`); and a type built with
+	/// its hand-written mock inside another public mock of its module, whose extensions declare the function only generated
+	/// code calls beside the construction function of that name (seed 37). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
 	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Pinned by
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
-	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836]
+	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836]
 
 	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x6B6B7D1CC833E4A4
 
