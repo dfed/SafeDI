@@ -1387,9 +1387,11 @@ extension GraphFuzzerMockMirrorModel {
 				&& (!isProvidedByTreeByValue(property.validatedForDependencyCycles) || uncoveredProperties.contains(property.validatedForDependencyCycles.unwrapped))
 				&& !isFulfilledByForwardedProperty(property)
 		}
+		// A property every receive of which production always passes `nil` has no override.
+		let received = mockRoot.received.subtracting(propertiesEveryReceiveOfWhichIsPassedNil(of: mockRoot, mockedTypeName: mockedTypeName))
 		let receivedParameterProperties = lazilyInstantiatedReceivedProperties.isEmpty
-			? mockRoot.received
-			: Set(mockRoot.received.filter { !isFulfilledByForwardedProperty($0) }.map(\.validatedForDependencyCycles))
+			? received
+			: Set(received.filter { !isFulfilledByForwardedProperty($0) }.map(\.validatedForDependencyCycles))
 		let requiredUnwrappedProperties = Set(mockRoot.required.filter { !isFulfilledByForwardedProperty($0) }.map(\.validatedForDependencyCycles.unwrapped))
 		var overrideCount = 0
 		for property in receivedParameterProperties
@@ -1401,6 +1403,120 @@ extension GraphFuzzerMockMirrorModel {
 			overrideCount += 1
 		}
 		return overrideCount
+	}
+
+	/// The properties received only if available in the mock's trees that production passes `nil` wherever it builds
+	/// them, as the Manual's "Dependencies received only if available" states: in the mocked type's own tree, and in each
+	/// promoted dependency's tree, every receive of a label back to a type that declares it reads one declaration, so a
+	/// required receive there – above the receive only if available, on its type, or below it – pins that declaration to
+	/// a form, and a receive only if available that reads no form one declaration provides together with it gets `nil`.
+	/// A property is listed when its every receive there is pinned, each receive judged by its type, as the mock judges it.
+	private func propertiesEveryReceiveOfWhichIsPassedNil(of mockRoot: MockRoot, mockedTypeName: String) -> Set<GraphFuzzerMirrorProperty> {
+		/// A receive of a dependency of a type, from above it.
+		struct Receive {
+			let property: GraphFuzzerMirrorProperty
+			let isRequired: Bool
+			/// The declared forms the receive reads: a receive of `x: X?` reads `x: X` too, and an alias only if available of
+			/// `x: X` reads `x: X?`.
+			let reads: Set<GraphFuzzerMirrorProperty>
+		}
+		func declaredLabels(ofTypeNamed typeName: String) -> Set<String> {
+			Set((types[typeName]?.dependencies ?? []).compactMap { dependency -> String? in
+				switch dependency.source {
+				case .instantiated, .forwarded:
+					dependency.property.label
+				case .received, .aliased:
+					nil
+				}
+			})
+		}
+		func receives(ofTypeNamed typeName: String) -> [Receive] {
+			let declared = declaredLabels(ofTypeNamed: typeName)
+			return (types[typeName]?.dependencies ?? []).compactMap { dependency -> Receive? in
+				switch dependency.source {
+				case let .received(onlyIfAvailable):
+					return Receive(property: dependency.property, isRequired: !onlyIfAvailable, reads: [dependency.property, dependency.property.unwrapped])
+				case let .aliased(fulfillingProperty, onlyIfAvailable):
+					// An alias of a label its own type declares renames that declaration, unless it keeps the label.
+					guard fulfillingProperty.label == dependency.property.label || !declared.contains(fulfillingProperty.label) else { return nil }
+					let otherForm = fulfillingProperty.isOptional
+						? fulfillingProperty.unwrapped
+						: GraphFuzzerMirrorProperty(label: fulfillingProperty.label, type: fulfillingProperty.type + "?")
+					return Receive(property: fulfillingProperty, isRequired: !onlyIfAvailable, reads: onlyIfAvailable ? [fulfillingProperty, otherForm] : [fulfillingProperty, fulfillingProperty.unwrapped])
+				case .instantiated, .forwarded:
+					return nil
+				}
+			}
+		}
+		/// Whether one declaration can fulfill both: one either reads, or a lazily instantiated one whose instance it reads.
+		func oneDeclarationFulfills(_ reads: Set<GraphFuzzerMirrorProperty>, _ otherReads: Set<GraphFuzzerMirrorProperty>) -> Bool {
+			func fulfills(_ declaration: GraphFuzzerMirrorProperty, _ reads: Set<GraphFuzzerMirrorProperty>) -> Bool {
+				reads.contains(declaration) || declaration.lazilyInstantiatedInstance.map(reads.contains) ?? false
+			}
+			return reads.union(otherReads).contains { fulfills($0, reads) && fulfills($0, otherReads) }
+		}
+		func childTypeNames(ofTypeNamed typeName: String) -> [String] {
+			propertiesToGenerate(ofTypeNamed: typeName).compactMap { propertyToGenerate in
+				guard case let .instantiated(_, childTypeName, _) = propertyToGenerate else { return nil }
+				return childTypeName
+			}
+		}
+		/// The forms the required receives of `label` below `typeName` read, back to a type that declares the label.
+		func requiredReadsBelow(_ typeName: String, of label: String) -> [Set<GraphFuzzerMirrorProperty>] {
+			var reads = [Set<GraphFuzzerMirrorProperty>]()
+			var visited: Set<String> = [typeName]
+			var typeNamesToVisit = [typeName]
+			while let typeNameToVisit = typeNamesToVisit.popLast() {
+				for childTypeName in childTypeNames(ofTypeNamed: typeNameToVisit) where visited.insert(childTypeName).inserted {
+					reads += receives(ofTypeNamed: childTypeName).filter { $0.isRequired && $0.property.label == label }.map(\.reads)
+					if !declaredLabels(ofTypeNamed: childTypeName).contains(label) {
+						typeNamesToVisit.append(childTypeName)
+					}
+				}
+			}
+			return reads
+		}
+		struct Visit: Hashable {
+			let typeName: String
+			let requiredReadsAbove: [String: Set<Set<GraphFuzzerMirrorProperty>>]
+			let declaredAbove: Set<String>
+		}
+		var pinned = Set<GraphFuzzerMirrorProperty>()
+		// The properties some receive reads: one that a visit of its type finds unpinned is read wherever its type is built.
+		var read = Set<GraphFuzzerMirrorProperty>()
+		let treeTypeNames = [mockedTypeName] + mockRoot.promotedChildren.compactMap { child -> String? in
+			guard case let .instantiated(_, scopeTypeName, _) = child else { return nil }
+			return scopeTypeName
+		}
+		var visits = Set<Visit>()
+		var visitsToMake = treeTypeNames.map { Visit(typeName: $0, requiredReadsAbove: [:], declaredAbove: []) }
+		while let visit = visitsToMake.popLast() {
+			guard visits.insert(visit).inserted else { continue }
+			let typeReceives = receives(ofTypeNamed: visit.typeName).filter { !visit.declaredAbove.contains($0.property.label) }
+			for receive in typeReceives where !receive.isRequired {
+				let label = receive.property.label
+				let pinningReads = Array(visit.requiredReadsAbove[label] ?? [])
+					+ typeReceives.filter { $0.isRequired && $0.property.label == label }.map(\.reads)
+					+ requiredReadsBelow(visit.typeName, of: label)
+				if pinningReads.contains(where: { !oneDeclarationFulfills(receive.reads, $0) }) {
+					pinned.insert(receive.property)
+				} else {
+					read.insert(receive.property)
+				}
+			}
+			var requiredReadsAbove = visit.requiredReadsAbove
+			for receive in typeReceives where receive.isRequired {
+				requiredReadsAbove[receive.property.label, default: []].insert(receive.reads)
+			}
+			let declared = declaredLabels(ofTypeNamed: visit.typeName)
+			for label in declared {
+				requiredReadsAbove[label] = nil
+			}
+			for childTypeName in childTypeNames(ofTypeNamed: visit.typeName) {
+				visitsToMake.append(Visit(typeName: childTypeName, requiredReadsAbove: requiredReadsAbove, declaredAbove: visit.declaredAbove.union(declared)))
+			}
+		}
+		return pinned.subtracting(read)
 	}
 
 	/// The shapes the mock root shows.
