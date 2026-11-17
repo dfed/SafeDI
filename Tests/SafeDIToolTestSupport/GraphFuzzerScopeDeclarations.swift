@@ -35,7 +35,9 @@ import SwiftSyntax
 /// property builds; an inner seam's wrapping case holds that seam's root enum alone, and a case for a place inside a
 /// fill, `<call>_<builder>`, holds the level's struct, the root enum of the seam whose tree holds the filled place, and
 /// the enum of the type the fill builds. The oracles below read every seam's enums; a public mock's, which keep a case
-/// per path inside a fill, are left to the public mock corpus.
+/// per path inside a fill, are left to the public mock corpus. A seam's enum that declares a builder struct is a
+/// namespace with no case (`seam-builder-structs.md`): its struct's members are read as the cases it stands for, each
+/// member carrying what its case carried, so that every oracle judges both forms alike.
 struct GraphFuzzerScopeDeclarations {
 	/// The scope enums and value structs every file of `generatedFiles` declares, in the order of the files' names.
 	init(generatedFiles: [String: String]) {
@@ -395,15 +397,76 @@ private final class ScopeEnumCollector: SyntaxVisitor {
 		return .skipChildren
 	}
 
-	/// Whether `structDeclaration`, declared in `enumDeclaration`, is the payload struct of one of its cases: not the level's
-	/// builder struct (`__safeDI_Builder`), and not the empty struct a member of a `@Sendable` enum's case takes, which no
-	/// case carries.
-	private static func isValuesStruct(_ structDeclaration: StructDeclSyntax, of enumDeclaration: EnumDeclSyntax) -> Bool {
+	/// Whether `structDeclaration` is the payload struct of one of `cases`: not the level's builder struct
+	/// (`__safeDI_Builder`), and not the empty struct a member of a `@Sendable` enum's case takes, which no case carries.
+	private static func isValuesStruct(_ structDeclaration: StructDeclSyntax, of cases: [GraphFuzzerScopeDeclarations.ScopeCase]) -> Bool {
 		let name = structDeclaration.name.text
-		return enumDeclaration.memberBlock.members.contains { member in
-			member.decl.as(EnumCaseDeclSyntax.self)?.elements.contains { element in
-				element.parameterClause?.parameters.contains { $0.type.trimmedDescription.split(separator: ".").last.map(String.init) == name } ?? false
-			} ?? false
+		return cases.contains { scopeCase in
+			scopeCase.payload.contains { $0.split(separator: ".").last.map(String.init) == name }
+		}
+	}
+
+	/// The cases `enumDeclaration` stands for: those it declares, or, for a seam's enum that is a namespace holding a builder
+	/// struct (`__safeDI_Builder`) and no case, one case per member of the struct, as the enum declared them before it took
+	/// the struct (`builderStructCases(of:)`). A public mock's enum keeps its cases beside its struct, and those are read.
+	private static func cases(of enumDeclaration: EnumDeclSyntax) -> [GraphFuzzerScopeDeclarations.ScopeCase] {
+		var cases = [GraphFuzzerScopeDeclarations.ScopeCase]()
+		for member in enumDeclaration.memberBlock.members {
+			guard let caseDeclaration = member.decl.as(EnumCaseDeclSyntax.self) else { continue }
+			for element in caseDeclaration.elements {
+				// A case named as a keyword is spelled in backticks, which a place's label, read without them, does not spell.
+				cases.append(GraphFuzzerScopeDeclarations.ScopeCase(
+					label: element.name.text.replacingOccurrences(of: "`", with: ""),
+					payload: element.parameterClause?.parameters.map(\.type.trimmedDescription) ?? [],
+				))
+			}
+		}
+		guard cases.isEmpty else { return cases }
+		for member in enumDeclaration.memberBlock.members {
+			if let structDeclaration = member.decl.as(StructDeclSyntax.self), structDeclaration.name.text == builderStructName {
+				return builderStructCases(of: structDeclaration)
+			}
+		}
+		return []
+	}
+
+	/// The name of the builder struct a seam's scope enum declares in place of its cases.
+	private static let builderStructName = "__safeDI_Builder"
+
+	/// A case for each stored member of `builderStruct`, a seam's level's `__safeDI_Builder<__safeDI_Built>`, labeled as the
+	/// member, whose payload is what the case it replaces carried: the struct the member takes, unless the struct is
+	/// `Sendable` (a `@Sendable` enum's, whose cases carry no values, the member taking an empty struct no case carried),
+	/// then each scope enum whose builder struct the member returns, outermost first – a nested enum of the seam's own, an
+	/// inner seam's root enum, or, for a place inside a fill, the filled seam's root enum and then the enum of the type the
+	/// fill builds. A member returning `__safeDI_Built` or a wrapper's `Builder` is a place, which carries nothing more the
+	/// readers read.
+	private static func builderStructCases(of builderStruct: StructDeclSyntax) -> [GraphFuzzerScopeDeclarations.ScopeCase] {
+		let isSendable = builderStruct.inheritanceClause?.inheritedTypes.contains { $0.type.trimmedDescription == "Sendable" } ?? false
+		var cases = [GraphFuzzerScopeDeclarations.ScopeCase]()
+		for member in builderStruct.memberBlock.members {
+			guard let variable = member.decl.as(VariableDeclSyntax.self), variable.bindingSpecifier.tokenKind == .keyword(.let) else { continue }
+			for binding in variable.bindings {
+				guard let type = binding.typeAnnotation?.type else { continue }
+				let functionType = type.as(FunctionTypeSyntax.self) ?? type.as(AttributedTypeSyntax.self)?.baseType.as(FunctionTypeSyntax.self)
+				guard let functionType else { continue }
+				var payload = isSendable ? [] : functionType.parameters.map(\.type.trimmedDescription)
+				payload += scopeEnumsWhoseBuilderStructs(areIn: functionType.returnClause.type.trimmedDescription)
+				// A member named as a keyword is spelled in backticks, which a place's label, read without them, does not spell.
+				cases.append(GraphFuzzerScopeDeclarations.ScopeCase(label: binding.pattern.trimmedDescription.replacingOccurrences(of: "`", with: ""), payload: payload))
+			}
+		}
+		return cases
+	}
+
+	/// Each scope enum whose builder struct `type` spells, outermost first: `Inner.SafeDIScope_Gadget` and
+	/// `SafeDIScope_Service.DefaultGadget_Scope` in
+	/// `Inner.SafeDIScope_Gadget.__safeDI_Builder<SafeDIScope_Service.DefaultGadget_Scope.__safeDI_Builder<__safeDI_Built>>`.
+	private static func scopeEnumsWhoseBuilderStructs(areIn type: String) -> [String] {
+		let suffix = "." + builderStructName
+		return type.split { !($0.isLetter || $0.isNumber || $0 == "_" || $0 == ".") }.compactMap { token in
+			guard token.hasSuffix(suffix) else { return nil }
+			let enumPath = String(token.dropLast(suffix.count))
+			return enumPath.split(separator: ".").contains { GraphFuzzerScopeDeclarations.isRootEnumName(String($0)) } ? enumPath : nil
 		}
 	}
 
@@ -412,20 +475,12 @@ private final class ScopeEnumCollector: SyntaxVisitor {
 		// Each enum before the enums nested in it, so that enums are listed in the order a reader meets them.
 		let enumIndex = enums.count
 		enums.append(GraphFuzzerScopeDeclarations.ScopeEnum(extendedType: extendedType, path: path, cases: []))
-		var cases = [GraphFuzzerScopeDeclarations.ScopeCase]()
+		let cases = Self.cases(of: enumDeclaration)
 		var nestedEnums = [EnumDeclSyntax]()
 		for member in enumDeclaration.memberBlock.members {
-			if let caseDeclaration = member.decl.as(EnumCaseDeclSyntax.self) {
-				for element in caseDeclaration.elements {
-					// A case named as a keyword is spelled in backticks, which a place's label, read without them, does not spell.
-					cases.append(GraphFuzzerScopeDeclarations.ScopeCase(
-						label: element.name.text.replacingOccurrences(of: "`", with: ""),
-						payload: element.parameterClause?.parameters.map(\.type.trimmedDescription) ?? [],
-					))
-				}
-			} else if let nestedEnum = member.decl.as(EnumDeclSyntax.self) {
+			if let nestedEnum = member.decl.as(EnumDeclSyntax.self) {
 				nestedEnums.append(nestedEnum)
-			} else if let structDeclaration = member.decl.as(StructDeclSyntax.self), Self.isValuesStruct(structDeclaration, of: enumDeclaration) {
+			} else if let structDeclaration = member.decl.as(StructDeclSyntax.self), Self.isValuesStruct(structDeclaration, of: cases) {
 				var fields = [String]()
 				for structMember in structDeclaration.memberBlock.members {
 					guard let variable = structMember.decl.as(VariableDeclSyntax.self) else { continue }
