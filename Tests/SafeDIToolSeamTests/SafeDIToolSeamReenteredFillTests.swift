@@ -1310,6 +1310,88 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesReusedFillByNameWithNoMember_whenReusedFillLeadsToNoPlace() async throws {
+		// `Host`'s own `gadget` is its only place: the fill of `second` builds `DefaultSecond`, which holds none, so the fill of
+		// `first`, whose `SubB` re-enters it, leads to no place either, and its call takes no member of its own case.
+		let fixture = Fixture(
+			defaultSecondDeclarations: [],
+			hostDeclarations: ["@Instantiated let top: Top", "@Instantiated let gadget: any Gadget"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Middle"]?.generatedFiles, ["Middle.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Host {
+		    nonisolated public enum SafeDIScope_Gadget {
+		        nonisolated public struct gadget_Values {
+		            public let top: Top
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let gadget: (gadget_Values) -> __safeDI_Built
+
+		            public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
+		                self.gadget = gadget
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.gadget = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
+		        func __safeDI_top() -> Top {
+		            _ = Top.__safeDI_Top_333CA8E405D3F446.self\(seamCallComment(seam: "Top", module: "Feature"))
+		            func __safeDI_firstBuilder_SubA_first(_ scope: SubA.SafeDIScope_First.first_Values) -> any First {
+		                func __safeDI_first() -> DefaultFirst {
+		                    func __safeDI_subB() -> SubB {
+		                        _ = SubB.__safeDI_SubB_7CCD5CF6807E942D.self\(seamCallComment(seam: "SubB", module: "Feature"))
+		                        return SubB(__safeDI_secondBuilder: __safeDI_secondBuilder_SubB())
+		                    }
+		                    let subB: SubB = __safeDI_subB()
+		                    return DefaultFirst(subB: subB)
+		                }
+		                let first: any First = __safeDI_first()
+		                return first
+		            }
+		            func __safeDI_firstBuilder_Top() -> Top.SafeDIScope_First.__safeDI_Builder<any First> {
+		                .init(subA: { _ in __safeDI_firstBuilder_SubA() })
+		            }
+		            func __safeDI_firstBuilder_SubA() -> SubA.SafeDIScope_First.__safeDI_Builder<any First> {
+		                .init(first: { scope in __safeDI_firstBuilder_SubA_first(scope) })
+		            }
+		            func __safeDI_secondBuilder_Top() -> Top.SafeDIScope_Second.__safeDI_Builder<any Second> {
+		                .init(subB: { _ in __safeDI_secondBuilder_SubB() })
+		            }
+		            func __safeDI_secondBuilder_SubB() -> SubB.SafeDIScope_Second.__safeDI_Builder<any Second> {
+		                .init(second: { _ in
+		                    let second: any Second = DefaultSecond()
+		                    return second
+		                })
+		            }
+		            return Top(__safeDI_firstBuilder: __safeDI_firstBuilder_Top(), __safeDI_secondBuilder: __safeDI_secondBuilder_Top())
+		        }
+		        let top: Top = __safeDI_top()
+		        let gadget: any Gadget = __safeDI_gadgetBuilder.gadget(SafeDIScope_Gadget.gadget_Values(top: top))
+		        self.init(top: top, gadget: gadget)
+		    }
+		}
+
+		extension Host {
+		    public enum __safeDI_Host_167A4D1422DC7248 {}
+		}
+		"""])
+		try await expectValuesEqualVisibleBuild(output, fixture)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
