@@ -75,7 +75,7 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 	/// seam, the seam's own tree, which every build generates, reports the error in the mock's module too.
 	case fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive
 
-	static func <(lhs: Self, rhs: Self) -> Bool {
+	static func < (lhs: Self, rhs: Self) -> Bool {
 		allCases.firstIndex(of: lhs) ?? 0 < allCases.firstIndex(of: rhs) ?? 0
 	}
 
