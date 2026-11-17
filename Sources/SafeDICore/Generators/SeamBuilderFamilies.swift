@@ -160,7 +160,10 @@ extension DependencyTreeGenerator {
 		// (`scopeEnumsByType`), a place inside a fill included.
 		var reachedByHoleType = [SeamSignature.HoleType: [ReachedPlace]]()
 		var reenteringCalls = [ReachedPlace]()
-		for reached in placesAndCalls(in: generator, keysTheCalledSeam: !scopeTypeNames.areQualified) {
+		// The fills a call inside a fill of the same call can re-enter, found once for the seam: a seam's tree re-enters them,
+		// and a public mock's, which keeps its enum form, never does.
+		let reenteredFillsByKey = bindsReceivesAgain ? [:] : emittingFillsByKey(inTreeRootedAt: generator)
+		for reached in placesAndCalls(in: generator, keysTheCalledSeam: !scopeTypeNames.areQualified, reenteredFillsByKey: scopeTypeNames.areQualified ? [:] : reenteredFillsByKey) {
 			switch reached {
 			case let .reenteringCall(sitePath, steps):
 				reenteringCalls.append(ReachedPlace(sitePath: sitePath, steps: steps, call: nil, reentersEnclosingFill: true))
@@ -256,6 +259,7 @@ extension DependencyTreeGenerator {
 					parameters: parameters,
 					bindsReceivesAgain: bindsReceivesAgain,
 					namesApartAtRoot: namesApartAtRoot,
+					reenteredFillsByKey: reenteredFillsByKey,
 					proof: proof,
 					instantiables: instantiables,
 					reachedEnum: reachedEnum,
@@ -853,11 +857,13 @@ extension DependencyTreeGenerator {
 	/// Every place and every call that passes a builder up in the tree `generator` roots, in the order the generated code
 	/// reaches them: a seam call's fills are declared before the call. A fill's `@Sendable` function counts as one on the
 	/// call's step, whose case for the builder filled leads to what the fill builds.
-	/// - Parameter keysTheCalledSeam: Whether a fill's case carries the called seam's root enum, as a seam's builder struct
-	///   does (`filledRootKey(of:in:keysTheCalledSeam:)`), rather than that of the seam whose tree holds the place.
-	private static func placesAndCalls(in generator: ScopeGenerator, keysTheCalledSeam: Bool) -> [PlaceOrCall] {
-		// A seam's call that re-enters an enclosing call's fill takes the called seam's struct from a member of its own case.
-		let reenteredFillsByKey = keysTheCalledSeam ? emittingFillsByKey(inTreeRootedAt: generator) : [:]
+	/// - Parameters:
+	///   - keysTheCalledSeam: Whether a fill's case carries the called seam's root enum, as a seam's builder struct does
+	///     (`filledRootKey(of:in:keysTheCalledSeam:)`), rather than that of the seam whose tree holds the place.
+	///   - reenteredFillsByKey: The fills a call inside a fill can re-enter (`emittingFillsByKey(inTreeRootedAt:)`), empty
+	///     where no fill's case carries the called seam's root enum: a seam's call that re-enters one takes the called seam's
+	///     struct from a member of its own case.
+	private static func placesAndCalls(in generator: ScopeGenerator, keysTheCalledSeam: Bool, reenteredFillsByKey: [String: ScopeGenerator]) -> [PlaceOrCall] {
 		/// Whether the walk enters `child`: its tree leads to a place, or to a call that re-enters a fill whose tree does.
 		func leadsOn(_ child: ScopeGenerator) -> Bool {
 			child.containsBuildSite || child.passesUpBuilder || (child.holdsCallReenteringEnclosingFill && !reenteredFillsByKey.isEmpty)
