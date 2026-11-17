@@ -1429,6 +1429,10 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case holePlaceInsidePlainFillTwoCalls
 	/// `HoleNestImpl` reads `holeNestId` only if available, from its fill's struct.
 	case holePlaceInsidePlainFillFulfillerReadsInnerLevel
+	/// `HoleNestImpl` holds two or three more places of `HoleService`, spelled both `any HoleService` and `HoleService`
+	/// under labels the label reversal reorders: every builder and struct of the hole type is over `any HoleService`, the
+	/// most explicit spelling, never the spelling of the place whose label sorts first.
+	case holePlacesInsideFillSpellTypeWithAndWithoutAny
 	/// A loop of received instantiators, `HoleRingA` and `HoleRingB`, each receiving the next one's `Instantiator`, whose
 	/// later member holds a place of `HoleSeam`'s hole: its case is bound before the loop's first function and holds no
 	/// member of the loop.
@@ -5306,6 +5310,12 @@ enum GraphFuzzerGenerator {
 			let plainFillPlaceTwoTypesDeep = holeRolls.plainFillPlace.percentChance(35)
 			let plainFillImplReadsId = holeRolls.plainFillPlace.percentChance(75)
 			let plainFillFulfillerReadsId = holeRolls.plainFillPlace.percentChance(30)
+			// Places inside that plain fill of one hole type spelled with and without `any`, on a generator of their own, made
+			// whatever the base draw: two or three places, every one spelled alike but the one at `spelledPlaceOtherPosition`.
+			let drawsSpelledPlaces = holeRolls.spelledPlaces.percentChance(60)
+			let spelledPlaceCount = holeRolls.spelledPlaces.integer(in: 2...3)
+			let spelledPlaceOtherPosition = holeRolls.spelledPlaces.integer(in: 0...(spelledPlaceCount - 1))
+			let spelledPlacesSpellAny = holeRolls.spelledPlaces.percentChance(50)
 			let drawsLoopPlace = holeRolls.loopPlace.percentChance(25)
 			let loopLength = holeRolls.loopPlace.percentChance(30) ? 3 : 2
 			let loopPlaceOnEveryMember = holeRolls.loopPlace.percentChance(50)
@@ -6006,6 +6016,20 @@ enum GraphFuzzerGenerator {
 					secondHolePlace = (seamName, firstCall.label)
 				}
 			}
+			// Places of `HoleService` inside the plain fill spelled with and without `any`: `HoleNestImpl` holds two or three, every
+			// one spelled alike but one, under labels the label reversal reverses (`anyT<n>Spelled`), which sort before every other
+			// label on the path to a place of the hole type inside the fill, so that a spelling chosen by the order of the places'
+			// labels moves under the reversal. Every builder and struct of the hole type is over the most explicit spelling,
+			// `any HoleService`, whatever the labels (`holePlacesInsideFillSpellTypeWithAndWithoutAny`). A hole type of the
+			// places' own would give the seam a second hole type, whose builders a move of type names across wrapper names
+			// reorders (`seamBuilderOrderReason`). Not where a fill calls the seam again, whose fill's reads the known re-entry
+			// shape loses.
+			if drawsSpelledPlaces, !fillCallsSeamAgain, let nestImplIndex = seamModuleDeclarations.firstIndex(where: { $0.name == name("HoleNestImpl") }) {
+				for position in 0..<spelledPlaceCount {
+					let spellsAny = position == spelledPlaceOtherPosition ? !spelledPlacesSpellAny : spelledPlacesSpellAny
+					seamModuleDeclarations[nestImplIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "anyT\(position + 1)Spelled", type: spellsAny ? "any \(serviceName)" : serviceName))
+				}
+			}
 			// A hole under a later member of a loop of received instantiators: the seam, or `HoleRingFlow`, which it builds by
 			// value, instantiates `holeRingABuilder` and `holeRingBBuilder`, and now and then `holeRingCBuilder`, each an
 			// `Instantiator` of a member that receives the next one's, so each member's builder function wraps the next again.
@@ -6241,6 +6265,7 @@ enum GraphFuzzerGenerator {
 				instantiatorPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6548616E64)
 				nothingForwardedPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654E6F7468)
 				passedUpPlaceValue = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6550557056)
+				spelledPlaces = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553706C6C)
 			}
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
@@ -6284,6 +6309,9 @@ enum GraphFuzzerGenerator {
 			/// A value the seam that passes the place up declares, which `HoleImpl` reads
 			/// (`holePassedUpPlaceReadsPassingSeamsValue`, `holePassedUpPlaceReadsValueTwoSeamsUp`).
 			var passedUpPlaceValue: GraphFuzzerRandomNumberGenerator
+			/// Places inside a plain fill of one hole type spelled with and without `any`
+			/// (`holePlacesInsideFillSpellTypeWithAndWithoutAny`).
+			var spelledPlaces: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -10241,6 +10269,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		if properties(of: "HoleNestImpl").contains(where: { $0.label == "holeErasure" }) {
 			features.insert(.holeErasureInsidePlainFill)
 		}
+		let spelledPlaceTypes = Set(properties(of: "HoleNestImpl").filter { $0.label.hasSuffix("Spelled") }.map(\.type))
+		if spelledPlaceTypes.count == 2 {
+			features.insert(.holePlacesInsideFillSpellTypeWithAndWithoutAny)
+		}
 		if properties(of: "HoleDeepImpl").contains(where: { $0.label == "holeErasure" }) {
 			features.insert(.holeErasureInsideSendableFill)
 		}
@@ -10513,6 +10545,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		let builderParameter = try! NSRegularExpression(pattern: #"\b\w+Builder\w*: (?:@escaping (@Sendable )?\((\w+\.)?SafeDI(?:Sendable)?Scope_|(\w+\.)?SafeDI(?:Sendable)?Scope_\w+\.__safeDI_Builder<)"#)
 		let otherSeamsStruct = try! NSRegularExpression(pattern: #"@escaping (?:@Sendable )?\((\w+)\.SafeDI(?:Sendable)?Scope_"#)
 		let enumCaseOfInnerSeam = try! NSRegularExpression(pattern: #"^ +(?:indirect )?case \w+\((?:\w+, )?\w+\.SafeDI(?:Sendable)?Scope_"#)
+		// A builder struct's member that builds another seam's builder struct, as an enum's case holding another seam's enum did.
+		let structMemberOfInnerSeam = try! NSRegularExpression(pattern: #"^ +public let \w+: (?:@Sendable )?\(\w+_Values\) -> (\w+)\.SafeDI(?:Sendable)?Scope_"#)
+		// A function that returns a level's builder struct: its indentation, its name, the seam, the struct's path in the seam,
+		// and the struct's generic argument.
+		let levelFunction = try! NSRegularExpression(pattern: #"^( *)(?:@Sendable )?(?:nonisolated )?func (__safeDI_\w+)\([^)]*\) -> (\w+)\.(SafeDI(?:Sendable)?Scope_\w+(?:\.\w+_Scope)*)\.__safeDI_Builder<(.*) \{$"#)
+		let calledLevelFunction = try! NSRegularExpression(pattern: #"\bin (__safeDI_\w+)\(\)"#)
 		// A fill takes a case's payload; a dispatcher, the enum, which is no fill.
 		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+_Scope_*)?\.\w+_Values"#)
 		let dispatcherDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
@@ -10547,6 +10585,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					extendedType = String(line.dropFirst("extension ".count).dropLast(2))
 				} else if line.hasPrefix("}") {
 					extendedType = nil
+				}
+				if let extendedType, let member = firstMatch(structMemberOfInnerSeam, in: line), member[1] != extendedType {
+					features.insert(.passedUpBuilder)
 				}
 				if line.contains("init("), firstMatch(builderParameter, in: line) != nil {
 					features.insert(.builderParameter)
@@ -10631,6 +10672,34 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					features.insert(.fillOfPassedUpBuilderPassedToItsSeam)
 				}
 				if let callAfter, calledInside.contains(where: { $0 != scopeSeam && !callAfter.contains("return \($0)(") }) {
+					features.insert(.fillPassedToSeamPassingItsSiteUp)
+				}
+			}
+			// The same call where the fill is a level function: the struct of a fill's own level of seam `S`'s place, which the
+			// builder struct of the seam the fill is declared for is over, builds, in a member, the struct of seam `B`, which
+			// passes the place up, where `B` is neither `S` nor that seam.
+			struct LevelFunction {
+				let seam: String
+				let structPath: String
+				let genericArgument: String
+				let calledFunctions: [String]
+			}
+			var levelFunctionsByName = [String: LevelFunction]()
+			for (index, line) in lines.enumerated() {
+				guard let function = firstMatch(levelFunction, in: line) else { continue }
+				let bodyEnd = lines[(index + 1)...].firstIndex(of: function[1] + "}") ?? lines.count
+				let calledFunctions = lines[(index + 1)..<bodyEnd].flatMap { bodyLine in
+					calledLevelFunction.matches(in: bodyLine, range: NSRange(bodyLine.startIndex..., in: bodyLine)).compactMap { match in
+						Range(match.range(at: 1), in: bodyLine).map { String(bodyLine[$0]) }
+					}
+				}
+				levelFunctionsByName[function[2]] = LevelFunction(seam: function[3], structPath: function[3] + "." + function[4], genericArgument: function[5], calledFunctions: calledFunctions)
+			}
+			for function in levelFunctionsByName.values {
+				let seamsTheFillIsDeclaredFor = Set(levelFunctionsByName.values.filter { $0.genericArgument.hasPrefix(function.structPath + ".__safeDI_Builder<") }.map(\.seam))
+				guard !seamsTheFillIsDeclaredFor.isEmpty else { continue }
+				let calledSeams = function.calledFunctions.compactMap { levelFunctionsByName[$0]?.seam }
+				if calledSeams.contains(where: { $0 != function.seam && !seamsTheFillIsDeclaredFor.contains($0) }) {
 					features.insert(.fillPassedToSeamPassingItsSiteUp)
 				}
 			}
