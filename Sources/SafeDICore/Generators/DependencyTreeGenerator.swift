@@ -329,25 +329,30 @@ public actor DependencyTreeGenerator {
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
-		// The scopes of both mock scope maps outlive every mock root's tree, so the memo may be shared between them.
-		var constructionMemo = ConstructionMemo(sharing: ConstructionMemo.sharingBetweenTrees)
+		// One memo for the mock roots, shared between them as `sharingBetweenMockRoots` says.
+		var constructionMemo = ConstructionMemo(sharing: ConstructionMemo.sharingBetweenMockRoots)
 		var mockRootErrors = [DependencyTreeGeneratorError]()
-		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
+		// Skip types where generateMock is not enabled (unless explicitly listed
+		// in additionalMocksToGenerate), duplicates, and types not in the scope map.
+		// Types from dependent modules are skipped unless they appear in
+		// additionalMocksToGenerate. When generateMock is true and a hand-written
+		// mock exists, the generated mock calls through to the hand-written one
+		// (which must have a different name specified by customMockName).
+		var mockRootCandidates = typeDescriptionToFulfillingInstantiableMap.values
 			.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
-		{
+			.filter { instantiable in
+				(instantiable.generatesMock || additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource))
+					&& seen.insert(instantiable.concreteInstantiable).inserted
+			}
+		// The memo oracle builds the mock roots in reverse order too; `mockRoots` is put back in type order below.
+		if ConstructionMemoOracle.buildsMockRootsInReverseOrder {
+			mockRootCandidates.reverse()
+		}
+		for instantiable in mockRootCandidates {
 			let isAdditionalMock = additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource)
-			// Skip types where generateMock is not enabled (unless explicitly listed
-			// in additionalMocksToGenerate), duplicates, and types not in the scope map.
-			// Types from dependent modules are skipped unless they appear in
-			// additionalMocksToGenerate. When generateMock is true and a hand-written
-			// mock exists, the generated mock calls through to the hand-written one
-			// (which must have a different name specified by customMockName).
 			// A public mock's tree is built from the scopes with holes.
 			let rootMockScopes = mockScopes.forMockRoot(instantiable)
-			guard instantiable.generatesMock || isAdditionalMock,
-			      seen.insert(instantiable.concreteInstantiable).inserted,
-			      let scope = rootMockScopes.typeDescriptionToScopeMap[instantiable.concreteInstantiable]
-			else { continue }
+			guard let scope = rootMockScopes.typeDescriptionToScopeMap[instantiable.concreteInstantiable] else { continue }
 			let instantiable = mockRootInstantiable(for: instantiable, scope: scope)
 			// Without module scoping, every type belongs to the current module.
 			let isDeclaredInCurrentModule = currentModuleSourceFilePaths.map { currentModuleSourceFilePaths in
@@ -386,6 +391,9 @@ public actor DependencyTreeGenerator {
 			} catch let error as DependencyTreeGeneratorError {
 				mockRootErrors.append(error)
 			}
+		}
+		if ConstructionMemoOracle.buildsMockRootsInReverseOrder {
+			mockRoots.reverse()
 		}
 		// A call of another module's public mock that would pass `nil` for a value the tree holds is rejected before any
 		// code is generated, root by root in type order, and reported in source order, as is a hand-written method named
@@ -3211,7 +3219,7 @@ public actor DependencyTreeGenerator {
 							typeDescriptionToScopeMap[typeDescription].map { (typeDescription: typeDescription, scope: $0) }
 						},
 					)
-					var constructionMemo = ConstructionMemo(sharing: ConstructionMemo.sharingBetweenTrees)
+					var constructionMemo = ConstructionMemo()
 					return try rootScopesToGenerate.map { typeDescription, scope in
 						try RootScopeInfo(
 							typeDescription: typeDescription,
@@ -4502,7 +4510,7 @@ public actor DependencyTreeGenerator {
 			},
 			checkingSeamTrees: generatedSeams.map { (instantiable: $0.seam, scope: $0.rootScope) },
 		)
-		var constructionMemo = ConstructionMemo(sharing: ConstructionMemo.sharingBetweenTrees)
+		var constructionMemo = ConstructionMemo()
 		var rootScopeGenerators = try rootScopesToGenerate.map { typeDescription, scope in
 			try RootScopeInfo(
 				typeDescription: typeDescription,
@@ -9173,7 +9181,7 @@ public actor DependencyTreeGenerator {
 	/// in a form no one parameter carries together with the forms the seam's tree receives is rejected as its inline build
 	/// is, with the same error. A hole this module does not fill has no scope, and its tree ends there.
 	private func inlineTreesOfForeignSeamsWithHoles(in typeDescriptionToScopeMap: [TypeDescription: Scope]) throws -> [ScopeGenerator] {
-		var constructionMemo = ConstructionMemo(sharing: ConstructionMemo.sharingBetweenTrees)
+		var constructionMemo = ConstructionMemo()
 		return try foreignSeamTypesWithHoles().compactMap { typeDescriptionToScopeMap[$0] }.map { scope in
 			try scope.createScopeGenerator(
 				for: nil,

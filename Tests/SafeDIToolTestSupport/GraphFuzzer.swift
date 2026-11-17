@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 import Foundation
+import SafeDICore
 import Testing
 
 // MARK: - Random number generator
@@ -13053,7 +13054,11 @@ enum GraphFuzzerOracle {
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
 			firstOutcome: firstOutcome,
-			secondOutcome: toolOutcome(of: fixture),
+			// The second run creates the mock roots in reverse order, so that a construction memo shared between them
+			// carries other roots' generators to each; it must still give the first run's outcome.
+			secondOutcome: ConstructionMemoOracle.$buildsMockRootsInReverseOrder.withValue(true) {
+				try await toolOutcome(of: fixture)
+			},
 			renamedOutcomes: renamedOutcomes,
 			inlineOutcome: inlineOutcome,
 			visibleOutcome: visibleOutcome,

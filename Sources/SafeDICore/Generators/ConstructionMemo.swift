@@ -36,9 +36,10 @@
 /// place it compares. Only completed builds are stored: a pass that throws throws away its memo.
 ///
 /// A memo shared across trees (`Sharing.acrossTrees`) carries the first pass of each tree that finished to the trees
-/// created after it with the same memo. A first pass's keys name no generator of a pass before, so no key names an object
-/// that can be freed while the memo lives: each scope a child is built from belongs to a scope map that outlives the trees
-/// created from it, and a root's own scope is never a child's. A first pass starts each generator's code as it creates it,
+/// created after it with the same memo, which only the mock roots do: production trees keep a memo per tree. A first
+/// pass's keys name no generator of a pass before, and the memo keeps alive every scope its keys name, so no key names an
+/// object whose address another object can take while the memo lives. A root's own place is never stored. A tree built
+/// with a seam root or a mock root's builders neither reads nor keeps a shared memo. A first pass starts each generator's code as it creates it,
 /// so every generator a later tree reuses has started. What is constant in a pass of one tree and not across trees is
 /// either in the key (the flags) or excluded (a tree with holes, which alone has a start order of its own).
 struct ConstructionMemo {
@@ -50,8 +51,9 @@ struct ConstructionMemo {
 		case acrossTrees
 	}
 
-	/// How `DependencyTreeGenerator` shares the memo between the trees it creates. The memo oracle sets each value.
-	@TaskLocal static var sharingBetweenTrees = Sharing.acrossTrees
+	/// How `DependencyTreeGenerator` shares the memo between the mock roots it creates. Production trees always keep a
+	/// memo per tree.
+	@TaskLocal static var sharingBetweenMockRoots = Sharing.perTree
 
 	init(sharing: Sharing = .perTree) {
 		self.sharing = sharing
@@ -76,6 +78,7 @@ struct ConstructionMemo {
 			break
 		case .acrossTrees:
 			entriesByKey = firstPassMemo.entriesByKey
+			keyedScopes = firstPassMemo.keyedScopes
 		}
 	}
 
@@ -128,11 +131,33 @@ struct ConstructionMemo {
 		return nil
 	}
 
-	mutating func store(_ entry: Entry, for key: Key) {
+	/// Stores `entry` under `key`, keeping `scope`, the scope the key names, alive as long as the memo.
+	mutating func store(_ entry: Entry, for key: Key, keepingAlive scope: Scope) {
 		entriesByKey[key, default: []].append(entry)
+		keyedScopes.append(scope)
 	}
 
 	private var entriesByKey = [Key: [Entry]]()
+	/// The scopes `entriesByKey`'s keys name by identity, kept so that no other scope can take one's address.
+	private var keyedScopes = [Scope]()
+
+	/// The memo the memo oracle's build with the memo shares across the trees created with this memo
+	/// (`ConstructionMemoOracle`).
+	var oracleMemo: ConstructionMemo {
+		get {
+			var oracleMemo = ConstructionMemo(sharing: .acrossTrees)
+			oracleMemo.entriesByKey = oracleEntriesByKey
+			oracleMemo.keyedScopes = oracleKeyedScopes
+			return oracleMemo
+		}
+		set {
+			oracleEntriesByKey = newValue.entriesByKey
+			oracleKeyedScopes = newValue.keyedScopes
+		}
+	}
+
+	private var oracleEntriesByKey = [Key: [Entry]]()
+	private var oracleKeyedScopes = [Scope]()
 
 	/// Whether `Scope.createScopeGenerator` reuses the generators of places it already built. Turned off only by the memo
 	/// oracle, which compares the trees built with and without it.
@@ -297,4 +322,16 @@ extension Property {
 		}
 		return spellings
 	}
+}
+
+/// The memo oracle's hook: test only.
+public enum ConstructionMemoOracle {
+	/// Called each time `Scope.createScopeGenerator` creates a tree, with two more builds of it, neither of which starts
+	/// its code: one with the construction memo, shared across the trees created with one memo, and one without it. The
+	/// two must hold the same data on every path.
+	@TaskLocal public static var observer: (@Sendable (_ treeBuiltWithMemo: any Sendable, _ treeBuiltWithoutMemo: any Sendable) -> Void)?
+
+	/// Whether `DependencyTreeGenerator` creates its mock roots in reverse type order, so that a memo shared between them
+	/// carries other trees' generators to each; what it generates must not change.
+	@TaskLocal public static var buildsMockRootsInReverseOrder = false
 }

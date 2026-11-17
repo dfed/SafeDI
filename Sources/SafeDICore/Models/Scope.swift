@@ -415,8 +415,77 @@ final class Scope: Hashable {
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
 	) throws -> ScopeGenerator {
+		let scopeGenerator = try createdTree(
+			for: property,
+			nearestDeclarations: nearestDeclarations,
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			seamRoot: seamRoot,
+			mockBuilders: mockBuilders,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			forMockGeneration: forMockGeneration,
+			startsCodeGeneration: startsCodeGeneration,
+			validatesForwardedProperties: validatesForwardedProperties,
+			declaredTypeNames: declaredTypeNames,
+			constructionMemo: &constructionMemo,
+		)
+		if let observer = ConstructionMemoOracle.observer {
+			// The oracle's two builds start no code, so nothing changes either while it is read. The build with the memo
+			// shares it across every tree created with this memo, whatever the memo's own sharing, so that the oracle judges
+			// every reuse either sharing makes.
+			var oracleMemo = constructionMemo.oracleMemo
+			let treeBuiltWithMemo = try createdTree(
+				for: property,
+				nearestDeclarations: nearestDeclarations,
+				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+				seamRoot: seamRoot,
+				mockBuilders: mockBuilders,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+				forMockGeneration: forMockGeneration,
+				startsCodeGeneration: false,
+				validatesForwardedProperties: validatesForwardedProperties,
+				declaredTypeNames: declaredTypeNames,
+				constructionMemo: &oracleMemo,
+			)
+			constructionMemo.oracleMemo = oracleMemo
+			let treeBuiltWithoutMemo = try ConstructionMemo.$isEnabled.withValue(false) {
+				var unusedMemo = ConstructionMemo()
+				return try createdTree(
+					for: property,
+					nearestDeclarations: nearestDeclarations,
+					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+					seamRoot: seamRoot,
+					mockBuilders: mockBuilders,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+					forMockGeneration: forMockGeneration,
+					startsCodeGeneration: false,
+					validatesForwardedProperties: validatesForwardedProperties,
+					declaredTypeNames: declaredTypeNames,
+					constructionMemo: &unusedMemo,
+				)
+			}
+			observer(treeBuiltWithMemo, treeBuiltWithoutMemo)
+		}
+		return scopeGenerator
+	}
+
+	/// The tree `createScopeGenerator` creates, in as many passes as it takes.
+	private func createdTree(
+		for property: Property?,
+		nearestDeclarations: NearestDeclarations,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
+		seamRoot: ScopeGenerator.SeamRoot?,
+		mockBuilders: DependencyTreeGenerator.ShapedBuilders?,
+		erasedToConcreteExistential: Bool,
+		forMockGeneration: Bool,
+		startsCodeGeneration: Bool,
+		validatesForwardedProperties: Bool,
+		declaredTypeNames: DeclaredTypeNames,
+		constructionMemo: inout ConstructionMemo,
+	) throws -> ScopeGenerator {
 		var previousPassGenerator: ScopeGenerator?
-		var firstPassMemo: ConstructionMemo?
+		var firstPassMemo = ConstructionMemo()
+		// A tree with a seam root or a mock root's builders has holes, whose places read context the memo does not cover.
+		let sharesMemo = seamRoot == nil && mockBuilders == nil
 		var placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?
 		var scopeGenerator: ScopeGenerator
 		var generatorsToStart: [ScopeGenerator]?
@@ -427,7 +496,7 @@ final class Scope: Hashable {
 			if previousPassGenerator != nil {
 				generatorsToStart = []
 			}
-			var passMemo = previousPassGenerator == nil ? constructionMemo.memoForFirstPass : ConstructionMemo()
+			var passMemo = previousPassGenerator == nil && sharesMemo ? constructionMemo.memoForFirstPass : ConstructionMemo()
 			scopeGenerator = try createScopeGenerator(
 				for: property,
 				nearestDeclarations: nearestDeclarations,
@@ -460,7 +529,7 @@ final class Scope: Hashable {
 		for generator in generatorsToStart ?? [] {
 			ScopeGeneratorUnderConstruction.startCodeGeneration(of: generator)
 		}
-		if let firstPassMemo {
+		if sharesMemo {
 			constructionMemo.keepEntries(ofFirstPass: firstPassMemo)
 		}
 		return scopeGenerator
@@ -558,7 +627,7 @@ final class Scope: Hashable {
 				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
 				let scopeGenerator = createdScope.scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart, startedGenerators: &startedGenerators)
 				if let key = createdScope.memoKey, createdScope.isMemoizable {
-					memo.store(ConstructionMemo.Entry(reads: createdScope.readsAnsweredAbove, generator: scopeGenerator, subtreeScopeCount: createdScope.subtreeScopeCount), for: key)
+					memo.store(ConstructionMemo.Entry(reads: createdScope.readsAnsweredAbove, generator: scopeGenerator, subtreeScopeCount: createdScope.subtreeScopeCount), for: key, keepingAlive: createdScope.builtScope)
 				}
 				if scopeGeneratorsUnderConstruction.isEmpty {
 					return scopeGenerator
@@ -1656,6 +1725,10 @@ private struct ScopeGeneratorUnderConstruction {
 	}
 
 	private let scope: Scope
+	/// The scope this place builds.
+	var builtScope: Scope {
+		scope
+	}
 	private let property: Property?
 	/// Whether this scope is in the tree of a fill a mock declares, whose types are built as the mock's tree built
 	/// inline builds them: each with its hand-written mock where `mockReturnTypeIsCompatible` says the mock builds it.

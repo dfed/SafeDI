@@ -46,7 +46,7 @@ enum ConstructionMemoChecks {
 		guard digests.digest(of: treeBuiltWithMemo) != digests.digest(of: treeBuiltWithoutMemo) else { return nil }
 		let withMemo = Description.text(of: treeBuiltWithMemo).split(separator: "\n", omittingEmptySubsequences: false)
 		let withoutMemo = Description.text(of: treeBuiltWithoutMemo).split(separator: "\n", omittingEmptySubsequences: false)
-		let index = zip(withMemo, withoutMemo).firstIndex { !$0.utf8.elementsEqual($1.utf8) } ?? min(withMemo.count, withoutMemo.count)
+		let index = Array(zip(withMemo, withoutMemo)).firstIndex { !$0.utf8.elementsEqual($1.utf8) } ?? min(withMemo.count, withoutMemo.count)
 		let lineWithMemo = index < withMemo.count ? String(withMemo[index]) : "(end)"
 		let lineWithoutMemo = index < withoutMemo.count ? String(withoutMemo[index]) : "(end)"
 		return """
@@ -128,11 +128,11 @@ enum ConstructionMemoChecks {
 					low.combine(childDigest)
 				}
 			}
-			let digest = Digest(high: high.finalize(), low: low.finalize())
+			let valueDigest = Digest(high: high.finalize(), low: low.finalize())
 			if let object {
-				digestsByObject[ObjectIdentifier(object)] = digest
+				digestsByObject[ObjectIdentifier(object)] = valueDigest
 			}
-			return digest
+			return valueDigest
 		}
 
 		private var digestsByObject = [ObjectIdentifier: Digest]()
