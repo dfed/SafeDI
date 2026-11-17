@@ -67,6 +67,17 @@ struct GraphFuzzerFixture: Equatable {
 	/// fixtures of several seeds compile together as one module.
 	let swiftFileContent: [String]
 
+	/// The conditions the tool is told the build compiles a graph in one module under: `DEBUG`, the mock condition, for a
+	/// graph that draws a mock parameter an inactive `#if` clause declares (`addingGuardedMockParameterShapes`), whose
+	/// error only a build that compiles the generated mocks reports; none for every other graph, as before the draw.
+	var activeCompilationConditions: [String] {
+		swiftFileContent.contains { $0.contains(Self.guardedMockParameterCondition) } ? ["DEBUG"] : []
+	}
+
+	/// The condition of the clause that declares the dependency of `addingGuardedMockParameterShapes`, which no build of
+	/// the fuzzer sets.
+	static let guardedMockParameterCondition = "FUZZ_GUARD"
+
 	/// A seam corpus graph, every module of which that declares a seam sets `generatePlainDependencyTreeInitializers: true`,
 	/// so the oracles read and call the readable initializer a person calls, beside the one only generated code calls. The
 	/// public-mock corpus's graphs are drawn as they are.
@@ -2190,10 +2201,94 @@ enum GraphFuzzerGenerator {
 		/// takes every parameter its initializer takes, with the same defaults, and passes each on to it: `mock`, or the
 		/// method its `customMockName` names. `nil` for a type without one.
 		var handWrittenMockName: String?
+		/// The dependency the type declares only inside an `#if` clause no build of the fuzzer selects, with the hand-written
+		/// mock that takes it (`addingGuardedMockParameterShapes`), in place of what `properties` and `handWrittenMockName`
+		/// write. `nil` for every other type.
+		var guardedMockParameter: GuardedMockParameter?
 
 		/// The type's access as the compiler reads it: its own, capped by the type its extension extends.
 		var effectiveAccess: AccessLevel {
 			min(access, enclosingTypeAccess)
+		}
+	}
+
+	/// A dependency a type declares only inside an `#if` clause that no build of the fuzzer selects, and the hand-written
+	/// mock that takes it without a default value, so that no generated mock can call that mock.
+	struct GuardedMockParameter {
+		/// Where the `#if` block declares the dependency. The other clauses declare an initializer without parameters.
+		enum ClauseForm: CaseIterable {
+			/// `#if FUZZ_GUARD`, before `#else`.
+			case ifClause
+			/// `#else`, after `#if !FUZZ_GUARD`.
+			case elseClause
+			/// `#elseif FUZZ_GUARD`, between `#if FUZZ_OTHER` and `#else`.
+			case elseifClause
+			/// `#if FUZZ_INNER`, nested in `#if FUZZ_GUARD`: no one clause holds the dependency itself, so the error does
+			/// not offer to move the mock.
+			case nestedClause
+
+			/// The block's lines without indentation: a directive, or which initializer a clause declares.
+			fileprivate enum Line {
+				case directive(String)
+				case dependency
+				case noDependency
+			}
+
+			fileprivate var lines: [Line] {
+				switch self {
+				case .ifClause:
+					[.directive("#if FUZZ_GUARD"), .dependency, .directive("#else"), .noDependency, .directive("#endif")]
+				case .elseClause:
+					[.directive("#if !FUZZ_GUARD"), .noDependency, .directive("#else"), .dependency, .directive("#endif")]
+				case .elseifClause:
+					[.directive("#if FUZZ_OTHER"), .noDependency, .directive("#elseif FUZZ_GUARD"), .dependency, .directive("#else"), .noDependency, .directive("#endif")]
+				case .nestedClause:
+					[
+						.directive("#if FUZZ_GUARD"), .directive("#if FUZZ_INNER"), .dependency, .directive("#else"), .noDependency, .directive("#endif"),
+						.directive("#else"), .noDependency, .directive("#endif"),
+					]
+				}
+			}
+		}
+
+		let clauseForm: ClauseForm
+		let property: PropertyDeclaration
+		/// `mock`, or the method the type's `customMockName` names.
+		let mockName: String
+
+		/// The lines of the type's body: the `#if` block, whose clauses each declare an initializer, and the mock under
+		/// `#if DEBUG`, which takes the dependency and builds the type as the clause the compiler selects does.
+		fileprivate func bodyLines(ofTypeNamed typeName: String) -> [String] {
+			var lines = [String]()
+			for line in clauseForm.lines {
+				switch line {
+				case let .directive(directive):
+					lines.append("\t\(directive)")
+				case .dependency:
+					lines += [
+						"\tpublic init(\(property.label): \(property.type)) {",
+						"\t\tself.\(property.label) = \(property.label)",
+						"\t}",
+						"",
+						"\t\(property.attribute) let \(property.label): \(property.type)",
+					]
+				case .noDependency:
+					lines.append("\tpublic init() {}")
+				}
+			}
+			lines += ["", "\t#if DEBUG", "\tpublic static func \(mockName)(\(property.label): \(property.type)) -> \(typeName) {"]
+			for line in clauseForm.lines {
+				switch line {
+				case let .directive(directive):
+					lines.append("\t\t\(directive)")
+				case .dependency:
+					lines.append("\t\t\(typeName)(\(property.label): \(property.label))")
+				case .noDependency:
+					lines.append("\t\t\(typeName)()")
+				}
+			}
+			lines += ["\t}", "\t#endif"]
+			return lines
 		}
 	}
 
@@ -2361,6 +2456,7 @@ enum GraphFuzzerGenerator {
 			retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionRandomSeedMask)
 			builderReceivedBesideReceiveLeftNilRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.builderReceivedBesideReceiveLeftNilRandomSeedMask)
 			keywordLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.keywordLabelRandomSeedMask)
+			guardedMockParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.guardedMockParameterRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2433,6 +2529,8 @@ enum GraphFuzzerGenerator {
 			var finalDeclarations = addingMockVocabulary(to: movingSelfContainedSeamsIntoSeamModule(
 				addingMockOnlyBlockParameterTypes(to: addingUnreadParameterTypes(to: addingLabelFormsSeam(to: addingHoleShapes(to: addingAccessProofExtensions(to: addingAccessProofShapes(to: aliasDeclarations)))))),
 			))
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingGuardedMockParameterShapes(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -2813,6 +2911,7 @@ enum GraphFuzzerGenerator {
 		/// Draws only `labelingHoleOwnersAsKeywords`' choices: whether a graph's seam builds `HoleOwner` under keyword labels,
 		/// and which.
 		private var keywordLabelRandom: GraphFuzzerRandomNumberGenerator
+		private var guardedMockParameterRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -6709,6 +6808,53 @@ enum GraphFuzzerGenerator {
 
 		private static let mockVocabularyRandomSeedMask: UInt64 = 0x6D6F636B566F6361
 
+		// MARK: Guarded mock parameters
+
+		/// The base corpus's draw, in one graph of fifty, of a hand-written mock no generated mock can call: `Guarded`
+		/// declares `guardedValue: GuardedValue`, instantiated or received, only inside an `#if` clause that no build of
+		/// the fuzzer selects (`GuardedMockParameter.ClauseForm`), and its mock under `#if DEBUG` takes `guardedValue`
+		/// without a default value. Either the first root instantiates `GuardedHost`, whose `mock()` is generated and which
+		/// instantiates `Guarded`, so that the host's mock builds it with its `mock`; or the first root instantiates
+		/// `Guarded` itself, whose `mock()` is generated and calls the `customMock` its `customMockName` names. The tool
+		/// rejects every such graph with `GraphFuzzerOracle.guardedMockParameterErrorMarker` at the clause, among its other
+		/// errors, which the base corpus counts and whose remedies the remedy oracle applies.
+		/// `guardedMockParameterRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingGuardedMockParameterShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, guardedMockParameterRandom.percentChance(2) else { return declarations }
+			var declarations = declarations
+			let guardedName = "\(prefix)Guarded"
+			let valueName = "\(prefix)GuardedValue"
+			let isMockedItself = guardedMockParameterRandom.percentChance(50)
+			var guarded = TypeDeclaration(
+				name: guardedName,
+				instantiableArguments: isMockedItself ? ["generateMock: true", "customMockName: \"customMock\""] : [],
+				properties: [],
+				declaresHelperTypes: false,
+			)
+			guarded.guardedMockParameter = GuardedMockParameter(
+				clauseForm: guardedMockParameterRandom.element(of: GuardedMockParameter.ClauseForm.allCases),
+				property: PropertyDeclaration(attribute: guardedMockParameterRandom.percentChance(50) ? "@Instantiated" : "@Received", label: "guardedValue", type: valueName),
+				mockName: isMockedItself ? "customMock" : "mock",
+			)
+			let value = TypeDeclaration(name: valueName, instantiableArguments: [], properties: [], declaresHelperTypes: false)
+			if isMockedItself {
+				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "guarded", type: guardedName))
+				return declarations + [guarded, value]
+			} else {
+				let hostName = "\(prefix)GuardedHost"
+				let host = TypeDeclaration(
+					name: hostName,
+					instantiableArguments: ["generateMock: true"],
+					properties: [PropertyDeclaration(attribute: "@Instantiated", label: "guarded", type: guardedName)],
+					declaresHelperTypes: false,
+				)
+				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "guardedHost", type: hostName))
+				return declarations + [host, guarded, value]
+			}
+		}
+
+		private static let guardedMockParameterRandomSeedMask: UInt64 = 0x67756172644D636B
+
 		// MARK: Cycle parameters
 
 		/// How a property of `addingCycleParameterShapes`' cycle builds its type.
@@ -7725,7 +7871,9 @@ enum GraphFuzzerGenerator {
 			let narrowestNamedAccess = (declaration.properties.map(\.type) + declaration.defaultValuedParameters.map(\.type)).map(narrowestProofTypeAccess(in:)).min() ?? .public
 			let initializerAccess = min(spelledInitializerAccess, declaration.effectiveAccess) <= narrowestNamedAccess ? spelledInitializerAccess : narrowestNamedAccess
 			let storedParameters = storesEveryParameter ? declaration.defaultValuedParameters : []
-			if declaration.properties.isEmpty, storedParameters.isEmpty {
+			if let guardedMockParameter = declaration.guardedMockParameter {
+				lines += guardedMockParameter.bodyLines(ofTypeNamed: declaration.name)
+			} else if declaration.properties.isEmpty, storedParameters.isEmpty {
 				lines.append("\t\(initializerAccess.modifier)init(\(parameters)) {}")
 			} else {
 				lines.append("\t\(initializerAccess.modifier)init(\(parameters)) {")
@@ -13105,6 +13253,7 @@ enum GraphFuzzerOracle {
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 				skipCompileVerification: true,
+				activeCompilationConditions: fixture.activeCompilationConditions,
 				// The fuzzer's graphs are no test's expectations, so a record run never writes them.
 				recordDirectory: nil,
 			)

@@ -403,6 +403,224 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_defaultTheMockParameterOrMoveTheMockIntoTheClauseAndLeaveNoErrorAtTheDependency_whenAMockTakesADependencyOfAnInactiveClause() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(guardedHost: S1_GuardedHost) {
+					self.guardedHost = guardedHost
+				}
+
+				@Instantiated let guardedHost: S1_GuardedHost
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public final class S1_GuardedHost: Instantiable {
+				public init(guarded: S1_Guarded) {
+					self.guarded = guarded
+				}
+
+				@Instantiated let guarded: S1_Guarded
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_Guarded: Instantiable {
+				#if FUZZ_OTHER
+				public init() {}
+				#elseif FUZZ_GUARD
+				public init(guardedValue: S1_GuardedValue) {
+					self.guardedValue = guardedValue
+				}
+
+				@Instantiated let guardedValue: S1_GuardedValue
+				#else
+				public init() {}
+				#endif
+
+				#if DEBUG
+				public static func mock(guardedValue: S1_GuardedValue) -> S1_Guarded {
+					#if FUZZ_OTHER
+					S1_Guarded()
+					#elseif FUZZ_GUARD
+					S1_Guarded(guardedValue: guardedValue)
+					#else
+					S1_Guarded()
+					#endif
+				}
+				#endif
+			}
+			""",
+			Self.leaf("S1_GuardedValue"),
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.defaultMockParameter, .moveMockIntoClause])
+		#expect(runs.first?.remedy.fixture.swiftFileContent[2] == """
+		@Instantiable
+		public final class S1_Guarded: Instantiable {
+			#if FUZZ_OTHER
+			public init() {}
+			#elseif FUZZ_GUARD
+			public init(guardedValue: S1_GuardedValue) {
+				self.guardedValue = guardedValue
+			}
+
+			@Instantiated let guardedValue: S1_GuardedValue
+			#else
+			public init() {}
+			#endif
+
+			#if DEBUG
+			public static func mock(guardedValue: S1_GuardedValue = S1_GuardedValue()) -> S1_Guarded {
+				#if FUZZ_OTHER
+				S1_Guarded()
+				#elseif FUZZ_GUARD
+				S1_Guarded(guardedValue: guardedValue)
+				#else
+				S1_Guarded()
+				#endif
+			}
+			#endif
+		}
+		""")
+		#expect(runs.last?.remedy.fixture.swiftFileContent[2] == """
+		@Instantiable
+		public final class S1_Guarded: Instantiable {
+			#if FUZZ_OTHER
+			public init() {}
+			#elseif FUZZ_GUARD
+			public init(guardedValue: S1_GuardedValue) {
+				self.guardedValue = guardedValue
+			}
+
+			@Instantiated let guardedValue: S1_GuardedValue
+
+			#if DEBUG
+			public static func mock(guardedValue: S1_GuardedValue) -> S1_Guarded {
+				#if FUZZ_OTHER
+				S1_Guarded()
+				#elseif FUZZ_GUARD
+				S1_Guarded(guardedValue: guardedValue)
+				#else
+				S1_Guarded()
+				#endif
+			}
+			#endif
+			#else
+			public init() {}
+			#endif
+		}
+		""")
+		#expect(runs.map(\.errorsAtSite) == [[], []])
+		#expect(runs.map {
+			if case .accepted = $0.outcome {
+				true
+			} else {
+				false
+			}
+		} == [true, true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_defaultTheMockParameterOnlyAndLeaveNoErrorAtTheDependency_whenTheInactiveClauseHoldsTheDependencyInANestedBlock() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(guarded: S1_Guarded) {
+					self.guarded = guarded
+				}
+
+				@Instantiated let guarded: S1_Guarded
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true, customMockName: "customMock")
+			public final class S1_Guarded: Instantiable {
+				#if FUZZ_GUARD
+				#if FUZZ_INNER
+				public init(guardedValue: S1_GuardedValue) {
+					self.guardedValue = guardedValue
+				}
+
+				@Received let guardedValue: S1_GuardedValue
+				#else
+				public init() {}
+				#endif
+				#else
+				public init() {}
+				#endif
+
+				#if DEBUG
+				public static func customMock(guardedValue: S1_GuardedValue) -> S1_Guarded {
+					#if FUZZ_GUARD
+					#if FUZZ_INNER
+					S1_Guarded(guardedValue: guardedValue)
+					#else
+					S1_Guarded()
+					#endif
+					#else
+					S1_Guarded()
+					#endif
+				}
+				#endif
+			}
+			""",
+			Self.leaf("S1_GuardedValue"),
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.defaultMockParameter])
+		#expect(runs.first?.remedy.fixture.swiftFileContent[1] == """
+		@Instantiable(generateMock: true, customMockName: "customMock")
+		public final class S1_Guarded: Instantiable {
+			#if FUZZ_GUARD
+			#if FUZZ_INNER
+			public init(guardedValue: S1_GuardedValue) {
+				self.guardedValue = guardedValue
+			}
+
+			@Received let guardedValue: S1_GuardedValue
+			#else
+			public init() {}
+			#endif
+			#else
+			public init() {}
+			#endif
+
+			#if DEBUG
+			public static func customMock(guardedValue: S1_GuardedValue = S1_GuardedValue()) -> S1_Guarded {
+				#if FUZZ_GUARD
+				#if FUZZ_INNER
+				S1_Guarded(guardedValue: guardedValue)
+				#else
+				S1_Guarded()
+				#endif
+				#else
+				S1_Guarded()
+				#endif
+			}
+			#endif
+		}
+		""")
+		#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(runs.map {
+			if case .accepted = $0.outcome {
+				true
+			} else {
+				false
+			}
+		} == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func remedyRuns_leaveNoErrorAtTheReceive_whenTheSuggestedOnlyIfAvailableReceiveIsInsideASendableBuilder() async throws {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
 			"""
