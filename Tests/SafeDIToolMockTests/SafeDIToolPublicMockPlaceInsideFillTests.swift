@@ -207,12 +207,26 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            outer: Outer.SafeDIOverrides = .init(),
 			            id: Int? = nil
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			            self.id = id
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
 			        let id: Int?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -838,12 +852,29 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            token: (() -> Token)? = nil,
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.token = token
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                token: token,
+			                outer: outer
+			            )
 			        }
 
-			        let token: (() -> Token)?
-			        let outer: Outer.SafeDIOverrides
+			        var token: (() -> Token)? { __safeDI_storage.token }
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                token: (() -> Token)?,
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.token = token
+			                self.outer = outer
+			            }
+
+			            let token: (() -> Token)?
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -1128,12 +1159,26 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            outer: Outer.SafeDIOverrides = .init(),
 			            id: Int? = nil
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			            self.id = id
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
 			        let id: Int?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -1381,12 +1426,26 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            outer: Outer.SafeDIOverrides = .init(),
 			            id: Int? = nil
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			            self.id = id
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
 			        let id: Int?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -1611,12 +1670,26 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            outer: Outer.SafeDIOverrides = .init(),
 			            id: Int? = nil
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			            self.id = id
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
 			        let id: Int?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -1629,18 +1702,18 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                return gadget
 			            }
 			            func __safeDI_gadgetBuilder_Outer(id: Int?) -> Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget> {
-			                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner(id: id) })
+			                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner_SafeDIMockScope_Service(id: id) })
 			            }
-			            func __safeDI_gadgetBuilder_Outer_Inner(id: Int?) -> Inner.SafeDIMockScope_Service.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+			            func __safeDI_gadgetBuilder_Outer_Inner_SafeDIMockScope_Service(id: Int?) -> Inner.SafeDIMockScope_Service.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
 			                .init(service: { _ in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: id) })
 			            }
 			            @Sendable nonisolated func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: Int?) -> Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
 			                .init(gadget: { scope in __safeDI_gadgetBuilder_Outer_DefaultService_Scope_gadget(scope, id: id) })
 			            }
 			            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Outer() -> Outer.SafeDISendableMockScope_Gadget.__safeDI_Builder<any Gadget> {
-			                .init(inner_serviceSendableBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner_() })
+			                .init(inner_serviceSendableBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner_SafeDISendableMockScope_Service() })
 			            }
-			            @Sendable nonisolated func __safeDI_gadgetBuilder_Outer_Inner_() -> Inner.SafeDISendableMockScope_Service.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+			            @Sendable nonisolated func __safeDI_gadgetBuilder_Outer_Inner_SafeDISendableMockScope_Service() -> Inner.SafeDISendableMockScope_Service.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
 			                .init(screenBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope() })
 			            }
 			            @Sendable nonisolated func __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope() -> Inner.SafeDIMockScope_Service.Screen_Scope.__safeDI_Builder<Outer.SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {

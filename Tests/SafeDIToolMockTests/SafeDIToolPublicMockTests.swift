@@ -10251,14 +10251,34 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            serviceBuilder: Service.SafeDIOverrides = .init(),
 		            service: Service.SafeDIOverrides = .init()
 		        ) {
-		            self.analytics = analytics
-		            self.serviceBuilder = serviceBuilder
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                serviceBuilder: serviceBuilder,
+		                service: service
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
-		        let serviceBuilder: Service.SafeDIOverrides
-		        let service: Service.SafeDIOverrides
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var serviceBuilder: Service.SafeDIOverrides { __safeDI_storage.serviceBuilder }
+		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                serviceBuilder: Service.SafeDIOverrides,
+		                service: Service.SafeDIOverrides
+		            ) {
+		                self.analytics = analytics
+		                self.serviceBuilder = serviceBuilder
+		                self.service = service
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let serviceBuilder: Service.SafeDIOverrides
+		            let service: Service.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
