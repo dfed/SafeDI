@@ -1447,7 +1447,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			filledSites: Set<SeamSignature.Hole.Site>,
 			sitesPassedUpOnSomeRoute: Set<SeamSignature.Hole.Site> = [],
 			enclosingDispatchers: [String: String],
-			builderKeysDispatchedOverTheEnum: Set<SeamSignature.ScopeEnum.Key> = [],
 			fillNames: [String: String],
 			names: inout GeneratedNameAllocator,
 			innerScopeNameByKey: [SeamSignature.ScopeEnum.Key: String] = [:],
@@ -1488,14 +1487,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			/// Whether the dispatcher of the enum of `key` returns its builder struct (`FillDispatcher.returnsBuilderStruct`).
 			/// An enclosing call that declares its dispatchers over the enum, which this call reuses, keeps it from declaring
-			/// any of its own of the hole type, and so does a call inside this call's fills that reuses this call's
-			/// (`builderKeysDispatchedOverTheEnum`).
+			/// any of its own of the hole type.
 			func returnsBuilderStruct(_ key: SeamSignature.ScopeEnum.Key) -> Bool {
 				builderStructKeys.contains(key)
 					&& !innerScopeNameByKey.keys.contains { $0.seamType == key.seamType && $0.holeType == key.holeType && carriedInnerScopesByKey[$0] == nil }
 					&& !calledBuilders.builders.contains { builder in
-						builder.enumKey.holeType == key.holeType
-							&& (enclosingDispatchers[Self.key(of: builder.enumKey)] != nil || builderKeysDispatchedOverTheEnum.contains(builder.enumKey))
+						builder.enumKey.holeType == key.holeType && enclosingDispatchers[Self.key(of: builder.enumKey)] != nil
 					}
 			}
 			// The enums each family's routes reach that lead to a filled place, in the order the builders first reach them.
@@ -1897,8 +1894,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Every dispatcher of a seam's call returns the called seam's builder struct, as one function per level of its tree,
 			// and only a public mock's caller, which decides per route, switches over the enum: every seam's builders take
 			// builder structs (`SeamBuilderFamilies.declaresBuilderStructs(of:)`), and only a public mock's keep the closure over
-			// its enum; a call that hands the enum on in its enum form is a public mock's call inside a fill of the seam's call
-			// (`builderKeysHandedInEnumForm(byCallsInside:calling:)`), and no tree holds both, since only the trees of the seam
+			// its enum; a call that would hand the enum on in its enum form would be a public mock's call inside a fill of the seam's
+			// call, and no tree holds both, since only the trees of the seam
 			// world call seams (`createSeamScopeMapping`) and only mock trees call public mocks
 			// (`createMockTypeDescriptionToScopeMapping`); and a seam's case that carries the scope value a call hands its fill
 			// carries the struct of the fill's level too (`SeamHoles.carriesStruct(at:innerKey:)`), since its route step has a
