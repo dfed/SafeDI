@@ -9219,32 +9219,99 @@ public actor DependencyTreeGenerator {
 		var receivedFromOutside: Set<Property> = []
 	}
 
-	/// A scope that `validatePropertiesAreFulfillable` has yet to validate, with what the scopes it is built inside
-	/// give it.
+	/// A scope that `validatePropertiesAreFulfillable` has yet to validate. What the scopes it is built inside give it is
+	/// the walk's `ValidationContext`, which entering the scope changes by `propertiesNotReceivableInTree` and
+	/// `lazilyInstantiatedDeclaration`.
 	private struct ScopeToValidate {
 		let scope: Scope
-		/// The properties the scopes `scope` is built inside make available to it.
-		let receivableProperties: Set<Property>
-		/// The aliases declared above `scope` that a receive of their property resolves to.
-		let receivableAliases: [Property: ReceivableAlias]
-		/// The property each label names in `scope`: the one declared by the closest ancestor that declares the label.
-		let closestDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration]
-		/// For each label in `closestDeclarationByLabel`, how many scopes the declaring scope is built inside: `0` for the
-		/// root of the tree.
-		let closestDeclarationDepthByLabel: [String: Int]
-		/// For each of `receivableProperties` that a scope the root's tree builds made receivable, how many scopes that
-		/// scope is built inside, as `closestDeclarationDepthByLabel` counts them: the scope since which the property has
-		/// been receivable on this path. A property the root's own scope offers has no entry. Empty in the validation of
-		/// mocks, which never reads it.
-		let receivableDepthByProperty: [Property: Int]
 		/// The property `scope` is built for, as cycle validation sees it. `nil` at the root of the tree.
 		let property: Property?
 		/// The properties of the scopes `scope` is built inside, innermost first.
 		let propertyStack: [Property]
 		/// The concrete types of the scopes `scope` is built inside, innermost first, beside `propertyStack`.
 		let parentTypeStack: [TypeDescription]
+		/// The properties its parent made receivable that are not receivable in the tree `scope` creates: the property it
+		/// is built for, and that property's instance.
+		let propertiesNotReceivableInTree: [Property]
+		/// The lazily instantiated property `scope` is built for, as declared, which the instantiation stack holds as the
+		/// constant it stands for.
+		let lazilyInstantiatedDeclaration: Property?
+	}
+
+	/// What the scopes a scope of `validatePropertiesAreFulfillable`'s walk is built inside give it. The walk keeps one
+	/// context, which it changes as it enters a scope and puts back, from its undo log, as it leaves the scope, so that no
+	/// scope copies its parent's collections.
+	private struct ValidationContext {
+		/// The properties the scopes the scope is built inside make available to it.
+		var receivableProperties: Set<Property>
+		/// The aliases declared above the scope that a receive of their property resolves to.
+		var receivableAliases = [Property: ReceivableAlias]()
+		/// The property each label names in the scope: the one declared by the closest ancestor that declares the label.
+		var closestDeclarationByLabel = [String: DependencyTreeGeneratorError.LabelDeclaration]()
+		/// For each label in `closestDeclarationByLabel`, how many scopes the declaring scope is built inside: `0` for the
+		/// root of the tree.
+		var closestDeclarationDepthByLabel = [String: Int]()
+		/// For each of `receivableProperties` that a scope the root's tree builds made receivable, how many scopes that
+		/// scope is built inside, as `closestDeclarationDepthByLabel` counts them: the scope since which the property has
+		/// been receivable on this path. A property the root's own scope offers has no entry. Empty in the validation of
+		/// mocks, which never reads it.
+		var receivableDepthByProperty = [Property: Int]()
 		/// The lazily instantiated properties on the instantiation stack, keyed by the constant each is validated as.
-		let lazilyInstantiatedDeclarations: [Property: Property]
+		var lazilyInstantiatedDeclarations = [Property: Property]()
+
+		/// One change to a context, with what it replaced.
+		enum Change {
+			case insertedReceivableProperty(Property)
+			case removedReceivableProperty(Property)
+			case receivableAlias(Property, previous: ReceivableAlias?)
+			case closestDeclaration(String, previous: DependencyTreeGeneratorError.LabelDeclaration?, previousDepth: Int?)
+			case receivableDepth(Property, previous: Int?)
+			case lazilyInstantiatedDeclaration(Property, previous: Property?)
+		}
+
+		/// Undoes the changes after the first `count` of `undoLog`, last first, and removes them from it.
+		mutating func undo(_ undoLog: inout [Change], downTo count: Int) {
+			while undoLog.count > count, let change = undoLog.popLast() {
+				switch change {
+				case let .insertedReceivableProperty(property):
+					receivableProperties.remove(property)
+				case let .removedReceivableProperty(property):
+					receivableProperties.insert(property)
+				case let .receivableAlias(property, previous):
+					receivableAliases[property] = previous
+				case let .closestDeclaration(label, previous, previousDepth):
+					closestDeclarationByLabel[label] = previous
+					closestDeclarationDepthByLabel[label] = previousDepth
+				case let .receivableDepth(property, previous):
+					receivableDepthByProperty[property] = previous
+				case let .lazilyInstantiatedDeclaration(property, previous):
+					lazilyInstantiatedDeclarations[property] = previous
+				}
+			}
+		}
+	}
+
+	/// What validating one scope of `validatePropertiesAreFulfillable`'s walk finds that the scopes it builds need.
+	private struct ValidatedScope {
+		/// The aliases the scope declares, which a receive of their property resolves to.
+		let declaredAliases: [Property: ReceivableAlias]
+		/// The properties of the scope and of the scopes it is built inside, innermost first.
+		let instantiationStack: [Property]
+		/// The properties of the scopes the scope's children are built inside, innermost first.
+		let childPropertyStack: [Property]
+		/// The concrete types of the scopes the scope's children are built inside, beside `childPropertyStack`.
+		let childParentTypeStack: [TypeDescription]
+		/// The properties the scope makes receivable to the scopes it builds that its context does not hold, in the order
+		/// `insertProperties` finds them. Empty for a scope that builds none.
+		let newlyReceivableProperties: [Property]
+	}
+
+	/// A step of `validatePropertiesAreFulfillable`'s walk.
+	private enum ValidationStep {
+		/// Validate a scope, entering it.
+		case validate(ScopeToValidate)
+		/// Leave the scope entered when the undo log held `count` changes.
+		case restore(count: Int)
 	}
 
 	/// A scope of a tree that a cycle-closing scope builds again, which `validateTreeBuiltAgainByCycle` has yet to walk, with
@@ -9674,29 +9741,131 @@ public actor DependencyTreeGenerator {
 			validatesCycles: Bool,
 			validatesHiddenProperties: Bool,
 		) throws {
-			var scopesToValidate = [ScopeToValidate(
+			var context = ValidationContext(receivableProperties: Set(rootScope.scope.properties).union(rootScope.receivedFromOutside))
+			var undoLog = [ValidationContext.Change]()
+			var steps = [ValidationStep.validate(ScopeToValidate(
 				scope: rootScope.scope,
-				receivableProperties: Set(rootScope.scope.properties).union(rootScope.receivedFromOutside),
-				receivableAliases: [:],
-				closestDeclarationByLabel: [:],
-				closestDeclarationDepthByLabel: [:],
-				receivableDepthByProperty: [:],
 				property: nil,
 				propertyStack: [],
 				parentTypeStack: [],
-				lazilyInstantiatedDeclarations: [:],
-			)]
+				propertiesNotReceivableInTree: [],
+				lazilyInstantiatedDeclaration: nil,
+			))]
 			let mockRootForwardedProperties: Set<Property>? = rootScope.isMock ? rootScope.scope.instantiable.forwardedReceivableProperties : nil
-			while let scopeToValidate = scopesToValidate.popLast() {
-				try validatePropertiesAreFulfillable(
+			let root = rootScope.scope.instantiable.concreteInstantiable
+			while let step = steps.popLast() {
+				let scopeToValidate: ScopeToValidate
+				switch step {
+				case let .restore(count):
+					context.undo(&undoLog, downTo: count)
+					continue
+				case let .validate(validated):
+					scopeToValidate = validated
+				}
+				// Enter the scope: the scope its parent made receivable is not receivable in the tree it creates.
+				steps.append(.restore(count: undoLog.count))
+				for property in scopeToValidate.propertiesNotReceivableInTree where context.receivableProperties.remove(property) != nil {
+					undoLog.append(.removedReceivableProperty(property))
+				}
+				if let declaredProperty = scopeToValidate.lazilyInstantiatedDeclaration {
+					let validatedProperty = declaredProperty.asValidatedForDependencyCycles
+					undoLog.append(.lazilyInstantiatedDeclaration(validatedProperty, previous: context.lazilyInstantiatedDeclarations[validatedProperty]))
+					context.lazilyInstantiatedDeclarations[validatedProperty] = declaredProperty
+				}
+				let scope = scopeToValidate.scope
+				let validatedScope = try validatePropertiesAreFulfillable(
 					on: scopeToValidate,
+					context: context,
 					boundProperties: rootScope.boundProperties,
 					mockRootForwardedProperties: mockRootForwardedProperties,
 					validatesCycles: validatesCycles,
 					validatesHiddenProperties: validatesHiddenProperties,
-					root: rootScope.scope.instantiable.concreteInstantiable,
-					scopesToValidate: &scopesToValidate,
+					root: root,
 				)
+				// Only the scopes this scope builds read what it gives them.
+				guard scope.propertiesToGenerate.contains(where: { $0.builtScope != nil }) else { continue }
+				let depth = validatedScope.instantiationStack.count
+				forEachDeclaration(of: scope) { label, declaration in
+					undoLog.append(.closestDeclaration(label, previous: context.closestDeclarationByLabel[label], previousDepth: context.closestDeclarationDepthByLabel[label]))
+					context.closestDeclarationByLabel[label] = declaration
+					context.closestDeclarationDepthByLabel[label] = depth
+				}
+				// A property this scope provides shadows an alias of it declared above.
+				let shadowedAliasProperties = context.receivableAliases.keys.filter {
+					scope.providedProperties.containsPropertyOrItsUnwrappedForm($0)
+				}
+				for aliasProperty in shadowedAliasProperties {
+					undoLog.append(.receivableAlias(aliasProperty, previous: context.receivableAliases.removeValue(forKey: aliasProperty)))
+				}
+				for (aliasProperty, alias) in validatedScope.declaredAliases {
+					undoLog.append(.receivableAlias(aliasProperty, previous: context.receivableAliases.updateValue(alias, forKey: aliasProperty)))
+				}
+				// What the scopes this scope builds receive, with the depth since which each has been receivable, which the
+				// validation of mocks never reads.
+				for property in validatedScope.newlyReceivableProperties {
+					context.receivableProperties.insert(property)
+					undoLog.append(.insertedReceivableProperty(property))
+					if !cyclesOnly {
+						undoLog.append(.receivableDepth(property, previous: context.receivableDepthByProperty.updateValue(depth, forKey: property)))
+					}
+				}
+				let firstChildIndex = steps.endIndex
+				for childPropertyToGenerate in scope.propertiesToGenerate {
+					switch childPropertyToGenerate {
+					case let .instantiated(declaredChildProperty, childScope, _):
+						// A lazily instantiated property is validated as the constant it stands for.
+						let childProperty = declaredChildProperty.asValidatedForDependencyCycles
+						let childPropertyStack = validatedScope.childPropertyStack
+						let childParentTypeStack = validatedScope.childParentTypeStack
+						if let closedOnIndex = childPropertyStack.indices.first(where: {
+							childPropertyStack[$0] == childProperty && childParentTypeStack[$0] == childScope.instantiable.concreteInstantiable
+						}) {
+							// There is a cycle in our scope tree. Do not re-enter it. The type the cycle-closing scope builds
+							// receives the nearest declaration of each label, which a scope between it and the scope it closes
+							// on can make: the generated code passes that declaration where the tree is built again.
+							try validateTreeBuiltAgainByCycle(
+								of: childScope,
+								for: childProperty,
+								closedOnIndex: closedOnIndex,
+								cycleClosingScopeParent: scope,
+								propertyStack: childPropertyStack,
+								parentTypeStack: childParentTypeStack,
+								closestDeclarationByLabel: context.closestDeclarationByLabel,
+								closestDeclarationDepthByLabel: context.closestDeclarationDepthByLabel,
+								// As the tree of any child is given them, without the property it builds.
+								receivableProperties: context.receivableProperties.subtracting(childPropertyToGenerate.receivableProperties),
+								receivableDepthByProperty: context.receivableDepthByProperty,
+								validatesCycles: validatesCycles,
+								validatesHiddenProperties: validatesHiddenProperties,
+								root: root,
+							)
+							continue
+						}
+						// Neither the child nor, when it is lazily instantiated, its instance can be received in the tree it creates,
+						// but an instantiator, which its builder function rebinds (see `ScopeGenerator.ReceivedBuilderLoops`).
+						var propertiesNotReceivableInTree = [Property]()
+						if !ScopeGenerator.isBuilder(declaredChildProperty) {
+							propertiesNotReceivableInTree.append(declaredChildProperty)
+						}
+						if let instanceProperty = childPropertyToGenerate.lazilyInstantiatedInstanceProperty {
+							propertiesNotReceivableInTree.append(instanceProperty)
+						}
+						steps.append(.validate(ScopeToValidate(
+							scope: childScope,
+							property: childProperty,
+							propertyStack: childPropertyStack,
+							parentTypeStack: childParentTypeStack,
+							propertiesNotReceivableInTree: propertiesNotReceivableInTree,
+							lazilyInstantiatedDeclaration: declaredChildProperty.propertyType.isLazilyInstantiated ? declaredChildProperty : nil,
+						)))
+					case .aliased, .hole:
+						// A hole's tree is a fill's, which the module that fills it validates: the validated scopes hold no
+						// hole, since they leave out a dependency no scope builds.
+						break
+					}
+				}
+				// The scope validated next is the last one on the stack, so the first child goes last.
+				steps[firstChildIndex...].reverse()
 			}
 		}
 		/// Records each dependency of `scope` that the closest declaration of the label it receives hides, among
@@ -9784,15 +9953,25 @@ public actor DependencyTreeGenerator {
 			into closestDeclarationByLabel: inout [String: DependencyTreeGeneratorError.LabelDeclaration],
 			entering: (String) -> Void,
 		) {
+			forEachDeclaration(of: scope) { label, declaration in
+				closestDeclarationByLabel[label] = declaration
+				entering(label)
+			}
+		}
+		/// Calls `body` with each property `scope` creates, in declaration order, as the closest declaration of its label for
+		/// the scopes `scope` builds.
+		func forEachDeclaration(
+			of scope: Scope,
+			_ body: (String, DependencyTreeGeneratorError.LabelDeclaration) -> Void,
+		) {
 			for dependency in scope.instantiable.dependencies where scope.createdProperties.contains(dependency.property) {
-				closestDeclarationByLabel[dependency.property.label] = .init(
+				body(dependency.property.label, .init(
 					property: dependency.property,
 					lazilyInstantiatedInstanceProperty: dependency.lazilyInstantiatedInstanceProperty,
 					declarationLocation: dependency.declarationLocation,
 					declaringType: scope.instantiable.concreteInstantiable,
 					isForwarded: dependency.isForwarded,
-				)
-				entering(dependency.property.label)
+				))
 			}
 		}
 		/// Inserts into `properties` what `scope` makes available to the scopes it builds, given `receivableProperties`, what
@@ -10132,22 +10311,25 @@ public actor DependencyTreeGenerator {
 				return nil
 			}
 		}
+		/// Validates `scopeToValidate`'s scope, given the context of the scopes it is built inside, and returns what the
+		/// scopes it builds need. It reads the context only: the walk changes it once this returns, so nothing here may
+		/// hold the context's collections past its return, or changing them would copy them.
 		func validatePropertiesAreFulfillable(
 			on scopeToValidate: ScopeToValidate,
+			context: ValidationContext,
 			boundProperties: Set<Property>,
 			mockRootForwardedProperties: Set<Property>?,
 			validatesCycles: Bool,
 			validatesHiddenProperties: Bool,
 			root: TypeDescription,
-			scopesToValidate: inout [ScopeToValidate],
-		) throws {
+		) throws -> ValidatedScope {
 			let scope = scopeToValidate.scope
-			let receivableProperties = scopeToValidate.receivableProperties
-			let receivableAliases = scopeToValidate.receivableAliases
-			let closestDeclarationByLabel = scopeToValidate.closestDeclarationByLabel
+			let receivableProperties = context.receivableProperties
+			let receivableAliases = context.receivableAliases
+			let closestDeclarationByLabel = context.closestDeclarationByLabel
 			let property = scopeToValidate.property
 			let propertyStack = scopeToValidate.propertyStack
-			let lazilyInstantiatedDeclarations = scopeToValidate.lazilyInstantiatedDeclarations
+			let lazilyInstantiatedDeclarations = context.lazilyInstantiatedDeclarations
 			let instantiationStack: [Property] = if let property {
 				[property] + propertyStack
 			} else {
@@ -10155,7 +10337,7 @@ public actor DependencyTreeGenerator {
 			}
 			/// The nearest declaration of a label above this scope, as `indexOfEntryClosedOn` reads it.
 			let nearestDeclaration: (String) -> (properties: [Property], depth: Int)? = { label in
-				closestDeclarationByLabel[label].map { ([$0.property.asValidatedForDependencyCycles], scopeToValidate.closestDeclarationDepthByLabel[label, default: 0]) }
+				closestDeclarationByLabel[label].map { ([$0.property.asValidatedForDependencyCycles], context.closestDeclarationDepthByLabel[label, default: 0]) }
 			}
 			if validatesCycles, let property {
 				try validateNoCycleInReceivedProperties(
@@ -10184,7 +10366,7 @@ public actor DependencyTreeGenerator {
 							of: fulfillingProperty,
 							declaredBy: scope,
 							closestDeclarationByLabel: closestDeclarationByLabel,
-							closestDeclarationDepthByLabel: scopeToValidate.closestDeclarationDepthByLabel,
+							closestDeclarationDepthByLabel: context.closestDeclarationDepthByLabel,
 							receivableProperties: receivableProperties,
 							boundProperties: boundProperties,
 							instantiationStack: instantiationStack,
@@ -10440,90 +10622,23 @@ public actor DependencyTreeGenerator {
 				}
 			}
 
-			var childClosestDeclarationByLabel = closestDeclarationByLabel
-			var childClosestDeclarationDepthByLabel = scopeToValidate.closestDeclarationDepthByLabel
-			enterDeclarations(of: scope, into: &childClosestDeclarationByLabel) {
-				childClosestDeclarationDepthByLabel[$0] = instantiationStack.count
-			}
-			// A property this scope provides shadows an alias of it declared above.
-			var childReceivableAliases = receivableAliases.filter {
-				!scope.providedProperties.containsPropertyOrItsUnwrappedForm($0.key)
-			}
-			for (aliasProperty, alias) in declaredAliases {
-				childReceivableAliases[aliasProperty] = alias
-			}
-			// What the scopes this scope builds receive, found only for a scope that builds one, with the depth since which each
-			// has been receivable, which the validation of mocks never reads.
-			var childReceivableProperties = Set<Property>()
-			var childReceivableDepthByProperty = [Property: Int]()
+			// What the scopes this scope builds receive, found only for a scope that builds one.
+			var newlyReceivableProperties = [Property]()
 			if scope.propertiesToGenerate.contains(where: { $0.builtScope != nil }) {
-				childReceivableProperties = receivableProperties
-				childReceivableDepthByProperty = scopeToValidate.receivableDepthByProperty
-				insertProperties(madeAvailableBy: scope, given: receivableProperties, instantiationStack: instantiationStack, nearestDeclaration: nearestDeclaration, into: &childReceivableProperties) {
-					if !cyclesOnly {
-						childReceivableDepthByProperty[$0] = instantiationStack.count
+				var propertiesMadeAvailable = Set<Property>()
+				insertProperties(madeAvailableBy: scope, given: receivableProperties, instantiationStack: instantiationStack, nearestDeclaration: nearestDeclaration, into: &propertiesMadeAvailable) {
+					if !receivableProperties.contains($0) {
+						newlyReceivableProperties.append($0)
 					}
 				}
 			}
-			let firstChildIndex = scopesToValidate.endIndex
-			for childPropertyToGenerate in scope.propertiesToGenerate {
-				switch childPropertyToGenerate {
-				case let .instantiated(declaredChildProperty, childScope, _):
-					// A lazily instantiated property is validated as the constant it stands for.
-					let childProperty = declaredChildProperty.asValidatedForDependencyCycles
-					if let closedOnIndex = childPropertyStack.indices.first(where: {
-						childPropertyStack[$0] == childProperty && childParentTypeStack[$0] == childScope.instantiable.concreteInstantiable
-					}) {
-						// There is a cycle in our scope tree. Do not re-enter it. The type the cycle-closing scope builds
-						// receives the nearest declaration of each label, which a scope between it and the scope it closes
-						// on can make: the generated code passes that declaration where the tree is built again.
-						try validateTreeBuiltAgainByCycle(
-							of: childScope,
-							for: childProperty,
-							closedOnIndex: closedOnIndex,
-							cycleClosingScopeParent: scope,
-							propertyStack: childPropertyStack,
-							parentTypeStack: childParentTypeStack,
-							closestDeclarationByLabel: childClosestDeclarationByLabel,
-							closestDeclarationDepthByLabel: childClosestDeclarationDepthByLabel,
-							// As the tree of any child is given them, without the property it builds.
-							receivableProperties: childReceivableProperties.subtracting(childPropertyToGenerate.receivableProperties),
-							receivableDepthByProperty: childReceivableDepthByProperty,
-							validatesCycles: validatesCycles,
-							validatesHiddenProperties: validatesHiddenProperties,
-							root: root,
-						)
-						continue
-					}
-					// Neither the child nor, when it is lazily instantiated, its instance can be received in the tree it creates,
-					// but an instantiator, which its builder function rebinds (see `ScopeGenerator.ReceivedBuilderLoops`).
-					var receivablePropertiesInChildTree = childReceivableProperties
-					if !ScopeGenerator.isBuilder(declaredChildProperty) {
-						receivablePropertiesInChildTree.remove(declaredChildProperty)
-					}
-					if let instanceProperty = childPropertyToGenerate.lazilyInstantiatedInstanceProperty {
-						receivablePropertiesInChildTree.remove(instanceProperty)
-					}
-					scopesToValidate.append(ScopeToValidate(
-						scope: childScope,
-						receivableProperties: receivablePropertiesInChildTree,
-						receivableAliases: childReceivableAliases,
-						closestDeclarationByLabel: childClosestDeclarationByLabel,
-						closestDeclarationDepthByLabel: childClosestDeclarationDepthByLabel,
-						receivableDepthByProperty: childReceivableDepthByProperty,
-						property: childProperty,
-						propertyStack: childPropertyStack,
-						parentTypeStack: childParentTypeStack,
-						lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations.recordingLazilyInstantiated(declaredChildProperty),
-					))
-				case .aliased, .hole:
-					// A hole's tree is a fill's, which the module that fills it validates: the validated scopes hold no
-					// hole, since they leave out a dependency no scope builds.
-					break
-				}
-			}
-			// The scope validated next is the last one on the stack, so the first child goes last.
-			scopesToValidate[firstChildIndex...].reverse()
+			return ValidatedScope(
+				declaredAliases: declaredAliases,
+				instantiationStack: instantiationStack,
+				childPropertyStack: childPropertyStack,
+				childParentTypeStack: childParentTypeStack,
+				newlyReceivableProperties: newlyReceivableProperties,
+			)
 		}
 
 		// Each tree reports the first error it throws, and the errors of every tree are reported, rather than the
