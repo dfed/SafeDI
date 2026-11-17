@@ -647,11 +647,6 @@ public struct SeamSignature: Sendable {
 			/// at the `@Sendable` root enum, whatever enum its own case is in.
 			public let isBuiltBySendableBuilder: Bool
 
-			/// The case as a diagnostic names it: qualified by its enum where that is nested in a root.
-			public var describedCase: String {
-				rootEnumTypeName == nil ? caseName : "\(enumTypeName).\(caseName)"
-			}
-
 			/// The type of the enum whose case the place is, qualified by `seamType` when it is given.
 			func enumType(qualifiedBy seamType: TypeDescription?) -> TypeDescription {
 				let rootType: TypeDescription = if let seamType {
