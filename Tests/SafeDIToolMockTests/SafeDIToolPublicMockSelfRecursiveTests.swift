@@ -75,10 +75,24 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			        public init(
 			            next: __safeDI_Feature_Feature_MockConfiguration = .init()
 			        ) {
-			            self.next = next
+			            __safeDI_storage = __safeDI_Storage(
+			                next: next
+			            )
 			        }
 
-			        public let next: __safeDI_Feature_Feature_MockConfiguration
+			        public var next: __safeDI_Feature_Feature_MockConfiguration { __safeDI_storage.next }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                next: __safeDI_Feature_Feature_MockConfiguration
+			            ) {
+			                self.next = next
+			            }
+
+			            let next: __safeDI_Feature_Feature_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -109,11 +123,25 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			    public init(
 			        _ safeDIBuilder: ((any Api, Instantiator<Feature>) -> Feature)? = nil
 			    ) {
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// Overrides how `Feature` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((any Api, Instantiator<Feature>) -> Feature)?
+			    public var safeDIBuilder: ((any Api, Instantiator<Feature>) -> Feature)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            safeDIBuilder: ((any Api, Instantiator<Feature>) -> Feature)?
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let safeDIBuilder: ((any Api, Instantiator<Feature>) -> Feature)?
+			    }
 			}
 
 			extension Feature {
@@ -142,10 +170,24 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			        init(
 			            feature: Feature.SafeDIOverrides = .init()
 			        ) {
-			            self.feature = feature
+			            __safeDI_storage = __safeDI_Storage(
+			                feature: feature
+			            )
 			        }
 
-			        let feature: Feature.SafeDIOverrides
+			        var feature: Feature.SafeDIOverrides { __safeDI_storage.feature }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                feature: Feature.SafeDIOverrides
+			            ) {
+			                self.feature = feature
+			            }
+
+			            let feature: Feature.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -211,10 +253,24 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			        public init(
 			            step: __safeDI_Feature_Step_MockConfiguration = .init()
 			        ) {
-			            self.step = step
+			            __safeDI_storage = __safeDI_Storage(
+			                step: step
+			            )
 			        }
 
-			        public let step: __safeDI_Feature_Step_MockConfiguration
+			        public var step: __safeDI_Feature_Step_MockConfiguration { __safeDI_storage.step }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                step: __safeDI_Feature_Step_MockConfiguration
+			            ) {
+			                self.step = step
+			            }
+
+			            let step: __safeDI_Feature_Step_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -251,13 +307,30 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			        step: __safeDI_Feature_Step_MockConfiguration = .init(),
 			        _ safeDIBuilder: ((any Api, Step) -> Feature)? = nil
 			    ) {
-			        self.step = step
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            step: step,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let step: __safeDI_Feature_Step_MockConfiguration
+			    public var step: __safeDI_Feature_Step_MockConfiguration { __safeDI_storage.step }
 			    /// Overrides how `Feature` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((any Api, Step) -> Feature)?
+			    public var safeDIBuilder: ((any Api, Step) -> Feature)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            step: __safeDI_Feature_Step_MockConfiguration,
+			            safeDIBuilder: ((any Api, Step) -> Feature)?
+			        ) {
+			            self.step = step
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let step: __safeDI_Feature_Step_MockConfiguration
+			        let safeDIBuilder: ((any Api, Step) -> Feature)?
+			    }
 			}
 
 			extension Feature {
@@ -271,11 +344,25 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			    public init(
 			        _ safeDIBuilder: ((Instantiator<Feature>) -> Step)? = nil
 			    ) {
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// Overrides how `Step` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((Instantiator<Feature>) -> Step)?
+			    public var safeDIBuilder: ((Instantiator<Feature>) -> Step)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            safeDIBuilder: ((Instantiator<Feature>) -> Step)?
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let safeDIBuilder: ((Instantiator<Feature>) -> Step)?
+			    }
 			}
 
 			extension Step {
@@ -304,10 +391,24 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			        init(
 			            feature: Feature.SafeDIOverrides = .init()
 			        ) {
-			            self.feature = feature
+			            __safeDI_storage = __safeDI_Storage(
+			                feature: feature
+			            )
 			        }
 
-			        let feature: Feature.SafeDIOverrides
+			        var feature: Feature.SafeDIOverrides { __safeDI_storage.feature }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                feature: Feature.SafeDIOverrides
+			            ) {
+			                self.feature = feature
+			            }
+
+			            let feature: Feature.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -370,10 +471,24 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			        public init(
 			            next: __safeDI_Feature_Feature_MockConfiguration = .init()
 			        ) {
-			            self.next = next
+			            __safeDI_storage = __safeDI_Storage(
+			                next: next
+			            )
 			        }
 
-			        public let next: __safeDI_Feature_Feature_MockConfiguration
+			        public var next: __safeDI_Feature_Feature_MockConfiguration { __safeDI_storage.next }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                next: __safeDI_Feature_Feature_MockConfiguration
+			            ) {
+			                self.next = next
+			            }
+
+			            let next: __safeDI_Feature_Feature_MockConfiguration
+			        }
 			    }
 
 			    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -407,11 +522,25 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			    public init(
 			        _ safeDIBuilder: (@Sendable (any Api, SendableInstantiator<Feature>) -> Feature)? = nil
 			    ) {
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// Overrides how `Feature` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: (@Sendable (any Api, SendableInstantiator<Feature>) -> Feature)?
+			    public var safeDIBuilder: (@Sendable (any Api, SendableInstantiator<Feature>) -> Feature)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            safeDIBuilder: (@Sendable (any Api, SendableInstantiator<Feature>) -> Feature)?
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let safeDIBuilder: (@Sendable (any Api, SendableInstantiator<Feature>) -> Feature)?
+			    }
 			}
 
 			extension Feature {
@@ -440,10 +569,24 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			        init(
 			            feature: Feature.SafeDIOverrides = .init()
 			        ) {
-			            self.feature = feature
+			            __safeDI_storage = __safeDI_Storage(
+			                feature: feature
+			            )
 			        }
 
-			        let feature: Feature.SafeDIOverrides
+			        var feature: Feature.SafeDIOverrides { __safeDI_storage.feature }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                feature: Feature.SafeDIOverrides
+			            ) {
+			                self.feature = feature
+			            }
+
+			            let feature: Feature.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -511,12 +654,29 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			            token: (() -> Token)? = nil,
 			            next: __safeDI_Feature_Feature_MockConfiguration = .init()
 			        ) {
-			            self.token = token
-			            self.next = next
+			            __safeDI_storage = __safeDI_Storage(
+			                token: token,
+			                next: next
+			            )
 			        }
 
-			        public let token: (() -> Token)?
-			        public let next: __safeDI_Feature_Feature_MockConfiguration
+			        public var token: (() -> Token)? { __safeDI_storage.token }
+			        public var next: __safeDI_Feature_Feature_MockConfiguration { __safeDI_storage.next }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                token: (() -> Token)?,
+			                next: __safeDI_Feature_Feature_MockConfiguration
+			            ) {
+			                self.token = token
+			                self.next = next
+			            }
+
+			            let token: (() -> Token)?
+			            let next: __safeDI_Feature_Feature_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -550,13 +710,30 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			        token: (() -> Token)? = nil,
 			        _ safeDIBuilder: ((Token, any Api, Instantiator<Feature>) -> Feature)? = nil
 			    ) {
-			        self.token = token
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            token: token,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let token: (() -> Token)?
+			    public var token: (() -> Token)? { __safeDI_storage.token }
 			    /// Overrides how `Feature` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((Token, any Api, Instantiator<Feature>) -> Feature)?
+			    public var safeDIBuilder: ((Token, any Api, Instantiator<Feature>) -> Feature)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            token: (() -> Token)?,
+			            safeDIBuilder: ((Token, any Api, Instantiator<Feature>) -> Feature)?
+			        ) {
+			            self.token = token
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let token: (() -> Token)?
+			        let safeDIBuilder: ((Token, any Api, Instantiator<Feature>) -> Feature)?
+			    }
 			}
 
 			extension Feature {
@@ -585,10 +762,24 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			        init(
 			            feature: Feature.SafeDIOverrides = .init()
 			        ) {
-			            self.feature = feature
+			            __safeDI_storage = __safeDI_Storage(
+			                feature: feature
+			            )
 			        }
 
-			        let feature: Feature.SafeDIOverrides
+			        var feature: Feature.SafeDIOverrides { __safeDI_storage.feature }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                feature: Feature.SafeDIOverrides
+			            ) {
+			                self.feature = feature
+			            }
+
+			            let feature: Feature.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(

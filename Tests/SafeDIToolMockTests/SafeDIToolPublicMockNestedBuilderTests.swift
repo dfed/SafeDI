@@ -76,10 +76,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            row: __safeDI_Core_Row_MockConfiguration = .init()
 		        ) {
-		            self.row = row
+		            __safeDI_storage = __safeDI_Storage(
+		                row: row
+		            )
 		        }
 
-		        public let row: __safeDI_Core_Row_MockConfiguration
+		        public var row: __safeDI_Core_Row_MockConfiguration { __safeDI_storage.row }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                row: __safeDI_Core_Row_MockConfiguration
+		            ) {
+		                self.row = row
+		            }
+
+		            let row: __safeDI_Core_Row_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -111,13 +125,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        token: (() -> Token)? = nil,
 		        _ safeDIBuilder: ((Token, any Service) -> Row)? = nil
 		    ) {
-		        self.token = token
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
 		    /// Overrides how `Row` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, any Service) -> Row)?
+		    public var safeDIBuilder: ((Token, any Service) -> Row)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            safeDIBuilder: ((Token, any Service) -> Row)?
+		        ) {
+		            self.token = token
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let safeDIBuilder: ((Token, any Service) -> Row)?
+		    }
 		}
 
 		extension Row {
@@ -217,10 +248,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			        init(
 			            panel: Panel.SafeDIOverrides = .init()
 			        ) {
-			            self.panel = panel
+			            __safeDI_storage = __safeDI_Storage(
+			                panel: panel
+			            )
 			        }
 
-			        let panel: Panel.SafeDIOverrides
+			        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                panel: Panel.SafeDIOverrides
+			            ) {
+			                self.panel = panel
+			            }
+
+			            let panel: Panel.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -316,12 +361,29 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            page: __safeDI_Core_Page_MockConfiguration = .init(),
 		            model: ((any Service) -> Model)? = nil
 		        ) {
-		            self.page = page
-		            self.model = model
+		            __safeDI_storage = __safeDI_Storage(
+		                page: page,
+		                model: model
+		            )
 		        }
 
-		        public let page: __safeDI_Core_Page_MockConfiguration
-		        public let model: ((any Service) -> Model)?
+		        public var page: __safeDI_Core_Page_MockConfiguration { __safeDI_storage.page }
+		        public var model: ((any Service) -> Model)? { __safeDI_storage.model }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                page: __safeDI_Core_Page_MockConfiguration,
+		                model: ((any Service) -> Model)?
+		            ) {
+		                self.page = page
+		                self.model = model
+		            }
+
+		            let page: __safeDI_Core_Page_MockConfiguration
+		            let model: ((any Service) -> Model)?
+		        }
 		    }
 
 		    public static func mock(
@@ -382,10 +444,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            row: __safeDI_Core_Row_MockConfiguration = .init()
 		        ) {
-		            self.row = row
+		            __safeDI_storage = __safeDI_Storage(
+		                row: row
+		            )
 		        }
 
-		        public let row: __safeDI_Core_Row_MockConfiguration
+		        public var row: __safeDI_Core_Row_MockConfiguration { __safeDI_storage.row }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                row: __safeDI_Core_Row_MockConfiguration
+		            ) {
+		                self.row = row
+		            }
+
+		            let row: __safeDI_Core_Row_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -418,15 +494,35 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        model: ((any Service) -> Model)? = nil,
 		        _ safeDIBuilder: ((Token, Model) -> Page)? = nil
 		    ) {
-		        self.token = token
-		        self.model = model
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            model: model,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
-		    public let model: ((any Service) -> Model)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
+		    public var model: ((any Service) -> Model)? { __safeDI_storage.model }
 		    /// Overrides how `Page` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, Model) -> Page)?
+		    public var safeDIBuilder: ((Token, Model) -> Page)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            model: ((any Service) -> Model)?,
+		            safeDIBuilder: ((Token, Model) -> Page)?
+		        ) {
+		            self.token = token
+		            self.model = model
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let model: ((any Service) -> Model)?
+		        let safeDIBuilder: ((Token, Model) -> Page)?
+		    }
 		}
 
 		extension Page {
@@ -441,13 +537,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        token: (() -> Token)? = nil,
 		        _ safeDIBuilder: ((Token, any Service) -> Row)? = nil
 		    ) {
-		        self.token = token
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
 		    /// Overrides how `Row` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, any Service) -> Row)?
+		    public var safeDIBuilder: ((Token, any Service) -> Row)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            safeDIBuilder: ((Token, any Service) -> Row)?
+		        ) {
+		            self.token = token
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let safeDIBuilder: ((Token, any Service) -> Row)?
+		    }
 		}
 
 		extension Row {
@@ -474,10 +587,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                hub: hub
+		            )
 		        }
 
-		        let hub: Hub.SafeDIOverrides
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.hub = hub
+		            }
+
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -603,16 +730,32 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
 		        public init() {
-		            self.store = nil
+		            __safeDI_storage = __safeDI_Storage(
+		                store: nil
+		            )
 		        }
 
 		        init(
 		            store: ((any Api) -> Store)? = nil
 		        ) {
-		            self.store = store
+		            __safeDI_storage = __safeDI_Storage(
+		                store: store
+		            )
 		        }
 
-		        let store: ((any Api) -> Store)?
+		        var store: ((any Api) -> Store)? { __safeDI_storage.store }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                store: ((any Api) -> Store)?
+		            ) {
+		                self.store = store
+		            }
+
+		            let store: ((any Api) -> Store)?
+		        }
 		    }
 
 		    public static func mock(
@@ -651,12 +794,29 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            appStore: (() -> Store)? = nil,
 		            home: Home.SafeDIOverrides = .init()
 		        ) {
-		            self.appStore = appStore
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                appStore: appStore,
+		                home: home
+		            )
 		        }
 
-		        let appStore: (() -> Store)?
-		        let home: Home.SafeDIOverrides
+		        var appStore: (() -> Store)? { __safeDI_storage.appStore }
+		        var home: Home.SafeDIOverrides { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                appStore: (() -> Store)?,
+		                home: Home.SafeDIOverrides
+		            ) {
+		                self.appStore = appStore
+		                self.home = home
+		            }
+
+		            let appStore: (() -> Store)?
+		            let home: Home.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -728,10 +888,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			        init(
 			            panel: Panel.SafeDIOverrides = .init()
 			        ) {
-			            self.panel = panel
+			            __safeDI_storage = __safeDI_Storage(
+			                panel: panel
+			            )
 			        }
 
-			        let panel: Panel.SafeDIOverrides
+			        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                panel: Panel.SafeDIOverrides
+			            ) {
+			                self.panel = panel
+			            }
+
+			            let panel: Panel.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -821,10 +995,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            board: (@Sendable () -> Board.SafeDIOverrides)? = nil
 		        ) {
-		            self.board = board
+		            __safeDI_storage = __safeDI_Storage(
+		                board: board
+		            )
 		        }
 
-		        let board: (@Sendable () -> Board.SafeDIOverrides)?
+		        var board: (@Sendable () -> Board.SafeDIOverrides)? { __safeDI_storage.board }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                board: (@Sendable () -> Board.SafeDIOverrides)?
+		            ) {
+		                self.board = board
+		            }
+
+		            let board: (@Sendable () -> Board.SafeDIOverrides)?
+		        }
 		    }
 
 		    static func mock(
@@ -868,10 +1056,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            board: Board.SafeDIOverrides = .init()
 		        ) {
-		            self.board = board
+		            __safeDI_storage = __safeDI_Storage(
+		                board: board
+		            )
 		        }
 
-		        let board: Board.SafeDIOverrides
+		        var board: Board.SafeDIOverrides { __safeDI_storage.board }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                board: Board.SafeDIOverrides
+		            ) {
+		                self.board = board
+		            }
+
+		            let board: Board.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -1056,10 +1258,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            crate: Crate.SafeDIOverrides = .init()
 		        ) {
-		            self.crate = crate
+		            __safeDI_storage = __safeDI_Storage(
+		                crate: crate
+		            )
 		        }
 
-		        public let crate: Crate.SafeDIOverrides
+		        public var crate: Crate.SafeDIOverrides { __safeDI_storage.crate }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                crate: Crate.SafeDIOverrides
+		            ) {
+		                self.crate = crate
+		            }
+
+		            let crate: Crate.SafeDIOverrides
+		        }
 		    }
 
 		    public static func mock(
@@ -1096,10 +1312,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            shelf: Shelf.SafeDIOverrides = .init()
 		        ) {
-		            self.shelf = shelf
+		            __safeDI_storage = __safeDI_Storage(
+		                shelf: shelf
+		            )
 		        }
 
-		        let shelf: Shelf.SafeDIOverrides
+		        var shelf: Shelf.SafeDIOverrides { __safeDI_storage.shelf }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                shelf: Shelf.SafeDIOverrides
+		            ) {
+		                self.shelf = shelf
+		            }
+
+		            let shelf: Shelf.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -1224,10 +1454,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			        init(
 			            panel: Panel.SafeDIOverrides = .init()
 			        ) {
-			            self.panel = panel
+			            __safeDI_storage = __safeDI_Storage(
+			                panel: panel
+			            )
 			        }
 
-			        let panel: Panel.SafeDIOverrides
+			        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                panel: Panel.SafeDIOverrides
+			            ) {
+			                self.panel = panel
+			            }
+
+			            let panel: Panel.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -1276,10 +1520,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            panel: Panel.SafeDIOverrides = .init()
 		        ) {
-		            self.panel = panel
+		            __safeDI_storage = __safeDI_Storage(
+		                panel: panel
+		            )
 		        }
 
-		        public let panel: Panel.SafeDIOverrides
+		        public var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                panel: Panel.SafeDIOverrides
+		            ) {
+		                self.panel = panel
+		            }
+
+		            let panel: Panel.SafeDIOverrides
+		        }
 		    }
 
 		    public static func mock(
@@ -1389,10 +1647,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            row: ((ServiceBuilder, any Service) -> Row)? = nil
 		        ) {
-		            self.row = row
+		            __safeDI_storage = __safeDI_Storage(
+		                row: row
+		            )
 		        }
 
-		        public let row: ((ServiceBuilder, any Service) -> Row)?
+		        public var row: ((ServiceBuilder, any Service) -> Row)? { __safeDI_storage.row }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                row: ((ServiceBuilder, any Service) -> Row)?
+		            ) {
+		                self.row = row
+		            }
+
+		            let row: ((ServiceBuilder, any Service) -> Row)?
+		        }
 		    }
 
 		    public static func mock(
@@ -1612,12 +1884,29 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            serviceBuilder: (() -> Thing)? = nil,
 		            panel: Panel.SafeDIOverrides = .init()
 		        ) {
-		            self.serviceBuilder = serviceBuilder
-		            self.panel = panel
+		            __safeDI_storage = __safeDI_Storage(
+		                serviceBuilder: serviceBuilder,
+		                panel: panel
+		            )
 		        }
 
-		        let serviceBuilder: (() -> Thing)?
-		        let panel: Panel.SafeDIOverrides
+		        var serviceBuilder: (() -> Thing)? { __safeDI_storage.serviceBuilder }
+		        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                serviceBuilder: (() -> Thing)?,
+		                panel: Panel.SafeDIOverrides
+		            ) {
+		                self.serviceBuilder = serviceBuilder
+		                self.panel = panel
+		            }
+
+		            let serviceBuilder: (() -> Thing)?
+		            let panel: Panel.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -1735,10 +2024,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            middle: Middle.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.middle = middle
+		            __safeDI_storage = __safeDI_Storage(
+		                middle: middle
+		            )
 		        }
 
-		        let middle: Middle.SafeDIMockConfiguration
+		        var middle: Middle.SafeDIMockConfiguration { __safeDI_storage.middle }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                middle: Middle.SafeDIMockConfiguration
+		            ) {
+		                self.middle = middle
+		            }
+
+		            let middle: Middle.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1770,15 +2073,35 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            panel: Panel.SafeDIOverrides = .init(),
 		            _ safeDIBuilder: ((Thing, Panel) -> Middle)? = nil
 		        ) {
-		            self.serviceBuilder = serviceBuilder
-		            self.panel = panel
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                serviceBuilder: serviceBuilder,
+		                panel: panel,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let serviceBuilder: (() -> Thing)?
-		        let panel: Panel.SafeDIOverrides
+		        var serviceBuilder: (() -> Thing)? { __safeDI_storage.serviceBuilder }
+		        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Thing, Panel) -> Middle)?
+		        var safeDIBuilder: ((Thing, Panel) -> Middle)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                serviceBuilder: (() -> Thing)?,
+		                panel: Panel.SafeDIOverrides,
+		                safeDIBuilder: ((Thing, Panel) -> Middle)?
+		            ) {
+		                self.serviceBuilder = serviceBuilder
+		                self.panel = panel
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let serviceBuilder: (() -> Thing)?
+		            let panel: Panel.SafeDIOverrides
+		            let safeDIBuilder: ((Thing, Panel) -> Middle)?
+		        }
 		    }
 		}
 		#endif
@@ -1835,12 +2158,29 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            panel: Panel.SafeDIOverrides = .init(),
 		            deck: ((@escaping (Deck.SafeDIMockScope_Service) -> any Service) -> Deck)? = nil
 		        ) {
-		            self.panel = panel
-		            self.deck = deck
+		            __safeDI_storage = __safeDI_Storage(
+		                panel: panel,
+		                deck: deck
+		            )
 		        }
 
-		        let panel: Panel.SafeDIOverrides
-		        let deck: ((@escaping (Deck.SafeDIMockScope_Service) -> any Service) -> Deck)?
+		        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+		        var deck: ((@escaping (Deck.SafeDIMockScope_Service) -> any Service) -> Deck)? { __safeDI_storage.deck }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                panel: Panel.SafeDIOverrides,
+		                deck: ((@escaping (Deck.SafeDIMockScope_Service) -> any Service) -> Deck)?
+		            ) {
+		                self.panel = panel
+		                self.deck = deck
+		            }
+
+		            let panel: Panel.SafeDIOverrides
+		            let deck: ((@escaping (Deck.SafeDIMockScope_Service) -> any Service) -> Deck)?
+		        }
 		    }
 
 		    static func mock(
@@ -1907,14 +2247,34 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            serviceBuilder_Panel: (() -> Thing)? = nil,
 		            panel: Panel.SafeDIOverrides = .init()
 		        ) {
-		            self.serviceBuilder = serviceBuilder
-		            self.serviceBuilder_Panel = serviceBuilder_Panel
-		            self.panel = panel
+		            __safeDI_storage = __safeDI_Storage(
+		                serviceBuilder: serviceBuilder,
+		                serviceBuilder_Panel: serviceBuilder_Panel,
+		                panel: panel
+		            )
 		        }
 
-		        let serviceBuilder: (() -> Thing)?
-		        let serviceBuilder_Panel: (() -> Thing)?
-		        let panel: Panel.SafeDIOverrides
+		        var serviceBuilder: (() -> Thing)? { __safeDI_storage.serviceBuilder }
+		        var serviceBuilder_Panel: (() -> Thing)? { __safeDI_storage.serviceBuilder_Panel }
+		        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                serviceBuilder: (() -> Thing)?,
+		                serviceBuilder_Panel: (() -> Thing)?,
+		                panel: Panel.SafeDIOverrides
+		            ) {
+		                self.serviceBuilder = serviceBuilder
+		                self.serviceBuilder_Panel = serviceBuilder_Panel
+		                self.panel = panel
+		            }
+
+		            let serviceBuilder: (() -> Thing)?
+		            let serviceBuilder_Panel: (() -> Thing)?
+		            let panel: Panel.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -1977,12 +2337,29 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            serviceBuilder: (() -> Thing)? = nil,
 		            panel: Panel.SafeDIOverrides = .init()
 		        ) {
-		            self.serviceBuilder = serviceBuilder
-		            self.panel = panel
+		            __safeDI_storage = __safeDI_Storage(
+		                serviceBuilder: serviceBuilder,
+		                panel: panel
+		            )
 		        }
 
-		        public let serviceBuilder: (() -> Thing)?
-		        public let panel: Panel.SafeDIOverrides
+		        public var serviceBuilder: (() -> Thing)? { __safeDI_storage.serviceBuilder }
+		        public var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                serviceBuilder: (() -> Thing)?,
+		                panel: Panel.SafeDIOverrides
+		            ) {
+		                self.serviceBuilder = serviceBuilder
+		                self.panel = panel
+		            }
+
+		            let serviceBuilder: (() -> Thing)?
+		            let panel: Panel.SafeDIOverrides
+		        }
 		    }
 
 		    public static func mock(
@@ -2117,10 +2494,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            host: ((@escaping (Host.SafeDIMockScope_TapService_AnyService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService) -> Host)? = nil
 		        ) {
-		            self.host = host
+		            __safeDI_storage = __safeDI_Storage(
+		                host: host
+		            )
 		        }
 
-		        let host: ((@escaping (Host.SafeDIMockScope_TapService_AnyService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService) -> Host)?
+		        var host: ((@escaping (Host.SafeDIMockScope_TapService_AnyService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService) -> Host)? { __safeDI_storage.host }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                host: ((@escaping (Host.SafeDIMockScope_TapService_AnyService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService) -> Host)?
+		            ) {
+		                self.host = host
+		            }
+
+		            let host: ((@escaping (Host.SafeDIMockScope_TapService_AnyService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService_AnyService) -> AnyService) -> Host)?
+		        }
 		    }
 
 		    static func mock(
@@ -2226,10 +2617,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			        init(
 			            office: Office.SafeDIOverrides = .init()
 			        ) {
-			            self.office = office
+			            __safeDI_storage = __safeDI_Storage(
+			                office: office
+			            )
 			        }
 
-			        let office: Office.SafeDIOverrides
+			        var office: Office.SafeDIOverrides { __safeDI_storage.office }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                office: Office.SafeDIOverrides
+			            ) {
+			                self.office = office
+			            }
+
+			            let office: Office.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -2324,14 +2729,34 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration = .init(),
 		            model: ((any Service) -> Model)? = nil
 		        ) {
-		            self.token = token
-		            self.lobbyBuilder = lobbyBuilder
-		            self.model = model
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                lobbyBuilder: lobbyBuilder,
+		                model: model
+		            )
 		        }
 
-		        public let token: (() -> Token)?
-		        public let lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration
-		        public let model: ((any Service) -> Model)?
+		        public var token: (() -> Token)? { __safeDI_storage.token }
+		        public var lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration { __safeDI_storage.lobbyBuilder }
+		        public var model: ((any Service) -> Model)? { __safeDI_storage.model }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration,
+		                model: ((any Service) -> Model)?
+		            ) {
+		                self.token = token
+		                self.lobbyBuilder = lobbyBuilder
+		                self.model = model
+		            }
+
+		            let token: (() -> Token)?
+		            let lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration
+		            let model: ((any Service) -> Model)?
+		        }
 		    }
 
 		    public static func mock(
@@ -2394,10 +2819,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            row: __safeDI_Core_Row_MockConfiguration = .init()
 		        ) {
-		            self.row = row
+		            __safeDI_storage = __safeDI_Storage(
+		                row: row
+		            )
 		        }
 
-		        public let row: __safeDI_Core_Row_MockConfiguration
+		        public var row: __safeDI_Core_Row_MockConfiguration { __safeDI_storage.row }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                row: __safeDI_Core_Row_MockConfiguration
+		            ) {
+		                self.row = row
+		            }
+
+		            let row: __safeDI_Core_Row_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -2429,13 +2868,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        model: ((any Service) -> Model)? = nil,
 		        _ safeDIBuilder: ((Token?, Model) -> Lobby)? = nil
 		    ) {
-		        self.model = model
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            model: model,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let model: ((any Service) -> Model)?
+		    public var model: ((any Service) -> Model)? { __safeDI_storage.model }
 		    /// Overrides how `Lobby` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token?, Model) -> Lobby)?
+		    public var safeDIBuilder: ((Token?, Model) -> Lobby)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            model: ((any Service) -> Model)?,
+		            safeDIBuilder: ((Token?, Model) -> Lobby)?
+		        ) {
+		            self.model = model
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let model: ((any Service) -> Model)?
+		        let safeDIBuilder: ((Token?, Model) -> Lobby)?
+		    }
 		}
 
 		extension Lobby {
@@ -2450,13 +2906,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        token: (() -> Token)? = nil,
 		        _ safeDIBuilder: ((Token, any Service) -> Row)? = nil
 		    ) {
-		        self.token = token
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
 		    /// Overrides how `Row` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, any Service) -> Row)?
+		    public var safeDIBuilder: ((Token, any Service) -> Row)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            safeDIBuilder: ((Token, any Service) -> Row)?
+		        ) {
+		            self.token = token
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let safeDIBuilder: ((Token, any Service) -> Row)?
+		    }
 		}
 
 		extension Row {
@@ -2483,10 +2956,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            office: Office.SafeDIOverrides = .init()
 		        ) {
-		            self.office = office
+		            __safeDI_storage = __safeDI_Storage(
+		                office: office
+		            )
 		        }
 
-		        let office: Office.SafeDIOverrides
+		        var office: Office.SafeDIOverrides { __safeDI_storage.office }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                office: Office.SafeDIOverrides
+		            ) {
+		                self.office = office
+		            }
+
+		            let office: Office.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -2578,12 +3065,29 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration = .init(),
 		            desk: __safeDI_Core_Desk_MockConfiguration = .init()
 		        ) {
-		            self.lobbyBuilder = lobbyBuilder
-		            self.desk = desk
+		            __safeDI_storage = __safeDI_Storage(
+		                lobbyBuilder: lobbyBuilder,
+		                desk: desk
+		            )
 		        }
 
-		        public let lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration
-		        public let desk: __safeDI_Core_Desk_MockConfiguration
+		        public var lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration { __safeDI_storage.lobbyBuilder }
+		        public var desk: __safeDI_Core_Desk_MockConfiguration { __safeDI_storage.desk }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration,
+		                desk: __safeDI_Core_Desk_MockConfiguration
+		            ) {
+		                self.lobbyBuilder = lobbyBuilder
+		                self.desk = desk
+		            }
+
+		            let lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration
+		            let desk: __safeDI_Core_Desk_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -2651,10 +3155,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            row: __safeDI_Core_Row_MockConfiguration = .init()
 		        ) {
-		            self.row = row
+		            __safeDI_storage = __safeDI_Storage(
+		                row: row
+		            )
 		        }
 
-		        public let row: __safeDI_Core_Row_MockConfiguration
+		        public var row: __safeDI_Core_Row_MockConfiguration { __safeDI_storage.row }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                row: __safeDI_Core_Row_MockConfiguration
+		            ) {
+		                self.row = row
+		            }
+
+		            let row: __safeDI_Core_Row_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -2686,13 +3204,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        model: ((any Service) -> Model)? = nil,
 		        _ safeDIBuilder: ((Token?, Model) -> Lobby)? = nil
 		    ) {
-		        self.model = model
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            model: model,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let model: ((any Service) -> Model)?
+		    public var model: ((any Service) -> Model)? { __safeDI_storage.model }
 		    /// Overrides how `Lobby` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token?, Model) -> Lobby)?
+		    public var safeDIBuilder: ((Token?, Model) -> Lobby)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            model: ((any Service) -> Model)?,
+		            safeDIBuilder: ((Token?, Model) -> Lobby)?
+		        ) {
+		            self.model = model
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let model: ((any Service) -> Model)?
+		        let safeDIBuilder: ((Token?, Model) -> Lobby)?
+		    }
 		}
 
 		extension Lobby {
@@ -2708,15 +3243,35 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        model: ((any Service) -> Model)? = nil,
 		        _ safeDIBuilder: ((Token, Model) -> Desk)? = nil
 		    ) {
-		        self.token = token
-		        self.model = model
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            model: model,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
-		    public let model: ((any Service) -> Model)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
+		    public var model: ((any Service) -> Model)? { __safeDI_storage.model }
 		    /// Overrides how `Desk` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, Model) -> Desk)?
+		    public var safeDIBuilder: ((Token, Model) -> Desk)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            model: ((any Service) -> Model)?,
+		            safeDIBuilder: ((Token, Model) -> Desk)?
+		        ) {
+		            self.token = token
+		            self.model = model
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let model: ((any Service) -> Model)?
+		        let safeDIBuilder: ((Token, Model) -> Desk)?
+		    }
 		}
 
 		extension Desk {
@@ -2731,13 +3286,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        token: (() -> Token)? = nil,
 		        _ safeDIBuilder: ((Token, any Service) -> Row)? = nil
 		    ) {
-		        self.token = token
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
 		    /// Overrides how `Row` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, any Service) -> Row)?
+		    public var safeDIBuilder: ((Token, any Service) -> Row)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            safeDIBuilder: ((Token, any Service) -> Row)?
+		        ) {
+		            self.token = token
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let safeDIBuilder: ((Token, any Service) -> Row)?
+		    }
 		}
 
 		extension Row {
@@ -2764,10 +3336,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            office: Office.SafeDIOverrides = .init()
 		        ) {
-		            self.office = office
+		            __safeDI_storage = __safeDI_Storage(
+		                office: office
+		            )
 		        }
 
-		        let office: Office.SafeDIOverrides
+		        var office: Office.SafeDIOverrides { __safeDI_storage.office }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                office: Office.SafeDIOverrides
+		            ) {
+		                self.office = office
+		            }
+
+		            let office: Office.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -2877,14 +3463,34 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration = .init(),
 		            wing: __safeDI_Core_Wing_MockConfiguration = .init()
 		        ) {
-		            self.token = token
-		            self.lobbyBuilder = lobbyBuilder
-		            self.wing = wing
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                lobbyBuilder: lobbyBuilder,
+		                wing: wing
+		            )
 		        }
 
-		        public let token: (() -> Token)?
-		        public let lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration
-		        public let wing: __safeDI_Core_Wing_MockConfiguration
+		        public var token: (() -> Token)? { __safeDI_storage.token }
+		        public var lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration { __safeDI_storage.lobbyBuilder }
+		        public var wing: __safeDI_Core_Wing_MockConfiguration { __safeDI_storage.wing }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration,
+		                wing: __safeDI_Core_Wing_MockConfiguration
+		            ) {
+		                self.token = token
+		                self.lobbyBuilder = lobbyBuilder
+		                self.wing = wing
+		            }
+
+		            let token: (() -> Token)?
+		            let lobbyBuilder: __safeDI_Core_Lobby_MockConfiguration
+		            let wing: __safeDI_Core_Wing_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -2958,10 +3564,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            row: __safeDI_Core_Row_MockConfiguration = .init()
 		        ) {
-		            self.row = row
+		            __safeDI_storage = __safeDI_Storage(
+		                row: row
+		            )
 		        }
 
-		        public let row: __safeDI_Core_Row_MockConfiguration
+		        public var row: __safeDI_Core_Row_MockConfiguration { __safeDI_storage.row }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                row: __safeDI_Core_Row_MockConfiguration
+		            ) {
+		                self.row = row
+		            }
+
+		            let row: __safeDI_Core_Row_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -2993,13 +3613,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        model: ((any Service) -> Model)? = nil,
 		        _ safeDIBuilder: ((Token?, Model) -> Lobby)? = nil
 		    ) {
-		        self.model = model
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            model: model,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let model: ((any Service) -> Model)?
+		    public var model: ((any Service) -> Model)? { __safeDI_storage.model }
 		    /// Overrides how `Lobby` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token?, Model) -> Lobby)?
+		    public var safeDIBuilder: ((Token?, Model) -> Lobby)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            model: ((any Service) -> Model)?,
+		            safeDIBuilder: ((Token?, Model) -> Lobby)?
+		        ) {
+		            self.model = model
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let model: ((any Service) -> Model)?
+		        let safeDIBuilder: ((Token?, Model) -> Lobby)?
+		    }
 		}
 
 		extension Lobby {
@@ -3015,15 +3652,35 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        gauge: ((any Service) -> Gauge)? = nil,
 		        _ safeDIBuilder: ((Model, Gauge) -> Wing)? = nil
 		    ) {
-		        self.model = model
-		        self.gauge = gauge
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            model: model,
+		            gauge: gauge,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let model: ((any Service) -> Model)?
-		    public let gauge: ((any Service) -> Gauge)?
+		    public var model: ((any Service) -> Model)? { __safeDI_storage.model }
+		    public var gauge: ((any Service) -> Gauge)? { __safeDI_storage.gauge }
 		    /// Overrides how `Wing` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Model, Gauge) -> Wing)?
+		    public var safeDIBuilder: ((Model, Gauge) -> Wing)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            model: ((any Service) -> Model)?,
+		            gauge: ((any Service) -> Gauge)?,
+		            safeDIBuilder: ((Model, Gauge) -> Wing)?
+		        ) {
+		            self.model = model
+		            self.gauge = gauge
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let model: ((any Service) -> Model)?
+		        let gauge: ((any Service) -> Gauge)?
+		        let safeDIBuilder: ((Model, Gauge) -> Wing)?
+		    }
 		}
 
 		extension Wing {
@@ -3038,13 +3695,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        token: (() -> Token)? = nil,
 		        _ safeDIBuilder: ((Token, any Service) -> Row)? = nil
 		    ) {
-		        self.token = token
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
 		    /// Overrides how `Row` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, any Service) -> Row)?
+		    public var safeDIBuilder: ((Token, any Service) -> Row)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            safeDIBuilder: ((Token, any Service) -> Row)?
+		        ) {
+		            self.token = token
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let safeDIBuilder: ((Token, any Service) -> Row)?
+		    }
 		}
 
 		extension Row {
@@ -3072,10 +3746,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            office: Office.SafeDIOverrides = .init()
 		        ) {
-		            self.office = office
+		            __safeDI_storage = __safeDI_Storage(
+		                office: office
+		            )
 		        }
 
-		        let office: Office.SafeDIOverrides
+		        var office: Office.SafeDIOverrides { __safeDI_storage.office }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                office: Office.SafeDIOverrides
+		            ) {
+		                self.office = office
+		            }
+
+		            let office: Office.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -3178,12 +3866,29 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            page: __safeDI_Core_Page_MockConfiguration = .init(),
 		            hall: __safeDI_Core_Hall_MockConfiguration = .init()
 		        ) {
-		            self.page = page
-		            self.hall = hall
+		            __safeDI_storage = __safeDI_Storage(
+		                page: page,
+		                hall: hall
+		            )
 		        }
 
-		        public let page: __safeDI_Core_Page_MockConfiguration
-		        public let hall: __safeDI_Core_Hall_MockConfiguration
+		        public var page: __safeDI_Core_Page_MockConfiguration { __safeDI_storage.page }
+		        public var hall: __safeDI_Core_Hall_MockConfiguration { __safeDI_storage.hall }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                page: __safeDI_Core_Page_MockConfiguration,
+		                hall: __safeDI_Core_Hall_MockConfiguration
+		            ) {
+		                self.page = page
+		                self.hall = hall
+		            }
+
+		            let page: __safeDI_Core_Page_MockConfiguration
+		            let hall: __safeDI_Core_Hall_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -3249,10 +3954,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            row: __safeDI_Core_Row_MockConfiguration = .init()
 		        ) {
-		            self.row = row
+		            __safeDI_storage = __safeDI_Storage(
+		                row: row
+		            )
 		        }
 
-		        public let row: __safeDI_Core_Row_MockConfiguration
+		        public var row: __safeDI_Core_Row_MockConfiguration { __safeDI_storage.row }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                row: __safeDI_Core_Row_MockConfiguration
+		            ) {
+		                self.row = row
+		            }
+
+		            let row: __safeDI_Core_Row_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -3285,15 +4004,35 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        model: ((any Service) -> Model)? = nil,
 		        _ safeDIBuilder: ((Token, Model) -> Page)? = nil
 		    ) {
-		        self.token = token
-		        self.model = model
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            model: model,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
-		    public let model: ((any Service) -> Model)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
+		    public var model: ((any Service) -> Model)? { __safeDI_storage.model }
 		    /// Overrides how `Page` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, Model) -> Page)?
+		    public var safeDIBuilder: ((Token, Model) -> Page)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            model: ((any Service) -> Model)?,
+		            safeDIBuilder: ((Token, Model) -> Page)?
+		        ) {
+		            self.token = token
+		            self.model = model
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let model: ((any Service) -> Model)?
+		        let safeDIBuilder: ((Token, Model) -> Page)?
+		    }
 		}
 
 		extension Page {
@@ -3308,13 +4047,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        model: ((any Service) -> Model)? = nil,
 		        _ safeDIBuilder: ((Model) -> Hall)? = nil
 		    ) {
-		        self.model = model
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            model: model,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let model: ((any Service) -> Model)?
+		    public var model: ((any Service) -> Model)? { __safeDI_storage.model }
 		    /// Overrides how `Hall` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Model) -> Hall)?
+		    public var safeDIBuilder: ((Model) -> Hall)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            model: ((any Service) -> Model)?,
+		            safeDIBuilder: ((Model) -> Hall)?
+		        ) {
+		            self.model = model
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let model: ((any Service) -> Model)?
+		        let safeDIBuilder: ((Model) -> Hall)?
+		    }
 		}
 
 		extension Hall {
@@ -3329,13 +4085,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        token: (() -> Token)? = nil,
 		        _ safeDIBuilder: ((Token, any Service) -> Row)? = nil
 		    ) {
-		        self.token = token
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
 		    /// Overrides how `Row` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, any Service) -> Row)?
+		    public var safeDIBuilder: ((Token, any Service) -> Row)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            safeDIBuilder: ((Token, any Service) -> Row)?
+		        ) {
+		            self.token = token
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let safeDIBuilder: ((Token, any Service) -> Row)?
+		    }
 		}
 
 		extension Row {
@@ -3362,10 +4135,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                hub: hub
+		            )
 		        }
 
-		        let hub: Hub.SafeDIOverrides
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.hub = hub
+		            }
+
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -3458,10 +4245,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            model: __safeDI_Core_Model_MockConfiguration = .init()
 		        ) {
-		            self.model = model
+		            __safeDI_storage = __safeDI_Storage(
+		                model: model
+		            )
 		        }
 
-		        public let model: __safeDI_Core_Model_MockConfiguration
+		        public var model: __safeDI_Core_Model_MockConfiguration { __safeDI_storage.model }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                model: __safeDI_Core_Model_MockConfiguration
+		            ) {
+		                self.model = model
+		            }
+
+		            let model: __safeDI_Core_Model_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -3518,10 +4319,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            row: __safeDI_Core_Row_MockConfiguration = .init()
 		        ) {
-		            self.row = row
+		            __safeDI_storage = __safeDI_Storage(
+		                row: row
+		            )
 		        }
 
-		        public let row: __safeDI_Core_Row_MockConfiguration
+		        public var row: __safeDI_Core_Row_MockConfiguration { __safeDI_storage.row }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                row: __safeDI_Core_Row_MockConfiguration
+		            ) {
+		                self.row = row
+		            }
+
+		            let row: __safeDI_Core_Row_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -3553,13 +4368,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        token: (() -> Badge)? = nil,
 		        _ safeDIBuilder: ((Badge, any Service) -> Bench)? = nil
 		    ) {
-		        self.token = token
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Badge)?
+		    public var token: (() -> Badge)? { __safeDI_storage.token }
 		    /// Overrides how `Bench` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Badge, any Service) -> Bench)?
+		    public var safeDIBuilder: ((Badge, any Service) -> Bench)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Badge)?,
+		            safeDIBuilder: ((Badge, any Service) -> Bench)?
+		        ) {
+		            self.token = token
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Badge)?
+		        let safeDIBuilder: ((Badge, any Service) -> Bench)?
+		    }
 		}
 
 		extension Bench {
@@ -3575,15 +4407,35 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        bench: __safeDI_Core_Bench_MockConfiguration = .init(),
 		        _ safeDIBuilder: ((Token, any Service, Bench) -> Model)? = nil
 		    ) {
-		        self.token = token
-		        self.bench = bench
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            bench: bench,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
-		    public let bench: __safeDI_Core_Bench_MockConfiguration
+		    public var token: (() -> Token)? { __safeDI_storage.token }
+		    public var bench: __safeDI_Core_Bench_MockConfiguration { __safeDI_storage.bench }
 		    /// Overrides how `Model` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, any Service, Bench) -> Model)?
+		    public var safeDIBuilder: ((Token, any Service, Bench) -> Model)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            bench: __safeDI_Core_Bench_MockConfiguration,
+		            safeDIBuilder: ((Token, any Service, Bench) -> Model)?
+		        ) {
+		            self.token = token
+		            self.bench = bench
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let bench: __safeDI_Core_Bench_MockConfiguration
+		        let safeDIBuilder: ((Token, any Service, Bench) -> Model)?
+		    }
 		}
 
 		extension Model {
@@ -3598,13 +4450,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        token: (() -> Token)? = nil,
 		        _ safeDIBuilder: ((Token, any Service) -> Row)? = nil
 		    ) {
-		        self.token = token
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
 		    /// Overrides how `Row` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, any Service) -> Row)?
+		    public var safeDIBuilder: ((Token, any Service) -> Row)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            safeDIBuilder: ((Token, any Service) -> Row)?
+		        ) {
+		            self.token = token
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let safeDIBuilder: ((Token, any Service) -> Row)?
+		    }
 		}
 
 		extension Row {
@@ -3631,10 +4500,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                hub: hub
+		            )
 		        }
 
-		        let hub: Hub.SafeDIOverrides
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.hub = hub
+		            }
+
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -3711,12 +4594,29 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            page: __safeDI_Core_Page_MockConfiguration = .init(),
 		            model: ((ErasedInstantiator<String, any Part>) -> Model)? = nil
 		        ) {
-		            self.page = page
-		            self.model = model
+		            __safeDI_storage = __safeDI_Storage(
+		                page: page,
+		                model: model
+		            )
 		        }
 
-		        public let page: __safeDI_Core_Page_MockConfiguration
-		        public let model: ((ErasedInstantiator<String, any Part>) -> Model)?
+		        public var page: __safeDI_Core_Page_MockConfiguration { __safeDI_storage.page }
+		        public var model: ((ErasedInstantiator<String, any Part>) -> Model)? { __safeDI_storage.model }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                page: __safeDI_Core_Page_MockConfiguration,
+		                model: ((ErasedInstantiator<String, any Part>) -> Model)?
+		            ) {
+		                self.page = page
+		                self.model = model
+		            }
+
+		            let page: __safeDI_Core_Page_MockConfiguration
+		            let model: ((ErasedInstantiator<String, any Part>) -> Model)?
+		        }
 		    }
 
 		    public static func mock(
@@ -3781,10 +4681,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            row: __safeDI_Core_Row_MockConfiguration = .init()
 		        ) {
-		            self.row = row
+		            __safeDI_storage = __safeDI_Storage(
+		                row: row
+		            )
 		        }
 
-		        public let row: __safeDI_Core_Row_MockConfiguration
+		        public var row: __safeDI_Core_Row_MockConfiguration { __safeDI_storage.row }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                row: __safeDI_Core_Row_MockConfiguration
+		            ) {
+		                self.row = row
+		            }
+
+		            let row: __safeDI_Core_Row_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -3817,15 +4731,35 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        model: ((ErasedInstantiator<String, any Part>) -> Model)? = nil,
 		        _ safeDIBuilder: ((Token, Model) -> Page)? = nil
 		    ) {
-		        self.token = token
-		        self.model = model
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            model: model,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
-		    public let model: ((ErasedInstantiator<String, any Part>) -> Model)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
+		    public var model: ((ErasedInstantiator<String, any Part>) -> Model)? { __safeDI_storage.model }
 		    /// Overrides how `Page` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, Model) -> Page)?
+		    public var safeDIBuilder: ((Token, Model) -> Page)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            model: ((ErasedInstantiator<String, any Part>) -> Model)?,
+		            safeDIBuilder: ((Token, Model) -> Page)?
+		        ) {
+		            self.token = token
+		            self.model = model
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let model: ((ErasedInstantiator<String, any Part>) -> Model)?
+		        let safeDIBuilder: ((Token, Model) -> Page)?
+		    }
 		}
 
 		extension Page {
@@ -3840,13 +4774,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        token: (() -> Token)? = nil,
 		        _ safeDIBuilder: ((Token, any Service) -> Row)? = nil
 		    ) {
-		        self.token = token
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
 		    /// Overrides how `Row` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, any Service) -> Row)?
+		    public var safeDIBuilder: ((Token, any Service) -> Row)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            safeDIBuilder: ((Token, any Service) -> Row)?
+		        ) {
+		            self.token = token
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let safeDIBuilder: ((Token, any Service) -> Row)?
+		    }
 		}
 
 		extension Row {
@@ -3872,10 +4823,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                hub: hub
+		            )
 		        }
 
-		        let hub: Hub.SafeDIOverrides
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.hub = hub
+		            }
+
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -3960,14 +4925,34 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            desk: __safeDI_Core_Desk_MockConfiguration = .init(),
 		            model: ((any Service) -> Model)? = nil
 		        ) {
-		            self.token = token
-		            self.desk = desk
-		            self.model = model
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                desk: desk,
+		                model: model
+		            )
 		        }
 
-		        public let token: (() -> Token)?
-		        public let desk: __safeDI_Core_Desk_MockConfiguration
-		        public let model: ((any Service) -> Model)?
+		        public var token: (() -> Token)? { __safeDI_storage.token }
+		        public var desk: __safeDI_Core_Desk_MockConfiguration { __safeDI_storage.desk }
+		        public var model: ((any Service) -> Model)? { __safeDI_storage.model }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                desk: __safeDI_Core_Desk_MockConfiguration,
+		                model: ((any Service) -> Model)?
+		            ) {
+		                self.token = token
+		                self.desk = desk
+		                self.model = model
+		            }
+
+		            let token: (() -> Token)?
+		            let desk: __safeDI_Core_Desk_MockConfiguration
+		            let model: ((any Service) -> Model)?
+		        }
 		    }
 
 		    public static func mock(
@@ -4029,10 +5014,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            row: __safeDI_Core_Row_MockConfiguration = .init()
 		        ) {
-		            self.row = row
+		            __safeDI_storage = __safeDI_Storage(
+		                row: row
+		            )
 		        }
 
-		        public let row: __safeDI_Core_Row_MockConfiguration
+		        public var row: __safeDI_Core_Row_MockConfiguration { __safeDI_storage.row }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                row: __safeDI_Core_Row_MockConfiguration
+		            ) {
+		                self.row = row
+		            }
+
+		            let row: __safeDI_Core_Row_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -4065,15 +5064,35 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        token: ((Model) -> Stamp)? = nil,
 		        _ safeDIBuilder: ((Model, Stamp) -> Desk)? = nil
 		    ) {
-		        self.model = model
-		        self.token = token
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            model: model,
+		            token: token,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let model: ((any Service) -> Model)?
-		    public let token: ((Model) -> Stamp)?
+		    public var model: ((any Service) -> Model)? { __safeDI_storage.model }
+		    public var token: ((Model) -> Stamp)? { __safeDI_storage.token }
 		    /// Overrides how `Desk` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Model, Stamp) -> Desk)?
+		    public var safeDIBuilder: ((Model, Stamp) -> Desk)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            model: ((any Service) -> Model)?,
+		            token: ((Model) -> Stamp)?,
+		            safeDIBuilder: ((Model, Stamp) -> Desk)?
+		        ) {
+		            self.model = model
+		            self.token = token
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let model: ((any Service) -> Model)?
+		        let token: ((Model) -> Stamp)?
+		        let safeDIBuilder: ((Model, Stamp) -> Desk)?
+		    }
 		}
 
 		extension Desk {
@@ -4088,13 +5107,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        token: (() -> Token)? = nil,
 		        _ safeDIBuilder: ((Token, any Service) -> Row)? = nil
 		    ) {
-		        self.token = token
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
 		    /// Overrides how `Row` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, any Service) -> Row)?
+		    public var safeDIBuilder: ((Token, any Service) -> Row)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            safeDIBuilder: ((Token, any Service) -> Row)?
+		        ) {
+		            self.token = token
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let safeDIBuilder: ((Token, any Service) -> Row)?
+		    }
 		}
 
 		extension Row {
@@ -4121,10 +5157,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            office: Office.SafeDIOverrides = .init()
 		        ) {
-		            self.office = office
+		            __safeDI_storage = __safeDI_Storage(
+		                office: office
+		            )
 		        }
 
-		        let office: Office.SafeDIOverrides
+		        var office: Office.SafeDIOverrides { __safeDI_storage.office }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                office: Office.SafeDIOverrides
+		            ) {
+		                self.office = office
+		            }
+
+		            let office: Office.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -4209,14 +5259,34 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            bench: __safeDI_Core_Bench_MockConfiguration = .init(),
 		            model: ((any Service) -> Model)? = nil
 		        ) {
-		            self.token = token
-		            self.bench = bench
-		            self.model = model
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                bench: bench,
+		                model: model
+		            )
 		        }
 
-		        public let token: (() -> Token)?
-		        public let bench: __safeDI_Core_Bench_MockConfiguration
-		        public let model: ((any Service) -> Model)?
+		        public var token: (() -> Token)? { __safeDI_storage.token }
+		        public var bench: __safeDI_Core_Bench_MockConfiguration { __safeDI_storage.bench }
+		        public var model: ((any Service) -> Model)? { __safeDI_storage.model }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                bench: __safeDI_Core_Bench_MockConfiguration,
+		                model: ((any Service) -> Model)?
+		            ) {
+		                self.token = token
+		                self.bench = bench
+		                self.model = model
+		            }
+
+		            let token: (() -> Token)?
+		            let bench: __safeDI_Core_Bench_MockConfiguration
+		            let model: ((any Service) -> Model)?
+		        }
 		    }
 
 		    public static func mock(
@@ -4278,10 +5348,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            row: __safeDI_Core_Row_MockConfiguration = .init()
 		        ) {
-		            self.row = row
+		            __safeDI_storage = __safeDI_Storage(
+		                row: row
+		            )
 		        }
 
-		        public let row: __safeDI_Core_Row_MockConfiguration
+		        public var row: __safeDI_Core_Row_MockConfiguration { __safeDI_storage.row }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                row: __safeDI_Core_Row_MockConfiguration
+		            ) {
+		                self.row = row
+		            }
+
+		            let row: __safeDI_Core_Row_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -4314,15 +5398,35 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        model: ((any Service) -> Model)? = nil,
 		        _ safeDIBuilder: ((Badge, Model) -> Bench)? = nil
 		    ) {
-		        self.token = token
-		        self.model = model
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            model: model,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Badge)?
-		    public let model: ((any Service) -> Model)?
+		    public var token: (() -> Badge)? { __safeDI_storage.token }
+		    public var model: ((any Service) -> Model)? { __safeDI_storage.model }
 		    /// Overrides how `Bench` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Badge, Model) -> Bench)?
+		    public var safeDIBuilder: ((Badge, Model) -> Bench)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Badge)?,
+		            model: ((any Service) -> Model)?,
+		            safeDIBuilder: ((Badge, Model) -> Bench)?
+		        ) {
+		            self.token = token
+		            self.model = model
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Badge)?
+		        let model: ((any Service) -> Model)?
+		        let safeDIBuilder: ((Badge, Model) -> Bench)?
+		    }
 		}
 
 		extension Bench {
@@ -4337,13 +5441,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        token: (() -> Token)? = nil,
 		        _ safeDIBuilder: ((Token, any Service) -> Row)? = nil
 		    ) {
-		        self.token = token
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
 		    /// Overrides how `Row` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, any Service) -> Row)?
+		    public var safeDIBuilder: ((Token, any Service) -> Row)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            safeDIBuilder: ((Token, any Service) -> Row)?
+		        ) {
+		            self.token = token
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let safeDIBuilder: ((Token, any Service) -> Row)?
+		    }
 		}
 
 		extension Row {
@@ -4370,10 +5491,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            office: Office.SafeDIOverrides = .init()
 		        ) {
-		            self.office = office
+		            __safeDI_storage = __safeDI_Storage(
+		                office: office
+		            )
 		        }
 
-		        let office: Office.SafeDIOverrides
+		        var office: Office.SafeDIOverrides { __safeDI_storage.office }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                office: Office.SafeDIOverrides
+		            ) {
+		                self.office = office
+		            }
+
+		            let office: Office.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -4466,12 +5601,29 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            token: (() -> Token)? = nil,
 		            node: __safeDI_Core_Node_MockConfiguration = .init()
 		        ) {
-		            self.token = token
-		            self.node = node
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                node: node
+		            )
 		        }
 
-		        public let token: (() -> Token)?
-		        public let node: __safeDI_Core_Node_MockConfiguration
+		        public var token: (() -> Token)? { __safeDI_storage.token }
+		        public var node: __safeDI_Core_Node_MockConfiguration { __safeDI_storage.node }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                node: __safeDI_Core_Node_MockConfiguration
+		            ) {
+		                self.token = token
+		                self.node = node
+		            }
+
+		            let token: (() -> Token)?
+		            let node: __safeDI_Core_Node_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -4534,10 +5686,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            row: __safeDI_Core_Row_MockConfiguration = .init()
 		        ) {
-		            self.row = row
+		            __safeDI_storage = __safeDI_Storage(
+		                row: row
+		            )
 		        }
 
-		        public let row: __safeDI_Core_Row_MockConfiguration
+		        public var row: __safeDI_Core_Row_MockConfiguration { __safeDI_storage.row }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                row: __safeDI_Core_Row_MockConfiguration
+		            ) {
+		                self.row = row
+		            }
+
+		            let row: __safeDI_Core_Row_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -4568,11 +5734,25 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    public init(
 		        _ safeDIBuilder: ((Int, Instantiator<Node>, any Service) -> Node)? = nil
 		    ) {
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
 		    /// Overrides how `Node` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Int, Instantiator<Node>, any Service) -> Node)?
+		    public var safeDIBuilder: ((Int, Instantiator<Node>, any Service) -> Node)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            safeDIBuilder: ((Int, Instantiator<Node>, any Service) -> Node)?
+		        ) {
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let safeDIBuilder: ((Int, Instantiator<Node>, any Service) -> Node)?
+		    }
 		}
 
 		extension Node {
@@ -4587,13 +5767,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        token: (() -> Token)? = nil,
 		        _ safeDIBuilder: ((Token, any Service) -> Row)? = nil
 		    ) {
-		        self.token = token
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
 		    /// Overrides how `Row` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, any Service) -> Row)?
+		    public var safeDIBuilder: ((Token, any Service) -> Row)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            safeDIBuilder: ((Token, any Service) -> Row)?
+		        ) {
+		            self.token = token
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let safeDIBuilder: ((Token, any Service) -> Row)?
+		    }
 		}
 
 		extension Row {
@@ -4619,10 +5816,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                hub: hub
+		            )
 		        }
 
-		        let hub: Hub.SafeDIOverrides
+		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.hub = hub
+		            }
+
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -4689,10 +5900,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public init(
 		            hub: Hub.SafeDIOverrides = .init()
 		        ) {
-		            self.hub = hub
+		            __safeDI_storage = __safeDI_Storage(
+		                hub: hub
+		            )
 		        }
 
-		        public let hub: Hub.SafeDIOverrides
+		        public var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                hub: Hub.SafeDIOverrides
+		            ) {
+		                self.hub = hub
+		            }
+
+		            let hub: Hub.SafeDIOverrides
+		        }
 		    }
 
 		    public static func mock(
@@ -4755,10 +5980,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            board: Board.SafeDIOverrides = .init()
 		        ) {
-		            self.board = board
+		            __safeDI_storage = __safeDI_Storage(
+		                board: board
+		            )
 		        }
 
-		        let board: Board.SafeDIOverrides
+		        var board: Board.SafeDIOverrides { __safeDI_storage.board }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                board: Board.SafeDIOverrides
+		            ) {
+		                self.board = board
+		            }
+
+		            let board: Board.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -4812,16 +6051,32 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
 		        public init() {
-		            self.badge = nil
+		            __safeDI_storage = __safeDI_Storage(
+		                badge: nil
+		            )
 		        }
 
 		        package init(
 		            badge: ((Thing?) -> Badge)? = nil
 		        ) {
-		            self.badge = badge
+		            __safeDI_storage = __safeDI_Storage(
+		                badge: badge
+		            )
 		        }
 
-		        package let badge: ((Thing?) -> Badge)?
+		        package var badge: ((Thing?) -> Badge)? { __safeDI_storage.badge }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                badge: ((Thing?) -> Badge)?
+		            ) {
+		                self.badge = badge
+		            }
+
+		            let badge: ((Thing?) -> Badge)?
+		        }
 		    }
 
 		    public static func mock(
@@ -4863,10 +6118,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            panel: Panel.SafeDIOverrides = .init()
 		        ) {
-		            self.panel = panel
+		            __safeDI_storage = __safeDI_Storage(
+		                panel: panel
+		            )
 		        }
 
-		        let panel: Panel.SafeDIOverrides
+		        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                panel: Panel.SafeDIOverrides
+		            ) {
+		                self.panel = panel
+		            }
+
+		            let panel: Panel.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -4895,10 +6164,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        init(
 		            panel: Panel.SafeDIOverrides = .init()
 		        ) {
-		            self.panel = panel
+		            __safeDI_storage = __safeDI_Storage(
+		                panel: panel
+		            )
 		        }
 
-		        let panel: Panel.SafeDIOverrides
+		        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                panel: Panel.SafeDIOverrides
+		            ) {
+		                self.panel = panel
+		            }
+
+		            let panel: Panel.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -4984,10 +6267,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	        init(
 	            panel: Panel.SafeDIOverrides = .init()
 	        ) {
-	            self.panel = panel
+	            __safeDI_storage = __safeDI_Storage(
+	                panel: panel
+	            )
 	        }
 
-	        let panel: Panel.SafeDIOverrides
+	        var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+
+	        private let __safeDI_storage: __safeDI_Storage
+
+	        private final class __safeDI_Storage {
+	            init(
+	                panel: Panel.SafeDIOverrides
+	            ) {
+	                self.panel = panel
+	            }
+
+	            let panel: Panel.SafeDIOverrides
+	        }
 	    }
 
 	"""
@@ -5017,12 +6314,29 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	            panel: Panel.SafeDIOverrides = .init(),
 	            held: (@Sendable () -> Panel.SafeDIOverrides)? = nil
 	        ) {
-	            self.panel = panel
-	            self.held = held
+	            __safeDI_storage = __safeDI_Storage(
+	                panel: panel,
+	                held: held
+	            )
 	        }
 
-	        public let panel: Panel.SafeDIOverrides
-	        public let held: (@Sendable () -> Panel.SafeDIOverrides)?
+	        public var panel: Panel.SafeDIOverrides { __safeDI_storage.panel }
+	        public var held: (@Sendable () -> Panel.SafeDIOverrides)? { __safeDI_storage.held }
+
+	        private let __safeDI_storage: __safeDI_Storage
+
+	        private final class __safeDI_Storage {
+	            init(
+	                panel: Panel.SafeDIOverrides,
+	                held: (@Sendable () -> Panel.SafeDIOverrides)?
+	            ) {
+	                self.panel = panel
+	                self.held = held
+	            }
+
+	            let panel: Panel.SafeDIOverrides
+	            let held: (@Sendable () -> Panel.SafeDIOverrides)?
+	        }
 	    }
 
 	"""
@@ -5355,10 +6669,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	        init(
 	            board: Board.SafeDIOverrides = .init()
 	        ) {
-	            self.board = board
+	            __safeDI_storage = __safeDI_Storage(
+	                board: board
+	            )
 	        }
 
-	        let board: Board.SafeDIOverrides
+	        var board: Board.SafeDIOverrides { __safeDI_storage.board }
+
+	        private let __safeDI_storage: __safeDI_Storage
+
+	        private final class __safeDI_Storage {
+	            init(
+	                board: Board.SafeDIOverrides
+	            ) {
+	                self.board = board
+	            }
+
+	            let board: Board.SafeDIOverrides
+	        }
 	    }
 
 	"""

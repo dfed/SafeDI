@@ -138,12 +138,29 @@ struct SafeDIToolQueryTests: ~Copyable {
 		            logger: (() -> Logger)? = nil,
 		            service: Service.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.logger = logger
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                logger: logger,
+		                service: service
+		            )
 		        }
 
-		        let logger: (() -> Logger)?
-		        let service: Service.SafeDIMockConfiguration
+		        var logger: (() -> Logger)? { __safeDI_storage.logger }
+		        var service: Service.SafeDIMockConfiguration { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                logger: (() -> Logger)?,
+		                service: Service.SafeDIMockConfiguration
+		            ) {
+		                self.logger = logger
+		                self.service = service
+		            }
+
+		            let logger: (() -> Logger)?
+		            let service: Service.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(

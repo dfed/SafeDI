@@ -268,12 +268,15 @@ private func configurationOwner(named name: String, extendedType: String?) -> St
 	extendedType.map { "\($0).\(name)" } ?? name
 }
 
-/// The label and type of `member` when it declares one stored field, or `nil` otherwise.
+/// The label and type of `member` when it declares one field, or `nil` otherwise: a property a configuration stores, or
+/// one that reads its field from the configuration's storage, as a property of the storage's class that holds it. The
+/// property that holds the storage is no field.
 private func storedField(of member: MemberBlockItemSyntax) -> (label: String, type: String)? {
 	guard let variable = member.decl.as(VariableDeclSyntax.self),
 	      variable.bindings.count == 1,
 	      let binding = variable.bindings.first,
 	      let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
+	      identifier.identifier.text != configurationStoragePropertyName,
 	      let type = binding.typeAnnotation?.type.trimmedDescription
 	else { return nil }
 	return (identifier.identifier.text, type)
@@ -308,6 +311,9 @@ private func kindOfName(_ name: String) -> String {
 
 private let mockOverridesParameterName = "safeDIOverrides"
 private let mockOverridesStructName = "SafeDIOverrides"
+/// The property through which a configuration holds the class it keeps its fields in, and that class's name.
+private let configurationStoragePropertyName = "__safeDI_storage"
+private let configurationStorageTypeName = "__safeDI_Storage"
 
 private final class ConfigurationFieldCollector: SyntaxVisitor {
 	var fields = GraphFuzzerMockDifference.Fields()
@@ -579,9 +585,12 @@ private struct Rendering {
 	/// the other outcome passes as `nil`.
 	private func argumentsText(of list: LabeledExprListSyntax, in scope: Scope) -> String {
 		joined(list.compactMap { argument -> Place? in
-			if let label = argument.label?.text,
-			   let read = droppedRead(of: overridesRead(by: argument.expression), byNodeAt: Syntax(argument), in: scope),
-			   read.endsIn(label == mockOverridesParameterName ? nil : label)
+			if scope.isConfigurationInitializer, isStorageInitialization(list), let label = argument.label?.text, isDroppedField(labeled: label, in: scope) {
+				// The other outcome's configuration has no such field, so its initializer hands the storage none.
+				nil
+			} else if let label = argument.label?.text,
+			          let read = droppedRead(of: overridesRead(by: argument.expression), byNodeAt: Syntax(argument), in: scope),
+			          read.endsIn(label == mockOverridesParameterName ? nil : label)
 			{
 				label == Self.overrideBuilderName ? Place(text: "\(label): nil", sortedAs: nil) : nil
 			} else {
@@ -601,6 +610,11 @@ private struct Rendering {
 		      callee.base?.trimmedDescription == scope.extendedType
 		else { return nil }
 		return scope.optionalParametersOfPublicMock.contains(label) || argument.expression.is(NilLiteralExprSyntax.self) ? label : nil
+	}
+
+	/// Whether `list` is the arguments of the call that creates a configuration's storage, one for each of its fields.
+	private func isStorageInitialization(_ list: LabeledExprListSyntax) -> Bool {
+		list.parent?.as(FunctionCallExprSyntax.self)?.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == configurationStorageTypeName
 	}
 
 	private func isDroppedField(labeled label: String, in scope: Scope) -> Bool {

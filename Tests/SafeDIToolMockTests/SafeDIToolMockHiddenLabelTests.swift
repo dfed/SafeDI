@@ -1415,12 +1415,29 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            leaf: (() -> Leaf)? = nil,
 		            promoted: Promoted.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.leaf = leaf
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                leaf: leaf,
+		                promoted: promoted
+		            )
 		        }
 
-		        let leaf: (() -> Leaf)?
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        var leaf: (() -> Leaf)? { __safeDI_storage.leaf }
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                leaf: (() -> Leaf)?,
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.leaf = leaf
+		                self.promoted = promoted
+		            }
+
+		            let leaf: (() -> Leaf)?
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1510,10 +1527,24 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		        init(
 		            promoted: Promoted.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                promoted: promoted
+		            )
 		        }
 
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.promoted = promoted
+		            }
+
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1590,10 +1621,24 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		        init(
 		            middle: Middle.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.middle = middle
+		            __safeDI_storage = __safeDI_Storage(
+		                middle: middle
+		            )
 		        }
 
-		        let middle: Middle.SafeDIMockConfiguration
+		        var middle: Middle.SafeDIMockConfiguration { __safeDI_storage.middle }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                middle: Middle.SafeDIMockConfiguration
+		            ) {
+		                self.middle = middle
+		            }
+
+		            let middle: Middle.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1669,12 +1714,29 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            leaf: (() -> Leaf)? = nil,
 		            promoted: Promoted.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.leaf = leaf
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                leaf: leaf,
+		                promoted: promoted
+		            )
 		        }
 
-		        let leaf: (() -> Leaf)?
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        var leaf: (() -> Leaf)? { __safeDI_storage.leaf }
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                leaf: (() -> Leaf)?,
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.leaf = leaf
+		                self.promoted = promoted
+		            }
+
+		            let leaf: (() -> Leaf)?
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1743,14 +1805,28 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            count_Bool: Bool? = nil,
 		            count_String: String? = nil
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		            self.count_Bool = count_Bool
 		            self.count_String = count_String
 		        }
 
-		        let child: ((Bool?) -> Child)?
+		        var child: ((Bool?) -> Child)? { __safeDI_storage.child }
 		        let count_Bool: Bool?
 		        let count_String: String?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((Bool?) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: ((Bool?) -> Child)?
+		        }
 		    }
 
 		    static func mock(
@@ -1819,14 +1895,28 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            count_Bool: Bool? = nil,
 		            count_String: String? = nil
 		        ) {
-		            self.middle = middle
+		            __safeDI_storage = __safeDI_Storage(
+		                middle: middle
+		            )
 		            self.count_Bool = count_Bool
 		            self.count_String = count_String
 		        }
 
-		        let middle: Middle.SafeDIMockConfiguration
+		        var middle: Middle.SafeDIMockConfiguration { __safeDI_storage.middle }
 		        let count_Bool: Bool?
 		        let count_String: String?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                middle: Middle.SafeDIMockConfiguration
+		            ) {
+		                self.middle = middle
+		            }
+
+		            let middle: Middle.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1899,14 +1989,28 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            count_Bool: Bool? = nil,
 		            count_String: String? = nil
 		        ) {
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                promoted: promoted
+		            )
 		            self.count_Bool = count_Bool
 		            self.count_String = count_String
 		        }
 
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
 		        let count_Bool: Bool?
 		        let count_String: String?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.promoted = promoted
+		            }
+
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1984,10 +2088,24 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		        public init(
 		            promoted: __safeDI_Promoted_MockConfiguration = .init()
 		        ) {
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                promoted: promoted
+		            )
 		        }
 
-		        public let promoted: __safeDI_Promoted_MockConfiguration
+		        public var promoted: __safeDI_Promoted_MockConfiguration { __safeDI_storage.promoted }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                promoted: __safeDI_Promoted_MockConfiguration
+		            ) {
+		                self.promoted = promoted
+		            }
+
+		            let promoted: __safeDI_Promoted_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -2086,14 +2204,31 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            promoted: Promoted.SafeDIMockConfiguration = .init(),
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.user = user
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                promoted: promoted
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let user: (() -> User)?
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.user = user
+		                self.promoted = promoted
+		            }
+
+		            let user: (() -> User)?
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2181,12 +2316,29 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            user: (() -> User)? = nil,
 		            promoted: Promoted.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.user = user
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                promoted: promoted
+		            )
 		        }
 
-		        let user: (() -> User)?
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.user = user
+		                self.promoted = promoted
+		            }
+
+		            let user: (() -> User)?
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2273,14 +2425,31 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            promoted: Promoted.SafeDIMockConfiguration = .init(),
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.user = user
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                promoted: promoted
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let user: (() -> User)?
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.user = user
+		                self.promoted = promoted
+		            }
+
+		            let user: (() -> User)?
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2374,14 +2543,31 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            promoted: Promoted.SafeDIMockConfiguration = .init(),
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.user = user
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                promoted: promoted
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let user: (() -> User)?
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.user = user
+		                self.promoted = promoted
+		            }
+
+		            let user: (() -> User)?
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2481,14 +2667,31 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            promoted: Promoted.SafeDIMockConfiguration = .init(),
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.user = user
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                promoted: promoted
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let user: (() -> User)?
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.user = user
+		                self.promoted = promoted
+		            }
+
+		            let user: (() -> User)?
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2582,16 +2785,36 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            promoted: ((User) -> Promoted)? = nil,
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.user = user
-		            self.middle = middle
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                middle: middle,
+		                promoted: promoted
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let user: (() -> User)?
-		        let middle: Middle.SafeDIMockConfiguration
-		        let promoted: ((User) -> Promoted)?
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var middle: Middle.SafeDIMockConfiguration { __safeDI_storage.middle }
+		        var promoted: ((User) -> Promoted)? { __safeDI_storage.promoted }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                middle: Middle.SafeDIMockConfiguration,
+		                promoted: ((User) -> Promoted)?
+		            ) {
+		                self.user = user
+		                self.middle = middle
+		                self.promoted = promoted
+		            }
+
+		            let user: (() -> User)?
+		            let middle: Middle.SafeDIMockConfiguration
+		            let promoted: ((User) -> Promoted)?
+		        }
 		    }
 
 		    static func mock(
@@ -2668,14 +2891,31 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            promoted: Promoted.SafeDIMockConfiguration = .init(),
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.user = user
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                promoted: promoted
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let user: (() -> User)?
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.user = user
+		                self.promoted = promoted
+		            }
+
+		            let user: (() -> User)?
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2764,14 +3004,31 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            promoted: Promoted.SafeDIMockConfiguration = .init(),
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.user = user
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                promoted: promoted
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let user: (() -> User)?
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.user = user
+		                self.promoted = promoted
+		            }
+
+		            let user: (() -> User)?
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2857,12 +3114,29 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            user: (() -> User)? = nil,
 		            promoted: __safeDI_Promoted_MockConfiguration = .init()
 		        ) {
-		            self.user = user
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                promoted: promoted
+		            )
 		        }
 
-		        public let user: (() -> User)?
-		        public let promoted: __safeDI_Promoted_MockConfiguration
+		        public var user: (() -> User)? { __safeDI_storage.user }
+		        public var promoted: __safeDI_Promoted_MockConfiguration { __safeDI_storage.promoted }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                promoted: __safeDI_Promoted_MockConfiguration
+		            ) {
+		                self.user = user
+		                self.promoted = promoted
+		            }
+
+		            let user: (() -> User)?
+		            let promoted: __safeDI_Promoted_MockConfiguration
+		        }
 		    }
 
 		    public static func mock(
@@ -2955,14 +3229,31 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            promoted: Promoted.SafeDIMockConfiguration = .init(),
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.user = user
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                promoted: promoted
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let user: (() -> User)?
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.user = user
+		                self.promoted = promoted
+		            }
+
+		            let user: (() -> User)?
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -3053,14 +3344,31 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            promoted: Promoted.SafeDIMockConfiguration = .init(),
 		            user_Draft: Draft? = nil
 		        ) {
-		            self.user = user
-		            self.promoted = promoted
+		            __safeDI_storage = __safeDI_Storage(
+		                user: user,
+		                promoted: promoted
+		            )
 		            self.user_Draft = user_Draft
 		        }
 
-		        let user: (() -> User)?
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        var user: (() -> User)? { __safeDI_storage.user }
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
 		        let user_Draft: Draft?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                user: (() -> User)?,
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.user = user
+		                self.promoted = promoted
+		            }
+
+		            let user: (() -> User)?
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(

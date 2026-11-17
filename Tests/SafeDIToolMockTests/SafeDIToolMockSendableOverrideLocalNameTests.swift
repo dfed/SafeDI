@@ -64,10 +64,24 @@ struct SafeDIToolMockSendableOverrideLocalNameTests: ~Copyable {
 		        init(
 		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.screenBuilder = screenBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                screenBuilder: screenBuilder
+		            )
 		        }
 
-		        let screenBuilder: Screen.SafeDIMockConfiguration
+		        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                screenBuilder: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let screenBuilder: Screen.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -130,14 +144,34 @@ struct SafeDIToolMockSendableOverrideLocalNameTests: ~Copyable {
 		            screenBuilder__safeDIBuilder: (@Sendable () -> Leaf)? = nil,
 		            screenBuilder__screenBuilder_leaf_safeDIBuilder: (() -> Leaf)? = nil
 		        ) {
-		            self.screenBuilder = screenBuilder
-		            self.screenBuilder__safeDIBuilder = screenBuilder__safeDIBuilder
-		            self.screenBuilder__screenBuilder_leaf_safeDIBuilder = screenBuilder__screenBuilder_leaf_safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                screenBuilder: screenBuilder,
+		                screenBuilder__safeDIBuilder: screenBuilder__safeDIBuilder,
+		                screenBuilder__screenBuilder_leaf_safeDIBuilder: screenBuilder__screenBuilder_leaf_safeDIBuilder
+		            )
 		        }
 
-		        let screenBuilder: Screen.SafeDIMockConfiguration
-		        let screenBuilder__safeDIBuilder: (@Sendable () -> Leaf)?
-		        let screenBuilder__screenBuilder_leaf_safeDIBuilder: (() -> Leaf)?
+		        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+		        var screenBuilder__safeDIBuilder: (@Sendable () -> Leaf)? { __safeDI_storage.screenBuilder__safeDIBuilder }
+		        var screenBuilder__screenBuilder_leaf_safeDIBuilder: (() -> Leaf)? { __safeDI_storage.screenBuilder__screenBuilder_leaf_safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screenBuilder: Screen.SafeDIMockConfiguration,
+		                screenBuilder__safeDIBuilder: (@Sendable () -> Leaf)?,
+		                screenBuilder__screenBuilder_leaf_safeDIBuilder: (() -> Leaf)?
+		            ) {
+		                self.screenBuilder = screenBuilder
+		                self.screenBuilder__safeDIBuilder = screenBuilder__safeDIBuilder
+		                self.screenBuilder__screenBuilder_leaf_safeDIBuilder = screenBuilder__screenBuilder_leaf_safeDIBuilder
+		            }
+
+		            let screenBuilder: Screen.SafeDIMockConfiguration
+		            let screenBuilder__safeDIBuilder: (@Sendable () -> Leaf)?
+		            let screenBuilder__screenBuilder_leaf_safeDIBuilder: (() -> Leaf)?
+		        }
 		    }
 
 		    static func mock(
@@ -211,10 +245,24 @@ struct SafeDIToolMockSendableOverrideLocalNameTests: ~Copyable {
 		        init(
 		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.screenBuilder = screenBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                screenBuilder: screenBuilder
+		            )
 		        }
 
-		        let screenBuilder: Screen.SafeDIMockConfiguration
+		        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                screenBuilder: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let screenBuilder: Screen.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -278,10 +326,24 @@ struct SafeDIToolMockSendableOverrideLocalNameTests: ~Copyable {
 		        init(
 		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.screenBuilder = screenBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                screenBuilder: screenBuilder
+		            )
 		        }
 
-		        let screenBuilder: Screen.SafeDIMockConfiguration
+		        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                screenBuilder: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let screenBuilder: Screen.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(

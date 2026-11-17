@@ -976,12 +976,29 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			            tag: (() -> Tag)? = nil,
 			            aBuilder: A.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.tag = tag
-			            self.aBuilder = aBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                tag: tag,
+			                aBuilder: aBuilder
+			            )
 			        }
 
-			        let tag: (() -> Tag)?
-			        let aBuilder: A.SafeDIMockConfiguration
+			        var tag: (() -> Tag)? { __safeDI_storage.tag }
+			        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                tag: (() -> Tag)?,
+			                aBuilder: A.SafeDIMockConfiguration
+			            ) {
+			                self.tag = tag
+			                self.aBuilder = aBuilder
+			            }
+
+			            let tag: (() -> Tag)?
+			            let aBuilder: A.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1017,11 +1034,25 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			        init(
 			            _ safeDIBuilder: ((Tag, Instantiator<A>) -> B)? = nil
 			        ) {
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Tag, Instantiator<A>) -> B)?
+			        var safeDIBuilder: ((Tag, Instantiator<A>) -> B)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                safeDIBuilder: ((Tag, Instantiator<A>) -> B)?
+			            ) {
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let safeDIBuilder: ((Tag, Instantiator<A>) -> B)?
+			        }
 			    }
 			}
 
@@ -1033,15 +1064,35 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			            bBuilder: B.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: ((TagReader, any Api, Instantiator<B>) -> A)? = nil
 			        ) {
-			            self.reader = reader
-			            self.bBuilder = bBuilder
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                reader: reader,
+			                bBuilder: bBuilder,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let reader: ((Tag) -> TagReader)?
-			        let bBuilder: B.SafeDIMockConfiguration
+			        var reader: ((Tag) -> TagReader)? { __safeDI_storage.reader }
+			        var bBuilder: B.SafeDIMockConfiguration { __safeDI_storage.bBuilder }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((TagReader, any Api, Instantiator<B>) -> A)?
+			        var safeDIBuilder: ((TagReader, any Api, Instantiator<B>) -> A)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                reader: ((Tag) -> TagReader)?,
+			                bBuilder: B.SafeDIMockConfiguration,
+			                safeDIBuilder: ((TagReader, any Api, Instantiator<B>) -> A)?
+			            ) {
+			                self.reader = reader
+			                self.bBuilder = bBuilder
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let reader: ((Tag) -> TagReader)?
+			            let bBuilder: B.SafeDIMockConfiguration
+			            let safeDIBuilder: ((TagReader, any Api, Instantiator<B>) -> A)?
+			        }
 			    }
 			}
 			#endif

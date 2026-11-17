@@ -279,10 +279,24 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 		        init(
 		            dependency: (() -> Dependency)? = nil
 		        ) {
-		            self.dependency = dependency
+		            __safeDI_storage = __safeDI_Storage(
+		                dependency: dependency
+		            )
 		        }
 
-		        let dependency: (() -> Dependency)?
+		        var dependency: (() -> Dependency)? { __safeDI_storage.dependency }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                dependency: (() -> Dependency)?
+		            ) {
+		                self.dependency = dependency
+		            }
+
+		            let dependency: (() -> Dependency)?
+		        }
 		    }
 
 		    static func mock(
@@ -350,10 +364,24 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 		        init(
 		            dependency: (() -> Dependency)? = nil
 		        ) {
-		            self.dependency = dependency
+		            __safeDI_storage = __safeDI_Storage(
+		                dependency: dependency
+		            )
 		        }
 
-		        let dependency: (() -> Dependency)?
+		        var dependency: (() -> Dependency)? { __safeDI_storage.dependency }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                dependency: (() -> Dependency)?
+		            ) {
+		                self.dependency = dependency
+		            }
+
+		            let dependency: (() -> Dependency)?
+		        }
 		    }
 
 		    static func mock(

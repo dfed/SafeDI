@@ -1940,10 +1940,24 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 		        init(
 		            feature: Feature.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.feature = feature
+		            __safeDI_storage = __safeDI_Storage(
+		                feature: feature
+		            )
 		        }
 
-		        let feature: Feature.SafeDIMockConfiguration
+		        var feature: Feature.SafeDIMockConfiguration { __safeDI_storage.feature }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feature: Feature.SafeDIMockConfiguration
+		            ) {
+		                self.feature = feature
+		            }
+
+		            let feature: Feature.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2197,10 +2211,24 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 			        init(
 			            network: (() -> Network)? = nil
 			        ) {
-			            self.network = network
+			            __safeDI_storage = __safeDI_Storage(
+			                network: network
+			            )
 			        }
 
-			        let network: (() -> Network)?
+			        var network: (() -> Network)? { __safeDI_storage.network }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                network: (() -> Network)?
+			            ) {
+			                self.network = network
+			            }
+
+			            let network: (() -> Network)?
+			        }
 			    }
 
 			    static func mock(
@@ -2279,10 +2307,24 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 		        init(
 		            network: (() -> Network)? = nil
 		        ) {
-		            self.network = network
+		            __safeDI_storage = __safeDI_Storage(
+		                network: network
+		            )
 		        }
 
-		        let network: (() -> Network)?
+		        var network: (() -> Network)? { __safeDI_storage.network }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                network: (() -> Network)?
+		            ) {
+		                self.network = network
+		            }
+
+		            let network: (() -> Network)?
+		        }
 		    }
 
 		    static func mock(
@@ -2364,10 +2406,24 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 			        init(
 			            logger: (() -> Logger)? = nil
 			        ) {
-			            self.logger = logger
+			            __safeDI_storage = __safeDI_Storage(
+			                logger: logger
+			            )
 			        }
 
-			        let logger: (() -> Logger)?
+			        var logger: (() -> Logger)? { __safeDI_storage.logger }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                logger: (() -> Logger)?
+			            ) {
+			                self.logger = logger
+			            }
+
+			            let logger: (() -> Logger)?
+			        }
 			    }
 
 			    static func mock(
@@ -2503,10 +2559,24 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 		        init(
 		            network: (() -> Network)? = nil
 		        ) {
-		            self.network = network
+		            __safeDI_storage = __safeDI_Storage(
+		                network: network
+		            )
 		        }
 
-		        let network: (() -> Network)?
+		        var network: (() -> Network)? { __safeDI_storage.network }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                network: (() -> Network)?
+		            ) {
+		                self.network = network
+		            }
+
+		            let network: (() -> Network)?
+		        }
 		    }
 
 		    static func mock(

@@ -89,12 +89,29 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            zebra: ((AnyUserService) -> Zebra)? = nil,
 		            apple: ((AnyUserService) -> Apple)? = nil
 		        ) {
-		            self.zebra = zebra
-		            self.apple = apple
+		            __safeDI_storage = __safeDI_Storage(
+		                zebra: zebra,
+		                apple: apple
+		            )
 		        }
 
-		        let zebra: ((AnyUserService) -> Zebra)?
-		        let apple: ((AnyUserService) -> Apple)?
+		        var zebra: ((AnyUserService) -> Zebra)? { __safeDI_storage.zebra }
+		        var apple: ((AnyUserService) -> Apple)? { __safeDI_storage.apple }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                zebra: ((AnyUserService) -> Zebra)?,
+		                apple: ((AnyUserService) -> Apple)?
+		            ) {
+		                self.zebra = zebra
+		                self.apple = apple
+		            }
+
+		            let zebra: ((AnyUserService) -> Zebra)?
+		            let apple: ((AnyUserService) -> Apple)?
+		        }
 		    }
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
@@ -195,20 +212,49 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            banana: ((AnyUserService) -> Banana)? = nil,
 		            lime: ((AnyUserService) -> Lime)? = nil
 		        ) {
-		            self.mango = mango
-		            self.apple = apple
-		            self.zebra = zebra
-		            self.kiwi = kiwi
-		            self.banana = banana
-		            self.lime = lime
+		            __safeDI_storage = __safeDI_Storage(
+		                mango: mango,
+		                apple: apple,
+		                zebra: zebra,
+		                kiwi: kiwi,
+		                banana: banana,
+		                lime: lime
+		            )
 		        }
 
-		        let mango: ((AnyUserService) -> Mango)?
-		        let apple: ((AnyUserService) -> Apple)?
-		        let zebra: ((AnyUserService) -> Zebra)?
-		        let kiwi: ((AnyUserService) -> Kiwi)?
-		        let banana: ((AnyUserService) -> Banana)?
-		        let lime: ((AnyUserService) -> Lime)?
+		        var mango: ((AnyUserService) -> Mango)? { __safeDI_storage.mango }
+		        var apple: ((AnyUserService) -> Apple)? { __safeDI_storage.apple }
+		        var zebra: ((AnyUserService) -> Zebra)? { __safeDI_storage.zebra }
+		        var kiwi: ((AnyUserService) -> Kiwi)? { __safeDI_storage.kiwi }
+		        var banana: ((AnyUserService) -> Banana)? { __safeDI_storage.banana }
+		        var lime: ((AnyUserService) -> Lime)? { __safeDI_storage.lime }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                mango: ((AnyUserService) -> Mango)?,
+		                apple: ((AnyUserService) -> Apple)?,
+		                zebra: ((AnyUserService) -> Zebra)?,
+		                kiwi: ((AnyUserService) -> Kiwi)?,
+		                banana: ((AnyUserService) -> Banana)?,
+		                lime: ((AnyUserService) -> Lime)?
+		            ) {
+		                self.mango = mango
+		                self.apple = apple
+		                self.zebra = zebra
+		                self.kiwi = kiwi
+		                self.banana = banana
+		                self.lime = lime
+		            }
+
+		            let mango: ((AnyUserService) -> Mango)?
+		            let apple: ((AnyUserService) -> Apple)?
+		            let zebra: ((AnyUserService) -> Zebra)?
+		            let kiwi: ((AnyUserService) -> Kiwi)?
+		            let banana: ((AnyUserService) -> Banana)?
+		            let lime: ((AnyUserService) -> Lime)?
+		        }
 		    }
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
@@ -286,12 +332,29 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            zebra: Zebra.SafeDIMockConfiguration = .init(),
 		            apple: ((AnyUserService) -> Apple)? = nil
 		        ) {
-		            self.zebra = zebra
-		            self.apple = apple
+		            __safeDI_storage = __safeDI_Storage(
+		                zebra: zebra,
+		                apple: apple
+		            )
 		        }
 
-		        let zebra: Zebra.SafeDIMockConfiguration
-		        let apple: ((AnyUserService) -> Apple)?
+		        var zebra: Zebra.SafeDIMockConfiguration { __safeDI_storage.zebra }
+		        var apple: ((AnyUserService) -> Apple)? { __safeDI_storage.apple }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                zebra: Zebra.SafeDIMockConfiguration,
+		                apple: ((AnyUserService) -> Apple)?
+		            ) {
+		                self.zebra = zebra
+		                self.apple = apple
+		            }
+
+		            let zebra: Zebra.SafeDIMockConfiguration
+		            let apple: ((AnyUserService) -> Apple)?
+		        }
 		    }
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
@@ -361,12 +424,29 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            apple: ((AnyUserService) -> Apple)? = nil,
 		            zebra: ((Apple, AnyUserService) -> Zebra)? = nil
 		        ) {
-		            self.apple = apple
-		            self.zebra = zebra
+		            __safeDI_storage = __safeDI_Storage(
+		                apple: apple,
+		                zebra: zebra
+		            )
 		        }
 
-		        let apple: ((AnyUserService) -> Apple)?
-		        let zebra: ((Apple, AnyUserService) -> Zebra)?
+		        var apple: ((AnyUserService) -> Apple)? { __safeDI_storage.apple }
+		        var zebra: ((Apple, AnyUserService) -> Zebra)? { __safeDI_storage.zebra }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                apple: ((AnyUserService) -> Apple)?,
+		                zebra: ((Apple, AnyUserService) -> Zebra)?
+		            ) {
+		                self.apple = apple
+		                self.zebra = zebra
+		            }
+
+		            let apple: ((AnyUserService) -> Apple)?
+		            let zebra: ((Apple, AnyUserService) -> Zebra)?
+		        }
 		    }
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
@@ -447,14 +527,34 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            apple: Apple.SafeDIMockConfiguration = .init(),
 		            settings: ((AnyUserService) -> Settings)? = nil
 		        ) {
-		            self.zebra = zebra
-		            self.apple = apple
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                zebra: zebra,
+		                apple: apple,
+		                settings: settings
+		            )
 		        }
 
-		        let zebra: Zebra.SafeDIMockConfiguration
-		        let apple: Apple.SafeDIMockConfiguration
-		        let settings: ((AnyUserService) -> Settings)?
+		        var zebra: Zebra.SafeDIMockConfiguration { __safeDI_storage.zebra }
+		        var apple: Apple.SafeDIMockConfiguration { __safeDI_storage.apple }
+		        var settings: ((AnyUserService) -> Settings)? { __safeDI_storage.settings }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                zebra: Zebra.SafeDIMockConfiguration,
+		                apple: Apple.SafeDIMockConfiguration,
+		                settings: ((AnyUserService) -> Settings)?
+		            ) {
+		                self.zebra = zebra
+		                self.apple = apple
+		                self.settings = settings
+		            }
+
+		            let zebra: Zebra.SafeDIMockConfiguration
+		            let apple: Apple.SafeDIMockConfiguration
+		            let settings: ((AnyUserService) -> Settings)?
+		        }
 		    }
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
@@ -535,12 +635,29 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            zebra: Zebra.SafeDIMockConfiguration = .init(),
 		            apple: Apple.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.zebra = zebra
-		            self.apple = apple
+		            __safeDI_storage = __safeDI_Storage(
+		                zebra: zebra,
+		                apple: apple
+		            )
 		        }
 
-		        let zebra: Zebra.SafeDIMockConfiguration
-		        let apple: Apple.SafeDIMockConfiguration
+		        var zebra: Zebra.SafeDIMockConfiguration { __safeDI_storage.zebra }
+		        var apple: Apple.SafeDIMockConfiguration { __safeDI_storage.apple }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                zebra: Zebra.SafeDIMockConfiguration,
+		                apple: Apple.SafeDIMockConfiguration
+		            ) {
+		                self.zebra = zebra
+		                self.apple = apple
+		            }
+
+		            let zebra: Zebra.SafeDIMockConfiguration
+		            let apple: Apple.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -619,12 +736,29 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            zebra: ((AnyUserService, AnyAnalytics) -> Zebra)? = nil,
 		            apple: ((AnyUserService, AnyLogger, AnyAnalytics) -> Apple)? = nil
 		        ) {
-		            self.zebra = zebra
-		            self.apple = apple
+		            __safeDI_storage = __safeDI_Storage(
+		                zebra: zebra,
+		                apple: apple
+		            )
 		        }
 
-		        let zebra: ((AnyUserService, AnyAnalytics) -> Zebra)?
-		        let apple: ((AnyUserService, AnyLogger, AnyAnalytics) -> Apple)?
+		        var zebra: ((AnyUserService, AnyAnalytics) -> Zebra)? { __safeDI_storage.zebra }
+		        var apple: ((AnyUserService, AnyLogger, AnyAnalytics) -> Apple)? { __safeDI_storage.apple }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                zebra: ((AnyUserService, AnyAnalytics) -> Zebra)?,
+		                apple: ((AnyUserService, AnyLogger, AnyAnalytics) -> Apple)?
+		            ) {
+		                self.zebra = zebra
+		                self.apple = apple
+		            }
+
+		            let zebra: ((AnyUserService, AnyAnalytics) -> Zebra)?
+		            let apple: ((AnyUserService, AnyLogger, AnyAnalytics) -> Apple)?
+		        }
 		    }
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
@@ -695,12 +829,29 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            zebraBuilder: (@Sendable (AnyUserService) -> Zebra)? = nil,
 		            apple: ((AnyUserService) -> Apple)? = nil
 		        ) {
-		            self.zebraBuilder = zebraBuilder
-		            self.apple = apple
+		            __safeDI_storage = __safeDI_Storage(
+		                zebraBuilder: zebraBuilder,
+		                apple: apple
+		            )
 		        }
 
-		        let zebraBuilder: (@Sendable (AnyUserService) -> Zebra)?
-		        let apple: ((AnyUserService) -> Apple)?
+		        var zebraBuilder: (@Sendable (AnyUserService) -> Zebra)? { __safeDI_storage.zebraBuilder }
+		        var apple: ((AnyUserService) -> Apple)? { __safeDI_storage.apple }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                zebraBuilder: (@Sendable (AnyUserService) -> Zebra)?,
+		                apple: ((AnyUserService) -> Apple)?
+		            ) {
+		                self.zebraBuilder = zebraBuilder
+		                self.apple = apple
+		            }
+
+		            let zebraBuilder: (@Sendable (AnyUserService) -> Zebra)?
+		            let apple: ((AnyUserService) -> Apple)?
+		        }
 		    }
 
 		    static func mock(
@@ -772,12 +923,29 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            zebra: ((AnyUserService) -> Zebra)? = nil,
 		            apple: ((AnyUserService) -> Apple)? = nil
 		        ) {
-		            self.zebra = zebra
-		            self.apple = apple
+		            __safeDI_storage = __safeDI_Storage(
+		                zebra: zebra,
+		                apple: apple
+		            )
 		        }
 
-		        let zebra: ((AnyUserService) -> Zebra)?
-		        let apple: ((AnyUserService) -> Apple)?
+		        var zebra: ((AnyUserService) -> Zebra)? { __safeDI_storage.zebra }
+		        var apple: ((AnyUserService) -> Apple)? { __safeDI_storage.apple }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                zebra: ((AnyUserService) -> Zebra)?,
+		                apple: ((AnyUserService) -> Apple)?
+		            ) {
+		                self.zebra = zebra
+		                self.apple = apple
+		            }
+
+		            let zebra: ((AnyUserService) -> Zebra)?
+		            let apple: ((AnyUserService) -> Apple)?
+		        }
 		    }
 
 		    /// - Parameter class: Passed to every type that creates this dependency:
@@ -844,12 +1012,29 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            zebra: ((AnyUserService) -> Zebra)? = nil,
 		            apple: ((AnyUserService) -> Apple)? = nil
 		        ) {
-		            self.zebra = zebra
-		            self.apple = apple
+		            __safeDI_storage = __safeDI_Storage(
+		                zebra: zebra,
+		                apple: apple
+		            )
 		        }
 
-		        let zebra: ((AnyUserService) -> Zebra)?
-		        let apple: ((AnyUserService) -> Apple)?
+		        var zebra: ((AnyUserService) -> Zebra)? { __safeDI_storage.zebra }
+		        var apple: ((AnyUserService) -> Apple)? { __safeDI_storage.apple }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                zebra: ((AnyUserService) -> Zebra)?,
+		                apple: ((AnyUserService) -> Apple)?
+		            ) {
+		                self.zebra = zebra
+		                self.apple = apple
+		            }
+
+		            let zebra: ((AnyUserService) -> Zebra)?
+		            let apple: ((AnyUserService) -> Apple)?
+		        }
 		    }
 
 		    /// - Parameter userService_AnyUserService: Passed to every type that creates this dependency:
@@ -912,12 +1097,29 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            zebra: ((LazilyInstantiated<Engine>) -> Zebra)? = nil,
 		            apple: ((LazilyInstantiated<Engine>) -> Apple)? = nil
 		        ) {
-		            self.zebra = zebra
-		            self.apple = apple
+		            __safeDI_storage = __safeDI_Storage(
+		                zebra: zebra,
+		                apple: apple
+		            )
 		        }
 
-		        let zebra: ((LazilyInstantiated<Engine>) -> Zebra)?
-		        let apple: ((LazilyInstantiated<Engine>) -> Apple)?
+		        var zebra: ((LazilyInstantiated<Engine>) -> Zebra)? { __safeDI_storage.zebra }
+		        var apple: ((LazilyInstantiated<Engine>) -> Apple)? { __safeDI_storage.apple }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                zebra: ((LazilyInstantiated<Engine>) -> Zebra)?,
+		                apple: ((LazilyInstantiated<Engine>) -> Apple)?
+		            ) {
+		                self.zebra = zebra
+		                self.apple = apple
+		            }
+
+		            let zebra: ((LazilyInstantiated<Engine>) -> Zebra)?
+		            let apple: ((LazilyInstantiated<Engine>) -> Apple)?
+		        }
 		    }
 
 		    /// - Parameter engine: Passed to every type that creates this dependency:
@@ -983,12 +1185,29 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            zebra: ((AnyUserService) -> Feature.Zebra)? = nil,
 		            apple: ((AnyUserService) -> Feature.Apple)? = nil
 		        ) {
-		            self.zebra = zebra
-		            self.apple = apple
+		            __safeDI_storage = __safeDI_Storage(
+		                zebra: zebra,
+		                apple: apple
+		            )
 		        }
 
-		        let zebra: ((AnyUserService) -> Feature.Zebra)?
-		        let apple: ((AnyUserService) -> Feature.Apple)?
+		        var zebra: ((AnyUserService) -> Feature.Zebra)? { __safeDI_storage.zebra }
+		        var apple: ((AnyUserService) -> Feature.Apple)? { __safeDI_storage.apple }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                zebra: ((AnyUserService) -> Feature.Zebra)?,
+		                apple: ((AnyUserService) -> Feature.Apple)?
+		            ) {
+		                self.zebra = zebra
+		                self.apple = apple
+		            }
+
+		            let zebra: ((AnyUserService) -> Feature.Zebra)?
+		            let apple: ((AnyUserService) -> Feature.Apple)?
+		        }
 		    }
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
@@ -1060,12 +1279,29 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            zebra: Zebra.SafeDIMockConfiguration = .init(),
 		            apple: Apple.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.zebra = zebra
-		            self.apple = apple
+		            __safeDI_storage = __safeDI_Storage(
+		                zebra: zebra,
+		                apple: apple
+		            )
 		        }
 
-		        let zebra: Zebra.SafeDIMockConfiguration
-		        let apple: Apple.SafeDIMockConfiguration
+		        var zebra: Zebra.SafeDIMockConfiguration { __safeDI_storage.zebra }
+		        var apple: Apple.SafeDIMockConfiguration { __safeDI_storage.apple }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                zebra: Zebra.SafeDIMockConfiguration,
+		                apple: Apple.SafeDIMockConfiguration
+		            ) {
+		                self.zebra = zebra
+		                self.apple = apple
+		            }
+
+		            let zebra: Zebra.SafeDIMockConfiguration
+		            let apple: Apple.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1142,12 +1378,29 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            zebra: ((Engine) -> Zebra)? = nil,
 		            apple: Apple.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.zebra = zebra
-		            self.apple = apple
+		            __safeDI_storage = __safeDI_Storage(
+		                zebra: zebra,
+		                apple: apple
+		            )
 		        }
 
-		        let zebra: ((Engine) -> Zebra)?
-		        let apple: Apple.SafeDIMockConfiguration
+		        var zebra: ((Engine) -> Zebra)? { __safeDI_storage.zebra }
+		        var apple: Apple.SafeDIMockConfiguration { __safeDI_storage.apple }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                zebra: ((Engine) -> Zebra)?,
+		                apple: Apple.SafeDIMockConfiguration
+		            ) {
+		                self.zebra = zebra
+		                self.apple = apple
+		            }
+
+		            let zebra: ((Engine) -> Zebra)?
+		            let apple: Apple.SafeDIMockConfiguration
+		        }
 		    }
 
 		    /// - Parameter engine: Passed to every type that creates this dependency:
@@ -1224,12 +1477,29 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            b: B.SafeDIMockConfiguration = .init(),
 		            kiwi: ((Engine) -> Kiwi)? = nil
 		        ) {
-		            self.b = b
-		            self.kiwi = kiwi
+		            __safeDI_storage = __safeDI_Storage(
+		                b: b,
+		                kiwi: kiwi
+		            )
 		        }
 
-		        let b: B.SafeDIMockConfiguration
-		        let kiwi: ((Engine) -> Kiwi)?
+		        var b: B.SafeDIMockConfiguration { __safeDI_storage.b }
+		        var kiwi: ((Engine) -> Kiwi)? { __safeDI_storage.kiwi }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                b: B.SafeDIMockConfiguration,
+		                kiwi: ((Engine) -> Kiwi)?
+		            ) {
+		                self.b = b
+		                self.kiwi = kiwi
+		            }
+
+		            let b: B.SafeDIMockConfiguration
+		            let kiwi: ((Engine) -> Kiwi)?
+		        }
 		    }
 
 		    /// - Parameter engine: Passed to every type that creates this dependency:
@@ -1323,14 +1593,34 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            zebra: Zebra.SafeDIMockConfiguration = .init(),
 		            apple: Apple.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.userService = userService
-		            self.zebra = zebra
-		            self.apple = apple
+		            __safeDI_storage = __safeDI_Storage(
+		                userService: userService,
+		                zebra: zebra,
+		                apple: apple
+		            )
 		        }
 
-		        let userService: (() -> AnyUserService)?
-		        let zebra: Zebra.SafeDIMockConfiguration
-		        let apple: Apple.SafeDIMockConfiguration
+		        var userService: (() -> AnyUserService)? { __safeDI_storage.userService }
+		        var zebra: Zebra.SafeDIMockConfiguration { __safeDI_storage.zebra }
+		        var apple: Apple.SafeDIMockConfiguration { __safeDI_storage.apple }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                userService: (() -> AnyUserService)?,
+		                zebra: Zebra.SafeDIMockConfiguration,
+		                apple: Apple.SafeDIMockConfiguration
+		            ) {
+		                self.userService = userService
+		                self.zebra = zebra
+		                self.apple = apple
+		            }
+
+		            let userService: (() -> AnyUserService)?
+		            let zebra: Zebra.SafeDIMockConfiguration
+		            let apple: Apple.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1402,12 +1692,29 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            zebra: (([String]) -> Zebra)? = nil,
 		            apple: (([String]) -> Apple)? = nil
 		        ) {
-		            self.zebra = zebra
-		            self.apple = apple
+		            __safeDI_storage = __safeDI_Storage(
+		                zebra: zebra,
+		                apple: apple
+		            )
 		        }
 
-		        public let zebra: (([String]) -> Zebra)?
-		        public let apple: (([String]) -> Apple)?
+		        public var zebra: (([String]) -> Zebra)? { __safeDI_storage.zebra }
+		        public var apple: (([String]) -> Apple)? { __safeDI_storage.apple }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                zebra: (([String]) -> Zebra)?,
+		                apple: (([String]) -> Apple)?
+		            ) {
+		                self.zebra = zebra
+		                self.apple = apple
+		            }
+
+		            let zebra: (([String]) -> Zebra)?
+		            let apple: (([String]) -> Apple)?
+		        }
 		    }
 
 		    /// - Parameter tags: Passed to every type that creates this dependency:

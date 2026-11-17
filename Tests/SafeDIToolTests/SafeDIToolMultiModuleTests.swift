@@ -663,10 +663,24 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		        init(
 		            engine: (() -> Engine)? = nil
 		        ) {
-		            self.engine = engine
+		            __safeDI_storage = __safeDI_Storage(
+		                engine: engine
+		            )
 		        }
 
-		        let engine: (() -> Engine)?
+		        var engine: (() -> Engine)? { __safeDI_storage.engine }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                engine: (() -> Engine)?
+		            ) {
+		                self.engine = engine
+		            }
+
+		            let engine: (() -> Engine)?
+		        }
 		    }
 
 		    static func mock(

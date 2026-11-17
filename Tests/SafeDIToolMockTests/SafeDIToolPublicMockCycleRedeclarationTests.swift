@@ -223,10 +223,24 @@ struct SafeDIToolPublicMockCycleRedeclarationTests: ~Copyable {
 		        init(
 		            home: Home.SafeDIOverrides = .init()
 		        ) {
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home
+		            )
 		        }
 
-		        let home: Home.SafeDIOverrides
+		        var home: Home.SafeDIOverrides { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: Home.SafeDIOverrides
+		            ) {
+		                self.home = home
+		            }
+
+		            let home: Home.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -338,10 +352,24 @@ struct SafeDIToolPublicMockCycleRedeclarationTests: ~Copyable {
 		        init(
 		            home: Home.SafeDIOverrides = .init()
 		        ) {
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home
+		            )
 		        }
 
-		        let home: Home.SafeDIOverrides
+		        var home: Home.SafeDIOverrides { __safeDI_storage.home }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: Home.SafeDIOverrides
+		            ) {
+		                self.home = home
+		            }
+
+		            let home: Home.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(

@@ -351,10 +351,24 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 				        init(
 				            feedService: FeedService.SafeDIOverrides = .init()
 				        ) {
-				            self.feedService = feedService
+				            __safeDI_storage = __safeDI_Storage(
+				                feedService: feedService
+				            )
 				        }
 
-				        let feedService: FeedService.SafeDIOverrides
+				        var feedService: FeedService.SafeDIOverrides { __safeDI_storage.feedService }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                feedService: FeedService.SafeDIOverrides
+				            ) {
+				                self.feedService = feedService
+				            }
+
+				            let feedService: FeedService.SafeDIOverrides
+				        }
 				    }
 
 				    static func mock(
@@ -391,10 +405,24 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 				        init(
 				            feedService: FeedService.SafeDIOverrides = .init()
 				        ) {
-				            self.feedService = feedService
+				            __safeDI_storage = __safeDI_Storage(
+				                feedService: feedService
+				            )
 				        }
 
-				        let feedService: FeedService.SafeDIOverrides
+				        var feedService: FeedService.SafeDIOverrides { __safeDI_storage.feedService }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                feedService: FeedService.SafeDIOverrides
+				            ) {
+				                self.feedService = feedService
+				            }
+
+				            let feedService: FeedService.SafeDIOverrides
+				        }
 				    }
 
 				    static func mock(
@@ -761,10 +789,24 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			        init(
 			            feedService: FeedService.SafeDIOverrides = .init()
 			        ) {
-			            self.feedService = feedService
+			            __safeDI_storage = __safeDI_Storage(
+			                feedService: feedService
+			            )
 			        }
 
-			        let feedService: FeedService.SafeDIOverrides
+			        var feedService: FeedService.SafeDIOverrides { __safeDI_storage.feedService }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                feedService: FeedService.SafeDIOverrides
+			            ) {
+			                self.feedService = feedService
+			            }
+
+			            let feedService: FeedService.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -796,10 +838,24 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			        init(
 			            feedService: FeedService.SafeDIOverrides = .init()
 			        ) {
-			            self.feedService = feedService
+			            __safeDI_storage = __safeDI_Storage(
+			                feedService: feedService
+			            )
 			        }
 
-			        let feedService: FeedService.SafeDIOverrides
+			        var feedService: FeedService.SafeDIOverrides { __safeDI_storage.feedService }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                feedService: FeedService.SafeDIOverrides
+			            ) {
+			                self.feedService = feedService
+			            }
+
+			            let feedService: FeedService.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(

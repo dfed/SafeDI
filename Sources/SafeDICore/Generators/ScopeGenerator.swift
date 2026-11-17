@@ -7218,6 +7218,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					rootChildren: treePropertyNodes,
 					rootLabelMap: rootLabelMap,
 					onlyIfAvailableOverrides: onlyIfAvailableOverrides,
+					sendableConfigurationTypeNames: context.sendableConfigurationTypeNames,
 					indent: indent,
 				))
 			}
@@ -8651,6 +8652,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			indent: standardIndent,
 			cycleEdges: cycleEdges,
 			requiresSendable: sendableConfigurationTypeNames.contains(node.concreteType.asSource),
+			sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 			defaultExpression: { defaultParameter in
 				handWrittenMockDefaultParameters.first(where: {
 					$0.isDefault(forParameterLabeled: defaultParameter.label, ofType: defaultParameter.typeDescription)
@@ -9375,10 +9377,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Generates the `SafeDIOverrides` struct. Configuration type references
 	/// use qualified names (e.g., `ChildA.SafeDIMockConfiguration`).
+	///
+	/// The field of each root-level child is in the struct's storage (`ConfigurationStorage`). An override of what the
+	/// mock receives only if available is stored on the struct itself: its type is the user's, which SafeDI cannot prove
+	/// `Sendable`, so stored beside the storage it keeps the struct `Sendable` exactly where that type is, as the struct
+	/// was when it stored every field. No such override is a configuration, so the struct still holds no configuration
+	/// by value.
 	private static func generateSafeDIOverridesStruct(
 		rootChildren: [MockParameterNode],
 		rootLabelMap: [String: [TypeDescription: String]],
 		onlyIfAvailableOverrides: [OnlyIfAvailableOverride],
+		sendableConfigurationTypeNames: Set<String>,
 		indent: String,
 	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
@@ -9389,51 +9398,84 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(indent)struct SafeDIOverrides {")
 
 		// Generate SafeDIOverrides init with root-level children and onlyIfAvailable entries.
-		lines.append("\(innerIndent)init(")
-		var initParameters = rootChildren.map { child in
-			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: child.requiresSendable) {
-				return "\(memberIndent)\(label): \(publicMockOverridesMember.type) = \(publicMockOverridesMember.defaultValue)"
-			} else if child.needsConfigurationStruct {
-				return "\(memberIndent)\(label): \(child.configurationTypeName) = .init()"
-			} else {
-				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
-				return "\(memberIndent)\(label): (\(sendableAnnotation)\(child.builderClosureType))? = nil"
-			}
+		let childFields = rootChildren.map { child in
+			configurationField(
+				of: child,
+				named: disambiguatedLabel(for: child, labelMap: rootLabelMap),
+				parentRequiresSendable: false,
+				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+			)
 		}
+		let storage = ConfigurationStorage(fields: childFields.map(\.field))
+		lines.append("\(innerIndent)init(")
+		var initParameters = childFields.map { "\(memberIndent)\($0.field.name): \($0.field.typeSource) = \($0.defaultValue)" }
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
 			initParameters.append("\(memberIndent)\(onlyIfAvailableOverride.name): \(onlyIfAvailableOverride.typeDescription.asSource) = nil")
 		}
 		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
-		for child in rootChildren {
-			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			lines.append("\(memberIndent)self.\(label) = \(label)")
+		if !storage.fields.isEmpty {
+			lines.append(contentsOf: storage.initialization(to: storage.fields.map(\.name), indent: memberIndent))
 		}
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
 			lines.append("\(memberIndent)self.\(onlyIfAvailableOverride.name) = \(onlyIfAvailableOverride.name)")
 		}
 		lines.append("\(innerIndent)}")
 
-		// Generate stored properties.
+		// Generate the properties: those the storage holds, then the overrides of what the mock receives only if available.
 		lines.append("")
-		for child in rootChildren {
-			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: child.requiresSendable) {
-				lines.append("\(innerIndent)let \(label): \(publicMockOverridesMember.type)")
-			} else if child.needsConfigurationStruct {
-				lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
-			} else {
-				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
-				lines.append("\(innerIndent)let \(label): (\(sendableAnnotation)\(child.builderClosureType))?")
-			}
-		}
+		lines.append(contentsOf: storage.readers(indent: innerIndent))
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
 			lines.append("\(innerIndent)let \(onlyIfAvailableOverride.name): \(onlyIfAvailableOverride.typeDescription.asSource)")
+		}
+		if !storage.fields.isEmpty {
+			lines.append("")
+			lines.append(contentsOf: storage.declarations(indent: innerIndent))
 		}
 
 		lines.append("\(indent)}")
 		return lines.joined(separator: "\n")
+	}
+
+	/// The field of a configuration that configures how `child` is built, and the default of the initializer parameter
+	/// that sets it: the `SafeDIOverrides` of the public mock `child` calls, `child`'s own configuration when it has one,
+	/// or else an optional builder closure.
+	/// - Parameters:
+	///   - parentRequiresSendable: Whether the configuration that holds the field is `@Sendable`-typed, which makes each
+	///     of its closures `@Sendable`, as `child` being built in a `@Sendable` builder function does.
+	///   - sendableConfigurationTypeNames: The types whose configurations are `@Sendable`-typed, and so `Sendable`.
+	private static func configurationField(
+		of child: MockParameterNode,
+		named name: String,
+		parentRequiresSendable: Bool,
+		sendableConfigurationTypeNames: Set<String>,
+	) -> (field: ConfigurationStorage.Field, defaultValue: String) {
+		let isSendable = parentRequiresSendable || child.requiresSendable
+		let (typeSource, defaultValue, isProvenSendable) = if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: isSendable) {
+			// A `@Sendable` closure that returns the overrides where the child is built in a `@Sendable` builder function,
+			// and otherwise the overrides, a public struct, which is never `Sendable`.
+			(publicMockOverridesMember.type, publicMockOverridesMember.defaultValue, isSendable)
+		} else if child.needsConfigurationStruct {
+			(child.configurationTypeName, ".init()", sendableConfigurationTypeNames.contains(child.concreteType.asSource))
+		} else {
+			// A leaf child field also needs `@Sendable` when the child itself
+			// is reached sendably — e.g. a `SendableInstantiator` dependency on
+			// a non-sendable parent. `generateInstantiatorBinding` later wraps
+			// such children in a `@Sendable` local function, which would fail
+			// to capture a non-sendable override closure.
+			("(\(isSendable ? "@Sendable " : "")\(child.builderClosureType))?", "nil", isSendable)
+		}
+		return (
+			field: ConfigurationStorage.Field(
+				name: name,
+				typeSource: typeSource,
+				parameterTypeSource: typeSource,
+				accessPrefix: "",
+				documentation: nil,
+				isProvenSendable: isProvenSendable,
+			),
+			defaultValue: defaultValue,
+		)
 	}
 
 	/// Generates a single `SafeDIMockConfiguration` struct for a `MockParameterNode`.
@@ -9443,11 +9485,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// cross-root struct-per-type dedup produces a consistent annotation. Such a struct
 	/// also stores each labeled default-valued parameter that is not a closure as a
 	/// `@Sendable` closure returning the value, which `resolveBuilderArguments` calls.
+	///
+	/// Its fields are in its storage (`ConfigurationStorage`), which is `Sendable` when the struct is `@Sendable`-typed and
+	/// each configuration it holds is too, as the struct was when it stored its fields.
 	private static func generateConfigurationStruct(
 		for node: MockParameterNode,
 		indent: String,
 		cycleEdges: Set<CycleEdge>,
 		requiresSendable: Bool,
+		sendableConfigurationTypeNames: Set<String>,
 		defaultExpression: (MockParameterNode.DefaultParameter) -> String,
 	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
@@ -9462,8 +9508,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Build init parameters in order: children, defaults, builder (last).
 		var initParameters = [String]()
-		var assignments = [String]()
-		var storedProperties = [String]()
+		var fields = [ConfigurationStorage.Field]()
+		func appendField(named name: String, typeSource: String, parameterTypeSource: String, isProvenSendable: Bool, documentation: String? = nil) {
+			fields.append(ConfigurationStorage.Field(
+				name: name,
+				typeSource: typeSource,
+				parameterTypeSource: parameterTypeSource,
+				accessPrefix: "",
+				documentation: documentation,
+				isProvenSendable: isProvenSendable,
+			))
+		}
 
 		// Child edge parameters (disambiguated if labels collide).
 		// Exclude back-edges from `cycleEdges` — including them would nest a
@@ -9483,24 +9538,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
 		for child in nonCycleChildren {
-			let label = disambiguatedLabel(for: child, labelMap: childLabelMap)
-			if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: requiresSendable || child.requiresSendable) {
-				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(publicMockOverridesMember.type) = \(publicMockOverridesMember.defaultValue)")
-				storedProperties.append("\(innerIndent)let \(label): \(publicMockOverridesMember.type)")
-			} else if child.needsConfigurationStruct {
-				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.configurationTypeName) = .init()")
-				storedProperties.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
-			} else {
-				// A leaf child field also needs `@Sendable` when the child itself
-				// is reached sendably — e.g. a `SendableInstantiator` dependency on
-				// a non-sendable parent. `generateInstantiatorBinding` later wraps
-				// such children in a `@Sendable` local function, which would fail
-				// to capture a non-sendable override closure.
-				let childSendable = (requiresSendable || child.requiresSendable) ? "@Sendable " : ""
-				initParameters.append("\(innerIndent)\(standardIndent)\(label): (\(childSendable)\(child.builderClosureType))? = nil")
-				storedProperties.append("\(innerIndent)let \(label): (\(childSendable)\(child.builderClosureType))?")
-			}
-			assignments.append("\(innerIndent)\(standardIndent)self.\(label) = \(label)")
+			let (field, defaultValue) = configurationField(
+				of: child,
+				named: disambiguatedLabel(for: child, labelMap: childLabelMap),
+				parentRequiresSendable: requiresSendable,
+				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+			)
+			initParameters.append("\(innerIndent)\(standardIndent)\(field.name): \(field.typeSource) = \(defaultValue)")
+			fields.append(field)
 		}
 
 		// Default-valued parameters.
@@ -9513,10 +9558,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// returns the value, which its initializer takes as an autoclosure, as the parameter does, and the mock
 				// calls it once per construction (`resolveBuilderArguments`).
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping () -> \(typeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
-				storedProperties.append("\(innerIndent)let \(defaultParameter.label): () -> \(typeSource)")
+				appendField(named: defaultParameter.label, typeSource: "() -> \(typeSource)", parameterTypeSource: "@escaping () -> \(typeSource)", isProvenSendable: false)
 			} else if defaultParameter.isClosureType, !defaultParameter.isAutoclosure {
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(closureSendable)@escaping \(typeSource) = \(defaultExpression(defaultParameter))")
-				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(closureSendable)\(typeSource)")
+				// The storage is proven `Sendable` only where the stored function type is `@Sendable` at its top: by the attribute
+				// added here, or by its own spelling. `closureSendable` reads the spelling's text, so a type that spells
+				// `@Sendable` only inside it stays unproven.
+				appendField(
+					named: defaultParameter.label,
+					typeSource: "\(closureSendable)\(typeSource)",
+					parameterTypeSource: "\(closureSendable)@escaping \(typeSource)",
+					isProvenSendable: requiresSendable && (!closureSendable.isEmpty || defaultParameter.valueTypeDescription.isSendableFunction),
+				)
 			} else if requiresSendable {
 				// A `@Sendable` builder function cannot capture the value when its type is not `Sendable`, and
 				// SafeDI cannot tell whether it is, so the struct stores a `@Sendable` closure that returns the
@@ -9525,38 +9578,44 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// caller still passes a value. Swift rejects `@Sendable` on a typealias, so a typealiased function
 				// type is stored this way too, even when the parameter is declared `@escaping`.
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping @Sendable () -> \(typeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
-				storedProperties.append("\(innerIndent)let \(defaultParameter.label): @Sendable () -> \(typeSource)")
+				appendField(named: defaultParameter.label, typeSource: "@Sendable () -> \(typeSource)", parameterTypeSource: "@escaping @Sendable () -> \(typeSource)", isProvenSendable: true)
 			} else {
 				// A parameter declared `@escaping` is of a function type, which the initializer stores, so it takes the
 				// value `@escaping` too, also when the type is a typealias of a function type.
 				let escaping = defaultParameter.isDeclaredEscaping ? "@escaping " : ""
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(escaping)\(typeSource) = \(defaultExpression(defaultParameter))")
-				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(typeSource)")
+				appendField(named: defaultParameter.label, typeSource: typeSource, parameterTypeSource: "\(escaping)\(typeSource)", isProvenSendable: false)
 			}
-			assignments.append("\(innerIndent)\(standardIndent)self.\(defaultParameter.label) = \(defaultParameter.label)")
 		}
 
 		// Builder parameter (always last, unlabeled). Optional with nil default so that
 		// the default construction (which may be @MainActor) is called in mock()
 		// rather than referenced in this nonisolated init.
-		let closureType = node.concreteBuilderClosureType
-		initParameters.append("\(innerIndent)\(standardIndent)_ \(ReservedName.configurationBuilderPropertyName): (\(sendableAnnotation)\(closureType))? = nil")
-		assignments.append("\(innerIndent)\(standardIndent)self.\(ReservedName.configurationBuilderPropertyName) = \(ReservedName.configurationBuilderPropertyName)")
-		storedProperties.append("\(innerIndent)/// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.")
-		storedProperties.append("\(innerIndent)let \(ReservedName.configurationBuilderPropertyName): (\(sendableAnnotation)\(closureType))?")
+		let builderType = "(\(sendableAnnotation)\(node.concreteBuilderClosureType))?"
+		initParameters.append("\(innerIndent)\(standardIndent)_ \(ReservedName.configurationBuilderPropertyName): \(builderType) = nil")
+		appendField(
+			named: ReservedName.configurationBuilderPropertyName,
+			typeSource: builderType,
+			parameterTypeSource: builderType,
+			isProvenSendable: requiresSendable,
+			documentation: "Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.",
+		)
+		let storage = ConfigurationStorage(fields: fields)
 
 		// Emit init.
 		lines.append("\(innerIndent)init(")
 		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
-		lines.append(contentsOf: assignments)
+		lines.append(contentsOf: storage.initialization(to: fields.map(\.name), indent: "\(innerIndent)\(standardIndent)"))
 		lines.append("\(innerIndent)}")
 
-		// Emit stored properties. They are `let`, not `private(set) var`, which would keep an extension initializer from assigning
-		// them one by one but costs Debug builds of mocks; the Manual asks users to build a configuration through its
-		// initializers instead (see "Configuration fields are `let`" in `.claude/rules/mock-generation.md`).
+		// Emit the properties that read each field from the storage, and the storage. A field is a computed property, so an
+		// initializer a person writes in an extension calls `self.init(…)`, as the Manual asks (see "Configuration fields are
+		// behind one reference" in `.claude/rules/mock-generation.md`).
 		lines.append("")
-		lines.append(contentsOf: storedProperties)
+		lines.append(contentsOf: storage.readers(indent: innerIndent))
+		lines.append("")
+		lines.append(contentsOf: storage.declarations(indent: innerIndent))
 
 		lines.append("\(indent)}")
 		return lines.joined(separator: "\n")

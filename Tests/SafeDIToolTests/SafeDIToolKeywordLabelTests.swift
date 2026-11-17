@@ -154,12 +154,29 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            `default`: Thing.SafeDIMockConfiguration = .init(),
 		            `class`: Thing.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.`default` = `default`
-		            self.`class` = `class`
+		            __safeDI_storage = __safeDI_Storage(
+		                default: `default`,
+		                class: `class`
+		            )
 		        }
 
-		        let `default`: Thing.SafeDIMockConfiguration
-		        let `class`: Thing.SafeDIMockConfiguration
+		        var `default`: Thing.SafeDIMockConfiguration { __safeDI_storage.`default` }
+		        var `class`: Thing.SafeDIMockConfiguration { __safeDI_storage.`class` }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                `default`: Thing.SafeDIMockConfiguration,
+		                `class`: Thing.SafeDIMockConfiguration
+		            ) {
+		                self.`default` = `default`
+		                self.`class` = `class`
+		            }
+
+		            let `default`: Thing.SafeDIMockConfiguration
+		            let `class`: Thing.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -290,12 +307,29 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            `default`: (() -> Leaf)? = nil,
 		            thing: Thing.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.`default` = `default`
-		            self.thing = thing
+		            __safeDI_storage = __safeDI_Storage(
+		                default: `default`,
+		                thing: thing
+		            )
 		        }
 
-		        let `default`: (() -> Leaf)?
-		        let thing: Thing.SafeDIMockConfiguration
+		        var `default`: (() -> Leaf)? { __safeDI_storage.`default` }
+		        var thing: Thing.SafeDIMockConfiguration { __safeDI_storage.thing }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                `default`: (() -> Leaf)?,
+		                thing: Thing.SafeDIMockConfiguration
+		            ) {
+		                self.`default` = `default`
+		                self.thing = thing
+		            }
+
+		            let `default`: (() -> Leaf)?
+		            let thing: Thing.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -399,10 +433,24 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		        init(
 		            leaf: (() -> Leaf)? = nil
 		        ) {
-		            self.leaf = leaf
+		            __safeDI_storage = __safeDI_Storage(
+		                leaf: leaf
+		            )
 		        }
 
-		        let leaf: (() -> Leaf)?
+		        var leaf: (() -> Leaf)? { __safeDI_storage.leaf }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                leaf: (() -> Leaf)?
+		            ) {
+		                self.leaf = leaf
+		            }
+
+		            let leaf: (() -> Leaf)?
+		        }
 		    }
 
 		    static func mock(
@@ -453,14 +501,31 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 			        `inout`: Int? = nil,
 			        _ safeDIBuilder: ((Int) -> Session)? = nil
 			    ) {
-			        self.`inout` = `inout`
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            `inout`: `inout`,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// `nil` keeps the default of `Session`’s `inout`.
-			    public let `inout`: Int?
+			    public var `inout`: Int? { __safeDI_storage.`inout` }
 			    /// Overrides how `Session` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((Int) -> Session)?
+			    public var safeDIBuilder: ((Int) -> Session)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            `inout`: Int?,
+			            safeDIBuilder: ((Int) -> Session)?
+			        ) {
+			            self.`inout` = `inout`
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let `inout`: Int?
+			        let safeDIBuilder: ((Int) -> Session)?
+			    }
 			}
 
 			extension Session {
@@ -486,13 +551,30 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 			            session: __safeDI_Session_MockConfiguration = .init(),
 			            `default`: String? = Service.__safeDI_publicMockDefault_default()
 			        ) {
-			            self.session = session
-			            self.`default` = `default`
+			            __safeDI_storage = __safeDI_Storage(
+			                session: session,
+			                default: `default`
+			            )
 			        }
 
-			        public let session: __safeDI_Session_MockConfiguration
+			        public var session: __safeDI_Session_MockConfiguration { __safeDI_storage.session }
 			        /// The default of `Service`’s `default` unless set; `.init(default: nil)` passes `nil`.
-			        public let `default`: String?
+			        public var `default`: String? { __safeDI_storage.`default` }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                session: __safeDI_Session_MockConfiguration,
+			                `default`: String?
+			            ) {
+			                self.session = session
+			                self.`default` = `default`
+			            }
+
+			            let session: __safeDI_Session_MockConfiguration
+			            let `default`: String?
+			        }
 			    }
 
 			    public static func mock(
@@ -557,13 +639,30 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            `default`: Int = 1,
 		            _ safeDIBuilder: ((Int) -> Child)? = nil
 		        ) {
-		            self.`default` = `default`
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                default: `default`,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let `default`: Int
+		        var `default`: Int { __safeDI_storage.`default` }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Int) -> Child)?
+		        var safeDIBuilder: ((Int) -> Child)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                `default`: Int,
+		                safeDIBuilder: ((Int) -> Child)?
+		            ) {
+		                self.`default` = `default`
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let `default`: Int
+		            let safeDIBuilder: ((Int) -> Child)?
+		        }
 		    }
 		}
 		#endif
@@ -581,10 +680,24 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		        init(
 		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -715,14 +828,34 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            `_`: (() -> Leaf)? = nil,
 		            `my leaf`: Thing.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.`inout` = `inout`
-		            self.`_` = `_`
-		            self.`my leaf` = `my leaf`
+		            __safeDI_storage = __safeDI_Storage(
+		                `inout`: `inout`,
+		                `_`: `_`,
+		                `my leaf`: `my leaf`
+		            )
 		        }
 
-		        let `inout`: (() -> Leaf)?
-		        let `_`: (() -> Leaf)?
-		        let `my leaf`: Thing.SafeDIMockConfiguration
+		        var `inout`: (() -> Leaf)? { __safeDI_storage.`inout` }
+		        var `_`: (() -> Leaf)? { __safeDI_storage.`_` }
+		        var `my leaf`: Thing.SafeDIMockConfiguration { __safeDI_storage.`my leaf` }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                `inout`: (() -> Leaf)?,
+		                `_`: (() -> Leaf)?,
+		                `my leaf`: Thing.SafeDIMockConfiguration
+		            ) {
+		                self.`inout` = `inout`
+		                self.`_` = `_`
+		                self.`my leaf` = `my leaf`
+		            }
+
+		            let `inout`: (() -> Leaf)?
+		            let `_`: (() -> Leaf)?
+		            let `my leaf`: Thing.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -791,12 +924,26 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            home: ((LazilyInstantiated<Analytics>?) -> Home)? = nil,
 		            `default`: Analytics? = nil
 		        ) {
-		            self.home = home
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home
+		            )
 		            self.`default` = `default`
 		        }
 
-		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        var home: ((LazilyInstantiated<Analytics>?) -> Home)? { __safeDI_storage.home }
 		        let `default`: Analytics?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		            ) {
+		                self.home = home
+		            }
+
+		            let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        }
 		    }
 
 		    static func mock(
@@ -881,16 +1028,39 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            default_EngineB: (() -> EngineB)? = nil,
 		            childB: ((EngineB) -> ChildB)? = nil
 		        ) {
-		            self.default_EngineA = default_EngineA
-		            self.childA = childA
-		            self.default_EngineB = default_EngineB
-		            self.childB = childB
+		            __safeDI_storage = __safeDI_Storage(
+		                default_EngineA: default_EngineA,
+		                childA: childA,
+		                default_EngineB: default_EngineB,
+		                childB: childB
+		            )
 		        }
 
-		        let default_EngineA: (() -> EngineA)?
-		        let childA: ((EngineA) -> ChildA)?
-		        let default_EngineB: (() -> EngineB)?
-		        let childB: ((EngineB) -> ChildB)?
+		        var default_EngineA: (() -> EngineA)? { __safeDI_storage.default_EngineA }
+		        var childA: ((EngineA) -> ChildA)? { __safeDI_storage.childA }
+		        var default_EngineB: (() -> EngineB)? { __safeDI_storage.default_EngineB }
+		        var childB: ((EngineB) -> ChildB)? { __safeDI_storage.childB }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                default_EngineA: (() -> EngineA)?,
+		                childA: ((EngineA) -> ChildA)?,
+		                default_EngineB: (() -> EngineB)?,
+		                childB: ((EngineB) -> ChildB)?
+		            ) {
+		                self.default_EngineA = default_EngineA
+		                self.childA = childA
+		                self.default_EngineB = default_EngineB
+		                self.childB = childB
+		            }
+
+		            let default_EngineA: (() -> EngineA)?
+		            let childA: ((EngineA) -> ChildA)?
+		            let default_EngineB: (() -> EngineB)?
+		            let childB: ((EngineB) -> ChildB)?
+		        }
 		    }
 
 		    static func mock(
@@ -954,10 +1124,24 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		        init(
 		            `default`: (() -> Analytics)? = nil
 		        ) {
-		            self.`default` = `default`
+		            __safeDI_storage = __safeDI_Storage(
+		                default: `default`
+		            )
 		        }
 
-		        let `default`: (() -> Analytics)?
+		        var `default`: (() -> Analytics)? { __safeDI_storage.`default` }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                `default`: (() -> Analytics)?
+		            ) {
+		                self.`default` = `default`
+		            }
+
+		            let `default`: (() -> Analytics)?
+		        }
 		    }
 
 		    static func mock(
@@ -1022,10 +1206,24 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		        init(
 		            thingBuilder: Thing.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.thingBuilder = thingBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                thingBuilder: thingBuilder
+		            )
 		        }
 
-		        let thingBuilder: Thing.SafeDIMockConfiguration
+		        var thingBuilder: Thing.SafeDIMockConfiguration { __safeDI_storage.thingBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                thingBuilder: Thing.SafeDIMockConfiguration
+		            ) {
+		                self.thingBuilder = thingBuilder
+		            }
+
+		            let thingBuilder: Thing.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1129,12 +1327,29 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            `var`: (() -> Leaf)? = nil,
 		            `let`: (() -> Leaf)? = nil
 		        ) {
-		            self.`var` = `var`
-		            self.`let` = `let`
+		            __safeDI_storage = __safeDI_Storage(
+		                var: `var`,
+		                let: `let`
+		            )
 		        }
 
-		        let `var`: (() -> Leaf)?
-		        let `let`: (() -> Leaf)?
+		        var `var`: (() -> Leaf)? { __safeDI_storage.`var` }
+		        var `let`: (() -> Leaf)? { __safeDI_storage.`let` }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                `var`: (() -> Leaf)?,
+		                `let`: (() -> Leaf)?
+		            ) {
+		                self.`var` = `var`
+		                self.`let` = `let`
+		            }
+
+		            let `var`: (() -> Leaf)?
+		            let `let`: (() -> Leaf)?
+		        }
 		    }
 
 		    static func mock(

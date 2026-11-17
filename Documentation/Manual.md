@@ -1041,7 +1041,7 @@ LoggedInView.mock(
 
 `SafeDIMockConfiguration` has an optional field for each of the child’s own `@Instantiated` dependencies and each labeled default-valued parameter of its `init` (or `instantiate(…)`), plus a final, unlabeled builder closure. A default-valued parameter’s field defaults to the default the type’s hand-written `mock` method declares for it, if any, and otherwise to its `init`’s (or `instantiate(…)`’s). The builder’s parameters match the hand-written `mock` method’s signature if one is defined, or the `init`’s otherwise; without a builder, the generated mock calls the hand-written `mock` method or `init` directly.
 
-The fields of `SafeDIOverrides` and `SafeDIMockConfiguration` may become computed properties in a later release, so create these values only through their generated initializers: an initializer you write in an extension of one calls `self.init(…)`, and never assigns the fields one by one.
+The fields of `SafeDIOverrides` and `SafeDIMockConfiguration` are read-only computed properties, so create these values only through their generated initializers: an initializer you write in an extension of one calls `self.init(…)`.
 
 > **Note:** Pass the builder in parentheses, as in `.init(StubNoteStorage.init)` above. Swift gives a trailing closure to the first closure field, which may not be the builder.
 

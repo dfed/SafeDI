@@ -113,10 +113,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            filter: AppFilter.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.filter = filter
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter
+		            )
 		        }
 
-		        let filter: AppFilter.SafeDIMockConfiguration
+		        var filter: AppFilter.SafeDIMockConfiguration { __safeDI_storage.filter }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: AppFilter.SafeDIMockConfiguration
+		            ) {
+		                self.filter = filter
+		            }
+
+		            let filter: AppFilter.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -145,13 +159,30 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            ruleSet: (() -> RuleSet)? = nil,
 		            _ safeDIBuilder: ((RuleSet) -> AppFilter)? = nil
 		        ) {
-		            self.ruleSet = ruleSet
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                ruleSet: ruleSet,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let ruleSet: (() -> RuleSet)?
+		        var ruleSet: (() -> RuleSet)? { __safeDI_storage.ruleSet }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((RuleSet) -> AppFilter)?
+		        var safeDIBuilder: ((RuleSet) -> AppFilter)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                ruleSet: (() -> RuleSet)?,
+		                safeDIBuilder: ((RuleSet) -> AppFilter)?
+		            ) {
+		                self.ruleSet = ruleSet
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let ruleSet: (() -> RuleSet)?
+		            let safeDIBuilder: ((RuleSet) -> AppFilter)?
+		        }
 		    }
 		}
 		#endif
@@ -214,10 +245,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            filter: (() -> AnyFilter)? = nil
 		        ) {
-		            self.filter = filter
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter
+		            )
 		        }
 
-		        let filter: (() -> AnyFilter)?
+		        var filter: (() -> AnyFilter)? { __safeDI_storage.filter }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: (() -> AnyFilter)?
+		            ) {
+		                self.filter = filter
+		            }
+
+		            let filter: (() -> AnyFilter)?
+		        }
 		    }
 
 		    static func mock(
@@ -286,10 +331,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            filterBuilder: (() -> AnyFilter)? = nil
 		        ) {
-		            self.filterBuilder = filterBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                filterBuilder: filterBuilder
+		            )
 		        }
 
-		        let filterBuilder: (() -> AnyFilter)?
+		        var filterBuilder: (() -> AnyFilter)? { __safeDI_storage.filterBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filterBuilder: (() -> AnyFilter)?
+		            ) {
+		                self.filterBuilder = filterBuilder
+		            }
+
+		            let filterBuilder: (() -> AnyFilter)?
+		        }
 		    }
 
 		    static func mock(
@@ -352,10 +411,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            filterBuilder: (() -> any FilterProtocol)? = nil
 		        ) {
-		            self.filterBuilder = filterBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                filterBuilder: filterBuilder
+		            )
 		        }
 
-		        let filterBuilder: (() -> any FilterProtocol)?
+		        var filterBuilder: (() -> any FilterProtocol)? { __safeDI_storage.filterBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filterBuilder: (() -> any FilterProtocol)?
+		            ) {
+		                self.filterBuilder = filterBuilder
+		            }
+
+		            let filterBuilder: (() -> any FilterProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -427,10 +500,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            filter: (() -> AnyFilter)? = nil
 		        ) {
-		            self.filter = filter
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter
+		            )
 		        }
 
-		        let filter: (() -> AnyFilter)?
+		        var filter: (() -> AnyFilter)? { __safeDI_storage.filter }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: (() -> AnyFilter)?
+		            ) {
+		                self.filter = filter
+		            }
+
+		            let filter: (() -> AnyFilter)?
+		        }
 		    }
 
 		    static func mock(
@@ -493,10 +580,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            filter: (() -> FilterProtocol)? = nil
 		        ) {
-		            self.filter = filter
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter
+		            )
 		        }
 
-		        let filter: (() -> FilterProtocol)?
+		        var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: (() -> FilterProtocol)?
+		            ) {
+		                self.filter = filter
+		            }
+
+		            let filter: (() -> FilterProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -565,10 +666,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            filter: (() -> FilterProtocol)? = nil
 		        ) {
-		            self.filter = filter
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter
+		            )
 		        }
 
-		        let filter: (() -> FilterProtocol)?
+		        var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: (() -> FilterProtocol)?
+		            ) {
+		                self.filter = filter
+		            }
+
+		            let filter: (() -> FilterProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -636,10 +751,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            filter: (() -> FilterProtocol)? = nil
 		        ) {
-		            self.filter = filter
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter
+		            )
 		        }
 
-		        let filter: (() -> FilterProtocol)?
+		        var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: (() -> FilterProtocol)?
+		            ) {
+		                self.filter = filter
+		            }
+
+		            let filter: (() -> FilterProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -707,10 +836,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            filter: (() -> FilterProtocol)? = nil
 		        ) {
-		            self.filter = filter
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter
+		            )
 		        }
 
-		        let filter: (() -> FilterProtocol)?
+		        var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: (() -> FilterProtocol)?
+		            ) {
+		                self.filter = filter
+		            }
+
+		            let filter: (() -> FilterProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -780,10 +923,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            filter: (() -> FilterProtocol)? = nil
 		        ) {
-		            self.filter = filter
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter
+		            )
 		        }
 
-		        let filter: (() -> FilterProtocol)?
+		        var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: (() -> FilterProtocol)?
+		            ) {
+		                self.filter = filter
+		            }
+
+		            let filter: (() -> FilterProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -843,10 +1000,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            filter: (() -> FilterProtocol)? = nil
 		        ) {
-		            self.filter = filter
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter
+		            )
 		        }
 
-		        let filter: (() -> FilterProtocol)?
+		        var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: (() -> FilterProtocol)?
+		            ) {
+		                self.filter = filter
+		            }
+
+		            let filter: (() -> FilterProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -900,10 +1071,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            filter: (() -> FilterProtocol)? = nil
 		        ) {
-		            self.filter = filter
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter
+		            )
 		        }
 
-		        let filter: (() -> FilterProtocol)?
+		        var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: (() -> FilterProtocol)?
+		            ) {
+		                self.filter = filter
+		            }
+
+		            let filter: (() -> FilterProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -974,10 +1159,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            filter: (() -> FilterProtocol)? = nil
 		        ) {
-		            self.filter = filter
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter
+		            )
 		        }
 
-		        let filter: (() -> FilterProtocol)?
+		        var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: (() -> FilterProtocol)?
+		            ) {
+		                self.filter = filter
+		            }
+
+		            let filter: (() -> FilterProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -1052,10 +1251,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            filter: (() -> FilterProtocol)? = nil
 		        ) {
-		            self.filter = filter
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter
+		            )
 		        }
 
-		        let filter: (() -> FilterProtocol)?
+		        var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: (() -> FilterProtocol)?
+		            ) {
+		                self.filter = filter
+		            }
+
+		            let filter: (() -> FilterProtocol)?
+		        }
 		    }
 
 		    static func mock(
@@ -1082,10 +1295,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 				        init(
 				            filter: (() -> FilterProtocol)? = nil
 				        ) {
-				            self.filter = filter
+				            __safeDI_storage = __safeDI_Storage(
+				                filter: filter
+				            )
 				        }
 
-				        let filter: (() -> FilterProtocol)?
+				        var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                filter: (() -> FilterProtocol)?
+				            ) {
+				                self.filter = filter
+				            }
+
+				            let filter: (() -> FilterProtocol)?
+				        }
 				    }
 
 				    static func mock(
@@ -1110,10 +1337,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 				        init(
 				            filter: (() -> FilterProtocol)? = nil
 				        ) {
-				            self.filter = filter
+				            __safeDI_storage = __safeDI_Storage(
+				                filter: filter
+				            )
 				        }
 
-				        let filter: (() -> FilterProtocol)?
+				        var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                filter: (() -> FilterProtocol)?
+				            ) {
+				                self.filter = filter
+				            }
+
+				            let filter: (() -> FilterProtocol)?
+				        }
 				    }
 
 				    static func mock(
@@ -1186,10 +1427,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        public init(
 		            filter: (() -> FilterProtocol)? = nil
 		        ) {
-		            self.filter = filter
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter
+		            )
 		        }
 
-		        public let filter: (() -> FilterProtocol)?
+		        public var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: (() -> FilterProtocol)?
+		            ) {
+		                self.filter = filter
+		            }
+
+		            let filter: (() -> FilterProtocol)?
+		        }
 		    }
 
 		    public static func mock(
@@ -1216,10 +1471,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 				        public init(
 				            filter: (() -> FilterProtocol)? = nil
 				        ) {
-				            self.filter = filter
+				            __safeDI_storage = __safeDI_Storage(
+				                filter: filter
+				            )
 				        }
 
-				        public let filter: (() -> FilterProtocol)?
+				        public var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                filter: (() -> FilterProtocol)?
+				            ) {
+				                self.filter = filter
+				            }
+
+				            let filter: (() -> FilterProtocol)?
+				        }
 				    }
 
 				    public static func mock(
@@ -1244,10 +1513,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 				        public init(
 				            filter: (() -> FilterProtocol)? = nil
 				        ) {
-				            self.filter = filter
+				            __safeDI_storage = __safeDI_Storage(
+				                filter: filter
+				            )
 				        }
 
-				        public let filter: (() -> FilterProtocol)?
+				        public var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                filter: (() -> FilterProtocol)?
+				            ) {
+				                self.filter = filter
+				            }
+
+				            let filter: (() -> FilterProtocol)?
+				        }
 				    }
 
 				    public static func mock(
@@ -1348,10 +1631,24 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        init(
 		            root: ((@escaping (Root.SafeDIMockScope_AppFilter_FilterProtocol) -> any FilterProtocol) -> Root)? = nil
 		        ) {
-		            self.root = root
+		            __safeDI_storage = __safeDI_Storage(
+		                root: root
+		            )
 		        }
 
-		        let root: ((@escaping (Root.SafeDIMockScope_AppFilter_FilterProtocol) -> any FilterProtocol) -> Root)?
+		        var root: ((@escaping (Root.SafeDIMockScope_AppFilter_FilterProtocol) -> any FilterProtocol) -> Root)? { __safeDI_storage.root }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                root: ((@escaping (Root.SafeDIMockScope_AppFilter_FilterProtocol) -> any FilterProtocol) -> Root)?
+		            ) {
+		                self.root = root
+		            }
+
+		            let root: ((@escaping (Root.SafeDIMockScope_AppFilter_FilterProtocol) -> any FilterProtocol) -> Root)?
+		        }
 		    }
 
 		    static func mock(

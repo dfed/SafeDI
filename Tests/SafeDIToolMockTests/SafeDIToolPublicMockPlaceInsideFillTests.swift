@@ -95,12 +95,29 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            tag: (() -> Tag)? = nil,
 			            inner: Inner.SafeDIOverrides = .init()
 			        ) {
-			            self.tag = tag
-			            self.inner = inner
+			            __safeDI_storage = __safeDI_Storage(
+			                tag: tag,
+			                inner: inner
+			            )
 			        }
 
-			        public let tag: (() -> Tag)?
-			        public let inner: Inner.SafeDIOverrides
+			        public var tag: (() -> Tag)? { __safeDI_storage.tag }
+			        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                tag: (() -> Tag)?,
+			                inner: Inner.SafeDIOverrides
+			            ) {
+			                self.tag = tag
+			                self.inner = inner
+			            }
+
+			            let tag: (() -> Tag)?
+			            let inner: Inner.SafeDIOverrides
+			        }
 			    }
 
 			    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -163,10 +180,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        init(
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -255,12 +286,29 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            session: (() -> Session)? = nil,
 			            inner: Inner.SafeDIOverrides = .init()
 			        ) {
-			            self.session = session
-			            self.inner = inner
+			            __safeDI_storage = __safeDI_Storage(
+			                session: session,
+			                inner: inner
+			            )
 			        }
 
-			        public let session: (() -> Session)?
-			        public let inner: Inner.SafeDIOverrides
+			        public var session: (() -> Session)? { __safeDI_storage.session }
+			        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                session: (() -> Session)?,
+			                inner: Inner.SafeDIOverrides
+			            ) {
+			                self.session = session
+			                self.inner = inner
+			            }
+
+			            let session: (() -> Session)?
+			            let inner: Inner.SafeDIOverrides
+			        }
 			    }
 
 			    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -323,10 +371,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        init(
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -410,10 +472,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        public init(
 			            inner: Inner.SafeDIOverrides = .init()
 			        ) {
-			            self.inner = inner
+			            __safeDI_storage = __safeDI_Storage(
+			                inner: inner
+			            )
 			        }
 
-			        public let inner: Inner.SafeDIOverrides
+			        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                inner: Inner.SafeDIOverrides
+			            ) {
+			                self.inner = inner
+			            }
+
+			            let inner: Inner.SafeDIOverrides
+			        }
 			    }
 
 			    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -475,10 +551,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        init(
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -569,12 +659,29 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            id: (() -> Code)? = nil,
 			            inner: Inner.SafeDIOverrides = .init()
 			        ) {
-			            self.id = id
-			            self.inner = inner
+			            __safeDI_storage = __safeDI_Storage(
+			                id: id,
+			                inner: inner
+			            )
 			        }
 
-			        public let id: (() -> Code)?
-			        public let inner: Inner.SafeDIOverrides
+			        public var id: (() -> Code)? { __safeDI_storage.id }
+			        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                id: (() -> Code)?,
+			                inner: Inner.SafeDIOverrides
+			            ) {
+			                self.id = id
+			                self.inner = inner
+			            }
+
+			            let id: (() -> Code)?
+			            let inner: Inner.SafeDIOverrides
+			        }
 			    }
 
 			    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -637,10 +744,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        init(
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -734,10 +855,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        public init(
 			            inner: Inner.SafeDIOverrides = .init()
 			        ) {
-			            self.inner = inner
+			            __safeDI_storage = __safeDI_Storage(
+			                inner: inner
+			            )
 			        }
 
-			        public let inner: Inner.SafeDIOverrides
+			        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                inner: Inner.SafeDIOverrides
+			            ) {
+			                self.inner = inner
+			            }
+
+			            let inner: Inner.SafeDIOverrides
+			        }
 			    }
 
 			    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -798,10 +933,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        init(
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -898,12 +1047,29 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            tag: (() -> Tag)? = nil,
 			            inner: Inner.SafeDIOverrides = .init()
 			        ) {
-			            self.tag = tag
-			            self.inner = inner
+			            __safeDI_storage = __safeDI_Storage(
+			                tag: tag,
+			                inner: inner
+			            )
 			        }
 
-			        public let tag: (() -> Tag)?
-			        public let inner: Inner.SafeDIOverrides
+			        public var tag: (() -> Tag)? { __safeDI_storage.tag }
+			        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                tag: (() -> Tag)?,
+			                inner: Inner.SafeDIOverrides
+			            ) {
+			                self.tag = tag
+			                self.inner = inner
+			            }
+
+			            let tag: (() -> Tag)?
+			            let inner: Inner.SafeDIOverrides
+			        }
 			    }
 
 			    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -972,10 +1138,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        init(
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -1073,12 +1253,29 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            tag: (() -> Tag)? = nil,
 			            inner: Inner.SafeDIOverrides = .init()
 			        ) {
-			            self.tag = tag
-			            self.inner = inner
+			            __safeDI_storage = __safeDI_Storage(
+			                tag: tag,
+			                inner: inner
+			            )
 			        }
 
-			        public let tag: (() -> Tag)?
-			        public let inner: Inner.SafeDIOverrides
+			        public var tag: (() -> Tag)? { __safeDI_storage.tag }
+			        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                tag: (() -> Tag)?,
+			                inner: Inner.SafeDIOverrides
+			            ) {
+			                self.tag = tag
+			                self.inner = inner
+			            }
+
+			            let tag: (() -> Tag)?
+			            let inner: Inner.SafeDIOverrides
+			        }
 			    }
 
 			    public static func mock(
@@ -1160,10 +1357,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        init(
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -1270,12 +1481,29 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            tag: (() -> Tag)? = nil,
 			            inner: Inner.SafeDIOverrides = .init()
 			        ) {
-			            self.tag = tag
-			            self.inner = inner
+			            __safeDI_storage = __safeDI_Storage(
+			                tag: tag,
+			                inner: inner
+			            )
 			        }
 
-			        public let tag: (() -> Tag)?
-			        public let inner: Inner.SafeDIOverrides
+			        public var tag: (() -> Tag)? { __safeDI_storage.tag }
+			        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                tag: (() -> Tag)?,
+			                inner: Inner.SafeDIOverrides
+			            ) {
+			                self.tag = tag
+			                self.inner = inner
+			            }
+
+			            let tag: (() -> Tag)?
+			            let inner: Inner.SafeDIOverrides
+			        }
 			    }
 
 			    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -1350,10 +1578,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        init(
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -1458,10 +1700,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        public init(
 			            inner: Inner.SafeDIOverrides = .init()
 			        ) {
-			            self.inner = inner
+			            __safeDI_storage = __safeDI_Storage(
+			                inner: inner
+			            )
 			        }
 
-			        public let inner: Inner.SafeDIOverrides
+			        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                inner: Inner.SafeDIOverrides
+			            ) {
+			                self.inner = inner
+			            }
+
+			            let inner: Inner.SafeDIOverrides
+			        }
 			    }
 
 			    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -1553,10 +1809,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        init(
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -1659,10 +1929,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        public init(
 			            inner: Inner.SafeDIOverrides = .init()
 			        ) {
-			            self.inner = inner
+			            __safeDI_storage = __safeDI_Storage(
+			                inner: inner
+			            )
 			        }
 
-			        public let inner: Inner.SafeDIOverrides
+			        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                inner: Inner.SafeDIOverrides
+			            ) {
+			                self.inner = inner
+			            }
+
+			            let inner: Inner.SafeDIOverrides
+			        }
 			    }
 
 			    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -1730,10 +2014,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        init(
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -1863,10 +2161,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        public init(
 			            inner: Inner.SafeDIOverrides = .init()
 			        ) {
-			            self.inner = inner
+			            __safeDI_storage = __safeDI_Storage(
+			                inner: inner
+			            )
 			        }
 
-			        public let inner: Inner.SafeDIOverrides
+			        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                inner: Inner.SafeDIOverrides
+			            ) {
+			                self.inner = inner
+			            }
+
+			            let inner: Inner.SafeDIOverrides
+			        }
 			    }
 
 			    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -1947,10 +2259,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        init(
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -2050,14 +2376,34 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            user_Draft: (() -> Draft)? = nil,
 			            b: __safeDI_Middle_B_MockConfiguration = .init()
 			        ) {
-			            self.user_User = user_User
-			            self.user_Draft = user_Draft
-			            self.b = b
+			            __safeDI_storage = __safeDI_Storage(
+			                user_User: user_User,
+			                user_Draft: user_Draft,
+			                b: b
+			            )
 			        }
 
-			        public let user_User: (() -> User)?
-			        public let user_Draft: (() -> Draft)?
-			        public let b: __safeDI_Middle_B_MockConfiguration
+			        public var user_User: (() -> User)? { __safeDI_storage.user_User }
+			        public var user_Draft: (() -> Draft)? { __safeDI_storage.user_Draft }
+			        public var b: __safeDI_Middle_B_MockConfiguration { __safeDI_storage.b }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                user_User: (() -> User)?,
+			                user_Draft: (() -> Draft)?,
+			                b: __safeDI_Middle_B_MockConfiguration
+			            ) {
+			                self.user_User = user_User
+			                self.user_Draft = user_Draft
+			                self.b = b
+			            }
+
+			            let user_User: (() -> User)?
+			            let user_Draft: (() -> Draft)?
+			            let b: __safeDI_Middle_B_MockConfiguration
+			        }
 			    }
 
 			    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -2122,13 +2468,30 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        inner: Inner.SafeDIOverrides = .init(),
 			        _ safeDIBuilder: ((Draft, Inner) -> B)? = nil
 			    ) {
-			        self.inner = inner
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            inner: inner,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let inner: Inner.SafeDIOverrides
+			    public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
 			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((Draft, Inner) -> B)?
+			    public var safeDIBuilder: ((Draft, Inner) -> B)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            inner: Inner.SafeDIOverrides,
+			            safeDIBuilder: ((Draft, Inner) -> B)?
+			        ) {
+			            self.inner = inner
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let inner: Inner.SafeDIOverrides
+			        let safeDIBuilder: ((Draft, Inner) -> B)?
+			    }
 			}
 
 			extension B {
@@ -2155,12 +2518,29 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            user: (() -> Draft)? = nil,
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.user = user
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                user: user,
+			                outer: outer
+			            )
 			        }
 
-			        let user: (() -> Draft)?
-			        let outer: Outer.SafeDIOverrides
+			        var user: (() -> Draft)? { __safeDI_storage.user }
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                user: (() -> Draft)?,
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.user = user
+			                self.outer = outer
+			            }
+
+			            let user: (() -> Draft)?
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -2256,16 +2636,39 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            user_Draft: (() -> Draft)? = nil,
 			            b: __safeDI_Middle_B_MockConfiguration = .init()
 			        ) {
-			            self.user_User = user_User
-			            self.a = a
-			            self.user_Draft = user_Draft
-			            self.b = b
+			            __safeDI_storage = __safeDI_Storage(
+			                user_User: user_User,
+			                a: a,
+			                user_Draft: user_Draft,
+			                b: b
+			            )
 			        }
 
-			        public let user_User: (() -> User)?
-			        public let a: ((User) -> A)?
-			        public let user_Draft: (() -> Draft)?
-			        public let b: __safeDI_Middle_B_MockConfiguration
+			        public var user_User: (() -> User)? { __safeDI_storage.user_User }
+			        public var a: ((User) -> A)? { __safeDI_storage.a }
+			        public var user_Draft: (() -> Draft)? { __safeDI_storage.user_Draft }
+			        public var b: __safeDI_Middle_B_MockConfiguration { __safeDI_storage.b }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                user_User: (() -> User)?,
+			                a: ((User) -> A)?,
+			                user_Draft: (() -> Draft)?,
+			                b: __safeDI_Middle_B_MockConfiguration
+			            ) {
+			                self.user_User = user_User
+			                self.a = a
+			                self.user_Draft = user_Draft
+			                self.b = b
+			            }
+
+			            let user_User: (() -> User)?
+			            let a: ((User) -> A)?
+			            let user_Draft: (() -> Draft)?
+			            let b: __safeDI_Middle_B_MockConfiguration
+			        }
 			    }
 
 			    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -2334,13 +2737,30 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        inner: Inner.SafeDIOverrides = .init(),
 			        _ safeDIBuilder: ((Draft, Inner) -> B)? = nil
 			    ) {
-			        self.inner = inner
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            inner: inner,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let inner: Inner.SafeDIOverrides
+			    public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
 			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((Draft, Inner) -> B)?
+			    public var safeDIBuilder: ((Draft, Inner) -> B)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            inner: Inner.SafeDIOverrides,
+			            safeDIBuilder: ((Draft, Inner) -> B)?
+			        ) {
+			            self.inner = inner
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let inner: Inner.SafeDIOverrides
+			        let safeDIBuilder: ((Draft, Inner) -> B)?
+			    }
 			}
 
 			extension B {
@@ -2367,12 +2787,29 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            user: (() -> Draft)? = nil,
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.user = user
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                user: user,
+			                outer: outer
+			            )
 			        }
 
-			        let user: (() -> Draft)?
-			        let outer: Outer.SafeDIOverrides
+			        var user: (() -> Draft)? { __safeDI_storage.user }
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                user: (() -> Draft)?,
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.user = user
+			                self.outer = outer
+			            }
+
+			            let user: (() -> Draft)?
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(
@@ -2452,10 +2889,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        public init(
 			            innerBuilder: ((@escaping (Inner.SafeDIMockScope_Service) -> any Service) -> Inner)? = nil
 			        ) {
-			            self.innerBuilder = innerBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                innerBuilder: innerBuilder
+			            )
 			        }
 
-			        public let innerBuilder: ((@escaping (Inner.SafeDIMockScope_Service) -> any Service) -> Inner)?
+			        public var innerBuilder: ((@escaping (Inner.SafeDIMockScope_Service) -> any Service) -> Inner)? { __safeDI_storage.innerBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                innerBuilder: ((@escaping (Inner.SafeDIMockScope_Service) -> any Service) -> Inner)?
+			            ) {
+			                self.innerBuilder = innerBuilder
+			            }
+
+			            let innerBuilder: ((@escaping (Inner.SafeDIMockScope_Service) -> any Service) -> Inner)?
+			        }
 			    }
 
 			    public static func mock(
@@ -2509,10 +2960,24 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			        init(
 			            outer: Outer.SafeDIOverrides = .init()
 			        ) {
-			            self.outer = outer
+			            __safeDI_storage = __safeDI_Storage(
+			                outer: outer
+			            )
 			        }
 
-			        let outer: Outer.SafeDIOverrides
+			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                outer: Outer.SafeDIOverrides
+			            ) {
+			                self.outer = outer
+			            }
+
+			            let outer: Outer.SafeDIOverrides
+			        }
 			    }
 
 			    static func mock(

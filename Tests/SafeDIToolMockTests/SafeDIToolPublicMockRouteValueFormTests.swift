@@ -160,12 +160,29 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		            desk: __safeDI_Core_Desk_MockConfiguration = .init(),
 		            model: ((any Service) -> Model)? = nil
 		        ) {
-		            self.desk = desk
-		            self.model = model
+		            __safeDI_storage = __safeDI_Storage(
+		                desk: desk,
+		                model: model
+		            )
 		        }
 
-		        public let desk: __safeDI_Core_Desk_MockConfiguration
-		        public let model: ((any Service) -> Model)?
+		        public var desk: __safeDI_Core_Desk_MockConfiguration { __safeDI_storage.desk }
+		        public var model: ((any Service) -> Model)? { __safeDI_storage.model }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                desk: __safeDI_Core_Desk_MockConfiguration,
+		                model: ((any Service) -> Model)?
+		            ) {
+		                self.desk = desk
+		                self.model = model
+		            }
+
+		            let desk: __safeDI_Core_Desk_MockConfiguration
+		            let model: ((any Service) -> Model)?
+		        }
 		    }
 
 		    public static func mock(
@@ -211,15 +228,35 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        model: ((any Service) -> Model)? = nil,
 		        _ safeDIBuilder: ((LazilyInstantiated<Token>, Model) -> Desk)? = nil
 		    ) {
-		        self.token = token
-		        self.model = model
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            token: token,
+		            model: model,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let token: (() -> Token)?
-		    public let model: ((any Service) -> Model)?
+		    public var token: (() -> Token)? { __safeDI_storage.token }
+		    public var model: ((any Service) -> Model)? { __safeDI_storage.model }
 		    /// Overrides how `Desk` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((LazilyInstantiated<Token>, Model) -> Desk)?
+		    public var safeDIBuilder: ((LazilyInstantiated<Token>, Model) -> Desk)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            token: (() -> Token)?,
+		            model: ((any Service) -> Model)?,
+		            safeDIBuilder: ((LazilyInstantiated<Token>, Model) -> Desk)?
+		        ) {
+		            self.token = token
+		            self.model = model
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let token: (() -> Token)?
+		        let model: ((any Service) -> Model)?
+		        let safeDIBuilder: ((LazilyInstantiated<Token>, Model) -> Desk)?
+		    }
 		}
 
 		extension Desk {
@@ -245,10 +282,24 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        init(
 		            office: Office.SafeDIOverrides = .init()
 		        ) {
-		            self.office = office
+		            __safeDI_storage = __safeDI_Storage(
+		                office: office
+		            )
 		        }
 
-		        let office: Office.SafeDIOverrides
+		        var office: Office.SafeDIOverrides { __safeDI_storage.office }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                office: Office.SafeDIOverrides
+		            ) {
+		                self.office = office
+		            }
+
+		            let office: Office.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(
@@ -355,12 +406,29 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		            inner: Inner.SafeDIOverrides = .init(),
 		            holder: __safeDI_Middle_Holder_MockConfiguration = .init()
 		        ) {
-		            self.inner = inner
-		            self.holder = holder
+		            __safeDI_storage = __safeDI_Storage(
+		                inner: inner,
+		                holder: holder
+		            )
 		        }
 
-		        public let inner: Inner.SafeDIOverrides
-		        public let holder: __safeDI_Middle_Holder_MockConfiguration
+		        public var inner: Inner.SafeDIOverrides { __safeDI_storage.inner }
+		        public var holder: __safeDI_Middle_Holder_MockConfiguration { __safeDI_storage.holder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                inner: Inner.SafeDIOverrides,
+		                holder: __safeDI_Middle_Holder_MockConfiguration
+		            ) {
+		                self.inner = inner
+		                self.holder = holder
+		            }
+
+		            let inner: Inner.SafeDIOverrides
+		            let holder: __safeDI_Middle_Holder_MockConfiguration
+		        }
 		    }
 
 		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
@@ -427,15 +495,35 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        direct: ((any Gadget) -> DefaultService)? = nil,
 		        _ safeDIBuilder: ((Code, DefaultService) -> Holder)? = nil
 		    ) {
-		        self.id = id
-		        self.direct = direct
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            id: id,
+		            direct: direct,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let id: (() -> Code)?
-		    public let direct: ((any Gadget) -> DefaultService)?
+		    public var id: (() -> Code)? { __safeDI_storage.id }
+		    public var direct: ((any Gadget) -> DefaultService)? { __safeDI_storage.direct }
 		    /// Overrides how `Holder` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Code, DefaultService) -> Holder)?
+		    public var safeDIBuilder: ((Code, DefaultService) -> Holder)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            id: (() -> Code)?,
+		            direct: ((any Gadget) -> DefaultService)?,
+		            safeDIBuilder: ((Code, DefaultService) -> Holder)?
+		        ) {
+		            self.id = id
+		            self.direct = direct
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let id: (() -> Code)?
+		        let direct: ((any Gadget) -> DefaultService)?
+		        let safeDIBuilder: ((Code, DefaultService) -> Holder)?
+		    }
 		}
 
 		extension Holder {
@@ -461,10 +549,24 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        init(
 		            outer: Outer.SafeDIOverrides = .init()
 		        ) {
-		            self.outer = outer
+		            __safeDI_storage = __safeDI_Storage(
+		                outer: outer
+		            )
 		        }
 
-		        let outer: Outer.SafeDIOverrides
+		        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                outer: Outer.SafeDIOverrides
+		            ) {
+		                self.outer = outer
+		            }
+
+		            let outer: Outer.SafeDIOverrides
+		        }
 		    }
 
 		    static func mock(

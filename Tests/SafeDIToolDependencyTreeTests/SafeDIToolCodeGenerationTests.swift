@@ -9510,10 +9510,24 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		        init(
 		            parentBuilder: Parent.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.parentBuilder = parentBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                parentBuilder: parentBuilder
+		            )
 		        }
 
-		        let parentBuilder: Parent.SafeDIMockConfiguration
+		        var parentBuilder: Parent.SafeDIMockConfiguration { __safeDI_storage.parentBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                parentBuilder: Parent.SafeDIMockConfiguration
+		            ) {
+		                self.parentBuilder = parentBuilder
+		            }
+
+		            let parentBuilder: Parent.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -11314,10 +11328,24 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		        init(
 		            service: (() -> Service)? = nil
 		        ) {
-		            self.service = service
+		            __safeDI_storage = __safeDI_Storage(
+		                service: service
+		            )
 		        }
 
-		        let service: (() -> Service)?
+		        var service: (() -> Service)? { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                service: (() -> Service)?
+		            ) {
+		                self.service = service
+		            }
+
+		            let service: (() -> Service)?
+		        }
 		    }
 
 		    static func mock(

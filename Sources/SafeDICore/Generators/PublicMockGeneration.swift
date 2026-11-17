@@ -113,6 +113,12 @@ struct PublicStructMember {
 	let isUnlabeled: Bool
 	/// The member's documentation comment, when it has one.
 	let documentation: String?
+
+	/// The type the struct's storage (`ConfigurationStorage`) takes the member as: its stored type, or, where the
+	/// initializer takes the member as an `@autoclosure` of its stored function type, that type `@escaping`.
+	var storageParameterTypeSource: String {
+		parameterTypeSource == typeSource ? typeSource : "@escaping \(typeSource)"
+	}
 }
 
 extension ScopeGenerator {
@@ -122,11 +128,22 @@ extension ScopeGenerator {
 		[.public] + Set(members.map(\.access)).filter { $0 < .public }.sorted(by: >)
 	}
 
-	/// The initializers and stored members of a public struct, indented by `indent`: one initializer per level of
-	/// `publicInitializerLevels(of:)`, each taking every member at or above its level, in member order, and assigning
-	/// each member it omits its `omittedValue`.
+	/// The initializers and members of a public struct, indented by `indent`: one initializer per level of
+	/// `publicInitializerLevels(of:)`, each taking every member at or above its level, in member order, and setting
+	/// each member it omits to its `omittedValue`. The members are in the struct's storage (`ConfigurationStorage`),
+	/// which is not `Sendable`, since a public struct is not `Sendable` unless it declares it, which none of these does.
 	static func publicStructBody(members: [PublicStructMember], indent: String) -> [String] {
 		let memberIndent = "\(indent)\(standardIndent)"
+		let storage = ConfigurationStorage(fields: members.map { member in
+			ConfigurationStorage.Field(
+				name: member.name,
+				typeSource: member.typeSource,
+				parameterTypeSource: member.storageParameterTypeSource,
+				accessPrefix: member.access == .internal ? "" : "\(member.access.spelledOnGeneratedDeclaration) ",
+				documentation: member.documentation,
+				isProvenSendable: false,
+			)
+		})
 		var lines = [String]()
 		for level in publicInitializerLevels(of: members) {
 			let takenMembers = members.filter { $0.access >= level }
@@ -140,20 +157,18 @@ extension ScopeGenerator {
 				}.joined(separator: ",\n"))
 				lines.append("\(indent)) {")
 			}
-			for member in members {
-				let value = member.access >= level ? member.name : member.omittedValue
-				lines.append("\(memberIndent)self.\(member.name) = \(value)")
-			}
+			lines.append(contentsOf: storage.initialization(
+				to: members.map { $0.access >= level ? $0.name : $0.omittedValue },
+				indent: memberIndent,
+			))
 			lines.append("\(indent)}")
 			lines.append("")
 		}
-		for member in members {
-			if let documentation = member.documentation {
-				lines.append("\(indent)/// \(documentation)")
-			}
-			let accessPrefix = member.access == .internal ? "" : "\(member.access.spelledOnGeneratedDeclaration) "
-			lines.append("\(indent)\(accessPrefix)let \(member.name): \(member.typeSource)")
-		}
+		// A public struct always has a member: a module-level configuration has its builder, and a public mock declares its
+		// `SafeDIOverrides` only for a tree with a node.
+		lines.append(contentsOf: storage.readers(indent: indent))
+		lines.append("")
+		lines.append(contentsOf: storage.declarations(indent: indent))
 		return lines
 	}
 

@@ -800,6 +800,21 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueOracleFixtureFailure_isNil_whenRootsMockMakesStorageOfDrawnMocksOverridesSendable() async throws {
+		// The root's mock builds `S1_Screen` in a `Sendable` builder, which makes `S1_Detail`'s configuration `@Sendable`-typed,
+		// so the storage of `S1_Screen`'s overrides, which holds it, is `Sendable` in the value-oracle run alone.
+		let runs = try await Self.valueOracleToolRuns(of: Self.sendableRootOfMockedScreenFixture)
+		let drawnMock = try Self.generatedFile("S1_Screen+SafeDIMock.swift", of: runs.firstOutcome)
+		let valueOracleMock = try Self.generatedFile("S1_Screen+SafeDIMock.swift", of: #require(runs.valueOracle?.outcome))
+
+		#expect(!drawnMock.contains("private final class __safeDI_Storage: Sendable {"))
+		#expect(valueOracleMock.contains("private final class __safeDI_Storage: Sendable {"))
+		#expect(GraphFuzzerMockOverrides.comparableWithAnotherRunsMocks(valueOracleMock) == GraphFuzzerMockOverrides.comparableWithAnotherRunsMocks(drawnMock))
+		#expect(runs.valueOracleFixtureFailure == nil)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func valueOracleFixtureFailure_isNil_whenMirrorWritesAliasOfOptionalFormWithNonOptionalType() async throws {
 		// Production accepts the retyped alias, and the model agrees with the mock about what it builds.
 		let runs = try await Self.valueOracleToolRuns(of: Self.retypedAliasFixture)
@@ -1195,6 +1210,14 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 	])
 
 	/// A root that builds a mocked type with a child, so that the root's mock needs the mocked type's configuration.
+	/// A root that builds a mocked type in a `Sendable` builder, whose tree configures a child that has a child of its own.
+	private static let sendableRootOfMockedScreenFixture = fixture([
+		type("S1_Root", arguments: "isRoot: true", properties: ["@Instantiated let screenBuilder: SendableInstantiator<S1_Screen>"]),
+		type("S1_Screen", arguments: "generateMock: true", properties: ["@Instantiated let detail: S1_Detail"]),
+		type("S1_Detail", properties: ["@Instantiated let leaf: S1_Leaf"]),
+		type("S1_Leaf", properties: []),
+	])
+
 	private static let rootOfMockedScreenFixture = fixture([
 		type("S1_Root", arguments: "isRoot: true", properties: ["@Instantiated let screen: S1_Screen"]),
 		type("S1_Screen", arguments: "generateMock: true", properties: ["@Instantiated let detail: S1_Detail"]),

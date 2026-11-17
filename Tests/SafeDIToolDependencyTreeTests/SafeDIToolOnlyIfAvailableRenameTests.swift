@@ -1102,14 +1102,31 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			            child: Child.SafeDIMockConfiguration = .init(),
 			            secretToken: Token? = nil
 			        ) {
-			            self.token = token
-			            self.child = child
+			            __safeDI_storage = __safeDI_Storage(
+			                token: token,
+			                child: child
+			            )
 			            self.secretToken = secretToken
 			        }
 
-			        let token: (() -> Token)?
-			        let child: Child.SafeDIMockConfiguration
+			        var token: (() -> Token)? { __safeDI_storage.token }
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
 			        let secretToken: Token?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                token: (() -> Token)?,
+			                child: Child.SafeDIMockConfiguration
+			            ) {
+			                self.token = token
+			                self.child = child
+			            }
+
+			            let token: (() -> Token)?
+			            let child: Child.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(

@@ -244,14 +244,34 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            t3: __safeDI_Feature_T3_MockConfiguration = .init(),
 		            t2Builder: ((T3?) -> T2)? = nil
 		        ) {
-		            self.t4Builder = t4Builder
-		            self.t3 = t3
-		            self.t2Builder = t2Builder
+		            __safeDI_storage = __safeDI_Storage(
+		                t4Builder: t4Builder,
+		                t3: t3,
+		                t2Builder: t2Builder
+		            )
 		        }
 
-		        public let t4Builder: ((Instantiator<T4>, Instantiator<T2>?) -> T4)?
-		        public let t3: __safeDI_Feature_T3_MockConfiguration
-		        public let t2Builder: ((T3?) -> T2)?
+		        public var t4Builder: ((Instantiator<T4>, Instantiator<T2>?) -> T4)? { __safeDI_storage.t4Builder }
+		        public var t3: __safeDI_Feature_T3_MockConfiguration { __safeDI_storage.t3 }
+		        public var t2Builder: ((T3?) -> T2)? { __safeDI_storage.t2Builder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                t4Builder: ((Instantiator<T4>, Instantiator<T2>?) -> T4)?,
+		                t3: __safeDI_Feature_T3_MockConfiguration,
+		                t2Builder: ((T3?) -> T2)?
+		            ) {
+		                self.t4Builder = t4Builder
+		                self.t3 = t3
+		                self.t2Builder = t2Builder
+		            }
+
+		            let t4Builder: ((Instantiator<T4>, Instantiator<T2>?) -> T4)?
+		            let t3: __safeDI_Feature_T3_MockConfiguration
+		            let t2Builder: ((T3?) -> T2)?
+		        }
 		    }
 
 		    public static func mock(
@@ -296,13 +316,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		        t4: ((Instantiator<T4>, Instantiator<T2>?) -> T4)? = nil,
 		        _ safeDIBuilder: ((T4) -> T3)? = nil
 		    ) {
-		        self.t4 = t4
-		        self.safeDIBuilder = safeDIBuilder
+		        __safeDI_storage = __safeDI_Storage(
+		            t4: t4,
+		            safeDIBuilder: safeDIBuilder
+		        )
 		    }
 
-		    public let t4: ((Instantiator<T4>, Instantiator<T2>?) -> T4)?
+		    public var t4: ((Instantiator<T4>, Instantiator<T2>?) -> T4)? { __safeDI_storage.t4 }
 		    /// Overrides how `T3` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((T4) -> T3)?
+		    public var safeDIBuilder: ((T4) -> T3)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            t4: ((Instantiator<T4>, Instantiator<T2>?) -> T4)?,
+		            safeDIBuilder: ((T4) -> T3)?
+		        ) {
+		            self.t4 = t4
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let t4: ((Instantiator<T4>, Instantiator<T2>?) -> T4)?
+		        let safeDIBuilder: ((T4) -> T3)?
+		    }
 		}
 
 		extension T3 {
@@ -384,14 +421,34 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            t3: ((Instantiator<T4>) -> T3)? = nil,
 		            t2Builder: ((T3?) -> T2)? = nil
 		        ) {
-		            self.t4Builder = t4Builder
-		            self.t3 = t3
-		            self.t2Builder = t2Builder
+		            __safeDI_storage = __safeDI_Storage(
+		                t4Builder: t4Builder,
+		                t3: t3,
+		                t2Builder: t2Builder
+		            )
 		        }
 
-		        public let t4Builder: ((Instantiator<T4>?, Instantiator<T2>?) -> T4)?
-		        public let t3: ((Instantiator<T4>) -> T3)?
-		        public let t2Builder: ((T3?) -> T2)?
+		        public var t4Builder: ((Instantiator<T4>?, Instantiator<T2>?) -> T4)? { __safeDI_storage.t4Builder }
+		        public var t3: ((Instantiator<T4>) -> T3)? { __safeDI_storage.t3 }
+		        public var t2Builder: ((T3?) -> T2)? { __safeDI_storage.t2Builder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                t4Builder: ((Instantiator<T4>?, Instantiator<T2>?) -> T4)?,
+		                t3: ((Instantiator<T4>) -> T3)?,
+		                t2Builder: ((T3?) -> T2)?
+		            ) {
+		                self.t4Builder = t4Builder
+		                self.t3 = t3
+		                self.t2Builder = t2Builder
+		            }
+
+		            let t4Builder: ((Instantiator<T4>?, Instantiator<T2>?) -> T4)?
+		            let t3: ((Instantiator<T4>) -> T3)?
+		            let t2Builder: ((T3?) -> T2)?
+		        }
 		    }
 
 		    public static func mock(
@@ -1978,26 +2035,64 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            screen6Builder: Screen6.SafeDIMockConfiguration = .init(),
 			            screen7Builder: Screen7.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.service = service
-			            self.screen0Builder = screen0Builder
-			            self.screen1Builder = screen1Builder
-			            self.screen2Builder = screen2Builder
-			            self.screen3Builder = screen3Builder
-			            self.screen4Builder = screen4Builder
-			            self.screen5Builder = screen5Builder
-			            self.screen6Builder = screen6Builder
-			            self.screen7Builder = screen7Builder
+			            __safeDI_storage = __safeDI_Storage(
+			                service: service,
+			                screen0Builder: screen0Builder,
+			                screen1Builder: screen1Builder,
+			                screen2Builder: screen2Builder,
+			                screen3Builder: screen3Builder,
+			                screen4Builder: screen4Builder,
+			                screen5Builder: screen5Builder,
+			                screen6Builder: screen6Builder,
+			                screen7Builder: screen7Builder
+			            )
 			        }
 
-			        let service: (() -> Service)?
-			        let screen0Builder: Screen0.SafeDIMockConfiguration
-			        let screen1Builder: Screen1.SafeDIMockConfiguration
-			        let screen2Builder: Screen2.SafeDIMockConfiguration
-			        let screen3Builder: Screen3.SafeDIMockConfiguration
-			        let screen4Builder: Screen4.SafeDIMockConfiguration
-			        let screen5Builder: Screen5.SafeDIMockConfiguration
-			        let screen6Builder: Screen6.SafeDIMockConfiguration
-			        let screen7Builder: Screen7.SafeDIMockConfiguration
+			        var service: (() -> Service)? { __safeDI_storage.service }
+			        var screen0Builder: Screen0.SafeDIMockConfiguration { __safeDI_storage.screen0Builder }
+			        var screen1Builder: Screen1.SafeDIMockConfiguration { __safeDI_storage.screen1Builder }
+			        var screen2Builder: Screen2.SafeDIMockConfiguration { __safeDI_storage.screen2Builder }
+			        var screen3Builder: Screen3.SafeDIMockConfiguration { __safeDI_storage.screen3Builder }
+			        var screen4Builder: Screen4.SafeDIMockConfiguration { __safeDI_storage.screen4Builder }
+			        var screen5Builder: Screen5.SafeDIMockConfiguration { __safeDI_storage.screen5Builder }
+			        var screen6Builder: Screen6.SafeDIMockConfiguration { __safeDI_storage.screen6Builder }
+			        var screen7Builder: Screen7.SafeDIMockConfiguration { __safeDI_storage.screen7Builder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                service: (() -> Service)?,
+			                screen0Builder: Screen0.SafeDIMockConfiguration,
+			                screen1Builder: Screen1.SafeDIMockConfiguration,
+			                screen2Builder: Screen2.SafeDIMockConfiguration,
+			                screen3Builder: Screen3.SafeDIMockConfiguration,
+			                screen4Builder: Screen4.SafeDIMockConfiguration,
+			                screen5Builder: Screen5.SafeDIMockConfiguration,
+			                screen6Builder: Screen6.SafeDIMockConfiguration,
+			                screen7Builder: Screen7.SafeDIMockConfiguration
+			            ) {
+			                self.service = service
+			                self.screen0Builder = screen0Builder
+			                self.screen1Builder = screen1Builder
+			                self.screen2Builder = screen2Builder
+			                self.screen3Builder = screen3Builder
+			                self.screen4Builder = screen4Builder
+			                self.screen5Builder = screen5Builder
+			                self.screen6Builder = screen6Builder
+			                self.screen7Builder = screen7Builder
+			            }
+
+			            let service: (() -> Service)?
+			            let screen0Builder: Screen0.SafeDIMockConfiguration
+			            let screen1Builder: Screen1.SafeDIMockConfiguration
+			            let screen2Builder: Screen2.SafeDIMockConfiguration
+			            let screen3Builder: Screen3.SafeDIMockConfiguration
+			            let screen4Builder: Screen4.SafeDIMockConfiguration
+			            let screen5Builder: Screen5.SafeDIMockConfiguration
+			            let screen6Builder: Screen6.SafeDIMockConfiguration
+			            let screen7Builder: Screen7.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -2145,13 +2240,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            model0: ((Int, Service) -> Model0)? = nil,
 			            _ safeDIBuilder: ((Int, Service, Model0, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen0)? = nil
 			        ) {
-			            self.model0 = model0
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                model0: model0,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let model0: ((Int, Service) -> Model0)?
+			        var model0: ((Int, Service) -> Model0)? { __safeDI_storage.model0 }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Int, Service, Model0, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen0)?
+			        var safeDIBuilder: ((Int, Service, Model0, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen0)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                model0: ((Int, Service) -> Model0)?,
+			                safeDIBuilder: ((Int, Service, Model0, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen0)?
+			            ) {
+			                self.model0 = model0
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let model0: ((Int, Service) -> Model0)?
+			            let safeDIBuilder: ((Int, Service, Model0, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen0)?
+			        }
 			    }
 			}
 
@@ -2162,13 +2274,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            model1: ((Int, Service) -> Model1)? = nil,
 			            _ safeDIBuilder: ((Int, Service, Model1, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen1)? = nil
 			        ) {
-			            self.model1 = model1
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                model1: model1,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let model1: ((Int, Service) -> Model1)?
+			        var model1: ((Int, Service) -> Model1)? { __safeDI_storage.model1 }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Int, Service, Model1, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen1)?
+			        var safeDIBuilder: ((Int, Service, Model1, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen1)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                model1: ((Int, Service) -> Model1)?,
+			                safeDIBuilder: ((Int, Service, Model1, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen1)?
+			            ) {
+			                self.model1 = model1
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let model1: ((Int, Service) -> Model1)?
+			            let safeDIBuilder: ((Int, Service, Model1, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen1)?
+			        }
 			    }
 			}
 
@@ -2179,13 +2308,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            model2: ((Int, Service) -> Model2)? = nil,
 			            _ safeDIBuilder: ((Int, Service, Model2, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen2)? = nil
 			        ) {
-			            self.model2 = model2
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                model2: model2,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let model2: ((Int, Service) -> Model2)?
+			        var model2: ((Int, Service) -> Model2)? { __safeDI_storage.model2 }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Int, Service, Model2, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen2)?
+			        var safeDIBuilder: ((Int, Service, Model2, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen2)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                model2: ((Int, Service) -> Model2)?,
+			                safeDIBuilder: ((Int, Service, Model2, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen2)?
+			            ) {
+			                self.model2 = model2
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let model2: ((Int, Service) -> Model2)?
+			            let safeDIBuilder: ((Int, Service, Model2, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen2)?
+			        }
 			    }
 			}
 
@@ -2196,13 +2342,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            model3: ((Int, Service) -> Model3)? = nil,
 			            _ safeDIBuilder: ((Int, Service, Model3, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen3)? = nil
 			        ) {
-			            self.model3 = model3
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                model3: model3,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let model3: ((Int, Service) -> Model3)?
+			        var model3: ((Int, Service) -> Model3)? { __safeDI_storage.model3 }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Int, Service, Model3, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen3)?
+			        var safeDIBuilder: ((Int, Service, Model3, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen3)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                model3: ((Int, Service) -> Model3)?,
+			                safeDIBuilder: ((Int, Service, Model3, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen3)?
+			            ) {
+			                self.model3 = model3
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let model3: ((Int, Service) -> Model3)?
+			            let safeDIBuilder: ((Int, Service, Model3, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen3)?
+			        }
 			    }
 			}
 
@@ -2213,13 +2376,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            model4: ((Int, Service) -> Model4)? = nil,
 			            _ safeDIBuilder: ((Int, Service, Model4, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen4)? = nil
 			        ) {
-			            self.model4 = model4
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                model4: model4,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let model4: ((Int, Service) -> Model4)?
+			        var model4: ((Int, Service) -> Model4)? { __safeDI_storage.model4 }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Int, Service, Model4, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen4)?
+			        var safeDIBuilder: ((Int, Service, Model4, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen4)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                model4: ((Int, Service) -> Model4)?,
+			                safeDIBuilder: ((Int, Service, Model4, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen4)?
+			            ) {
+			                self.model4 = model4
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let model4: ((Int, Service) -> Model4)?
+			            let safeDIBuilder: ((Int, Service, Model4, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen4)?
+			        }
 			    }
 			}
 
@@ -2230,13 +2410,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            model5: ((Int, Service) -> Model5)? = nil,
 			            _ safeDIBuilder: ((Int, Service, Model5, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen5)? = nil
 			        ) {
-			            self.model5 = model5
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                model5: model5,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let model5: ((Int, Service) -> Model5)?
+			        var model5: ((Int, Service) -> Model5)? { __safeDI_storage.model5 }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Int, Service, Model5, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen5)?
+			        var safeDIBuilder: ((Int, Service, Model5, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen5)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                model5: ((Int, Service) -> Model5)?,
+			                safeDIBuilder: ((Int, Service, Model5, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen5)?
+			            ) {
+			                self.model5 = model5
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let model5: ((Int, Service) -> Model5)?
+			            let safeDIBuilder: ((Int, Service, Model5, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen5)?
+			        }
 			    }
 			}
 
@@ -2247,13 +2444,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            model6: ((Int, Service) -> Model6)? = nil,
 			            _ safeDIBuilder: ((Int, Service, Model6, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen6)? = nil
 			        ) {
-			            self.model6 = model6
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                model6: model6,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let model6: ((Int, Service) -> Model6)?
+			        var model6: ((Int, Service) -> Model6)? { __safeDI_storage.model6 }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Int, Service, Model6, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen6)?
+			        var safeDIBuilder: ((Int, Service, Model6, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen6)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                model6: ((Int, Service) -> Model6)?,
+			                safeDIBuilder: ((Int, Service, Model6, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen6)?
+			            ) {
+			                self.model6 = model6
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let model6: ((Int, Service) -> Model6)?
+			            let safeDIBuilder: ((Int, Service, Model6, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen6)?
+			        }
 			    }
 			}
 
@@ -2264,13 +2478,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            model7: ((Int, Service) -> Model7)? = nil,
 			            _ safeDIBuilder: ((Int, Service, Model7, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen7)? = nil
 			        ) {
-			            self.model7 = model7
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                model7: model7,
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let model7: ((Int, Service) -> Model7)?
+			        var model7: ((Int, Service) -> Model7)? { __safeDI_storage.model7 }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Int, Service, Model7, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen7)?
+			        var safeDIBuilder: ((Int, Service, Model7, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen7)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                model7: ((Int, Service) -> Model7)?,
+			                safeDIBuilder: ((Int, Service, Model7, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen7)?
+			            ) {
+			                self.model7 = model7
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let model7: ((Int, Service) -> Model7)?
+			            let safeDIBuilder: ((Int, Service, Model7, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>, ErasedInstantiator<Int, Screen>) -> Screen7)?
+			        }
 			    }
 			}
 			#endif
@@ -2443,11 +2674,17 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		for (position, screen) in screens.enumerated() {
 			lines.append("            screen\(screen)Builder: Screen\(screen).SafeDIMockConfiguration = .init()" + (position == screens.count - 1 ? "" : ","))
 		}
-		lines += ["        ) {", "            self.service = service"]
-		lines += screens.map { "            self.screen\($0)Builder = screen\($0)Builder" }
-		lines += ["        }", "", "        let service: (() -> Service)?"]
-		lines += screens.map { "        let screen\($0)Builder: Screen\($0).SafeDIMockConfiguration" }
-		lines += ["    }", "", "    static func mock(", "        safeDIOverrides: SafeDIOverrides = .init()", "    ) -> Root {"]
+		lines += ["        ) {", "            __safeDI_storage = __safeDI_Storage(", "                service: service" + (screens.isEmpty ? "" : ",")]
+		lines += screens.enumerated().map { position, screen in "                screen\(screen)Builder: screen\(screen)Builder" + (position == screens.count - 1 ? "" : ",") }
+		lines += ["            )", "        }", "", "        var service: (() -> Service)? { __safeDI_storage.service }"]
+		lines += screens.map { "        var screen\($0)Builder: Screen\($0).SafeDIMockConfiguration { __safeDI_storage.screen\($0)Builder }" }
+		lines += ["", "        private let __safeDI_storage: __safeDI_Storage", "", "        private final class __safeDI_Storage {", "            init(", "                service: (() -> Service)?" + (screens.isEmpty ? "" : ",")]
+		lines += screens.enumerated().map { position, screen in "                screen\(screen)Builder: Screen\(screen).SafeDIMockConfiguration" + (position == screens.count - 1 ? "" : ",") }
+		lines += ["            ) {", "                self.service = service"]
+		lines += screens.map { "                self.screen\($0)Builder = screen\($0)Builder" }
+		lines += ["            }", "", "            let service: (() -> Service)?"]
+		lines += screens.map { "            let screen\($0)Builder: Screen\($0).SafeDIMockConfiguration" }
+		lines += ["        }", "    }", "", "    static func mock(", "        safeDIOverrides: SafeDIOverrides = .init()", "    ) -> Root {"]
 		lines.append("        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }")
 		// A loop's members declare every function first, then every wrapper.
 		for unit in units {
@@ -2478,13 +2715,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 				"            model\(screen): ((Int, Service) -> Model\(screen))? = nil,",
 				"            _ safeDIBuilder: \(builderType) = nil",
 				"        ) {",
-				"            self.model\(screen) = model\(screen)",
-				"            self.safeDIBuilder = safeDIBuilder",
+				"            __safeDI_storage = __safeDI_Storage(",
+				"                model\(screen): model\(screen),",
+				"                safeDIBuilder: safeDIBuilder",
+				"            )",
 				"        }",
 				"",
-				"        let model\(screen): ((Int, Service) -> Model\(screen))?",
+				"        var model\(screen): ((Int, Service) -> Model\(screen))? { __safeDI_storage.model\(screen) }",
 				"        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.",
-				"        let safeDIBuilder: \(builderType)",
+				"        var safeDIBuilder: \(builderType) { __safeDI_storage.safeDIBuilder }",
+				"",
+				"        private let __safeDI_storage: __safeDI_Storage",
+				"",
+				"        private final class __safeDI_Storage {",
+				"            init(",
+				"                model\(screen): ((Int, Service) -> Model\(screen))?,",
+				"                safeDIBuilder: \(builderType)",
+				"            ) {",
+				"                self.model\(screen) = model\(screen)",
+				"                self.safeDIBuilder = safeDIBuilder",
+				"            }",
+				"",
+				"            let model\(screen): ((Int, Service) -> Model\(screen))?",
+				"            let safeDIBuilder: \(builderType)",
+				"        }",
 				"    }",
 				"}",
 			]

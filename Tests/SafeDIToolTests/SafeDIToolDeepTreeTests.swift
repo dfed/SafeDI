@@ -465,12 +465,29 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 			"            service: (() -> Service)? = nil,",
 			"            feature0: Feature0.SafeDIMockConfiguration = .init()",
 			"        ) {",
-			"            self.service = service",
-			"            self.feature0 = feature0",
+			"            __safeDI_storage = __safeDI_Storage(",
+			"                service: service,",
+			"                feature0: feature0",
+			"            )",
 			"        }",
 			"",
-			"        let service: (() -> Service)?",
-			"        let feature0: Feature0.SafeDIMockConfiguration",
+			"        var service: (() -> Service)? { __safeDI_storage.service }",
+			"        var feature0: Feature0.SafeDIMockConfiguration { __safeDI_storage.feature0 }",
+			"",
+			"        private let __safeDI_storage: __safeDI_Storage",
+			"",
+			"        private final class __safeDI_Storage {",
+			"            init(",
+			"                service: (() -> Service)?,",
+			"                feature0: Feature0.SafeDIMockConfiguration",
+			"            ) {",
+			"                self.service = service",
+			"                self.feature0 = feature0",
+			"            }",
+			"",
+			"            let service: (() -> Service)?",
+			"            let feature0: Feature0.SafeDIMockConfiguration",
+			"        }",
 			"    }",
 			"",
 			"    static func mock(",
@@ -516,13 +533,30 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 			            \(nextFeature): \(nextFeatureType) = \(nextFeatureDefault),
 			            _ safeDIBuilder: \(builderType) = nil
 			        ) {
-			            self.\(nextFeature) = \(nextFeature)
-			            self.safeDIBuilder = safeDIBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                \(nextFeature): \(nextFeature),
+			                safeDIBuilder: safeDIBuilder
+			            )
 			        }
 
-			        let \(nextFeature): \(nextFeatureType)
+			        var \(nextFeature): \(nextFeatureType) { __safeDI_storage.\(nextFeature) }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: \(builderType)
+			        var safeDIBuilder: \(builderType) { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                \(nextFeature): \(nextFeatureType),
+			                safeDIBuilder: \(builderType)
+			            ) {
+			                self.\(nextFeature) = \(nextFeature)
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let \(nextFeature): \(nextFeatureType)
+			            let safeDIBuilder: \(builderType)
+			        }
 			    }
 			}
 			"""

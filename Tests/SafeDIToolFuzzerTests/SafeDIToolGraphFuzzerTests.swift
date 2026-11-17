@@ -1684,6 +1684,18 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func smokeSeeds_judgeConfigurationStorage_inGraphsTheToolAccepts() async throws {
+		// The configuration storage oracle judges each configuration a graph generates, so a change that stops it finding
+		// them fails here rather than quietly judging nothing.
+		let judgedCount = try await smokeResults.value.count { result in
+			guard case let .accepted(generatedFiles, _) = result.outcome else { return false }
+			return GraphFuzzerConfigurationStorage.configurationCount(in: generatedFiles) > 0
+		}
+		#expect(judgedCount >= 10, "Judged \(judgedCount) of \(Self.smokeSeeds.count) graphs")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func smokeSeeds_applyRemedies_inGraphsTheToolRejects() async throws {
 		// The remedy oracle judges rejected graphs, so a change that stops it reading the tool's errors, or stops it applying
 		// what they state, fails here rather than quietly judging nothing.
@@ -2476,18 +2488,44 @@ struct SafeDIToolGraphFuzzerTests {
 		            anyT1: ((S2420_Service) -> S2420_AnyT1)? = nil,
 		            t1Builder: ((S2420_Service) -> S2420_T1)? = nil
 		        ) {
-		            self.t6 = t6
-		            self.service = service
-		            self.t2 = t2
-		            self.anyT1 = anyT1
-		            self.t1Builder = t1Builder
+		            __safeDI_storage = __safeDI_Storage(
+		                t6: t6,
+		                service: service,
+		                t2: t2,
+		                anyT1: anyT1,
+		                t1Builder: t1Builder
+		            )
 		        }
 
-		        let t6: (() -> S2420_T6)?
-		        let service: (() -> S2420_Service)?
-		        let t2: S2420_T2.SafeDIMockConfiguration
-		        let anyT1: ((S2420_Service) -> S2420_AnyT1)?
-		        let t1Builder: ((S2420_Service) -> S2420_T1)?
+		        var t6: (() -> S2420_T6)? { __safeDI_storage.t6 }
+		        var service: (() -> S2420_Service)? { __safeDI_storage.service }
+		        var t2: S2420_T2.SafeDIMockConfiguration { __safeDI_storage.t2 }
+		        var anyT1: ((S2420_Service) -> S2420_AnyT1)? { __safeDI_storage.anyT1 }
+		        var t1Builder: ((S2420_Service) -> S2420_T1)? { __safeDI_storage.t1Builder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                t6: (() -> S2420_T6)?,
+		                service: (() -> S2420_Service)?,
+		                t2: S2420_T2.SafeDIMockConfiguration,
+		                anyT1: ((S2420_Service) -> S2420_AnyT1)?,
+		                t1Builder: ((S2420_Service) -> S2420_T1)?
+		            ) {
+		                self.t6 = t6
+		                self.service = service
+		                self.t2 = t2
+		                self.anyT1 = anyT1
+		                self.t1Builder = t1Builder
+		            }
+
+		            let t6: (() -> S2420_T6)?
+		            let service: (() -> S2420_Service)?
+		            let t2: S2420_T2.SafeDIMockConfiguration
+		            let anyT1: ((S2420_Service) -> S2420_AnyT1)?
+		            let t1Builder: ((S2420_Service) -> S2420_T1)?
+		        }
 		    }
 
 		    static func mock(
@@ -3490,11 +3528,12 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_nameNeitherReason_whenAConfigurationInitializersBuilderAssignmentMovesFirst() async throws {
 		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, renamings: [], multiModuleRenamings: [])
-		let assignments = "            self.t8Builder = t8Builder\n            self.safeDIBuilder = safeDIBuilder\n"
+		// The initializer hands its storage each field, in the order of its fields.
+		let assignments = "                t8Builder: t8Builder,\n                safeDIBuilder: safeDIBuilder\n"
 
 		let differences = Self.differences(of: toolRuns.firstOutcome, editingFileNamed: "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift") { code in
 			#expect(code.contains(assignments))
-			return code.replacingOccurrences(of: assignments, with: "            self.safeDIBuilder = safeDIBuilder\n            self.t8Builder = t8Builder\n")
+			return code.replacingOccurrences(of: assignments, with: "                safeDIBuilder: safeDIBuilder,\n                t8Builder: t8Builder\n")
 		}
 
 		#expect(differences.map(\.aspect) == [.mockCode])
@@ -5692,7 +5731,7 @@ struct SafeDIToolGraphFuzzerTests {
 			.instanceOfPromotedWrapperPassedToMockedType: 2,
 			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 350,
 		],
-		drawnMocksMatchingOnlyAfterNormalizationCount: 663,
+		drawnMocksMatchingOnlyAfterNormalizationCount: 669,
 		mirroredPairsTakingSamplesCount: 872,
 		forwardedPropertiesSampleCount: 2_396,
 		overridePairCount: 4_721,

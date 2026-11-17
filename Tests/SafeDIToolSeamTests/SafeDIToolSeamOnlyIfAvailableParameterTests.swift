@@ -278,14 +278,34 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 		            cache: ((Database, Logger?) -> Cache)? = nil,
 		            user: (() -> User)? = nil
 		        ) {
-		            self.database = database
-		            self.cache = cache
-		            self.user = user
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                cache: cache,
+		                user: user
+		            )
 		        }
 
-		        public let database: (() -> Database)?
-		        public let cache: ((Database, Logger?) -> Cache)?
-		        public let user: (() -> User)?
+		        public var database: (() -> Database)? { __safeDI_storage.database }
+		        public var cache: ((Database, Logger?) -> Cache)? { __safeDI_storage.cache }
+		        public var user: (() -> User)? { __safeDI_storage.user }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                cache: ((Database, Logger?) -> Cache)?,
+		                user: (() -> User)?
+		            ) {
+		                self.database = database
+		                self.cache = cache
+		                self.user = user
+		            }
+
+		            let database: (() -> Database)?
+		            let cache: ((Database, Logger?) -> Cache)?
+		            let user: (() -> User)?
+		        }
 		    }
 
 		    public static func mock(

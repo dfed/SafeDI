@@ -951,10 +951,24 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        init(
 		            screen: Screen.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.screen = screen
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen
+		            )
 		        }
 
-		        let screen: Screen.SafeDIMockConfiguration
+		        var screen: Screen.SafeDIMockConfiguration { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.screen = screen
+		            }
+
+		            let screen: Screen.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -2255,14 +2269,34 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		            cache: ((Database) -> Cache)? = nil,
 		            user: (() -> User)? = nil
 		        ) {
-		            self.database = database
-		            self.cache = cache
-		            self.user = user
+		            __safeDI_storage = __safeDI_Storage(
+		                database: database,
+		                cache: cache,
+		                user: user
+		            )
 		        }
 
-		        let database: (() -> Database)?
-		        let cache: ((Database) -> Cache)?
-		        let user: (() -> User)?
+		        var database: (() -> Database)? { __safeDI_storage.database }
+		        var cache: ((Database) -> Cache)? { __safeDI_storage.cache }
+		        var user: (() -> User)? { __safeDI_storage.user }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                database: (() -> Database)?,
+		                cache: ((Database) -> Cache)?,
+		                user: (() -> User)?
+		            ) {
+		                self.database = database
+		                self.cache = cache
+		                self.user = user
+		            }
+
+		            let database: (() -> Database)?
+		            let cache: ((Database) -> Cache)?
+		            let user: (() -> User)?
+		        }
 		    }
 
 		    static func mock(

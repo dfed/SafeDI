@@ -89,10 +89,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            clock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 			        ) {
-			            self.clock = clock
+			            __safeDI_storage = __safeDI_Storage(
+			                clock: clock
+			            )
 			        }
 
-			        public let clock: __safeDI_Other_SystemClock_MockConfiguration
+			        public var clock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.clock }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                clock: __safeDI_Other_SystemClock_MockConfiguration
+			            ) {
+			                self.clock = clock
+			            }
+
+			            let clock: __safeDI_Other_SystemClock_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -118,10 +132,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            systemClock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 			        ) {
-			            self.systemClock = systemClock
+			            __safeDI_storage = __safeDI_Storage(
+			                systemClock: systemClock
+			            )
 			        }
 
-			        public let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			        public var systemClock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			            ) {
+			                self.systemClock = systemClock
+			            }
+
+			            let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -147,14 +175,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        zone: String? = nil,
 			        _ safeDIBuilder: ((String) -> SystemClock)? = nil
 			    ) {
-			        self.zone = zone
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            zone: zone,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// `nil` keeps the default of `SystemClock`’s `zone`.
-			    public let zone: String?
+			    public var zone: String? { __safeDI_storage.zone }
 			    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((String) -> SystemClock)?
+			    public var safeDIBuilder: ((String) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            zone: String?,
+			            safeDIBuilder: ((String) -> SystemClock)?
+			        ) {
+			            self.zone = zone
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let zone: String?
+			        let safeDIBuilder: ((String) -> SystemClock)?
+			    }
 			}
 
 			extension SystemClock {
@@ -211,10 +256,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            clock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 				        ) {
-				            self.clock = clock
+				            __safeDI_storage = __safeDI_Storage(
+				                clock: clock
+				            )
 				        }
 
-				        public let clock: __safeDI_Other_SystemClock_MockConfiguration
+				        public var clock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.clock }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                clock: __safeDI_Other_SystemClock_MockConfiguration
+				            ) {
+				                self.clock = clock
+				            }
+
+				            let clock: __safeDI_Other_SystemClock_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -240,10 +299,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            systemClock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 				        ) {
-				            self.systemClock = systemClock
+				            __safeDI_storage = __safeDI_Storage(
+				                systemClock: systemClock
+				            )
 				        }
 
-				        public let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				        public var systemClock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				            ) {
+				                self.systemClock = systemClock
+				            }
+
+				            let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -277,14 +350,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        zone: String? = nil,
 				        _ safeDIBuilder: ((String) -> SystemClock)? = nil
 				    ) {
-				        self.zone = zone
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            zone: zone,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// `nil` keeps the default of `SystemClock`’s `zone`.
-				    public let zone: String?
+				    public var zone: String? { __safeDI_storage.zone }
 				    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String) -> SystemClock)?
+				    public var safeDIBuilder: ((String) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            zone: String?,
+				            safeDIBuilder: ((String) -> SystemClock)?
+				        ) {
+				            self.zone = zone
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let zone: String?
+				        let safeDIBuilder: ((String) -> SystemClock)?
+				    }
 				}
 
 				extension SystemClock {
@@ -349,10 +439,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            systemClock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 			        ) {
-			            self.systemClock = systemClock
+			            __safeDI_storage = __safeDI_Storage(
+			                systemClock: systemClock
+			            )
 			        }
 
-			        public let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			        public var systemClock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			            ) {
+			                self.systemClock = systemClock
+			            }
+
+			            let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -378,10 +482,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            clock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 			        ) {
-			            self.clock = clock
+			            __safeDI_storage = __safeDI_Storage(
+			                clock: clock
+			            )
 			        }
 
-			        public let clock: __safeDI_Other_SystemClock_MockConfiguration
+			        public var clock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.clock }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                clock: __safeDI_Other_SystemClock_MockConfiguration
+			            ) {
+			                self.clock = clock
+			            }
+
+			            let clock: __safeDI_Other_SystemClock_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -407,14 +525,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        zone: String? = nil,
 			        _ safeDIBuilder: ((String) -> SystemClock)? = nil
 			    ) {
-			        self.zone = zone
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            zone: zone,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// `nil` keeps the default of `SystemClock`’s `zone`.
-			    public let zone: String?
+			    public var zone: String? { __safeDI_storage.zone }
 			    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((String) -> SystemClock)?
+			    public var safeDIBuilder: ((String) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            zone: String?,
+			            safeDIBuilder: ((String) -> SystemClock)?
+			        ) {
+			            self.zone = zone
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let zone: String?
+			        let safeDIBuilder: ((String) -> SystemClock)?
+			    }
 			}
 
 			extension SystemClock {
@@ -471,10 +606,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            systemClock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 				        ) {
-				            self.systemClock = systemClock
+				            __safeDI_storage = __safeDI_Storage(
+				                systemClock: systemClock
+				            )
 				        }
 
-				        public let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				        public var systemClock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				            ) {
+				                self.systemClock = systemClock
+				            }
+
+				            let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -500,10 +649,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            clock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 				        ) {
-				            self.clock = clock
+				            __safeDI_storage = __safeDI_Storage(
+				                clock: clock
+				            )
 				        }
 
-				        public let clock: __safeDI_Other_SystemClock_MockConfiguration
+				        public var clock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.clock }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                clock: __safeDI_Other_SystemClock_MockConfiguration
+				            ) {
+				                self.clock = clock
+				            }
+
+				            let clock: __safeDI_Other_SystemClock_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -537,14 +700,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        zone: String? = nil,
 				        _ safeDIBuilder: ((String) -> SystemClock)? = nil
 				    ) {
-				        self.zone = zone
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            zone: zone,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// `nil` keeps the default of `SystemClock`’s `zone`.
-				    public let zone: String?
+				    public var zone: String? { __safeDI_storage.zone }
 				    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String) -> SystemClock)?
+				    public var safeDIBuilder: ((String) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            zone: String?,
+				            safeDIBuilder: ((String) -> SystemClock)?
+				        ) {
+				            self.zone = zone
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let zone: String?
+				        let safeDIBuilder: ((String) -> SystemClock)?
+				    }
 				}
 
 				extension SystemClock {
@@ -623,12 +803,29 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			            clock: __safeDI_Other_SystemClock_MockConfiguration = .init(),
 			            systemClock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 			        ) {
-			            self.clock = clock
-			            self.systemClock = systemClock
+			            __safeDI_storage = __safeDI_Storage(
+			                clock: clock,
+			                systemClock: systemClock
+			            )
 			        }
 
-			        public let clock: __safeDI_Other_SystemClock_MockConfiguration
-			        public let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			        public var clock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.clock }
+			        public var systemClock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                clock: __safeDI_Other_SystemClock_MockConfiguration,
+			                systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			            ) {
+			                self.clock = clock
+			                self.systemClock = systemClock
+			            }
+
+			            let clock: __safeDI_Other_SystemClock_MockConfiguration
+			            let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -658,14 +855,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        zone: String? = nil,
 			        _ safeDIBuilder: ((String) -> SystemClock)? = nil
 			    ) {
-			        self.zone = zone
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            zone: zone,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// `nil` keeps the default of `SystemClock`’s `zone`.
-			    public let zone: String?
+			    public var zone: String? { __safeDI_storage.zone }
 			    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((String) -> SystemClock)?
+			    public var safeDIBuilder: ((String) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            zone: String?,
+			            safeDIBuilder: ((String) -> SystemClock)?
+			        ) {
+			            self.zone = zone
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let zone: String?
+			        let safeDIBuilder: ((String) -> SystemClock)?
+			    }
 			}
 
 			extension SystemClock {
@@ -723,12 +937,29 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				            clock: __safeDI_Other_SystemClock_MockConfiguration = .init(),
 				            systemClock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 				        ) {
-				            self.clock = clock
-				            self.systemClock = systemClock
+				            __safeDI_storage = __safeDI_Storage(
+				                clock: clock,
+				                systemClock: systemClock
+				            )
 				        }
 
-				        public let clock: __safeDI_Other_SystemClock_MockConfiguration
-				        public let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				        public var clock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.clock }
+				        public var systemClock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                clock: __safeDI_Other_SystemClock_MockConfiguration,
+				                systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				            ) {
+				                self.clock = clock
+				                self.systemClock = systemClock
+				            }
+
+				            let clock: __safeDI_Other_SystemClock_MockConfiguration
+				            let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -766,14 +997,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        zone: String? = nil,
 				        _ safeDIBuilder: ((String) -> SystemClock)? = nil
 				    ) {
-				        self.zone = zone
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            zone: zone,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// `nil` keeps the default of `SystemClock`’s `zone`.
-				    public let zone: String?
+				    public var zone: String? { __safeDI_storage.zone }
 				    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String) -> SystemClock)?
+				    public var safeDIBuilder: ((String) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            zone: String?,
+				            safeDIBuilder: ((String) -> SystemClock)?
+				        ) {
+				            self.zone = zone
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let zone: String?
+				        let safeDIBuilder: ((String) -> SystemClock)?
+				    }
 				}
 
 				extension SystemClock {
@@ -841,10 +1089,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            clock: __safeDI_Feature_SystemClock_MockConfiguration = .init()
 			        ) {
-			            self.clock = clock
+			            __safeDI_storage = __safeDI_Storage(
+			                clock: clock
+			            )
 			        }
 
-			        public let clock: __safeDI_Feature_SystemClock_MockConfiguration
+			        public var clock: __safeDI_Feature_SystemClock_MockConfiguration { __safeDI_storage.clock }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                clock: __safeDI_Feature_SystemClock_MockConfiguration
+			            ) {
+			                self.clock = clock
+			            }
+
+			            let clock: __safeDI_Feature_SystemClock_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -870,10 +1132,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            systemClock: __safeDI_Feature_SystemClock_MockConfiguration = .init()
 			        ) {
-			            self.systemClock = systemClock
+			            __safeDI_storage = __safeDI_Storage(
+			                systemClock: systemClock
+			            )
 			        }
 
-			        public let systemClock: __safeDI_Feature_SystemClock_MockConfiguration
+			        public var systemClock: __safeDI_Feature_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                systemClock: __safeDI_Feature_SystemClock_MockConfiguration
+			            ) {
+			                self.systemClock = systemClock
+			            }
+
+			            let systemClock: __safeDI_Feature_SystemClock_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -909,14 +1185,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        zone: String? = nil,
 			        _ safeDIBuilder: ((String) -> SystemClock)? = nil
 			    ) {
-			        self.zone = zone
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            zone: zone,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// `nil` keeps the default of `SystemClock`’s `zone`.
-			    public let zone: String?
+			    public var zone: String? { __safeDI_storage.zone }
 			    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((String) -> SystemClock)?
+			    public var safeDIBuilder: ((String) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            zone: String?,
+			            safeDIBuilder: ((String) -> SystemClock)?
+			        ) {
+			            self.zone = zone
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let zone: String?
+			        let safeDIBuilder: ((String) -> SystemClock)?
+			    }
 			}
 
 			extension SystemClock {
@@ -946,10 +1239,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            clock: __safeDI_Feature_SystemClock_MockConfiguration = .init()
 				        ) {
-				            self.clock = clock
+				            __safeDI_storage = __safeDI_Storage(
+				                clock: clock
+				            )
 				        }
 
-				        public let clock: __safeDI_Feature_SystemClock_MockConfiguration
+				        public var clock: __safeDI_Feature_SystemClock_MockConfiguration { __safeDI_storage.clock }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                clock: __safeDI_Feature_SystemClock_MockConfiguration
+				            ) {
+				                self.clock = clock
+				            }
+
+				            let clock: __safeDI_Feature_SystemClock_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -975,10 +1282,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            systemClock: __safeDI_Feature_SystemClock_MockConfiguration = .init()
 				        ) {
-				            self.systemClock = systemClock
+				            __safeDI_storage = __safeDI_Storage(
+				                systemClock: systemClock
+				            )
 				        }
 
-				        public let systemClock: __safeDI_Feature_SystemClock_MockConfiguration
+				        public var systemClock: __safeDI_Feature_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                systemClock: __safeDI_Feature_SystemClock_MockConfiguration
+				            ) {
+				                self.systemClock = systemClock
+				            }
+
+				            let systemClock: __safeDI_Feature_SystemClock_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -1009,14 +1330,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        zone: String? = nil,
 				        _ safeDIBuilder: ((String) -> SystemClock)? = nil
 				    ) {
-				        self.zone = zone
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            zone: zone,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// `nil` keeps the default of `SystemClock`’s `zone`.
-				    public let zone: String?
+				    public var zone: String? { __safeDI_storage.zone }
 				    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String) -> SystemClock)?
+				    public var safeDIBuilder: ((String) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            zone: String?,
+				            safeDIBuilder: ((String) -> SystemClock)?
+				        ) {
+				            self.zone = zone
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let zone: String?
+				        let safeDIBuilder: ((String) -> SystemClock)?
+				    }
 				}
 
 				extension SystemClock {
@@ -1115,10 +1453,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            clock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 			        ) {
-			            self.clock = clock
+			            __safeDI_storage = __safeDI_Storage(
+			                clock: clock
+			            )
 			        }
 
-			        public let clock: __safeDI_Other_SystemClock_MockConfiguration
+			        public var clock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.clock }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                clock: __safeDI_Other_SystemClock_MockConfiguration
+			            ) {
+			                self.clock = clock
+			            }
+
+			            let clock: __safeDI_Other_SystemClock_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -1144,10 +1496,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            systemClock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 			        ) {
-			            self.systemClock = systemClock
+			            __safeDI_storage = __safeDI_Storage(
+			                systemClock: systemClock
+			            )
 			        }
 
-			        public let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			        public var systemClock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			            ) {
+			                self.systemClock = systemClock
+			            }
+
+			            let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -1173,14 +1539,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        zone: String? = __safeDI_Other_SystemClock_mockDefault_zone(),
 			        _ safeDIBuilder: ((String?) -> SystemClock)? = nil
 			    ) {
-			        self.zone = zone
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            zone: zone,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// The default of `SystemClock`’s `zone` unless set.
-			    public let zone: String?
+			    public var zone: String? { __safeDI_storage.zone }
 			    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((String?) -> SystemClock)?
+			    public var safeDIBuilder: ((String?) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            zone: String?,
+			            safeDIBuilder: ((String?) -> SystemClock)?
+			        ) {
+			            self.zone = zone
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let zone: String?
+			        let safeDIBuilder: ((String?) -> SystemClock)?
+			    }
 			}
 
 			extension SystemClock {
@@ -1237,10 +1620,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            clock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 				        ) {
-				            self.clock = clock
+				            __safeDI_storage = __safeDI_Storage(
+				                clock: clock
+				            )
 				        }
 
-				        public let clock: __safeDI_Other_SystemClock_MockConfiguration
+				        public var clock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.clock }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                clock: __safeDI_Other_SystemClock_MockConfiguration
+				            ) {
+				                self.clock = clock
+				            }
+
+				            let clock: __safeDI_Other_SystemClock_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -1266,10 +1663,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            systemClock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 				        ) {
-				            self.systemClock = systemClock
+				            __safeDI_storage = __safeDI_Storage(
+				                systemClock: systemClock
+				            )
 				        }
 
-				        public let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				        public var systemClock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				            ) {
+				                self.systemClock = systemClock
+				            }
+
+				            let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -1303,14 +1714,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        zone: String? = __safeDI_Other_SystemClock_mockDefault_zone(),
 				        _ safeDIBuilder: ((String?) -> SystemClock)? = nil
 				    ) {
-				        self.zone = zone
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            zone: zone,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// The default of `SystemClock`’s `zone` unless set.
-				    public let zone: String?
+				    public var zone: String? { __safeDI_storage.zone }
 				    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String?) -> SystemClock)?
+				    public var safeDIBuilder: ((String?) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            zone: String?,
+				            safeDIBuilder: ((String?) -> SystemClock)?
+				        ) {
+				            self.zone = zone
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let zone: String?
+				        let safeDIBuilder: ((String?) -> SystemClock)?
+				    }
 				}
 
 				extension SystemClock {
@@ -1387,10 +1815,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            service: __safeDI_Feature_ConcreteService_MockConfiguration = .init()
 			        ) {
-			            self.service = service
+			            __safeDI_storage = __safeDI_Storage(
+			                service: service
+			            )
 			        }
 
-			        public let service: __safeDI_Feature_ConcreteService_MockConfiguration
+			        public var service: __safeDI_Feature_ConcreteService_MockConfiguration { __safeDI_storage.service }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                service: __safeDI_Feature_ConcreteService_MockConfiguration
+			            ) {
+			                self.service = service
+			            }
+
+			            let service: __safeDI_Feature_ConcreteService_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -1416,14 +1858,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        name: String? = nil,
 			        _ safeDIBuilder: ((String) -> ConcreteService)? = nil
 			    ) {
-			        self.name = name
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            name: name,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// `nil` keeps the default of `ConcreteService`’s `name`.
-			    public let name: String?
+			    public var name: String? { __safeDI_storage.name }
 			    /// Overrides how `ConcreteService` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((String) -> ConcreteService)?
+			    public var safeDIBuilder: ((String) -> ConcreteService)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            name: String?,
+			            safeDIBuilder: ((String) -> ConcreteService)?
+			        ) {
+			            self.name = name
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let name: String?
+			        let safeDIBuilder: ((String) -> ConcreteService)?
+			    }
 			}
 
 			extension ConcreteService {
@@ -1450,10 +1909,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            service: __safeDI_Other_ConcreteService_MockConfiguration = .init()
 			        ) {
-			            self.service = service
+			            __safeDI_storage = __safeDI_Storage(
+			                service: service
+			            )
 			        }
 
-			        public let service: __safeDI_Other_ConcreteService_MockConfiguration
+			        public var service: __safeDI_Other_ConcreteService_MockConfiguration { __safeDI_storage.service }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                service: __safeDI_Other_ConcreteService_MockConfiguration
+			            ) {
+			                self.service = service
+			            }
+
+			            let service: __safeDI_Other_ConcreteService_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -1479,10 +1952,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            service: __safeDI_Other_ConcreteService_MockConfiguration = .init()
 			        ) {
-			            self.service = service
+			            __safeDI_storage = __safeDI_Storage(
+			                service: service
+			            )
 			        }
 
-			        public let service: __safeDI_Other_ConcreteService_MockConfiguration
+			        public var service: __safeDI_Other_ConcreteService_MockConfiguration { __safeDI_storage.service }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                service: __safeDI_Other_ConcreteService_MockConfiguration
+			            ) {
+			                self.service = service
+			            }
+
+			            let service: __safeDI_Other_ConcreteService_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -1508,14 +1995,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        name: String? = nil,
 			        _ safeDIBuilder: ((String) -> ConcreteService)? = nil
 			    ) {
-			        self.name = name
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            name: name,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// `nil` keeps the default of `ConcreteService`’s `name`.
-			    public let name: String?
+			    public var name: String? { __safeDI_storage.name }
 			    /// Overrides how `ConcreteService` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((String) -> ConcreteService)?
+			    public var safeDIBuilder: ((String) -> ConcreteService)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            name: String?,
+			            safeDIBuilder: ((String) -> ConcreteService)?
+			        ) {
+			            self.name = name
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let name: String?
+			        let safeDIBuilder: ((String) -> ConcreteService)?
+			    }
 			}
 
 			extension ConcreteService {
@@ -1545,10 +2049,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            service: __safeDI_Feature_ConcreteService_MockConfiguration = .init()
 				        ) {
-				            self.service = service
+				            __safeDI_storage = __safeDI_Storage(
+				                service: service
+				            )
 				        }
 
-				        public let service: __safeDI_Feature_ConcreteService_MockConfiguration
+				        public var service: __safeDI_Feature_ConcreteService_MockConfiguration { __safeDI_storage.service }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                service: __safeDI_Feature_ConcreteService_MockConfiguration
+				            ) {
+				                self.service = service
+				            }
+
+				            let service: __safeDI_Feature_ConcreteService_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -1579,14 +2097,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        name: String? = nil,
 				        _ safeDIBuilder: ((String) -> ConcreteService)? = nil
 				    ) {
-				        self.name = name
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            name: name,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// `nil` keeps the default of `ConcreteService`’s `name`.
-				    public let name: String?
+				    public var name: String? { __safeDI_storage.name }
 				    /// Overrides how `ConcreteService` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String) -> ConcreteService)?
+				    public var safeDIBuilder: ((String) -> ConcreteService)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            name: String?,
+				            safeDIBuilder: ((String) -> ConcreteService)?
+				        ) {
+				            self.name = name
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let name: String?
+				        let safeDIBuilder: ((String) -> ConcreteService)?
+				    }
 				}
 
 				extension ConcreteService {
@@ -1615,10 +2150,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            service: __safeDI_Other_ConcreteService_MockConfiguration = .init()
 				        ) {
-				            self.service = service
+				            __safeDI_storage = __safeDI_Storage(
+				                service: service
+				            )
 				        }
 
-				        public let service: __safeDI_Other_ConcreteService_MockConfiguration
+				        public var service: __safeDI_Other_ConcreteService_MockConfiguration { __safeDI_storage.service }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                service: __safeDI_Other_ConcreteService_MockConfiguration
+				            ) {
+				                self.service = service
+				            }
+
+				            let service: __safeDI_Other_ConcreteService_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -1644,10 +2193,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            service: __safeDI_Other_ConcreteService_MockConfiguration = .init()
 				        ) {
-				            self.service = service
+				            __safeDI_storage = __safeDI_Storage(
+				                service: service
+				            )
 				        }
 
-				        public let service: __safeDI_Other_ConcreteService_MockConfiguration
+				        public var service: __safeDI_Other_ConcreteService_MockConfiguration { __safeDI_storage.service }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                service: __safeDI_Other_ConcreteService_MockConfiguration
+				            ) {
+				                self.service = service
+				            }
+
+				            let service: __safeDI_Other_ConcreteService_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -1681,14 +2244,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        name: String? = nil,
 				        _ safeDIBuilder: ((String) -> ConcreteService)? = nil
 				    ) {
-				        self.name = name
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            name: name,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// `nil` keeps the default of `ConcreteService`’s `name`.
-				    public let name: String?
+				    public var name: String? { __safeDI_storage.name }
 				    /// Overrides how `ConcreteService` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String) -> ConcreteService)?
+				    public var safeDIBuilder: ((String) -> ConcreteService)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            name: String?,
+				            safeDIBuilder: ((String) -> ConcreteService)?
+				        ) {
+				            self.name = name
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let name: String?
+				        let safeDIBuilder: ((String) -> ConcreteService)?
+				    }
 				}
 
 				extension ConcreteService {
@@ -1745,10 +2325,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            service: __safeDI_Other_ConcreteService_MockConfiguration = .init()
 			        ) {
-			            self.service = service
+			            __safeDI_storage = __safeDI_Storage(
+			                service: service
+			            )
 			        }
 
-			        public let service: __safeDI_Other_ConcreteService_MockConfiguration
+			        public var service: __safeDI_Other_ConcreteService_MockConfiguration { __safeDI_storage.service }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                service: __safeDI_Other_ConcreteService_MockConfiguration
+			            ) {
+			                self.service = service
+			            }
+
+			            let service: __safeDI_Other_ConcreteService_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -1774,10 +2368,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            service: __safeDI_Other_ConcreteService_MockConfiguration = .init()
 			        ) {
-			            self.service = service
+			            __safeDI_storage = __safeDI_Storage(
+			                service: service
+			            )
 			        }
 
-			        public let service: __safeDI_Other_ConcreteService_MockConfiguration
+			        public var service: __safeDI_Other_ConcreteService_MockConfiguration { __safeDI_storage.service }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                service: __safeDI_Other_ConcreteService_MockConfiguration
+			            ) {
+			                self.service = service
+			            }
+
+			            let service: __safeDI_Other_ConcreteService_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -1803,14 +2411,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        name: String? = nil,
 			        _ safeDIBuilder: ((String) -> ConcreteService)? = nil
 			    ) {
-			        self.name = name
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            name: name,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// `nil` keeps the default of `ConcreteService`’s `name`.
-			    public let name: String?
+			    public var name: String? { __safeDI_storage.name }
 			    /// Overrides how `ConcreteService` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((String) -> ConcreteService)?
+			    public var safeDIBuilder: ((String) -> ConcreteService)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            name: String?,
+			            safeDIBuilder: ((String) -> ConcreteService)?
+			        ) {
+			            self.name = name
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let name: String?
+			        let safeDIBuilder: ((String) -> ConcreteService)?
+			    }
 			}
 
 			extension ConcreteService {
@@ -1843,10 +2468,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            service: __safeDI_Other_ConcreteService_MockConfiguration = .init()
 				        ) {
-				            self.service = service
+				            __safeDI_storage = __safeDI_Storage(
+				                service: service
+				            )
 				        }
 
-				        public let service: __safeDI_Other_ConcreteService_MockConfiguration
+				        public var service: __safeDI_Other_ConcreteService_MockConfiguration { __safeDI_storage.service }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                service: __safeDI_Other_ConcreteService_MockConfiguration
+				            ) {
+				                self.service = service
+				            }
+
+				            let service: __safeDI_Other_ConcreteService_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -1872,10 +2511,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            service: __safeDI_Other_ConcreteService_MockConfiguration = .init()
 				        ) {
-				            self.service = service
+				            __safeDI_storage = __safeDI_Storage(
+				                service: service
+				            )
 				        }
 
-				        public let service: __safeDI_Other_ConcreteService_MockConfiguration
+				        public var service: __safeDI_Other_ConcreteService_MockConfiguration { __safeDI_storage.service }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                service: __safeDI_Other_ConcreteService_MockConfiguration
+				            ) {
+				                self.service = service
+				            }
+
+				            let service: __safeDI_Other_ConcreteService_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -1909,14 +2562,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        name: String? = nil,
 				        _ safeDIBuilder: ((String) -> ConcreteService)? = nil
 				    ) {
-				        self.name = name
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            name: name,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// `nil` keeps the default of `ConcreteService`’s `name`.
-				    public let name: String?
+				    public var name: String? { __safeDI_storage.name }
 				    /// Overrides how `ConcreteService` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String) -> ConcreteService)?
+				    public var safeDIBuilder: ((String) -> ConcreteService)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            name: String?,
+				            safeDIBuilder: ((String) -> ConcreteService)?
+				        ) {
+				            self.name = name
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let name: String?
+				        let safeDIBuilder: ((String) -> ConcreteService)?
+				    }
 				}
 
 				extension ConcreteService {
@@ -2004,10 +2674,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            concreteService: __safeDI_Feature_ConcreteService_MockConfiguration = .init()
 			        ) {
-			            self.concreteService = concreteService
+			            __safeDI_storage = __safeDI_Storage(
+			                concreteService: concreteService
+			            )
 			        }
 
-			        public let concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+			        public var concreteService: __safeDI_Feature_ConcreteService_MockConfiguration { __safeDI_storage.concreteService }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+			            ) {
+			                self.concreteService = concreteService
+			            }
+
+			            let concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -2040,11 +2724,25 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public init(
 			        _ safeDIBuilder: ((ServiceProtocol) -> Ticker)? = nil
 			    ) {
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// Overrides how `Ticker` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+			    public var safeDIBuilder: ((ServiceProtocol) -> Ticker)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+			    }
 			}
 
 			extension Ticker {
@@ -2060,16 +2758,36 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        name: String? = nil,
 			        _ safeDIBuilder: ((String, Instantiator<Ticker>) -> ConcreteService)? = nil
 			    ) {
-			        self.tickerBuilder = tickerBuilder
-			        self.name = name
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            tickerBuilder: tickerBuilder,
+			            name: name,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration
+			    public var tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration { __safeDI_storage.tickerBuilder }
 			    /// `nil` keeps the default of `ConcreteService`’s `name`.
-			    public let name: String?
+			    public var name: String? { __safeDI_storage.name }
 			    /// Overrides how `ConcreteService` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((String, Instantiator<Ticker>) -> ConcreteService)?
+			    public var safeDIBuilder: ((String, Instantiator<Ticker>) -> ConcreteService)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration,
+			            name: String?,
+			            safeDIBuilder: ((String, Instantiator<Ticker>) -> ConcreteService)?
+			        ) {
+			            self.tickerBuilder = tickerBuilder
+			            self.name = name
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration
+			        let name: String?
+			        let safeDIBuilder: ((String, Instantiator<Ticker>) -> ConcreteService)?
+			    }
 			}
 
 			extension ConcreteService {
@@ -2100,10 +2818,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            concreteService: __safeDI_Feature_ConcreteService_MockConfiguration = .init()
 				        ) {
-				            self.concreteService = concreteService
+				            __safeDI_storage = __safeDI_Storage(
+				                concreteService: concreteService
+				            )
 				        }
 
-				        public let concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+				        public var concreteService: __safeDI_Feature_ConcreteService_MockConfiguration { __safeDI_storage.concreteService }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+				            ) {
+				                self.concreteService = concreteService
+				            }
+
+				            let concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -2141,11 +2873,25 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    public init(
 				        _ safeDIBuilder: ((ServiceProtocol) -> Ticker)? = nil
 				    ) {
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// Overrides how `Ticker` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+				    public var safeDIBuilder: ((ServiceProtocol) -> Ticker)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+				        ) {
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+				    }
 				}
 
 				extension Ticker {
@@ -2161,16 +2907,36 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        name: String? = nil,
 				        _ safeDIBuilder: ((String, Instantiator<Ticker>) -> ConcreteService)? = nil
 				    ) {
-				        self.tickerBuilder = tickerBuilder
-				        self.name = name
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            tickerBuilder: tickerBuilder,
+				            name: name,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
-				    public let tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration
+				    public var tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration { __safeDI_storage.tickerBuilder }
 				    /// `nil` keeps the default of `ConcreteService`’s `name`.
-				    public let name: String?
+				    public var name: String? { __safeDI_storage.name }
 				    /// Overrides how `ConcreteService` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String, Instantiator<Ticker>) -> ConcreteService)?
+				    public var safeDIBuilder: ((String, Instantiator<Ticker>) -> ConcreteService)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration,
+				            name: String?,
+				            safeDIBuilder: ((String, Instantiator<Ticker>) -> ConcreteService)?
+				        ) {
+				            self.tickerBuilder = tickerBuilder
+				            self.name = name
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration
+				        let name: String?
+				        let safeDIBuilder: ((String, Instantiator<Ticker>) -> ConcreteService)?
+				    }
 				}
 
 				extension ConcreteService {
@@ -2257,10 +3023,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            concreteService: __safeDI_Feature_ConcreteService_MockConfiguration = .init()
 			        ) {
-			            self.concreteService = concreteService
+			            __safeDI_storage = __safeDI_Storage(
+			                concreteService: concreteService
+			            )
 			        }
 
-			        public let concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+			        public var concreteService: __safeDI_Feature_ConcreteService_MockConfiguration { __safeDI_storage.concreteService }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+			            ) {
+			                self.concreteService = concreteService
+			            }
+
+			            let concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -2293,11 +3073,25 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public init(
 			        _ safeDIBuilder: ((ServiceProtocol) -> Ticker)? = nil
 			    ) {
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// Overrides how `Ticker` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+			    public var safeDIBuilder: ((ServiceProtocol) -> Ticker)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+			    }
 			}
 
 			extension Ticker {
@@ -2314,19 +3108,42 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        tone: Int? = __safeDI_Feature_ConcreteService_mockDefault_tone(),
 			        _ safeDIBuilder: ((String, Int?, Instantiator<Ticker>) -> ConcreteService)? = nil
 			    ) {
-			        self.tickerBuilder = tickerBuilder
-			        self.name = name
-			        self.tone = tone
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            tickerBuilder: tickerBuilder,
+			            name: name,
+			            tone: tone,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration
+			    public var tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration { __safeDI_storage.tickerBuilder }
 			    /// `nil` keeps the default of `ConcreteService`’s `name`.
-			    public let name: String?
+			    public var name: String? { __safeDI_storage.name }
 			    /// The default of `ConcreteService`’s `tone` unless set.
-			    public let tone: Int?
+			    public var tone: Int? { __safeDI_storage.tone }
 			    /// Overrides how `ConcreteService` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((String, Int?, Instantiator<Ticker>) -> ConcreteService)?
+			    public var safeDIBuilder: ((String, Int?, Instantiator<Ticker>) -> ConcreteService)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration,
+			            name: String?,
+			            tone: Int?,
+			            safeDIBuilder: ((String, Int?, Instantiator<Ticker>) -> ConcreteService)?
+			        ) {
+			            self.tickerBuilder = tickerBuilder
+			            self.name = name
+			            self.tone = tone
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration
+			        let name: String?
+			        let tone: Int?
+			        let safeDIBuilder: ((String, Int?, Instantiator<Ticker>) -> ConcreteService)?
+			    }
 			}
 
 			extension ConcreteService {
@@ -2359,10 +3176,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            concreteService: __safeDI_Feature_ConcreteService_MockConfiguration = .init()
 				        ) {
-				            self.concreteService = concreteService
+				            __safeDI_storage = __safeDI_Storage(
+				                concreteService: concreteService
+				            )
 				        }
 
-				        public let concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+				        public var concreteService: __safeDI_Feature_ConcreteService_MockConfiguration { __safeDI_storage.concreteService }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+				            ) {
+				                self.concreteService = concreteService
+				            }
+
+				            let concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -2400,11 +3231,25 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    public init(
 				        _ safeDIBuilder: ((ServiceProtocol) -> Ticker)? = nil
 				    ) {
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// Overrides how `Ticker` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+				    public var safeDIBuilder: ((ServiceProtocol) -> Ticker)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+				        ) {
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+				    }
 				}
 
 				extension Ticker {
@@ -2421,19 +3266,42 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        tone: Int? = __safeDI_Feature_ConcreteService_mockDefault_tone(),
 				        _ safeDIBuilder: ((String, Int?, Instantiator<Ticker>) -> ConcreteService)? = nil
 				    ) {
-				        self.tickerBuilder = tickerBuilder
-				        self.name = name
-				        self.tone = tone
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            tickerBuilder: tickerBuilder,
+				            name: name,
+				            tone: tone,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
-				    public let tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration
+				    public var tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration { __safeDI_storage.tickerBuilder }
 				    /// `nil` keeps the default of `ConcreteService`’s `name`.
-				    public let name: String?
+				    public var name: String? { __safeDI_storage.name }
 				    /// The default of `ConcreteService`’s `tone` unless set.
-				    public let tone: Int?
+				    public var tone: Int? { __safeDI_storage.tone }
 				    /// Overrides how `ConcreteService` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String, Int?, Instantiator<Ticker>) -> ConcreteService)?
+				    public var safeDIBuilder: ((String, Int?, Instantiator<Ticker>) -> ConcreteService)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration,
+				            name: String?,
+				            tone: Int?,
+				            safeDIBuilder: ((String, Int?, Instantiator<Ticker>) -> ConcreteService)?
+				        ) {
+				            self.tickerBuilder = tickerBuilder
+				            self.name = name
+				            self.tone = tone
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration
+				        let name: String?
+				        let tone: Int?
+				        let safeDIBuilder: ((String, Int?, Instantiator<Ticker>) -> ConcreteService)?
+				    }
 				}
 
 				extension ConcreteService {
@@ -2522,10 +3390,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            concreteService: __safeDI_Feature_ConcreteService_MockConfiguration = .init()
 			        ) {
-			            self.concreteService = concreteService
+			            __safeDI_storage = __safeDI_Storage(
+			                concreteService: concreteService
+			            )
 			        }
 
-			        public let concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+			        public var concreteService: __safeDI_Feature_ConcreteService_MockConfiguration { __safeDI_storage.concreteService }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+			            ) {
+			                self.concreteService = concreteService
+			            }
+
+			            let concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -2558,11 +3440,25 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public init(
 			        _ safeDIBuilder: ((ServiceProtocol) -> Ticker)? = nil
 			    ) {
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// Overrides how `Ticker` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+			    public var safeDIBuilder: ((ServiceProtocol) -> Ticker)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+			    }
 			}
 
 			extension Ticker {
@@ -2579,19 +3475,42 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        tone: Optional<String>? = nil,
 			        _ safeDIBuilder: ((String, Optional<String>, Instantiator<Ticker>) -> ConcreteService)? = nil
 			    ) {
-			        self.tickerBuilder = tickerBuilder
-			        self.name = name
-			        self.tone = tone
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            tickerBuilder: tickerBuilder,
+			            name: name,
+			            tone: tone,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration
+			    public var tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration { __safeDI_storage.tickerBuilder }
 			    /// `nil` keeps the default of `ConcreteService`’s `name`.
-			    public let name: String?
+			    public var name: String? { __safeDI_storage.name }
 			    /// `nil` keeps the default of `ConcreteService`’s `tone`.
-			    public let tone: Optional<String>?
+			    public var tone: Optional<String>? { __safeDI_storage.tone }
 			    /// Overrides how `ConcreteService` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((String, Optional<String>, Instantiator<Ticker>) -> ConcreteService)?
+			    public var safeDIBuilder: ((String, Optional<String>, Instantiator<Ticker>) -> ConcreteService)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration,
+			            name: String?,
+			            tone: Optional<String>?,
+			            safeDIBuilder: ((String, Optional<String>, Instantiator<Ticker>) -> ConcreteService)?
+			        ) {
+			            self.tickerBuilder = tickerBuilder
+			            self.name = name
+			            self.tone = tone
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration
+			        let name: String?
+			        let tone: Optional<String>?
+			        let safeDIBuilder: ((String, Optional<String>, Instantiator<Ticker>) -> ConcreteService)?
+			    }
 			}
 
 			extension ConcreteService {
@@ -2623,10 +3542,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            concreteService: __safeDI_Feature_ConcreteService_MockConfiguration = .init()
 				        ) {
-				            self.concreteService = concreteService
+				            __safeDI_storage = __safeDI_Storage(
+				                concreteService: concreteService
+				            )
 				        }
 
-				        public let concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+				        public var concreteService: __safeDI_Feature_ConcreteService_MockConfiguration { __safeDI_storage.concreteService }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+				            ) {
+				                self.concreteService = concreteService
+				            }
+
+				            let concreteService: __safeDI_Feature_ConcreteService_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -2664,11 +3597,25 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    public init(
 				        _ safeDIBuilder: ((ServiceProtocol) -> Ticker)? = nil
 				    ) {
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// Overrides how `Ticker` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+				    public var safeDIBuilder: ((ServiceProtocol) -> Ticker)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+				        ) {
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let safeDIBuilder: ((ServiceProtocol) -> Ticker)?
+				    }
 				}
 
 				extension Ticker {
@@ -2685,19 +3632,42 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        tone: Optional<String>? = nil,
 				        _ safeDIBuilder: ((String, Optional<String>, Instantiator<Ticker>) -> ConcreteService)? = nil
 				    ) {
-				        self.tickerBuilder = tickerBuilder
-				        self.name = name
-				        self.tone = tone
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            tickerBuilder: tickerBuilder,
+				            name: name,
+				            tone: tone,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
-				    public let tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration
+				    public var tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration { __safeDI_storage.tickerBuilder }
 				    /// `nil` keeps the default of `ConcreteService`’s `name`.
-				    public let name: String?
+				    public var name: String? { __safeDI_storage.name }
 				    /// `nil` keeps the default of `ConcreteService`’s `tone`.
-				    public let tone: Optional<String>?
+				    public var tone: Optional<String>? { __safeDI_storage.tone }
 				    /// Overrides how `ConcreteService` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String, Optional<String>, Instantiator<Ticker>) -> ConcreteService)?
+				    public var safeDIBuilder: ((String, Optional<String>, Instantiator<Ticker>) -> ConcreteService)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration,
+				            name: String?,
+				            tone: Optional<String>?,
+				            safeDIBuilder: ((String, Optional<String>, Instantiator<Ticker>) -> ConcreteService)?
+				        ) {
+				            self.tickerBuilder = tickerBuilder
+				            self.name = name
+				            self.tone = tone
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let tickerBuilder: __safeDI_Feature_Ticker_MockConfiguration
+				        let name: String?
+				        let tone: Optional<String>?
+				        let safeDIBuilder: ((String, Optional<String>, Instantiator<Ticker>) -> ConcreteService)?
+				    }
 				}
 
 				extension ConcreteService {
@@ -2804,10 +3774,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            clock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 			        ) {
-			            self.clock = clock
+			            __safeDI_storage = __safeDI_Storage(
+			                clock: clock
+			            )
 			        }
 
-			        public let clock: __safeDI_Other_SystemClock_MockConfiguration
+			        public var clock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.clock }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                clock: __safeDI_Other_SystemClock_MockConfiguration
+			            ) {
+			                self.clock = clock
+			            }
+
+			            let clock: __safeDI_Other_SystemClock_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -2833,10 +3817,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            systemClock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 			        ) {
-			            self.systemClock = systemClock
+			            __safeDI_storage = __safeDI_Storage(
+			                systemClock: systemClock
+			            )
 			        }
 
-			        public let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			        public var systemClock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			            ) {
+			                self.systemClock = systemClock
+			            }
+
+			            let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -2862,14 +3860,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        zone: String? = nil,
 			        _ safeDIBuilder: ((String) -> SystemClock)? = nil
 			    ) {
-			        self.zone = zone
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            zone: zone,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// `nil` keeps the default of `SystemClock`’s `zone`.
-			    public let zone: String?
+			    public var zone: String? { __safeDI_storage.zone }
 			    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((String) -> SystemClock)?
+			    public var safeDIBuilder: ((String) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            zone: String?,
+			            safeDIBuilder: ((String) -> SystemClock)?
+			        ) {
+			            self.zone = zone
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let zone: String?
+			        let safeDIBuilder: ((String) -> SystemClock)?
+			    }
 			}
 
 			extension SystemClock {
@@ -2926,10 +3941,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            clock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 				        ) {
-				            self.clock = clock
+				            __safeDI_storage = __safeDI_Storage(
+				                clock: clock
+				            )
 				        }
 
-				        public let clock: __safeDI_Other_SystemClock_MockConfiguration
+				        public var clock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.clock }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                clock: __safeDI_Other_SystemClock_MockConfiguration
+				            ) {
+				                self.clock = clock
+				            }
+
+				            let clock: __safeDI_Other_SystemClock_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -2955,10 +3984,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            systemClock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 				        ) {
-				            self.systemClock = systemClock
+				            __safeDI_storage = __safeDI_Storage(
+				                systemClock: systemClock
+				            )
 				        }
 
-				        public let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				        public var systemClock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				            ) {
+				                self.systemClock = systemClock
+				            }
+
+				            let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -2992,14 +4035,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        zone: String? = nil,
 				        _ safeDIBuilder: ((String) -> SystemClock)? = nil
 				    ) {
-				        self.zone = zone
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            zone: zone,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// `nil` keeps the default of `SystemClock`’s `zone`.
-				    public let zone: String?
+				    public var zone: String? { __safeDI_storage.zone }
 				    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String) -> SystemClock)?
+				    public var safeDIBuilder: ((String) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            zone: String?,
+				            safeDIBuilder: ((String) -> SystemClock)?
+				        ) {
+				            self.zone = zone
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let zone: String?
+				        let safeDIBuilder: ((String) -> SystemClock)?
+				    }
 				}
 
 				extension SystemClock {
@@ -3104,10 +4164,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            clock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 			        ) {
-			            self.clock = clock
+			            __safeDI_storage = __safeDI_Storage(
+			                clock: clock
+			            )
 			        }
 
-			        public let clock: __safeDI_Other_SystemClock_MockConfiguration
+			        public var clock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.clock }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                clock: __safeDI_Other_SystemClock_MockConfiguration
+			            ) {
+			                self.clock = clock
+			            }
+
+			            let clock: __safeDI_Other_SystemClock_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -3133,10 +4207,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            systemClock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 			        ) {
-			            self.systemClock = systemClock
+			            __safeDI_storage = __safeDI_Storage(
+			                systemClock: systemClock
+			            )
 			        }
 
-			        public let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			        public var systemClock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			            ) {
+			                self.systemClock = systemClock
+			            }
+
+			            let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -3162,14 +4250,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        zone: String? = nil,
 			        _ safeDIBuilder: ((String) -> SystemClock)? = nil
 			    ) {
-			        self.zone = zone
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            zone: zone,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// `nil` keeps the default of `SystemClock`’s `zone`.
-			    public let zone: String?
+			    public var zone: String? { __safeDI_storage.zone }
 			    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((String) -> SystemClock)?
+			    public var safeDIBuilder: ((String) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            zone: String?,
+			            safeDIBuilder: ((String) -> SystemClock)?
+			        ) {
+			            self.zone = zone
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let zone: String?
+			        let safeDIBuilder: ((String) -> SystemClock)?
+			    }
 			}
 
 			extension SystemClock {
@@ -3226,10 +4331,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            clock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 				        ) {
-				            self.clock = clock
+				            __safeDI_storage = __safeDI_Storage(
+				                clock: clock
+				            )
 				        }
 
-				        public let clock: __safeDI_Other_SystemClock_MockConfiguration
+				        public var clock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.clock }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                clock: __safeDI_Other_SystemClock_MockConfiguration
+				            ) {
+				                self.clock = clock
+				            }
+
+				            let clock: __safeDI_Other_SystemClock_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -3255,10 +4374,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            systemClock: __safeDI_Other_SystemClock_MockConfiguration = .init()
 				        ) {
-				            self.systemClock = systemClock
+				            __safeDI_storage = __safeDI_Storage(
+				                systemClock: systemClock
+				            )
 				        }
 
-				        public let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				        public var systemClock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				            ) {
+				                self.systemClock = systemClock
+				            }
+
+				            let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -3292,14 +4425,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        zone: String? = nil,
 				        _ safeDIBuilder: ((String) -> SystemClock)? = nil
 				    ) {
-				        self.zone = zone
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            zone: zone,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// `nil` keeps the default of `SystemClock`’s `zone`.
-				    public let zone: String?
+				    public var zone: String? { __safeDI_storage.zone }
 				    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: ((String) -> SystemClock)?
+				    public var safeDIBuilder: ((String) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            zone: String?,
+				            safeDIBuilder: ((String) -> SystemClock)?
+				        ) {
+				            self.zone = zone
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let zone: String?
+				        let safeDIBuilder: ((String) -> SystemClock)?
+				    }
 				}
 
 				extension SystemClock {
@@ -3422,10 +4572,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            clockBoxBuilder: __safeDI_Other_ClockBox_MockConfiguration = .init()
 			        ) {
-			            self.clockBoxBuilder = clockBoxBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                clockBoxBuilder: clockBoxBuilder
+			            )
 			        }
 
-			        public let clockBoxBuilder: __safeDI_Other_ClockBox_MockConfiguration
+			        public var clockBoxBuilder: __safeDI_Other_ClockBox_MockConfiguration { __safeDI_storage.clockBoxBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                clockBoxBuilder: __safeDI_Other_ClockBox_MockConfiguration
+			            ) {
+			                self.clockBoxBuilder = clockBoxBuilder
+			            }
+
+			            let clockBoxBuilder: __safeDI_Other_ClockBox_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -3458,10 +4622,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        public init(
 			            systemClockBoxBuilder: __safeDI_Other_SystemClockBox_MockConfiguration = .init()
 			        ) {
-			            self.systemClockBoxBuilder = systemClockBoxBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                systemClockBoxBuilder: systemClockBoxBuilder
+			            )
 			        }
 
-			        public let systemClockBoxBuilder: __safeDI_Other_SystemClockBox_MockConfiguration
+			        public var systemClockBoxBuilder: __safeDI_Other_SystemClockBox_MockConfiguration { __safeDI_storage.systemClockBoxBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                systemClockBoxBuilder: __safeDI_Other_SystemClockBox_MockConfiguration
+			            ) {
+			                self.systemClockBoxBuilder = systemClockBoxBuilder
+			            }
+
+			            let systemClockBoxBuilder: __safeDI_Other_SystemClockBox_MockConfiguration
+			        }
 			    }
 
 			    public static func mock(
@@ -3494,14 +4672,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        zone: @autoclosure @escaping @Sendable () -> String? = nil,
 			        _ safeDIBuilder: (@Sendable (String) -> SystemClock)? = nil
 			    ) {
-			        self.zone = zone
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            zone: zone,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
 			    /// `nil` keeps the default of `SystemClock`’s `zone`.
-			    public let zone: @Sendable () -> String?
+			    public var zone: @Sendable () -> String? { __safeDI_storage.zone }
 			    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: (@Sendable (String) -> SystemClock)?
+			    public var safeDIBuilder: (@Sendable (String) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            zone: @escaping @Sendable () -> String?,
+			            safeDIBuilder: (@Sendable (String) -> SystemClock)?
+			        ) {
+			            self.zone = zone
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let zone: @Sendable () -> String?
+			        let safeDIBuilder: (@Sendable (String) -> SystemClock)?
+			    }
 			}
 
 			extension SystemClock {
@@ -3521,13 +4716,30 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        clock: __safeDI_Other_SystemClock_MockConfiguration = .init(),
 			        _ safeDIBuilder: (@Sendable (Clock) -> ClockBox)? = nil
 			    ) {
-			        self.clock = clock
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            clock: clock,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let clock: __safeDI_Other_SystemClock_MockConfiguration
+			    public var clock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.clock }
 			    /// Overrides how `ClockBox` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: (@Sendable (Clock) -> ClockBox)?
+			    public var safeDIBuilder: (@Sendable (Clock) -> ClockBox)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            clock: __safeDI_Other_SystemClock_MockConfiguration,
+			            safeDIBuilder: (@Sendable (Clock) -> ClockBox)?
+			        ) {
+			            self.clock = clock
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let clock: __safeDI_Other_SystemClock_MockConfiguration
+			        let safeDIBuilder: (@Sendable (Clock) -> ClockBox)?
+			    }
 			}
 
 			extension ClockBox {
@@ -3542,13 +4754,30 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        systemClock: __safeDI_Other_SystemClock_MockConfiguration = .init(),
 			        _ safeDIBuilder: (@Sendable (SystemClock) -> SystemClockBox)? = nil
 			    ) {
-			        self.systemClock = systemClock
-			        self.safeDIBuilder = safeDIBuilder
+			        __safeDI_storage = __safeDI_Storage(
+			            systemClock: systemClock,
+			            safeDIBuilder: safeDIBuilder
+			        )
 			    }
 
-			    public let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			    public var systemClock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
 			    /// Overrides how `SystemClockBox` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: (@Sendable (SystemClock) -> SystemClockBox)?
+			    public var safeDIBuilder: (@Sendable (SystemClock) -> SystemClockBox)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            systemClock: __safeDI_Other_SystemClock_MockConfiguration,
+			            safeDIBuilder: (@Sendable (SystemClock) -> SystemClockBox)?
+			        ) {
+			            self.systemClock = systemClock
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+			        let safeDIBuilder: (@Sendable (SystemClock) -> SystemClockBox)?
+			    }
 			}
 
 			extension SystemClockBox {
@@ -3600,10 +4829,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            clockBoxBuilder: __safeDI_Other_ClockBox_MockConfiguration = .init()
 				        ) {
-				            self.clockBoxBuilder = clockBoxBuilder
+				            __safeDI_storage = __safeDI_Storage(
+				                clockBoxBuilder: clockBoxBuilder
+				            )
 				        }
 
-				        public let clockBoxBuilder: __safeDI_Other_ClockBox_MockConfiguration
+				        public var clockBoxBuilder: __safeDI_Other_ClockBox_MockConfiguration { __safeDI_storage.clockBoxBuilder }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                clockBoxBuilder: __safeDI_Other_ClockBox_MockConfiguration
+				            ) {
+				                self.clockBoxBuilder = clockBoxBuilder
+				            }
+
+				            let clockBoxBuilder: __safeDI_Other_ClockBox_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -3636,10 +4879,24 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        public init(
 				            systemClockBoxBuilder: __safeDI_Other_SystemClockBox_MockConfiguration = .init()
 				        ) {
-				            self.systemClockBoxBuilder = systemClockBoxBuilder
+				            __safeDI_storage = __safeDI_Storage(
+				                systemClockBoxBuilder: systemClockBoxBuilder
+				            )
 				        }
 
-				        public let systemClockBoxBuilder: __safeDI_Other_SystemClockBox_MockConfiguration
+				        public var systemClockBoxBuilder: __safeDI_Other_SystemClockBox_MockConfiguration { __safeDI_storage.systemClockBoxBuilder }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                systemClockBoxBuilder: __safeDI_Other_SystemClockBox_MockConfiguration
+				            ) {
+				                self.systemClockBoxBuilder = systemClockBoxBuilder
+				            }
+
+				            let systemClockBoxBuilder: __safeDI_Other_SystemClockBox_MockConfiguration
+				        }
 				    }
 
 				    public static func mock(
@@ -3680,14 +4937,31 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        zone: @autoclosure @escaping @Sendable () -> String? = nil,
 				        _ safeDIBuilder: (@Sendable (String) -> SystemClock)? = nil
 				    ) {
-				        self.zone = zone
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            zone: zone,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
 				    /// `nil` keeps the default of `SystemClock`’s `zone`.
-				    public let zone: @Sendable () -> String?
+				    public var zone: @Sendable () -> String? { __safeDI_storage.zone }
 				    /// Overrides how `SystemClock` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: (@Sendable (String) -> SystemClock)?
+				    public var safeDIBuilder: (@Sendable (String) -> SystemClock)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            zone: @escaping @Sendable () -> String?,
+				            safeDIBuilder: (@Sendable (String) -> SystemClock)?
+				        ) {
+				            self.zone = zone
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let zone: @Sendable () -> String?
+				        let safeDIBuilder: (@Sendable (String) -> SystemClock)?
+				    }
 				}
 
 				extension SystemClock {
@@ -3707,13 +4981,30 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        clock: __safeDI_Other_SystemClock_MockConfiguration = .init(),
 				        _ safeDIBuilder: (@Sendable (Clock) -> ClockBox)? = nil
 				    ) {
-				        self.clock = clock
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            clock: clock,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
-				    public let clock: __safeDI_Other_SystemClock_MockConfiguration
+				    public var clock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.clock }
 				    /// Overrides how `ClockBox` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: (@Sendable (Clock) -> ClockBox)?
+				    public var safeDIBuilder: (@Sendable (Clock) -> ClockBox)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            clock: __safeDI_Other_SystemClock_MockConfiguration,
+				            safeDIBuilder: (@Sendable (Clock) -> ClockBox)?
+				        ) {
+				            self.clock = clock
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let clock: __safeDI_Other_SystemClock_MockConfiguration
+				        let safeDIBuilder: (@Sendable (Clock) -> ClockBox)?
+				    }
 				}
 
 				extension ClockBox {
@@ -3728,13 +5019,30 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        systemClock: __safeDI_Other_SystemClock_MockConfiguration = .init(),
 				        _ safeDIBuilder: (@Sendable (SystemClock) -> SystemClockBox)? = nil
 				    ) {
-				        self.systemClock = systemClock
-				        self.safeDIBuilder = safeDIBuilder
+				        __safeDI_storage = __safeDI_Storage(
+				            systemClock: systemClock,
+				            safeDIBuilder: safeDIBuilder
+				        )
 				    }
 
-				    public let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				    public var systemClock: __safeDI_Other_SystemClock_MockConfiguration { __safeDI_storage.systemClock }
 				    /// Overrides how `SystemClockBox` is constructed. Parameters match the type’s initializer or custom mock method.
-				    public let safeDIBuilder: (@Sendable (SystemClock) -> SystemClockBox)?
+				    public var safeDIBuilder: (@Sendable (SystemClock) -> SystemClockBox)? { __safeDI_storage.safeDIBuilder }
+
+				    private let __safeDI_storage: __safeDI_Storage
+
+				    private final class __safeDI_Storage {
+				        init(
+				            systemClock: __safeDI_Other_SystemClock_MockConfiguration,
+				            safeDIBuilder: (@Sendable (SystemClock) -> SystemClockBox)?
+				        ) {
+				            self.systemClock = systemClock
+				            self.safeDIBuilder = safeDIBuilder
+				        }
+
+				        let systemClock: __safeDI_Other_SystemClock_MockConfiguration
+				        let safeDIBuilder: (@Sendable (SystemClock) -> SystemClockBox)?
+				    }
 				}
 
 				extension SystemClockBox {

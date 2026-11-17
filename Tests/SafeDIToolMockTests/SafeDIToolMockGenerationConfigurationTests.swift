@@ -165,10 +165,24 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		        init(
 		            dependency: (() -> Dependency)? = nil
 		        ) {
-		            self.dependency = dependency
+		            __safeDI_storage = __safeDI_Storage(
+		                dependency: dependency
+		            )
 		        }
 
-		        let dependency: (() -> Dependency)?
+		        var dependency: (() -> Dependency)? { __safeDI_storage.dependency }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                dependency: (() -> Dependency)?
+		            ) {
+		                self.dependency = dependency
+		            }
+
+		            let dependency: (() -> Dependency)?
+		        }
 		    }
 
 		    static func mock(
@@ -486,10 +500,24 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		        init(
 		            crossModuleService: (() -> CrossModuleService)? = nil
 		        ) {
-		            self.crossModuleService = crossModuleService
+		            __safeDI_storage = __safeDI_Storage(
+		                crossModuleService: crossModuleService
+		            )
 		        }
 
-		        let crossModuleService: (() -> CrossModuleService)?
+		        var crossModuleService: (() -> CrossModuleService)? { __safeDI_storage.crossModuleService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                crossModuleService: (() -> CrossModuleService)?
+		            ) {
+		                self.crossModuleService = crossModuleService
+		            }
+
+		            let crossModuleService: (() -> CrossModuleService)?
+		        }
 		    }
 
 		    static func mock(
@@ -558,10 +586,24 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		        init(
 		            child: Child.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -629,10 +671,24 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		        init(
 		            middle: Middle.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.middle = middle
+		            __safeDI_storage = __safeDI_Storage(
+		                middle: middle
+		            )
 		        }
 
-		        let middle: Middle.SafeDIMockConfiguration
+		        var middle: Middle.SafeDIMockConfiguration { __safeDI_storage.middle }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                middle: Middle.SafeDIMockConfiguration
+		            ) {
+		                self.middle = middle
+		            }
+
+		            let middle: Middle.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -678,13 +734,30 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            leaf: (() -> Leaf)? = nil,
 		            _ safeDIBuilder: ((Leaf) -> Middle)? = nil
 		        ) {
-		            self.leaf = leaf
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                leaf: leaf,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let leaf: (() -> Leaf)?
+		        var leaf: (() -> Leaf)? { __safeDI_storage.leaf }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Leaf) -> Middle)?
+		        var safeDIBuilder: ((Leaf) -> Middle)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                leaf: (() -> Leaf)?,
+		                safeDIBuilder: ((Leaf) -> Middle)?
+		            ) {
+		                self.leaf = leaf
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let leaf: (() -> Leaf)?
+		            let safeDIBuilder: ((Leaf) -> Middle)?
+		        }
 		    }
 		}
 		#endif
@@ -751,10 +824,24 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		        init(
 		            middle: Middle.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.middle = middle
+		            __safeDI_storage = __safeDI_Storage(
+		                middle: middle
+		            )
 		        }
 
-		        let middle: Middle.SafeDIMockConfiguration
+		        var middle: Middle.SafeDIMockConfiguration { __safeDI_storage.middle }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                middle: Middle.SafeDIMockConfiguration
+		            ) {
+		                self.middle = middle
+		            }
+
+		            let middle: Middle.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -783,10 +870,24 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		        init(
 		            middle: Middle.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.middle = middle
+		            __safeDI_storage = __safeDI_Storage(
+		                middle: middle
+		            )
 		        }
 
-		        let middle: Middle.SafeDIMockConfiguration
+		        var middle: Middle.SafeDIMockConfiguration { __safeDI_storage.middle }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                middle: Middle.SafeDIMockConfiguration
+		            ) {
+		                self.middle = middle
+		            }
+
+		            let middle: Middle.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -818,13 +919,30 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            leaf: (() -> Leaf)? = nil,
 		            _ safeDIBuilder: ((Leaf) -> Middle)? = nil
 		        ) {
-		            self.leaf = leaf
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                leaf: leaf,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let leaf: (() -> Leaf)?
+		        var leaf: (() -> Leaf)? { __safeDI_storage.leaf }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Leaf) -> Middle)?
+		        var safeDIBuilder: ((Leaf) -> Middle)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                leaf: (() -> Leaf)?,
+		                safeDIBuilder: ((Leaf) -> Middle)?
+		            ) {
+		                self.leaf = leaf
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let leaf: (() -> Leaf)?
+		            let safeDIBuilder: ((Leaf) -> Middle)?
+		        }
 		    }
 		}
 		#endif
@@ -1163,10 +1281,24 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		        init(
 		            crossModuleService: (() -> CrossModuleService)? = nil
 		        ) {
-		            self.crossModuleService = crossModuleService
+		            __safeDI_storage = __safeDI_Storage(
+		                crossModuleService: crossModuleService
+		            )
 		        }
 
-		        let crossModuleService: (() -> CrossModuleService)?
+		        var crossModuleService: (() -> CrossModuleService)? { __safeDI_storage.crossModuleService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                crossModuleService: (() -> CrossModuleService)?
+		            ) {
+		                self.crossModuleService = crossModuleService
+		            }
+
+		            let crossModuleService: (() -> CrossModuleService)?
+		        }
 		    }
 
 		    static func mock(
@@ -1256,12 +1388,29 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            analytics: (() -> Analytics)? = nil,
 		            mid: Mid.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.analytics = analytics
-		            self.mid = mid
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                mid: mid
+		            )
 		        }
 
-		        let analytics: (() -> Analytics)?
-		        let mid: Mid.SafeDIMockConfiguration
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var mid: Mid.SafeDIMockConfiguration { __safeDI_storage.mid }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                mid: Mid.SafeDIMockConfiguration
+		            ) {
+		                self.analytics = analytics
+		                self.mid = mid
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let mid: Mid.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1360,12 +1509,29 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            b: B.SafeDIMockConfiguration = .init(),
 		            c: ((B) -> C)? = nil
 		        ) {
-		            self.b = b
-		            self.c = c
+		            __safeDI_storage = __safeDI_Storage(
+		                b: b,
+		                c: c
+		            )
 		        }
 
-		        let b: B.SafeDIMockConfiguration
-		        let c: ((B) -> C)?
+		        var b: B.SafeDIMockConfiguration { __safeDI_storage.b }
+		        var c: ((B) -> C)? { __safeDI_storage.c }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                b: B.SafeDIMockConfiguration,
+		                c: ((B) -> C)?
+		            ) {
+		                self.b = b
+		                self.c = c
+		            }
+
+		            let b: B.SafeDIMockConfiguration
+		            let c: ((B) -> C)?
+		        }
 		    }
 
 		    static func mock(
@@ -1442,14 +1608,34 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            header: ((FileLogger) -> Header)? = nil,
 		            footer: ((Logger?) -> Footer)? = nil
 		        ) {
-		            self.fileLogger = fileLogger
-		            self.header = header
-		            self.footer = footer
+		            __safeDI_storage = __safeDI_Storage(
+		                fileLogger: fileLogger,
+		                header: header,
+		                footer: footer
+		            )
 		        }
 
-		        let fileLogger: (() -> FileLogger)?
-		        let header: ((FileLogger) -> Header)?
-		        let footer: ((Logger?) -> Footer)?
+		        var fileLogger: (() -> FileLogger)? { __safeDI_storage.fileLogger }
+		        var header: ((FileLogger) -> Header)? { __safeDI_storage.header }
+		        var footer: ((Logger?) -> Footer)? { __safeDI_storage.footer }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                fileLogger: (() -> FileLogger)?,
+		                header: ((FileLogger) -> Header)?,
+		                footer: ((Logger?) -> Footer)?
+		            ) {
+		                self.fileLogger = fileLogger
+		                self.header = header
+		                self.footer = footer
+		            }
+
+		            let fileLogger: (() -> FileLogger)?
+		            let header: ((FileLogger) -> Header)?
+		            let footer: ((Logger?) -> Footer)?
+		        }
 		    }
 
 		    static func mock(

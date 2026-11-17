@@ -336,10 +336,24 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		        public init(
 		            child: ((ErasedInstantiator<Int, any Other>) -> Child)? = nil
 		        ) {
-		            self.child = child
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
 		        }
 
-		        public let child: ((ErasedInstantiator<Int, any Other>) -> Child)?
+		        public var child: ((ErasedInstantiator<Int, any Other>) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((ErasedInstantiator<Int, any Other>) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: ((ErasedInstantiator<Int, any Other>) -> Child)?
+		        }
 		    }
 
 		    public static func mock(
@@ -501,10 +515,24 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		        public init(
 		            inner: ((ErasedInstantiator<Int, any Other>) -> Inner)? = nil
 		        ) {
-		            self.inner = inner
+		            __safeDI_storage = __safeDI_Storage(
+		                inner: inner
+		            )
 		        }
 
-		        public let inner: ((ErasedInstantiator<Int, any Other>) -> Inner)?
+		        public var inner: ((ErasedInstantiator<Int, any Other>) -> Inner)? { __safeDI_storage.inner }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                inner: ((ErasedInstantiator<Int, any Other>) -> Inner)?
+		            ) {
+		                self.inner = inner
+		            }
+
+		            let inner: ((ErasedInstantiator<Int, any Other>) -> Inner)?
+		        }
 		    }
 
 		    public static func mock(

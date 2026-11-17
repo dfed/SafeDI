@@ -72,14 +72,31 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            sibling: ((Service?) -> Sibling)? = nil,
 			            serviceAlias: Service? = nil
 			        ) {
-			            self.child = child
-			            self.sibling = sibling
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child,
+			                sibling: sibling
+			            )
 			            self.serviceAlias = serviceAlias
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
-			        let sibling: ((Service?) -> Sibling)?
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+			        var sibling: ((Service?) -> Sibling)? { __safeDI_storage.sibling }
 			        let serviceAlias: Service?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: Child.SafeDIMockConfiguration,
+			                sibling: ((Service?) -> Sibling)?
+			            ) {
+			                self.child = child
+			                self.sibling = sibling
+			            }
+
+			            let child: Child.SafeDIMockConfiguration
+			            let sibling: ((Service?) -> Sibling)?
+			        }
 			    }
 
 			    static func mock(
@@ -123,10 +140,24 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        init(
 			            child: Child.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.child = child
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child
+			            )
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: Child.SafeDIMockConfiguration
+			            ) {
+			                self.child = child
+			            }
+
+			            let child: Child.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -171,14 +202,31 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            sibling: ((Instantiator<Leaf>?) -> Sibling)? = nil,
 			            leafBuilderAlias: Instantiator<Leaf>? = nil
 			        ) {
-			            self.child = child
-			            self.sibling = sibling
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child,
+			                sibling: sibling
+			            )
 			            self.leafBuilderAlias = leafBuilderAlias
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
-			        let sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+			        var sibling: ((Instantiator<Leaf>?) -> Sibling)? { __safeDI_storage.sibling }
 			        let leafBuilderAlias: Instantiator<Leaf>?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: Child.SafeDIMockConfiguration,
+			                sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			            ) {
+			                self.child = child
+			                self.sibling = sibling
+			            }
+
+			            let child: Child.SafeDIMockConfiguration
+			            let sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			        }
 			    }
 
 			    static func mock(
@@ -231,14 +279,31 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            child: Child.SafeDIMockConfiguration = .init(),
 			            leafBuilderAlias: Instantiator<Leaf>? = nil
 			        ) {
-			            self.leafBuilder = leafBuilder
-			            self.child = child
+			            __safeDI_storage = __safeDI_Storage(
+			                leafBuilder: leafBuilder,
+			                child: child
+			            )
 			            self.leafBuilderAlias = leafBuilderAlias
 			        }
 
-			        let leafBuilder: ((Instantiator<Leaf>?) -> Leaf)?
-			        let child: Child.SafeDIMockConfiguration
+			        var leafBuilder: ((Instantiator<Leaf>?) -> Leaf)? { __safeDI_storage.leafBuilder }
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
 			        let leafBuilderAlias: Instantiator<Leaf>?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leafBuilder: ((Instantiator<Leaf>?) -> Leaf)?,
+			                child: Child.SafeDIMockConfiguration
+			            ) {
+			                self.leafBuilder = leafBuilder
+			                self.child = child
+			            }
+
+			            let leafBuilder: ((Instantiator<Leaf>?) -> Leaf)?
+			            let child: Child.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -289,10 +354,24 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        init(
 			            child: Child.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.child = child
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child
+			            )
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: Child.SafeDIMockConfiguration
+			            ) {
+			                self.child = child
+			            }
+
+			            let child: Child.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -344,14 +423,31 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            sibling: ((Service?) -> Sibling)? = nil,
 			            serviceAlias: Service? = nil
 			        ) {
-			            self.child = child
-			            self.sibling = sibling
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child,
+			                sibling: sibling
+			            )
 			            self.serviceAlias = serviceAlias
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
-			        let sibling: ((Service?) -> Sibling)?
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+			        var sibling: ((Service?) -> Sibling)? { __safeDI_storage.sibling }
 			        let serviceAlias: Service?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: Child.SafeDIMockConfiguration,
+			                sibling: ((Service?) -> Sibling)?
+			            ) {
+			                self.child = child
+			                self.sibling = sibling
+			            }
+
+			            let child: Child.SafeDIMockConfiguration
+			            let sibling: ((Service?) -> Sibling)?
+			        }
 			    }
 
 			    static func mock(
@@ -396,10 +492,24 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        init(
 			            child: Child.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.child = child
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child
+			            )
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: Child.SafeDIMockConfiguration
+			            ) {
+			                self.child = child
+			            }
+
+			            let child: Child.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -445,14 +555,31 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            sibling: ((Instantiator<Leaf>?) -> Sibling)? = nil,
 			            leafBuilderAlias: Instantiator<Leaf>? = nil
 			        ) {
-			            self.child = child
-			            self.sibling = sibling
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child,
+			                sibling: sibling
+			            )
 			            self.leafBuilderAlias = leafBuilderAlias
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
-			        let sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+			        var sibling: ((Instantiator<Leaf>?) -> Sibling)? { __safeDI_storage.sibling }
 			        let leafBuilderAlias: Instantiator<Leaf>?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: Child.SafeDIMockConfiguration,
+			                sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			            ) {
+			                self.child = child
+			                self.sibling = sibling
+			            }
+
+			            let child: Child.SafeDIMockConfiguration
+			            let sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			        }
 			    }
 
 			    static func mock(
@@ -503,14 +630,31 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            child: Child.SafeDIMockConfiguration = .init(),
 			            leafBuilderAlias: Instantiator<Leaf>? = nil
 			        ) {
-			            self.leafBuilder = leafBuilder
-			            self.child = child
+			            __safeDI_storage = __safeDI_Storage(
+			                leafBuilder: leafBuilder,
+			                child: child
+			            )
 			            self.leafBuilderAlias = leafBuilderAlias
 			        }
 
-			        let leafBuilder: ((Instantiator<Leaf>?) -> Leaf)?
-			        let child: Child.SafeDIMockConfiguration
+			        var leafBuilder: ((Instantiator<Leaf>?) -> Leaf)? { __safeDI_storage.leafBuilder }
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
 			        let leafBuilderAlias: Instantiator<Leaf>?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leafBuilder: ((Instantiator<Leaf>?) -> Leaf)?,
+			                child: Child.SafeDIMockConfiguration
+			            ) {
+			                self.leafBuilder = leafBuilder
+			                self.child = child
+			            }
+
+			            let leafBuilder: ((Instantiator<Leaf>?) -> Leaf)?
+			            let child: Child.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -562,10 +706,24 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        init(
 			            child: Child.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.child = child
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child
+			            )
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: Child.SafeDIMockConfiguration
+			            ) {
+			                self.child = child
+			            }
+
+			            let child: Child.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -651,14 +809,31 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            sibling: ((Instantiator<Leaf>?) -> Sibling)? = nil,
 			            leafBuilderAlias: Instantiator<Leaf>? = nil
 			        ) {
-			            self.child = child
-			            self.sibling = sibling
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child,
+			                sibling: sibling
+			            )
 			            self.leafBuilderAlias = leafBuilderAlias
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
-			        let sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+			        var sibling: ((Instantiator<Leaf>?) -> Sibling)? { __safeDI_storage.sibling }
 			        let leafBuilderAlias: Instantiator<Leaf>?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: Child.SafeDIMockConfiguration,
+			                sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			            ) {
+			                self.child = child
+			                self.sibling = sibling
+			            }
+
+			            let child: Child.SafeDIMockConfiguration
+			            let sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			        }
 			    }
 
 			    static func mock(
@@ -707,10 +882,24 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        init(
 			            child: Child.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.child = child
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child
+			            )
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: Child.SafeDIMockConfiguration
+			            ) {
+			                self.child = child
+			            }
+
+			            let child: Child.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -802,14 +991,31 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            sibling: ((Instantiator<Leaf>?) -> Sibling)? = nil,
 			            leafBuilderAlias: Instantiator<Leaf>? = nil
 			        ) {
-			            self.child = child
-			            self.sibling = sibling
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child,
+			                sibling: sibling
+			            )
 			            self.leafBuilderAlias = leafBuilderAlias
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
-			        let sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+			        var sibling: ((Instantiator<Leaf>?) -> Sibling)? { __safeDI_storage.sibling }
 			        let leafBuilderAlias: Instantiator<Leaf>?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: Child.SafeDIMockConfiguration,
+			                sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			            ) {
+			                self.child = child
+			                self.sibling = sibling
+			            }
+
+			            let child: Child.SafeDIMockConfiguration
+			            let sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			        }
 			    }
 
 			    static func mock(
@@ -858,10 +1064,24 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        init(
 			            child: Child.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.child = child
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child
+			            )
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: Child.SafeDIMockConfiguration
+			            ) {
+			                self.child = child
+			            }
+
+			            let child: Child.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -930,12 +1150,29 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            serviceAlias: ((Service?) -> Service)? = nil,
 			            child: Child.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.serviceAlias = serviceAlias
-			            self.child = child
+			            __safeDI_storage = __safeDI_Storage(
+			                serviceAlias: serviceAlias,
+			                child: child
+			            )
 			        }
 
-			        let serviceAlias: ((Service?) -> Service)?
-			        let child: Child.SafeDIMockConfiguration
+			        var serviceAlias: ((Service?) -> Service)? { __safeDI_storage.serviceAlias }
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                serviceAlias: ((Service?) -> Service)?,
+			                child: Child.SafeDIMockConfiguration
+			            ) {
+			                self.serviceAlias = serviceAlias
+			                self.child = child
+			            }
+
+			            let serviceAlias: ((Service?) -> Service)?
+			            let child: Child.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1038,14 +1275,34 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            other: ((Service) -> Other)? = nil,
 			            aBuilder: A.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.serviceAlias = serviceAlias
-			            self.other = other
-			            self.aBuilder = aBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                serviceAlias: serviceAlias,
+			                other: other,
+			                aBuilder: aBuilder
+			            )
 			        }
 
-			        let serviceAlias: ((Service?) -> Service)?
-			        let other: ((Service) -> Other)?
-			        let aBuilder: A.SafeDIMockConfiguration
+			        var serviceAlias: ((Service?) -> Service)? { __safeDI_storage.serviceAlias }
+			        var other: ((Service) -> Other)? { __safeDI_storage.other }
+			        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                serviceAlias: ((Service?) -> Service)?,
+			                other: ((Service) -> Other)?,
+			                aBuilder: A.SafeDIMockConfiguration
+			            ) {
+			                self.serviceAlias = serviceAlias
+			                self.other = other
+			                self.aBuilder = aBuilder
+			            }
+
+			            let serviceAlias: ((Service?) -> Service)?
+			            let other: ((Service) -> Other)?
+			            let aBuilder: A.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1098,10 +1355,24 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        init(
 			            aBuilder: A.SafeDIMockConfiguration = .init()
 			        ) {
-			            self.aBuilder = aBuilder
+			            __safeDI_storage = __safeDI_Storage(
+			                aBuilder: aBuilder
+			            )
 			        }
 
-			        let aBuilder: A.SafeDIMockConfiguration
+			        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                aBuilder: A.SafeDIMockConfiguration
+			            ) {
+			                self.aBuilder = aBuilder
+			            }
+
+			            let aBuilder: A.SafeDIMockConfiguration
+			        }
 			    }
 
 			    static func mock(
@@ -1186,12 +1457,26 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 		            aBuilder: A.SafeDIMockConfiguration = .init(),
 		            \(label)Alias: \(type)? = nil
 		        ) {
-		            self.aBuilder = aBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
 		            self.\(label)Alias = \(label)Alias
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
 		        let \(label)Alias: \(type)?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
