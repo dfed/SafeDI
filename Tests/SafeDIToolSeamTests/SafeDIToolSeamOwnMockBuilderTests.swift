@@ -125,10 +125,24 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        init(
 		            profileBuilder: ((any UserService) -> Profile)? = nil
 		        ) {
-		            self.profileBuilder = profileBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                profileBuilder: profileBuilder
+		            )
 		        }
 
-		        let profileBuilder: ((any UserService) -> Profile)?
+		        var profileBuilder: ((any UserService) -> Profile)? { __safeDI_storage.profileBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                profileBuilder: ((any UserService) -> Profile)?
+		            ) {
+		                self.profileBuilder = profileBuilder
+		            }
+
+		            let profileBuilder: ((any UserService) -> Profile)?
+		        }
 		    }
 
 		    static func mock(
@@ -270,12 +284,29 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            profile: ((any UserService) -> Profile)? = nil,
 		            settings: ((any UserService) -> Settings)? = nil
 		        ) {
-		            self.profile = profile
-		            self.settings = settings
+		            __safeDI_storage = __safeDI_Storage(
+		                profile: profile,
+		                settings: settings
+		            )
 		        }
 
-		        let profile: ((any UserService) -> Profile)?
-		        let settings: ((any UserService) -> Settings)?
+		        var profile: ((any UserService) -> Profile)? { __safeDI_storage.profile }
+		        var settings: ((any UserService) -> Settings)? { __safeDI_storage.settings }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                profile: ((any UserService) -> Profile)?,
+		                settings: ((any UserService) -> Settings)?
+		            ) {
+		                self.profile = profile
+		                self.settings = settings
+		            }
+
+		            let profile: ((any UserService) -> Profile)?
+		            let settings: ((any UserService) -> Settings)?
+		        }
 		    }
 
 		    static func mock(
@@ -432,10 +463,24 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        init(
 		            inner: ((any UserService) -> Inner)? = nil
 		        ) {
-		            self.inner = inner
+		            __safeDI_storage = __safeDI_Storage(
+		                inner: inner
+		            )
 		        }
 
-		        let inner: ((any UserService) -> Inner)?
+		        var inner: ((any UserService) -> Inner)? { __safeDI_storage.inner }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                inner: ((any UserService) -> Inner)?
+		            ) {
+		                self.inner = inner
+		            }
+
+		            let inner: ((any UserService) -> Inner)?
+		        }
 		    }
 
 		    static func mock(
@@ -557,10 +602,24 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        init(
 		            profile: ((AnyUserService) -> Profile)? = nil
 		        ) {
-		            self.profile = profile
+		            __safeDI_storage = __safeDI_Storage(
+		                profile: profile
+		            )
 		        }
 
-		        let profile: ((AnyUserService) -> Profile)?
+		        var profile: ((AnyUserService) -> Profile)? { __safeDI_storage.profile }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                profile: ((AnyUserService) -> Profile)?
+		            ) {
+		                self.profile = profile
+		            }
+
+		            let profile: ((AnyUserService) -> Profile)?
+		        }
 		    }
 
 		    static func mock(
@@ -684,12 +743,29 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            settings: ((any UserService) -> Settings)? = nil,
 		            account: ((any UserService) -> Account)? = nil
 		        ) {
-		            self.settings = settings
-		            self.account = account
+		            __safeDI_storage = __safeDI_Storage(
+		                settings: settings,
+		                account: account
+		            )
 		        }
 
-		        let settings: ((any UserService) -> Settings)?
-		        let account: ((any UserService) -> Account)?
+		        var settings: ((any UserService) -> Settings)? { __safeDI_storage.settings }
+		        var account: ((any UserService) -> Account)? { __safeDI_storage.account }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                settings: ((any UserService) -> Settings)?,
+		                account: ((any UserService) -> Account)?
+		            ) {
+		                self.settings = settings
+		                self.account = account
+		            }
+
+		            let settings: ((any UserService) -> Settings)?
+		            let account: ((any UserService) -> Account)?
+		        }
 		    }
 
 		    static func mock(
@@ -829,12 +905,29 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            settings: ((any UserService) -> Settings)? = nil,
 		            reader: ((Clock) -> Reader)? = nil
 		        ) {
-		            self.settings = settings
-		            self.reader = reader
+		            __safeDI_storage = __safeDI_Storage(
+		                settings: settings,
+		                reader: reader
+		            )
 		        }
 
-		        let settings: ((any UserService) -> Settings)?
-		        let reader: ((Clock) -> Reader)?
+		        var settings: ((any UserService) -> Settings)? { __safeDI_storage.settings }
+		        var reader: ((Clock) -> Reader)? { __safeDI_storage.reader }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                settings: ((any UserService) -> Settings)?,
+		                reader: ((Clock) -> Reader)?
+		            ) {
+		                self.settings = settings
+		                self.reader = reader
+		            }
+
+		            let settings: ((any UserService) -> Settings)?
+		            let reader: ((Clock) -> Reader)?
+		        }
 		    }
 
 		    static func mock(
@@ -941,12 +1034,29 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            userServiceBuilder: (() -> Analytics)? = nil,
 		            profile: ((any UserService) -> Profile)? = nil
 		        ) {
-		            self.userServiceBuilder = userServiceBuilder
-		            self.profile = profile
+		            __safeDI_storage = __safeDI_Storage(
+		                userServiceBuilder: userServiceBuilder,
+		                profile: profile
+		            )
 		        }
 
-		        let userServiceBuilder: (() -> Analytics)?
-		        let profile: ((any UserService) -> Profile)?
+		        var userServiceBuilder: (() -> Analytics)? { __safeDI_storage.userServiceBuilder }
+		        var profile: ((any UserService) -> Profile)? { __safeDI_storage.profile }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                userServiceBuilder: (() -> Analytics)?,
+		                profile: ((any UserService) -> Profile)?
+		            ) {
+		                self.userServiceBuilder = userServiceBuilder
+		                self.profile = profile
+		            }
+
+		            let userServiceBuilder: (() -> Analytics)?
+		            let profile: ((any UserService) -> Profile)?
+		        }
 		    }
 
 		    static func mock(
@@ -1068,10 +1178,24 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        init(
 		            badge: Badge.SafeDIMockConfiguration = .init()
 		        ) {
-		            self.badge = badge
+		            __safeDI_storage = __safeDI_Storage(
+		                badge: badge
+		            )
 		        }
 
-		        let badge: Badge.SafeDIMockConfiguration
+		        var badge: Badge.SafeDIMockConfiguration { __safeDI_storage.badge }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                badge: Badge.SafeDIMockConfiguration
+		            ) {
+		                self.badge = badge
+		            }
+
+		            let badge: Badge.SafeDIMockConfiguration
+		        }
 		    }
 
 		    static func mock(
@@ -1101,13 +1225,30 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            userServiceBuilder: (() -> Analytics)? = nil,
 		            _ safeDIBuilder: ((any UserService, Instantiator<Analytics>) -> Badge)? = nil
 		        ) {
-		            self.userServiceBuilder = userServiceBuilder
-		            self.safeDIBuilder = safeDIBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                userServiceBuilder: userServiceBuilder,
+		                safeDIBuilder: safeDIBuilder
+		            )
 		        }
 
-		        let userServiceBuilder: (() -> Analytics)?
+		        var userServiceBuilder: (() -> Analytics)? { __safeDI_storage.userServiceBuilder }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((any UserService, Instantiator<Analytics>) -> Badge)?
+		        var safeDIBuilder: ((any UserService, Instantiator<Analytics>) -> Badge)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                userServiceBuilder: (() -> Analytics)?,
+		                safeDIBuilder: ((any UserService, Instantiator<Analytics>) -> Badge)?
+		            ) {
+		                self.userServiceBuilder = userServiceBuilder
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let userServiceBuilder: (() -> Analytics)?
+		            let safeDIBuilder: ((any UserService, Instantiator<Analytics>) -> Badge)?
+		        }
 		    }
 		}
 		#endif
@@ -1330,10 +1471,24 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        init(
 		            profileBuilder: (@Sendable (any UserService) -> SendableProfile)? = nil
 		        ) {
-		            self.profileBuilder = profileBuilder
+		            __safeDI_storage = __safeDI_Storage(
+		                profileBuilder: profileBuilder
+		            )
 		        }
 
-		        let profileBuilder: (@Sendable (any UserService) -> SendableProfile)?
+		        var profileBuilder: (@Sendable (any UserService) -> SendableProfile)? { __safeDI_storage.profileBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                profileBuilder: (@Sendable (any UserService) -> SendableProfile)?
+		            ) {
+		                self.profileBuilder = profileBuilder
+		            }
+
+		            let profileBuilder: (@Sendable (any UserService) -> SendableProfile)?
+		        }
 		    }
 
 		    static func mock(
@@ -1526,12 +1681,29 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            settings: ((any UserService) -> Settings)? = nil,
 		            reader: ((Clock, Clock) -> Reader)? = nil
 		        ) {
-		            self.settings = settings
-		            self.reader = reader
+		            __safeDI_storage = __safeDI_Storage(
+		                settings: settings,
+		                reader: reader
+		            )
 		        }
 
-		        let settings: ((any UserService) -> Settings)?
-		        let reader: ((Clock, Clock) -> Reader)?
+		        var settings: ((any UserService) -> Settings)? { __safeDI_storage.settings }
+		        var reader: ((Clock, Clock) -> Reader)? { __safeDI_storage.reader }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                settings: ((any UserService) -> Settings)?,
+		                reader: ((Clock, Clock) -> Reader)?
+		            ) {
+		                self.settings = settings
+		                self.reader = reader
+		            }
+
+		            let settings: ((any UserService) -> Settings)?
+		            let reader: ((Clock, Clock) -> Reader)?
+		        }
 		    }
 
 		    static func mock(
@@ -1774,10 +1946,24 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        init(
 		            panel: ((@escaping (Panel.SafeDIMockScope_UserService) -> any UserService) -> Panel)? = nil
 		        ) {
-		            self.panel = panel
+		            __safeDI_storage = __safeDI_Storage(
+		                panel: panel
+		            )
 		        }
 
-		        let panel: ((@escaping (Panel.SafeDIMockScope_UserService) -> any UserService) -> Panel)?
+		        var panel: ((@escaping (Panel.SafeDIMockScope_UserService) -> any UserService) -> Panel)? { __safeDI_storage.panel }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                panel: ((@escaping (Panel.SafeDIMockScope_UserService) -> any UserService) -> Panel)?
+		            ) {
+		                self.panel = panel
+		            }
+
+		            let panel: ((@escaping (Panel.SafeDIMockScope_UserService) -> any UserService) -> Panel)?
+		        }
 		    }
 
 		    static func mock(
