@@ -8904,6 +8904,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
+		/// Whether the node's construction where no override reaches it reads a default from a `SafeDIMockConfiguration`
+		/// it builds afresh, `<Type>.SafeDIMockConfiguration().<label>`: whether one of the arguments it surfaces there is
+		/// neither a builder its call of another module's public mock fills nor a dependency, as `resolveBuilderArguments`
+		/// decides.
+		func readsConfigurationBuiltAfresh(handWrittenMockDefaultParameters: [DefaultParameter]) -> Bool {
+			callSiteArgumentsForPrunedOverride(handWrittenMockDefaultParameters: handWrittenMockDefaultParameters).contains { argument in
+				holeArgumentValuesByLabel[argument.innerLabel] == nil && !dependencyInnerLabels.contains(argument.innerLabel)
+			}
+		}
+
 		/// The Swift expression, for use inside a generated `mock()` body, that
 		/// reads this node's optional override closure.
 		///
@@ -9277,12 +9287,40 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let child: String
 	}
 
+	/// The nodes of the configuration types of a mock root's tree, one per type, in the order `generateMockCode`
+	/// generates their structs.
+	struct ConfigurationTypes: Sendable {
+		/// The nodes of the types the tree builds above every node whose type repeats an ancestor's, in the order this
+		/// root reaches them.
+		let nodes: [MockParameterNode]
+		/// The nodes of the other types the tree's code reads a configuration of beneath a node whose type repeats an
+		/// ancestor's, one per type and construction, in the order this root reaches them. `generateMockCode` takes them
+		/// after every root's `nodes`, so a type the module's trees also configure elsewhere keeps its struct where it was.
+		let nodesBeneathRepeatedAncestors: [MockParameterNode]
+	}
+
 	/// Collects the nodes of all unique configuration types in this scope's mock parameter tree,
 	/// in the order this root reaches them. `generateMockCode` keeps the first root's node for each
 	/// type, in alphabetical root order, and generates its struct once with `generateConfigurationStruct`.
-	func collectConfigurationTypes() async -> [MockParameterNode] {
+	///
+	/// Beneath a node whose type repeats an ancestor's, which a cycle edge prunes, a node of another type is recorded only
+	/// where the code generated for it reads its configuration (#720): in a public mock, every node it builds with its
+	/// type's construction function, which the type's module-level configuration declares; in any other mock, a node whose
+	/// construction reads a default of its type's hand-written mock from a `SafeDIMockConfiguration` it builds afresh
+	/// (`MockParameterNode.readsConfigurationBuiltAfresh(handWrittenMockDefaultParameters:)`). `generateMockCode` adds
+	/// the configurations their structs nest, so that no struct is generated that nothing reads or names.
+	func collectConfigurationTypes(
+		isPublicMock: Bool,
+		handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]],
+	) async -> ConfigurationTypes {
 		let parameterTree = await rootMockParameterTree
-		return await Self.collectUniqueConfigurationTypes(from: parameterTree.propertyNodes)
+		return await Self.collectUniqueConfigurationTypes(from: parameterTree.propertyNodes) { node in
+			if isPublicMock {
+				node.isBuiltWithPublicConstructionFunction
+			} else {
+				node.readsConfigurationBuiltAfresh(handWrittenMockDefaultParameters: handWrittenMockDefaultParameters[node.concreteType, default: []])
+			}
+		}
 	}
 
 	/// A node of a mock root's parameter tree, with the type that builds the node's property.
@@ -10101,31 +10139,40 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// When the same type appears in both sendable and non-sendable contexts,
 	/// the sendable version is preferred (`@Sendable` closures work in both contexts).
 	/// `async` for the reason `generateMockBodyBindings` is.
+	///
+	/// A node whose type repeats an ancestor's records nothing: its ancestor's node records the type. The nodes beneath it
+	/// are walked all the same, since a type can be built only there, and each is recorded apart, in
+	/// `nodesBeneathRepeatedAncestors`, when `readsConfigurationBeneathRepeatedAncestor` says the code generated for it
+	/// reads its type's configuration. A cycle edge prunes every such node (the path from the ancestor to the node that
+	/// repeats it is a cycle of types, which `computeCycleEdges` breaks at one of its edges), so no override reaches it.
+	/// One node is kept per type and construction, since `generateMockCode` chooses between a type's constructions there,
+	/// and adds the configurations those structs nest.
 	private static func collectUniqueConfigurationTypes(
 		from nodes: [MockParameterNode],
-	) async -> [MockParameterNode] {
+		readsConfigurationBeneathRepeatedAncestor: (MockParameterNode) -> Bool,
+	) async -> ConfigurationTypes {
 		var seen = Set<String>()
 		var result = [MockParameterNode]()
+		var nodesBeneathRepeatedAncestors = [MockParameterNode]()
 
-		func walk(_ node: MockParameterNode, ancestorTypes: Set<String> = []) async {
+		func walk(_ node: MockParameterNode, ancestorTypes: Set<String>, isBeneathRepeatedAncestor: Bool) async {
 			let key = node.concreteType.asSource
-			// Skip nodes whose type matches an ancestor — self-referencing cycle.
-			guard !ancestorTypes.contains(key) else { return }
+			let repeatsAncestor = ancestorTypes.contains(key)
 			var childAncestors = ancestorTypes
 			childAncestors.insert(key)
 			// Process children first (depth-first). Only property children
 			// produce configuration structs; aliases are plain `let` bindings.
 			for child in node.propertyChildren {
-				await walk(child, ancestorTypes: childAncestors)
+				await walk(child, ancestorTypes: childAncestors, isBeneathRepeatedAncestor: isBeneathRepeatedAncestor || repeatsAncestor)
 			}
-			// Skip leaf nodes that don't need a SafeDIMockConfiguration struct.
-			guard node.needsConfigurationStruct else { return }
-			// No cycle-closer guard here: a cycle-closer (isPropertyCycle == true)
-			// is always reached at a deeper DFS level than its matching non-cycle
-			// occurrence (the property must appear earlier in the stack for
-			// `isPropertyCycle` to fire), so the `seen` dedup below catches it
-			// after the real version has already been recorded.
-			if seen.contains(key) {
+			// Skip leaf nodes that don't need a SafeDIMockConfiguration struct, and nodes whose type repeats an ancestor's,
+			// such as a cycle-closer (isPropertyCycle == true), whose property appears earlier in the stack.
+			guard node.needsConfigurationStruct, !repeatsAncestor else { return }
+			if isBeneathRepeatedAncestor {
+				if readsConfigurationBeneathRepeatedAncestor(node) {
+					nodesBeneathRepeatedAncestors.append(node)
+				}
+			} else if seen.contains(key) {
 				// If this node requires sendable and the existing one doesn't,
 				// replace it — @Sendable closures are compatible in both contexts.
 				if node.requiresSendable,
@@ -10135,16 +10182,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				{
 					result[existingIndex] = node
 				}
-				return
+			} else {
+				seen.insert(key)
+				result.append(node)
 			}
-			seen.insert(key)
-			result.append(node)
 		}
 
 		for node in nodes {
-			await walk(node)
+			await walk(node, ancestorTypes: [], isBeneathRepeatedAncestor: false)
 		}
-		return result
+		// A type the tree also records above every repeated ancestor is generated from that node.
+		var seenConstructions = Set<ConstructedType>()
+		return ConfigurationTypes(
+			nodes: result,
+			nodesBeneathRepeatedAncestors: nodesBeneathRepeatedAncestors.filter { node in
+				!seen.contains(node.concreteType.asSource)
+					&& seenConstructions.insert(ConstructedType(concreteType: node.concreteType, usesMockInitializer: node.useMockInitializer)).inserted
+			},
+		)
+	}
+
+	/// The children of `node` whose `SafeDIMockConfiguration` the struct generated from `node` nests as a field
+	/// (`configurationField(of:named:parentRequiresSendable:sendableConfigurationTypeNames:)`): each that no edge in
+	/// `cycleEdges` prunes, that needs a struct, and that calls no other module's public mock taking `safeDIOverrides`.
+	static func childrenWithNestedConfigurations(of node: MockParameterNode, cycleEdges: Set<CycleEdge>) -> [MockParameterNode] {
+		node.propertyChildren.filter { child in
+			!cycleEdges.contains(CycleEdge(parent: node.concreteType.asSource, child: child.concreteType.asSource))
+				&& child.publicMockCall?.takesOverrides != true
+				&& child.needsConfigurationStruct
+		}
 	}
 
 	/// Generates the `SafeDIOverrides` struct. Configuration type references
@@ -11168,6 +11234,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 			} else if !overrideReachable {
 				// The struct is built afresh, so nothing is read from `SafeDIOverrides`, even inside a `@Sendable` function.
+				// `MockParameterNode.readsConfigurationBuiltAfresh(handWrittenMockDefaultParameters:)` tells which nodes reach
+				// this branch, so that a type built only beneath a repeated ancestor gets the struct it reads.
 				readingDefault("\(node.configurationTypeName)().\(argument.label)", of: argument)
 			} else if let sendableOverrideExtractor {
 				readingDefault(
