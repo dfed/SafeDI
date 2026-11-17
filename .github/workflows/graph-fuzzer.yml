@@ -692,3 +692,124 @@ jobs:
           path: reports
       - name: Combine
         run: python3 .github/scripts/combine-release-acceptance-reports.py reports 4 >> "$GITHUB_STEP_SUMMARY"
+
+  # Deletes the branch this run was dispatched on when it is a scratch ref:
+  # one a tool pushed only to run this workflow on a commit, named
+  # `verify/…`, `probe/…` or `coverage/…`. A tool that is killed never
+  # deletes its ref, so the run does, and the tool's own delete is the
+  # fallback for a run that never reaches this job. It needs every other job,
+  # so it runs last, and `always()` has it run after a failure or a cancel.
+  # A job added to this workflow goes into its `needs:` too, or the ref could
+  # go while that job still has to check it out.
+  #
+  # It leaves the ref while another run on it has not finished. That run
+  # deletes it when it ends if it is a run of verify.yml or graph-fuzzer.yml;
+  # if it is another workflow's, or if two runs end within seconds and each
+  # sees the other unfinished, the ref stays for the tool's own delete. The
+  # delete is a push that names this run's commit as the value the ref must
+  # still have, which GitHub checks as it deletes, so a ref a later push
+  # moved is left, and one deleted during the run is found already gone.
+  # GitHub starts no re-run of a run whose ref is gone. A run dispatched on
+  # the ref just before this job lists the ref's runs can be missing from
+  # the list and lose its ref; the tools push a new ref for each run they
+  # dispatch, so that race is accepted. The ref's
+  # name reaches the API as a request field and git as an argument, never
+  # inside a URL. A failure to list the runs or to delete only warns, and
+  # the step's `continue-on-error` keeps its timeout from failing the job, so
+  # the delete never fails a run that passed nor puts a failed check on its
+  # commit. The job's own keeps the run green on a failure outside the step,
+  # such as a lost runner, though that job's check then shows the failure.
+  #
+  # It checks nothing out and runs no code of the ref's but this step, and is
+  # the workflow's only job that can write: `contents: write` to delete the
+  # ref, `actions: read` to list the ref's runs. It calls only GitHub's API
+  # and git, so it needs no container.
+  #
+  # Probed by dispatches no tool deleted after: a Verify run with a filter
+  # (44026679738) and one with `pins` (44030204927), after the jobs it calls,
+  # deleted their refs. A Verify run that ended while a Graph Fuzzer run on
+  # its ref had not (44028823431) logged that it left the ref, and the Graph
+  # Fuzzer run deleted it when it ended (44026683066). A ref named
+  # `probe/lane-delete&status=completed` was left while another run on it was
+  # unfinished (44032859335) and then deleted (44032847773); a ref pushed
+  # elsewhere during the run was left (44033034599), and one deleted while
+  # its run was in progress was found already gone (44037696301). A run
+  # cancelled while it built deleted its ref (44036973726), and a re-run of
+  # it after that failed to start (its second attempt). On probe commits that
+  # changed only the credentials or the step's length, a token the API
+  # refuses (44031256021) and git credentials GitHub refuses (44031416560)
+  # each warned and passed, and a step stopped by its limit left this job
+  # and its check green (44036369586, and its re-run with the ref pushed
+  # again).
+  # verify.yml has the same job; keep the two steps the same.
+  delete-scratch-ref:
+    name: Delete This Run's Scratch Ref
+    needs:
+      - fuzz
+      - coverage-build
+      - coverage-unit-suite
+      - coverage-fuzz
+      - coverage-report
+      - coverage-corpus
+      - release-acceptance-older-release
+      - release-acceptance-build
+      - release-acceptance
+      - combine-release-acceptance
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && !inputs.bundle && github.ref_type == 'branch' && (startsWith(github.ref_name, 'verify/') || startsWith(github.ref_name, 'probe/') || startsWith(github.ref_name, 'coverage/')) }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Delete the Ref
+        # 0 to 4 s in the probe runs above, deleting, leaving or finding the
+        # ref already gone. One minute is the least the limit can be set to
+        # in whole minutes; a step it stops leaves the ref for the tool and,
+        # by `continue-on-error`, fails neither the job nor the run.
+        timeout-minutes: 1
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          RUN_ID: ${{ github.run_id }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          case "$REF_NAME" in
+            verify/*|probe/*|coverage/*) ;;
+            *) echo "$REF_NAME is not a scratch ref. Left."; exit 0 ;;
+          esac
+          left_for_the_tool() {
+            # One line, since a warning annotation ends at the first line
+            # break, and the API's error bodies end their lines in \r\n.
+            echo "::warning::$REF_NAME is left for the tool that pushed it to delete: $(printf '%s' "$1" | tr '\r\n' '  ')"
+            exit 0
+          }
+          if ! unfinished=$(gh api -X GET "repos/$REPOSITORY/actions/runs" -f branch="$REF_NAME" -F per_page=100 --jq "[.workflow_runs[] | select(.id != $RUN_ID and .status != \"completed\") | .id | tostring] | join(\" \")" 2>&1); then
+            left_for_the_tool "listing its runs failed: $unfinished"
+          fi
+          if [ -n "$unfinished" ]; then
+            echo "$REF_NAME is left: run(s) $unfinished on it have not finished."
+            exit 0
+          fi
+          remote="https://github.com/$REPOSITORY.git"
+          authorization="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          repository="$RUNNER_TEMP/delete-scratch-ref"
+          git init -q "$repository"
+          # Refused unless the ref still points at this run's commit.
+          if pushed=$(git -C "$repository" -c http.extraHeader="$authorization" push --force-with-lease="refs/heads/$REF_NAME:$COMMIT" "$remote" ":refs/heads/$REF_NAME" 2>&1); then
+            echo "Deleted $REF_NAME."
+            exit 0
+          fi
+          if ! listed=$(git -C "$repository" -c http.extraHeader="$authorization" ls-remote "$remote" "refs/heads/$REF_NAME" 2>&1); then
+            left_for_the_tool "the delete failed ($pushed), and so did reading the ref ($listed)"
+          fi
+          now=$(printf '%s\n' "$listed" | awk -v ref="refs/heads/$REF_NAME" '$2 == ref { print $1 }')
+          if [ -z "$now" ]; then
+            echo "$REF_NAME is already gone."
+          elif [ "$now" != "$COMMIT" ]; then
+            echo "$REF_NAME is left: it now points at $now, not this run's $COMMIT."
+          else
+            left_for_the_tool "the delete failed: $pushed"
+          fi
