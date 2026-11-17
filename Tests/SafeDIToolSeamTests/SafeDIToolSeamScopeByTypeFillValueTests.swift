@@ -1056,6 +1056,69 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesRequiredWrapper_whenSeamCallInsideOptionalReaderRequiresToken() async throws {
+		// `DefaultUserService` reads `token` only if available, but builds `Panel`, a seam whose place `DefaultGadget` fills
+		// requiring `token`, which the fill hands it from its own scope: the fill's tree requires `token`, so the fill takes
+		// the wrapper required, as inline reads a value on every route.
+		try await expectFill(
+			feature: Self.lazyRouteFeature() + [
+				"public protocol Gadget {}",
+				seamFixtureType(named: "Panel", isSeam: true, declarations: ["@Instantiated let gadget: any Gadget"]),
+			],
+			fulfillers: [
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received(onlyIfAvailable: true) let token: Token?", "@Instantiated let panel: Panel"]),
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultGadget", fulfilling: "Gadget", declarations: ["@Received let token: Token"]),
+			],
+			root: Self.lazyRouteRoot,
+			expectedApp: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let token = Token()
+			        func __safeDI_office() -> Office {
+			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(_ scope: Office.SafeDIScope_UserService.Model_Scope.userService_Values, token: LazilyInstantiated<Token>) -> any UserService {
+			                func __safeDI_userService() -> DefaultUserService {
+			                    func __safeDI_panel() -> Panel {
+			                        _ = Panel.__safeDI_Panel_A5FB2CD0EC7D53C9.self // \(Self.moduleInfoComment)
+			                        func __safeDI_gadgetBuilder_Panel() -> Panel.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+			                            .init(gadget: { _ in
+			                                let gadget: any Gadget = DefaultGadget(token: token.instance)
+			                                return gadget
+			                            })
+			                        }
+			                        return Panel(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Panel())
+			                    }
+			                    let panel: Panel = __safeDI_panel()
+			                    return DefaultUserService(token: token.instance, panel: panel)
+			                }
+			                let userService: any UserService = __safeDI_userService()
+			                return userService
+			            }
+			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
+			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { scope in __safeDI_userServiceBuilder_Office_Model_Scope_userService(scope, token: token) })
+			            }
+			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+			        }
+			        let office: Office = __safeDI_office()
+			        self.init(token: token, office: office)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_wrapsCallersOptionalToken_whenCallerForwardsTokenOptionally() async throws {
 		// `Screen`, the caller, forwards `token: Token?`, which the fill reads only if available: the root dispatcher wraps
 		// the value where there is one, so the fill reads the caller’s `token` beside `Desk` and `Desk`’s instance beneath it.
