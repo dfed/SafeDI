@@ -1767,6 +1767,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// A fill that holds places of several hole types or families of the calling seam is handed a struct for each, so its
 			// level functions take each under a name of its own, after the fill's parameter it leads to, which names the builder
 			// whose route leads there: never a position, which would move to another type when the types are renamed.
+			// A level reached from two roots takes the list of the root whose key spells first. Every root here is the called
+			// seam's root of a hole type and family, and a level a root reaches has its hole type, so two roots that share a level
+			// differ only in family, and the `@Sendable` root's list comes first, whatever the names. That is the list the level
+			// needs: the `@Sendable` root reaches it from inside a `@Sendable` function, so each place beneath it is built in one on
+			// that route, and a case whose places are built in one on one route and not on another, with a fill that holds a place,
+			// is rejected (`placeInsideFillOfCaseOfBothRootEnums`); each fill beneath the level that the list reaches is a fill of a
+			// `@Sendable` place, which takes the `@Sendable` family's structs.
 			var carriedInnerScopesByLevel = [SeamSignature.ScopeEnum.Key: [(name: String, type: TypeDescription)]]()
 			for (rootKey, carried) in carriedInnerScopesByKey.sorted(by: { $0.key.spelling < $1.key.spelling }) {
 				var keysToVisit = [rootKey]
