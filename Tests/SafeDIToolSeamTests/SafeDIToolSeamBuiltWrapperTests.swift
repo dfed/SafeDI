@@ -1445,10 +1445,10 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
 			        func __safeDI_inner() -> Inner {
-			            let __safeDI_gadgetSendableBuilder_inner_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.inner_widgetSendableBuilder(SafeDISendableScope_Gadget.inner_widgetSendableBuilder_Values())
 			            _ = Inner.__safeDI_Inner_C965CB17F84BDA80.self\(seamCallComment(seam: "Inner"))
 			            @Sendable func __safeDI_widgetSendableBuilder_Inner_widget() -> any Widget {
 			                @Sendable nonisolated func __safeDI_widget() -> DefaultWidget {
+			                    let __safeDI_gadgetSendableBuilder_inner_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.inner_widgetSendableBuilder(SafeDISendableScope_Gadget.inner_widgetSendableBuilder_Values())
 			                    let gadget: any Gadget = __safeDI_gadgetSendableBuilder_inner_widgetSendableBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())
 			                    return DefaultWidget(gadget: gadget)
 			                }

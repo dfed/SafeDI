@@ -2207,11 +2207,11 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			    public init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
 			        func __safeDI_inner() -> Inner {
 			            let __safeDI_gadgetSendableBuilder_inner_defaultService_AnyServiceSendableBuilder = __safeDI_gadgetSendableBuilder.inner_defaultService_AnyServiceSendableBuilder(SafeDISendableScope_Gadget.inner_defaultService_AnyServiceSendableBuilder_Values())
-			            let __safeDI_gadgetSendableBuilder_inner_defaultService_AnyServiceSendableBuilder_ = __safeDI_gadgetSendableBuilder.inner_defaultService_AnyServiceSendableBuilder_(SafeDISendableScope_Gadget.inner_defaultService_AnyServiceSendableBuilder__Values())
 			            _ = Inner.__safeDI_Inner_8EF748110FD1B9AF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            @Sendable nonisolated func __safeDI_defaultService_AnyServiceSendableBuilder_Inner_makeService(__safeDI_inner_defaultService_AnyServiceSendableBuilder: @escaping SendableErasedInstantiator<(), SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>.Builder) -> SendableErasedInstantiator<(), AnyService>.Builder {
 			                @Sendable nonisolated func __safeDI_makeService() -> DefaultService {
 			                    let __safeDI_inner_defaultService_AnyServiceSendableBuilder = __safeDI_inner_defaultService_AnyServiceSendableBuilder(())
+			                    let __safeDI_gadgetSendableBuilder_inner_defaultService_AnyServiceSendableBuilder_ = __safeDI_gadgetSendableBuilder.inner_defaultService_AnyServiceSendableBuilder_(SafeDISendableScope_Gadget.inner_defaultService_AnyServiceSendableBuilder__Values())
 			                    let gadget: any Gadget = __safeDI_gadgetSendableBuilder_inner_defaultService_AnyServiceSendableBuilder_.gadget(SafeDIScope_Gadget.DefaultService_Scope.gadget_Values())
 			                    return DefaultService(gadget: gadget)
 			                }

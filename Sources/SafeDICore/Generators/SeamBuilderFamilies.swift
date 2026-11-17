@@ -159,8 +159,11 @@ extension DependencyTreeGenerator {
 		// The places and calls of a seam's or a public mock's tree, by hole type, whose enums are nested by type
 		// (`scopeEnumsByType`), a place inside a fill included.
 		var reachedByHoleType = [SeamSignature.HoleType: [ReachedPlace]]()
+		var reenteringCalls = [ReachedPlace]()
 		for reached in placesAndCalls(in: generator, keysTheCalledSeam: !scopeTypeNames.areQualified) {
 			switch reached {
+			case let .reenteringCall(sitePath, steps):
+				reenteringCalls.append(ReachedPlace(sitePath: sitePath, steps: steps, call: nil, reentersEnclosingFill: true))
 			case let .place(sitePath, steps):
 				guard let hole = holesBySite[SeamSignature.Hole.Site(seamType: seamType, path: sitePath)] else { continue }
 				reach(hole.holeType)
@@ -190,6 +193,11 @@ extension DependencyTreeGenerator {
 					innerAccessByEnum[key, default: []].append((min(innerSeamAccess.level, builder.tierAccess), builder.accessCause ?? innerSeamAccess.cause, innerKey.seamType))
 				}
 			}
+		}
+
+		// A call that re-enters an enclosing call's fill has a route in each hole type whose enums have its case.
+		for holeType in reachedByHoleType.keys {
+			reachedByHoleType[holeType, default: []] += reenteringCalls
 		}
 
 		// The stem of each hole type, from what it builds alone, named apart only from another hole type's.
@@ -439,6 +447,7 @@ extension DependencyTreeGenerator {
 				caseName: callRoute.caseName,
 				memberValuesType: holeTypesDeclaringBuilderStructs.contains(callRoute.rootKey.holeType) ? callRoute.memberValuesType : nil,
 				handsFillLevelStruct: callRoute.handsFillLevelStruct,
+				reentersEnclosingFill: callRoute.reentersEnclosingFill,
 			)
 		}
 
@@ -843,6 +852,9 @@ extension DependencyTreeGenerator {
 		/// A call that passes a builder up, with the cases on its path, and whether any `@Sendable` function, a fill's
 		/// included, encloses it.
 		case call(sitePath: [Property], generator: ScopeGenerator, steps: [ReachedStep], isInSendableFunction: Bool)
+		/// A seam's call inside a fill that re-enters an enclosing call's fill by name, with the cases on its path,
+		/// the last its case for the builder the reused fill is passed for.
+		case reenteringCall(sitePath: [Property], steps: [ReachedStep])
 	}
 
 	/// Every place and every call that passes a builder up in the tree `generator` roots, in the order the generated code
@@ -851,6 +863,12 @@ extension DependencyTreeGenerator {
 	/// - Parameter keysTheCalledSeam: Whether a fill's case carries the called seam's root enum, as a seam's builder struct
 	///   does (`filledRootKey(of:in:keysTheCalledSeam:)`), rather than that of the seam whose tree holds the place.
 	private static func placesAndCalls(in generator: ScopeGenerator, keysTheCalledSeam: Bool) -> [PlaceOrCall] {
+		// A seam's call that re-enters an enclosing call's fill takes the called seam's struct from a member of its own case.
+		let reenteredFillsByKey = keysTheCalledSeam ? emittingFillsByKey(inTreeRootedAt: generator) : [:]
+		/// Whether the walk enters `child`: its tree leads to a place, or to a call that re-enters a fill whose tree does.
+		func leadsOn(_ child: ScopeGenerator) -> Bool {
+			child.containsBuildSite || child.passesUpBuilder || (child.holdsCallReenteringEnclosingFill && !reenteredFillsByKey.isEmpty)
+		}
 		struct Frame {
 			let generator: ScopeGenerator
 			let orderedChildren: [ScopeGenerator.OrderedChild]
@@ -879,6 +897,19 @@ extension DependencyTreeGenerator {
 				if !frame.generator.passedUpHoles.isEmpty {
 					reached.append(.call(sitePath: frame.path, generator: frame.generator, steps: frame.steps, isInSendableFunction: frame.isInSendableFunction))
 				}
+				if let callStep = frame.steps.last {
+					for reusedFill in reenteredFills(by: frame.generator, in: reenteredFillsByKey) {
+						guard let innerKey = filledRootKey(of: reusedFill, in: frame.generator, keysTheCalledSeam: true) else { continue }
+						let fulfillerBuildsInSendableFunction = reusedFill.children.first?.buildsInSendableFunction ?? false
+						reached.append(.reenteringCall(sitePath: frame.path, steps: frame.steps.dropLast() + [ReachedStep(
+							type: callStep.type,
+							property: callStep.property,
+							pathLength: callStep.pathLength,
+							buildsInSendableFunction: callStep.buildsInSendableFunction,
+							filledBuilder: SeamDeclarationGraph.FilledBuilder(innerKey: innerKey, carriesInnerScope: !fulfillerBuildsInSendableFunction),
+						)]))
+					}
+				}
 				continue
 			}
 			frames[frames.count - 1].nextPosition += 1
@@ -891,7 +922,7 @@ extension DependencyTreeGenerator {
 					sitePath: sitePath,
 					steps: frame.steps + [ReachedStep(type: type, property: holeSite.property, pathLength: sitePath.count, buildsInSendableFunction: isSendableWrapper, filledBuilder: nil)],
 				))
-			} else if child.generator.containsBuildSite || child.generator.passesUpBuilder, child.generator.fillEmitsCode {
+			} else if leadsOn(child.generator), child.generator.fillEmitsCode {
 				if child.generator.fillHole != nil {
 					// A fill of the call this frame is: the call's step becomes its case for the builder filled, on which the fill's
 					// `@Sendable` function counts. The filled place's path in the inner seam's tree has no case of this seam's.
