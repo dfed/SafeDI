@@ -1077,7 +1077,7 @@ private struct ReadSwiftFile {
 	/// The file's syntax tree, when its text mentions a SafeDI marker, so it was parsed.
 	let syntaxTree: SourceFileSyntax?
 	/// When its text mentions no SafeDI marker, so it was not parsed, the names of the types it may declare: each name
-	/// that follows `enum`, `struct`, `class`, `actor`, `protocol`, or `typealias` and whitespace in it
+	/// that follows `enum`, `struct`, `class`, `actor`, `protocol`, `typealias`, or `associatedtype` and whitespace in it
 	/// (`TypeDeclarationWords.namesFollowingKeywords`), a superset of the names of the types it declares, which a parse
 	/// decides exactly. A declaration with a comment between the keyword and the name is not found. Empty for a parsed
 	/// file.
@@ -1117,8 +1117,8 @@ private func readSwiftFile(atPath filePath: String, findingPackageAccessModifier
 
 /// What `UnsafeBufferPointer<UInt8>.typeDeclarationWords` found in a file's text.
 struct TypeDeclarationWords {
-	/// Each name that follows `enum`, `struct`, `class`, `actor`, `protocol`, or `typealias` and whitespace, the keyword a
-	/// whole word too: a word, or a name in backticks without them, as a mention of the type spells it
+	/// Each name that follows `enum`, `struct`, `class`, `actor`, `protocol`, `typealias`, or `associatedtype` and
+	/// whitespace, the keyword a whole word too: a word, or a name in backticks without them, as a mention of the type spells it
 	/// (`mentionedTypeNames(of:)`). A superset of the names of the types the text declares.
 	var namesFollowingKeywords = Set<String>()
 	/// Whether the text holds the word `package`, which every declaration only another module of the package can name
@@ -1194,9 +1194,10 @@ extension UnsafeBufferPointer<UInt8> {
 		return found
 	}
 
-	/// Whether these bytes, a word, are a keyword that introduces a declaration of a type whose access SafeDI reads:
-	/// `enum`, `struct`, `class`, `actor`, `protocol`, or `typealias`. A word's length rules out most words, and every
-	/// other keyword, before any byte is compared.
+	/// Whether these bytes, a word, are a keyword that introduces a declaration of a type whose access SafeDI reads –
+	/// `enum`, `struct`, `class`, `actor`, `protocol`, or `typealias` – or `associatedtype`, which introduces a type whose
+	/// name SafeDI reads only for a reserved prefix. A word's length rules out most words, and every other keyword, before
+	/// any byte is compared.
 	private var isTypeDeclarationKeyword: Bool {
 		switch count {
 		case 4:
@@ -1209,6 +1210,8 @@ extension UnsafeBufferPointer<UInt8> {
 			spells("protocol")
 		case 9:
 			spells("typealias")
+		case 14:
+			spells("associatedtype")
 		default:
 			false
 		}

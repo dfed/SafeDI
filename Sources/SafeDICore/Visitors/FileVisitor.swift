@@ -41,7 +41,7 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
 		// A protocol declares no type SafeDI scans for, but its declaration proves its access, as any plain type's does.
 		// Its body declares nothing SafeDI reads: a type nested in it counts as the protocol does (`TypeAccessProof`). The
-		// type aliases it declares can have reserved names.
+		// type aliases and associated types it declares can have reserved names.
 		recordPlainTypeDeclaration(
 			typeDefined(named: node.name.text),
 			access: node.modifiers.access(introducedBy: node.protocolKeyword, sourceLocationConverter: sourceLocationConverter),

@@ -355,6 +355,98 @@ import Testing
 		}
 
 		@Test
+		func declaration_producesReservedTypeNameDiagnosticAtEachAssociatedType_whenNestedProtocolDeclaresAssociatedTypesWithReservedPrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct Home: Instantiable {
+				    public init() {}
+
+				    public protocol Holder {
+				        associatedtype SafeDIScope_Value
+				        #if DEBUG
+				        associatedtype SafeDIMockScope_Element
+				        #else
+				        associatedtype __safeDI_Element
+				        #endif
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct Home: Instantiable {
+				    public init() {}
+
+				    public protocol Holder {
+				        associatedtype SafeDIScope_Value
+				        #if DEBUG
+				        associatedtype SafeDIMockScope_Element
+				        #else
+				        associatedtype __safeDI_Element
+				        #endif
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type name `SafeDIScope_Value` begins with `SafeDIScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIScope_`.",
+						line: 6,
+						column: 24,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `SafeDIMockScope_Element` begins with `SafeDIMockScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIMockScope_`.",
+						line: 8,
+						column: 24,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The type name `__safeDI_Element` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `__safeDI_`.",
+						line: 10,
+						column: 24,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenNestedProtocolDeclaresRenamedAssociatedTypes() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct Home: Instantiable {
+				    public init() {}
+
+				    public protocol Holder {
+				        associatedtype Value
+				        #if DEBUG
+				        associatedtype MockElement
+				        #else
+				        associatedtype Element
+				        #endif
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct Home: Instantiable {
+				    public init() {}
+
+				    public protocol Holder {
+				        associatedtype Value
+				        #if DEBUG
+				        associatedtype MockElement
+				        #else
+				        associatedtype Element
+				        #endif
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func declaration_producesReservedTypeNameDiagnostic_whenTypeNestedInsideNestedTypeBeginsWithReservedPrefix() {
 			assertMacroExpansion(
 				"""
