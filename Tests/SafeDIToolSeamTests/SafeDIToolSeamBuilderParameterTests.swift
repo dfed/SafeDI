@@ -6474,7 +6474,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			                func __safeDI_userService() -> DefaultTracker {
 			                    func __safeDI_serviceBuilder() -> Service {
 			                        _ = Service.__safeDI_Service_DAEE219B0D380A33.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			                        return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_inner_trackerBuilder.serviceBuilder(SafeDIScope_UserService.DefaultTracker_Scope.serviceBuilder_Values()))
+			                        return Service(__safeDI_userServiceBuilder: __safeDI_inner_trackerBuilder.serviceBuilder(SafeDIScope_UserService.DefaultTracker_Scope.serviceBuilder_Values()))
 			                    }
 			                    let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
 			                    return DefaultTracker(serviceBuilder: serviceBuilder)
