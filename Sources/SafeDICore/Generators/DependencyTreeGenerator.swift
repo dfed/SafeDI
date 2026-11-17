@@ -2400,10 +2400,39 @@ public actor DependencyTreeGenerator {
 				case tierOmitsBuilder(hole: SeamSignature.Hole, builder: SeamSignature.Builder?, tier: AccessLevel)
 				/// A builder narrower than a tier only because of an inner seam whose enum it holds.
 				case tierOmitsBuilderHoldingInnerSeam(builder: SeamSignature.Builder, innerSeam: TypeDescription, tier: AccessLevel)
+				/// `place` and `reference`, places of one builder, forward different values, so no one builder a person writes
+				/// can fill both: the builder takes what its places forward. A plugin check, since two spellings of one type
+				/// are not decidable from one declaration. Reported at `place`'s `forwardingLocation`.
+				case placesForwardOtherValues(place: SeamSignature.Hole, reference: SeamSignature.Hole, isSendable: Bool)
 			}
 
 			let seam: Instantiable
 			let kind: Kind
+
+			/// `` `label: Type` on `Owner` forwards `Value` ``, or `forwards nothing`, for a place of a builder.
+			private static func forwardedValueClause(of place: SeamSignature.Hole) -> String {
+				let forwarded = place.forwardedType.map { "forwards `\($0.strippingEscaping.asSource)`" } ?? "forwards nothing"
+				return "`\(place.property.asSource)` on `\(place.ownerType.asSource)` \(forwarded)"
+			}
+
+			/// How to make `place` forward what `reference` forwards, by the kinds of the two: an erased instantiator that
+			/// forwards a written type beside a plain or lazy place takes `()`, beside an `Instantiator<T>` takes
+			/// `T.ForwardedProperties`, and two erased instantiators take one first generic argument; any of them can name
+			/// another type in its `fulfilledByType`, which gives it a builder of its own.
+			private static func forwardedValueRemedy(of place: SeamSignature.Hole, beside reference: SeamSignature.Hole) -> String {
+				let (erasedPlace, otherPlace) = place.property.propertyType.isErasedInstantiator && place.forwardedType != nil ? (place, reference) : (reference, place)
+				switch otherPlace.property.propertyType {
+				case .constant, .lazilyInstantiated, .sendableLazilyInstantiated:
+					return "Declare `\(erasedPlace.property.label)`’s first generic argument `()`, or name another type in its `fulfilledByType`."
+				case .instantiator, .sendableInstantiator:
+					let forwardedProperties = TypeDescription.nested(name: Dependency.forwardedPropertiesType, parentType: otherPlace.builtType, generics: [])
+					let wrapperName = erasedPlace.property.propertyType.isSendable ? Dependency.sendableErasedInstantiatorType : Dependency.erasedInstantiatorType
+					let declaredType = TypeDescription.simple(name: wrapperName, generics: [forwardedProperties, erasedPlace.builtType])
+					return "Declare `\(erasedPlace.property.label)` as `\(declaredType.asSource)`, or name another type in its `fulfilledByType`."
+				case .erasedInstantiator, .sendableErasedInstantiator:
+					return "Give both the same first generic argument, or name another type in the `fulfilledByType` of one."
+				}
+			}
 
 			/// What requires `tier`, the tier an omission is reported at: the seam's access, in a clause of the error's first
 			/// sentence, or its `generateMock: .public`, which no narrower seam removes, in a sentence of its own.
@@ -2517,6 +2546,10 @@ public actor DependencyTreeGenerator {
 					)
 					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder?.label(inTierAt: tier) ?? hole.builderLabel(inTierAt: tier)): \((builder?.readableParameterType ?? hole.builtType).asSource)`, the builder for `\(hole.ownerType.asSource)`’s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
 					declarationNotes = SeamAccessExplanation.declarationNotes(for: hole.accessCause, neededLevel: tier)
+				case let .placesForwardOtherValues(place, reference, isSendable):
+					receivers = []
+					location = place.forwardingLocation ?? location
+					message = "\(Self.forwardedValueClause(of: place)), and \(Self.forwardedValueClause(of: reference)). \(seamName) takes one \(isSendable ? "`@Sendable` " : "")builder for both, since `\(place.instantiatedType.asSource)` fills each and each returns `\(place.builtType.asSource)`, and a builder’s places must forward the same values. \(Self.forwardedValueRemedy(of: place, beside: reference))"
 				case let .parameters(.initializerCollides(parameters, builderLabels, handWrittenInitializer)):
 					receivers = []
 					let handWrittenSignature = "init(\(handWrittenInitializer.arguments.map { "\($0.label):" }.joined()))"
@@ -4697,6 +4730,7 @@ public actor DependencyTreeGenerator {
 							instantiables: instantiables,
 							ownScopeEnums: ownScopeEnums,
 							generatesPlainInitializers: seams.generatesPlainDependencyTreeInitializers,
+							declaredTypeNames: declaredTypeNames,
 						)
 						if seamRoot?.signature.settledContent != previousSeamRoot?.signature.settledContent {
 							changed = true
@@ -5334,7 +5368,7 @@ public actor DependencyTreeGenerator {
 	///   them: what `shapedBuilders` reads an enum the seam's builders reach from, never a copy another seam carries.
 	/// - Parameter generatesPlainInitializers: Whether the seam's tiers have plain initializers, which a hand-written
 	///   initializer callable with their labels would collide with: the module's `SeamResolution.generatesPlainDependencyTreeInitializers`.
-	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum], generatesPlainInitializers: Bool) throws -> ScopeGenerator.SeamRoot? {
+	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum], generatesPlainInitializers: Bool, declaredTypeNames: DeclaredTypeNames) throws -> ScopeGenerator.SeamRoot? {
 		let ownParameters = ownParameters(of: seam, proof: proof)
 		// The seam's own properties are parameters as declared, and provide forms as any parameter does.
 		var ownLabels = Set<String>()
@@ -5571,6 +5605,21 @@ public actor DependencyTreeGenerator {
 			      reportedHoleDeclarations.insert(OwnedHoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted
 			else { continue }
 			errors.append(.seam(.init(seam: seam, kind: .tierOmitsBuilder(hole: hole, builder: shapedBuilders.builderBySite[hole.site], tier: tier))))
+		}
+		// The places of one builder must forward one value, since the builder a person writes takes it: each place that forwards
+		// another value than the first by location is reported, wherever the builder's places are, an inner seam's included.
+		let enumsByKey = Dictionary(shapedBuilders.scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+		for builder in shapedBuilders.builders {
+			let reachedSites = SeamSignature.ScopeEnum.sitesReached(from: builder.enumKey, in: enumsByKey)
+			let places = holes.filter { reachedSites.contains($0.site) }
+			let comparison = ForwardedValueComparison(
+				fillingType: builder.enumKey.holeType.instantiatedType,
+				moduleNameByOwner: Dictionary(places.compactMap { place in instantiables[place.ownerType]?.moduleName.map { (place.ownerType, $0) } }, uniquingKeysWith: { first, _ in first }),
+				declaredTypeNames: declaredTypeNames,
+			)
+			for (place, reference) in Self.placesForwardingOtherValues(among: places, comparison: comparison) {
+				errors.append(.seam(.init(seam: seam, kind: .placesForwardOtherValues(place: place, reference: reference, isSendable: builder.enumKey.isSendable))))
+			}
 		}
 		// A builder can be narrower than every place it builds where an inner seam whose enum it holds is.
 		for builder in shapedBuilders.builders {
