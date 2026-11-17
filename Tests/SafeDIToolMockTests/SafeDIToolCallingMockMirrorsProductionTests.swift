@@ -266,6 +266,24 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		_ = try await executeSafeDIToolMultiModuleTest(modules: Self.w4FulfilledInFeatureModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 	}
 
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func generate_buildsTwinsValues_whenReceiveIsRemovedAsCycleErrorSays(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		// The dependency cycle’s first remedy: `AppSettings` no longer receives `feedBuilder`. The calling mock and its twin
+		// are accepted, the mock fills `settings` as the twin does, and what it builds equals what the twin builds.
+		let result = try await GraphFuzzerCallingMockCheck.run(Self.graph(
+			named: "the plain W4 cycle with its receive removed",
+			mock: Self.w4ConstantCycleRemediedModules(caller: caller.attribute, callee: calledTypes.attribute),
+			twin: Self.w4ConstantCycleRemediedModules(caller: Self.twinCaller, callee: Self.twinCalledTypes),
+			callerTypeName: "Root",
+			caller: caller,
+			expectedTwinInitializerLabels: [],
+			valueProbes: [DifferentialValueProbe(name: "Root", expression: "App.Root.mock()", knownRightExpression: "App.Root()")],
+		), seed: 0)
+
+		Self.expectFillsAsTwin(result)
+	}
+
 	@Test(arguments: CallingMockCaller.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_acceptsCallingMockAndTwin_whenReceiveIsOptionalAsCycleErrorSays(caller: CallingMockCaller) async throws {
