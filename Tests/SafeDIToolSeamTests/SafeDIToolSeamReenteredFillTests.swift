@@ -1945,7 +1945,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		]
 		await assertThrowsMultiModuleError(inModule: "Outer", diagnostics: { fixtures in
 			"""
-			\(fixtures["Outer"]!["DefaultGadget.swift"]):11:5: error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Outer"]!["DefaultGadget.swift"]):11:5: error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
