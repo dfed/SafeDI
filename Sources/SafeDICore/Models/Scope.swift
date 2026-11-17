@@ -1345,7 +1345,7 @@ private struct ScopeGeneratorUnderConstruction {
 				return .init(
 					label: label,
 					value: route == nil ? receivedLabel : publicMockUpValue,
-					builderStruct: .init(enumKey: enumKey, rootDispatcherKey: "", upValue: publicMockUpValue, carriedStructs: [:]),
+					builderStruct: .init(rootDispatcherKey: nil, upValue: publicMockUpValue, carriedStructs: [:]),
 					overrideHanding: route == nil ? .callersBuilder : .none,
 				)
 			}
@@ -1365,11 +1365,11 @@ private struct ScopeGeneratorUnderConstruction {
 			// What the call refers to by name: the enclosing dispatcher, whatever expression passes it.
 			let enclosingFill = enclosingFills[dispatcherKey] == nil ? nil : ScopeGenerator.BuilderCallArgument.EnclosingFill(key: dispatcherKey, name: dispatcher)
 			guard !isPublicMockCall else {
-				let passesUp = !reachedSites.isSubset(of: sitesFilledOnEveryRoute)
 				// A call inside a fill of an enclosing call of the same builder re-enters the enclosing call's root level function,
 				// handing it the struct this call passes up where a route does, and, for each struct of a level it takes, what the
 				// member of the call's own case of that struct's level returns, as a seam's call does.
 				if let enclosingName = enclosingFills[dispatcherKey] {
+					let passesUp = !reachedSites.isSubset(of: sitesFilledOnEveryRoute)
 					var arguments = passesUp ? ["\((enclosingLevelUpNames[dispatcherKey] ?? "").spelledAsArgumentLabel): \(publicMockUpValue)"] : []
 					arguments += (enclosingCarriedInnerScopes[dispatcherKey] ?? []).compactMap { carriedInnerScope in
 						seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, carrying: carriedInnerScope.type).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
@@ -1377,8 +1377,8 @@ private struct ScopeGeneratorUnderConstruction {
 					return .init(label: label, value: "\(enclosingName)(\(arguments.joined(separator: ", ")))", enclosingFill: .init(key: dispatcherKey, name: enclosingName), isSendable: enumKey.isSendable)
 				}
 				// A public mock's caller passes the call of the builder's root level function, which decides per route which places
-				// it fills and passes the others up, handed the struct the caller passes up where a route does
-				// (`PublicMockLevelFunctions`).
+				// it fills and passes the others up, and takes the struct the caller passes up exactly where a route does
+				// (`PublicMockLevelFunctions.Function.takesUp`): the call is handed that struct whether or not it passes it.
 				// One function a person writes cannot both fill some places of the builder and hand others the builder passed up.
 				// The root level function of a route to a place inside a fill is handed the struct the case of this mock's own struct
 				// for the call returns, for each of its levels the fill is handed.
@@ -1390,8 +1390,8 @@ private struct ScopeGeneratorUnderConstruction {
 					label: label,
 					value: dispatcher,
 					isSendable: enumKey.isSendable,
-					builderStruct: .init(enumKey: enumKey, rootDispatcherKey: dispatcherKey, upValue: passesUp ? publicMockUpValue : nil, carriedStructs: carriedStructs),
-					overrideHanding: passesUp ? .none : .fills,
+					builderStruct: .init(rootDispatcherKey: dispatcherKey, upValue: publicMockUpValue, carriedStructs: carriedStructs),
+					overrideHanding: .fills,
 				)
 			}
 			// A seam's caller fills every place the builder reaches. The root level's function of a route to a place inside a fill
