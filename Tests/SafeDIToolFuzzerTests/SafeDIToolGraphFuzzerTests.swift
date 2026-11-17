@@ -4614,6 +4614,49 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func valuesInOrder_givesValuesInElementOrder_whenLaterElementsFinishFirst() async throws {
+		// Each element waits longer the earlier it is, so the twenty finish in the reverse of their order.
+		let values = try await GraphFuzzerOracle.valuesInOrder(of: Array(0..<20), concurrent: 20) { element in
+			try await Task.sleep(for: .milliseconds(10 * (20 - element)))
+			return "value \(element)"
+		}
+
+		#expect(values == (0..<20).map { "value \($0)" })
+	}
+
+	@Test
+	func valuesInOrder_throwsTheFirstFailureInElementOrder_whenLaterElementsFailFirst() async {
+		// Six of twenty elements fail, and each waits longer the earlier it is, so the first of them in order, 3, is the
+		// last to fail. A loop that threw whichever failure finished first would name 17.
+		let failing: Set = [3, 5, 8, 11, 14, 17]
+
+		let error = await #expect(throws: ElementFailure.self) {
+			try await GraphFuzzerOracle.valuesInOrder(of: Array(0..<20), concurrent: 20) { element in
+				try await Task.sleep(for: .milliseconds(10 * (20 - element)))
+				guard !failing.contains(element) else { throw ElementFailure(description: "element \(element) failed") }
+				return element
+			}
+		}
+
+		#expect(error?.description == "element 3 failed")
+	}
+
+	@Test
+	func valuesInOrder_startsNoElementAfterAFailure_whenOneElementRunsAtATime() async {
+		let started = StartedElements()
+
+		await #expect(throws: ElementFailure.self) {
+			try await GraphFuzzerOracle.valuesInOrder(of: Array(0..<20), concurrent: 1) { element in
+				await started.append(element)
+				guard element != 2 else { throw ElementFailure(description: "element 2 failed") }
+				return element
+			}
+		}
+
+		#expect(await started.elements == [0, 1, 2])
+	}
+
+	@Test
 	func difference_isNil_whenUnreadTypeCommentMovesToAnotherFileOfItsModule() {
 		let comment = "    // SafeDI counts `StaticString` as `public`: no module it reads declares it narrower. If `StaticString` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n"
 		let commentAboveFirst = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S5_T0+SafeDIMock.swift": "extension S5_T0 {\n\(comment)    public static func mock() {}\n}\n", "FuzzFeature/S5_T1+SafeDIMock.swift": "extension S5_T1 {\n    public static func mock() {}\n}\n"], warnings: [])
@@ -5552,7 +5595,7 @@ struct SafeDIToolGraphFuzzerTests {
 						.map(configuration.seed(at:))
 					nextBatchIndex += 1
 					group.addTask { try await GraphFuzzerPhaseAccount.$current.withValue(phaseContext) {
-						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueGraphsOf: corpus.isolatedValueGraphSeeds) { seed in
+						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueGraphsOf: corpus.isolatedValueGraphSeeds, concurrentToolRuns: 1) { seed in
 							report.append("seed \(seed)")
 						}
 						for index in results.indices where results[index].passesBesidesBuilderSurface
@@ -6236,7 +6279,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 561, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0xE4F258D97EB28F62
+	static let seamCorpusFixtureHash: UInt64 = 0x68E8DD2A5FA95F82
 	static let seamCorpusAcceptedSeedCount = 289
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -6393,7 +6436,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`seamBuilderOrderShape(listedBy:)`). Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x0323974AA9955E8D
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x18CB353E24F0F8BF
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -7623,7 +7666,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xCD6CA3904FDC435E
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x37B82E937A0C994B
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -8600,4 +8643,18 @@ private enum GeneratedExtension {
 	static let second = "extension S12_T1 {\n    static let b = 1\n}\n"
 	static let third = "extension S12_T2 {\n    static let c = 1\n}\n"
 	static let fourth = "extension S12_T3 {\n    static let d = 1\n}\n"
+}
+
+/// What a `valuesInOrder` test's element throws.
+private struct ElementFailure: Error, CustomStringConvertible {
+	let description: String
+}
+
+/// The elements a `valuesInOrder` test's closure was called with, in the order of the calls.
+private actor StartedElements {
+	private(set) var elements = [Int]()
+
+	func append(_ element: Int) {
+		elements.append(element)
+	}
 }

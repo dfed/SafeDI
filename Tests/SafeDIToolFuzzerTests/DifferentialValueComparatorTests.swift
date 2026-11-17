@@ -2368,8 +2368,9 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete))
 
-		// The batch's feature path, which does not compile, then each graph on its own: two paths, then one.
-		#expect(filesToDelete.count == 4)
+		// The batch's two paths, described side by side, of which the feature path does not compile, then each graph on
+		// its own, two paths each.
+		#expect(filesToDelete.count == 6)
 		#expect(comparisons.map(\.name) == ["Compiling", "Broken"])
 		#expect(try comparisons[0].result.get().differences == [
 			DifferentialValueDifference(probe: "CompilingRoot()", path: ["<1> CompilingRoot", "e"], feature: "e: nil", knownRight: "e: <2> CompilingA (seen, first at <1> CompilingRoot > a)"),
