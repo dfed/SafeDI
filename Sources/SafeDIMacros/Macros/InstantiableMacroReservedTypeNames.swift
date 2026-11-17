@@ -25,11 +25,18 @@ import SwiftSyntaxMacros
 extension InstantiableMacro {
 	/// The prefixes of the names of the types SafeDI’s generated code declares beside the types a person declares, each
 	/// reserved whole so that no generated name can collide with a person’s type: a seam’s root enums, `SafeDIScope_<Stem>`
-	/// and `SafeDISendableScope_<Stem>`, which the seam’s module declares in an extension of the seam, and in which the
-	/// types of the seam’s tree are spelled (`ScopeTypeNames.seam` in `SeamBuilderFamilies.swift`, which this target does
-	/// not compile), and `ReservedName.builderFunctionNamePrefix`, the prefix of the builder struct `__safeDI_Builder`
-	/// each of those enums declares.
-	static let reservedTypeNamePrefixes = ["SafeDIScope_", "SafeDISendableScope_", ReservedName.builderFunctionNamePrefix]
+	/// and `SafeDISendableScope_<Stem>`, which the seam’s module declares in an extension of the seam, and a public mock’s,
+	/// `SafeDIMockScope_<Stem>` and `SafeDISendableMockScope_<Stem>`, which the mocked type’s module declares in an
+	/// extension of the mocked type, in each of which the types of the tree are spelled (`ScopeTypeNames.seam` and
+	/// `ScopeTypeNames.publicMock` in `SeamBuilderFamilies.swift`, which this target does not compile), and
+	/// `ReservedName.builderFunctionNamePrefix`, the prefix of the builder struct `__safeDI_Builder` a seam’s enums declare.
+	static let reservedTypeNamePrefixes = [
+		"SafeDIScope_",
+		"SafeDISendableScope_",
+		"SafeDIMockScope_",
+		"SafeDISendableMockScope_",
+		ReservedName.builderFunctionNamePrefix,
+	]
 
 	/// Reports `name`, the name of the type the macro decorates or extends, and the name of each type declared among
 	/// `members` – in every clause of an `#if` block, and inside another type declared there – that begins with one of
