@@ -50,13 +50,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		// can read no level’s values, and `Shell` hands `Home` the member of its own struct.
 		let modules = Self.screenLoopModules(mid: [Self.shell], app: [Self.root(holding: "shell: Shell")])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
-		#if canImport(SafeDI)
-		import SafeDI
-		#endif
-
-
-		"""])
+		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader])
 		#expect(output.modules["Feat"]?.generatedFiles == ["Feat.swift": generatedFileHeader + """
 		#if canImport(Core)
 		import Core
@@ -232,7 +226,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		#if DEBUG
 		extension Shell {
 		    nonisolated public enum SafeDIMockScope_Api {
-		        nonisolated public struct home_Values {}
+		        nonisolated public struct home_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
@@ -279,7 +273,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		}
 
 		extension Shell {
-		    public enum __safeDI_Shell_mock_F92AFF4BE0F46BAB {}
+		    public enum __safeDI_Shell_mock_BCE44FADDA8E6FCF {}
 		}
 		#endif
 		"""])
@@ -314,7 +308,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		        apiBuilder: @escaping () -> any Api,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        _ = Shell.__safeDI_Shell_mock_F92AFF4BE0F46BAB.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        _ = Shell.__safeDI_Shell_mock_BCE44FADDA8E6FCF.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let shell = Shell.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides.shell)
 		        return Root(shell: shell)
 		    }
@@ -587,7 +581,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		#if DEBUG
 		extension Outer {
 		    nonisolated public enum SafeDIMockScope_Api {
-		        nonisolated public struct inner_Values {}
+		        nonisolated public struct inner_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
@@ -637,7 +631,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		}
 
 		extension Outer {
-		    public enum __safeDI_Outer_mock_37CAEDCD65EE9712 {}
+		    public enum __safeDI_Outer_mock_FF10A81DEF4A07EE {}
 		}
 		#endif
 		"""])
@@ -681,7 +675,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		                    return api
 		                })
 		            }
-		            _ = Outer.__safeDI_Outer_mock_37CAEDCD65EE9712.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Outer.__safeDI_Outer_mock_FF10A81DEF4A07EE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Outer.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Outer(), safeDIOverrides: safeDIOverrides.outer)
 		        }
 		        let outer: Outer = __safeDI_outer()
