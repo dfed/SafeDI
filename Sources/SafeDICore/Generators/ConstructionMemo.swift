@@ -308,7 +308,7 @@ struct ConstructionLog {
 			// spelled as: a `Set` or `Dictionary` holds no two properties `==` merges.
 			switch (self, other) {
 			case let (.nearestDeclaration(declaration), .nearestDeclaration(otherDeclaration)):
-				guard let declaration, let otherDeclaration else { return true }
+				guard let declaration, let otherDeclaration, !declaration.isUnchangedCopy(of: otherDeclaration) else { return true }
 				return declaration.bindings.allSatisfy { key, value in
 					guard let index = otherDeclaration.bindings.index(forKey: key) else { return false }
 					let (otherKey, otherValue) = otherDeclaration.bindings[index]
@@ -422,7 +422,32 @@ extension Property {
 extension TypeDescription {
 	/// Whether `other`, which `==` equates with this type, is spelled as it is, byte for byte.
 	fileprivate func isSpelledAlike(_ other: TypeDescription) -> Bool {
-		asSource.utf8.elementsEqual(other.asSource.utf8)
+		isBuiltAlike(other) || asSource.utf8.elementsEqual(other.asSource.utf8)
+	}
+
+	/// Whether `other` is built of the same cases and names as this type, so that it is spelled alike without either
+	/// spelling being made. `false` for a pair this does not compare, which `isSpelledAlike` then spells.
+	fileprivate func isBuiltAlike(_ other: TypeDescription) -> Bool {
+		switch (self, other) {
+		case let (.simple(name, generics), .simple(otherName, otherGenerics)):
+			name.utf8.elementsEqual(otherName.utf8) && generics.isBuiltAlike(otherGenerics)
+		case let (.nested(name, parentType, generics), .nested(otherName, otherParentType, otherGenerics)):
+			name.utf8.elementsEqual(otherName.utf8) && parentType.isBuiltAlike(otherParentType) && generics.isBuiltAlike(otherGenerics)
+		case let (.optional(wrapped), .optional(otherWrapped)),
+		     let (.any(wrapped), .any(otherWrapped)),
+		     let (.some(wrapped), .some(otherWrapped)),
+		     let (.array(wrapped), .array(otherWrapped)):
+			wrapped.isBuiltAlike(otherWrapped)
+		case (.simple, _), (.nested, _), (.optional, _), (.any, _), (.some, _), (.array, _), (.void, _), (.composition, _), (.implicitlyUnwrappedOptional, _), (.metatype, _), (.attributed, _), (.dictionary, _), (.tuple, _), (.closure, _), (.variadic, _), (.unknown, _):
+			false
+		}
+	}
+}
+
+extension [TypeDescription] {
+	/// Whether each of `other`'s types is built as this array's type at its index (see `TypeDescription.isBuiltAlike`).
+	fileprivate func isBuiltAlike(_ other: [TypeDescription]) -> Bool {
+		count == other.count && zip(self, other).allSatisfy { $0.isBuiltAlike($1) }
 	}
 }
 
