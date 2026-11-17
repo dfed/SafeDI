@@ -2567,6 +2567,7 @@ enum GraphFuzzerGenerator {
 			passingUpCopyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.passingUpCopyRandomSeedMask)
 			reenteredFillRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredFillRandomSeedMask)
 			reenteredPlaceFieldRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredPlaceFieldRandomSeedMask)
+			repeatedAncestorRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.repeatedAncestorRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2639,6 +2640,8 @@ enum GraphFuzzerGenerator {
 			var finalDeclarations = addingMockVocabulary(to: movingSelfContainedSeamsIntoSeamModule(
 				addingMockOnlyBlockParameterTypes(to: addingUnreadParameterTypes(to: addingLabelFormsSeam(to: addingHoleShapes(to: addingAccessProofExtensions(to: addingAccessProofShapes(to: aliasDeclarations)))))),
 			))
+			// Drawn after it, each from a stream of its own, so that every other draw of a graph they draw in is drawn as before.
+			finalDeclarations = addingRepeatedAncestorShapes(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3039,6 +3042,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingReenteredFillShapes`' choices of `reenteredTag`, which `ReenteredSubA` binds before the place whose
 		/// fill builds `ReenteredSubB` again: whether the graph reads it, and how.
 		private var reenteredPlaceFieldRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingRepeatedAncestorShapes`' choices: whether a graph gains `RepeatRoot`'s tree, in which a type is
+		/// built only beneath a cycle edge that repeats an ancestor, and every shape of that tree.
+		private var repeatedAncestorRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -7166,6 +7172,104 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let mockVocabularyRandomSeedMask: UInt64 = 0x6D6F636B566F6361
+
+		// MARK: Shapes of reported issues
+
+		/// In one base corpus graph in twenty-five, adds the shape of issue #720: `RepeatRoot`, whose mock is generated,
+		/// builds `RepeatScreen` through `RepeatScreenProtocol`, whose hand-written `mockOnly` mock takes `repeatFlow` and,
+		/// three times in four, not `repeatBadge`; `RepeatFlow` builds `RepeatScreen` again through an instantiator, with
+		/// `init`, beneath the cycle edge, where it builds `RepeatBadge`, built nowhere else, whose hand-written `mockOnly`
+		/// mock's default for `flag` the call reads from `RepeatBadge.SafeDIMockConfiguration`. `RepeatBadge` builds
+		/// `RepeatBadgeDetail`, which builds `RepeatBadgePart`, so that `RepeatBadge`'s configuration nests one of a type
+		/// whose construction reads nothing. A mock that takes `repeatBadge` builds it itself, which main generates code for
+		/// that compiles.
+		/// `repeatedAncestorRandom` draws only for this pass, after every other base pass, and only in the base corpus.
+		private mutating func addingRepeatedAncestorShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, repeatedAncestorRandom.percentChance(4) else { return declarations }
+			let mockOmitsBadge = repeatedAncestorRandom.percentChance(75)
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let protocolConformance = sendability == .sendable ? ": Sendable" : ""
+			let rootName = "\(prefix)RepeatRoot"
+			let screenName = "\(prefix)RepeatScreen"
+			let flowName = "\(prefix)RepeatFlow"
+			let badgeName = "\(prefix)RepeatBadge"
+			let badgeDetailName = "\(prefix)RepeatBadgeDetail"
+			let badgePartName = "\(prefix)RepeatBadgePart"
+			let badgeDetailValue = "\(badgeDetailName)(repeatBadgePart: \(badgePartName)())"
+			let badgeValue = "\(badgeName)(repeatBadgeDetail: \(badgeDetailValue))"
+			let screenProtocolName = "\(screenName)Protocol"
+			let badgeProtocolName = "\(badgeName)Protocol"
+			var root = TypeDeclaration(
+				name: rootName,
+				instantiableArguments: ["generateMock: true"],
+				properties: [PropertyDeclaration(attribute: "@Instantiated", label: "repeatScreen", type: screenProtocolName)],
+				declaresHelperTypes: false,
+			)
+			var screen = TypeDeclaration(
+				name: screenName,
+				instantiableArguments: ["fulfillingAdditionalTypes: [\(screenProtocolName).self]"],
+				properties: [
+					PropertyDeclaration(attribute: "@Instantiated", label: "repeatFlow", type: "\(instantiator)<\(flowName)>"),
+					PropertyDeclaration(attribute: "@Instantiated", label: "repeatBadge", type: badgeName),
+				],
+				declaresHelperTypes: false,
+				additionalConformances: [screenProtocolName],
+			)
+			screen.precedingDeclarations.append("public protocol \(screenProtocolName)\(protocolConformance) {}")
+			let badgeParameter = mockOmitsBadge ? "" : ", repeatBadge: \(badgeName) = \(badgeValue)"
+			let badgeArgument = mockOmitsBadge ? badgeValue : "repeatBadge"
+			screen.additionalDeclarations.append([
+				"@Instantiable(fulfillingAdditionalTypes: [\(screenProtocolName).self], mockOnly: true)",
+				"extension \(screenName) {",
+				"\tpublic static func mock(repeatFlow: \(instantiator)<\(flowName)> = \(instantiator) { .unused() }\(badgeParameter)) -> \(screenProtocolName) {",
+				"\t\t\(screenName)(repeatFlow: repeatFlow, repeatBadge: \(badgeArgument))",
+				"\t}",
+				"}",
+			].joined(separator: "\n"))
+			var flow = TypeDeclaration(
+				name: flowName,
+				instantiableArguments: [],
+				properties: [PropertyDeclaration(attribute: "@Instantiated", label: "repeatScreenBuilder", type: "\(instantiator)<\(screenName)>")],
+				declaresHelperTypes: false,
+			)
+			flow.precedingDeclarations.append([
+				"extension \(flowName) {",
+				"\tpublic static func unused() -> \(flowName) {",
+				"\t\t\(flowName)(repeatScreenBuilder: \(instantiator) { \(screenName)(repeatFlow: \(instantiator) { unused() }, repeatBadge: \(badgeValue)) })",
+				"\t}",
+				"}",
+			].joined(separator: "\n"))
+			var badge = TypeDeclaration(
+				name: badgeName,
+				instantiableArguments: ["fulfillingAdditionalTypes: [\(badgeProtocolName).self]"],
+				properties: [PropertyDeclaration(attribute: "@Instantiated", label: "repeatBadgeDetail", type: badgeDetailName)],
+				declaresHelperTypes: false,
+				additionalConformances: [badgeProtocolName],
+			)
+			badge.defaultValuedParameters = [ParameterDeclaration(name: "flag", type: "Bool", defaultValue: "true")]
+			badge.precedingDeclarations.append("public protocol \(badgeProtocolName)\(protocolConformance) {}")
+			badge.additionalDeclarations.append([
+				"@Instantiable(fulfillingAdditionalTypes: [\(badgeProtocolName).self], mockOnly: true)",
+				"extension \(badgeName) {",
+				"\tpublic static func mock(flag: Bool = true) -> \(badgeProtocolName) { \(badgeName)(repeatBadgeDetail: \(badgeDetailValue), flag: flag) }",
+				"}",
+			].joined(separator: "\n"))
+			let badgeDetail = TypeDeclaration(
+				name: badgeDetailName,
+				instantiableArguments: [],
+				properties: [PropertyDeclaration(attribute: "@Instantiated", label: "repeatBadgePart", type: badgePartName)],
+				declaresHelperTypes: false,
+			)
+			let badgePart = TypeDeclaration(
+				name: badgePartName,
+				instantiableArguments: [],
+				properties: [],
+				declaresHelperTypes: false,
+			)
+			return declarations + [root, screen, flow, badge, badgeDetail, badgePart]
+		}
+
+		private static let repeatedAncestorRandomSeedMask: UInt64 = 0x7265706561744166
 
 		// MARK: Cycle parameters
 
