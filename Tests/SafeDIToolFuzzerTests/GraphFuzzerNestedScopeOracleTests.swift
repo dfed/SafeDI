@@ -335,6 +335,66 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 	}
 
 	@Test
+	func casesNamingNoPropertyOfTheirType_isEmpty_whenSendableCaseOfCallInsideFillNamesCallingProperty() {
+		// The `@Sendable` family's case of `inner`'s call inside a fill, which returns the struct of the type the fill builds
+		// rather than another seam's: the case of the property `inner` and the builder `gadgetSendableBuilder`.
+		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": Self.nestedHomeScopeOfBuilderStructs(addingSendableMemberLabeled: "inner_gadgetSendableBuilder_Sendable")])
+
+		#expect(declarations.casesNamingNoPropertyOfTheirType(of: Self.sharedTypeFactsWithPlaceInsideFill) == [])
+	}
+
+	@Test
+	func casesNamingNoPropertyOfTheirType_reportsSendableCaseOfCallInsideFill_whenItNamesNoProperty() {
+		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": Self.nestedHomeScopeOfBuilderStructs(addingSendableMemberLabeled: "outer_gadgetSendableBuilder_Sendable")])
+
+		#expect(declarations.casesNamingNoPropertyOfTheirType(of: Self.sharedTypeFactsWithPlaceInsideFill) == [
+			"`Home.SafeDISendableScope_Service` declares the case `outer_gadgetSendableBuilder_Sendable`, which names no property of the seam `Home`.",
+		])
+	}
+
+	@Test
+	func unproducedDeclaredCases_isEmpty_whenFillsTypeEnumHoldsOnlyCallOfSeamThatPassesPlaceUp() {
+		// `DefaultGadget`, which `Home`'s fill of `Inner`'s builder builds, holds no place of its own but calls `Part`, which
+		// passes its place up: its enum holds only the member of that call, and no place's path enters the fill.
+		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": Self.nestedHomeScopeOfBuilderStructs
+				.replacingOccurrences(of: Self.defaultGadgetMembers, with: """
+				            nonisolated public struct partBuilder_Values {}
+
+				            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				                public let partBuilder: (partBuilder_Values) -> Part.SafeDIScope_Service.__safeDI_Builder<__safeDI_Built>
+				            }
+				""")])
+
+		#expect(declarations.unproducedDeclaredCases(of: Self.sharedTypeFacts) == [])
+	}
+
+	@Test
+	func unproducedDeclaredCases_isEmpty_whenFillCaseCallsSeamAgainInsideFillWhoseLevelItReuses() {
+		// `DefaultGadget` calls `Part` again, whose own fill of `gadgetBuilder` reuses `DefaultGadget`'s level by name: the
+		// call's case holds `DefaultGadget`'s own enum, which no place's path enters again.
+		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": Self.nestedHomeScopeOfBuilderStructs
+				.replacingOccurrences(of: Self.defaultGadgetMembers, with: """
+				            nonisolated public struct service_Values {}
+
+				            nonisolated public struct partBuilder_gadgetBuilder_Values {}
+
+				            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				                public let service: (service_Values) -> ErasedInstantiator<(), __safeDI_Built>.Builder
+				                public let partBuilder_gadgetBuilder: (partBuilder_gadgetBuilder_Values) -> Part.SafeDIScope_Gadget.__safeDI_Builder<SafeDIScope_Service.DefaultGadget_Scope.__safeDI_Builder<__safeDI_Built>>
+				            }
+				""")])
+
+		let facts = GraphFuzzerPlaceFacts(
+			producedCases: Self.sharedTypeFactsWithPlaceInsideFill.producedCases,
+			declaredLabels: Self.sharedTypeFactsWithPlaceInsideFill.declaredLabels.merging([Self.holder(of: "DefaultGadget"): ["service", "partBuilder"]]) { $1 },
+		)
+
+		#expect(declarations.unproducedDeclaredCases(of: facts) == [])
+	}
+
+	@Test
 	func undeclaredProducedCases_reportsCase_whenTheTypesBuilderStructLacksItsMember() {
 		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": Self.nestedHomeScopeOfBuilderStructs.replacingOccurrences(
 			of: "                public let shared: (shared_Values) -> SafeDIScope_Service.Shared_Scope.__safeDI_Builder<__safeDI_Built>\n\n                public let service:",
@@ -603,6 +663,26 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 	}
 
 	"""
+
+	/// The members of `DefaultGadget_Scope` in `nestedHomeScopeOfBuilderStructs`: its `service` place's struct and member.
+	private static let defaultGadgetMembers = """
+	            nonisolated public struct service_Values {}
+
+	            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+	            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+	                public let service: (service_Values) -> ErasedInstantiator<(), __safeDI_Built>.Builder
+	            }
+	"""
+
+	/// `nestedHomeScopeOfBuilderStructs` with a member labeled `label` in the `@Sendable` root's builder struct, which carries
+	/// no values and returns the struct of `DefaultGadget`, the type `Home`'s fill of `Inner`'s builder builds.
+	private static func nestedHomeScopeOfBuilderStructs(addingSendableMemberLabeled label: String) -> String {
+		let sendableMember = "            public let screenA_Sendable: @Sendable (screenA_Sendable_Values) -> SafeDIScope_Service.ScreenA_Scope.__safeDI_Builder<__safeDI_Built>\n"
+		return nestedHomeScopeOfBuilderStructs.replacingOccurrences(
+			of: sendableMember,
+			with: sendableMember + "            public let \(label): @Sendable (\(label)_Values) -> SafeDIScope_Service.DefaultGadget_Scope.__safeDI_Builder<__safeDI_Built>\n",
+		)
+	}
 
 	/// `name`, an `@Instantiable` type that fulfills `fulfilledType`, declaring `declarations`.
 	private static func fulfillingType(named name: String, fulfilling fulfilledType: String, declarations: [String]) -> String {
