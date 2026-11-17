@@ -536,9 +536,542 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_wrapsCallersTokenForFill_whenLevelBindsTokenLazilyBesideCallersPlainToken(integration: MultiModuleIntegration) async throws {
+		// `Desk` binds `token` lazily above one of `Model`’s places, and `Root` holds a plain `token` above the other, which
+		// the root dispatcher hands the fill. The fill takes the wrapper and reads its instance where it builds `userService`:
+		// `Desk`’s route hands it `Desk`’s wrapper, and the root dispatcher wraps `Root`’s own `token`, as inline reads each.
+		try await expectFill(
+			feature: Self.lazyRouteFeature(),
+			fulfillers: [Self.lazyRouteFulfiller],
+			root: Self.lazyRouteRoot,
+			integration: integration,
+			expectedApp: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let token = Token()
+			        func __safeDI_office() -> Office {
+			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Office"))
+			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
+			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
+			                    let userService: any UserService = DefaultUserService(token: token.instance)
+			                    return userService
+			                })
+			            }
+			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+			        }
+			        let office: Office = __safeDI_office()
+			        self.init(token: token, office: office)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_wrapsCallersTokenForFill_whenRouteReadingCallersPlainTokenIsFirst() async throws {
+		// `Office` builds `model`, whose route binds no `token`, before `desk`, which binds it lazily: the builders reach the
+		// route that reads `Root`’s plain `token` first, and the fill still takes the wrapper.
+		try await expectFill(
+			feature: Self.lazyRouteFeature(deskFirst: false),
+			fulfillers: [Self.lazyRouteFulfiller],
+			root: Self.lazyRouteRoot,
+			expectedApp: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let token = Token()
+			        func __safeDI_office() -> Office {
+			            _ = Office.__safeDI_Office_C1C4CFA43B1FA192.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) }, desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
+			                    let userService: any UserService = DefaultUserService(token: token.instance)
+			                    return userService
+			                })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
+			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            }
+			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+			        }
+			        let office: Office = __safeDI_office()
+			        self.init(token: token, office: office)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_wrapsCallersTokenForFill_whenLevelBindsTokenSendableLazilyBesideCallersPlainToken() async throws {
+		try await expectFill(
+			feature: Self.lazyRouteFeature(deskToken: "SendableLazilyInstantiated<Token>"),
+			fulfillers: [Self.lazyRouteFulfiller],
+			root: Self.lazyRouteRoot,
+			expectedApp: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let token = Token()
+			        func __safeDI_office() -> Office {
+			            _ = Office.__safeDI_Office_79E9D8C7948FA1D0.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: SendableLazilyInstantiated<Token>({ token })) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
+			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: SendableLazilyInstantiated<Token>) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
+			                    let userService: any UserService = DefaultUserService(token: token.instance)
+			                    return userService
+			                })
+			            }
+			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+			        }
+			        let office: Office = __safeDI_office()
+			        self.init(token: token, office: office)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsFillCallersTokenInstance_whenCallerHoldsTokenLazilyBesideLevelsPlainToken() async throws {
+		// The other way round: `Desk` binds a plain `token`, which the fill takes, and `Root` holds it lazily, so the root
+		// dispatcher hands the fill `Root`’s instance.
+		try await expectFill(
+			feature: Self.lazyRouteFeature(deskToken: "Token"),
+			fulfillers: [Self.lazyRouteFulfiller],
+			root: seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: LazilyInstantiated<Token>", "@Instantiated let office: Office"]),
+			expectedApp: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_token() -> Token {
+			            Token()
+			        }
+			        let token = LazilyInstantiated<Token>(__safeDI_token)
+			        func __safeDI_office() -> Office {
+			            _ = Office.__safeDI_Office_198FC1FC010778A5.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: token.instance) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
+			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: Token) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
+			                    let userService: any UserService = DefaultUserService(token: token)
+			                    return userService
+			                })
+			            }
+			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+			        }
+			        let office: Office = __safeDI_office()
+			        self.init(token: token, office: office)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsOptionalLazyFillParametersInstance_whenFillReadsLazilyBoundTokenOnlyIfAvailable() async throws {
+		// `DefaultUserService` reads `token` only if available: the fill takes the wrapper optionally and reads its instance
+		// through the optional, `Desk`’s beneath `Desk` and `Root`’s wrapped `token` beside it.
+		try await expectFill(
+			feature: Self.lazyRouteFeature(),
+			fulfillers: [Self.lazyRouteOnlyIfAvailableFulfiller],
+			root: Self.lazyRouteRoot,
+			expectedApp: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let token = Token()
+			        func __safeDI_office() -> Office {
+			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
+			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
+			                    let userService: any UserService = DefaultUserService(token: token?.instance)
+			                    return userService
+			                })
+			            }
+			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+			        }
+			        let office: Office = __safeDI_office()
+			        self.init(token: token, office: office)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_wrapsCallersTokenForFill_whenFulfillerIsDeclaredInAnotherModule() async throws {
+		// `DefaultUserService` is declared in `Services`, beneath `App`, which fills the place: what the fill reads is read
+		// from the fulfiller’s declaration in `Services`’ `.safedi`.
+		try await expectFill(
+			feature: Self.lazyRouteFeature(),
+			fulfillers: [Self.lazyRouteFulfiller],
+			root: Self.lazyRouteRoot,
+			fulfillersModule: "Services",
+			expectedApp: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(Services)
+			import Services
+			#endif
+
+			extension Root {
+			    public init() {
+			        let token = Token()
+			        func __safeDI_office() -> Office {
+			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
+			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
+			                    let userService: any UserService = DefaultUserService(token: token.instance)
+			                    return userService
+			                })
+			            }
+			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+			        }
+			        let office: Office = __safeDI_office()
+			        self.init(token: token, office: office)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_instantiatesDesksTokenWhenModelIsBuilt_whenDeskHoldsModelInInstantiator() async throws {
+		// `Desk` holds `Model` in an instantiator: inline reads `Desk`’s lazy `token` only when `modelBuilder` builds a
+		// `Model`, never when `Desk` is built. `Desk`’s route hands the fill the wrapper, whose instance the fill reads where
+		// it builds `userService`, so a `Root()` holds a `Desk` whose `token` is not instantiated yet, as inline’s does.
+		try await expectFill(
+			feature: Self.lazyRouteFeature(deskModel: "modelBuilder: Instantiator<Model>"),
+			fulfillers: [Self.lazyRouteFulfiller],
+			root: Self.lazyRouteRoot,
+			probes: [
+				DifferentialValueProbe("Root()"),
+				DifferentialValueProbe("Root().office.desk.modelBuilder.instantiate()"),
+			],
+			expectedApp: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let token = Token()
+			        func __safeDI_office() -> Office {
+			            _ = Office.__safeDI_Office_3809615F3E68B69C.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
+			                .init(modelBuilder: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
+			                    let userService: any UserService = DefaultUserService(token: token.instance)
+			                    return userService
+			                })
+			            }
+			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+			        }
+			        let office: Office = __safeDI_office()
+			        self.init(token: token, office: office)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNilForOptionalLazyFillParameter_whenCallerDeclaresNoToken() async throws {
+		// `DefaultUserService` reads `token` only if available and `Root` declares none: inline passes `nil` beside `Desk`,
+		// so the root dispatcher does, and `Desk`’s route hands its wrapper, whose instance the fill reads through the optional.
+		try await expectFill(
+			feature: Self.lazyRouteFeature(),
+			fulfillers: [Self.lazyRouteOnlyIfAvailableFulfiller],
+			root: seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let office: Office"]),
+			expectedApp: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_office() -> Office {
+			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: nil) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
+			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
+			                    let userService: any UserService = DefaultUserService(token: token?.instance)
+			                    return userService
+			                })
+			            }
+			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+			        }
+			        let office: Office = __safeDI_office()
+			        self.init(office: office)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_bindsAliasFromOptionalLazyFillParameter_whenFillRenamesTokenOnlyIfAvailable() async throws {
+		// `DefaultUserService` renames `token` only if available: the alias reads the instance through the optional wrapper
+		// the fill takes, `Desk`’s beneath it and `Root`’s value beside it.
+		try await expectFill(
+			feature: Self.lazyRouteFeature(),
+			fulfillers: [SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: [#"@Received(fulfilledByDependencyNamed: "token", ofType: Token.self, onlyIfAvailable: true) let renamed: Token?"#])],
+			root: Self.lazyRouteRoot,
+			expectedAppInSources: { appSources in
+				"""
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        let token = Token()
+				        func __safeDI_office() -> Office {
+				            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
+				            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(_ scope: Office.SafeDIScope_UserService.Model_Scope.userService_Values, token: LazilyInstantiated<Token>?) -> any UserService {
+				                func __safeDI_userService() -> DefaultUserService {
+				                    #sourceLocation(file: "\(appSources)/DefaultUserService.swift", line: 9)
+				                    let renamed: Token? = token?.instance
+				                    #sourceLocation()
+				                    return DefaultUserService(renamed: renamed)
+				                }
+				                let userService: any UserService = __safeDI_userService()
+				                return userService
+				            }
+				            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+				                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+				            }
+				            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
+				                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+				            }
+				            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
+				                .init(userService: { scope in __safeDI_userServiceBuilder_Office_Model_Scope_userService(scope, token: token) })
+				            }
+				            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+				        }
+				        let office: Office = __safeDI_office()
+				        self.init(token: token, office: office)
+				    }
+				}
+				"""
+			},
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesOptionalLazyFillParametersInstanceToCycle_whenLoopInFillDeclaresTokenAgain() async throws {
+		// `DefaultUserService` builds a loop of instantiators, `LoopA` reading `token` only if available and `LoopB`
+		// declaring its own before it builds `LoopA` again: the function the loop closes on takes `token`, and its first call,
+		// in the fill, hands it the instance of the wrapper the fill takes optionally.
+		try await expectFill(
+			feature: Self.lazyRouteFeature(),
+			fulfillers: [
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Instantiated let loopABuilder: Instantiator<LoopA>"]),
+				seamFixtureType(named: "LoopA", declarations: ["@Received(onlyIfAvailable: true) let token: Token?", "@Instantiated let loopBBuilder: Instantiator<LoopB>"]),
+				seamFixtureType(named: "LoopB", declarations: ["@Instantiated let token: Token", "@Instantiated let loopABuilder: Instantiator<LoopA>"]),
+			],
+			root: Self.lazyRouteRoot,
+			probes: [
+				DifferentialValueProbe("Root()"),
+				DifferentialValueProbe("(Root().office.model.userService as! DefaultUserService).loopABuilder.instantiate()"),
+				DifferentialValueProbe("(Root().office.desk.model.userService as! DefaultUserService).loopABuilder.instantiate()"),
+			],
+			expectedApp: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let token = Token()
+			        func __safeDI_office() -> Office {
+			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(_ scope: Office.SafeDIScope_UserService.Model_Scope.userService_Values, token: LazilyInstantiated<Token>?) -> any UserService {
+			                func __safeDI_userService() -> DefaultUserService {
+			                    func __safeDI_loopABuilder(token: Token?) -> LoopA {
+			                        func __safeDI_loopBBuilder() -> LoopB {
+			                            let token = Token()
+			                            let loopABuilder = Instantiator<LoopA> {
+			                                __safeDI_loopABuilder(token: token)
+			                            }
+			                            return LoopB(token: token, loopABuilder: loopABuilder)
+			                        }
+			                        let loopBBuilder = Instantiator<LoopB>(__safeDI_loopBBuilder)
+			                        return LoopA(token: token, loopBBuilder: loopBBuilder)
+			                    }
+			                    let loopABuilder = Instantiator<LoopA> {
+			                        __safeDI_loopABuilder(token: token?.instance)
+			                    }
+			                    return DefaultUserService(loopABuilder: loopABuilder)
+			                }
+			                let userService: any UserService = __safeDI_userService()
+			                return userService
+			            }
+			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
+			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { scope in __safeDI_userServiceBuilder_Office_Model_Scope_userService(scope, token: token) })
+			            }
+			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+			        }
+			        let office: Office = __safeDI_office()
+			        self.init(token: token, office: office)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_wrapsCallersOptionalToken_whenCallerForwardsTokenOptionally() async throws {
+		// `Screen`, the caller, forwards `token: Token?`, which the fill reads only if available: the root dispatcher wraps
+		// the value where there is one, so the fill reads the caller’s `token` beside `Desk` and `Desk`’s instance beneath it.
+		try await expectFill(
+			feature: Self.lazyRouteFeature(),
+			fulfillers: [Self.lazyRouteOnlyIfAvailableFulfiller],
+			root: seamFixtureType(named: "Screen", declarations: ["@Forwarded let token: Token?", "@Instantiated let office: Office"])
+				+ "\n\n"
+				+ seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screenBuilder: Instantiator<Screen>"]),
+			probes: [
+				DifferentialValueProbe("Root().screenBuilder.instantiate(nil)"),
+				DifferentialValueProbe("Root().screenBuilder.instantiate(Token())"),
+			],
+			expectedApp: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_screenBuilder(token: Token?) -> Screen {
+			            func __safeDI_office() -> Office {
+			                _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
+			                func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                    .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: token.map { value in LazilyInstantiated<Token>({ value }) }) })
+			                }
+			                func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
+			                    .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			                }
+			                func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
+			                    .init(userService: { _ in
+			                        let userService: any UserService = DefaultUserService(token: token?.instance)
+			                        return userService
+			                    })
+			                }
+			                return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+			            }
+			            let office: Office = __safeDI_office()
+			            return Screen(token: token, office: office)
+			        }
+			        let screenBuilder = Instantiator<Screen> {
+			            __safeDI_screenBuilder(token: $0)
+			        }
+			        self.init(screenBuilder: screenBuilder)
+			    }
+			}
+			""",
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// `Office`, a seam, builds `Model`, whose `userService` is a place, inside `Desk`, which binds `token` as `deskToken`,
+	/// and beside it, where no type of `Office`’s tree binds `token`; `Desk` holds `Model` as `deskModel` declares it, and
+	/// `Office` builds `desk` first when `deskFirst`.
+	private static func lazyRouteFeature(deskToken: String = "LazilyInstantiated<Token>", deskModel: String = "model: Model", deskFirst: Bool = true) -> [String] {
+		let officeDeclarations = ["@Instantiated let desk: Desk", "@Instantiated let model: Model"]
+		return [
+			"public protocol UserService {}",
+			seamFixtureType(named: "Token", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+			seamFixtureType(named: "Model", declarations: ["@Instantiated let userService: any UserService"]),
+			seamFixtureType(named: "Desk", declarations: ["@Instantiated let token: \(deskToken)", "@Instantiated let \(deskModel)"]),
+			seamFixtureType(named: "Office", isSeam: true, declarations: deskFirst ? officeDeclarations : officeDeclarations.reversed()),
+		]
+	}
+
+	/// The fill of `lazyRouteFeature`’s place, which reads `token: Token`.
+	private static let lazyRouteFulfiller = SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let token: Token"])
+
+	/// The fill of `lazyRouteFeature`’s place, which reads `token` only if available.
+	private static let lazyRouteOnlyIfAvailableFulfiller = SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received(onlyIfAvailable: true) let token: Token?"])
+
+	/// The caller of `lazyRouteFeature`’s seam, which holds a plain `token` above the call.
+	private static let lazyRouteRoot = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Token", "@Instantiated let office: Office"])
 
 	/// `Home` instantiates `session: Session` and `Settings` forwards `session: Session?`, each before `avatar`, whose
 	/// `userService` the fill reads `session` for; `Service` instantiates `home` first when `homeFirst`.
@@ -597,19 +1130,47 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 	private static let moduleInfoComment = "If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
 
 	/// Generates `feature`, whose seam `Service` (or `Home`) holds a place `App` fills with `fulfillers`, and `App`'s
-	/// `root`; expects `App`'s file to equal `expectedApp`, and the values `Root` builds to equal those of the same graph
-	/// built with `fulfillers` in `Feature`, where every tree is built inline.
+	/// `root`, through `integration`; expects `App`'s file holding `Root`'s initializer to equal `expectedApp`, and the
+	/// values `Root` builds to equal those of the same graph built with `fulfillers` in `Feature`, where every tree is built
+	/// inline. `fulfillers` are declared in `App`, or in a module of that name between `Feature` and `App` when
+	/// `fulfillersModule` names one.
 	private mutating func expectFill(
 		feature: [String],
 		fulfillers: [String],
 		root: String,
+		integration: MultiModuleIntegration = .moduleInfo,
+		fulfillersModule: String? = nil,
 		probes: [DifferentialValueProbe] = [DifferentialValueProbe("Root()")],
 		expectedApp: String,
 		sourceLocation: SourceLocation = #_sourceLocation,
 	) async throws {
-		let modules = SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: fulfillers + [root])
-		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + expectedApp, sourceLocation: sourceLocation)
+		try await expectFill(feature: feature, fulfillers: fulfillers, root: root, integration: integration, fulfillersModule: fulfillersModule, probes: probes, expectedAppInSources: { _ in expectedApp }, sourceLocation: sourceLocation)
+	}
+
+	/// `expectFill`, where `App`'s expected file depends on the path of the directory `App`'s sources are written in, which
+	/// `expectedAppInSources` is handed, as a `#sourceLocation` directive names it.
+	private mutating func expectFill(
+		feature: [String],
+		fulfillers: [String],
+		root: String,
+		integration: MultiModuleIntegration = .moduleInfo,
+		fulfillersModule: String? = nil,
+		probes: [DifferentialValueProbe] = [DifferentialValueProbe("Root()")],
+		expectedAppInSources: (String) -> String,
+		sourceLocation: SourceLocation = #_sourceLocation,
+	) async throws {
+		let modules = if let fulfillersModule {
+			[
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
+				ModuleFixture(name: fulfillersModule, packageName: "Other", swiftFileContent: fulfillers.map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Feature\nimport \(fulfillersModule)\n\n" + root], dependencies: ["Feature", fulfillersModule]),
+			]
+		} else {
+			SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: fulfillers + [root])
+		}
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)
+		let appSources = output.fixtureRoot.appendingPathComponent("Other").appendingPathComponent("Sources").appendingPathComponent("App").path
+		#expect(output.modules["App"]?.generatedFiles[integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"] == generatedFileHeader + expectedAppInSources(appSources), sourceLocation: sourceLocation)
 		guard compileVerificationIsEnabled else { return }
 		let visibleModules = SafeDIToolSeamBuilderParameterTests.modules(feature: feature + fulfillers, app: [root])
 		let visibleOutput = try await executeSafeDIToolMultiModuleTest(modules: visibleModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
