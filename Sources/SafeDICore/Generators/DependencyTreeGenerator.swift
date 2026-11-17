@@ -348,104 +348,83 @@ public actor DependencyTreeGenerator {
 		if ConstructionMemoOracle.buildsMockRootsInReverseOrder {
 			mockRootCandidates.reverse()
 		}
-		// The mock roots are validated one after another, in type order, then their trees are built `mockRootsBuiltAtOnce` at a
-		// time, each from the memo as the trees before its wave left it, and finished in type order. A wave's trees are merged
-		// into the memo in type order, whichever finished first, so the memo, and the errors reported, are what building
-		// them one after another gives, but for the reuses a tree misses of the other trees of its wave.
-		enum MockRootStep {
-			case prepared(PreparedMockRoot)
-			case failed(DependencyTreeGeneratorError)
-		}
+		// The mock roots are validated one after another, in type order, and each one's tree is built on a task of its own
+		// as soon as it is validated, from the memo as the mock roots `mockRootsBuiltAtOnce` or more before it left it;
+		// each is then finished in type order, its new memo entries appended then, whichever tree finished first. So which
+		// trees a tree's build reads, and so the memo, the errors and the mocks, are the same on every run, and are what
+		// building them one after another gives, but for the reuses a tree misses of the trees built beside it.
 		var mockRootSteps = [MockRootStep]()
+		var stepsFinished = 0
+		var candidateIndex = mockRootCandidates.startIndex
+		var isPreparing = true
 		// An error other than a `DependencyTreeGeneratorError` ends the mock pass where the mock root that throws it stands.
 		var errorEndingMockPass: (any Error)?
-		for instantiable in mockRootCandidates {
-			let isAdditionalMock = additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource)
-			// A public mock's tree is built from the scopes with holes.
-			let rootMockScopes = mockScopes.forMockRoot(instantiable)
-			guard let scope = rootMockScopes.typeDescriptionToScopeMap[instantiable.concreteInstantiable] else { continue }
-			let instantiable = mockRootInstantiable(for: instantiable, scope: scope)
-			// Without module scoping, every type belongs to the current module.
-			let isDeclaredInCurrentModule = currentModuleSourceFilePaths.map { currentModuleSourceFilePaths in
-				instantiable.sourceFilePath.map(currentModuleSourceFilePaths.contains) ?? false
-			} ?? true
-			guard isAdditionalMock || isDeclaredInCurrentModule else { continue }
-
-			// Each mock root reports the first error it finds, and the errors of every mock root are reported.
-			do {
-				let prepared = try await prepareMockRoot(
-					for: instantiable,
-					scope: scope,
-					// A `generateMock: true` type declared in this module gets its mock whether
-					// or not it is listed; any other type reaching here is generated only
-					// because it is listed, so removing it from the list is also a fix.
-					generatedMockReason: instantiable.generatesMock && isDeclaredInCurrentModule ? .generateMock : .additionalMocksToGenerate,
-					mockScopes: rootMockScopes,
-					emittingModule: emittingModuleToCheck,
-					receivedPropertiesCache: &receivedPropertiesCache,
-					childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
-					promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
-					scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
-				)
-				mockRootSteps.append(.prepared(prepared))
-			} catch let error as DependencyTreeGeneratorError {
-				mockRootSteps.append(.failed(error))
-			} catch {
-				errorEndingMockPass = error
-				break
-			}
-		}
 		let declaredTypeNames = declaredTypeNames
-		var waveStart = mockRootSteps.startIndex
-		while waveStart < mockRootSteps.endIndex {
-			let wave = mockRootSteps[waveStart..<min(waveStart + Self.mockRootsBuiltAtOnce, mockRootSteps.endIndex)]
-			waveStart = wave.endIndex
-			let memoBeforeWave = constructionMemo
-			let builtTrees = await withTaskGroup(of: (Int, Result<(ScopeGenerator, ConstructionMemo), any Error>).self) { taskGroup in
-				for (index, step) in zip(wave.indices, wave) {
-					switch step {
-					case let .prepared(prepared):
-						taskGroup.addTask {
-							var treeMemo = memoBeforeWave
-							return (index, Result { try (prepared.createdTree(builders: nil, declaredTypeNames: declaredTypeNames, constructionMemo: &treeMemo), treeMemo) })
-						}
-					case .failed:
-						break
-					}
+		while true {
+			if isPreparing, stepsFinished > mockRootSteps.count - Self.mockRootsBuiltAtOnce {
+				guard candidateIndex < mockRootCandidates.endIndex else {
+					isPreparing = false
+					continue
 				}
-				var builtTrees = [Int: Result<(ScopeGenerator, ConstructionMemo), any Error>]()
-				for await (index, builtTree) in taskGroup {
-					builtTrees[index] = builtTree
+				let instantiable = mockRootCandidates[candidateIndex]
+				candidateIndex += 1
+				let isAdditionalMock = additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource)
+				// A public mock's tree is built from the scopes with holes.
+				let rootMockScopes = mockScopes.forMockRoot(instantiable)
+				guard let scope = rootMockScopes.typeDescriptionToScopeMap[instantiable.concreteInstantiable] else { continue }
+				let mockRootInstantiable = mockRootInstantiable(for: instantiable, scope: scope)
+				// Without module scoping, every type belongs to the current module.
+				let isDeclaredInCurrentModule = currentModuleSourceFilePaths.map { currentModuleSourceFilePaths in
+					mockRootInstantiable.sourceFilePath.map(currentModuleSourceFilePaths.contains) ?? false
+				} ?? true
+				guard isAdditionalMock || isDeclaredInCurrentModule else { continue }
+
+				// Each mock root reports the first error it finds, and the errors of every mock root are reported.
+				let prepared: PreparedMockRoot
+				do {
+					prepared = try await prepareMockRoot(
+						for: mockRootInstantiable,
+						scope: scope,
+						// A `generateMock: true` type declared in this module gets its mock whether
+						// or not it is listed; any other type reaching here is generated only
+						// because it is listed, so removing it from the list is also a fix.
+						generatedMockReason: mockRootInstantiable.generatesMock && isDeclaredInCurrentModule ? .generateMock : .additionalMocksToGenerate,
+						mockScopes: rootMockScopes,
+						emittingModule: emittingModuleToCheck,
+						receivedPropertiesCache: &receivedPropertiesCache,
+						childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
+						promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
+						scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+					)
+				} catch let error as DependencyTreeGeneratorError {
+					mockRootSteps.append(.failed(error))
+					continue
+				} catch {
+					errorEndingMockPass = error
+					isPreparing = false
+					continue
 				}
-				return builtTrees
-			}
-			for (index, step) in zip(wave.indices, wave) {
-				switch step {
-				case let .failed(error):
-					mockRootErrors.append(error)
-				case let .prepared(prepared):
-					guard let builtTree = builtTrees[index] else { continue }
-					let (mockRoot, treeMemo) = try builtTree.get()
-					constructionMemo.appendEntries(storedBy: treeMemo, beyond: memoBeforeWave)
-					try prepared.checkWithMemoOracle(builders: nil, declaredTypeNames: declaredTypeNames, constructionMemo: &constructionMemo)
-					do {
-						let instantiable = prepared.instantiable
-						let mockRoot = try await finishMockRoot(prepared, generator: mockRoot, flatParameterMockDefaults: flatParameterMockDefaults)
-						if instantiable.generateMock == .public, let publicMockContext {
-							var findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: flatParameterMockDefaults)
-							if findings.isEmpty, let finding = try await callersViewFinding(of: instantiable) {
-								findings.append(finding)
-							}
-							guard findings.isEmpty else {
-								mockRootErrors.append(.publicMockCannotBeGenerated(findings))
-								continue
-							}
-						}
-						mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
-					} catch let error as DependencyTreeGeneratorError {
-						mockRootErrors.append(error)
-					}
+				// The task inherits the task-local values the memo oracle reads, and reads nothing of this generator's.
+				let memoTreeStartsFrom = constructionMemo
+				let treeBuild = Task { () throws -> (ScopeGenerator, ConstructionMemo) in
+					var treeMemo = memoTreeStartsFrom
+					let tree = try prepared.createdTree(builders: nil, declaredTypeNames: declaredTypeNames, constructionMemo: &treeMemo)
+					return (tree, treeMemo)
 				}
+				mockRootSteps.append(.building(prepared, treeBuild: treeBuild, memoTreeStartedFrom: memoTreeStartsFrom))
+			} else if stepsFinished < mockRootSteps.count {
+				let step = mockRootSteps[stepsFinished]
+				stepsFinished += 1
+				try await finish(
+					step,
+					constructionMemo: &constructionMemo,
+					mockRoots: &mockRoots,
+					mockRootErrors: &mockRootErrors,
+					flatParameterMockDefaults: flatParameterMockDefaults,
+					publicMockContext: publicMockContext,
+				)
+			} else {
+				break
 			}
 		}
 		if let errorEndingMockPass {
@@ -6422,12 +6401,56 @@ public actor DependencyTreeGenerator {
 		)
 	}
 
-	/// A mock root `prepareMockRootScope` validated, whose tree is not built yet: what building it reads, as values, so that
-	/// several mock roots' trees can be built at once.
+	/// A mock root `generateMockCode` validated, or the error its validation found.
+	private enum MockRootStep {
+		/// The mock root's tree is being built by `treeBuild` from `memoTreeStartedFrom`.
+		case building(PreparedMockRoot, treeBuild: Task<(ScopeGenerator, ConstructionMemo), any Error>, memoTreeStartedFrom: ConstructionMemo)
+		case failed(DependencyTreeGeneratorError)
+	}
+
+	/// Finishes the mock root of `step`, the next in type order: appends its tree's new entries to `constructionMemo`, hands
+	/// the memo oracle its builds, finishes it, and appends it to `mockRoots`, or its error to `mockRootErrors`.
+	private func finish(
+		_ step: MockRootStep,
+		constructionMemo: inout ConstructionMemo,
+		mockRoots: inout [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)],
+		mockRootErrors: inout [DependencyTreeGeneratorError],
+		flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault],
+		publicMockContext: PublicMockContext?,
+	) async throws {
+		switch step {
+		case let .failed(error):
+			mockRootErrors.append(error)
+		case let .building(prepared, treeBuild, memoTreeStartedFrom):
+			let (mockRoot, treeMemo) = try await treeBuild.value
+			constructionMemo.appendEntries(storedBy: treeMemo, beyond: memoTreeStartedFrom)
+			try prepared.checkWithMemoOracle(builders: nil, declaredTypeNames: declaredTypeNames, constructionMemo: &constructionMemo)
+			do {
+				let instantiable = prepared.instantiable
+				let mockRoot = try await finishMockRoot(prepared, generator: mockRoot, flatParameterMockDefaults: flatParameterMockDefaults)
+				if instantiable.generateMock == .public, let publicMockContext {
+					var findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: flatParameterMockDefaults)
+					if findings.isEmpty, let finding = try await callersViewFinding(of: instantiable) {
+						findings.append(finding)
+					}
+					guard findings.isEmpty else {
+						mockRootErrors.append(.publicMockCannotBeGenerated(findings))
+						return
+					}
+				}
+				mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
+			} catch let error as DependencyTreeGeneratorError {
+				mockRootErrors.append(error)
+			}
+		}
+	}
+
 	/// How many mock roots' trees `generateMockCode` builds at once. Fixed, so that the work done, and so the CPU time, is
-	/// the same on every machine: a tree misses the reuses of the other trees of its wave, which it builds again.
+	/// the same on every machine: a tree misses the reuses of the trees of the mock roots fewer than this many before it.
 	static let mockRootsBuiltAtOnce = 4
 
+	/// A mock root `prepareMockRootScope` validated, whose tree is not built yet: what building it reads, as values, so that
+	/// several mock roots' trees can be built at once.
 	struct PreparedMockRoot: Sendable {
 		let instantiable: Instantiable
 		/// The mock root's scope, with every scope its tree reaches.
