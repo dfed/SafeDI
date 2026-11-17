@@ -258,13 +258,33 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case retentionPublicMockValueBeforeBuilderLeafThroughInstantiator
 	/// `RetainLive`, the fill, reads `retainNavigator`, which the known-right path then keeps alive too.
 	case retentionPublicMockValueBeforeBuilderFillReadsValue
+	/// On a stream of its own (`publicMockOverrideClosureRandomSeedMask`), a call of a public mock that takes no
+	/// `SafeDIOverrides`, whose node's override member is a closure: `OverriddenScreen`, a mocked consumer, builds
+	/// `OverriddenDetail`, a `.public` type of the declaring module that builds nothing but places. The call cannot hand the
+	/// closure a builder a person writes, and the consumer's overrides then hold no member for it, where a `.public` consumer
+	/// passes a place up (S1), or where its fill of the `OverriddenApi` place reads the call's other place or a value the
+	/// called mock renames (S2); every other call keeps the member (`GraphFuzzerToolRuns.publicMockOverrideClosureFailure`).
+	case overrideClosureCall
+	case overrideClosureCallPublicCallerPassesPlaceUp
+	case overrideClosureCallFillReadsCalledMocksOtherPlace
+	case overrideClosureCallFillReadsValueCalledMockRenames
+	/// A call the draw keeps the member for; one whose internal consumer passes a place up; and one whose fill reads the
+	/// value the call passes the called mock under the fill's label.
+	case overrideClosureCallCanHand
+	case overrideClosureCallInternalCallerPassesPlaceUp
+	case overrideClosureCallFillReadsCalledMocksParameter
+
+	/// The shapes of `overrideClosureCall` whose call can hand an override closure no builder a person writes, so that the
+	/// consumer's overrides hold no member for it.
+	static let overrideClosureCannotHandShapes: Set<GraphFuzzerPublicMockDrawFeature> = [.overrideClosureCallPublicCallerPassesPlaceUp, .overrideClosureCallFillReadsCalledMocksOtherPlace, .overrideClosureCallFillReadsValueCalledMockRenames]
 
 	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,
-	/// `retentionPublicMockValueBeforeBuilder…`, and `T6`'s mock isolated to the main actor or built with its hand-written
-	/// mock in another public mock) draws this shape, whose count in accepted graphs the public mock corpus pins too
-	/// (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
+	/// `retentionPublicMockValueBeforeBuilder…`, `overrideClosure…`, and `T6`'s mock isolated to the main actor or built with
+	/// its hand-written mock in another public mock) draws this shape, whose count in accepted graphs the public mock corpus
+	/// pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
 	var isCountedWhenAccepted: Bool {
 		rawValue.hasPrefix("selfBuildingPublicMock") || rawValue.hasPrefix("placeInsidePublicMockFill") || isRetentionShape
+			|| rawValue.hasPrefix("overrideClosureCall")
 			|| self == .holeMockIsolatedToMainActor || self == .holeHandWrittenMockBuiltInPublicMock
 	}
 
@@ -515,6 +535,8 @@ struct GraphFuzzerPublicMockDraw {
 		drawPlaceInsidePublicMockFill(random: &placeInFillRandom)
 		var retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockRetentionRandomSeedMask)
 		drawRetentionPublicMock(random: &retentionRandom)
+		var overrideClosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockOverrideClosureRandomSeedMask)
+		drawOverrideClosurePublicMockCall(random: &overrideClosureRandom)
 	}
 
 	/// The files of the graph, each beginning with its module's marker: as drawn, or, for the known-right path of the
@@ -626,6 +648,9 @@ struct GraphFuzzerPublicMockDraw {
 	/// Draws only the retention oracle's shape (`drawRetentionPublicMock`): rolls added after the rest of the draw was
 	/// pinned, so that its other shapes are drawn as before.
 	static let publicMockRetentionRandomSeedMask: UInt64 = 0x7075626D6B726574
+	/// Draws only a call of a public mock whose override member is a closure (`drawOverrideClosurePublicMockCall`): rolls
+	/// added after the rest of the draw was pinned, so that its other shapes are drawn as before.
+	static let publicMockOverrideClosureRandomSeedMask: UInt64 = 0x7075626D6B6F7663
 	/// Draws only whether an `ErasedInstantiator` hole forwards a value, `holeTicket: Int`, which `HoleFill` forwards
 	/// (`holeForwardsValue`): a roll added after the rest of the draw was pinned, so that its other shapes are drawn as
 	/// before.
@@ -2048,6 +2073,98 @@ struct GraphFuzzerPublicMockDraw {
 		files.append(File(module: consumerModule, declarations: [Self.renderer(of: app), Self.renderer(of: live)]))
 	}
 
+	/// A call of a public mock whose override member is a closure, in two graphs in five: `OverriddenDetail`, a `.public` type
+	/// of the declaring module with an `internal` initializer, builds nothing but a place of `OverriddenApi` and, now and
+	/// then, one of `OverriddenStore`, so that its mock takes no `SafeDIOverrides`; now and then it receives
+	/// `overriddenSession`, which its module cannot build, plainly or renamed from `overriddenMainSession`.
+	/// `OverriddenScreen`, a mocked consumer in one consumer module, `true` or `.public`, builds it by value or through an
+	/// `Instantiator`, and builds the sessions in an extension of its module's own. `OverriddenLive` beside it fills the
+	/// `OverriddenApi` place, reading the session, the other place, both, or nothing, or, three draws in ten, nothing does and
+	/// the consumer's mock takes the builder; `OverriddenStoreLive` fills the other place half the time. The consumer's
+	/// overrides hold the closure that builds `OverriddenDetail` only where the call can hand it a builder a person writes
+	/// for each place (`GraphFuzzerPublicMockDrawFeature.overrideClosureCannotHandShapes`). Every roll is made before any is
+	/// read.
+	private mutating func drawOverrideClosurePublicMockCall(random: inout GraphFuzzerRandomNumberGenerator) {
+		let drawsShape = random.percentChance(40)
+		let consumerIsPublic = random.percentChance(40)
+		let throughInstantiator = random.percentChance(50)
+		let buildsStore = random.percentChance(40)
+		let sessionRoll = random.integer(in: 0...9)
+		let fillsApi = random.percentChance(70)
+		let fillReadsSession = random.percentChance(50)
+		let fillReadsStore = random.percentChance(50)
+		let fillsStore = random.percentChance(50)
+		let consumerModuleRoll = random.integer(in: 0...1)
+		let consumerModules = consumerModules
+		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
+		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
+		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
+		let apiName = name("OverriddenApi")
+		let storeName = name("OverriddenStore")
+		let sessionName = name("OverriddenSession")
+		// Three in ten receive no session, four plainly, three renamed from `overriddenMainSession`.
+		let receivesSession = sessionRoll >= 3
+		let renamesSession = sessionRoll >= 7
+		var detail = InstantiableClass(name: name("OverriddenDetail"), conformances: conformances)
+		detail.mockGeneration = ".public"
+		// An `internal` initializer, which no consumer module can call, so that the consumer's mock calls the public mock.
+		detail.initializerAccess = .internal
+		if receivesSession {
+			let attribute = renamesSession ? "@Received(fulfilledByDependencyNamed: \"overriddenMainSession\", ofType: \(sessionName).self)" : "@Received"
+			detail.properties.append(Property(attribute: attribute, label: "overriddenSession", type: sessionName))
+		}
+		if buildsStore {
+			detail.properties.append(Property(attribute: "@Instantiated", label: "overriddenStore", type: "any \(storeName)"))
+		}
+		detail.properties.append(Property(attribute: "@Instantiated", label: "overriddenApi", type: "any \(apiName)"))
+		var declaringModuleDeclarations = [protocolDeclaration(apiName), Self.renderer(of: detail)]
+		if buildsStore {
+			declaringModuleDeclarations.append(protocolDeclaration(storeName))
+		}
+		let readsSession = fillsApi && fillReadsSession
+		if receivesSession || readsSession {
+			// The type conforms to `Instantiable` by hand, so its module cannot build it, and the consumer's module builds it.
+			declaringModuleDeclarations.append { rendering in
+				"\(rendering.modifier(.public))final class \(sessionName): Instantiable, Sendable {\n\t\(rendering.modifier(.public))init() {}\n}"
+			}
+		}
+		var screen = InstantiableClass(name: name("OverriddenScreen"), conformances: conformances)
+		screen.mockGeneration = consumerIsPublic ? ".public" : "true"
+		if receivesSession || readsSession {
+			screen.properties.append(Property(attribute: "@Instantiated", label: "overriddenSession", type: sessionName))
+		}
+		if renamesSession {
+			screen.properties.append(Property(attribute: "@Instantiated", label: "overriddenMainSession", type: sessionName))
+		}
+		screen.properties.append(throughInstantiator
+			? Property(attribute: "@Instantiated", label: "overriddenDetailBuilder", type: "Instantiator<\(detail.name)>")
+			: Property(attribute: "@Instantiated", label: "overriddenDetail", type: detail.name))
+		var consumerDeclarations = [Self.renderer(of: screen)]
+		if fillsApi {
+			var live = InstantiableClass(name: name("OverriddenLive"), conformances: [apiName] + conformances)
+			live.arguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
+			if readsSession {
+				live.properties.append(Property(attribute: "@Received", label: "overriddenSession", type: sessionName))
+			}
+			if buildsStore, fillReadsStore {
+				live.properties.append(Property(attribute: "@Received", label: "overriddenStore", type: "any \(storeName)"))
+			}
+			consumerDeclarations.append(Self.renderer(of: live))
+		}
+		if buildsStore, fillsStore {
+			var storeLive = InstantiableClass(name: name("OverriddenStoreLive"), conformances: [storeName] + conformances)
+			storeLive.arguments = ["fulfillingAdditionalTypes: [\(storeName).self]"]
+			consumerDeclarations.append(Self.renderer(of: storeLive))
+		}
+		if receivesSession || readsSession {
+			consumerDeclarations.append { rendering in
+				"@Instantiable(conformsElsewhere: true)\nextension \(sessionName) {\n\t\(rendering.modifier(.public))static func instantiate() -> \(sessionName) {\n\t\t\(sessionName)()\n\t}\n}"
+			}
+		}
+		files.append(File(module: .seamModule, declarations: declaringModuleDeclarations))
+		files.append(File(module: consumerModule, declarations: consumerDeclarations))
+	}
+
 	/// Declares `Logger`, its production type `ConsoleLogger`, which instantiates `Level`, and a fake: a class at `package`
 	/// or `internal` access in a file with no SafeDI content, as a macro expansion would declare it, extended by a
 	/// `mockOnly` extension spelling `package` or no access level, whose `mock` takes a defaulted parameter half the
@@ -2308,6 +2425,32 @@ extension GraphFuzzerToolRuns {
 			seed: fixture.seed,
 			kind: .publicMockPassesUpPlaceItsRootLevelFills,
 			details: "`\(consumerName).mock` takes a builder of `\(prefix)T6`'s places, whose fill reads only what `\(prefix)T6`'s mock binds before its tree.\nThis graph:\n\(firstOutcome.description)",
+		)
+	}
+
+	/// The failure of a `generateMockPublic` graph the tool accepts that draws a call of a public mock whose override member is
+	/// a closure (`GraphFuzzerPublicMockDrawFeature.overrideClosureCall`), whose consumer's generated mock holds that member,
+	/// `let overriddenDetail: ((…` or `let overriddenDetailBuilder: ((…`, where the call can hand the closure no builder a
+	/// person writes (`overrideClosureCannotHandShapes`), or lacks it where the call can. `nil` for any other graph.
+	var publicMockOverrideClosureFailure: GraphFuzzerFailure? {
+		guard knownRightOutcome != nil, case let .accepted(generatedFiles, _) = firstOutcome else { return nil }
+		let features = GraphFuzzerPublicMockDraw.drawFeatures(of: fixture)
+		guard features.contains(.overrideClosureCall) else { return nil }
+		let consumerName = "\(fixture.typeNamePrefix)OverriddenScreen"
+		let member = try? NSRegularExpression(pattern: "^\\s*(public )?let overriddenDetail(Builder)?: \\(\\(", options: [.anchorsMatchLines])
+		let holdsMember = generatedFiles.keys.sorted().contains { fileName in
+			guard fileName == "\(consumerName)+SafeDIMock.swift" || fileName.hasSuffix("/\(consumerName)+SafeDIMock.swift"), let contents = generatedFiles[fileName] else { return false }
+			return member?.firstMatch(in: contents, range: NSRange(contents.startIndex..., in: contents)) != nil
+		}
+		let canHand = features.isDisjoint(with: GraphFuzzerPublicMockDrawFeature.overrideClosureCannotHandShapes)
+		guard holdsMember != canHand else { return nil }
+		let cannotHandShapes = features.intersection(GraphFuzzerPublicMockDrawFeature.overrideClosureCannotHandShapes).sorted().map(\.rawValue).joined(separator: ", ")
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: canHand ? .publicMockDropsOverrideClosureItsCallCanHand : .publicMockOffersOverrideClosureItsCallCannotHand,
+			details: canHand
+				? "`\(consumerName)`'s overrides hold no closure that builds `\(fixture.typeNamePrefix)OverriddenDetail`, whose call can hand it a builder a person writes for each place.\nThis graph:\n\(firstOutcome.description)"
+				: "`\(consumerName)`'s overrides hold a closure that builds `\(fixture.typeNamePrefix)OverriddenDetail`, whose call can hand it no builder a person writes (\(cannotHandShapes)).\nThis graph:\n\(firstOutcome.description)",
 		)
 	}
 
@@ -3099,6 +3242,24 @@ extension GraphFuzzerPublicMockDraw {
 			}
 			if types.declarations["\(prefix)RetainLive"]?.properties.contains(where: { $0.label == "retainNavigator" }) == true {
 				features.insert(.retentionPublicMockValueBeforeBuilderFillReadsValue)
+			}
+		}
+		if let detail = types.declarations["\(prefix)OverriddenDetail"], let screen = types.declarations["\(prefix)OverriddenScreen"] {
+			features.insert(.overrideClosureCall)
+			let live = types.declarations["\(prefix)OverriddenLive"]
+			let buildsStore = detail.properties.contains { $0.label == "overriddenStore" }
+			let passesPlaceUp = live == nil || buildsStore && types.declarations["\(prefix)OverriddenStoreLive"] == nil
+			if passesPlaceUp {
+				features.insert(screen.arguments.contains("generateMock: .public") ? .overrideClosureCallPublicCallerPassesPlaceUp : .overrideClosureCallInternalCallerPassesPlaceUp)
+			}
+			if live?.properties.contains(where: { $0.label == "overriddenStore" }) == true {
+				features.insert(.overrideClosureCallFillReadsCalledMocksOtherPlace)
+			}
+			if live?.properties.contains(where: { $0.label == "overriddenSession" }) == true, let session = detail.properties.first(where: { $0.label == "overriddenSession" }) {
+				features.insert(session.attribute.contains("fulfilledByDependencyNamed:") ? .overrideClosureCallFillReadsValueCalledMockRenames : .overrideClosureCallFillReadsCalledMocksParameter)
+			}
+			if features.isDisjoint(with: GraphFuzzerPublicMockDrawFeature.overrideClosureCannotHandShapes) {
+				features.insert(.overrideClosureCallCanHand)
 			}
 		}
 		return features

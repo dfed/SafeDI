@@ -321,6 +321,41 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(overriding.publicMockRootLevelFailure == nil)
 	}
 
+	/// The runs of `seed`'s public mock graph, accepted with `consumerMock` as `OverriddenScreen`'s generated mock in `FuzzApp`.
+	private func overrideClosureRuns(seed: UInt64, consumerMock: String) -> GraphFuzzerToolRuns {
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic])
+		let accepted = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzApp/S\(seed)_OverriddenScreen+SafeDIMock.swift": consumerMock], warnings: [])
+		return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: accepted, secondOutcome: accepted, knownRightOutcome: accepted)
+	}
+
+	/// `OverriddenScreen`'s generated mock, whose overrides hold `members`.
+	private func overriddenScreenMock(seed: UInt64, members: [String]) -> String {
+		"extension S\(seed)_OverriddenScreen {\n    public struct SafeDIOverrides {\n        public init() {}\n\(members.map { "        \($0)\n" }.joined())    }\n}\n"
+	}
+
+	@Test
+	func publicMockOverrideClosureFailure_reportsOfferedClosure_whenCallCannotHandBuilderPersonWrites() throws {
+		// A graph whose call of `OverriddenDetail` cannot hand its override closure a builder a person writes fails when the
+		// consumer's overrides hold the closure, and passes when they do not; a graph that does not draw the call passes either
+		// way.
+		let seed = try #require((UInt64(0)..<1_000).first { !GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateMockPublic])).isDisjoint(with: GraphFuzzerPublicMockDrawFeature.overrideClosureCannotHandShapes) })
+		let member = "public let overriddenDetailBuilder: ((S\(seed)_OverriddenSession, @escaping () -> any S\(seed)_OverriddenApi) -> S\(seed)_OverriddenDetail)?"
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: [member])).publicMockOverrideClosureFailure?.kind == .publicMockOffersOverrideClosureItsCallCannotHand)
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: [])).publicMockOverrideClosureFailure == nil)
+		let otherSeed = try #require((UInt64(0)..<1_000).first { !GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateMockPublic])).contains(.overrideClosureCall) })
+		#expect(overrideClosureRuns(seed: otherSeed, consumerMock: overriddenScreenMock(seed: otherSeed, members: [member])).publicMockOverrideClosureFailure == nil)
+	}
+
+	@Test
+	func publicMockOverrideClosureFailure_reportsDroppedClosure_whenCallCanHandBuilderPersonWrites() throws {
+		// A graph whose call of `OverriddenDetail` can hand its override closure a builder a person writes for each place fails
+		// when the consumer's overrides hold no closure, and passes when they hold one, by value or through an instantiator.
+		let seed = try #require((UInt64(0)..<1_000).first { GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateMockPublic])).contains(.overrideClosureCallCanHand) })
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: [])).publicMockOverrideClosureFailure?.kind == .publicMockDropsOverrideClosureItsCallCanHand)
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["public let overriddenDetail: ((@escaping () -> any S\(seed)_OverriddenApi) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure == nil)
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["let overriddenDetailBuilder: ((@escaping () -> any S\(seed)_OverriddenApi) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure == nil)
+	}
+
 	// MARK: Builder structs
 
 	@Test

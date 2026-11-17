@@ -10598,6 +10598,10 @@ struct GraphFuzzerFailure: Equatable {
 		/// A consumer's mock in a `generateMockPublic` graph takes a builder of `T6`'s places, which the fill its module declares
 		/// fills from what `T6`'s mock binds before its tree (`GraphFuzzerToolRuns.publicMockRootLevelFailure`).
 		case publicMockPassesUpPlaceItsRootLevelFills = "a consumer passes up a public mock's place its fill fills from what the public mock binds before its tree"
+		/// A consumer's overrides in a `generateMockPublic` graph hold a closure that builds a called public mock whose call can
+		/// hand it no builder a person writes, or hold none where the call can (`GraphFuzzerToolRuns.publicMockOverrideClosureFailure`).
+		case publicMockOffersOverrideClosureItsCallCannotHand = "a consumer's overrides hold a closure that builds a called public mock its call can hand no builder a person writes"
+		case publicMockDropsOverrideClosureItsCallCanHand = "a consumer's overrides hold no closure that builds a called public mock its call can hand a builder a person writes"
 		/// The differential value comparator describes other values for a probe of a `generateMockPublic` graph than for
 		/// the same probe of its known-right path, beyond the stated divergences.
 		case publicMockBuildsOtherValuesThanKnownRight = "the graph builds other values than its known-right path"
@@ -12231,7 +12235,7 @@ enum GraphFuzzerOracle {
 		}
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
-			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
+			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
 			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
