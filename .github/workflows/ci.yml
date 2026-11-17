@@ -2177,9 +2177,25 @@ jobs:
         # times that, rounded up for the runner's variance.
         timeout-minutes: 5
         run: swift build --build-system swiftbuild --traits sourceBuild --target SafeDIToolTestSupport --scratch-path "$RUNNER_TEMP/swiftbuild-test-support"
+      # Built in a step of its own so that the build directory is saved
+      # only after a build that succeeded, and before the tests, which a
+      # failure of theirs then cannot lose. The build from nothing took 4.2
+      # minutes on the 4-core Linux runner, 2.5 minutes on a restored build
+      # whose sources were not stamped, and 7 seconds on one whose sources
+      # were, after which the test step's own build took 3 seconds (run
+      # 44189733147, 2026-11-17); the limit is about twice the first.
+      - name: Build Tests
+        timeout-minutes: 10
+        run: swift build --build-tests --traits sourceBuild
+      - name: Save Build Directory
+        if: ${{ github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .build
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
       # A time limit for the macOS job's reason: about twice the longest
-      # duration measured. On 2026-11-15, eight successful runs of this
-      # step took 18.5 to 32.6 minutes (median 19.3; the longest was main's
+      # duration measured, from when this step also built. On 2026-11-15,
+      # eight successful runs of this step took 18.5 to 32.6 minutes (median 19.3; the longest was main's
       # run 43721724778), and the step of a pull request's run 43726656460
       # reached the 35-minute limit after its tests had passed. The tests
       # alone take about 5.5 minutes; the rest is the build, and the compile
@@ -2193,13 +2209,6 @@ jobs:
       - name: Build and Test Framework
         timeout-minutes: 70
         run: swift test --traits sourceBuild
-      # Whatever the tests found: the build is this commit's either way.
-      - name: Save Build Directory
-        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' && hashFiles('.build/workspace-state.json') != '' }}
-        uses: actions/cache/save@v6
-        with:
-          path: .build
-          key: ${{ steps.build-cache.outputs.cache-primary-key }}
 
   readme-validation:
     name: Check Markdown links
