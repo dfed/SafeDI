@@ -943,7 +943,8 @@ jobs:
       # To read the passed compile checks other runs uploaded.
       actions: read
     env:
-      # What the test step passes `swift test`, which the compile check
+      # What the build step passes `swift build --build-tests` and the test
+      # step passes `swift test --skip-build`, which the compile check
       # identity below hashes too.
       SWIFT_TEST_ARGUMENTS: -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
     steps:
@@ -1042,22 +1043,39 @@ jobs:
       # so the counts are exact. SwiftPM's native build system passes the
       # flag through; the swiftbuild build system drops it.
       #
-      # The time limit stops a test that hangs rather than letting it hold
-      # the runner for GitHub's six-hour default. It is about twice the
-      # longest duration measured, rounded up to 5 minutes. On 2026-11-15,
-      # eight successful runs of this step took 17.1 to 55.1 minutes
-      # (median 32.2): 26.4 (run 43712596551), 45.2 (43692820935), 55.1
-      # (43687996075), 17.1 (43685323713), 23.9 (43682711345), 21.9
-      # (43676467330), 38.0 (43671437925) and 54.9 (main's run
-      # 43721724778). The longest took 92% of the 60-minute limit this
-      # step had.
-      - name: Build and Test Framework
-        timeout-minutes: 115
+      # The build and the tests are two steps, as "Build Tests on Linux"
+      # and the Linux test jobs are, so that a run's step list shows how
+      # its time divides.
+      #
+      # Each time limit stops a step that hangs rather than letting it
+      # hold the runner for GitHub's six-hour default, and is about twice
+      # the longest duration measured, rounded up to 5 minutes. Two runs
+      # measured the steps apart, read from their logs while they were
+      # one step: PR #765's run 44067580141 built for 23.5 minutes and
+      # tested for 18.6, and main's run 44032976346 for 14.1 and 16.8.
+      # That is thin, so the limits also allow for the one step these
+      # were: on 2026-11-15, eight successful runs of that combined step
+      # took 17.1 to 55.1 minutes (median 32.2): 26.4 (run 43712596551),
+      # 45.2 (43692820935), 55.1 (43687996075), 17.1 (43685323713), 23.9
+      # (43682711345), 21.9 (43676467330), 38.0 (43671437925) and 54.9
+      # (main's run 43721724778). The build's limit is twice 23.5, rounded
+      # up to 55. The tests' longest is not measured: at most the combined
+      # step's 55.1 less the shortest build, 14.1, so 41.0, when no compile
+      # check had passed before; the limit is twice that, 85. Each run's
+      # step list now gives both durations: set the limits from those
+      # once there are eight.
+      - name: Build Framework and Tests
+        timeout-minutes: 55
+        run: |
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          xcrun swift build --build-tests $SWIFT_TEST_ARGUMENTS
+      - name: Test Framework
+        timeout-minutes: 85
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
         run: |
           # shellcheck disable=SC2086 # The arguments are words to split.
-          xcrun swift test $SWIFT_TEST_ARGUMENTS
+          xcrun swift test --skip-build $SWIFT_TEST_ARGUMENTS
       - name: Save Passed Compile Checks
         if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
         uses: actions/cache/save@v6
