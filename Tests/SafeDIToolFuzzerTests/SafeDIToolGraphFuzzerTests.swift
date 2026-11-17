@@ -937,6 +937,120 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: renamed, modules: modules) == GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: fixture, modules: modules))
 	}
 
+	/// `chainFixture`'s chain beneath a seam, `S7_Screen`, with `S7_Caller` in the same-package caller's module and
+	/// `S7_OtherCaller` in the other package's, each instantiating `S7_Screen`, and, when `drawRootName` names one,
+	/// `S7_<drawRootName>`, a root of a draw beneath the seam's module, declared in `drawRootModule`.
+	private static func chainFixtureWithBothCallers(drawRootName: String?, drawRootModule: GraphFuzzerModule = .samePackageCaller) -> GraphFuzzerFixture {
+		var files = chainFixture(screenArguments: "generateDependencyTree: true", callerArguments: "").swiftFileContent
+		files.append(chainFile(module: .otherPackageCaller, name: "OtherCaller", arguments: "", label: "screen", type: "S7_Screen"))
+		if let drawRootName {
+			files.append(chainFile(module: drawRootModule, name: drawRootName, arguments: "isRoot: true", label: "screen", type: "S7_Screen"))
+		}
+		return GraphFuzzerFixture(seed: 7, swiftFileContent: files)
+	}
+
+	/// What each module of `chainFixtureWithBothCallers` lists when it lists every module beneath it.
+	private static let chainModulesBeneath: [GraphFuzzerModule: [GraphFuzzerModule]] = [
+		.seamDependencyLeaf: [],
+		.seamDependencyBase: [.seamDependencyLeaf],
+		.seamDependency: [.seamDependencyLeaf, .seamDependencyBase],
+		.seamModule: [.seamDependencyLeaf, .seamDependencyBase, .seamDependency],
+		.samePackageCaller: [.seamDependencyLeaf, .seamDependencyBase, .seamDependency, .seamModule],
+		.otherPackageCaller: [.seamDependencyLeaf, .seamDependencyBase, .seamDependency, .seamModule],
+	]
+
+	@Test(arguments: MultiModuleIntegration.allCases, ["FillCallRoot", "CarriedRoot", "ReenteredRoot"])
+	func dependencyLists_listEveryModuleBeneathOnlyInDrawRootsModuleAndBeneathCallers_whenGraphDeclaresDrawRoot(integration: MultiModuleIntegration, drawRootName: String) throws {
+		// The module that declares the draw's root, and every module beneath the callers, which declare the draws' seams,
+		// list every module beneath them, as the tool asks of a module that declares a root, a seam's included; the other
+		// caller lists the seam's module alone, so it reads the chain through that module's view.
+		let fixture = Self.chainFixtureWithBothCallers(drawRootName: drawRootName)
+		var expected = Self.chainModulesBeneath
+		expected[.otherPackageCaller] = [.seamModule]
+		#expect(try fixture.dependencyLists(modules: #require(fixture.modules), integration: integration, listsTransitiveDependencies: false) == expected)
+	}
+
+	@Test
+	func dependencyLists_listEveryModuleBeneathInOtherPackageCaller_whenItDeclaresDrawRoot() throws {
+		let fixture = Self.chainFixtureWithBothCallers(drawRootName: "ReenteredRoot", drawRootModule: .otherPackageCaller)
+		var expected = Self.chainModulesBeneath
+		expected[.samePackageCaller] = [.seamModule]
+		#expect(try fixture.dependencyLists(modules: #require(fixture.modules), integration: .moduleInfo, listsTransitiveDependencies: false) == expected)
+	}
+
+	@Test
+	func dependencyLists_listImportedModules_whenGraphDeclaresNoDrawRoot() throws {
+		let fixture = Self.chainFixtureWithBothCallers(drawRootName: nil)
+		var expected = Self.chainModulesImported
+		expected[.samePackageCaller] = [.seamModule]
+		expected[.otherPackageCaller] = [.seamModule]
+		#expect(try fixture.dependencyLists(modules: #require(fixture.modules), integration: .moduleInfo, listsTransitiveDependencies: false) == expected)
+	}
+
+	@Test
+	func dependencyLists_listEveryModuleBeneathInEveryModule_whenRunListsTransitiveDependencies() throws {
+		// The inline build and the known-right path, as 2.2.0 asked, whatever roots the graph declares.
+		let fixture = Self.chainFixtureWithBothCallers(drawRootName: "FillCallRoot")
+		#expect(try fixture.dependencyLists(modules: #require(fixture.modules), integration: .moduleInfo, listsTransitiveDependencies: true) == Self.chainModulesBeneath)
+	}
+
+	@Test
+	func callersReadingThroughView_returnsCallerDeclaringNoDrawRoot_whenGraphDeclaresDrawRoot() {
+		let fixture = Self.chainFixtureWithBothCallers(drawRootName: "CarriedRoot")
+		#expect(fixture.declaresRootOfDrawBeneathSeamsModule)
+		#expect(GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: fixture) == [.otherPackageCaller])
+	}
+
+	@Test
+	func callersReadingThroughView_returnsBothCallers_whenGraphDeclaresNoDrawRoot() {
+		#expect(GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: Self.chainFixtureWithBothCallers(drawRootName: nil)) == [.samePackageCaller, .otherPackageCaller])
+	}
+
+	@Test
+	func callersReadingThroughView_returnsNone_whenOnlyCallerDeclaresDrawRoot() {
+		let fixture = Self.chainFixtureWithBothCallers(drawRootName: "FillCallRoot")
+		let withoutOtherCaller = GraphFuzzerFixture(seed: 7, swiftFileContent: fixture.swiftFileContent.filter { GraphFuzzerModule(declaredIn: $0) != .otherPackageCaller })
+		#expect(GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: withoutOtherCaller) == [])
+	}
+
+	@Test
+	func callersReadingThroughView_returnsNone_whenCallersMockBuildsChain() {
+		// The mock of `S7_Caller` builds `S7_Screen`'s tree, chain and all, so its module lists the modules beneath.
+		#expect(GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: Self.chainFixture(screenArguments: "", callerArguments: "generateMock: true")) == [])
+	}
+
+	@Test
+	func callersReadingThroughView_returnsNone_whenModuleOmitsPackageName() {
+		// The SwiftPM plugin flow runs only where every module names its package, so the integrations are not compared.
+		let fixture = Self.chainFixtureWithBothCallers(drawRootName: nil)
+		let withoutPackage = GraphFuzzerFixture(seed: 7, swiftFileContent: fixture.swiftFileContent.map { content in
+			guard GraphFuzzerModule(declaredIn: content) == .otherPackageCaller else { return content }
+			return content.replacingOccurrences(of: GraphFuzzerModule.marker + GraphFuzzerModule.otherPackageCaller.name, with: GraphFuzzerModule.marker + GraphFuzzerModule.otherPackageCaller.name + GraphFuzzerModule.packageNameOmittedMarker)
+		})
+		#expect(withoutPackage.modulesOmittingPackageName == [.otherPackageCaller])
+		#expect(GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: withoutPackage) == [])
+	}
+
+	@Test(arguments: [(UInt64(304), GraphFuzzerSeamDrawFeature.seamDependencyReadThroughView), (347, .seamDependencyChainReadThroughView)])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func integrationsDisagreeFailure_returnsNil_whenOtherPackageCallerReadsThroughViewBesideDrawRoot(seed: UInt64, feature: GraphFuzzerSeamDrawFeature) async throws {
+		// Seam corpus seed 304 moves declarations beneath the seam's module, and seed 347 draws the chain there, each in a
+		// graph that declares a root of the draws beneath the seam's module: that root's module lists every module beneath
+		// it, while `FuzzOther` lists the seam's module alone and computes what it calls from that module's view, which the
+		// two flows compute alike.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		#expect(fixture.declaresRootOfDrawBeneathSeamsModule)
+		#expect(GraphFuzzerFeature.seamDrawFeatures(of: fixture).contains(feature))
+		#expect(GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: fixture) == [.otherPackageCaller])
+		let moduleInfoOutcome = try await GraphFuzzerOracle.toolOutcome(of: fixture)
+		guard case .accepted = moduleInfoOutcome else {
+			Issue.record("Seed \(seed) is expected to be accepted:\n\(moduleInfoOutcome.description)")
+			return
+		}
+		let runs = try await GraphFuzzerToolRuns(fixture: fixture, firstOutcome: moduleInfoOutcome, secondOutcome: moduleInfoOutcome, pluginOutcome: GraphFuzzerOracle.toolOutcome(of: fixture, integration: .swiftPackagePlugin))
+		#expect(runs.integrationsDisagreeFailure == nil)
+	}
+
 	@Test(arguments: [UInt64(4_749), 4_867])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func integrationsDisagreeFailure_returnsNil_whenSeamCorpusMockBuildsChainBeneathItsModulesImport(seed: UInt64) async throws {
@@ -995,6 +1109,16 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 		for feature in GraphFuzzerPublicMockDrawFeature.allCases where feature.isCountedWhenAccepted {
 			#expect(Self.publicMockCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachShapeReadThroughView() {
+		// The integrations' comparison (`integrationsDisagree`) checks what a caller computes from the seam's module's view
+		// – cell 5b's chain, and moved declarations – only in a graph whose caller lists the seam's module alone; it judges
+		// them only while each lands in at least ten graphs the tool accepts, which the corpus runs pin exactly.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isReadThroughViewShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
 		}
 	}
 
@@ -6355,7 +6479,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isReadThroughViewShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
@@ -6529,6 +6653,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.reenteredFillReadsValueOfOneRouteRemedied: 22,
 		.reenteredFillReentersEnclosingFill: 24,
 		.reenteredFillSendableCall: 11,
+		.seamDependencyChainReadThroughView: 13,
+		.seamDependencyReadThroughView: 10,
 	]
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
@@ -6688,6 +6814,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.seamModuleRunWithoutPackageName: 62,
 		.seamDependency: 35,
 		.seamDependencyChain: 55,
+		.seamDependencyReadThroughView: 64,
+		.seamDependencyChainReadThroughView: 58,
 		.hole: 331,
 		.holeOwnedBySeam: 75,
 		.holeProtocolInMarkerFreeFile: 166,
