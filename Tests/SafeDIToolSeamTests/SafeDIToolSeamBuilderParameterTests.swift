@@ -7110,7 +7110,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let chain = "Host -> shell -> Shell -> inner -> Inner -> panel -> Panel -> \(rowHop) -> Row -> widget -> DefaultWidget -> gadget -> \(fillHops) -> panel"
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["\(closerName).swift"]):10:5: error: \(Self.gadgetCycleMessage(chain: chain, closingProperty: "panel: \(spelling.closer)", closer: hop == .onSeamPath ? nil : "Helper", caseName: "DefaultWidget_Scope.gadget", builderLabel: spelling.path.hasPrefix("Sendable") ? "gadgetSendableBuilder" : "gadgetBuilder"))
+			\(fixtures["App"]!["\(closerName).swift"]):10:5: error: \(Self.gadgetCycleMessage(chain: chain, closingProperty: "panel: \(spelling.closer)", closer: hop == .onSeamPath ? nil : "Helper", caseName: "gadget", builderLabel: spelling.path.hasPrefix("Sendable") ? "gadgetSendableBuilder" : "gadgetBuilder"))
 			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panel: \(spelling.path)` here.
 			"""
 		}) {

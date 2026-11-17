@@ -272,7 +272,7 @@ struct SafeDIToolSeamFillReceivesParameterInAnotherFormTests: ~Copyable {
 			        nonisolated public struct service_Values {
 			            public var tag: Tag { __safeDI_tag.instance }
 			            public let reader: Reader
-			            let __safeDI_tag: LazilyInstantiated<Tag>
+			            public let __safeDI_tag: LazilyInstantiated<Tag>
 
 			            init(tag: LazilyInstantiated<Tag>, reader: Reader) {
 			                __safeDI_tag = tag
