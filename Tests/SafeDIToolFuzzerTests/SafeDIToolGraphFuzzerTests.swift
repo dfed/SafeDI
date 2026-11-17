@@ -6402,7 +6402,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 567, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 
-	static let seamCorpusSeedCount = 1_000
+	static let seamCorpusSeedCount = 2_000
 	static let seamCorpusFixtureHash: UInt64 = 0xBFD479D302B40D2D
 	static let seamCorpusAcceptedSeedCount = 250
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xB457A077460D0FB1
@@ -6540,13 +6540,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// hole, visible and inline alike; and seed 883, whose `S883_Root0()` spends a batch's traversals through `HoleBoth`,
 	/// `HolePing` and `HoleInner2` re-entering `HoleSeam`, with types shared under its hole, on both of its builds alike; and
 	/// seed 945, whose `S945_HoleOtherRoot()` spends a batch's traversals through `HoleOuter`, `HoleRelay` and `HoleImpl`
-	/// re-entering `HoleSeam`, whose place inside a plain fill `HoleNestScreen` holds, on both of its builds alike.
-	static let seamCorpusSeedsTraversingPastTheBatchBudget: Set<UInt64> = [391, 883, 945]
+	/// re-entering `HoleSeam`, whose place inside a plain fill `HoleNestScreen` holds, on both of its builds alike; and the
+	/// smoke batch's seeds 277 and 1890, below the corpus's size (`seamSmokeSeedsTraversingPastTheBatchBudget`).
+	static let seamCorpusSeedsTraversingPastTheBatchBudget: Set<UInt64> = [277, 391, 883, 945, 1_890]
 
 	/// The seam smoke batch's seeds whose probes traverse more wrappers than a batch allows, compared on their own as
 	/// `seamCorpusSeedsTraversingPastTheBatchBudget`'s are: seed 1890, whose `S1890_HoleOtherRoot()` spends a batch's
-	/// traversals through `HoleOuterS`, `HoleRelay` and `HoleDeep` re-entering `HoleSeam`.
-	static let seamSmokeSeedsTraversingPastTheBatchBudget: Set<UInt64> = [1_890]
+	/// traversals through `HoleOuterS`, `HoleRelay` and `HoleDeep` re-entering `HoleSeam`; and seed 277, whose hole re-enters
+	/// `HoleSeam` through a seam passing its place up, plain and `@Sendable`, beside the instantiator place.
+	static let seamSmokeSeedsTraversingPastTheBatchBudget: Set<UInt64> = [277, 1_890]
 
 	/// The ordinary suite's batch of the seam corpus: graphs the tool accepts whose generated code, between them, shows
 	/// every `GraphFuzzerSeamOutputFeature` – both kinds of pass-through, a call reading `.instance`, an `@escaping`
@@ -6938,7 +6940,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
-			seeds: [93, 98, 121, 164, 273, 283, 298, 304, 308, 309, 326, 347, 348, 362, 365, 384, 481, 500, 527, 550, 556, 594, 605, 669, 670, 699, 769, 791, 797, 832, 850, 858, 876, 883, 892, 905, 930],
+			seeds: [93, 98, 121, 164, 273, 283, 298, 304, 308, 309, 326, 347, 348, 362, 365, 384, 481, 500, 527, 550, 556, 594, 605, 669, 670, 699, 769, 791, 797, 832, 850, 858, 876, 883, 892, 905, 930, 1_020],
 		),
 		// Seed 391's chain of hole draws that re-enter one another holds more wrappers than a graph compared on its own may
 		// traverse (`DifferentialValueLimits.isolatedFuzzerGraph`), so the comparator describes none of its values beneath
@@ -6972,7 +6974,7 @@ struct SafeDIToolGraphFuzzerTests {
 		seeds: BuilderSurfaceSeeds(
 			base: [],
 			labels: [],
-			sameSupply: [1_020],
+			sameSupply: [],
 			sameSupplyReason: seamMockTakesHoleValueReason,
 			sameSupplyBuilderKindFlips: [],
 			remedyBuilderKindFlips: [],
@@ -7050,7 +7052,7 @@ struct SafeDIToolGraphFuzzerTests {
 		base: [],
 		labels: [],
 		sameSupply: [
-			98, 135, 151, 273, 300, 326, 797, 854, 858, 990,
+			98, 135, 151, 273, 300, 326, 797, 854, 858, 990, 1_020,
 		],
 		sameSupplyReason: seamMockTakesHoleValueReason,
 		sameSupplyBuilderKindFlips: [],
@@ -7065,13 +7067,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// The known issues of the smoke batch's seeds beyond the seam corpus, which no corpus run reaches: the in-seam leak,
 	/// until its fix, and the order of a seam's builders by label. In order of their seeds.
-	static let seamSmokeKnownIssuesBeyondTheCorpus: [GraphFuzzerKnownIssue] = [
-		GraphFuzzerKnownIssue(
-			reason: seamBuilderOrderReason,
-			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
-			seeds: [1_020],
-		),
-	]
+	static let seamSmokeKnownIssuesBeyondTheCorpus: [GraphFuzzerKnownIssue] = []
 
 	private static let inSeamLeakReason = "A seam's builder functions capture the values of each level on the way to a place, so holding a builder keeps them alive where the inline build frees them, until the in-seam leak fix"
 
