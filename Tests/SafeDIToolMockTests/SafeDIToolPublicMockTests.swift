@@ -2138,9 +2138,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
 			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_tag() -> String? { "tag" }
 
-			    @frozen nonisolated public enum SafeDIMockScope_Thing {
-			        case thing(thing_Values)
-
+			    nonisolated public enum SafeDIMockScope_Thing {
 			        nonisolated public struct thing_Values {
 			            public let name: String
 			            public let count: Int
@@ -6373,9 +6371,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"Profile+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
-			    @frozen nonisolated public enum SafeDIMockScope_UserService {
-			        case userService(userService_Values)
-
+			    nonisolated public enum SafeDIMockScope_UserService {
 			        nonisolated public struct userService_Values {
 			            public let analytics: Analytics
 			        }
@@ -6678,9 +6674,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#expect(output.modules["Core"]?.generatedFiles["Core.swift"] == generatedFileHeader + """
 		#if DEBUG
 		extension Service {
-		    @frozen nonisolated public enum SafeDIMockScope_UserService {
-		        case userService(userService_Values)
-
+		    nonisolated public enum SafeDIMockScope_UserService {
 		        nonisolated public struct userService_Values {
 		            package let session: Session
 		            internal let token: Token
@@ -7121,9 +7115,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"Profile+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
-			    @frozen nonisolated public enum SafeDIMockScope_Scores {
-			        case scores(scores_Values)
-
+			    nonisolated public enum SafeDIMockScope_Scores {
 			        nonisolated public struct scores_Values {
 			            public let userService: any UserService
 			        }
@@ -7142,9 +7134,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDIMockScope_UserService {
-			        case userService(userService_Values)
-
+			    nonisolated public enum SafeDIMockScope_UserService {
 			        nonisolated public struct userService_Values {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -7477,9 +7467,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		#if DEBUG
 		extension Screen {
-		    @frozen nonisolated public enum SafeDIMockScope_MissingWidget_AnyWidget {
-		        case userService(userService_Values)
-
+		    nonisolated public enum SafeDIMockScope_MissingWidget_AnyWidget {
 		        nonisolated public struct userService_Values {
 		            public let analytics: Analytics
 		            public let service: Service
@@ -14455,9 +14443,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 				#if DEBUG
 				extension FeedScreen {
-				    @frozen nonisolated public enum SafeDIMockScope_FeedService {
-				        case service(service_Values)
-
+				    nonisolated public enum SafeDIMockScope_FeedService {
 				        nonisolated public struct service_Values {
 				            public let shared: SharedThing
 				            internal let store: FeedStore
@@ -14590,9 +14576,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 				#if DEBUG
 				extension FeedScreen {
-				    @frozen nonisolated public enum SafeDIMockScope_FeedService {
-				        case service(service_Values)
-
+				    nonisolated public enum SafeDIMockScope_FeedService {
 				        nonisolated public struct service_Values {
 				            public let shared: SharedThing
 				            internal let store: FeedStore
@@ -14729,9 +14713,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 				#if DEBUG
 				extension FeedScreen {
-				    @frozen nonisolated public enum SafeDIMockScope_FeedService {
-				        case service(service_Values)
-
+				    nonisolated public enum SafeDIMockScope_FeedService {
 				        nonisolated public struct service_Values {
 				            public let shared: SharedThing
 				            internal let store: FeedStore
@@ -14864,9 +14846,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 				#if DEBUG
 				extension FeedScreen {
-				    @frozen nonisolated public enum SafeDIMockScope_FeedService {
-				        case service(service_Values)
-
+				    nonisolated public enum SafeDIMockScope_FeedService {
 				        nonisolated public struct service_Values {
 				            public let shared: SharedThing
 				            internal let store: FeedStore

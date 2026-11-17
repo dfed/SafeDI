@@ -817,16 +817,12 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 			#if DEBUG
 			extension Hub {
-			    @frozen nonisolated public enum SafeDIMockScope_Api {
-			        case x(x_Values, SafeDIMockScope_Api.X_Scope)
-
+			    nonisolated public enum SafeDIMockScope_Api {
 			        nonisolated public struct x_Values {
 			            public let user: User
 			        }
 
-			        @frozen nonisolated public enum X_Scope {
-			            case bBuilder(bBuilder_Values, SafeDIMockScope_Api.B_Scope)
-
+			        nonisolated public enum X_Scope {
 			            nonisolated public struct bBuilder_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -843,9 +839,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum B_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum B_Scope {
 			            nonisolated public struct api_Values {
 			                public let user: Draft
 			                public let x: X
@@ -1182,16 +1176,12 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 			#if DEBUG
 			extension Hub {
-			    @frozen nonisolated public enum SafeDIMockScope_Api {
-			        case bBuilder(bBuilder_Values, SafeDIMockScope_Api.B_Scope)
-
+			    nonisolated public enum SafeDIMockScope_Api {
 			        nonisolated public struct bBuilder_Values {
 			            public let user: User
 			        }
 
-			        @frozen nonisolated public enum B_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum B_Scope {
 			            nonisolated public struct api_Values {
 			                public let user: Draft
 			            }
@@ -1808,16 +1798,12 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 	#if DEBUG
 	extension Hub {
-	    @frozen nonisolated public enum SafeDIMockScope_Api {
-	        case x(x_Values, SafeDIMockScope_Api.X_Scope)
-
+	    nonisolated public enum SafeDIMockScope_Api {
 	        nonisolated public struct x_Values {
 	            public let user: User
 	        }
 
-	        @frozen nonisolated public enum X_Scope {
-	            case bBuilder(bBuilder_Values, SafeDIMockScope_Api.B_Scope)
-
+	        nonisolated public enum X_Scope {
 	            nonisolated public struct bBuilder_Values {}
 
 	            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1834,9 +1820,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	            }
 	        }
 
-	        @frozen nonisolated public enum B_Scope {
-	            case api(api_Values)
-
+	        nonisolated public enum B_Scope {
 	            nonisolated public struct api_Values {
 	                public let user: Draft
 	                public let x: X
@@ -2024,16 +2008,12 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 	#if DEBUG
 	extension Hub {
-	    @frozen nonisolated public enum SafeDIMockScope_Api {
-	        case bBuilder(bBuilder_Values, SafeDIMockScope_Api.B_Scope)
-
+	    nonisolated public enum SafeDIMockScope_Api {
 	        nonisolated public struct bBuilder_Values {
 	            public let user: User
 	        }
 
-	        @frozen nonisolated public enum B_Scope {
-	            case api(api_Values)
-
+	        nonisolated public enum B_Scope {
 	            nonisolated public struct api_Values {
 	                public let user: Draft
 	            }
@@ -2141,16 +2121,12 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 
 	#if DEBUG
 	extension Hub {
-	    @frozen nonisolated public enum SafeDIMockScope_Api {
-	        case x(x_Values, SafeDIMockScope_Api.X_Scope)
-
+	    nonisolated public enum SafeDIMockScope_Api {
 	        nonisolated public struct x_Values {
 	            public let user: User
 	        }
 
-	        @frozen nonisolated public enum X_Scope {
-	            case bBuilder(bBuilder_Values, SafeDIMockScope_Api.B_Scope)
-
+	        nonisolated public enum X_Scope {
 	            nonisolated public struct bBuilder_Values {}
 
 	            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2167,9 +2143,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	            }
 	        }
 
-	        @frozen nonisolated public enum B_Scope {
-	            case api(api_Values)
-
+	        nonisolated public enum B_Scope {
 	            nonisolated public struct api_Values {
 	                public let user: Draft?
 	                public let x: X
