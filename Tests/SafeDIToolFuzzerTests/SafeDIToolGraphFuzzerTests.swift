@@ -2902,7 +2902,7 @@ struct SafeDIToolGraphFuzzerTests {
 			let buildFindings = findings(in: diagnostics)
 			findingsByBuild[build] = buildFindings
 			#expect(buildFindings.contains { $0.contains("carries from `\(prefix)ReenteredSubA`, and \(call)") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
-			#expect(buildFindings.contains { $0.contains("inside that `\(prefix)ReenteredSubB`, but") && $0.contains("` on `\(prefix)ReenteredSubB`, so the builder’s scope carries it") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
+			#expect(buildFindings.contains { $0.contains("inside that `\(prefix)ReenteredSubB`, but") && $0.contains("` on `\(prefix)ReenteredSubB`, so the builder’s values struct carries it") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
 			#expect(!buildFindings.contains { $0.contains("` on `\(prefix)ReenteredRelay`") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
 		}
 		#expect(findingsByBuild["hole"] == findingsByBuild["visible"])
@@ -5117,7 +5117,7 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "A", call: "Factory")) == "its diagnostics")
 		// Calls of seams that build the seam built again, named as written.
 		func relayOutcome(_ first: String, _ second: String) -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
 		}
 		#expect(GraphFuzzerToolOutcome.differences(between: relayOutcome("A", "B"), and: relayOutcome("B", "A")) == [])
 		#expect(GraphFuzzerToolOutcome.difference(between: relayOutcome("A", "B"), and: relayOutcome("B", "C")) == "its diagnostics")
@@ -5128,7 +5128,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// A fill that opens the seam again both directly and through two seams that build it lists the direct call first, then
 		// the relays and their calls, which follow names. Another relay or call in that list still differs.
 		func outcome(_ first: String, _ second: String) -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `Seam` again (`seamBuilder`) and `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `Seam` again (`seamBuilder`) and `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
 		}
 		#expect(GraphFuzzerToolOutcome.differences(between: outcome("A", "B"), and: outcome("B", "A")) == [])
 		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "C")) == "its diagnostics")
