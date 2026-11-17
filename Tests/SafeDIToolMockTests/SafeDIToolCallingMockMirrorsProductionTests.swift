@@ -598,8 +598,8 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	/// where the caller’s plain `token` is nearest.
 	private static func lazyRouteModules(caller: String, callee: String) -> [ModuleFixture] {
 		[
-			ModuleFixture(name: "Core", packageName: "Core", swiftFileContentByFilePath: ["CoreTypes.swift": Self.lazyRouteCore(callee: callee)]),
-			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": "import Core\n" + Self.lazyRouteApp(caller: caller)], dependencies: ["Core"]),
+			ModuleFixture(name: "Core", packageName: "Core", swiftFileContentByFilePath: ["CoreTypes.swift": lazyRouteCore(callee: callee)]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": "import Core\n" + lazyRouteApp(caller: caller)], dependencies: ["Core"]),
 		]
 	}
 
