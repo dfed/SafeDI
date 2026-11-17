@@ -176,7 +176,10 @@ jobs:
     if: ${{ !cancelled() && needs.release-acceptance-older-release.result == 'success' && (needs.release-acceptance-build.result == 'success' || inputs.bundle) }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    timeout-minutes: 45
+    # The job's parts sum to about 25 minutes at their longest: the
+    # container's start (11 minutes once, run 43879263598), two downloads
+    # and an unpack, and the comparison under its own limit of 11.
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:

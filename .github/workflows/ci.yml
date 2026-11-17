@@ -453,17 +453,23 @@ jobs:
         if: ${{ !cancelled() && steps.xcode-26-2.outcome == 'success' }}
         timeout-minutes: 14
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=ios -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages" -derivedDataPath "$RUNNER_TEMP/framework-xcode-26.2"
+      # Reuses the host tools and macros the iOS step built (2.3 minutes at
+      # most over ten runs); after an iOS failure it builds them itself, as
+      # long as iOS's 4.7, so the limit is about twice that.
       - name: Build Framework (generic/platform=tvos)
         if: ${{ !cancelled() && steps.xcode-26-2.outcome == 'success' }}
-        timeout-minutes: 14
+        timeout-minutes: 10
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=tvos -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages" -derivedDataPath "$RUNNER_TEMP/framework-xcode-26.2"
       - name: Build Framework (generic/platform=watchos)
         if: ${{ !cancelled() && steps.xcode-26-2.outcome == 'success' }}
         timeout-minutes: 14
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=watchos -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages" -derivedDataPath "$RUNNER_TEMP/framework-xcode-26.2"
+      # Reuses the host tools and macros the iOS step built (2.3 minutes at
+      # most over ten runs); after an iOS failure it builds them itself, as
+      # long as iOS's 4.7, so the limit is about twice that.
       - name: Build Framework (generic/platform=visionos)
         if: ${{ !cancelled() && steps.xcode-26-2.outcome == 'success' }}
-        timeout-minutes: 14
+        timeout-minutes: 10
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=visionos -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages" -derivedDataPath "$RUNNER_TEMP/framework-xcode-26.2"
       - name: Report Free Disk Space
         if: ${{ !cancelled() }}
@@ -2028,10 +2034,11 @@ jobs:
       # imports, which `SafeDIToolTestSupport` depending on the
       # executable target `SafeDITool` did.
       - name: Build the SafeDITool Test Support Target Alone with Swift Build
-        # Measured 26 s on a 10-core Mac (Swift 6.4.2, swift-syntax built
-        # from source into the empty scratch path); set from this job's
-        # first runs on the 4-core Linux runner, which has no measurement yet.
-        timeout-minutes: 15
+        # Every run is cold: swift-syntax builds from source into the empty
+        # scratch path. Ten CI runs on the 4-core Linux runner took at most
+        # 1.9 minutes (2026-11-16 and 17); the limit is about two and a half
+        # times that, rounded up for the runner's variance.
+        timeout-minutes: 5
         run: swift build --build-system swiftbuild --traits sourceBuild --target SafeDIToolTestSupport --scratch-path "$RUNNER_TEMP/swiftbuild-test-support"
       # A time limit for the macOS job's reason: about twice the longest
       # duration measured. On 2026-11-15, eight successful runs of this
