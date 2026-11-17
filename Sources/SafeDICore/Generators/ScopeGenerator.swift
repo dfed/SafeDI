@@ -68,6 +68,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		callSiteLazilyInstantiatedInstanceProperties: Set<Property>? = nil,
 		reboundProperties: Set<Property> = [],
 		previousPassReceivedBuilderLoops: ReceivedBuilderLoops? = nil,
+		previousPassPublicMockRootLevelUpNames: [String: String] = [:],
 		namesBoundBySeam: Set<String> = [],
 		placeHoldingProperties: Set<Property>? = nil,
 	) {
@@ -257,6 +258,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			referencedFillNamesByKey.merge(child.referencedFillNamesByKey) { name, _ in name }
 			fillKeysReferencedFromSendableFunction.formUnion(child.fillKeysReferencedFromSendableFunction)
 		}
+		// A call inside a fill of this call that re-enters a root level function hands it the caller's struct where the function
+		// takes it, which the pass before found (`Scope.enclosingLevelUpNamesOfThisCall`). Nearly no call holds such a call.
+		let publicMockRootLevelUpNames = publicMockLevelFunctions?.rootLevelUpNames(amongKeys: Set(referencedFillNamesByKey.keys)) ?? [:]
+		self.publicMockRootLevelUpNames = publicMockRootLevelUpNames
+		publicMockRootLevelUpNamesChangedInTree = publicMockRootLevelUpNames != previousPassPublicMockRootLevelUpNames
+			|| propertiesToGenerate.contains(where: \.publicMockRootLevelUpNamesChangedInTree)
 		let ownFills = propertiesToGenerate.compactMap { child -> SendableFillNode? in
 			child.fillKey.map { SendableFillNode(key: $0, references: Set(child.referencedFillNamesByKey.keys), startsSendable: child.fillHole?.isSendable == true) }
 		} + fillDispatchers.map { dispatcher in
@@ -744,6 +751,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleParametersChangedInTree = false
 		receivedBuilderLoops = ReceivedBuilderLoops()
 		receivedBuilderLoopsChangedInTree = false
+		publicMockRootLevelUpNames = [:]
+		publicMockRootLevelUpNamesChangedInTree = false
 		reboundProperties = []
 		description = property.asSource
 		propertiesToGenerate = []
@@ -843,6 +852,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleParametersChangedInTree = false
 		receivedBuilderLoops = ReceivedBuilderLoops()
 		receivedBuilderLoopsChangedInTree = false
+		publicMockRootLevelUpNames = [:]
+		publicMockRootLevelUpNamesChangedInTree = false
 		reboundProperties = []
 		description = holeProperty.asSource
 		propertiesToGenerate = []
@@ -3319,6 +3330,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Whether a scope in this tree found other loops among its children than the pass before, so that
 	/// `Scope.createScopeGenerator` creates the tree again.
 	let receivedBuilderLoopsChangedInTree: Bool
+	/// For a call of another module's public mock, the name each root level function a call inside one of its fills re-enters
+	/// takes the caller's struct under, by its dispatcher's key, where the function takes it
+	/// (`PublicMockLevelFunctions.rootLevelUpNames(amongKeys:)`), which the next pass of `Scope.createScopeGenerator` hands
+	/// those calls. Empty for nearly every scope.
+	nonisolated let publicMockRootLevelUpNames: [String: String]
+	/// Whether a call in this tree found other `publicMockRootLevelUpNames` than the pass before handed the calls inside its
+	/// fills, so that `Scope.createScopeGenerator` creates the tree again.
+	let publicMockRootLevelUpNamesChangedInTree: Bool
 	/// The properties of the siblings this scope's builder function rebinds, as a member of a loop of its scope (see
 	/// `ReceivedBuilderLoops`), in the order its body first receives them. Empty for nearly every scope.
 	let reboundProperties: [Property]
