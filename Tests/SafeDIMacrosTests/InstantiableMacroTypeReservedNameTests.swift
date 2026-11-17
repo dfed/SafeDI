@@ -25,8 +25,8 @@ import Testing
 #if canImport(SafeDIMacros)
 	@testable import SafeDIMacros
 
-	/// A type whose name begins with a prefix of the types SafeDI generates (`SafeDIScope_`, `SafeDISendableScope_`, or
-	/// `__safeDI_`), declared where the `@Instantiable` macro sees it: the decorated type, the type an `@Instantiable`
+	/// A type whose name begins with a prefix of the types SafeDI generates (`SafeDIScope_`, `SafeDISendableScope_`,
+	/// `SafeDIMockScope_`, `SafeDISendableMockScope_`, or `__safeDI_`), declared where the `@Instantiable` macro sees it: the decorated type, the type an `@Instantiable`
 	/// extension extends, or a type declared inside either. Generated code declares types of those names beside the
 	/// person's, so a type of such a name makes the generated code fail to compile.
 	struct InstantiableMacroTypeReservedNameTests {
@@ -75,6 +75,58 @@ import Testing
 				diagnostics: [
 					DiagnosticSpec(
 						message: "The type name `SafeDISendableScope_Api` begins with `SafeDISendableScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDISendableScope_`.",
+						line: 2,
+						column: 15,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedTypeNameDiagnostic_whenClassNameBeginsWithPublicMockScopePrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class SafeDIMockScope_Api: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public final class SafeDIMockScope_Api: Instantiable {
+				    public init() {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type name `SafeDIMockScope_Api` begins with `SafeDIMockScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDIMockScope_`.",
+						line: 2,
+						column: 20,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedTypeNameDiagnostic_whenStructNameBeginsWithSendablePublicMockScopePrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct SafeDISendableMockScope_Api: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public struct SafeDISendableMockScope_Api: Instantiable {
+				    public init() {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type name `SafeDISendableMockScope_Api` begins with `SafeDISendableMockScope_`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `SafeDISendableMockScope_`.",
 						line: 2,
 						column: 15,
 						severity: .error,
@@ -527,6 +579,12 @@ import Testing
 				    public struct MySafeDIScope_Api {}
 				    public struct Detail_Scope {}
 				    public struct detailBuilder_Values {}
+				    public struct SafeDIMockScope {}
+				    public struct SafeDIMockScopeApi {}
+				    public struct SafeDISendableMockScopeApi {}
+				    public struct safeDIMockScope_Api {}
+				    public struct SafeDISendablemockScope_Api {}
+				    public struct SAFEDIMOCKSCOPE_Api {}
 				}
 				""",
 				expandedSource: """
@@ -541,6 +599,12 @@ import Testing
 				    public struct MySafeDIScope_Api {}
 				    public struct Detail_Scope {}
 				    public struct detailBuilder_Values {}
+				    public struct SafeDIMockScope {}
+				    public struct SafeDIMockScopeApi {}
+				    public struct SafeDISendableMockScopeApi {}
+				    public struct safeDIMockScope_Api {}
+				    public struct SafeDISendablemockScope_Api {}
+				    public struct SAFEDIMOCKSCOPE_Api {}
 				}
 				""",
 				macros: instantiableTestMacros,
