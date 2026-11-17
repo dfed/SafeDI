@@ -1054,6 +1054,10 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			    @Received let variadicHandler: (Int...) throws(CancellationError) -> Void
 			    @Instantiated let ovenFactory: Instantiator<Oven>
 			}
+
+			extension Kitchen {
+			    struct SafeDIScope_Kitchen {}
+			}
 			""",
 			"Pantry.swift": """
 			@Instantiable(generateMock: .public, customMockName: "customMock")
@@ -1324,6 +1328,7 @@ extension SafeDIConfiguration: BinarySample {}
 extension Instantiable: BinarySample {}
 extension Instantiable.DeclarationType: BinarySample {}
 extension PlainTypeDeclaration: BinarySample {}
+extension ReservedTypeNameDeclaration: BinarySample {}
 extension MockGeneration: BinarySample {}
 extension AccessDeclaration: BinarySample {}
 extension AccessLevel: BinarySample {}

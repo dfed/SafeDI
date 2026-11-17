@@ -139,13 +139,16 @@ extension IfConfigDeclSyntax {
 	///   - enclosingExtensionAccess: The access of the extension the block is in, if it is in one.
 	///   - sourceLocationConverter: A converter for the tree the block is in, with which each declaration records where
 	///     it begins.
+	///   - recordsReservedTypeNames: Whether to record the declarations, in every clause, of the types the `@Instantiable`
+	///     macro does not see whose names begin with a reserved prefix: `false` inside a declaration the macro reads.
 	func safeDIContentAmongDeclarations(
 		enclosedBy enclosingType: TypeDescription?,
 		enclosingTypeAccess: [AccessDeclaration] = [],
 		inExtensionOf extendedType: TypeDescription?,
 		enclosingExtensionAccess: AccessDeclaration? = nil,
 		sourceLocationConverter: SourceLocationConverter? = nil,
-	) -> (content: SafeDIContent, outputFileDeclarations: OutputFileDeclarations, plainTypeNames: PlainTypeNamesInAnyClause) {
+		recordsReservedTypeNames: Bool = false,
+	) -> (content: SafeDIContent, outputFileDeclarations: OutputFileDeclarations, plainTypeNames: PlainTypeNamesInAnyClause, reservedTypeNameDeclarations: [ReservedTypeNameDeclaration]) {
 		let detector = SafeDIContentDetector(
 			context: .declarations,
 			enclosingType: enclosingType,
@@ -153,9 +156,10 @@ extension IfConfigDeclSyntax {
 			extendedType: extendedType,
 			enclosingExtensionAccess: enclosingExtensionAccess,
 			sourceLocationConverter: sourceLocationConverter,
+			recordsReservedTypeNames: recordsReservedTypeNames,
 		)
 		detector.walk(self)
-		return (detector.content, detector.outputFileDeclarations, detector.plainTypeNames)
+		return (detector.content, detector.outputFileDeclarations, detector.plainTypeNames, detector.reservedTypeNameDeclarations)
 	}
 }
 
@@ -201,6 +205,9 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	///   - enclosingTypeAccess: The access of each type declaration enclosing the walked block in its file.
 	///   - enclosingExtensionAccess: The access of the extension the walked block is in, if it is in one.
 	///   - sourceLocationConverter: A converter for the tree the walked block is in.
+	///   - recordsReservedTypeNames: Whether the walked block is outside every declaration the `@Instantiable` macro reads,
+	///     so that the declarations it holds of types whose names begin with a reserved prefix are recorded, except those
+	///     the macro reads.
 	init(
 		context: SafeDIContentContext,
 		enclosingType: TypeDescription? = nil,
@@ -208,6 +215,7 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 		extendedType: TypeDescription? = nil,
 		enclosingExtensionAccess: AccessDeclaration? = nil,
 		sourceLocationConverter: SourceLocationConverter? = nil,
+		recordsReservedTypeNames: Bool = false,
 	) {
 		self.context = context
 		self.enclosingType = enclosingType
@@ -215,6 +223,7 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 		self.extendedType = extendedType
 		self.enclosingExtensionAccess = enclosingExtensionAccess
 		self.sourceLocationConverter = sourceLocationConverter
+		recordsReservedTypeNamesAtPosition = recordsReservedTypeNames
 		super.init(viewMode: .sourceAccurate)
 	}
 
@@ -224,9 +233,12 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	/// Among type declarations, the outermost names of the `struct`, `class`, `actor`, `enum`, `protocol`, and `typealias`
 	/// declarations that are not `@Instantiable`, in every clause.
 	private(set) var plainTypeNames = PlainTypeNamesInAnyClause()
+	/// Among type declarations, the declarations in every clause of the types the `@Instantiable` macro does not see whose
+	/// names begin with a reserved prefix, in source order, when the walk records them.
+	private(set) var reservedTypeNameDeclarations = [ReservedTypeNameDeclaration]()
 
 	override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), access: node.modifiers.access(introducedBy: node.classKeyword, sourceLocationConverter: sourceLocationConverter), isTypeDefinition: true)
+		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), named: node.name, access: node.modifiers.access(introducedBy: node.classKeyword, sourceLocationConverter: sourceLocationConverter), isTypeDefinition: true)
 	}
 
 	override func visitPost(_: ClassDeclSyntax) {
@@ -234,7 +246,7 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	}
 
 	override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), access: node.modifiers.access(introducedBy: node.actorKeyword, sourceLocationConverter: sourceLocationConverter), isTypeDefinition: true)
+		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), named: node.name, access: node.modifiers.access(introducedBy: node.actorKeyword, sourceLocationConverter: sourceLocationConverter), isTypeDefinition: true)
 	}
 
 	override func visitPost(_: ActorDeclSyntax) {
@@ -242,7 +254,7 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	}
 
 	override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), access: node.modifiers.access(introducedBy: node.structKeyword, sourceLocationConverter: sourceLocationConverter), isTypeDefinition: true)
+		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), named: node.name, access: node.modifiers.access(introducedBy: node.structKeyword, sourceLocationConverter: sourceLocationConverter), isTypeDefinition: true)
 	}
 
 	override func visitPost(_: StructDeclSyntax) {
@@ -254,7 +266,7 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 		// inside it are enclosed by no type declaration of the file.
 		extendedType = node.extendedType.typeDescription
 		enclosingExtensionAccess = node.modifiers.access(introducedBy: node.extensionKeyword, sourceLocationConverter: sourceLocationConverter)
-		return visitTypeDeclaration(node.attributes, declaring: node.extendedType.typeDescription, access: nil, isTypeDefinition: false)
+		return visitTypeDeclaration(node.attributes, declaring: node.extendedType.typeDescription, named: nil, access: nil, isTypeDefinition: false)
 	}
 
 	override func visitPost(_: ExtensionDeclSyntax) {
@@ -266,8 +278,10 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
 		let declaredType = typeDefined(named: node.name.text)
 		let access = node.modifiers.access(introducedBy: node.enumKeyword, sourceLocationConverter: sourceLocationConverter)
-		recordPlainTypeDeclaration(declaredType, access: access, isInstantiable: node.attributes.instantiableMacro != nil)
-		enterType(declaredType, access: access)
+		let isInstantiable = node.attributes.instantiableMacro != nil
+		recordPlainTypeDeclaration(declaredType, access: access, isInstantiable: isInstantiable)
+		recordReservedTypeName(node.name, isInstantiable: isInstantiable)
+		enterType(declaredType, access: access, isInstantiable: isInstantiable)
 		return switch context {
 		case .declarations:
 			// Enums can nest instantiable types.
@@ -278,12 +292,16 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	}
 
 	override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
-		// A protocol's body declares nothing SafeDI reads.
+		// A protocol's body declares nothing SafeDI reads, but the type aliases it declares can have reserved names.
 		recordPlainTypeDeclaration(
 			typeDefined(named: node.name.text),
 			access: node.modifiers.access(introducedBy: node.protocolKeyword, sourceLocationConverter: sourceLocationConverter),
 			isInstantiable: false,
 		)
+		recordReservedTypeName(node.name, isInstantiable: false)
+		if recordsReservedTypeNamesAtPosition {
+			reservedTypeNameDeclarations += ReservedTypeNameDeclaration.declaredAmongMembers(of: node, sourceLocationConverter: sourceLocationConverter)
+		}
 		return .skipChildren
 	}
 
@@ -293,6 +311,7 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 			access: node.modifiers.access(introducedBy: node.typealiasKeyword, sourceLocationConverter: sourceLocationConverter),
 			isInstantiable: false,
 		)
+		recordReservedTypeName(node.name, isInstantiable: false)
 		return .skipChildren
 	}
 
@@ -349,9 +368,12 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	private var enclosingType: TypeDescription?
 	/// The access of each type declaration enclosing the walk's position in its file, outermost first.
 	private var enclosingTypeAccess: [AccessDeclaration]
-	/// The enclosing type and the access of each enclosing type declaration of each declaration the walk is inside,
-	/// innermost last.
-	private var outerEnclosingTypes = [(type: TypeDescription?, access: [AccessDeclaration])]()
+	/// The enclosing type, the access of each enclosing type declaration, and whether reserved type names are recorded, of
+	/// each declaration the walk is inside, innermost last.
+	private var outerEnclosingTypes = [(type: TypeDescription?, access: [AccessDeclaration], recordsReservedTypeNames: Bool)]()
+	/// Whether the walk's position is outside every declaration the `@Instantiable` macro reads, in a walk that records
+	/// the declarations of types whose names begin with a reserved prefix.
+	private var recordsReservedTypeNamesAtPosition: Bool
 	/// The type the extension the walk is inside extends, if it is inside one.
 	private var extendedType: TypeDescription?
 	/// The access of the extension the walk is inside, if it is inside one.
@@ -361,14 +383,19 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	///   - declaredType: The type the declaration declares, which encloses the types among its members.
 	///   - access: The access the declaration spells, or `nil` for an extension, which encloses its members in no type
 	///     declaration of the file.
+	///   - name: The name of the type the declaration defines, or `nil` for an extension.
 	///   - isTypeDefinition: Whether the declaration defines a type, which only a type definition
 	///     can make a root, or a type whose dependency tree SafeDI generates: SafeDI never treats an
 	///     `@Instantiable` extension as either.
-	private func visitTypeDeclaration(_ attributes: AttributeListSyntax, declaring declaredType: TypeDescription, access: AccessDeclaration?, isTypeDefinition: Bool) -> SyntaxVisitorContinueKind {
+	private func visitTypeDeclaration(_ attributes: AttributeListSyntax, declaring declaredType: TypeDescription, named name: TokenSyntax?, access: AccessDeclaration?, isTypeDefinition: Bool) -> SyntaxVisitorContinueKind {
+		let isInstantiable = attributes.instantiableMacro != nil
 		if let access {
-			recordPlainTypeDeclaration(declaredType, access: access, isInstantiable: attributes.instantiableMacro != nil)
+			recordPlainTypeDeclaration(declaredType, access: access, isInstantiable: isInstantiable)
 		}
-		enterType(declaredType, access: access)
+		if let name {
+			recordReservedTypeName(name, isInstantiable: isInstantiable)
+		}
+		enterType(declaredType, access: access, isInstantiable: isInstantiable)
 		switch context {
 		case .declarations:
 			if let instantiableMacro = attributes.instantiableMacro {
@@ -398,20 +425,33 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	}
 
 	/// Makes `type`, declared with `access`, the enclosing type until the declaration that declares it ends. An extension,
-	/// whose `access` is `nil`, is enclosed by no type declaration of the file.
-	private func enterType(_ type: TypeDescription, access: AccessDeclaration?) {
-		outerEnclosingTypes.append((enclosingType, enclosingTypeAccess))
+	/// whose `access` is `nil`, is enclosed by no type declaration of the file. The `@Instantiable` macro reads every type
+	/// declared inside a declaration that is `@Instantiable`, so none of them is recorded for its reserved name.
+	private func enterType(_ type: TypeDescription, access: AccessDeclaration?, isInstantiable: Bool) {
+		outerEnclosingTypes.append((enclosingType, enclosingTypeAccess, recordsReservedTypeNamesAtPosition))
 		enclosingType = type
 		if let access {
 			enclosingTypeAccess.append(access)
 		} else {
 			enclosingTypeAccess = []
 		}
+		recordsReservedTypeNamesAtPosition = recordsReservedTypeNamesAtPosition && !isInstantiable
 	}
 
 	/// Restores the enclosing type of the declaration that just ended.
 	private func exitType() {
-		(enclosingType, enclosingTypeAccess) = outerEnclosingTypes.removeLast()
+		(enclosingType, enclosingTypeAccess, recordsReservedTypeNamesAtPosition) = outerEnclosingTypes.removeLast()
+	}
+
+	/// Records the declaration of the type `name` names when its name begins with a reserved prefix and the
+	/// `@Instantiable` macro does not see it: the walk records reserved names, its position is outside every declaration
+	/// the macro reads, and the declaration is not `@Instantiable`. Only a walk among type declarations records them.
+	private func recordReservedTypeName(_ name: TokenSyntax, isInstantiable: Bool) {
+		guard recordsReservedTypeNamesAtPosition,
+		      !isInstantiable,
+		      let declaration = ReservedTypeNameDeclaration.declaredBy(name, sourceLocationConverter: sourceLocationConverter)
+		else { return }
+		reservedTypeNameDeclarations.append(declaration)
 	}
 
 	/// Records the outermost name of `type`, which a declaration with `access` declares, among `plainTypeNames` when it is
