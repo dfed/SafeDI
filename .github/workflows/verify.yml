@@ -175,14 +175,25 @@ jobs:
           restore-keys: |
             verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}-
             verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
-      # The key is the warming job's. A hit is never re-saved, so this
-      # workflow, which sets the build's arguments, is in it.
-      - name: Cache Debug Build Directory
+      # The key is the warming job's: a hit is never re-saved, so it holds
+      # the build's arguments and the compiler's version. This job saves no
+      # build: when the key hashed this workflow instead, each branch a run
+      # was dispatched on that had changed the workflow saved a copy of
+      # about 500 MB that only it could restore.
+      - name: Hash Fast Build Arguments
+        id: fast-build-arguments
         if: ${{ inputs.mode == 'fast' }}
-        uses: actions/cache@v6
+        run: |
+          compiler=$(swift --version 2>&1)
+          arguments=$(printf '%s\n%s' "$FAST_SWIFT_TEST_ARGUMENTS" "$compiler" | sha256sum | cut -c1-16)
+          test "${#arguments}" -eq 16
+          echo "hash=$arguments" >> "$GITHUB_OUTPUT"
+      - name: Restore Debug Build Directory
+        if: ${{ inputs.mode == 'fast' }}
+        uses: actions/cache/restore@v6
         with:
           path: .build
-          key: verify-debug-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/verify.yml') }}
+          key: verify-debug-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ steps.fast-build-arguments.outputs.hash }}
           restore-keys: |
             verify-debug-${{ runner.os }}-swift-6.2-
       - name: Resolve Package Dependencies
@@ -536,9 +547,8 @@ jobs:
   # runs then start from that build: a way to try a change to this workflow
   # before it lands, and to spare a long-lived branch its first full build.
   # A newer push cancels an older one's job, since only the newest build is
-  # restored. Each saved build is about 520 MB; GitHub evicts the caches
-  # least recently read once a repository holds 10 GB, which are the older
-  # commits' builds. It runs on Linux beside CI and slows none of CI's jobs,
+  # restored. Each saved build is about 480 MB, so "Delete Older Release
+  # Verify Builds" below deletes the ref's older ones. It runs on Linux beside CI and slows none of CI's jobs,
   # reads the repository and nothing else, and saving a cache takes no token
   # permission. The step took 23.9 minutes from nothing (run 43772841709),
   # and the job above about 10 seconds from the same commit's build and 2
@@ -592,12 +602,61 @@ jobs:
           path: .build
           key: verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
+  # Deletes every release build "Warm the Release Verify Build Cache" saved
+  # for this ref but the newest. A run restores only the newest, by the
+  # key's prefix, and each push to main saved another of about 480 MB into
+  # a repository whose caches GitHub evicts, least recently read first,
+  # above 10 GB. On 2026-11-17 the repository stood at 9.9 GB, so each save
+  # evicted about as much, and what went was whatever had been read least
+  # recently: an older one of these, or a cache read less often, such as
+  # the macOS build of a runner image few runs land on, whose absence cost
+  # a run 9 minutes (ci.yml's "Build and Test on Xcode 26" has the runs).
+  # Deleting the older build here leaves the rest alone. It keeps the newest by
+  # creation time rather than this run's own, so an older run that finishes
+  # late deletes nothing newer. Deleting a cache takes `actions: write`,
+  # which only this job has; it checks nothing out and calls only GitHub's
+  # API, so it needs no container. A failure warns and leaves the builds for
+  # the next run or for eviction.
+  prune-release-cache:
+    name: Delete Older Release Verify Builds
+    needs: warm-release-cache
+    if: ${{ !cancelled() && needs.warm-release-cache.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Delete All but the Newest Build
+        # A list and a delete for each older build, usually one. One minute
+        # is the least the limit can be set to in whole minutes.
+        timeout-minutes: 1
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        run: |
+          if ! older=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key=verify-release-v1- -f ref="$REF" -f sort=created_at -f direction=desc -F per_page=100 --jq '.actions_caches[1:][] | "\(.id) \(.key)"' 2>&1); then
+            echo "::warning::Listing $REF's release builds failed: $(printf '%s' "$older" | tr '\r\n' '  ')"
+            exit 0
+          fi
+          if [ -z "$older" ]; then
+            echo "$REF has no older release build."
+            exit 0
+          fi
+          printf '%s\n' "$older" | while read -r id key; do
+            if deleted=$(gh api -X DELETE "repos/$REPOSITORY/actions/caches/$id" 2>&1); then
+              echo "Deleted $key."
+            else
+              echo "::warning::Deleting $key failed: $(printf '%s' "$deleted" | tr '\r\n' '  ')"
+            fi
+          done
+
   # Builds fast mode's tests on main, so that the dependencies' debug build
   # products (swift-syntax's, most of a cold build) are in a cache every branch
   # can restore. SafeDI's own targets rebuild in every run anyway: a checkout
   # gives each source a new modification time. The key changes only with
-  # Package.resolved or this workflow, so most pushes find it and stop after
-  # the lookup. It runs on Linux beside CI and slows none of CI's jobs. Like
+  # Package.resolved, the build's arguments or the compiler, so most pushes
+  # find it and stop after the lookup. It runs on Linux beside CI and slows none of CI's jobs. Like
   # the job above it reads the repository and nothing else; saving a cache
   # takes no token permission.
   warm-fast-cache:
@@ -611,12 +670,19 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+      - name: Hash Fast Build Arguments
+        id: fast-build-arguments
+        run: |
+          compiler=$(swift --version 2>&1)
+          arguments=$(printf '%s\n%s' "$FAST_SWIFT_TEST_ARGUMENTS" "$compiler" | sha256sum | cut -c1-16)
+          test "${#arguments}" -eq 16
+          echo "hash=$arguments" >> "$GITHUB_OUTPUT"
       - name: Look Up Debug Build Directory
         id: lookup
         uses: actions/cache/restore@v6
         with:
           path: .build
-          key: verify-debug-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/verify.yml') }}
+          key: verify-debug-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ steps.fast-build-arguments.outputs.hash }}
           lookup-only: true
       # A miss restores the newest older cache, and the build is incremental
       # from there.
@@ -625,7 +691,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: .build
-          key: verify-debug-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/verify.yml') }}
+          key: verify-debug-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ steps.fast-build-arguments.outputs.hash }}
           restore-keys: |
             verify-debug-${{ runner.os }}-swift-6.2-
       - name: Resolve Package Dependencies
@@ -644,7 +710,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: .build
-          key: verify-debug-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/verify.yml') }}
+          key: verify-debug-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ steps.fast-build-arguments.outputs.hash }}
 
   # Deletes the branch this run was dispatched on when it is a scratch ref:
   # one a tool pushed only to run this workflow on a commit, named
@@ -707,6 +773,7 @@ jobs:
       - verify-test-partition
       - verify-passed-compile-checks
       - warm-release-cache
+      - prune-release-cache
       - warm-fast-cache
     if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.mode != 'warm' && github.ref_type == 'branch' && (startsWith(github.ref_name, 'verify/') || startsWith(github.ref_name, 'probe/') || startsWith(github.ref_name, 'coverage/')) }}
     runs-on: ubuntu-latest

@@ -336,8 +336,10 @@ jobs:
         with:
           command: swift package generate-documentation --target SafeDI --warnings-as-errors
       # Saved here, not when the job ends, so that an unrelated step that fails later loses no cache.
+      # Only from main, for the reason "Build and Test on Xcode 26" gives
+      # at its own cache.
       - name: Save Build Directory Cache
-        if: ${{ !cancelled() && steps.docc-cache.outputs.cache-hit != 'true' && steps.docc.outcome == 'success' }}
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && steps.docc-cache.outputs.cache-hit != 'true' && steps.docc.outcome == 'success' }}
         uses: actions/cache/save@v6
         with:
           path: .build
