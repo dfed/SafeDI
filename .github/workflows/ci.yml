@@ -1306,7 +1306,7 @@ jobs:
   # leaves the builds for the next run or for eviction.
   prune-build-caches:
     name: Delete Older Build Directories
-    needs: [spm, linux-build, linux-latest-swift]
+    needs: [spm, linux-build, linux-latest-swift, generate-time]
     if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
@@ -1325,7 +1325,7 @@ jobs:
           REF: ${{ github.ref }}
           COMMIT: ${{ github.sha }}
         run: |
-          for prefix in spm-release-v2-macOS-xcode-26.0- spm-release-v2-Linux-swift-6.2- spm-debug-v2-Linux-swift-; do
+          for prefix in spm-release-v2-macOS-xcode-26.0- spm-release-v2-Linux-swift-6.2- spm-debug-v2-Linux-swift- generate-time-build-v1-Linux-swift-6.2-; do
             if ! builds=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -F per_page=100 --jq '.actions_caches[] | "\(.id) \(.key)"' 2>&1); then
               echo "::warning::Listing $REF's builds under $prefix failed: $(printf '%s' "$builds" | tr '\r\n' '  ')"
               continue
@@ -1680,6 +1680,30 @@ jobs:
           command: command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }
       - name: Check the Script
         run: python3 -I Scripts/generate-time-check.py --self-test "$RUNNER_TEMP/generate-time-self-test"
+      # For the reason "Build Tests on Linux" gives. The builds below stamp
+      # again after each checkout of another commit, with this copy of the
+      # script, which the checkout of the base commit cannot change.
+      - name: Stamp Source Times
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          cp .github/scripts/stamp-source-times.sh "$RUNNER_TEMP/stamp-source-times.sh"
+          "$RUNNER_TEMP/stamp-source-times.sh"
+      # The release build of the SafeDITool product alone, which no other
+      # job builds with these arguments. Keyed on the commit, so that each
+      # push to main saves the build a later run starts from, and a run
+      # compiles only the targets whose files differ from that commit's.
+      # What the job measures is unchanged: a release build compiles each
+      # module whole, so a tool built on a restored build is the tool a
+      # build from nothing makes.
+      - name: Restore Build Directory
+        id: build-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .build
+          key: generate-time-build-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            generate-time-build-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
+            generate-time-build-v1-${{ runner.os }}-swift-6.2-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -1710,8 +1734,9 @@ jobs:
         with:
           path: .generate-time/cached
           key: generate-time-tool-${{ runner.os }}-swift-6.2-${{ steps.commits.outputs.base }}
-      # The limits are about twice the slowest build: this step took 10.3 and
-      # 11.2 minutes from nothing, and the change's build after it 2 seconds
+      # The limits are about twice the slowest build, which is the build
+      # from nothing a run makes when no build directory is restored: this
+      # step took 10.3 and 11.2 minutes from nothing, and the change's build after it 2 seconds
       # where the tool's sources were the same and 6.3 minutes where the
       # generator differed (probe runs 44053665790 and 44055931063); the
       # change's build alone, when the cache has the base's tool, is a build
@@ -1724,10 +1749,12 @@ jobs:
           HEAD: ${{ steps.commits.outputs.head }}
         run: |
           git checkout --quiet --detach "$BASE"
+          "$RUNNER_TEMP/stamp-source-times.sh"
           swift build -c release --product SafeDITool
           mkdir -p .generate-time/cached
           cp .build/release/SafeDITool .generate-time/cached/SafeDITool
           git checkout --quiet --detach "$HEAD"
+          "$RUNNER_TEMP/stamp-source-times.sh"
       - name: Build SafeDITool
         timeout-minutes: 25
         run: |
@@ -1735,6 +1762,14 @@ jobs:
           mv .generate-time/cached/SafeDITool .generate-time/base/SafeDITool
           swift build -c release --product SafeDITool
           cp .build/release/SafeDITool .generate-time/head/SafeDITool
+      # After the build rather than at the job's end, so that the cache
+      # holds this commit's build whatever the comparison finds.
+      - name: Save Build Directory
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .build
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
       # The comparison took 2.0 and 2.3 minutes (the same runs). The limit is
       # more than twice that because a slower generator is what this step
       # exists to report: the largest seam graph took 12 to 19 seconds a run
