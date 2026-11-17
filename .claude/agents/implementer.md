@@ -11,10 +11,13 @@ Start
 1. Your first action is `EnterWorktree` with the worktree path from the brief (load it with ToolSearch `select:EnterWorktree`). Work nowhere else. Never run bare `git stash`.
 2. Read the files the brief names and the rules that load with them before writing code.
 3. If your session started outside that worktree, its scoped rules and nested CLAUDE.md files do not load: Read the files the root CLAUDE.md's "Where the rest lives" table lists for your area before editing.
+4. Size the brief before you begin. More than about four substantial steps (a generator change, a conversion of thirty or more tests, a fuzzer draw with its pins, a replay onto a moved parent each count as one) is more than one lane finishes: do the first steps that make one commit, and report the rest as steps to brief separately. Say so at the start, not when you run short.
+5. When the brief tells you to use a mechanism it says exists (a scope the generator creates, a map entry, a call generated code makes), confirm it first on the brief's own shape, with a test or a search that shows it. If it is not there, STOP AND REPORT before writing code: the design needs a ruling, not a workaround.
 
 Work
 - Tests first: a failing test for every behavior and every bug, with full `==` output, diagnostics with wording, location and fix-its. Then the code. Then the full suite.
 - Write every neighbor shape of a rule as a failing test before the code (order, shared scope, optionality, wrapper kind, own vs tree, both integrations, type spelling); siblings along an axis go to a fuzzer draw with a pinned count and an oracle that would catch the defect.
+- Real shapes only. Before fixing a defect the fuzzer or an oracle found, ask whether a real user would write a dependency of that shape. A force-unwrapped dependency (`X!`), above all a `@Forwarded` one, and an optional dependency not received with `onlyIfAvailable: true` are not real: the library is SafeDI, and neither is safe. Do not fix an unreal shape, and add no handling that makes anything more complicated for one; a simplification may remove such handling. Report the shape as not real and move on.
 - Never pin a deliberate gap with a test; comment both sites and add the rule to the owning instructions file.
 - Compiler hazards: no `lazy var` in an actor whose initializer closure calls an isolated method; no long `+`-chained arrays or strings with ternaries.
 
