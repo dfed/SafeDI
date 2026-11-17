@@ -2312,7 +2312,7 @@ struct GraphFuzzerPublicMockDraw {
 	/// `OverriddenScreen`, a mocked consumer in one consumer module, `true` or `.public`, builds it by value or through an
 	/// `Instantiator`, and builds the sessions in an extension of its module's own. `OverriddenLive` beside it fills the
 	/// `OverriddenPlace1Api` place, reading the session, the other place, both, or nothing, or, three draws in ten, nothing does and
-	/// the consumer's mock takes the builder; `OverriddenStoreLive` fills the other place half the time. The consumer's
+	/// the consumer's mock takes the builder, as it does where the fill reads a session `OverriddenDetail` does not receive; `OverriddenStoreLive` fills the other place half the time. The consumer's
 	/// overrides hold the closure that builds `OverriddenDetail` only where the call can hand it a builder a person writes
 	/// for each place (`GraphFuzzerPublicMockDrawFeature.overrideClosureCannotHandShapes`). Every roll is made before any is
 	/// read.
@@ -3518,14 +3518,18 @@ extension GraphFuzzerPublicMockDraw {
 			features.insert(.overrideClosureCall)
 			let live = types.declarations["\(prefix)OverriddenLive"]
 			let buildsStore = detail.properties.contains { $0.label == "overriddenStore" }
-			let passesPlaceUp = live == nil || buildsStore && types.declarations["\(prefix)OverriddenStoreLive"] == nil
-			if passesPlaceUp {
+			let session = detail.properties.first { $0.label == "overriddenSession" }
+			let liveReadsSession = live?.properties.contains { $0.label == "overriddenSession" } == true
+			// A fill reads only what the called mock's levels hold: where `OverriddenLive` reads a session `OverriddenDetail` does
+			// not receive, the consumer passes the place up rather than fill it.
+			let fillsApi = live != nil && (!liveReadsSession || session != nil)
+			if !fillsApi || buildsStore && types.declarations["\(prefix)OverriddenStoreLive"] == nil {
 				features.insert(screen.arguments.contains("generateMock: .public") ? .overrideClosureCallPublicCallerPassesPlaceUp : .overrideClosureCallInternalCallerPassesPlaceUp)
 			}
-			if live?.properties.contains(where: { $0.label == "overriddenStore" }) == true {
+			if fillsApi, live?.properties.contains(where: { $0.label == "overriddenStore" }) == true {
 				features.insert(.overrideClosureCallFillReadsCalledMocksOtherPlace)
 			}
-			if live?.properties.contains(where: { $0.label == "overriddenSession" }) == true, let session = detail.properties.first(where: { $0.label == "overriddenSession" }) {
+			if fillsApi, liveReadsSession, let session {
 				features.insert(session.attribute.contains("fulfilledByDependencyNamed:") ? .overrideClosureCallFillReadsValueCalledMockRenames : .overrideClosureCallFillReadsCalledMocksParameter)
 			}
 			if features.isDisjoint(with: GraphFuzzerPublicMockDrawFeature.overrideClosureCannotHandShapes) {
