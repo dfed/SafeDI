@@ -200,11 +200,14 @@ struct GraphFuzzerCallingMockDraw {
 		implementationIsVisible ? [] : [holeBuilderLabel]
 	}
 
-	/// What the calling mock and its twin build where the mock fills the place: a probe calling the mock and the twin's seam
-	/// initializer, or, for a deferred place, one describing that value and what the place's builder builds for `id` 7 as a
-	/// tuple (`callerAndFill(of:place:)`), since the comparator calls no `ErasedInstantiator` and numbers identities per
-	/// probe. `nil` where the twin rejects the graph or the mock passes the place up.
+	/// What the calling mock and its known-right path build where the mock fills the place: a probe calling the mock and the
+	/// twin's seam initializer, or, for a deferred place, one describing that value and what the place's builder builds for
+	/// `id` 7 as a tuple (`callerAndFill(of:place:)`), since the comparator calls no `ErasedInstantiator` and numbers
+	/// identities per probe. For the seam built again, whose twin reports that the second build passes its builder on
+	/// unchanged, the known-right path is the same types built inline (`seamBuiltAgainValueProbes`). `nil` where the twin
+	/// rejects the graph otherwise or the mock passes the place up.
 	var valueProbes: [DifferentialValueProbe]? {
+		guard cell.shape != .seamBuiltAgain else { return seamBuiltAgainValueProbes }
 		// Qualified by its module: Foundation, which the probe executable imports, declares `Host` on macOS.
 		let caller = "\(names.callerModuleName).\(names.caller)"
 		let token = names.token.lowercasedFirst
@@ -227,6 +230,33 @@ struct GraphFuzzerCallingMockDraw {
 				name: "(\(caller), \(caller).\(place).instantiate(7))",
 				expression: Self.callerAndFill(of: mockCall, place: place),
 				knownRightExpression: Self.callerAndFill(of: twinCall, place: place),
+			)]
+		}
+	}
+
+	/// The seam built again's probes: the calling mock against the caller's root initializer in the same types built inline
+	/// (`GraphFuzzerCallingMockGraph.inlineModules`), in module `App`. A plain place is reached through the instantiators
+	/// the comparator calls, the outer place in the caller's seam and the inner one in the seam the level between builds
+	/// again. A deferred place's probe is one tuple of the caller, what the outer place's builder builds for `id` 7, the
+	/// level between built from the outer seam, and what the inner place's builder beneath it builds for `id` 7, so the
+	/// comparator, which calls no `ErasedInstantiator`, sees whether each fill receives the value nearest it, the caller's
+	/// or the level between's.
+	private var seamBuiltAgainValueProbes: [DifferentialValueProbe] {
+		let caller = "App.\(names.caller)"
+		switch cell.place {
+		case .plain:
+			return [DifferentialValueProbe(name: caller, expression: "\(caller).mock()", knownRightExpression: "\(caller)()")]
+		case .deferred:
+			let repeated = names.repeated.lowercasedFirst
+			let between = names.between.lowercasedFirst
+			let place = holePlace(protocolName: names.hole, fillName: names.fill).label
+			func fills(of call: String) -> String {
+				"{ let caller = \(call); let between = caller.\(repeated).\(between)Builder.instantiate(); return (caller, caller.\(repeated).\(place).instantiate(7), between, between.\(repeated)Builder.instantiate().\(place).instantiate(7)) }()"
+			}
+			return [DifferentialValueProbe(
+				name: "(\(caller), outer \(place).instantiate(7), level between, inner \(place).instantiate(7))",
+				expression: fills(of: "\(caller).mock()"),
+				knownRightExpression: fills(of: "\(caller)()"),
 			)]
 		}
 	}
@@ -707,9 +737,10 @@ struct GraphFuzzerCallingMockGraph {
 	/// Where production reports the graph's shape error, as the module's file and the declaration's line, or `nil` when
 	/// production accepts the graph.
 	let expectedTwinErrorSite: (file: String, declaration: String)?
-	/// What the differential value comparator describes where both forms are accepted and the mock passes up no place
-	/// without a reason: each probe's expression calls the calling mock, and its known-right expression the twin's seam
-	/// initializer. `nil` when the graph states none.
+	/// What the differential value comparator describes where the mock passes up no place without a reason and mirrors its
+	/// twin: each probe's expression calls the calling mock, and its known-right expression the twin's seam initializer
+	/// where the twin is accepted, or the caller's root initializer in `inlineModules` where the twin reports that a seam
+	/// built again passes its builder on unchanged. `nil` when the graph states none, which leaves that outcome unagreed.
 	let valueProbes: [DifferentialValueProbe]?
 
 	var callerModule: String {
@@ -734,6 +765,32 @@ struct GraphFuzzerCallingMockGraph {
 				dependencies: file.dependencies,
 			)
 		}
+	}
+
+	/// The same types built inline, the baseline the outcome rule 7 lists is judged against: the twin's files in one module
+	/// named after the caller's, each file as `<Module>Types.swift` without its imports of the graph's other modules, the
+	/// caller's module's seams roots (`@Instantiable(isRoot: true)`), and every other module's seams and public mocks plain
+	/// `@Instantiable` types.
+	var inlineModules: [ModuleFixture] {
+		let moduleNames = Set(twinFiles.map(\.module))
+		var contentByFileName = [String: String]()
+		for file in twinFiles {
+			var lines = file.content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+			lines.removeAll { line in
+				line.hasPrefix("import ") && moduleNames.contains(String(line.dropFirst("import ".count)))
+			}
+			var content = lines.joined(separator: "\n")
+			if file.module == callerModule {
+				content = content.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable(isRoot: true)")
+			} else {
+				content = content
+					.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true, generateMock: .public)", with: "@Instantiable")
+					.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable")
+					.replacingOccurrences(of: "@Instantiable(generateMock: .public)", with: "@Instantiable")
+			}
+			contentByFileName[file.fileName] = content
+		}
+		return [ModuleFixture(name: callerModule, packageName: Self.packageName, swiftFileContentByFilePath: contentByFileName)]
 	}
 
 	func contentByRelativePath(_ form: Form) -> [String: String] {
@@ -899,7 +956,11 @@ enum GraphFuzzerCallingMockCheck {
 	/// calling mock against its production twin: where the twin reports the graph's shape error, the mock reports the same
 	/// error, at the same sites; where the twin is accepted, the mock is too, and each place it passes up has a permanent
 	/// reason; and where it passes up none without one, when `comparesValues`, the mock compiles and builds what the twin
-	/// builds (`valueFailure`).
+	/// builds (`valueFailure`). The one outcome rule 7 lists apart, a twin whose every error is that a seam built again
+	/// passes its builder on unchanged while the mock is accepted, agrees only by values: the graph must state probes, and
+	/// when `comparesValues`, the mock must compile and build what the same types build inline (`inlineModules`), a
+	/// baseline that must build, as the twin must where it is accepted. Where values are not compared (`comparesValues` is
+	/// `false`, or compile verification is off), nothing more is judged of that outcome, as of an accepted twin's.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	static func run(_ graph: GraphFuzzerCallingMockGraph, seed: UInt64, comparesValues: Bool = true) async throws -> GraphFuzzerCallingMockResult {
 		let twin = try await toolRun(of: graph, .twin)
@@ -932,21 +993,21 @@ enum GraphFuzzerCallingMockCheck {
 		let missingFlatParameterLabels = mock.generatedCallerFile.map { generatedFile in
 			graph.flatParameterLabels.subtracting(mockParameterLabels(ofType: graph.callerTypeName, inGeneratedFile: generatedFile) ?? []).sorted()
 		} ?? []
-		let mirroringFailure: GraphFuzzerFailure? = if let twinSites {
-			if let mockSites {
-				mockSites == twinSites ? nil : GraphFuzzerFailure(
-					seed: seed,
-					kind: .callingMockReportsOtherErrorThanTwin,
-					details: "\(graph.name): the twin reports \(twinSites), the calling mock \(mockSites)",
-				)
-			} else {
-				GraphFuzzerFailure(
-					seed: seed,
-					kind: .callingMockAcceptedWhereTwinReportsShapeError,
-					details: "\(graph.name): the calling mock is accepted where the twin reports \(twinSites)",
-				)
-			}
-		} else if let mockDiagnostics = mock.diagnostics {
+		// The outcome rule 7 lists apart, judged by values below.
+		let agreesByValuesWithInline = twinSites != nil && mockSites == nil && graph.valueProbes != nil && twin.diagnostics.map(reportsOnlySeamBuiltAgain) == true
+		let mirroringFailure: GraphFuzzerFailure? = if let twinSites, let mockSites {
+			mockSites == twinSites ? nil : GraphFuzzerFailure(
+				seed: seed,
+				kind: .callingMockReportsOtherErrorThanTwin,
+				details: "\(graph.name): the twin reports \(twinSites), the calling mock \(mockSites)",
+			)
+		} else if let twinSites, !agreesByValuesWithInline {
+			GraphFuzzerFailure(
+				seed: seed,
+				kind: .callingMockAcceptedWhereTwinReportsShapeError,
+				details: "\(graph.name): the calling mock is accepted where the twin reports \(twinSites)",
+			)
+		} else if twinSites == nil, let mockDiagnostics = mock.diagnostics {
 			GraphFuzzerFailure(
 				seed: seed,
 				kind: .callingMockRejectsWhereTwinAccepts,
@@ -967,8 +1028,13 @@ enum GraphFuzzerCallingMockCheck {
 		} else {
 			nil
 		}
-		let valueJudgment: (compared: Bool, failure: GraphFuzzerFailure?) = if mirroringFailure == nil, drawingDefect == nil, comparesValues, let probes = graph.valueProbes, let feature = mock.valuePath, let knownRight = twin.valuePath {
-			try await valueFailure(of: graph, seed: seed, feature: feature, knownRight: knownRight, probes: probes)
+		let valueJudgment: (compared: Bool, failure: GraphFuzzerFailure?) = if mirroringFailure == nil, drawingDefect == nil, comparesValues, let probes = graph.valueProbes, let feature = mock.valuePath {
+			// The twin is rejected only where the mock agrees by values with the same types built inline.
+			if let knownRight = twin.valuePath {
+				try await valueFailure(of: graph, seed: seed, feature: feature, knownRight: knownRight, probes: probes)
+			} else {
+				try await valueFailure(of: graph, seed: seed, feature: feature, knownRight: inlineValuePath(of: graph), knownRightIsInline: true, probes: probes)
+			}
 		} else {
 			(false, nil)
 		}
@@ -984,17 +1050,49 @@ enum GraphFuzzerCallingMockCheck {
 		)
 	}
 
-	/// Compiles the calling mock's path, `feature`, and its twin's, `knownRight`, with the differential value comparator,
-	/// and compares what `probes` build in each: a mock that does not compile, that traps or does not finish when its probe
-	/// runs, or that builds other values, fails. Returns whether the values were compared, which they are not when compile
-	/// verification is off. Any other failure of the comparator, such as a twin that does not compile or run, or a probe
-	/// that names no declaration, is the harness's and throws.
+	/// The words of the error that a seam built again passes its builder on unchanged, by which a twin's error is recognized
+	/// as the outcome rule 7 lists apart. A fix that rewords the error fails
+	/// `callingMock_buildsInlineValues_whenFillReadsValueOfLevelBetweenBuildsOfSeam` rather than leaving the outcome unjudged.
+	static let seamBuiltAgainMarker = "again, but that call passes the builder"
+
+	/// Whether `diagnostics`, as the tool prints them, hold an error, and every error they hold is that a seam built again
+	/// passes its builder on unchanged.
+	static func reportsOnlySeamBuiltAgain(_ diagnostics: String) -> Bool {
+		let errors = diagnostics.split(separator: "\n").filter { $0.contains(": error: ") }
+		return !errors.isEmpty && errors.allSatisfy { $0.contains(seamBuiltAgainMarker) }
+	}
+
+	/// `graph`'s `inlineModules` run through the module-info flow, as the comparator compiles them. Throws where the tool
+	/// rejects them: a baseline that does not build is the harness's to fix.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	static func inlineValuePath(of graph: GraphFuzzerCallingMockGraph) async throws -> DifferentialValuePath {
+		var filesToDelete = [URL]()
+		defer {
+			for file in filesToDelete {
+				try? FileManager.default.removeItem(at: file)
+			}
+		}
+		do {
+			let output = try await executeSafeDIToolMultiModuleTest(modules: graph.inlineModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+			return try DifferentialValuePath(output: output, modules: graph.inlineModules)
+		} catch let error as SafeDIToolMultiModuleTestError {
+			throw HarnessError(description: "The tool rejects \(graph.name) built inline: \(error.underlyingError)")
+		}
+	}
+
+	/// Compiles the calling mock's path, `feature`, and the known-right path, `knownRight` – its twin's, or the same types
+	/// built inline where `knownRightIsInline` – with the differential value comparator, and compares what `probes` build in
+	/// each: a mock that does not compile, that traps or does not finish when its probe runs, or that builds other values,
+	/// fails. Returns whether the values were compared, which they are not when compile verification is off. Any other
+	/// failure of the comparator, such as a known-right path that does not compile or run, or a probe that names no
+	/// declaration, is the harness's and throws.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	static func valueFailure(
 		of graph: GraphFuzzerCallingMockGraph,
 		seed: UInt64,
 		feature: DifferentialValuePath,
 		knownRight: DifferentialValuePath,
+		knownRightIsInline: Bool = false,
 		probes: [DifferentialValueProbe],
 	) async throws -> (compared: Bool, failure: GraphFuzzerFailure?) {
 		var filesToDelete = [URL]()
@@ -1010,8 +1108,8 @@ enum GraphFuzzerCallingMockCheck {
 			guard !comparison.differences.isEmpty else { return (true, nil) }
 			var failure = GraphFuzzerFailure(
 				seed: seed,
-				kind: .callingMockBuildsOtherValuesThanTwin,
-				details: "\(graph.name): the calling mock builds other values than its twin at \(comparison.differences.map(\.description).joined(separator: "\n"))\n\(comparison.report)",
+				kind: knownRightIsInline ? .callingMockBuildsOtherValuesThanInline : .callingMockBuildsOtherValuesThanTwin,
+				details: "\(graph.name): the calling mock builds other values than \(knownRightIsInline ? "the same types built inline" : "its twin") at \(comparison.differences.map(\.description).joined(separator: "\n"))\n\(comparison.report)",
 			)
 			failure.valueDifferences = comparison.differences.map(\.description)
 			return (true, failure)
@@ -1167,7 +1265,7 @@ enum GraphFuzzerCallingMockTwinReport {
 	static let shapeErrorMarkers: [(shape: GraphFuzzerCallingMockShape, marker: String)] = [
 		(.outerSeamValue, "on from its own caller, which cannot hand it"),
 		(.appOnlyScreenInLoop, "builds only after it calls the builder for"),
-		(.seamBuiltAgain, "again, but that call passes the builder"),
+		(.seamBuiltAgain, GraphFuzzerCallingMockCheck.seamBuiltAgainMarker),
 		(.loopThroughInnerSeamBuilder, "is received while it is still being instantiated"),
 	]
 
