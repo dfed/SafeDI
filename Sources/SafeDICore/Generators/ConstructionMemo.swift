@@ -398,7 +398,7 @@ struct ConstructionLog {
 
 extension Property {
 	/// The label and the type as declared (see `ConstructionLog.Answer`).
-	fileprivate var spelling: String {
+	private var spelling: String {
 		"\(label): \(typeDescription.asSource)"
 	}
 

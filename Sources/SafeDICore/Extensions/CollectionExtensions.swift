@@ -95,7 +95,6 @@ extension Collection<Property> {
 		}
 		return source
 	}
-
 }
 
 extension Collection {
