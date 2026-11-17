@@ -454,8 +454,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func drawnValueProbes_describeKnownRight_inFirstGraphOfEachProbedCell() async throws {
-		let seeds = (UInt64(0)..<UInt64(GraphFuzzerCallingMockCell.drawnCells.count)).filter { GraphFuzzerCallingMockDraw(seed: $0).valueProbes != nil }
-		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27])
+		let seeds = GraphFuzzerCallingMockCell.firstSeeds.filter { GraphFuzzerCallingMockDraw(seed: $0).valueProbes != nil }
+		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293])
 		for seed in seeds {
 			var filesToDelete = [URL]()
 			defer {
@@ -750,12 +750,12 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func diagnosticSites_differ_whenTwinsOfTwoShapesReportTheirErrors() async throws {
 		var sitesByShape = [GraphFuzzerCallingMockShape: [[GraphFuzzerDiagnosticSite]?]]()
-		for seed in UInt64(0)..<UInt64(GraphFuzzerCallingMockCell.drawnCells.count) where GraphFuzzerCallingMockDraw(seed: seed).cell.shape.twinRejects {
+		for seed in GraphFuzzerCallingMockCell.firstSeeds where GraphFuzzerCallingMockDraw(seed: seed).cell.shape.twinRejects {
 			let shape = GraphFuzzerCallingMockDraw(seed: seed).cell.shape
 			await sitesByShape[shape, default: []].append(try GraphFuzzerCallingMockCheck.run(GraphFuzzerCallingMockDraw(seed: seed).graph, seed: seed).twinSites)
 		}
 
-		#expect(sitesByShape.keys.sorted() == [.outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder])
+		#expect(sitesByShape.keys.sorted() == [.outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall])
 		#expect(sitesByShape.values.allSatisfy { $0.allSatisfy { $0 != nil } })
 		for (shape, sites) in sitesByShape {
 			for (otherShape, otherSites) in sitesByShape where otherShape != shape {
@@ -1099,9 +1099,40 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 28)
+		#expect(GraphFuzzerCallingMockCell.all.count == 45)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
+		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)
+	}
+
+	/// The listed callers' block, added after the internal and `.public` callers', draws no earlier seed anew: seeds
+	/// `0..<280` draw the cells they drew before it, `drawnCells[s % 28]`, and seeds `280..<420` the listed callers' cells,
+	/// before the block of the fill that receives the value building the call.
+	@Test
+	func listedCallersBlock_leavesEarlierSeedsCells_whenAddedAfterThem() {
+		let earlierCells = Array(GraphFuzzerCallingMockCell.all.prefix(28))
+
+		#expect((UInt64(0)..<280).allSatisfy { GraphFuzzerCallingMockCell.cell(ofSeed: $0) == earlierCells[Int($0 % 28)] })
+		#expect(Set(earlierCells.map(\.caller)) == [.internal, .public])
+		#expect((UInt64(280)..<420).allSatisfy { GraphFuzzerCallingMockCell.cell(ofSeed: $0).caller == .listed })
+		#expect(GraphFuzzerCallingMockCell.cell(ofSeed: 284).description == "seamBuiltAgain/listed/plain")
+		#expect((UInt64(420)..<450).allSatisfy { GraphFuzzerCallingMockCell.cell(ofSeed: $0).shape == .fillReceivesValueBuildingTheCall })
+	}
+
+	/// The roll for a listed caller's cycle through a fill: the fill receives the `Relay` whose tree calls the seam, and the
+	/// listed mock reports the twin's cycle, which it accepted, with code that did not compile, before listed callers' trees
+	/// were walked for cycles over the trees built inline.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_reportsTwinsCycle_whenListedCallersFillReceivesValueBuildingTheCall() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 422)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 422)
+
+		#expect(draw.cell.description == "fillReceivesValueBuildingTheCall/listed/plain")
+		#expect(draw.mockConfiguration != nil)
+		#expect(result.twinSites?.first?.declaration == "@Received let \(draw.names.sibling.prefix(1).lowercased())\(draw.names.sibling.dropFirst()): \(draw.names.sibling)")
+		Self.expectMirrorsTwin(result)
 	}
 
 	@Test
@@ -1387,8 +1418,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	// MARK: Known issues
 
-	/// Ten graphs per drawn cell: seed `s` draws `GraphFuzzerCallingMockCell.drawnCells[s % 28]`.
-	static let callingMockCorpusSeedCount = 280
+	/// Ten graphs per drawn cell: seed `s` draws `GraphFuzzerCallingMockCell.cell(ofSeed: s)`.
+	static let callingMockCorpusSeedCount = GraphFuzzerCallingMockCell.all.count * GraphFuzzerCallingMockCell.graphsPerCell
 
 	/// Whether the cell test compiles seed `seed`'s graph and compares its values: the first graph of each cell with each
 	/// leaf position the cell draws, since each comparison compiles every module of both forms, and the leaf moves the
