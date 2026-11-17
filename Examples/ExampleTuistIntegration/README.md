@@ -152,7 +152,7 @@ tuist version
 ```
 
 If you want to track a newer Tuist release locally, bump the pinned
-version in `.github/workflows/ci.yml` (`spm-tuist-integration` job) at
+version in `.github/workflows/ci.yml` (the `example-integrations` job) at
 the same time so CI and local setup stay aligned.
 
 ## First-time setup
@@ -222,7 +222,7 @@ the shared mock-configuration extensions — all concatenated into
 
 ## CI
 
-A `spm-tuist-integration` job in `.github/workflows/ci.yml` performs the
+The `example-integrations` job in `.github/workflows/ci.yml` performs the
 equivalent of the first-time setup steps above: it installs Tuist via
 `mise` (pinned to `4.183.0`), runs `tuist install` and `tuist generate`,
 then builds the generated workspace with `xcodebuild`.

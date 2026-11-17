@@ -21,8 +21,8 @@ jobs:
     # job skipped by its `if:` reports "Success", so required status
     # checks are satisfied without allocating a runner. A skipped
     # matrix job is the exception: it reports one check under its
-    # unexpanded name, so "xcodebuild-markdown-only" reports the names
-    # branch protection requires of "xcodebuild". Anything that
+    # unexpanded name, so a required check that a matrix job reports
+    # needs a stand-in that reports the same names. Anything that
     # isn't Markdown (sources, workflows, lockfiles, project files)
     # counts as a source change. DocC articles are Markdown but feed
     # the DocC build, so they're tracked separately. The link checker
@@ -269,148 +269,33 @@ jobs:
             exit 1
           fi
 
-  xcodebuild:
-    # The job name spells out the matrix value so the check names stay
-    # exactly as branch protection lists them. The name and the matrix
-    # are anchored so that "xcodebuild-markdown-only" reports the same
-    # names when a Markdown-only pull request skips this job.
-    name: &xcodebuild-name Build with xcodebuild on Xcode 26 (${{ matrix.platforms }})
+  apple-platforms:
+    # One job builds SafeDI for the five Apple platforms, builds its DocC and builds the two Xcode project
+    # examples, where eight jobs did: a pull request waits for a macOS runner once instead of eight times, and
+    # the account's few macOS runners are what a run queues on. Each build is a step of its own. A platform's
+    # build and DocC run whatever the steps before them did, and a step of an example runs only when that
+    # example's step before it passed, so a failure names what failed and hides nothing else. A job without a
+    # matrix reports its own name when a Markdown-only change skips it, so it needs no stand-in.
+    #
+    # On macOS because it runs xcodebuild against Apple platform SDKs, builds DocC with Xcode's toolchain, and
+    # builds Xcode projects.
+    #
+    # Each build's timeout is about twice the longest it took in two runs (43970600091 and 43956636767), in
+    # seconds: the macOS build 158; a platform's build 219 to 395; Project Integration 158 and 198 in release;
+    # Multi Project Integration 187. A step the retry action runs gets more, because the action waits up to 465
+    # seconds between its six attempts: a resolve took 39 to 55 and gets 15 minutes; DocC took 45 with its build
+    # directory restored and builds swift-syntax when the cache misses, about 8 minutes, and gets 25. "Ensure
+    # Platforms Are Installed" took 5 to 42 per platform and gets 35 minutes, which lets one missing runtime
+    # download and be tried again.
+    #
+    # The price of one job: a step that fails on a flake is run again by running the whole job again, 30 to 40
+    # minutes, where its own job took about 1 to 8.
+    name: Build for Apple Platforms, DocC and Xcode Projects on Xcode 26
     # Every macOS job but "Build and Test on Xcode 26" also waits for a Linux job that takes seconds, so that the
     # run's longest job queues for the few macOS runners first and the run ends when it does, not 30 minutes later.
     needs: &after-the-long-macos-job-queues [changes, bazel-source-archive-check]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
-    runs-on: macos-26
-    strategy:
-      matrix: &xcodebuild-matrix
-        # Why the non-macOS destinations build with Xcode 26.2 while
-        # everything else in this workflow stays on the 26.0 floor:
-        # GitHub's macos-26 image ships the simulator runtimes for
-        # Xcode 26.2 and newer, dyld caches prebuilt, but not 26.0's.
-        # With 26.0 each of these jobs had to download an 8 GB runtime
-        # and then build its dyld shared cache in the background, which
-        # slowed every xcodebuild action on the runner 2-5x for several
-        # minutes (resolve took ~175 s against ~10 s on the macOS job).
-        # The 26.0 floor is still exercised by the macOS destination
-        # here, by the test job, and by the example jobs; what moves
-        # to 26.2 is compiling SafeDI's library sources against the
-        # iOS, tvOS, watchOS, and visionOS SDKs. If the image stops
-        # shipping a runtime, "Ensure Platform Is Installed" downloads
-        # it: slower, not broken.
-        include:
-          - platforms: platform=macOS
-            xcode: /Applications/Xcode_26.0.app
-          - platforms: generic/platform=ios
-            xcode: /Applications/Xcode_26.2.app
-            runtime: iOS
-            sdk: iphonesimulator
-          - platforms: generic/platform=tvos
-            xcode: /Applications/Xcode_26.2.app
-            runtime: tvOS
-            sdk: appletvsimulator
-          - platforms: generic/platform=watchos
-            xcode: /Applications/Xcode_26.2.app
-            runtime: watchOS
-            sdk: watchsimulator
-          - platforms: generic/platform=visionos
-            xcode: /Applications/Xcode_26.2.app
-            runtime: visionOS
-            sdk: xrsimulator
-      fail-fast: false
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v7
-      - name: Select Xcode Version
-        run: sudo xcode-select --switch ${{ matrix.xcode }}/Contents/Developer
-      # xcodebuild otherwise clones every package dependency from
-      # scratch on each run (swift-syntax is the large one). Keeping the
-      # clones in a fixed directory lets actions/cache restore them. The
-      # clones are plain git checkouts, so the key needn't name the
-      # Xcode version.
-      - name: Cache Cloned Source Packages
-        uses: actions/cache@v6
-        with:
-          path: ${{ runner.temp }}/xcode-packages
-          key: xcode-packages-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
-      # Resolving needs no platform, so it comes before any download
-      # the next step might have to do, while the runner is quiet.
-      - name: Resolve Package Dependencies
-        uses: ./.github/actions/retry
-        with:
-          command: xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme SafeDI-Package -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages"
-      # Normally a no-op: the selected Xcode's SDK version has a matching
-      # runtime on the image. The download is the fallback, with a
-      # deadline and one retry because a download that sits in
-      # "Preparing to download" has held a runner for an hour. The
-      # image has already run `-runFirstLaunch` for every Xcode, so it
-      # is only repeated when Xcode reports work pending. `ps` rather
-      # than `kill -0` for liveness: the child runs as root under sudo,
-      # so `kill -0` from the runner user would report EPERM instead of
-      # "alive".
-      - name: Ensure Platform Is Installed
-        if: ${{ matrix.runtime }}
-        env:
-          RUNTIME: ${{ matrix.runtime }}
-          SDK: ${{ matrix.sdk }}
-          DEADLINE_SECONDS: '900'
-        run: |
-          version=$(xcrun --sdk "$SDK" --show-sdk-version)
-          if xcrun simctl list runtimes | grep -q "^$RUNTIME $version "; then
-            echo "$RUNTIME $version runtime is installed on this image."
-            exit 0
-          fi
-          echo "::warning::$RUNTIME $version runtime is not on this image; downloading it. The job still passes, just more slowly."
-          if ! xcrun xcodebuild -checkFirstLaunchStatus > /dev/null 2>&1; then
-            sudo xcodebuild -runFirstLaunch
-          fi
-          download() {
-            sudo xcodebuild -downloadPlatform "$RUNTIME" &
-            local pid=$!
-            local waited=0
-            while ps -p "$pid" > /dev/null 2>&1; do
-              if [ "$waited" -ge "$DEADLINE_SECONDS" ]; then
-                echo "::warning::$RUNTIME download exceeded ${DEADLINE_SECONDS}s; stopping it"
-                sudo kill "$pid" 2> /dev/null || true
-                wait "$pid" 2> /dev/null || true
-                return 1
-              fi
-              sleep 15
-              waited=$((waited + 15))
-            done
-            wait "$pid"
-          }
-          download || download
-      - name: Build Framework
-        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }} -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages"
-
-  xcodebuild-markdown-only:
-    name: *xcodebuild-name
-    needs: changes
-    # GitHub evaluates a job's `if:` before it expands the job's matrix,
-    # so when a Markdown-only change skips "xcodebuild", that job reports
-    # one check under its unexpanded name and none of the five names
-    # branch protection requires. This job reports those five, from the
-    # same name and matrix (the anchors above), on Markdown-only pull
-    # requests. Otherwise it is skipped and reports only its unexpanded
-    # name, which nothing requires. It builds nothing, so it runs on
-    # Linux, without the test jobs' container.
-    if: ${{ needs.changes.outputs.source == 'false' && github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
-    strategy:
-      matrix: *xcodebuild-matrix
-    permissions: {}
-    steps:
-      - name: Report the Skipped Build
-        env:
-          PLATFORMS: ${{ matrix.platforms }}
-        run: echo "Stands in for the macOS job that builds for $PLATFORMS, which this pull request skips because it changes only Markdown."
-
-  docc:
-    name: Build DocC on Xcode 26
-    needs: *after-the-long-macos-job-queues
     # DocC articles under `*.docc/` are Markdown, so this job also runs
-    # when only those changed.
+    # when only those changed, and then only its DocC steps do.
     if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || needs.changes.outputs.docc == 'true') }}
     runs-on: macos-26
     permissions:
@@ -436,7 +321,8 @@ jobs:
       # The key names the runner image for the reason "Build and Test on
       # Xcode 26" gives at its own cache key.
       - name: Cache Build Directory
-        uses: actions/cache@v6
+        id: docc-cache
+        uses: actions/cache/restore@v6
         with:
           path: .build
           key: spm-debug-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}
@@ -444,17 +330,214 @@ jobs:
             spm-debug-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-
             spm-debug-${{ runner.os }}-xcode-26.0-
       - name: Build DocC
+        id: docc
+        timeout-minutes: 25
         uses: ./.github/actions/retry
         with:
           command: swift package generate-documentation --target SafeDI --warnings-as-errors
+      # Saved here, not when the job ends, so that an unrelated step that fails later loses no cache.
+      - name: Save Build Directory Cache
+        if: ${{ !cancelled() && steps.docc-cache.outputs.cache-hit != 'true' && steps.docc.outcome == 'success' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .build
+          key: ${{ steps.docc-cache.outputs.cache-primary-key }}
+      # xcodebuild otherwise clones every package dependency from
+      # scratch on each run (swift-syntax is the large one). Keeping the
+      # clones in a fixed directory lets actions/cache restore them. The
+      # clones are plain git checkouts, so the key needn't name the
+      # Xcode version.
+      - name: Cache Cloned Source Packages
+        id: packages-cache
+        if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/xcode-packages
+          key: xcode-packages-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+      # Resolving needs no platform, so it comes before any download
+      # the next step might have to do, while the runner is quiet.
+      - name: Resolve Package Dependencies
+        timeout-minutes: 15
+        id: resolve-packages
+        if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+        uses: ./.github/actions/retry
+        with:
+          command: xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme SafeDI-Package -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages"
+      # Saved here, not when the job ends, so that an unrelated step that fails later loses no cache.
+      - name: Save Cloned Source Packages Cache
+        if: ${{ !cancelled() && steps.packages-cache.outputs.cache-hit != 'true' && steps.resolve-packages.outcome == 'success' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/xcode-packages
+          key: ${{ steps.packages-cache.outputs.cache-primary-key }}
+      - name: Build Framework (platform=macOS)
+        if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+        timeout-minutes: 6
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination platform=macOS -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages" -derivedDataPath "$RUNNER_TEMP/framework-xcode-26.0"
+      - name: Report Free Disk Space
+        if: ${{ !cancelled() }}
+        run: df -h /
+      # Why the non-macOS destinations build with Xcode 26.2 while
+      # everything else in this workflow stays on the 26.0 floor:
+      # GitHub's macos-26 image ships the simulator runtimes for
+      # Xcode 26.2 and newer, dyld caches prebuilt, but not 26.0's.
+      # With 26.0 each of these builds had to download an 8 GB runtime
+      # and then build its dyld shared cache in the background, which
+      # slowed every xcodebuild action on the runner 2-5x for several
+      # minutes (resolve took ~175 s against ~10 s on the macOS build).
+      # The 26.0 floor is still exercised by the macOS destination
+      # here, by the test job, and by the example job; what moves
+      # to 26.2 is compiling SafeDI's library sources against the
+      # iOS, tvOS, watchOS, and visionOS SDKs. If the image stops
+      # shipping a runtime, "Ensure Platforms Are Installed" downloads
+      # it: slower, not broken.
+      # Each Xcode builds into a DerivedData directory of its own: products of one compiler are not read by another.
+      - name: Select Xcode 26.2
+        id: xcode-26-2
+        if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+        run: sudo xcode-select --switch /Applications/Xcode_26.2.app/Contents/Developer
+      - name: Resolve Package Dependencies with Xcode 26.2
+        timeout-minutes: 15
+        if: ${{ !cancelled() && steps.xcode-26-2.outcome == 'success' }}
+        uses: ./.github/actions/retry
+        with:
+          command: xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme SafeDI-Package -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages"
+      # Normally a no-op: the selected Xcode's SDK version has a matching
+      # runtime on the image. The download is the fallback, with a
+      # deadline and one retry because a download that sits in
+      # "Preparing to download" has held a runner for an hour. The
+      # image has already run `-runFirstLaunch` for every Xcode, so it
+      # is only repeated when Xcode reports work pending. `ps` rather
+      # than `kill -0` for liveness: the child runs as root under sudo,
+      # so `kill -0` from the runner user would report EPERM instead of
+      # "alive".
+      - name: Ensure Platforms Are Installed
+        timeout-minutes: 35
+        if: ${{ !cancelled() && steps.xcode-26-2.outcome == 'success' }}
+        env:
+          DEADLINE_SECONDS: '900'
+        run: |
+          download() {
+            sudo xcodebuild -downloadPlatform "$1" &
+            local pid=$!
+            local waited=0
+            while ps -p "$pid" > /dev/null 2>&1; do
+              if [ "$waited" -ge "$DEADLINE_SECONDS" ]; then
+                echo "::warning::$1 download exceeded ${DEADLINE_SECONDS}s; stopping it"
+                sudo kill "$pid" 2> /dev/null || true
+                wait "$pid" 2> /dev/null || true
+                return 1
+              fi
+              sleep 15
+              waited=$((waited + 15))
+            done
+            wait "$pid"
+          }
+          # A runtime that cannot be installed fails only its own platform's build below.
+          for pair in iOS:iphonesimulator tvOS:appletvsimulator watchOS:watchsimulator visionOS:xrsimulator; do
+            runtime=${pair%%:*}
+            version=$(xcrun --sdk "${pair##*:}" --show-sdk-version)
+            if xcrun simctl list runtimes | grep -q "^$runtime $version "; then
+              echo "$runtime $version runtime is installed on this image."
+              continue
+            fi
+            echo "::warning::$runtime $version runtime is not on this image; downloading it. The job still passes, just more slowly."
+            if ! xcrun xcodebuild -checkFirstLaunchStatus > /dev/null 2>&1; then
+              sudo xcodebuild -runFirstLaunch
+            fi
+            download "$runtime" || download "$runtime" || echo "::warning::$runtime $version could not be downloaded."
+          done
+      - name: Build Framework (generic/platform=ios)
+        if: ${{ !cancelled() && steps.xcode-26-2.outcome == 'success' }}
+        timeout-minutes: 14
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=ios -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages" -derivedDataPath "$RUNNER_TEMP/framework-xcode-26.2"
+      - name: Build Framework (generic/platform=tvos)
+        if: ${{ !cancelled() && steps.xcode-26-2.outcome == 'success' }}
+        timeout-minutes: 14
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=tvos -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages" -derivedDataPath "$RUNNER_TEMP/framework-xcode-26.2"
+      - name: Build Framework (generic/platform=watchos)
+        if: ${{ !cancelled() && steps.xcode-26-2.outcome == 'success' }}
+        timeout-minutes: 14
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=watchos -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages" -derivedDataPath "$RUNNER_TEMP/framework-xcode-26.2"
+      - name: Build Framework (generic/platform=visionos)
+        if: ${{ !cancelled() && steps.xcode-26-2.outcome == 'success' }}
+        timeout-minutes: 14
+        run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination generic/platform=visionos -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages" -derivedDataPath "$RUNNER_TEMP/framework-xcode-26.2"
+      - name: Report Free Disk Space
+        if: ${{ !cancelled() }}
+        run: df -h /
+      # The Xcode project examples declare package traits in their .xcodeproj (`traits = (…)`), which needs Xcode
+      # 26.4, the first Xcode that surfaces traits in the project file, so their steps select it and come last.
+      - name: Select Xcode 26.4
+        id: xcode-26-4
+        if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+      - name: Resolve Project Integration Package Dependencies
+        timeout-minutes: 15
+        id: project-1
+        if: ${{ !cancelled() && steps.xcode-26-4.outcome == 'success' }}
+        uses: ./.github/actions/retry
+        with:
+          command: pushd Examples/ExampleProjectIntegration && xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration && popd
+      # `EventLogger.swift` declares a different `@Instantiable` under
+      # `#if DEBUG` and `#else`. Xcode runs the plugin's command through a
+      # shell script that expands the target's
+      # `SWIFT_ACTIVE_COMPILATION_CONDITIONS`, which defines `DEBUG` only in
+      # the Debug configuration, so the generated file must wire
+      # `ConsoleEventLogger` in Debug and `DisabledEventLogger` in Release.
+      # Each configuration builds into its own DerivedData directory, so
+      # neither grep can read the other build's generated file.
+      - name: Build Project Integration
+        timeout-minutes: 6
+        id: project-2
+        if: ${{ !cancelled() && steps.project-1.outcome == 'success' }}
+        run: |
+          pushd Examples/ExampleProjectIntegration
+          xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration -derivedDataPath "$RUNNER_TEMP/project-debug"
+          popd
+          grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/project-debug/Build/Intermediates.noindex/BuildToolPluginIntermediates" -path "*/SafeDIOutput/NotesApp+SafeDI.swift")"
+      - name: Build Project Integration in release configuration
+        timeout-minutes: 7
+        id: project-3
+        if: ${{ !cancelled() && steps.project-2.outcome == 'success' }}
+        run: |
+          pushd Examples/ExampleProjectIntegration
+          xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration -configuration Release -derivedDataPath "$RUNNER_TEMP/project-release" SWIFT_OPTIMIZATION_LEVEL=-Onone SWIFT_COMPILATION_MODE=singlefile GCC_OPTIMIZATION_LEVEL=0 ONLY_ACTIVE_ARCH=YES
+          popd
+          grep -q "DisabledEventLogger()" "$(find "$RUNNER_TEMP/project-release/Build/Intermediates.noindex/BuildToolPluginIntermediates" -path "*/SafeDIOutput/NotesApp+SafeDI.swift")"
+      - name: Resolve Multi Project Package Dependencies
+        timeout-minutes: 15
+        id: multi-project-1
+        if: ${{ !cancelled() && steps.xcode-26-4.outcome == 'success' }}
+        uses: ./.github/actions/retry
+        with:
+          command: pushd Examples/ExampleMultiProjectIntegration && xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration && popd
+      - name: Build Multi Project Integration
+        timeout-minutes: 7
+        id: multi-project-2
+        if: ${{ !cancelled() && steps.multi-project-1.outcome == 'success' }}
+        run: pushd Examples/ExampleMultiProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration; popd
 
-  # Example jobs that declare package traits in their .xcodeproj
-  # (`traits = (…)`) need Xcode 26.4 — the first Xcode that
-  # surfaces traits in the project file. Other examples run on the
-  # same baseline as the SafeDI-core jobs above.
-
-  spm-package-integration:
-    name: Build Package Integration on Xcode 26
+  example-integrations:
+    # One job builds the Package, Tuist and Bazel examples, where three jobs did, for the reason "Build for Apple
+    # Platforms, DocC and Xcode Projects on Xcode 26" gives. Each example is a group of steps. A group's first
+    # step runs whatever the groups before it did, and each later step of the Tuist and Bazel groups runs only
+    # when the step before it passed, so a failure names its example and hides no other example.
+    #
+    # On macOS because the examples build with Xcode's toolchain and xcodebuild, Tuist generates an Xcode
+    # workspace, and the Bazel build mirrors BCR's macOS presubmit.
+    #
+    # Each build's timeout is about twice the longest it took in two runs (43970600091 and 43956636767), in
+    # seconds: Package Integration's seven builds 198, 220, 158, 145, 185, 125 and 219; Tuist's builds 130 and
+    # 92. A step the retry action runs gets more, because the action waits up to 465 seconds between its six
+    # attempts: Package Integration's resolve took 31, and Tuist's two installs under 15 and 40, and each gets
+    # 15 minutes; Bazel's two builds took 153 and 359 with its caches restored and build swift-syntax when the
+    # cache misses, and get 30; its build in opt mode took under 15 and gets 20. Bazel's other steps took under
+    # 15.
+    #
+    # The price of one job: a step that fails on a flake is run again by running the whole job again, about 35
+    # minutes, where its own job took 5 to 21.
+    name: Build Package, Tuist and Bazel Integrations on Xcode 26
     needs: *after-the-long-macos-job-queues
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     runs-on: macos-26
@@ -465,7 +548,9 @@ jobs:
         uses: actions/checkout@v7
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      # Package Integration.
       - name: Resolve Package Dependencies
+        timeout-minutes: 15
         uses: ./.github/actions/retry
         with:
           command: xcrun swift package resolve --package-path "Examples/Example Package Integration"
@@ -504,11 +589,13 @@ jobs:
             echo "swiftbuild_is_default=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Build Package Integration (swift build, native backend)
+        timeout-minutes: 7
         if: ${{ !cancelled() }}
         run: |
           xcrun swift build --build-system native --scratch-path "$RUNNER_TEMP/native-debug" --package-path "Examples/Example Package Integration"
           grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/native-debug/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
       - name: Build Package Integration in release configuration (swift build, native backend)
+        timeout-minutes: 8
         if: ${{ !cancelled() }}
         run: |
           xcrun swift build --build-system native -c release -Xswiftc -Onone --scratch-path "$RUNNER_TEMP/native-release" --package-path "Examples/Example Package Integration"
@@ -521,6 +608,7 @@ jobs:
       # a package's `.when(configuration:)` defines as for a debug build, and
       # only the build settings let SafeDITool wire `DisabledEventLogger`.
       - name: Build Package Integration (xcodebuild)
+        timeout-minutes: 6
         if: ${{ !cancelled() }}
         run: |
           log="$RUNNER_TEMP/xcodebuild-debug.log"
@@ -534,6 +622,7 @@ jobs:
           [ "$arguments" = expanded ]
           grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/xcodebuild-debug/Build/Intermediates.noindex/BuildToolPluginIntermediates" -path "*/RootModule/SafeDIGenerator/SafeDIOutput/Root+SafeDI.swift")"
       - name: Build Package Integration in release configuration (xcodebuild)
+        timeout-minutes: 5
         if: ${{ !cancelled() }}
         run: |
           log="$RUNNER_TEMP/xcodebuild-release.log"
@@ -569,6 +658,7 @@ jobs:
             exit 1
           fi
       - name: Build Package Integration without the DEBUG define (swift build, native backend, expects the assertion)
+        timeout-minutes: 7
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: |
           log="$RUNNER_TEMP/native-without-define.log"
@@ -589,6 +679,7 @@ jobs:
       # the arguments too, so the expectations hold whichever binary ran, and
       # the report names it.
       - name: Build Package Integration without the DEBUG define (swift build, Swift Build backend)
+        timeout-minutes: 5
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' && steps.backends.outputs.swiftbuild == 'true' }}
         env:
           SWIFTBUILD_IS_DEFAULT: ${{ steps.backends.outputs.swiftbuild_is_default }}
@@ -615,6 +706,7 @@ jobs:
               ;;
           esac
       - name: Build Package Integration without the DEBUG define in release configuration (swift build, Swift Build backend)
+        timeout-minutes: 8
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' && steps.backends.outputs.swiftbuild == 'true' }}
         env:
           SWIFTBUILD_IS_DEFAULT: ${{ steps.backends.outputs.swiftbuild_is_default }}
@@ -628,92 +720,40 @@ jobs:
             exit 1
           fi
           grep -q "DisabledEventLogger()" "$(find "$RUNNER_TEMP/swiftbuild-release/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
-
-  spm-project-integration:
-    name: Build Project Integration on Xcode 26
-    needs: *after-the-long-macos-job-queues
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
-    # Pinned to 26.4 — project file declares package traits.
-    runs-on: macos-26
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v7
-      - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
-      - name: Resolve Package Dependencies
-        uses: ./.github/actions/retry
-        with:
-          command: pushd Examples/ExampleProjectIntegration && xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration && popd
-      # `EventLogger.swift` declares a different `@Instantiable` under
-      # `#if DEBUG` and `#else`. Xcode runs the plugin's command through a
-      # shell script that expands the target's
-      # `SWIFT_ACTIVE_COMPILATION_CONDITIONS`, which defines `DEBUG` only in
-      # the Debug configuration, so the generated file must wire
-      # `ConsoleEventLogger` in Debug and `DisabledEventLogger` in Release.
-      # Each configuration builds into its own DerivedData directory, so
-      # neither grep can read the other build's generated file.
-      - name: Build Project Integration
-        run: |
-          pushd Examples/ExampleProjectIntegration
-          xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration -derivedDataPath "$RUNNER_TEMP/xcodebuild-debug"
-          popd
-          grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/xcodebuild-debug/Build/Intermediates.noindex/BuildToolPluginIntermediates" -path "*/SafeDIOutput/NotesApp+SafeDI.swift")"
-      - name: Build Project Integration in release configuration
-        run: |
-          pushd Examples/ExampleProjectIntegration
-          xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration -configuration Release -derivedDataPath "$RUNNER_TEMP/xcodebuild-release" SWIFT_OPTIMIZATION_LEVEL=-Onone SWIFT_COMPILATION_MODE=singlefile GCC_OPTIMIZATION_LEVEL=0 ONLY_ACTIVE_ARCH=YES
-          popd
-          grep -q "DisabledEventLogger()" "$(find "$RUNNER_TEMP/xcodebuild-release/Build/Intermediates.noindex/BuildToolPluginIntermediates" -path "*/SafeDIOutput/NotesApp+SafeDI.swift")"
-
-  spm-multi-project-integration:
-    name: Build Multi Project Integration on Xcode 26
-    needs: *after-the-long-macos-job-queues
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
-    # Pinned to 26.4 — project file declares package traits.
-    runs-on: macos-26
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v7
-      - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
-      - name: Resolve Package Dependencies
-        uses: ./.github/actions/retry
-        with:
-          command: pushd Examples/ExampleMultiProjectIntegration && xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration && popd
-      - name: Build Project Integration
-        run: pushd Examples/ExampleMultiProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration; popd
-
-  spm-tuist-integration:
-    name: Build Tuist Integration on Xcode 26
-    needs: *after-the-long-macos-job-queues
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
-    runs-on: macos-26
-    permissions:
-      contents: read
-    # Required so mise / tuist install don't hit anonymous GitHub API
-    # rate limits when resolving release tags and artifact bundles.
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v7
-      - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      - name: Report Free Disk Space
+        if: ${{ !cancelled() }}
+        run: df -h /
+      # Tuist Integration. Its first three steps read the token so that mise and tuist install don't hit
+      # anonymous GitHub API rate limits when resolving release tags and artifact bundles.
       - name: Install Tuist via mise
-        # Keep the pinned Tuist version here in sync with the README.
-        run: |
-          curl -fsSL https://mise.run | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          echo "$HOME/.local/share/mise/shims" >> "$GITHUB_PATH"
-          "$HOME/.local/bin/mise" install -y tuist@4.183.0
-          "$HOME/.local/bin/mise" use -g tuist@4.183.0
+        timeout-minutes: 15
+        id: tuist-1
+        if: ${{ !cancelled() }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Keep the pinned Tuist version here in sync with the README. In the retry wrapper because it
+        # downloads mise and Tuist; kept on one line, as the retry action needs. The two paths are added
+        # after the installs pass, so a retry adds them once.
+        uses: ./.github/actions/retry
+        with:
+          command: curl -fsSL https://mise.run | sh && "$HOME/.local/bin/mise" install -y tuist@4.183.0 && "$HOME/.local/bin/mise" use -g tuist@4.183.0 && echo "$HOME/.local/bin" >> "$GITHUB_PATH" && echo "$HOME/.local/share/mise/shims" >> "$GITHUB_PATH"
       - name: Tuist Install
-        run: pushd Examples/ExampleTuistIntegration && tuist install && popd
+        timeout-minutes: 15
+        id: tuist-2
+        if: ${{ !cancelled() && steps.tuist-1.outcome == 'success' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # In the retry wrapper because it downloads the workspace's packages. In a subshell so that the
+        # `cd` does not carry into a retry.
+        uses: ./.github/actions/retry
+        with:
+          command: (cd Examples/ExampleTuistIntegration && tuist install)
       - name: Tuist Generate
+        timeout-minutes: 3
+        id: tuist-3
+        if: ${{ !cancelled() && steps.tuist-2.outcome == 'success' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pushd Examples/ExampleTuistIntegration && tuist generate --no-open && popd
       # The `Subproject` framework's project is in `Projects/Subproject`, a
       # subdirectory of the workspace, so the plugin's script must find
@@ -726,6 +766,9 @@ jobs:
       # `DisabledEventLogger` and the generated compile-time assertion would
       # fail this build; the grep makes the check explicit.
       - name: Build Tuist Integration
+        timeout-minutes: 5
+        id: tuist-4
+        if: ${{ !cancelled() && steps.tuist-3.outcome == 'success' }}
         run: |
           pushd Examples/ExampleTuistIntegration
           xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -workspace ExampleTuistIntegration.xcworkspace -scheme ExampleTuistIntegration -derivedDataPath DerivedData
@@ -736,11 +779,151 @@ jobs:
       # only the active architecture is built because only the configuration
       # matters here.
       - name: Build Tuist Integration in release configuration
+        timeout-minutes: 4
+        id: tuist-5
+        if: ${{ !cancelled() && steps.tuist-4.outcome == 'success' }}
         run: |
           pushd Examples/ExampleTuistIntegration
           xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -workspace ExampleTuistIntegration.xcworkspace -scheme ExampleTuistIntegration -configuration Release -derivedDataPath DerivedData SWIFT_OPTIMIZATION_LEVEL=-Onone SWIFT_COMPILATION_MODE=singlefile GCC_OPTIMIZATION_LEVEL=0 ONLY_ACTIVE_ARCH=YES
           grep -q "DisabledEventLogger()" "$(find DerivedData/Build/Intermediates.noindex -path "*/Release/ExampleTuistIntegration.build/DerivedSources/SafeDIGenerated.swift")"
           popd
+      - name: Report Free Disk Space
+        if: ${{ !cancelled() }}
+        run: df -h /
+      # Bazel.
+      # General bazel sanity check on every PR. We can't perfectly
+      # mirror BCR's presubmit (https://registry.bazel.build/modules/safedi):
+      # BazelCI's BuildKite infrastructure is closed to non-`bazelbuild`
+      # projects (https://github.com/bazelbuild/continuous-integration/blob/main/.github/ISSUE_TEMPLATE/adding-your-project-to-bazel-ci.md),
+      # and any GH Actions runner we pick differs from BCR's image in
+      # ways we can't fully control (CC toolchain auto-detection,
+      # SDK-vs-runner-OS gap, exact Bazel point release). So treat BCR
+      # as the canonical macOS-on-older-OS check; this job catches
+      # general regressions before we publish.
+      #
+      # Keep `build_targets` aligned with `.bcr/presubmit.yml` so a
+      # divergence is visible in review. If you change BCR's task list,
+      # update this job too. BCR builds the example against the published
+      # source archive with `prefer_prebuilt_safeditool` both true and
+      # false; this job builds it against the checkout, which has no
+      # prebuilt toolchain, so it runs SafeDITool built from source.
+      #
+      # Pinned to Xcode 26.0 — matches BCR's `macos_arm64` runner
+      # platform defined at https://github.com/bazelbuild/continuous-integration/blob/master/buildkite/bazelci.py
+      # Bazel's disk and repository caches are content-addressed, so
+      # restoring them reuses the outputs of identical actions (above
+      # all the swift-syntax compiles) without changing what gets built.
+      # Both builds below point at the same caches, so the downstream
+      # example's exec-config swift-syntax is a hit even on a run where
+      # nothing was restored. The flags live on the command lines rather
+      # than in `.bazelrc` so BCR's presubmit keeps building with
+      # SafeDI's committed defaults.
+      - name: Cache Bazel
+        id: bazel-1
+        if: ${{ !cancelled() }}
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.cache/bazel-disk
+            ~/.cache/bazel-repository
+          key: bazel-${{ runner.os }}-xcode-26.0-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'Examples/ExampleBazelIntegration/MODULE.bazel', 'Examples/ExampleBazelIntegration/MODULE.bazel.lock') }}
+          restore-keys: |
+            bazel-${{ runner.os }}-xcode-26.0-
+      # Wrapping `bazelisk build` in retry — not just dependency
+      # resolution, like the SPM jobs above — because Bazel resolves
+      # external repos lazily during the build itself. There's no
+      # equivalent to `swift package resolve` we could isolate; a
+      # transient HTTP failure (e.g. on a `rules_swift` transitive
+      # like `MobileNativeFoundation/index-import`) surfaces as a
+      # build failure. Bazel caches successful downloads, so a retry
+      # after a flake is cheap.
+      #
+      # Each command runs in a subshell so a `cd` for the example
+      # build doesn't leak its cwd change into subsequent retries.
+      - name: Build SafeDI targets (mirrors BCR `verify_safedi_build`)
+        timeout-minutes: 30
+        id: bazel-2
+        if: ${{ !cancelled() && steps.bazel-1.outcome == 'success' }}
+        uses: ./.github/actions/retry
+        with:
+          # Kept on one line — the retry composite action splices
+          # `${{ inputs.command }}` directly into a bash `for` loop
+          # and tacks ` && break` onto the same source line, so a
+          # multi-line YAML command leaves `&& break` orphaned.
+          command: bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Sources/SafeDI:SafeDI //Sources/SafeDICore:SafeDICore //Sources/SafeDIMacros:SafeDIMacros //Sources/SafeDITool:SafeDITool //bazel:safedi
+      - name: Build downstream example (mirrors BCR `bcr_test_module.build_example`)
+        timeout-minutes: 30
+        id: bazel-3
+        if: ${{ !cancelled() && steps.bazel-2.outcome == 'success' }}
+        uses: ./.github/actions/retry
+        with:
+          command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration)
+      # The example takes SafeDI from this checkout, whose
+      # `bazel/private/prebuilt_safeditool.bzl` names no prebuilt
+      # SafeDITool, so every SafeDI action must run the SafeDITool built
+      # from the checkout: a release's prebuilt binary may not accept the
+      # options this checkout's rule passes. A prebuilt binary's path is
+      # under the `safeditool` extension's repository instead. Kept out of
+      # the retry wrapper: the build above fetched everything the query
+      # reads, and a wrong tool is deterministic, not a flake.
+      - name: Verify the example ran the SafeDITool built from this checkout
+        timeout-minutes: 3
+        id: bazel-4
+        if: ${{ !cancelled() && steps.bazel-3.outcome == 'success' }}
+        working-directory: Examples/ExampleBazelIntegration
+        run: |
+          executables=$(bazelisk aquery --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" --output=jsonproto 'mnemonic("SafeDI", deps(//ExampleBazelIntegration:ExampleBazelIntegration))' | jq -r '.actions[].arguments[0]')
+          echo "The example's SafeDI actions run:"
+          echo "$executables"
+          if [ -z "$executables" ]; then
+            echo "::error::Found no SafeDI action in the example; the query in this step is out of date."
+            exit 1
+          fi
+          if grep -v -E '^bazel-out/[^/]+/bin/external/safedi\+/Sources/SafeDITool/SafeDITool$' <<< "$executables"; then
+            echo "::error::The example ran a SafeDITool other than //Sources/SafeDITool:SafeDITool built from this checkout."
+            exit 1
+          fi
+      # `bazel run @safedi//:SafeDITool` runs SafeDITool in the
+      # directory it is run from, so a relative path among its arguments
+      # resolves there rather than in the runfiles tree. Run from a
+      # subdirectory of the workspace, as a user may. No target outputs a
+      # `.safedi` file at the top level, so Bazel writes one to bazel-bin
+      # from the disk cache only when `--remote_download_regex` asks for
+      # it. Kept out of the retry wrapper: the build above fetched
+      # everything this runs.
+      - name: Run SafeDITool through bazel run with a relative path
+        timeout-minutes: 5
+        id: bazel-5
+        if: ${{ !cancelled() && steps.bazel-4.outcome == 'success' }}
+        working-directory: Examples/ExampleBazelIntegration/Subproject
+        run: |
+          bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" '--remote_download_regex=.*\.safedi$' //Subproject:Subproject
+          bazelisk run --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" @safedi//:SafeDITool -- dump ../bazel-bin/Subproject/Subproject_safedi.safedi > /dev/null
+      # Optimized builds define `NDEBUG` and no `DEBUG`, so the rule must report the
+      # former, withhold the latter, and SafeDI must wire the example's
+      # `#elseif NDEBUG` logger. The `_safedi` target is listed so
+      # Bazel writes its output to bazel-bin even when every action is a cache hit.
+      - name: Build downstream example in opt mode
+        timeout-minutes: 20
+        id: bazel-6
+        if: ${{ !cancelled() && steps.bazel-5.outcome == 'success' }}
+        uses: ./.github/actions/retry
+        with:
+          command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" -c opt //ExampleBazelIntegration:ExampleBazelIntegration //ExampleBazelIntegration:ExampleBazelIntegration_safedi)
+      # Saved here, not when the job ends, so that an unrelated step that fails later loses no cache.
+      - name: Save Bazel Cache
+        if: ${{ !cancelled() && steps.bazel-1.outputs.cache-hit != 'true' && steps.bazel-6.outcome == 'success' }}
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.cache/bazel-disk
+            ~/.cache/bazel-repository
+          key: ${{ steps.bazel-1.outputs.cache-primary-key }}
+      # Kept out of the retry wrapper: a missing logger is deterministic, not a flake.
+      - name: Verify opt mode wired the `#elseif NDEBUG` logger
+        id: bazel-7
+        if: ${{ !cancelled() && steps.bazel-6.outcome == 'success' }}
+        run: grep -q "DisabledEventLogger()" Examples/ExampleBazelIntegration/bazel-bin/ExampleBazelIntegration/ExampleBazelIntegration_safedi.swift
 
   spm:
     name: Build and Test on Xcode 26
@@ -1644,124 +1827,6 @@ jobs:
       - name: Build and Test Framework
         timeout-minutes: 70
         run: swift test --traits sourceBuild
-
-  bazel:
-    name: Bazel Build on macOS
-    needs: *after-the-long-macos-job-queues
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
-    # General bazel sanity check on every PR. We can't perfectly
-    # mirror BCR's presubmit (https://registry.bazel.build/modules/safedi):
-    # BazelCI's BuildKite infrastructure is closed to non-`bazelbuild`
-    # projects (https://github.com/bazelbuild/continuous-integration/blob/main/.github/ISSUE_TEMPLATE/adding-your-project-to-bazel-ci.md),
-    # and any GH Actions runner we pick differs from BCR's image in
-    # ways we can't fully control (CC toolchain auto-detection,
-    # SDK-vs-runner-OS gap, exact Bazel point release). So treat BCR
-    # as the canonical macOS-on-older-OS check; this job catches
-    # general regressions before we publish.
-    #
-    # Keep `build_targets` aligned with `.bcr/presubmit.yml` so a
-    # divergence is visible in review. If you change BCR's task list,
-    # update this job too. BCR builds the example against the published
-    # source archive with `prefer_prebuilt_safeditool` both true and
-    # false; this job builds it against the checkout, which has no
-    # prebuilt toolchain, so it runs SafeDITool built from source.
-    #
-    # Pinned to Xcode 26.0 — matches BCR's `macos_arm64` runner
-    # platform defined at https://github.com/bazelbuild/continuous-integration/blob/master/buildkite/bazelci.py
-    runs-on: macos-26
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v7
-      - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
-      # Bazel's disk and repository caches are content-addressed, so
-      # restoring them reuses the outputs of identical actions (above
-      # all the swift-syntax compiles) without changing what gets built.
-      # Both builds below point at the same caches, so the downstream
-      # example's exec-config swift-syntax is a hit even on a run where
-      # nothing was restored. The flags live on the command lines rather
-      # than in `.bazelrc` so BCR's presubmit keeps building with
-      # SafeDI's committed defaults.
-      - name: Cache Bazel
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cache/bazel-disk
-            ~/.cache/bazel-repository
-          key: bazel-${{ runner.os }}-xcode-26.0-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'Examples/ExampleBazelIntegration/MODULE.bazel', 'Examples/ExampleBazelIntegration/MODULE.bazel.lock') }}
-          restore-keys: |
-            bazel-${{ runner.os }}-xcode-26.0-
-      # Wrapping `bazelisk build` in retry — not just dependency
-      # resolution, like the SPM jobs above — because Bazel resolves
-      # external repos lazily during the build itself. There's no
-      # equivalent to `swift package resolve` we could isolate; a
-      # transient HTTP failure (e.g. on a `rules_swift` transitive
-      # like `MobileNativeFoundation/index-import`) surfaces as a
-      # build failure. Bazel caches successful downloads, so a retry
-      # after a flake is cheap.
-      #
-      # Each command runs in a subshell so a `cd` for the example
-      # build doesn't leak its cwd change into subsequent retries.
-      - name: Build SafeDI targets (mirrors BCR `verify_safedi_build`)
-        uses: ./.github/actions/retry
-        with:
-          # Kept on one line — the retry composite action splices
-          # `${{ inputs.command }}` directly into a bash `for` loop
-          # and tacks ` && break` onto the same source line, so a
-          # multi-line YAML command leaves `&& break` orphaned.
-          command: bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Sources/SafeDI:SafeDI //Sources/SafeDICore:SafeDICore //Sources/SafeDIMacros:SafeDIMacros //Sources/SafeDITool:SafeDITool //bazel:safedi
-      - name: Build downstream example (mirrors BCR `bcr_test_module.build_example`)
-        uses: ./.github/actions/retry
-        with:
-          command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration)
-      # The example takes SafeDI from this checkout, whose
-      # `bazel/private/prebuilt_safeditool.bzl` names no prebuilt
-      # SafeDITool, so every SafeDI action must run the SafeDITool built
-      # from the checkout: a release's prebuilt binary may not accept the
-      # options this checkout's rule passes. A prebuilt binary's path is
-      # under the `safeditool` extension's repository instead. Kept out of
-      # the retry wrapper: the build above fetched everything the query
-      # reads, and a wrong tool is deterministic, not a flake.
-      - name: Verify the example ran the SafeDITool built from this checkout
-        working-directory: Examples/ExampleBazelIntegration
-        run: |
-          executables=$(bazelisk aquery --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" --output=jsonproto 'mnemonic("SafeDI", deps(//ExampleBazelIntegration:ExampleBazelIntegration))' | jq -r '.actions[].arguments[0]')
-          echo "The example's SafeDI actions run:"
-          echo "$executables"
-          if [ -z "$executables" ]; then
-            echo "::error::Found no SafeDI action in the example; the query in this step is out of date."
-            exit 1
-          fi
-          if grep -v -E '^bazel-out/[^/]+/bin/external/safedi\+/Sources/SafeDITool/SafeDITool$' <<< "$executables"; then
-            echo "::error::The example ran a SafeDITool other than //Sources/SafeDITool:SafeDITool built from this checkout."
-            exit 1
-          fi
-      # `bazel run @safedi//:SafeDITool` runs SafeDITool in the
-      # directory it is run from, so a relative path among its arguments
-      # resolves there rather than in the runfiles tree. Run from a
-      # subdirectory of the workspace, as a user may. No target outputs a
-      # `.safedi` file at the top level, so Bazel writes one to bazel-bin
-      # from the disk cache only when `--remote_download_regex` asks for
-      # it. Kept out of the retry wrapper: the build above fetched
-      # everything this runs.
-      - name: Run SafeDITool through bazel run with a relative path
-        working-directory: Examples/ExampleBazelIntegration/Subproject
-        run: |
-          bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" '--remote_download_regex=.*\.safedi$' //Subproject:Subproject
-          bazelisk run --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" @safedi//:SafeDITool -- dump ../bazel-bin/Subproject/Subproject_safedi.safedi > /dev/null
-      # Optimized builds define `NDEBUG` and no `DEBUG`, so the rule must report the
-      # former, withhold the latter, and SafeDI must wire the example's
-      # `#elseif NDEBUG` logger. The `_safedi` target is listed so
-      # Bazel writes its output to bazel-bin even when every action is a cache hit.
-      - name: Build downstream example in opt mode
-        uses: ./.github/actions/retry
-        with:
-          command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" -c opt //ExampleBazelIntegration:ExampleBazelIntegration //ExampleBazelIntegration:ExampleBazelIntegration_safedi)
-      # Kept out of the retry wrapper: a missing logger is deterministic, not a flake.
-      - name: Verify opt mode wired the `#elseif NDEBUG` logger
-        run: grep -q "DisabledEventLogger()" Examples/ExampleBazelIntegration/bazel-bin/ExampleBazelIntegration/ExampleBazelIntegration_safedi.swift
 
   readme-validation:
     name: Check Markdown links
