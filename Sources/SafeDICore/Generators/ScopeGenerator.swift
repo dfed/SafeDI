@@ -8257,8 +8257,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				!Self.isElidedInCallSite(argument, dependencyInnerLabels: dependencyInnerLabels)
 			}
 			self.callSiteArguments = callSiteArguments
+			// A builder closure's parameter cannot be spelled `X!`, so an implicitly unwrapped argument is taken as `X?`,
+			// as Swift types the initializer's own parameter; force-unwrapping it would trap where the value is `nil`.
 			builderParameterTypes = callSiteArguments.map { argument in
-				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter
+				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter.implicitlyUnwrappedOptionalSpelledAsOptional
 			}
 			needsConfigurationStruct = childItems?.containsPropertyNode == true || !defaultParameters.isEmpty || isPropertyCycle
 			subtreeCallsPublicMock = publicMockCall != nil || childItems?.propertyNodes.contains(where: \.subtreeCallsPublicMock) == true

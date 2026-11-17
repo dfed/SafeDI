@@ -736,6 +736,17 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// This type with an implicitly unwrapped optional at its top spelled as its optional form, as Swift spells the
+	/// parameter of `init(x: X!)` in the function's type: a function type's parameter, an autoclosure's return type and a
+	/// generic argument cannot be spelled `X!`, and a declaration of type `X!` accepts the optional's value.
+	public var implicitlyUnwrappedOptionalSpelledAsOptional: TypeDescription {
+		if case let .implicitlyUnwrappedOptional(wrappedType) = self {
+			.optional(wrappedType)
+		} else {
+			self
+		}
+	}
+
 	public var asFunctionParameter: TypeDescription {
 		switch self {
 		case .any,
