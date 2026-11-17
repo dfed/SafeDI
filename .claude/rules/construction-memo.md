@@ -22,7 +22,7 @@ paths:
 | `lazilyInstantiatedInstanceProperties`, `reboundProperties` | Key, with the spellings of both sets, compared by UTF-8 bytes, since `String`'s `==` reads canonically equivalent labels as one. |
 | `previousPassGenerator` and everything read from it (`foundCycleParameters`, `receivedBuilderLoops`, the child taken by index) | Key (its identity). Only first-pass entries cross trees, and their key holds `nil` there. |
 | `propertyStack`, `concreteTypeStack`, `depthStack` | Logged: read only through `declarationClosedOn`, whose answer is the declaration closed on. `closedOnFillPathDeclarationsBeneath` reads the stack unlogged, only where `fillPathStackCount > 0`: inside a fill, excluded. |
-| `nearestDeclarations` | Logged: `nearestDeclaration`, `binding`. |
+| `nearestDeclarations` | Logged: `nearestDeclaration`, `binding`. A `ConstructionLog.Read` key hashes its label as `String` does, canonically, as `NearestDeclarations` matches labels; a change that makes label matching byte-based updates those keys in the same pull request. |
 | `cycleParameterContexts` | Logged: `cycleParameterContext`, keyed by the resolved closed-on declaration, misses included. Its depths are used only as the depths the log records. |
 | `depth` | Stored by no generator; used only for the log's answering depths, which a hit asks again at the new place. |
 | `placeHoldingPropertiesByType` | Constant within a pass of one tree; `nil` on every first pass, the only pass whose entries cross trees; non-nil only in a tree with a build site, excluded. |
