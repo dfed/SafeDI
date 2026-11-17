@@ -1601,13 +1601,9 @@ struct PublicMockCall: Sendable {
 
 	/// The declarations in the public mock's tree that receive each label, which a diagnostic notes.
 	let receiversByLabel: [String: [(declaringType: TypeDescription, dependency: Dependency)]]
-	/// The places the call fills (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)`), each with a fill; the call passes
-	/// every other place up.
+	/// The places the call fills (`DependencyTreeGenerator.holesFilled(byCallsOf:in:unfulfilledInstantiationsAreHoles:)`), each
+	/// with a fill on every route; the call passes every other place up.
 	var filledHoles = [SeamSignature.Hole]()
-	/// The sites of the places among `filledHoles` that the call passes up on some route of an inner seam's enum, where a
-	/// value their fill reads is not there (`InnerScopeReaders.passesUpOnSomeInnerRoute(_:reading:from:)`): each has a fill
-	/// and is passed up too.
-	var sitesPassedUpOnSomeRoute = Set<SeamSignature.Hole.Site>()
 	/// The types of the passed parameters that the mock's tree declares `@escaping` (`ScopeGenerator.typesDeclaredEscaping`).
 	/// The calling tree's scope for the type is a leaf, with no scopes for that tree, so a function the calling tree
 	/// declares with such a parameter learns the name here.
@@ -1634,15 +1630,10 @@ struct PublicMockCall: Sendable {
 		builders.contains(where: \.takesBuilderStruct) ? ReservedName.publicMockFunctionName : InstantiableVisitor.mockMethodName
 	}
 
-	/// The sites of the places the call fills on every route.
-	var sitesFilledOnEveryRoute: Set<SeamSignature.Hole.Site> {
-		Set(filledHoles.map(\.site)).subtracting(sitesPassedUpOnSomeRoute)
-	}
-
 	/// The builders a caller that fills `filledHoles` passes up, as the leaf receives them: each whose routes reach a place
-	/// the caller does not fill on every route (`CalledBuilders.sitesReachedOnItsRoutes(by:in:)`).
+	/// the caller does not fill (`CalledBuilders.sitesReachedOnItsRoutes(by:in:)`).
 	var passedUpBuilders: [SeamSignature.Builder] {
-		let filledSites = sitesFilledOnEveryRoute
+		let filledSites = Set(filledHoles.map(\.site))
 		let calledBuilders = calledBuilders
 		let enumsByKey = calledBuilders.enumsByKey
 		return builders.filter { !calledBuilders.sitesReachedOnItsRoutes(by: $0, in: enumsByKey).isSubset(of: filledSites) }
