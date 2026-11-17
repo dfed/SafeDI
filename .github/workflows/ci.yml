@@ -556,6 +556,14 @@ jobs:
         uses: actions/checkout@v7
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      # For the reason "Build and Test on Xcode 26" gives: the three native
+      # builds below start from scratch directories an earlier run on main
+      # saved, and reuse only what was built from files with the same times.
+      - name: Stamp Source Times
+        run: .github/scripts/stamp-source-times.sh
+      - name: Read Runner Image Version
+        id: runner-image
+        run: echo "version=${ImageVersion:-$(sw_vers -buildVersion)}" >> "$GITHUB_OUTPUT"
       # Package Integration.
       - name: Resolve Package Dependencies
         timeout-minutes: 15
@@ -578,9 +586,33 @@ jobs:
       # command does not carry them at all. Every build uses its own scratch or
       # DerivedData directory, so no step can read a file a previous step
       # generated, and every step runs even when an earlier one failed, so one
-      # broken expectation does not hide the others. Release builds turn
+      # broken expectation does not hide the others. The three builds with
+      # SwiftPM's native backend start from the scratch directories a run on
+      # main saved ("Restore the Native Builds' Scratch Directories" below),
+      # because each otherwise compiles swift-syntax and SafeDI from nothing,
+      # and the native backend plans a build the same way from a restored
+      # directory as from an empty one. Each of the three deletes the
+      # restored directory's plugin outputs first, so that the generate
+      # command runs in this build and the file its `grep` reads is one this
+      # build generated. The xcodebuild and Swift Build builds start empty:
+      # Swift Build runs the plugin's fallback only on a build from nothing. Release builds turn
       # optimization off because only the configuration matters here, and an
       # optimized build of swift-syntax takes several times longer.
+      # One entry for the three directories, keyed without the commit and
+      # saved only by a run on main that restored none: what a build reuses
+      # from it is mostly swift-syntax, which changes with Package.resolved,
+      # and a build of SafeDI's own targets from an older commit costs only
+      # the targets whose files differ. The key names the runner image for
+      # the reason "Build and Test on Xcode 26" gives.
+      - name: Restore the Native Builds' Scratch Directories
+        id: native-scratch
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ runner.temp }}/native-debug
+            ${{ runner.temp }}/native-release
+            ${{ runner.temp }}/native-without-define
+          key: example-native-scratch-v1-macOS-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved', 'Examples/Example Package Integration/Package.resolved', 'Examples/Example Package Integration/Package.swift') }}
       - name: Report swift build Backends
         id: backends
         run: |
@@ -597,17 +629,21 @@ jobs:
             echo "swiftbuild_is_default=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Build Package Integration (swift build, native backend)
+        id: native-debug
         timeout-minutes: 7
         if: ${{ !cancelled() }}
         run: |
+          rm -rf "$RUNNER_TEMP/native-debug/plugins/outputs"
           xcrun swift build --build-system native --scratch-path "$RUNNER_TEMP/native-debug" --package-path "Examples/Example Package Integration"
           grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/native-debug/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
       # Twice the longest of ten runs, 5.5 minutes (run 44034763455; the
       # median was 3.9).
       - name: Build Package Integration in release configuration (swift build, native backend)
+        id: native-release
         timeout-minutes: 11
         if: ${{ !cancelled() }}
         run: |
+          rm -rf "$RUNNER_TEMP/native-release/plugins/outputs"
           xcrun swift build --build-system native -c release -Xswiftc -Onone --scratch-path "$RUNNER_TEMP/native-release" --package-path "Examples/Example Package Integration"
           grep -q "DisabledEventLogger()" "$(find "$RUNNER_TEMP/native-release/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
       # Xcode builds a package's source-built SafeDITool under a path with
@@ -653,29 +689,34 @@ jobs:
       # read the conditions from the build settings: those must still wire
       # the right logger, and a build that passes the arguments through
       # unexpanded must stop at SafeDI's compile-time assertion, as the
-      # Manual documents.
+      # Manual documents. The copy keeps the checkout's stamped times (`-p`),
+      # and its rewritten manifest gets a fixed one, so that the native
+      # build of the copy reuses a restored scratch directory too.
       - name: Prepare Package Integration without the DEBUG define
         id: prepare
         if: ${{ !cancelled() }}
         run: |
           copy="$RUNNER_TEMP/PackageIntegrationWithoutDebugDefine"
           rm -rf "$copy"
-          cp -R "Examples/Example Package Integration" "$copy"
+          cp -Rp "Examples/Example Package Integration" "$copy"
           rm -rf "$copy/.build"
           sed -i '' \
             -e "s|\.package(path: \"\.\./\.\./\"|.package(path: \"$GITHUB_WORKSPACE\"|" \
             -e '/\.define("DEBUG", \.when(configuration: \.debug)),/d' \
             "$copy/Package.swift"
+          TZ=UTC touch -t 200001010000.00 "$copy/Package.swift"
           grep -q "package(path: \"$GITHUB_WORKSPACE\"" "$copy/Package.swift"
           if grep -q '\.define("DEBUG"' "$copy/Package.swift"; then
             echo "The DEBUG define is still in $copy/Package.swift." >&2
             exit 1
           fi
       - name: Build Package Integration without the DEBUG define (swift build, native backend, expects the assertion)
+        id: native-without-define
         timeout-minutes: 7
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: |
           log="$RUNNER_TEMP/native-without-define.log"
+          rm -rf "$RUNNER_TEMP/native-without-define/plugins/outputs"
           if xcrun swift build --build-system native -v --scratch-path "$RUNNER_TEMP/native-without-define" --package-path "$RUNNER_TEMP/PackageIntegrationWithoutDebugDefine" > "$log" 2>&1; then
             echo "Expected the native backend to stop at SafeDI's compile-time assertion without the DEBUG define, but the build succeeded." >&2
             exit 1
@@ -684,6 +725,17 @@ jobs:
           echo "Build-setting arguments: $arguments"
           [ "$arguments" = unexpanded ] || { echo "::error::Expected the native backend to pass the build-setting arguments through unexpanded." >&2; exit 1; }
           grep -q 'SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation' "$log" || { tail -n 100 "$log"; exit 1; }
+      # Saved only when all three builds went as expected, so that the entry
+      # every later run starts from holds three whole builds.
+      - name: Save the Native Builds' Scratch Directories
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && steps.native-scratch.outputs.cache-hit != 'true' && steps.native-debug.outcome == 'success' && steps.native-release.outcome == 'success' && steps.native-without-define.outcome == 'success' }}
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ runner.temp }}/native-debug
+            ${{ runner.temp }}/native-release
+            ${{ runner.temp }}/native-without-define
+          key: ${{ steps.native-scratch.outputs.cache-primary-key }}
       # The debug build's expectation follows what the log shows. Expanded
       # arguments must wire `ConsoleEventLogger`. Arguments that arrive
       # unexpanded must fall back to the assertion, as on the native backend,
