@@ -239,6 +239,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		// A call's own fills and dispatchers are declared in the function that makes it, which encloses every reference to them.
 		let ownFillKeys = Set(ownFills.map(\.key))
+		// A case of one of the call's dispatchers that leads to a dispatcher an enclosing call declares, which this call reuses
+		// (`FillDispatcher.Case.Target.reusedCarriedInnerScopes`), refers to it by name, as a dispatcher passed by name is: a
+		// `@Sendable` function between this call and the enclosing one makes it `@Sendable`.
+		for target in fillDispatchers.flatMap({ $0.cases.compactMap(\.target) }) where !ownFillKeys.contains(target.key) {
+			referencedFillNamesByKey[target.key] = target.name
+		}
 		if buildsInSendableFunction {
 			fillKeysReferencedFromSendableFunction.formUnion(referencedFillNamesByKey.keys.filter { !ownFillKeys.contains($0) })
 		}
