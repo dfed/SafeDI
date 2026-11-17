@@ -310,6 +310,11 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case overrideClosureCallCanHand
 	case overrideClosureCallInternalCallerPassesPlaceUp
 	case overrideClosureCallFillReadsCalledMocksParameter
+	/// `OverriddenDetail` holds its `OverriddenPlace1Api` place as `ErasedInstantiator<(), any OverriddenPlace1Api>`, filled
+	/// by `OverriddenPlace1Live`, so a call that can hand the override closure a builder hands it a type spelled as a name,
+	/// which the called `mock()` takes `@escaping`; the oracle compiles a closure that passes it on
+	/// (`GraphFuzzerOracle.addingOverrideClosureCallers(to:of:)`).
+	case overrideClosureCallPlaceIsErasedInstantiator
 
 	/// The shapes of `overrideClosureCall` whose call can hand an override closure no builder a person writes, so that the
 	/// consumer's overrides hold no member for it.
@@ -2303,8 +2308,9 @@ struct GraphFuzzerPublicMockDraw {
 	/// A call of a public mock whose override member is a closure, in two graphs in five: `OverriddenDetail`, a `.public` type
 	/// of the declaring module with an `internal` initializer, builds nothing but a place of `OverriddenPlace1Api` and, now and
 	/// then, one of `OverriddenPlace1Store`, so that its mock takes no `SafeDIOverrides`; now and then it receives
-	/// `overriddenSession`, which its module cannot build, plainly or renamed from `overriddenMainSession`.
-	/// `OverriddenScreen`, a mocked consumer in one consumer module, `true` or `.public`, builds it by value or through an
+	/// `overriddenSession`, which its module cannot build, plainly or renamed from `overriddenMainSession`. Three draws in ten
+	/// hold the `OverriddenPlace1Api` place as an `ErasedInstantiator`, filled by `OverriddenPlace1Live` in place of
+	/// `OverriddenLive`. `OverriddenScreen`, a mocked consumer in one consumer module, `true` or `.public`, builds it by value or through an
 	/// `Instantiator`, and builds the sessions in an extension of its module's own. `OverriddenLive` beside it fills the
 	/// `OverriddenPlace1Api` place, reading the session, the other place, both, or nothing, or, three draws in ten, nothing does and
 	/// the consumer's mock takes the builder, as it does where the fill reads a session `OverriddenDetail` does not receive; `OverriddenStoreLive` fills the other place half the time. The consumer's
@@ -2322,6 +2328,7 @@ struct GraphFuzzerPublicMockDraw {
 		let fillReadsStore = random.percentChance(50)
 		let fillsStore = random.percentChance(50)
 		let consumerModuleRoll = random.integer(in: 0...1)
+		let holdsApiAsErasedInstantiator = random.percentChance(30)
 		let consumerModules = consumerModules
 		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
 		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
@@ -2347,7 +2354,14 @@ struct GraphFuzzerPublicMockDraw {
 		if buildsStore {
 			detail.properties.append(Property(attribute: "@Instantiated", label: "overriddenStore", type: "any \(storeName)"))
 		}
-		detail.properties.append(Property(attribute: "@Instantiated", label: "overriddenApi", type: "any \(apiName)"))
+		// Three in ten hold the place as an erased instantiator, whose builder the override closure is handed as a type spelled
+		// as a name, `ErasedInstantiator<(), any OverriddenPlace1Api>.Builder`, which the called `mock()` takes `@escaping`. Its
+		// fill is `OverriddenPlace1Live`, named by `fulfilledByType:` and so in the builder's label, sharing `OverriddenPlace1`
+		// with the places' types for the reason above.
+		let liveName = holdsApiAsErasedInstantiator ? name("OverriddenPlace1Live") : name("OverriddenLive")
+		detail.properties.append(holdsApiAsErasedInstantiator
+			? Property(attribute: "@Instantiated(fulfilledByType: \"\(liveName)\")", label: "overriddenApi", type: "ErasedInstantiator<(), any \(apiName)>")
+			: Property(attribute: "@Instantiated", label: "overriddenApi", type: "any \(apiName)"))
 		var declaringModuleDeclarations = [protocolDeclaration(apiName), Self.renderer(of: detail)]
 		if buildsStore {
 			declaringModuleDeclarations.append(protocolDeclaration(storeName))
@@ -2372,7 +2386,7 @@ struct GraphFuzzerPublicMockDraw {
 			: Property(attribute: "@Instantiated", label: "overriddenDetail", type: detail.name))
 		var consumerDeclarations = [Self.renderer(of: screen)]
 		if fillsApi {
-			var live = InstantiableClass(name: name("OverriddenLive"), conformances: [apiName] + conformances)
+			var live = InstantiableClass(name: liveName, conformances: [apiName] + conformances)
 			live.arguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
 			if readsSession {
 				live.properties.append(Property(attribute: "@Received", label: "overriddenSession", type: sessionName))
@@ -3515,7 +3529,10 @@ extension GraphFuzzerPublicMockDraw {
 		}
 		if let detail = types.declarations["\(prefix)OverriddenDetail"], let screen = types.declarations["\(prefix)OverriddenScreen"] {
 			features.insert(.overrideClosureCall)
-			let live = types.declarations["\(prefix)OverriddenLive"]
+			let live = types.declarations["\(prefix)OverriddenLive"] ?? types.declarations["\(prefix)OverriddenPlace1Live"]
+			if detail.properties.contains(where: { $0.label == "overriddenApi" && $0.type.hasPrefix("ErasedInstantiator<") }) {
+				features.insert(.overrideClosureCallPlaceIsErasedInstantiator)
+			}
 			let buildsStore = detail.properties.contains { $0.label == "overriddenStore" }
 			let session = detail.properties.first { $0.label == "overriddenSession" }
 			let liveReadsSession = live?.properties.contains { $0.label == "overriddenSession" } == true
