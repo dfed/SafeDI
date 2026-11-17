@@ -248,6 +248,26 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTwinsHiddenReceiveError_whenFillOfListedMocksCallReceivesLabelDeclaredAgainAboveTheCall(calledTypes: CalledTypeDeclaration) async {
+		// `Root` has no `generateMock`: its module lists it in `additionalMocksToGenerate`, so its mock is a mock root only
+		// through that list. Inside the fill of `SignedIn`’s `settings`, the receive of `logger: Logger` is hidden by the
+		// `logger: AuditLogger` that `Session`, which calls `SignedIn`, declares.
+		let diagnostics = { (fixtures: [String: FixturePaths]) in
+			"""
+			\(fixtures["App"]!["AppTypes.swift"]):20:5: error: @Received property `logger: Logger` is hidden in chain: Root -> Session -> SignedIn -> AppSettings. `Session` declares `logger: AuditLogger` with the same label, so the types below `Session` receive `logger: AuditLogger` instead. Give `logger: AuditLogger` on `Session` a different label to fix.
+			\(fixtures["App"]!["AppTypes.swift"]):30:5: note: `logger: AuditLogger` is declared here
+			"""
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.listedMockHiddenModules(caller: "@Instantiable", callee: calledTypes.attribute, listsCaller: true), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.listedMockHiddenModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, listsCaller: false), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+	}
+
 	// MARK: Tests – each error’s remedies work for the calling mock
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases)
@@ -1568,6 +1588,81 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				}
 				""",
 			], dependencies: ["Feature"]),
+		]
+	}
+
+	/// A receive hidden inside a fill: `Root` builds `logger: Logger` and `Session`, which builds `logger: AuditLogger` and
+	/// calls `SignedIn`, whose `settings` place `AppSettings` fills, receiving `logger: Logger`. Where `listsCaller`, module
+	/// `App` lists `Root` in `additionalMocksToGenerate`.
+	private static func listedMockHiddenModules(caller: String, callee: String, listsCaller: Bool) -> [ModuleFixture] {
+		var appFiles = [
+			"AppTypes.swift": """
+			import SafeDI
+			import Feature
+
+			@Instantiable
+			final class Logger: Instantiable {
+			    init() {}
+			}
+
+			@Instantiable
+			final class AuditLogger: Instantiable {
+			    init() {}
+			}
+
+			@Instantiable(fulfillingAdditionalTypes: [SettingsPage.self])
+			final class AppSettings: SettingsPage, Instantiable {
+			    init(logger: Logger) {
+			        self.logger = logger
+			    }
+
+			    @Received private let logger: Logger
+			}
+
+			@Instantiable
+			final class Session: Instantiable {
+			    init(logger: AuditLogger, signedIn: SignedIn) {
+			        self.logger = logger
+			        self.signedIn = signedIn
+			    }
+
+			    @Instantiated private let logger: AuditLogger
+			    @Instantiated private let signedIn: SignedIn
+			}
+
+			\(caller)
+			final class Root: Instantiable {
+			    init(logger: Logger, session: Session) {
+			        self.logger = logger
+			        self.session = session
+			    }
+
+			    @Instantiated private let logger: Logger
+			    @Instantiated private let session: Session
+			}
+			""",
+		]
+		if listsCaller {
+			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"])\n"
+		}
+		return [
+			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContentByFilePath: [
+				"FeatureTypes.swift": """
+				import SafeDI
+
+				public protocol SettingsPage {}
+
+				\(callee)
+				public final class SignedIn: Instantiable {
+				    init(settings: any SettingsPage) {
+				        self.settings = settings
+				    }
+
+				    @Instantiated private let settings: any SettingsPage
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Feature"]),
 		]
 	}
 
