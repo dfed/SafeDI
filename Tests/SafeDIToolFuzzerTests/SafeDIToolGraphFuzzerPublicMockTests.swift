@@ -464,16 +464,13 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			    static func mock() -> S1_T7 {
 			        func __safeDI_s1_HoleBuilder_S1_T6() -> S1_T6.SafeDIMockScope_S1_Hole.__safeDI_Builder<S1_Hole> {
 			        }
-			        func __safeDI_s1_HoleBuilder_S1_T6_S1_HoleHost_Scope(_ __safeDI_s1_HoleBuilder_S1_T6_wrap: @escaping (S1_T6.SafeDIMockScope_S1_Hole.S1_HoleHost_Scope) -> S1_T6.SafeDIMockScope_S1_Hole) -> S1_T6.SafeDIMockScope_S1_Hole.S1_HoleHost_Scope.__safeDI_Builder<S1_Hole> {
-			        }
 			        let t6 = S1_T6.__safeDI_mock(s1_HoleBuilder: __safeDI_s1_HoleBuilder_S1_T6())
-			        let t6Second = S1_T6.__safeDI_mock(s1_HoleBuilder: .init(s1_Hole: { __safeDI_s1_HoleValues in s1_HoleBuilder(.s1_Hole(__safeDI_s1_HoleValues)) }))
 			    }
 			}
 			""",
 		]
 		let features = GraphFuzzerPublicMockDraw.outputFeatures(of: fixture, generatedFiles: generatedFiles)
-		#expect(features.isSuperset(of: [.holeBuilder, .generatedOnlyMockFunction, .holeLoopBuilder, .holeLoopBuilderOfBuilderStruct, .consumerCall, .consumerFillsHole, .consumerPassesLevelFunctionsStruct, .consumerConvertsClosureOverEnum, .consumerConvertsOverReopenedLevel]))
+		#expect(features.isSuperset(of: [.holeBuilder, .generatedOnlyMockFunction, .holeLoopBuilder, .holeLoopBuilderOfBuilderStruct, .consumerCall, .consumerFillsHole, .consumerPassesLevelFunctionsStruct]))
 		#expect(!features.contains(.constructionFunction))
 	}
 
@@ -582,28 +579,6 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	}
 
 	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func outputFeatures_readNoPlacePassedUpWithoutScope_whenConsumerConvertsClosureOverEnum() {
-		// The closure over the enum a consumer takes, and the struct it converts that closure into, hand written code a scope.
-		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [])
-		let features = GraphFuzzerPublicMockDraw.outputFeatures(of: fixture, generatedFiles: [
-			"FuzzApp/S1_T7+SafeDIMock.swift": """
-			extension S1_T7 {
-			    static func mock(
-			        s1_HoleBuilder: @escaping (S1_T6.SafeDIMockScope_S1_Hole) -> S1_Hole
-			    ) -> S1_T7 {
-			        func __safeDI_s1_HoleBuilder_S1_T6(_ scope: S1_T6.SafeDIMockScope_S1_Hole, passUp: () -> S1_Hole) -> S1_Hole {
-			        }
-			        let t6 = S1_T6.__safeDI_mock(s1_HoleBuilder: .init(s1_Hole: { __safeDI_s1_HoleValues in s1_HoleBuilder(.s1_Hole(__safeDI_s1_HoleValues)) }))
-			    }
-			}
-			""",
-		])
-		#expect(features.isSuperset(of: [.consumerPassesHoleBuilderUp, .consumerFillsHole, .consumerConvertsClosureOverEnum]))
-		#expect(!features.contains(.consumerPassesPlaceUpWithoutScope))
-	}
-
-	@Test
 	func drawFeatures_readHoleMockAttributesAndHandWrittenMock_whenSeedsDrawThem() {
 		func features(ofSeed seed: UInt64) -> Set<GraphFuzzerPublicMockDrawFeature> {
 			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
@@ -646,7 +621,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		]
 		let features = GraphFuzzerPublicMockDraw.outputFeatures(of: fixture, generatedFiles: generatedFiles)
 		#expect(features.isSuperset(of: [.holeBuilder, .holeLoopBuilder, .consumerCall, .constructionFunction]))
-		#expect(features.isDisjoint(with: [.generatedOnlyMockFunction, .holeLoopBuilderOfBuilderStruct, .consumerPassesLevelFunctionsStruct, .consumerConvertsClosureOverEnum, .consumerConvertsOverReopenedLevel]))
+		#expect(features.isDisjoint(with: [.generatedOnlyMockFunction, .holeLoopBuilderOfBuilderStruct, .consumerPassesLevelFunctionsStruct]))
 	}
 
 	@Test
