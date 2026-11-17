@@ -13110,8 +13110,11 @@ enum GraphFuzzerOracle {
 				warnings += moduleOutput.warnings.map { normalize("\($0)") }
 			}
 			return (.accepted(
-				generatedFiles: addingPublicMockCallers(
-					to: addingSeamCallers(to: generatedFiles, seamTypeAccess: fixture.seamTypeAccess, modules: presentModules),
+				generatedFiles: addingOverrideClosureCallers(
+					to: addingPublicMockCallers(
+						to: addingSeamCallers(to: generatedFiles, seamTypeAccess: fixture.seamTypeAccess, modules: presentModules),
+						of: fixture,
+					),
 					of: fixture,
 				),
 				warnings: warnings,
@@ -13430,6 +13433,146 @@ enum GraphFuzzerOracle {
 			}
 		}
 		return generatedFiles
+	}
+
+	/// `generatedFiles` with, for a graph whose call of `OverriddenDetail`'s public mock can hand its override closure a
+	/// builder a person writes for each place (`GraphFuzzerPublicMockDrawFeature.overrideClosureCallCanHand`), a file in
+	/// `OverriddenScreen`'s module, `<OverriddenScreen>+SafeDIPublicMockCaller.swift`, holding the closure a person writes:
+	/// it takes what the consumer's overrides member hands it and passes each on to `OverriddenDetail`'s `mock()`, under the
+	/// label of the parameter of that type, so a builder handed without the `@escaping` the called `mock()` takes it with
+	/// fails the compile. Every name is read from the generated code – the consumer's from its mock's file name, the called
+	/// type's from the member's return type – so a renamed graph's caller is renamed with its files: the graph is chosen by
+	/// the member alone, which the consumer's overrides hold exactly where the call can hand it
+	/// (`GraphFuzzerToolRuns.publicMockOverrideClosureFailure` judges that), since the draw's features are read by the
+	/// unrenamed names. The known-right path declares no `.public` mock, so it gets none.
+	static func addingOverrideClosureCallers(to generatedFiles: [String: String], of fixture: GraphFuzzerFixture) -> [String: String] {
+		guard fixture.swiftFileContent.contains(where: { $0.contains("OverriddenDetail") && $0.contains("generateMock: .public") }) else { return generatedFiles }
+		var generatedFiles = generatedFiles
+		let suffix = "OverriddenScreen+SafeDIMock.swift"
+		for fileName in generatedFiles.keys.sorted() where fileName.hasSuffix(suffix) {
+			guard let contents = generatedFiles[fileName], let slash = fileName.firstIndex(of: "/") else { continue }
+			let moduleName = String(fileName[..<slash])
+			let screenName = String(fileName[fileName.index(after: slash)...].dropLast("+SafeDIMock.swift".count))
+			let lines = contents.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+			guard let memberIndex = lines.firstIndex(where: { $0.range(of: #"^(public )?let overriddenDetail(Builder)?: \("#, options: .regularExpression) != nil }),
+			      let structLine = lines[..<memberIndex].last(where: { $0.range(of: #"^(public )?struct \w+ \{$"#, options: .regularExpression) != nil }),
+			      let member = overrideClosureMember(lines[memberIndex])
+			else { continue }
+			let structName = structLine.split(separator: " ").dropLast().last.map(String.init) ?? ""
+			let mocks = personCalledMockParameters(of: member.returnType, in: generatedFiles)
+			guard let arguments = mocks.lazy.compactMap({ overrideClosureArguments(handing: member.parameterTypes, to: $0) }).first else {
+				Issue.record("`\(screenName)`’s overrides hand `\(member.returnType)`’s override closure \(member.parameterTypes), which no `mock()` of `\(member.returnType)` a person calls takes: \(mocks)")
+				continue
+			}
+			let parameterNames = member.parameterTypes.indices.map { "overriddenArgument\($0)" }
+			let closureParameters = parameterNames.isEmpty ? "" : " \(parameterNames.joined(separator: ", ")) in"
+			generatedFiles["\(moduleName)/\(screenName)\(publicMockCallerFileSuffix)"] = """
+			import \(GraphFuzzerModule.seamModule.name)
+
+			#if DEBUG
+			enum \(screenName)OverrideClosureCaller {
+			\tstatic func overrides() -> \(screenName).\(structName) {
+			\t\t.init(\(member.label): {\(closureParameters) \(member.returnType).mock(\(arguments)) })
+			\t}
+			}
+			#endif
+
+			"""
+		}
+		return generatedFiles
+	}
+
+	/// The label, the parameter types as written, and the return type of `line`, an overrides member whose type is an
+	/// optional closure, `let label: ((A, B) -> R)?`, or `nil` for any other line.
+	private static func overrideClosureMember(_ line: String) -> (label: String, parameterTypes: [String], returnType: String)? {
+		guard let letRange = line.range(of: "let "), let colon = line[letRange.upperBound...].range(of: ": ") else { return nil }
+		let label = String(line[letRange.upperBound..<colon.lowerBound])
+		var type = line[colon.upperBound...].trimmingCharacters(in: .whitespaces)
+		guard type.hasPrefix("("), type.hasSuffix(")?") else { return nil }
+		type = String(type.dropFirst().dropLast(2))
+		// The closure may spell attributes, such as `@Sendable`, before its parameters.
+		guard let parametersStart = type.firstIndex(of: "(") else { return nil }
+		var depth = 0
+		var parametersEnd: String.Index?
+		for index in type[parametersStart...].indices {
+			switch type[index] {
+			case "(":
+				depth += 1
+			case ")":
+				depth -= 1
+				if depth == 0, parametersEnd == nil {
+					parametersEnd = index
+				}
+			default:
+				break
+			}
+			if parametersEnd != nil { break }
+		}
+		guard let parametersEnd, let arrow = type[parametersEnd...].range(of: " -> ") else { return nil }
+		let parameterTypes = topLevelParameters(String(type[type.index(after: parametersStart)..<parametersEnd])).map { $0.trimmingCharacters(in: .whitespaces) }
+		return (label, parameterTypes, type[arrow.upperBound...].trimmingCharacters(in: .whitespaces))
+	}
+
+	/// The parameters of each `mock()` of `mockedType` a person calls in `generatedFiles` – not the one only generated code
+	/// calls – `public` ones first, each with its label, its type as written, and whether it has a default.
+	private static func personCalledMockParameters(of mockedType: String, in generatedFiles: [String: String]) -> [[(label: String, type: String, hasDefault: Bool)]] {
+		var publicMocks = [[(label: String, type: String, hasDefault: Bool)]]()
+		var otherMocks = [[(label: String, type: String, hasDefault: Bool)]]()
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where !fileName.hasSuffix(publicMockCallerFileSuffix) {
+			var extendedType: String?
+			var parameters: [(label: String, type: String, hasDefault: Bool)]?
+			var isPublic = false
+			for line in contents.split(separator: "\n") {
+				let trimmed = line.trimmingCharacters(in: .whitespaces)
+				if trimmed.hasPrefix("extension "), trimmed.hasSuffix(" {") {
+					extendedType = String(trimmed.dropFirst("extension ".count).dropLast(2))
+				}
+				if extendedType == mockedType, trimmed.hasSuffix("static func mock(") {
+					parameters = []
+					isPublic = trimmed.hasPrefix("public ")
+				} else if let collected = parameters, trimmed.hasPrefix(")") {
+					if isPublic {
+						publicMocks.append(collected)
+					} else {
+						otherMocks.append(collected)
+					}
+					parameters = nil
+				} else if parameters != nil, let colon = trimmed.range(of: ": ") {
+					let declaredType = trimmed[colon.upperBound...].trimmingCharacters(in: CharacterSet(charactersIn: ", "))
+					let defaultRange = declaredType.range(of: " = ")
+					parameters?.append((
+						String(trimmed[..<colon.lowerBound]),
+						defaultRange.map { String(declaredType[..<$0.lowerBound]) } ?? declaredType,
+						defaultRange != nil,
+					))
+				}
+			}
+		}
+		return publicMocks + otherMocks
+	}
+
+	/// The arguments of a call of a `mock()` that takes `mockParameters` passing on each of the override closure's
+	/// parameters, `overriddenArgument<index>`, under the label of the parameter of its type, in the mock's order, or `nil`
+	/// where a parameter of the closure matches none or the mock requires one the closure is not handed. Types are compared
+	/// without `@escaping`, which only the missing spelling of distinguishes the defect the call compiles to catch.
+	private static func overrideClosureArguments(handing parameterTypes: [String], to mockParameters: [(label: String, type: String, hasDefault: Bool)]) -> String? {
+		func unescaped(_ type: String) -> String {
+			type.hasPrefix("@escaping ") ? String(type.dropFirst("@escaping ".count)) : type
+		}
+		var argumentIndexByMockIndex = [Int: Int]()
+		for (argumentIndex, parameterType) in parameterTypes.enumerated() {
+			guard let mockIndex = mockParameters.indices.first(where: { argumentIndexByMockIndex[$0] == nil && unescaped(mockParameters[$0].type) == unescaped(parameterType) }) else { return nil }
+			argumentIndexByMockIndex[mockIndex] = argumentIndex
+		}
+		var arguments = [String]()
+		for (mockIndex, parameter) in mockParameters.enumerated() {
+			if let argumentIndex = argumentIndexByMockIndex[mockIndex] {
+				arguments.append("\(parameter.label): overriddenArgument\(argumentIndex)")
+			} else if !parameter.hasDefault {
+				return nil
+			}
+		}
+		return arguments.joined(separator: ", ")
 	}
 
 	/// Whether the `@Instantiable` attribute on the line before `typeName`'s class declaration in `content`, a fixture

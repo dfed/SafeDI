@@ -356,6 +356,93 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["let overriddenDetailBuilder: ((@escaping () -> any S\(seed)_OverriddenPlace1Api) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure == nil)
 	}
 
+	/// The first public mock corpus seed whose call of `OverriddenDetail` can hand its override closure a builder a person
+	/// writes, with the place held as an erased instantiator.
+	private func overrideClosureCanHandErasedInstantiatorSeed() throws -> UInt64 {
+		try #require((UInt64(0)..<1_000).first { GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateMockPublic])).isSuperset(of: [.overrideClosureCallCanHand, .overrideClosureCallPlaceIsErasedInstantiator]) })
+	}
+
+	/// `OverriddenDetail`'s generated file, whose `public` `mock()` takes the session, the erased instantiator's builder, and a
+	/// defaulted value, in that order, and whose `package` one takes the builder alone.
+	private func overriddenDetailMock(seed: UInt64) -> String {
+		"extension S\(seed)_OverriddenDetail {\n    public static func mock(\n        overriddenSession: S\(seed)_OverriddenSession,\n        s\(seed)_OverriddenPlace1Live_S\(seed)_OverriddenPlace1ApiBuilder: @escaping ErasedInstantiator<(), any S\(seed)_OverriddenPlace1Api>.Builder,\n        overriddenFlag: Bool = false\n    ) -> S\(seed)_OverriddenDetail {\n    }\n\n    package static func mock(\n        s\(seed)_OverriddenPlace1Live_S\(seed)_OverriddenPlace1ApiBuilder: @escaping ErasedInstantiator<(), any S\(seed)_OverriddenPlace1Api>.Builder\n    ) -> S\(seed)_OverriddenDetail {\n    }\n}\n"
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingOverrideClosureCallers_passesEachHandedValueOnUnderTheLabelOfItsType_whenCallCanHandBuilders() throws {
+		// The consumer's overrides hand the closure the builder before the session; the public `mock()` takes them the other
+		// way around, beside a defaulted value, so the closure passes each on by its type, in the mock's order.
+		let seed = try overrideClosureCanHandErasedInstantiatorSeed()
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic])
+		let generatedFiles = [
+			"FuzzApp/S\(seed)_OverriddenScreen+SafeDIMock.swift": overriddenScreenMock(seed: seed, members: ["public let overriddenDetail: ((ErasedInstantiator<(), any S\(seed)_OverriddenPlace1Api>.Builder, S\(seed)_OverriddenSession) -> S\(seed)_OverriddenDetail)?"]),
+			"FuzzFeature/S\(seed)_OverriddenDetail+SafeDIMock.swift": overriddenDetailMock(seed: seed),
+		]
+		#expect(GraphFuzzerOracle.addingOverrideClosureCallers(to: generatedFiles, of: fixture) == generatedFiles.merging([
+			"FuzzApp/S\(seed)_OverriddenScreen+SafeDIPublicMockCaller.swift": "import FuzzFeature\n\n#if DEBUG\nenum S\(seed)_OverriddenScreenOverrideClosureCaller {\n\tstatic func overrides() -> S\(seed)_OverriddenScreen.SafeDIOverrides {\n\t\t.init(overriddenDetail: { overriddenArgument0, overriddenArgument1 in S\(seed)_OverriddenDetail.mock(overriddenSession: overriddenArgument1, s\(seed)_OverriddenPlace1Live_S\(seed)_OverriddenPlace1ApiBuilder: overriddenArgument0) })\n\t}\n}\n#endif\n",
+		]) { $1 })
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingOverrideClosureCallers_addsNoCaller_whenOverridesHoldNoClosure() throws {
+		let seed = try overrideClosureCanHandErasedInstantiatorSeed()
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic])
+		let generatedFiles = [
+			"FuzzApp/S\(seed)_OverriddenScreen+SafeDIMock.swift": overriddenScreenMock(seed: seed, members: []),
+			"FuzzFeature/S\(seed)_OverriddenDetail+SafeDIMock.swift": overriddenDetailMock(seed: seed),
+		]
+		#expect(GraphFuzzerOracle.addingOverrideClosureCallers(to: generatedFiles, of: fixture) == generatedFiles)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingOverrideClosureCallers_addsNoCaller_whenFixtureIsKnownRight() throws {
+		// The known-right path spells every mock `true`, so it gets no caller.
+		let seed = try overrideClosureCanHandErasedInstantiatorSeed()
+		let generatedFiles = [
+			"FuzzApp/S\(seed)_OverriddenScreen+SafeDIMock.swift": overriddenScreenMock(seed: seed, members: ["let overriddenDetail: ((@escaping ErasedInstantiator<(), any S\(seed)_OverriddenPlace1Api>.Builder) -> S\(seed)_OverriddenDetail)?"]),
+			"FuzzFeature/S\(seed)_OverriddenDetail+SafeDIMock.swift": overriddenDetailMock(seed: seed),
+		]
+		#expect(GraphFuzzerOracle.addingOverrideClosureCallers(to: generatedFiles, of: GraphFuzzerGenerator.knownRightPublicMockFixture(forSeed: seed)) == generatedFiles)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingOverrideClosureCallers_addsCallerUnderRenamedNames_whenGraphMovesTypeNamesAcrossWrapperNames() throws {
+		// A renamed graph's names are read from its generated code, so its caller is the drawn graph's, renamed: restoring the
+		// renaming gives the drawn graph's file.
+		let seed = try overrideClosureCanHandErasedInstantiatorSeed()
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic])
+		let renaming = try #require(GraphFuzzerRenaming.all.first { $0.movesTypeNamesAcrossWrapperNames })
+		let prefix = fixture.typeNamePrefix
+		let renamedFixture = fixture.renamed(by: renaming)
+		let generatedFiles = [
+			"FuzzApp/S\(seed)_OverriddenScreen+SafeDIMock.swift": overriddenScreenMock(seed: seed, members: ["let overriddenDetail: ((@escaping ErasedInstantiator<(), any S\(seed)_OverriddenPlace1Api>.Builder) -> S\(seed)_OverriddenDetail)?"]),
+			"FuzzFeature/S\(seed)_OverriddenDetail+SafeDIMock.swift": overriddenDetailMock(seed: seed).replacingOccurrences(of: "overriddenSession: S\(seed)_OverriddenSession,\n        ", with: ""),
+		]
+		let renamedFiles = Dictionary(uniqueKeysWithValues: generatedFiles.map { (renaming.rename($0.key, typeNamePrefix: prefix), renaming.rename($0.value, typeNamePrefix: prefix)) })
+		let callerFileName = "FuzzApp/S\(seed)_OverriddenScreen+SafeDIPublicMockCaller.swift"
+		let caller = try #require(GraphFuzzerOracle.addingOverrideClosureCallers(to: generatedFiles, of: fixture)[callerFileName])
+		let renamedCaller = try #require(GraphFuzzerOracle.addingOverrideClosureCallers(to: renamedFiles, of: renamedFixture)[renaming.rename(callerFileName, typeNamePrefix: prefix)])
+		#expect(renaming.restore(renamedCaller, typeNamePrefix: prefix) == caller)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingOverrideClosureCallers_recordsIssue_whenNoMockTakesWhatTheClosureIsHanded() throws {
+		let seed = try overrideClosureCanHandErasedInstantiatorSeed()
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic])
+		let generatedFiles = [
+			"FuzzApp/S\(seed)_OverriddenScreen+SafeDIMock.swift": overriddenScreenMock(seed: seed, members: ["let overriddenDetail: ((@escaping () -> any S\(seed)_OverriddenPlace1Api) -> S\(seed)_OverriddenDetail)?"]),
+			"FuzzFeature/S\(seed)_OverriddenDetail+SafeDIMock.swift": overriddenDetailMock(seed: seed),
+		]
+		withKnownIssue {
+			_ = GraphFuzzerOracle.addingOverrideClosureCallers(to: generatedFiles, of: fixture)
+		}
+	}
+
 	// MARK: Builder structs
 
 	@Test

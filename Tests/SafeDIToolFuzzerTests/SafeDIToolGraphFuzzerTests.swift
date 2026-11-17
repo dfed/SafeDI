@@ -7793,6 +7793,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.overrideClosureCallFillReadsValueCalledMockRenames: 41,
 		.overrideClosureCallInternalCallerPassesPlaceUp: 98,
 		.overrideClosureCallPublicCallerPassesPlaceUp: 96,
+		.overrideClosureCallPlaceIsErasedInstantiator: 98,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,
