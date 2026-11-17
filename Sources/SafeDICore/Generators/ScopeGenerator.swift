@@ -1212,11 +1212,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// it, in scope where the dispatchers are declared. The parameters are found when the code is generated, from what the
 	/// fills read (`dispatcherParameters(of:fillReads:)`), a fixed point over the enums, which can recurse.
 	///
-	/// A public mock's caller decides per route (`decidesPerRoute`) when its code is generated: its fills read nothing of the
-	/// caller's, so where the nearest type on the route binds no form of a value a fill reads that provides the form it reads,
-	/// the route passes the place up. A place inside a fill that one case of the called mock's enum leads to on several
-	/// routes is filled on those that hold what its fill reads and passed up on the others
-	/// (`PublicMockCall.sitesPassedUpOnSomeRoute`).
+	/// A public mock's caller decides per route (`decidesPerRoute`) when its code is generated: each route hands a fill the
+	/// value nearest the place, or the caller's where no level on the route binds one (`PublicMockLevelFunctions`), so
+	/// every route of a filled place fills it.
 	struct FillDispatcher: Sendable {
 		struct Case: Sendable {
 			let name: String
@@ -1351,7 +1349,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		/// A dispatcher of an enum, for the routes of one family's root enum, or `nil` for one that serves every route that
-		/// reaches the enum (see `dispatchers(of:filledSites:sitesPassedUpOnSomeRoute:enclosingDispatchers:fillNames:names:innerScopeNameByKey:decidesPerRoute:)`).
+		/// reaches the enum (see `dispatchers(of:filledSites:enclosingDispatchers:builderKeysDispatchedOverTheEnum:fillNames:names:innerScopeNameByKey:carriedInnerScopesByKey:decidesPerRoute:)`).
 		struct Instance: Hashable {
 			let enumKey: SeamSignature.ScopeEnum.Key
 			/// Whether the routes are the `@Sendable` root enum's, where the instance serves one family.
@@ -1371,20 +1369,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// its arguments first reach them with an explicit stack: one for each enum that reaches a filled place, which no
 		/// enclosing call declares.
 		///
-		/// A public mock's caller passes up a place it does not fill on every route, so a dispatcher that reaches one takes
-		/// `passUp`. The plain and the `@Sendable` root enum of a hole type hold the same enums nested by type, but each one's
+		/// A public mock's caller passes up a place it does not fill, so a dispatcher that reaches one takes `passUp`. The plain and the `@Sendable` root enum of a hole type hold the same enums nested by type, but each one's
 		/// routes reach only its own places (`CalledBuilders.sitesReachedOnItsRoutes(by:in:)`): an enum whose places on the
 		/// routes of one root are all filled and on the other's are not has a dispatcher for each, so the builder of the root
 		/// whose routes fill every place takes no `passUp`, and the caller no builder to pass up.
 		/// - Parameters:
-		///   - sitesPassedUpOnSomeRoute: The sites among `filledSites` a public mock's caller passes up on some route too
-		///     (`PublicMockCall.sitesPassedUpOnSomeRoute`).
 		///   - enclosingCarriedInnerScopes: The structs each level function of `enclosingDispatchers` takes, by its key.
 		///   - decidesPerRoute: Whether the call is of a public mock (see `FillDispatcher.decidesPerRoute`).
 		static func dispatchers(
 			of calledBuilders: CalledBuilders,
 			filledSites: Set<SeamSignature.Hole.Site>,
-			sitesPassedUpOnSomeRoute: Set<SeamSignature.Hole.Site> = [],
 			enclosingDispatchers: [String: String],
 			fillNames: [String: String],
 			names: inout GeneratedNameAllocator,
@@ -1397,7 +1391,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let holesBySite = Dictionary(calledBuilders.holes.map { ($0.site, $0) }, uniquingKeysWith: { first, _ in first })
 			let builtTypeByHoleType = calledBuilders.holes.builtTypeByHoleType
 			let calledSeamTypes = Set(calledBuilders.builders.map(\.enumKey.seamType))
-			let sitesFilledOnEveryRoute = filledSites.subtracting(sitesPassedUpOnSomeRoute)
 			var sitesReachedByKey = [SeamSignature.ScopeEnum.Key: Set<SeamSignature.Hole.Site>]()
 			func sitesReached(from key: SeamSignature.ScopeEnum.Key) -> Set<SeamSignature.Hole.Site> {
 				if let sites = sitesReachedByKey[key] {
@@ -1461,7 +1454,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			/// Whether a dispatcher of the enum of `key` for `family`'s routes takes `passUp`.
 			func takesPassUp(_ key: SeamSignature.ScopeEnum.Key, onRoutesOf family: Bool?) -> Bool {
-				!sitesReached(from: key, onRoutesOf: family).isSubset(of: sitesFilledOnEveryRoute)
+				!sitesReached(from: key, onRoutesOf: family).isSubset(of: filledSites)
 			}
 			// An enum both families reach has a dispatcher for each where one takes `passUp` and the other does not; otherwise
 			// one serves both.

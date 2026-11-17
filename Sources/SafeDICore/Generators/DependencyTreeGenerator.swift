@@ -1025,16 +1025,14 @@ public actor DependencyTreeGenerator {
 			typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls)
 			// A call that fills a builder declares no dependency for it, so the map is built again with the fills.
 			if generatesPublicMock {
-				for (calledType, filled) in holesFilled(byCallsOf: publicMockCalls, in: typeDescriptionToScopeMap, unfulfilledInstantiationsAreHoles: true) {
-					publicMockCallsOfPublicMocks[calledType]?.filledHoles = filled.holes
-					publicMockCallsOfPublicMocks[calledType]?.sitesPassedUpOnSomeRoute = filled.sitesPassedUpOnSomeRoute
+				for (calledType, filledHoles) in holesFilled(byCallsOf: publicMockCalls, in: typeDescriptionToScopeMap, unfulfilledInstantiationsAreHoles: true) {
+					publicMockCallsOfPublicMocks[calledType]?.filledHoles = filledHoles
 				}
 			}
 			let filledHoles = holesFilled(byCallsOf: publicMockCalls, in: typeDescriptionToScopeMap, unfulfilledInstantiationsAreHoles: false)
 			if !filledHoles.isEmpty {
-				for (calledType, filled) in filledHoles {
-					publicMockCalls[calledType]?.filledHoles = filled.holes
-					publicMockCalls[calledType]?.sitesPassedUpOnSomeRoute = filled.sitesPassedUpOnSomeRoute
+				for (calledType, holes) in filledHoles {
+					publicMockCalls[calledType]?.filledHoles = holes
 				}
 				typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls)
 			}
@@ -8578,9 +8576,9 @@ public actor DependencyTreeGenerator {
 		byCallsOf publicMockCalls: [TypeDescription: PublicMockCall],
 		in typeDescriptionToScopeMap: [TypeDescription: Scope],
 		unfulfilledInstantiationsAreHoles: Bool,
-	) -> [TypeDescription: (holes: [SeamSignature.Hole], sitesPassedUpOnSomeRoute: Set<SeamSignature.Hole.Site>)] {
+	) -> [TypeDescription: [SeamSignature.Hole]] {
 		guard let emittingModule = emittingModuleToCheck else { return [:] }
-		var filledHoles = [TypeDescription: (holes: [SeamSignature.Hole], sitesPassedUpOnSomeRoute: Set<SeamSignature.Hole.Site>)]()
+		var filledHoles = [TypeDescription: [SeamSignature.Hole]]()
 		for calledType in publicMockCalls.keys.sorted() {
 			guard let publicMockCall = publicMockCalls[calledType] else { continue }
 			for hole in publicMockCall.holes {
@@ -8602,7 +8600,7 @@ public actor DependencyTreeGenerator {
 				else { continue }
 				// A route on which no level binds a value the fill reads hands the fill the caller's, as production's root
 				// dispatcher does (`PublicMockLevelFunctions`), so the place is filled on every route.
-				filledHoles[calledType, default: ([], [])].holes.append(hole)
+				filledHoles[calledType, default: []].append(hole)
 			}
 		}
 		return filledHoles
