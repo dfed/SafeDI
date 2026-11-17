@@ -263,6 +263,9 @@ struct PublicMockLevelFunctions: Sendable {
 			arguments.append("\(upName.spelledAsArgumentLabel): \(root.up)")
 		}
 		for carried in function.carriedInnerScopes {
+			// The `""` is never emitted: the call records a struct in `root.carriedStructs` for each struct its dispatcher
+			// carries (`ScopeGeneratorUnderConstruction.builderCallArguments`), and the function carries a subset of those, but
+			// no type holds that pairing. 2.3.1's emitter rewrite replaces this code and drops the fallback.
 			arguments.append("\(carried.upName.spelledAsArgumentLabel): \(root.carriedStructs[carried.name] ?? "")")
 		}
 		return "\(function.name)(\(arguments.joined(separator: ", ")))"
