@@ -6349,7 +6349,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let arguments = SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)
 		// The expression that builds the value: the place's member, called on the struct the last case on its route returned,
 		// or on the builder itself. An instantiator's member returns the builder its wrapper keeps. Every place of a seam's or
-		// a public mock's tree has its enum's case, whose member takes a struct (`SeamBuilderFamilies`).
+		// a public mock's tree has its enum's case, whose member takes a struct (`SeamBuilderFamilies`). The `""` is never
+		// returned: a hole is built before its place's case is known, so `enumPlace` is optional, and it is assigned to every
+		// place before any code is generated; no type holds that order. 2.3.1's emitter rewrite replaces this code and drops
+		// the fallback.
 		guard let enumPlace = site.enumPlace, let memberValuesTypeName = enumPlace.memberValuesTypeName else { return "" }
 		let valuesType = TypeDescription.nested(name: memberValuesTypeName, parentType: enumPlace.enumType(qualifiedBy: nil), generics: [])
 		// Inside a fill whose call's case leads on, the fill is handed the struct of its own level.
