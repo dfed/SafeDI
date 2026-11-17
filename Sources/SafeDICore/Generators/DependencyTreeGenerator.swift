@@ -491,9 +491,12 @@ public actor DependencyTreeGenerator {
 							publicMockContext: publicMockContext,
 						)),
 					)
-					async let configurationTypes = mockRoot.collectConfigurationTypes()
-					async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
 					let isPublicMock = instantiable.generateMock == .public
+					async let configurationTypes = mockRoot.collectConfigurationTypes(
+						isPublicMock: isPublicMock,
+						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+					)
+					async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
 					let publicConstructionNodes = isPublicMock ? await mockRoot.collectPublicConstructionNodes() : []
 					return try await GeneratedMockRoot(
 						root: GeneratedRoot(
@@ -563,9 +566,22 @@ public actor DependencyTreeGenerator {
 				mockConfigurationFulfillers.insert(fulfiller)
 			}
 		}
-		for result in generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription }) where result.isPublicMock {
-			guard let publicMockContext else { continue }
-			for configurationType in result.configurationTypes where seenPublicConfigurationTypes.insert(configurationType.concreteType).inserted {
+		// Every root's nodes above its repeated ancestors, and then every root's nodes beneath them, so that a type a tree
+		// configures only beneath a repeated ancestor changes nothing the module generates for the other types.
+		let sortedGeneratedRoots = generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription })
+		var configurationTypesInOrder = [(result: GeneratedMockRoot, configurationType: ScopeGenerator.MockParameterNode)]()
+		for result in sortedGeneratedRoots {
+			configurationTypesInOrder += result.configurationTypes.nodes.map { (result: result, configurationType: $0) }
+		}
+		// The public and internal mocks generate their own kinds of configuration, so each kind is resolved apart.
+		for isPublicMock in [true, false] {
+			configurationTypesInOrder += Self.configurationsBeneathRepeatedAncestors(
+				ofRoots: sortedGeneratedRoots.filter { $0.isPublicMock == isPublicMock },
+				cycleEdges: cycleEdges,
+			)
+		}
+		if let publicMockContext {
+			for (result, configurationType) in configurationTypesInOrder where result.isPublicMock && seenPublicConfigurationTypes.insert(configurationType.concreteType).inserted {
 				guard let configurationTypeName = publicMockContext.configurationTypeNameByType[configurationType.concreteType] else { continue }
 				let structNode = nodesReadingConfiguration[configurationType.concreteType].flatMap { nodeReadingConfiguration in
 					nodeReadingConfiguration.configurationRequirements == configurationType.configurationRequirements ? nil : nodeReadingConfiguration
@@ -591,28 +607,24 @@ public actor DependencyTreeGenerator {
 				}
 			}
 		}
-		for result in generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription }) where !result.isPublicMock {
-			for configurationType in result.configurationTypes {
-				let typeName = configurationType.concreteType.asSource
-				if seenTypeNames.insert(typeName).inserted {
-					// The first node can be one that reads no overrides from the struct, beneath a cycle edge, built
-					// the other way from the nodes that read them. The struct must describe those that read them.
-					let structNode = nodesReadingConfiguration[configurationType.concreteType].flatMap { nodeReadingConfiguration in
-						nodeReadingConfiguration.configurationRequirements == configurationType.configurationRequirements ? nil : nodeReadingConfiguration
-					} ?? configurationType
-					let structCode = ScopeGenerator.generateConfigurationStruct(
-						for: structNode,
-						cycleEdges: cycleEdges,
-						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
-						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters[configurationType.concreteType, default: []],
-					)
-					if rootedTypeNames.contains(typeName) {
-						rootedConfigurationExtensions[typeName] = structCode
-					} else {
-						sharedConfigurationExtensions.append(ConfigurationExtension(typeName: typeName, structCode: structCode))
-						recordFulfillers(configuredBy: structNode, inMockOf: result.root.typeDescription)
-					}
-				}
+		for (result, configurationType) in configurationTypesInOrder where !result.isPublicMock && seenTypeNames.insert(configurationType.concreteType.asSource).inserted {
+			let typeName = configurationType.concreteType.asSource
+			// The first node can be one that reads no overrides from the struct, beneath a cycle edge, built
+			// the other way from the nodes that read them. The struct must describe those that read them.
+			let structNode = nodesReadingConfiguration[configurationType.concreteType].flatMap { nodeReadingConfiguration in
+				nodeReadingConfiguration.configurationRequirements == configurationType.configurationRequirements ? nil : nodeReadingConfiguration
+			} ?? configurationType
+			let structCode = ScopeGenerator.generateConfigurationStruct(
+				for: structNode,
+				cycleEdges: cycleEdges,
+				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters[configurationType.concreteType, default: []],
+			)
+			if rootedTypeNames.contains(typeName) {
+				rootedConfigurationExtensions[typeName] = structCode
+			} else {
+				sharedConfigurationExtensions.append(ConfigurationExtension(typeName: typeName, structCode: structCode))
+				recordFulfillers(configuredBy: structNode, inMockOf: result.root.typeDescription)
 			}
 		}
 
@@ -1297,12 +1309,87 @@ public actor DependencyTreeGenerator {
 	/// struct its tree needs, in the order the root reaches them.
 	private struct GeneratedMockRoot {
 		let root: GeneratedRoot
-		let configurationTypes: [ScopeGenerator.MockParameterNode]
+		let configurationTypes: ScopeGenerator.ConfigurationTypes
 		/// Whether the root's mock is public, whose tree reads module-level configurations rather than the types' own.
 		let isPublicMock: Bool
 		/// For a public mock, the first node its tree builds with each construction of each type
 		/// (`ScopeGenerator.collectPublicConstructionNodes`); empty for an internal mock.
 		let publicConstructionNodes: [ScopeGenerator.MockParameterNode]
+	}
+
+	/// The configurations `roots`, sorted by type and all of one kind, need beneath their repeated ancestors, each with the
+	/// root whose tree holds the node it is generated from, in the order the roots' trees reach them: a struct for each
+	/// type a construction there reads (`ScopeGenerator.ConfigurationTypes.nodesBeneathRepeatedAncestors`) and for each
+	/// type whose configuration one of those structs nests, transitively, unless the roots configure the type above every
+	/// repeated ancestor, where its struct is generated as before.
+	///
+	/// Beneath repeated ancestors no check makes a type's two constructions agree (`validateConfigurationsAreBuiltOneWay`
+	/// reads no node beneath a cycle edge), so a type's struct is generated from a node built with its initializer (or
+	/// `instantiate(…)`) wherever one is, whose construction is the one that reads the struct afresh, and otherwise from one
+	/// built with its hand-written mock: which root sorts first never decides it. The nested configurations follow the
+	/// nodes so chosen, and choosing can find another construction of a nested type, so the two repeat until no node is new.
+	private static func configurationsBeneathRepeatedAncestors(
+		ofRoots roots: [GeneratedMockRoot],
+		cycleEdges: Set<ScopeGenerator.CycleEdge>,
+	) -> [(result: GeneratedMockRoot, configurationType: ScopeGenerator.MockParameterNode)] {
+		let typesConfiguredAbove = Set(roots.flatMap { $0.configurationTypes.nodes.map(\.concreteType) })
+		var candidates = [(result: GeneratedMockRoot, configurationType: ScopeGenerator.MockParameterNode)]()
+		var candidateConstructions = Set<ScopeGenerator.ConstructedType>()
+		func addCandidate(_ node: ScopeGenerator.MockParameterNode, of result: GeneratedMockRoot) -> Bool {
+			let isNew = !typesConfiguredAbove.contains(node.concreteType)
+				&& candidateConstructions.insert(ScopeGenerator.ConstructedType(concreteType: node.concreteType, usesMockInitializer: node.useMockInitializer)).inserted
+			if isNew {
+				candidates.append((result: result, configurationType: node))
+			}
+			return isNew
+		}
+		for result in roots {
+			for node in result.configurationTypes.nodesBeneathRepeatedAncestors {
+				_ = addCandidate(node, of: result)
+			}
+		}
+		var readTypes = [TypeDescription]()
+		for candidate in candidates where !readTypes.contains(candidate.configurationType.concreteType) {
+			readTypes.append(candidate.configurationType.concreteType)
+		}
+
+		var chosenNodes = [TypeDescription: (result: GeneratedMockRoot, configurationType: ScopeGenerator.MockParameterNode)]()
+		var neededTypes = Set<TypeDescription>()
+		var foundCandidate: Bool
+		repeat {
+			chosenNodes = [:]
+			for candidate in candidates {
+				let type = candidate.configurationType.concreteType
+				if let chosen = chosenNodes[type] {
+					if chosen.configurationType.useMockInitializer, !candidate.configurationType.useMockInitializer {
+						chosenNodes[type] = candidate
+					}
+				} else {
+					chosenNodes[type] = candidate
+				}
+			}
+			foundCandidate = false
+			neededTypes = Set(readTypes)
+			var typesToWalk = readTypes
+			while let type = typesToWalk.popLast() {
+				if let chosen = chosenNodes[type] {
+					for child in ScopeGenerator.childrenWithNestedConfigurations(of: chosen.configurationType, cycleEdges: cycleEdges) where !typesConfiguredAbove.contains(child.concreteType) {
+						if addCandidate(child, of: chosen.result) {
+							foundCandidate = true
+						}
+						if neededTypes.insert(child.concreteType).inserted {
+							typesToWalk.append(child.concreteType)
+						}
+					}
+				}
+			}
+		} while foundCandidate
+
+		var typesInOrder = [TypeDescription]()
+		for candidate in candidates where neededTypes.contains(candidate.configurationType.concreteType) && !typesInOrder.contains(candidate.configurationType.concreteType) {
+			typesInOrder.append(candidate.configurationType.concreteType)
+		}
+		return typesInOrder.compactMap { chosenNodes[$0] }
 	}
 
 	/// A type's `SafeDIMockConfiguration` struct, emitted in an extension of the type.
