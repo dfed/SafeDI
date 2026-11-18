@@ -8290,8 +8290,8 @@ struct SafeDIToolGraphFuzzerTests {
 	/// by-name check, and the view that cannot call;
 	/// then the fill that reads a value the loop around `T6`'s hole declares again
 	/// (`GraphFuzzerOracle.publicMockStaleValueErrorMarker`), which rejects seeds 50, 85, 450, 555, 609, 688 and 967; and the
-	/// fill that reads the `holeContext` `T6` declares outside the `@Sendable` function above its hole
-	/// (`GraphFuzzerOracle.publicMockSendableFunctionCarryErrorMarker`), which rejects seed 157.
+	/// fill, in a module that calls `T6`'s public mock, that reads the `holeContext` `T6` declares outside the `@Sendable`
+	/// function above its hole (`GraphFuzzerOracle.publicMockSendableFunctionCarryErrorMarker`), which rejects seed 157.
 	static let publicMockCorpusErrorGraphCounts = [
 		96, 0, 0, 0, 36, 0, 0, 7,
 		// pins: derive on CI
@@ -8592,6 +8592,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeHostReceivedThroughInstantiator: 38,
 		.holeHostReceivedThroughSendableInstantiator: 21,
 		.holeFillClosesLazyCycle: 15,
+		.holeFillReadsContextBoundOutsideSendableFunction: 1,
 		.holeFillReceivesField: 56,
 		.holeFillReceivesNonField: 40,
 		.holeFillReceivesFormBoundAgain: 25,
