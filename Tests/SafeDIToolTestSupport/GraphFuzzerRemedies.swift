@@ -202,11 +202,11 @@ enum GraphFuzzerRemedies {
 		/// The message of `diagnosticLine` when it is a note, or `nil` for any other line.
 		static func noteMessage(of diagnosticLine: Substring) -> String? {
 			if diagnosticLine.hasPrefix("note: ") {
-				return String(diagnosticLine.dropFirst("note: ".count))
+				String(diagnosticLine.dropFirst("note: ".count))
 			} else if let noteMarker = diagnosticLine.range(of: ": note: ") {
-				return String(diagnosticLine[noteMarker.upperBound...])
+				String(diagnosticLine[noteMarker.upperBound...])
 			} else {
-				return nil
+				nil
 			}
 		}
 
@@ -1099,7 +1099,7 @@ enum GraphFuzzerRemedies {
 			type = type.dropFirst(wrapper.count).dropLast()
 			break
 		}
-		return !type.isEmpty && type.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }) ? String(type) : nil
+		return !type.isEmpty && type.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" } ? String(type) : nil
 	}
 
 	/// The messages of the errors `outcome`, a seam fill's remedy's run, reports that `originalDiagnostics`, the tool's on
