@@ -2449,7 +2449,7 @@ struct GraphFuzzerPublicMockDraw {
 	/// that its `mock()` takes it, and `UnbuildableService`, a `.public` type of the declaring module with an `internal`
 	/// initializer, so that its mock calls the public mock. Beneath `UnbuildableService`, `UnbuildableCache` receives the
 	/// value only if available. The value is of `UnbuildableFilter`, a public class beside `UnbuildableService`, which every
-	/// tier takes (`unbuildableValuePublicMockCallPublicTier`), unless the consumer is in another package and a roll of four
+	/// tier takes (`unbuildableValuePublicMockCallPublicTier`), unless the consumer is in another package and a roll of one
 	/// in ten says otherwise: then it is of `[3 of Int]`, whose spelling SafeDI cannot read, which only `UnbuildableCache`'s
 	/// `package` initializer mentions, so that SafeDI proves it `package`, the public tier the consumer calls omits it, and
 	/// the tool rejects the graph (`leafTierOmitsProvidedValue`) rather than pass `nil`
@@ -2461,7 +2461,7 @@ struct GraphFuzzerPublicMockDraw {
 	/// Every roll is made before any is read.
 	private mutating func drawUnbuildableValuePassedToPublicMock(random: inout GraphFuzzerRandomNumberGenerator) {
 		let drawsShape = random.percentChance(20)
-		let omitsValueRoll = random.percentChance(40)
+		let omitsValueRoll = random.percentChance(10)
 		let consumerModuleRoll = random.integer(in: 0...1)
 		let consumerModules = consumerModules
 		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
