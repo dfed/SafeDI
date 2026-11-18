@@ -96,8 +96,12 @@ enum ConstructionMemoChecks {
 			}
 		}
 
+		/// Reads `value` as `Node(value)` does, reflecting it once and each of its types' names once a run.
 		mutating func digest(of value: Any) -> Digest {
-			let object = Mirror(reflecting: value).displayStyle == .class ? value as AnyObject : nil
+			let valueType = type(of: value)
+			let typeInfo = typeInfo(of: valueType)
+			let mirror = Mirror(reflecting: value)
+			let object = mirror.displayStyle == .class ? value as AnyObject : nil
 			if let object, let digest = digestsByObject[ObjectIdentifier(object)] {
 				return digest
 			}
@@ -105,27 +109,29 @@ enum ConstructionMemoChecks {
 			var low = Hasher()
 			high.combine(0)
 			low.combine(1)
-			switch Node(value) {
-			case let .scope(identifier):
-				high.combine(identifier)
-				low.combine(identifier)
-			case let .leaf(text):
-				high.combine(Array(text.utf8))
-				low.combine(Array(text.utf8))
-			case let .unordered(typeName, children):
-				high.combine(Array(typeName.utf8))
-				low.combine(Array(typeName.utf8))
-				for childDigest in children.map({ digest(of: $0.value) }).sorted() {
+			if let object, typeInfo.isScope {
+				high.combine(ObjectIdentifier(object))
+				low.combine(ObjectIdentifier(object))
+			} else if mirror.displayStyle == .set || mirror.displayStyle == .dictionary {
+				Self.combine(bytes: typeInfo.nameBytes, into: &high, and: &low)
+				for childDigest in mirror.children.map({ digest(of: $0.value) }).sorted() {
 					high.combine(childDigest)
 					low.combine(childDigest)
 				}
-			case let .ordered(typeName, children):
-				high.combine(Array(typeName.utf8))
-				low.combine(Array(typeName.utf8))
-				for child in children {
+			} else if mirror.children.isEmpty {
+				Self.combine(text: "\(typeInfo.name)(\(String(reflecting: value)))", into: &high, and: &low)
+			} else {
+				Self.combine(bytes: typeInfo.nameBytes, into: &high, and: &low)
+				for child in mirror.children {
 					let childDigest = digest(of: child.value)
-					high.combine(child.label.map { Array($0.utf8) })
-					low.combine(child.label.map { Array($0.utf8) })
+					if let label = child.label {
+						high.combine(true)
+						low.combine(true)
+						Self.combine(text: label, into: &high, and: &low)
+					} else {
+						high.combine(false)
+						low.combine(false)
+					}
 					high.combine(childDigest)
 					low.combine(childDigest)
 				}
@@ -137,6 +143,43 @@ enum ConstructionMemoChecks {
 			return valueDigest
 		}
 
+		private struct TypeInfo {
+			let name: String
+			let nameBytes: [UInt8]
+			/// Whether the type is `Scope`, which `Node` reads by its identity.
+			let isScope: Bool
+		}
+
+		private mutating func typeInfo(of valueType: Any.Type) -> TypeInfo {
+			if let typeInfo = typeInfoByType[ObjectIdentifier(valueType)] {
+				return typeInfo
+			}
+			let name = String(reflecting: valueType)
+			let typeInfo = TypeInfo(name: name, nameBytes: Array(name.utf8), isScope: String(describing: valueType) == "Scope")
+			typeInfoByType[ObjectIdentifier(valueType)] = typeInfo
+			return typeInfo
+		}
+
+		/// Hashes `text`'s UTF-8 bytes, preceded by their count, into both hashers.
+		private static func combine(text: String, into high: inout Hasher, and low: inout Hasher) {
+			var text = text
+			text.withUTF8 { bytes in
+				combine(bytes: UnsafeRawBufferPointer(bytes), into: &high, and: &low)
+			}
+		}
+
+		private static func combine(bytes: [UInt8], into high: inout Hasher, and low: inout Hasher) {
+			bytes.withUnsafeBytes { combine(bytes: $0, into: &high, and: &low) }
+		}
+
+		private static func combine(bytes: UnsafeRawBufferPointer, into high: inout Hasher, and low: inout Hasher) {
+			high.combine(bytes.count)
+			low.combine(bytes.count)
+			high.combine(bytes: bytes)
+			low.combine(bytes: bytes)
+		}
+
+		private var typeInfoByType = [ObjectIdentifier: TypeInfo]()
 		private var digestsByObject = [ObjectIdentifier: Digest]()
 	}
 

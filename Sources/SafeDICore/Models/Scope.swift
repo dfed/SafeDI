@@ -483,8 +483,8 @@ extension ConstructionGraph {
 		return scopeGenerator
 	}
 
-	/// Builds the tree `createdTree(for:…)` builds twice more, with the memo oracle's memo and with no memo, and hands both to
-	/// the oracle, when one is installed. Called once for each tree created with `constructionMemo`, in the order the trees
+	/// Builds the tree `createdTree(for:…)` builds twice more, with the memo oracle's memo and, when that build reused a
+	/// generator, with no memo, and hands both to the oracle, when one is installed. Called once for each tree created with `constructionMemo`, in the order the trees
 	/// are created, so the oracle's memo holds what it would if the trees were created one after another.
 	func checkWithMemoOracle(
 		for property: Property?,
@@ -517,6 +517,10 @@ extension ConstructionGraph {
 				constructionMemo: &oracleMemo,
 			)
 			constructionMemo.oracleMemo = oracleMemo
+			// A build that reused no generator built every place as the build without the memo does, so there is nothing
+			// to compare, and the build without the memo, and the comparison, are the oracle's whole cost on such a tree:
+			// a seam's tree with holes, which never memoizes, and most trees the tests create.
+			guard oracleMemo.lastTreeReusedGenerators else { return }
 			let treeBuiltWithoutMemo = try ConstructionMemo.$isEnabled.withValue(false) {
 				var unusedMemo = ConstructionMemo()
 				return try createdTree(
@@ -568,11 +572,13 @@ extension ConstructionGraph {
 		// Every scope of the tree is enclosed by these, so they are held in storage each scope's copy shares.
 		let nearestDeclarations = nearestDeclarations.sharingDeclarations()
 		var startOrderChanged: Bool
+		var reusedGenerators = false
 		repeat {
 			if previousPassGenerator != nil {
 				generatorsToStart = []
 			}
 			var passMemo = previousPassGenerator == nil && sharesMemo ? constructionMemo.memoForFirstPass : ConstructionMemo()
+			passMemo.reusedGenerators = false
 			// A place whose generator the pass before built settled is reused across passes only while the passes share
 			// the place-holding properties every place's build reads.
 			let settledPassMemo = placeHoldingPropertiesByType == placeHoldingPropertiesOfPreviousPass ? previousPassMemo : nil
@@ -596,6 +602,7 @@ extension ConstructionGraph {
 			if previousPassGenerator == nil {
 				firstPassMemo = passMemo
 			}
+			reusedGenerators = reusedGenerators || passMemo.reusedGenerators
 			previousPassMemo = passMemo
 			placeHoldingPropertiesOfPreviousPass = placeHoldingPropertiesByType
 			previousPassGenerator = scopeGenerator
@@ -620,6 +627,7 @@ extension ConstructionGraph {
 		if sharesMemo {
 			constructionMemo.keepEntries(ofFirstPass: firstPassMemo)
 		}
+		constructionMemo.lastTreeReusedGenerators = reusedGenerators
 		return scopeGenerator
 	}
 
@@ -686,6 +694,7 @@ extension ConstructionGraph {
 						? scopeGeneratorsUnderConstruction[index].memoKey(ofChildBuilding: scope, as: property, erasedToConcreteExistential: erasedToConcreteExistential)
 						: nil
 					if let key, let reuse = memo.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext, besides: scopeGeneratorsUnderConstruction[index].childGeneratorIdentifiers) {
+						memo.reusedGenerators = true
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
 					} else if let key, let reuse = settledPassMemo?.settledReuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext, besides: scopeGeneratorsUnderConstruction[index].childGeneratorIdentifiers) {
 						// The pass before built this place's generator settled: building the place again would build it again.
@@ -695,6 +704,7 @@ extension ConstructionGraph {
 							startLog.append(generator)
 						}
 						memo.store(reuse.entry, for: key, keepingAlive: scope.identity)
+						memo.reusedGenerators = true
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
 					} else {
 						var child = scopeGeneratorsUnderConstruction[index].childUnderConstruction(

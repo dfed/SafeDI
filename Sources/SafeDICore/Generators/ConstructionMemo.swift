@@ -208,6 +208,13 @@ struct ConstructionMemo: Sendable {
 			}
 	}
 
+	/// Whether a place of the pass this memo serves reused a generator another place built. A tree none of whose passes
+	/// reused one was built exactly as without the memo, which the memo oracle then has nothing to compare.
+	var reusedGenerators = false
+
+	/// Whether the last tree `Scope.createdTree` created with this memo reused a generator in any pass.
+	var lastTreeReusedGenerators = false
+
 	/// Stores `entry` under `key`, keeping `scope`, the scope the key names, alive as long as the memo.
 	mutating func store(_ entry: Entry, for key: Key, keepingAlive scope: ConstructionScopeIdentity) {
 		entriesByKey[key, default: []].append(entry)
@@ -500,9 +507,10 @@ extension [String] {
 
 /// The memo oracle's hook: test only.
 public enum ConstructionMemoOracle {
-	/// Called each time `Scope.createScopeGenerator` creates a tree, with two more builds of it, neither of which starts
-	/// its code: one with the construction memo, shared across the trees created with one memo, and one without it. The
-	/// two must hold the same data on every path.
+	/// Called each time `Scope.createScopeGenerator` creates a tree whose build with the oracle's memo reuses a generator,
+	/// with two more builds of it, neither of which starts its code: one with the construction memo, shared across the
+	/// trees created with one memo, and one without it. The two must hold the same data on every path. A build that reuses
+	/// none built every place as the build without the memo does, so it is not handed on.
 	@TaskLocal public static var observer: (@Sendable (_ treeBuiltWithMemo: any Sendable, _ treeBuiltWithoutMemo: any Sendable) -> Void)?
 
 	/// Whether `DependencyTreeGenerator` creates its mock roots in reverse type order, so that a memo shared between them
