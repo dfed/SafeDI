@@ -1890,53 +1890,78 @@ public actor DependencyTreeGenerator {
 		}
 
 		/// What a fill of a hole of another module's seam declares: where each receive of a type the fill's tree builds is
-		/// declared, and the properties that tree instantiates, as declared and as cycle validation sees them.
+		/// declared, and the properties that tree instantiates and that the seam's tree instantiates outside its fills, as
+		/// declared and as cycle validation sees them.
 		struct SeamFillDeclarations {
 			let receiveLocations: Set<Dependency.DeclarationLocation>
 			let instantiatedProperties: Set<Property>
+			let seamTreeInstantiatedProperties: Set<Property>
 
-			/// The declarations of the fill of each of `holes` that `typeDescriptionToScopeMap` builds: the tree of the scope
-			/// the hole's owner instantiates its property with. A hole the map does not fill has none.
-			static func ofFills(of holes: [SeamSignature.Hole], in typeDescriptionToScopeMap: [TypeDescription: Scope]) -> [SeamFillDeclarations] {
-				holes.compactMap { hole in
-					var fillScope: Scope?
-					for case let .instantiated(property, childScope, _) in typeDescriptionToScopeMap[hole.ownerType]?.propertiesToGenerate ?? [] where property == hole.property {
-						fillScope = childScope
-					}
-					guard let fillScope else { return nil }
-					var receiveLocations = Set<Dependency.DeclarationLocation>()
-					var instantiatedProperties = Set<Property>()
-					// A tree can be as deep as the module has types, so the walk keeps its own stack.
-					var reachedScopes: Set<Scope> = [fillScope]
-					var scopesToVisit = [fillScope]
-					while let scope = scopesToVisit.popLast() {
-						for dependency in scope.instantiable.dependencies {
-							switch dependency.source {
-							case .received, .aliased:
-								if let declarationLocation = dependency.declarationLocation {
-									receiveLocations.insert(declarationLocation)
-								}
-							case .instantiated, .forwarded:
-								break
-							}
+			/// The declarations of the fill of each hole of each seam in `holesBySeamType` that `typeDescriptionToScopeMap`
+			/// builds: the tree of the scope the hole's owner instantiates its property with. A hole the map does not fill has none.
+			static func ofFills(ofHolesOf holesBySeamType: [TypeDescription: [SeamSignature.Hole]], in typeDescriptionToScopeMap: [TypeDescription: Scope]) -> [SeamFillDeclarations] {
+				var fills = [SeamFillDeclarations]()
+				for (seamType, holes) in holesBySeamType where !holes.isEmpty {
+					// The edges by which the seam's tree enters a fill, which the walk of the seam's tree does not follow.
+					let fillEdges = holes.compactMap { hole in typeDescriptionToScopeMap[hole.ownerType].map { (owner: $0, property: hole.property) } }
+					let seamTreeInstantiatedProperties = typeDescriptionToScopeMap[seamType].map { seamScope in
+						declarations(inTreeOf: seamScope, entering: { scope, property in !fillEdges.contains { $0.owner === scope && $0.property == property } }).instantiatedProperties
+					} ?? []
+					for hole in holes {
+						var fillScope: Scope?
+						for case let .instantiated(property, childScope, _) in typeDescriptionToScopeMap[hole.ownerType]?.propertiesToGenerate ?? [] where property == hole.property {
+							fillScope = childScope
 						}
-						for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
-							instantiatedProperties.insert(property)
-							instantiatedProperties.insert(property.asValidatedForDependencyCycles)
-							if reachedScopes.insert(childScope).inserted {
-								scopesToVisit.append(childScope)
-							}
-						}
+						guard let fillScope else { continue }
+						let fillDeclarations = declarations(inTreeOf: fillScope, entering: { _, _ in true })
+						fills.append(SeamFillDeclarations(
+							receiveLocations: fillDeclarations.receiveLocations,
+							instantiatedProperties: fillDeclarations.instantiatedProperties,
+							seamTreeInstantiatedProperties: seamTreeInstantiatedProperties,
+						))
 					}
-					return SeamFillDeclarations(receiveLocations: receiveLocations, instantiatedProperties: instantiatedProperties)
 				}
+				return fills
+			}
+
+			/// Where each receive of a type in the tree `root` builds is declared, and the properties that tree instantiates, as
+			/// declared and as cycle validation sees them, walking into the child a scope instantiates a property with only where
+			/// `entering` says.
+			private static func declarations(inTreeOf root: Scope, entering: (_ scope: Scope, _ property: Property) -> Bool) -> (receiveLocations: Set<Dependency.DeclarationLocation>, instantiatedProperties: Set<Property>) {
+				var receiveLocations = Set<Dependency.DeclarationLocation>()
+				var instantiatedProperties = Set<Property>()
+				// A tree can be as deep as the module has types, so the walk keeps its own stack.
+				var reachedScopes: Set<Scope> = [root]
+				var scopesToVisit = [root]
+				while let scope = scopesToVisit.popLast() {
+					for dependency in scope.instantiable.dependencies {
+						switch dependency.source {
+						case .received, .aliased:
+							if let declarationLocation = dependency.declarationLocation {
+								receiveLocations.insert(declarationLocation)
+							}
+						case .instantiated, .forwarded:
+							break
+						}
+					}
+					for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
+						instantiatedProperties.insert(property)
+						instantiatedProperties.insert(property.asValidatedForDependencyCycles)
+						if entering(scope, property), reachedScopes.insert(childScope).inserted {
+							scopesToVisit.append(childScope)
+						}
+					}
+				}
+				return (receiveLocations, instantiatedProperties)
 			}
 		}
 
-		/// This error with each cycle that a receive inside one of `fills` closes, on a property that fill's tree does not
-		/// instantiate, marked `closedInSeamFill`, so that it states only the remedy that leads to no other error. A receive is
-		/// known by its declaration, so a type that fills a hole and is also built outside any fill loses the second remedy
-		/// for a cycle it closes there too, a deliberate loss the seam rules record.
+		/// This error with each cycle that a receive inside one of `fills` closes, on a property the fill's seam's tree
+		/// instantiates outside its fills and that fill's tree does not, marked `closedInSeamFill`, so that it states only the
+		/// remedy that leads to no other error. A property only the caller's tree declares keeps both remedies: the fill reads
+		/// the caller's value, as inline. A receive is known by its declaration, and a property by its label and type, so a
+		/// type that fills a hole and is also built outside any fill, and a property the caller declares that the seam's tree
+		/// also declares off the fill's path, lose the second remedy, a deliberate loss the seam rules record.
 		func markingCyclesClosedInSeamFills(_ fills: [SeamFillDeclarations]) -> Self {
 			if case let .independentErrors(errors) = self {
 				.independentErrors(errors.map { $0.markingCyclesClosedInSeamFills(fills) })
@@ -1947,7 +1972,7 @@ public actor DependencyTreeGenerator {
 					declarationLocation: declarationLocation,
 					lazilyInstantiatedProperties: lazilyInstantiatedProperties,
 					requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases,
-					closedInSeamFill: fills.contains { $0.receiveLocations.contains(declarationLocation) && !$0.instantiatedProperties.contains(instantiated) },
+					closedInSeamFill: fills.contains { $0.receiveLocations.contains(declarationLocation) && $0.seamTreeInstantiatedProperties.contains(instantiated) && !$0.instantiatedProperties.contains(instantiated) },
 				)
 			} else {
 				self
@@ -3576,8 +3601,8 @@ public actor DependencyTreeGenerator {
 				} catch let error as DependencyTreeGeneratorError {
 					// The trees build each foreign seam inline with the fills of its holes, which the seam's module calls
 					// through its builders. Only membership in what each fill declares is read, so the seams' order is moot.
-					let foreignSeamHoles = try foreignSeamRoots.get().values.flatMap { $0?.signature.holes ?? [] }
-					throw error.markingCyclesClosedInSeamFills(DependencyTreeGeneratorError.SeamFillDeclarations.ofFills(of: foreignSeamHoles, in: typeDescriptionToScopeMap))
+					let foreignSeamHoles = try foreignSeamRoots.get().compactMapValues { $0?.signature.holes }
+					throw error.markingCyclesClosedInSeamFills(DependencyTreeGeneratorError.SeamFillDeclarations.ofFills(ofHolesOf: foreignSeamHoles, in: typeDescriptionToScopeMap))
 				}
 				inlineForeignSeamTrees = try inlineTreesOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap)
 				self.validatedScopes = Set(typeDescriptionToScopeMap.values)
@@ -9776,8 +9801,8 @@ public actor DependencyTreeGenerator {
 		} catch let error as DependencyTreeGeneratorError {
 			// A called type with places is built inline with the fills of its places, which its own module calls through its
 			// builders, as production builds a foreign seam. Only membership in what each fill declares is read.
-			let places = calledTypesWithPlaces.flatMap { publicMockCalls[$0]?.holes ?? [] }
-			throw error.markingCyclesClosedInSeamFills(DependencyTreeGeneratorError.SeamFillDeclarations.ofFills(of: places, in: inlineTypeDescriptionToScopeMap))
+			let places = publicMockCalls.mapValues(\.holes)
+			throw error.markingCyclesClosedInSeamFills(DependencyTreeGeneratorError.SeamFillDeclarations.ofFills(ofHolesOf: places, in: inlineTypeDescriptionToScopeMap))
 		}
 	}
 
