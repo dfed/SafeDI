@@ -2315,6 +2315,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			callerMemoArgumentByLabel: [String: String] = [:],
 			typesDeclaredEscaping: Set<TypeDescription> = [],
 			fillsTakingPayloadFields: Set<String> = [],
+			labelsHiddenByReenteringCalls: Set<String> = [],
 		) -> String {
 			// What this function hands on of a value no case carries: its own parameter, or, for the root dispatcher, which
 			// takes none, the caller's declaration in the form the target takes (`ScopeGenerator.FillCallerReads`).
@@ -2345,6 +2346,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				valuesName: name("values"),
 				scopeName: name("scope"),
 				typesDeclaredEscaping: typesDeclaredEscaping,
+				labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
 			)
 		}
 
@@ -2366,6 +2368,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			valuesName: String,
 			scopeName: String,
 			typesDeclaredEscaping: Set<TypeDescription>,
+			labelsHiddenByReenteringCalls: Set<String>,
 		) -> String {
 			let memberIndent = indent + ScopeGenerator.standardIndent
 			/// The argument `target`, the target of `dispatcherCase`, takes for `parameter`, reading the case's payload bound as
@@ -2377,12 +2380,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// A level function an enclosing call declares takes the struct under its own name for it.
 					let argumentLabel = Self.isFill(target) ? label : target.reusedCarriedInnerScopes.first { $0.type == carriedInnerScope.type }?.upName ?? carriedInnerScope.upName
 					return ("\(argumentLabel.spelledAsArgumentLabel): \(carriedInnerScope.upName).\(dispatcherCase.name.spelledAsMemberReference)(\(payloadName))", true)
-				} else if readsOwnPayload, dispatcherCase.carriedLabels.contains(label) || (parameter.bindsMemo && dispatcherCase.values?.contains { $0.property.label == label } == true), let field = dispatcherCase.values?.first(where: { $0.property.label == label }) {
+				} else if readsOwnPayload, dispatcherCase.carriedLabels.contains(label) || (parameter.bindsMemo && labelsHiddenByReenteringCalls.contains(label) && dispatcherCase.values?.contains { $0.property.label == label } == true), let field = dispatcherCase.values?.first(where: { $0.property.label == label }) {
 					// A target that binds a deferred parameter's memo is handed the memo, whose instance it reads where it reads the
-					// value: also a deferred field `carriedLabels` leaves out, since the target binds the memo of the seam whose struct
-					// it is handed, as where a fill passed on beneath another declaration of the label builds the seam again
-					// (`Scope.fillUnderConstruction`), where the enclosing value is another declaration's. The payload is read before the
-					// member returns, so no memo made of it captures the payload.
+					// value: also a deferred field `carriedLabels` leaves out where a call inside a fill passes a fill of this call on
+					// beneath another declaration of the label (`fillDeferredLabelsHiddenByReenteringCalls`), which builds the seam
+					// again (`Scope.fillUnderConstruction`): the target binds the memo of the seam whose struct it is handed, where the
+					// enclosing value is another declaration's. Elsewhere the caller's declaration is the one inline reads, which the
+					// branches below hand. The payload is read before the member returns, so no memo made of it captures the payload.
 					let source = HandedSource(field, readsMemo: parameter.bindsMemo, expression: "\(payloadName).\(field.memberName(bindingMemo: parameter.bindsMemo))")
 					return ("\(label.spelledAsArgumentLabel): \(source.handed(to: parameter, capturingExpression: true))", true)
 				} else if let ownParameter = parameters.first(where: { $0.property.label == label }) {
@@ -5817,6 +5821,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				callerMemoArgumentByLabel: callerMemoArgumentByLabel,
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				fillsTakingPayloadFields: fillsTakingPayloadFields,
+				labelsHiddenByReenteringCalls: Set(fillDeferredLabelsHiddenByReenteringCalls.values.joined()),
 			))
 		}
 		if let publicMockLevelFunctions {
