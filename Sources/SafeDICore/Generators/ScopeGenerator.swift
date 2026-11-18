@@ -7970,13 +7970,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// readable initializer of the mock's production tree takes it, in label order. A place built inside a `@Sendable`
 	/// function, or held in a `Sendable` wrapper, is the `@Sendable` family's. `mock()` lists them among its flat received
 	/// parameters by label. A builder a call of another module's public mock passes up for a hole type and family the mock
-	/// builds places of, with the type of the mock's builder (`passedUpBuilderFamilies`), is that builder, as the seam takes
-	/// one builder for both, and is no parameter of its own (`passedUpProperties`). The builders the calls pass up for a
-	/// hole type and family the mock builds no place of are one builder, which every such call is handed, when the calls
-	/// pass them up as one type, as the mock takes them: a builder a `@Sendable` builder function captures is of the
-	/// `@Sendable` family and taken `@Sendable`, so it joins the `@Sendable` builder of its hole type that a call passes up;
-	/// calls that pass them up as different types forward different values, an error the mock root reports
-	/// (`DependencyTreeGenerator.placesForwardingOtherValuesErrors`), so they stay parameters of their own.
+	/// builds places of, with the type of the mock's builder (`passedUpBuilderFamilies`), is that builder, and is no
+	/// parameter of its own (`passedUpProperties`). The builders the calls pass up for a hole type and family the mock
+	/// builds no place of are one builder, which every such call is handed, when the calls pass them up as one type; calls
+	/// that pass them up as different types forward different values, an error the mock root reports
+	/// (`DependencyTreeGenerator.placesForwardingOtherValuesErrors`), so they stay parameters of their own. Both comparisons
+	/// take a builder as the mock takes it: one a `@Sendable` builder function captures is of the `@Sendable` family and
+	/// taken `@Sendable`, so it is one builder with the `@Sendable` builder of its hole type, as an internal mock's own places
+	/// of a hole type built both directly and inside a `@Sendable` function share one `@Sendable` builder, where a seam's
+	/// initializer takes a builder of each family.
 	///
 	/// A builder is labeled from what it builds alone, as a seam's builder is (`DependencyTreeGenerator.stems(of:)`), with
 	/// `_` appended while another parameter of `mock()` has the label (`otherParameterLabels`, and the flat received
