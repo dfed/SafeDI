@@ -1503,6 +1503,48 @@ jobs:
               fi
             done
           done
+      # The documentation build (219 MB) and CodeQL's build (337 MB, saved by
+      # codeql.yml) are saved once per macOS runner image, and a run restores
+      # the one for its own image, so the copy for an older image is 0.56 GB
+      # nothing needs once GitHub has moved every runner. The image version
+      # decides, not the time an entry was saved: while GitHub is moving
+      # runners, a run on the older image can save after one on the newer.
+      # Such a run then finds its own image's copy gone and restores the
+      # newer image's build by prefix, which costs it a longer build and
+      # changes no result.
+      - name: Delete the Documentation and CodeQL Builds of Older Runner Images
+        timeout-minutes: 1
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        run: |
+          for prefix in spm-debug-macOS-xcode- codeql-swift-native-macOS-xcode-; do
+            if ! entries=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -F per_page=100 --jq '.actions_caches[] | "\(.id) \(.key)"' 2>&1); then
+              echo "::warning::Listing $REF's entries under $prefix failed: $(printf '%s' "$entries" | tr '\r\n' '  ')"
+              continue
+            fi
+            # <prefix><Xcode version>-<image version, three numbers>-<hash>
+            images=$(printf '%s\n' "$entries" | sed -n -E "s/^[0-9]+ $prefix[0-9.]+-([0-9]+\.[0-9]+\.[0-9]+)-.*$/\1/p")
+            newest=$(printf '%s\n' "$images" | sort -t . -k 1,1n -k 2,2n -k 3,3n | tail -n 1)
+            if [ -z "$newest" ]; then
+              echo "$REF has no entry under $prefix whose key names an image."
+              continue
+            fi
+            printf '%s\n' "$entries" | while read -r id key; do
+              image=$(printf '%s\n' "$key" | sed -n -E "s/^$prefix[0-9.]+-([0-9]+\.[0-9]+\.[0-9]+)-.*$/\1/p")
+              # A key this pattern does not read stays.
+              if [ -z "$image" ] || [ "$image" = "$newest" ]; then
+                continue
+              fi
+              if deleted=$(gh api -X DELETE "repos/$REPOSITORY/actions/caches/$id" 2>&1); then
+                echo "Deleted $key, older than image $newest."
+              else
+                echo "::warning::Deleting $key failed: $(printf '%s' "$deleted" | tr '\r\n' '  ')"
+              fi
+            done
+          done
 
   linux:
     name: Build and Test on Linux
