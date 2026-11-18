@@ -321,13 +321,14 @@ public struct SeamSignature: Sendable {
 		/// of its label is bound after the site. A fill whose tree receives such a label is an error, since inline the
 		/// receive reads that declaration.
 		public struct UncarriedDeclaration: Sendable {
-			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, parameterTakingType: TypeDescription? = nil, builtAfter: Property?, reason: Reason) {
+			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, parameterTakingType: TypeDescription? = nil, builtAfter: Property?, reason: Reason, isBoundFromCallersArgument: Bool = false) {
 				self.property = property
 				self.declaringType = declaringType
 				self.declarationLocation = declarationLocation
 				self.parameterTakingType = parameterTakingType
 				self.builtAfter = builtAfter
 				self.reason = reason
+				self.isBoundFromCallersArgument = isBoundFromCallersArgument
 			}
 
 			/// Why the declaration is bound after the site.
@@ -407,6 +408,13 @@ public struct SeamSignature: Sendable {
 			/// The property of the scope on the site's path that the declaration's scope builds before it, or `nil`.
 			public let builtAfter: Property?
 			public let reason: Reason
+			/// Whether it is a received value a public mock binds at its root from the optional parameter its caller passes
+			/// its own nearest declaration of the label to: a fill of the call reads the caller's declaration where the caller
+			/// binds this declaration's form, which is then the value the mock binds (`Scope.fillUnderConstruction`). A seam or
+			/// public mock that calls the mock and passes the place up keeps it so: the mock binds what that type's tree passes
+			/// it, which is the passing type's own caller's where nothing on the path to the call declares the label, and a
+			/// declaration on that path is reported where the place is filled (`boundByPassingUpSeam`).
+			public let isBoundFromCallersArgument: Bool
 		}
 
 		/// A declaration a cycle in the seam's tree hands the site's owner when it builds it again: the site lies in the body

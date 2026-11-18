@@ -998,7 +998,9 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// A fill of a seam call: the hole it fills, its key (see `ScopeGenerator.fillKey(of:)`), and its function's name.
 	struct Fill {
-		let hole: SeamSignature.Hole
+		/// The place the fill fills, without the declarations bound from the call's arguments that the caller binds itself
+		/// (`fillUnderConstruction`).
+		var hole: SeamSignature.Hole
 		let key: String
 		let functionName: String
 		/// The fields the fill can bind: its hole's, or every place's of a case nested by type, for the fill that generates
@@ -1146,6 +1148,15 @@ private struct ScopeGeneratorUnderConstruction {
 		let boundFields = fill.fields.filter { !$0.isDeferredParameter || isBoundFromStruct($0) }
 		fill.boundLabels = Set(boundFields.map(\.property.label))
 		fill.callerNearestDeclarations = childNearestDeclarations
+		// A value the called public mock binds at its root from the argument the call passes, outside the `@Sendable` function
+		// that builds the place, is the caller's own where the caller binds the value's form here: the call passes it, so the
+		// fill reads it from the caller's scope, as the twin's fill reads the seam's parameter. Where the caller binds another
+		// form or none, the mock may build a value of its own, which no fill can read: the declaration stays uncarried, a
+		// deliberate gap against the twin, whose seam takes the value as a parameter (`seam-holes.md`, and the message of
+		// `declarationBoundAfterSite` for such a declaration).
+		fill.hole.uncarriedDeclarations.removeAll { declaration in
+			declaration.isBoundFromCallersArgument && childNearestDeclarations.binds(declaration.property)
+		}
 		fill.callerLazilyInstantiatedInstanceProperties = childLazilyInstantiatedInstanceProperties
 		let fieldLabels = Set(boundFields.map(\.property.label))
 		var fieldInstanceProperties = Set<Property>()
@@ -2339,6 +2350,12 @@ extension NearestDeclarations {
 			}
 		}
 		return nil
+	}
+
+	/// Whether the nearest declaration of `property`'s label binds `property` itself, built before the scope.
+	func binds(_ property: Property) -> Bool {
+		guard let nearestDeclaration = self[property.label] else { return false }
+		return nearestDeclaration.bindings[property] != nil && !nearestDeclaration.formsBeingBuilt.contains(property)
 	}
 
 	/// Makes `property`, which provides `forms`, the nearest declaration of its label, hiding every other.

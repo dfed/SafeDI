@@ -455,7 +455,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func drawnValueProbes_describeKnownRight_inFirstGraphOfEachProbedCell() async throws {
 		let seeds = GraphFuzzerCallingMockCell.firstSeeds.filter { GraphFuzzerCallingMockDraw(seed: $0).valueProbes != nil }
-		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531])
+		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531, 550, 551, 552, 553, 554, 555])
 		for seed in seeds {
 			var filesToDelete = [URL]()
 			defer {
@@ -1113,6 +1113,26 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 	}
 
+	/// Seed 550 draws the first graph of `calledTypesReceivedValueInSendablePlace/internal/plain`, the first of its block: an
+	/// internal calling mock whose call of a public mock fills a place the called type builds inside a `@Sendable` function,
+	/// with a fill that reads a value the called type receives. The called mock binds at its root the value the calling mock
+	/// passes it, its own, so the fill reads that value as the twin's does, where the calling mock reported the value as
+	/// bound outside that function before (`SeamSignature.Hole.UncarriedDeclaration.isBoundFromCallersArgument`), which the
+	/// check reports as a mock rejected where its twin is accepted.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_fillsTwinsValue_whenDrawnFillInSendablePlaceReadsValueCalledTypeReceives() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 550)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 550)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .calledTypesReceivedValueInSendablePlace, caller: .internal, place: .plain))
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.map(\.label) == [])
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+		#expect(result.comparedValues == compileVerificationIsEnabled)
+	}
+
 	/// The seam caller's graphs share a builder between the caller's own places and the fill's, a fill that instantiates
 	/// its places as plain values outside every `@Sendable` function, in the pinned number of its twenty graphs.
 	@Test
@@ -1203,7 +1223,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 55)
+		#expect(GraphFuzzerCallingMockCell.all.count == 61)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
 		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)
