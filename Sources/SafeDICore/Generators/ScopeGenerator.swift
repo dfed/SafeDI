@@ -191,7 +191,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		passesUpBuilder = !passedUpHoles.isEmpty || propertiesToGenerate.contains(where: \.passesUpBuilder)
 		holdsCallReenteringEnclosingFill = holeCallArguments.contains { $0.enclosingFillKey != nil } || propertiesToGenerate.contains(where: \.holdsCallReenteringEnclosingFill)
-		self.typesDeclaredEscaping = Self.typesDeclaredEscaping(
+		typesDeclaredEscaping = Self.typesDeclaredEscaping(
 			instantiable: instantiable,
 			publicMockCall: publicMockCall,
 			seamCall: seamCall,
