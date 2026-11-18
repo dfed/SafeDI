@@ -2040,11 +2040,112 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		// `Inner`'s place is inside its own `@Sendable` function, so `Host` takes a `@Sendable` builder struct whose member of
 		// each call's property returns `Inner`'s `@Sendable` struct, wherever the call is.
 		let hostExtension = SafeDIToolSeamBuilderParameterTests.seamExtension(in: generated, named: "Host")
-		#expect(hostExtension.contains("public init(__safeDI_serviceSendableBuilder: SafeDISendableScope_Service.__safeDI_Builder<any Service>)"), "\(generated)")
-		let members = hostExtension.split(separator: "\n").filter { $0.contains("public let ") && $0.contains("-> Inner.SafeDISendableScope_Service.__safeDI_Builder<") }.map { $0.trimmingCharacters(in: .whitespaces) }
-		let innerMember = "public let inner_Sendable: @Sendable (inner_Sendable_Values) -> Inner.SafeDISendableScope_Service.__safeDI_Builder<__safeDI_Built>"
-		let heldMember = "public let held_Sendable: @Sendable (held_Sendable_Values) -> Inner.SafeDISendableScope_Service.__safeDI_Builder<__safeDI_Built>"
-		#expect(members == (route == "plain" ? [innerMember] : route == "sendable" ? [heldMember] : [innerMember, heldMember]))
+		let expectedHostExtensions = [
+			"plain": """
+			extension Host {
+			    nonisolated public enum SafeDISendableScope_Service {
+			        nonisolated public struct inner_Sendable_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let inner_Sendable: @Sendable (inner_Sendable_Values) -> Inner.SafeDISendableScope_Service.__safeDI_Builder<__safeDI_Built>
+
+			            public init(inner_Sendable: @escaping @Sendable (inner_Sendable_Values) -> Inner.SafeDISendableScope_Service.__safeDI_Builder<__safeDI_Built>) {
+			                self.inner_Sendable = inner_Sendable
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                self.inner_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_serviceSendableBuilder: SafeDISendableScope_Service.__safeDI_Builder<any Service>) {
+			        func __safeDI_inner() -> Inner {
+			            _ = Inner.__safeDI_Inner_8A60048B814A1B82.self
+			            return Inner(__safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder.inner_Sendable(SafeDISendableScope_Service.inner_Sendable_Values()))
+			        }
+			        let inner: Inner = __safeDI_inner()
+			        self.init(inner: inner)
+			    }
+			}
+			""",
+			"sendable": """
+			extension Host {
+			    nonisolated public enum SafeDISendableScope_Service {
+			        nonisolated public struct held_Sendable_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let held_Sendable: @Sendable (held_Sendable_Values) -> Inner.SafeDISendableScope_Service.__safeDI_Builder<__safeDI_Built>
+
+			            public init(held_Sendable: @escaping @Sendable (held_Sendable_Values) -> Inner.SafeDISendableScope_Service.__safeDI_Builder<__safeDI_Built>) {
+			                self.held_Sendable = held_Sendable
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                self.held_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_serviceSendableBuilder: SafeDISendableScope_Service.__safeDI_Builder<any Service>) {
+			        @Sendable nonisolated func __safeDI_held() -> Inner {
+			            _ = Inner.__safeDI_Inner_8A60048B814A1B82.self
+			            return Inner(__safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder.held_Sendable(SafeDISendableScope_Service.held_Sendable_Values()))
+			        }
+			        let held = SendableInstantiator<Inner>(__safeDI_held)
+			        self.init(held: held)
+			    }
+			}
+			""",
+			"both": """
+			extension Host {
+			    nonisolated public enum SafeDISendableScope_Service {
+			        nonisolated public struct inner_Sendable_Values: Sendable {}
+
+			        nonisolated public struct held_Sendable_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let inner_Sendable: @Sendable (inner_Sendable_Values) -> Inner.SafeDISendableScope_Service.__safeDI_Builder<__safeDI_Built>
+			            public let held_Sendable: @Sendable (held_Sendable_Values) -> Inner.SafeDISendableScope_Service.__safeDI_Builder<__safeDI_Built>
+
+			            public init(inner_Sendable: @escaping @Sendable (inner_Sendable_Values) -> Inner.SafeDISendableScope_Service.__safeDI_Builder<__safeDI_Built>, held_Sendable: @escaping @Sendable (held_Sendable_Values) -> Inner.SafeDISendableScope_Service.__safeDI_Builder<__safeDI_Built>) {
+			                self.inner_Sendable = inner_Sendable
+			                self.held_Sendable = held_Sendable
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			                self.inner_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.held_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_serviceSendableBuilder: SafeDISendableScope_Service.__safeDI_Builder<any Service>) {
+			        func __safeDI_inner() -> Inner {
+			            _ = Inner.__safeDI_Inner_8A60048B814A1B82.self
+			            return Inner(__safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder.inner_Sendable(SafeDISendableScope_Service.inner_Sendable_Values()))
+			        }
+			        let inner: Inner = __safeDI_inner()
+			        @Sendable nonisolated func __safeDI_held() -> Inner {
+			            _ = Inner.__safeDI_Inner_8A60048B814A1B82.self
+			            return Inner(__safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder.held_Sendable(SafeDISendableScope_Service.held_Sendable_Values()))
+			        }
+			        let held = SendableInstantiator<Inner>(__safeDI_held)
+			        self.init(inner: inner, held: held)
+			    }
+			}
+			""",
+		]
+		#expect(hostExtension == expectedHostExtensions[route], "\(generated)")
 		try await expectDifferentialValuesMatch(output, feature: feature, fulfillers: [fulfiller], root: root)
 	}
 

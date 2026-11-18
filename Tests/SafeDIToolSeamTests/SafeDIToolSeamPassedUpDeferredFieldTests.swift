@@ -576,6 +576,47 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 		""")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Other"]?.generatedFiles == ["Other.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension OtherRoot {
+		    public convenience init() {
+		        let chainToken = ChainToken()
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_96BDB6C170135367.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values) -> any HoleService {
+		                let chainToken = scope.chainToken
+		                func __safeDI_holeService() -> HoleImpl {
+		                    @Sendable func __safeDI_leafBuilder() -> ChainLeaf {
+		                        ChainLeaf(chainToken: chainToken)
+		                    }
+		                    let leafBuilder = SendableInstantiator<ChainLeaf>(__safeDI_leafBuilder)
+		                    return HoleImpl(leafBuilder: leafBuilder)
+		                }
+		                let holeService: any HoleService = __safeDI_holeService()
+		                return holeService
+		            }
+		            func __safeDI_holeServiceBuilder_Outer() -> Outer.SafeDIScope_HoleService.__safeDI_Builder<any HoleService> {
+		                .init(seam: { _ in __safeDI_holeServiceBuilder_Seam() })
+		            }
+		            func __safeDI_holeServiceBuilder_Seam() -> Seam.SafeDIScope_HoleService.__safeDI_Builder<any HoleService> {
+		                .init(holeService: { scope in __safeDI_holeServiceBuilder_Seam_holeService(scope) })
+		            }
+		            return Outer(__safeDI_chainToken: chainToken, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder_Outer())
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(chainToken: chainToken, outer: outer)
+		    }
+		}
+		"""])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, movingToFeature: "HoleImpl", probe: "OtherRoot()")
 	}
 
@@ -598,6 +639,51 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 		""")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let tokenReaderPath = try #require(output.modules["Other"]).fixtures["TokenReader.swift"]
+		#expect(output.modules["Other"]?.generatedFiles == ["Other.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension OtherRoot {
+		    public convenience init() {
+		        let chainToken = ChainToken()
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_96BDB6C170135367.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values) -> any HoleService {
+		                let chainToken = scope.chainToken
+		                func __safeDI_holeService() -> HoleImpl {
+		                    @Sendable func __safeDI_readerBuilder() -> TokenReader {
+		                        #sourceLocation(file: "\(tokenReaderPath)", line: 8)
+		                        let token: ChainToken = chainToken
+		                        #sourceLocation()
+		                        return TokenReader(token: token)
+		                    }
+		                    let readerBuilder = SendableInstantiator<TokenReader>(__safeDI_readerBuilder)
+		                    return HoleImpl(readerBuilder: readerBuilder)
+		                }
+		                let holeService: any HoleService = __safeDI_holeService()
+		                return holeService
+		            }
+		            func __safeDI_holeServiceBuilder_Outer() -> Outer.SafeDIScope_HoleService.__safeDI_Builder<any HoleService> {
+		                .init(seam: { _ in __safeDI_holeServiceBuilder_Seam() })
+		            }
+		            func __safeDI_holeServiceBuilder_Seam() -> Seam.SafeDIScope_HoleService.__safeDI_Builder<any HoleService> {
+		                .init(holeService: { scope in __safeDI_holeServiceBuilder_Seam_holeService(scope) })
+		            }
+		            return Outer(__safeDI_chainToken: chainToken, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder_Outer())
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(chainToken: chainToken, outer: outer)
+		    }
+		}
+		"""])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, movingToFeature: "HoleImpl", probe: "OtherRoot()")
 	}
 
@@ -684,6 +770,52 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 			], dependencies: ["Core", "Feature"]),
 		]
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Other"]?.generatedFiles == ["Other.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension OtherRoot {
+		    public convenience init() {
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_2A6802B99AE13E38.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_holeServiceBuilder_Seam_NestImpl_Scope_holeService(_ scope: Seam.SafeDIScope_HoleService.NestImpl_Scope.holeService_Values, chainToken: ChainToken?) -> any HoleService {
+		                func __safeDI_holeService() -> HoleImpl {
+		                    func __safeDI_relayBuilder() -> Relay {
+		                        _ = Relay.__safeDI_Relay_6E41D8FCDF4140B3.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                        return Relay(__safeDI_chainToken: chainToken)
+		                    }
+		                    let relayBuilder = Instantiator<Relay>(__safeDI_relayBuilder)
+		                    return HoleImpl(relayBuilder: relayBuilder)
+		                }
+		                let holeService: any HoleService = __safeDI_holeService()
+		                return holeService
+		            }
+		            func __safeDI_holeServiceBuilder_Outer() -> Outer.SafeDIScope_HoleService.__safeDI_Builder<any HoleService> {
+		                .init(seam: { _ in __safeDI_holeServiceBuilder_Seam() })
+		            }
+		            func __safeDI_holeServiceBuilder_Seam() -> Seam.SafeDIScope_HoleService.__safeDI_Builder<any HoleService> {
+		                .init(nestBuilder_nestServiceBuilder: { values in __safeDI_holeServiceBuilder_Seam_Nest(chainToken: values.chainToken) })
+		            }
+		            func __safeDI_holeServiceBuilder_Seam_NestImpl_Scope(chainToken: ChainToken?) -> Seam.SafeDIScope_HoleService.NestImpl_Scope.__safeDI_Builder<any HoleService> {
+		                .init(holeService: { scope in __safeDI_holeServiceBuilder_Seam_NestImpl_Scope_holeService(scope, chainToken: chainToken) })
+		            }
+		            func __safeDI_holeServiceBuilder_Seam_Nest(chainToken: ChainToken?) -> Nest.SafeDIScope_NestService.__safeDI_Builder<Seam.SafeDIScope_HoleService.NestImpl_Scope.__safeDI_Builder<any HoleService>> {
+		                .init(nestService: { _ in __safeDI_holeServiceBuilder_Seam_NestImpl_Scope(chainToken: chainToken) })
+		            }
+		            return Outer(__safeDI_chainToken: nil, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder_Outer())
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+		"""])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, movingToFeature: "HoleImpl", probe: "OtherRoot()")
 	}
 
