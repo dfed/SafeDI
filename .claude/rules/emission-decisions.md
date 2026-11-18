@@ -49,6 +49,10 @@ Every fill of one call reads the same caller declarations, so within one form ev
 
 No body's statements include an empty chunk of text: every child scope a body emits writes at least one line. The only scope that writes nothing is a hole without a site, which exists only in a tree built to compute a seam's signature (`SeamHoles.site(at:)`), and such a tree generates no code. So a constant's body counts its statements without filtering empty strings, as the instantiator and lazy bodies do.
 
+## A spelling holds no subtree text longer
+
+A scope's text holds its whole subtree, and every scope caches its own, so `generate`'s peak memory moves with how long each level keeps its children's text. A port spells what the inline text spelled with the same string operations: a block and the code around it in one interpolation (`BuilderNode.spelled(after:followedBy:)`), never a copy of the block with a line added; and a plan that holds a body's statements is consumed as it is joined (`RootInitializer.spelled(writing:)`), so the statements are released before the text around them is written, as the temporary they replaced was. Holding the root's children in its plan while its extension was written raised `generate`'s peak memory by 3 to 8% on deep inline graphs, such as issue #646's. Byte-identical output does not show it, so a port that changes how a body's text is built is measured against its base's peak memory.
+
 ## Where the ports live
 
 In `Sources/SafeDICore/Generators/Emission/`:

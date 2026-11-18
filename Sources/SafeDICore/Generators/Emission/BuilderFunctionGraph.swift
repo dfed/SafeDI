@@ -28,15 +28,16 @@
 struct BuilderFunctionGraph: Hashable, Sendable {
 	let body: [Statement]
 
-	/// The body's text, statement by statement.
-	var spelledStatements: [String] {
-		body.map(\.spelled)
+	/// The body's text: each statement's, on lines of its own. The graph is consumed, so its statements, which can hold the
+	/// text of a whole tree, are released once their text is joined, before the caller writes anything around it.
+	consuming func spelled() -> String {
+		body.map(\.spelled).joined(separator: "\n")
 	}
 }
 
 /// One line, or one block, a body writes, with one spelling for each kind.
 indirect enum Statement: Hashable, Sendable {
-	/// The `func` block of a builder function.
+	/// The `func` block of a builder function, its closing line ended.
 	case function(BuilderNode)
 	/// `let label[: Type] = value`, and what ends its line.
 	case binding(BindingDeclaration, Expression, lineEnd: String)
@@ -46,7 +47,7 @@ indirect enum Statement: Hashable, Sendable {
 	var spelled: String {
 		switch self {
 		case let .function(node):
-			node.spelled
+			node.spelled()
 		case let .binding(declaration, value, lineEnd):
 			"\(declaration.spelled) = \(value.spelled)\(lineEnd)"
 		case let .verbatim(text):
@@ -76,15 +77,19 @@ struct BuilderNode: Hashable, Sendable {
 	/// What ends the line that returns the value.
 	let lineEnd: String
 
-	/// The `func` block. A body without statements still writes the line they would take, as builder functions always have:
-	/// the scope above drops it where it indents the block.
-	var spelled: String {
+	/// The `func` block, its closing line ended, between `prefix` and `suffix`. A body without statements still writes the
+	/// line they would take, as builder functions always have: the scope above drops it where it indents the block.
+	///
+	/// One interpolation writes the whole text, the code around the block included: the block holds the text of its scope's
+	/// whole subtree, so adding a line or a prefix to the block afterwards would copy that subtree once more at every level.
+	func spelled(after prefix: String = "", followedBy suffix: String = "") -> String {
 		let parameterList = parameters.isEmpty ? "" : parameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
 		return """
-		\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable, isNonisolated: isNonisolated))func \(name)(\(parameterList)) -> \(returnType.asSource) {
+		\(prefix)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable, isNonisolated: isNonisolated))func \(name)(\(parameterList)) -> \(returnType.asSource) {
 		\(body.statements.joined(separator: "\n"))
 		\(ScopeGenerator.standardIndent)\(body.returnKeyword)\(value.spelled)\(lineEnd)
 		}
+		\(suffix)
 		"""
 	}
 }
