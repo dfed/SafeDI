@@ -594,8 +594,11 @@ jobs:
       # directory as from an empty one. Each of the three deletes the
       # restored directory's plugin outputs first, so that the generate
       # command runs in this build and the file its `grep` reads is one this
-      # build generated. The xcodebuild and Swift Build builds start empty:
-      # Swift Build runs the plugin's fallback only on a build from nothing. Release builds turn
+      # build generated. The two xcodebuild builds start from restored
+      # DerivedData the same way: Xcode plans a package's build with the
+      # plugin's in-process fallback whether DerivedData is empty or not. The
+      # Swift Build builds start empty: Swift Build runs the plugin's
+      # fallback only on a build from nothing. Release builds turn
       # optimization off because only the configuration matters here, and an
       # optimized build of swift-syntax takes several times longer.
       # One entry for the three directories, keyed without the commit and
@@ -617,6 +620,17 @@ jobs:
             ${{ runner.temp }}/native-release
             ${{ runner.temp }}/native-without-define
           key: example-native-scratch-v1-macOS-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved', 'Examples/Example Package Integration/Package.resolved', 'Examples/Example Package Integration/Package.swift') }}
+      # As the entry above, for the two xcodebuild builds, which took 141
+      # seconds from nothing and 12 from DerivedData kept through a fresh
+      # stamped checkout and a tar round trip (run 44203313851).
+      - name: Restore the xcodebuild Builds' DerivedData
+        id: xcodebuild-derived-data
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ runner.temp }}/xcodebuild-debug
+            ${{ runner.temp }}/xcodebuild-release
+          key: example-xcodebuild-derived-data-v1-macOS-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved', 'Examples/Example Package Integration/Package.resolved', 'Examples/Example Package Integration/Package.swift') }}
       - name: Report swift build Backends
         id: backends
         run: |
@@ -660,11 +674,13 @@ jobs:
       # The limit is twice the longest of ten runs, 3.6 minutes (run
       # 44041978606).
       - name: Build Package Integration (xcodebuild)
+        id: xcodebuild-debug
         timeout-minutes: 8
         if: ${{ !cancelled() }}
         run: |
           log="$RUNNER_TEMP/xcodebuild-debug.log"
           status=0
+          rm -rf "$RUNNER_TEMP/xcodebuild-debug/Build/Intermediates.noindex/BuildToolPluginIntermediates"
           pushd "Examples/Example Package Integration"
           xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -destination "platform=macOS" -derivedDataPath "$RUNNER_TEMP/xcodebuild-debug" > "$log" 2>&1 || status=$?
           popd
@@ -676,11 +692,13 @@ jobs:
       # Twice the longest of ten runs, 3.4 minutes (run 44041978606; the
       # median was 2.4).
       - name: Build Package Integration in release configuration (xcodebuild)
+        id: xcodebuild-release
         timeout-minutes: 7
         if: ${{ !cancelled() }}
         run: |
           log="$RUNNER_TEMP/xcodebuild-release.log"
           status=0
+          rm -rf "$RUNNER_TEMP/xcodebuild-release/Build/Intermediates.noindex/BuildToolPluginIntermediates"
           pushd "Examples/Example Package Integration"
           xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -configuration Release -destination "platform=macOS" -derivedDataPath "$RUNNER_TEMP/xcodebuild-release" SWIFT_OPTIMIZATION_LEVEL=-Onone SWIFT_COMPILATION_MODE=singlefile GCC_OPTIMIZATION_LEVEL=0 ONLY_ACTIVE_ARCH=YES > "$log" 2>&1 || status=$?
           popd
@@ -689,6 +707,14 @@ jobs:
           [ "$status" -eq 0 ] || { tail -n 100 "$log"; exit 1; }
           [ "$arguments" = expanded ]
           grep -q "DisabledEventLogger()" "$(find "$RUNNER_TEMP/xcodebuild-release/Build/Intermediates.noindex/BuildToolPluginIntermediates" -path "*/RootModule/SafeDIGenerator/SafeDIOutput/Root+SafeDI.swift")"
+      - name: Save the xcodebuild Builds' DerivedData
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && steps.xcodebuild-derived-data.outputs.cache-hit != 'true' && steps.xcodebuild-debug.outcome == 'success' && steps.xcodebuild-release.outcome == 'success' }}
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ runner.temp }}/xcodebuild-debug
+            ${{ runner.temp }}/xcodebuild-release
+          key: ${{ steps.xcodebuild-derived-data.outputs.cache-primary-key }}
       # A copy of the example without its `DEBUG` define shows which builds
       # read the conditions from the build settings: those must still wire
       # the right logger, and a build that passes the arguments through
@@ -1444,10 +1470,12 @@ jobs:
               echo "::warning::Deleting $key failed: $(printf '%s' "$deleted" | tr '\r\n' '  ')"
             fi
           done
-      # The integrations job's scratch directories are saved once per runner
-      # image and Package.resolved, about 2 GB before compression, and the
-      # entry before stays until it ages out. Only the newest is restored.
-      - name: Delete All but the Newest Native Scratch Directories
+      # The integrations job's scratch and DerivedData directories are saved
+      # once per runner image and Package.resolved, about 690 and 520 MB
+      # compressed (229 MB a scratch directory and 259 MB a DerivedData, run
+      # 44203313851), and the entry before stays until it ages out. Only the
+      # newest of each is restored.
+      - name: Delete All but the Newest Scratch Directories of the Integrations Job
         timeout-minutes: 1
         continue-on-error: true
         env:
@@ -1455,21 +1483,22 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           REF: ${{ github.ref }}
         run: |
-          prefix=example-native-scratch-v1-
-          if ! older=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -f sort=created_at -f direction=desc -F per_page=100 --jq '.actions_caches[1:][] | "\(.id) \(.key)"' 2>&1); then
-            echo "::warning::Listing $REF's entries under $prefix failed: $(printf '%s' "$older" | tr '\r\n' '  ')"
-            exit 0
-          fi
-          if [ -z "$older" ]; then
-            echo "$REF has one entry or none under $prefix."
-            exit 0
-          fi
-          printf '%s\n' "$older" | while read -r id key; do
-            if deleted=$(gh api -X DELETE "repos/$REPOSITORY/actions/caches/$id" 2>&1); then
-              echo "Deleted $key."
-            else
-              echo "::warning::Deleting $key failed: $(printf '%s' "$deleted" | tr '\r\n' '  ')"
+          for prefix in example-native-scratch-v1- example-xcodebuild-derived-data-v1-; do
+            if ! older=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -f sort=created_at -f direction=desc -F per_page=100 --jq '.actions_caches[1:][] | "\(.id) \(.key)"' 2>&1); then
+              echo "::warning::Listing $REF's entries under $prefix failed: $(printf '%s' "$older" | tr '\r\n' '  ')"
+              continue
             fi
+            if [ -z "$older" ]; then
+              echo "$REF has one entry or none under $prefix."
+              continue
+            fi
+            printf '%s\n' "$older" | while read -r id key; do
+              if deleted=$(gh api -X DELETE "repos/$REPOSITORY/actions/caches/$id" 2>&1); then
+                echo "Deleted $key."
+              else
+                echo "::warning::Deleting $key failed: $(printf '%s' "$deleted" | tr '\r\n' '  ')"
+              fi
+            done
           done
 
   linux:
