@@ -1797,14 +1797,23 @@ extension DependencyTreeGenerator {
 			}
 		}
 		/// The receive of `instance`, or of its optional form, in the fill's tree declared first in source order, by the type
-		/// that receives it.
+		/// that receives it: a receive of the label, or an alias whose fulfilling property is the instance, which the finding
+		/// names by that property, as it names a reader through an alias.
 		func firstReader(of instance: Property) -> DependencyTreeGeneratorError.FillFinding.InstanceReader? {
 			var readers = [DependencyTreeGeneratorError.FillFinding.InstanceReader]()
 			var generatorsToVisit = [child]
 			while let generator = generatorsToVisit.popLast() {
 				for dependency in generator.builtInstantiable?.dependencies ?? [] {
-					if case .received = dependency.source, dependency.property.asUnwrappedProperty == instance, let type = generator.builtInstantiable?.concreteInstantiable {
-						readers.append(.init(property: dependency.property, type: type, declarationLocation: dependency.declarationLocation))
+					let receivedProperty: Property? = switch dependency.source {
+					case .received:
+						dependency.property
+					case let .aliased(fulfillingProperty, _, _):
+						fulfillingProperty
+					case .instantiated, .forwarded:
+						nil
+					}
+					if let receivedProperty, receivedProperty.asUnwrappedProperty == instance, let type = generator.builtInstantiable?.concreteInstantiable {
+						readers.append(.init(property: receivedProperty, type: type, declarationLocation: dependency.declarationLocation))
 					}
 				}
 				generatorsToVisit.append(contentsOf: generator.children)
@@ -1891,11 +1900,13 @@ extension DependencyTreeGenerator {
 			} else if !readsMemoOfItsOwnKind(property), property.propertyType == .sendableLazilyInstantiated, !property.typeDescription.isOptional,
 			          let instance = property.asLazilyInstantiatedInstanceProperty,
 			          let routes = fill.fillPlainMemoRoutesOfSendableWrapperReads[property.label],
-			          let memo = fill.fillFields.first(where: { $0.property.label == property.label && $0.bindsMemo && $0.deferral == .deferred(isSendable: false) && $0.property.asUnwrappedProperty == instance }),
+			          let memo = fill.fillFields.first(where: { $0.property.label == property.label && $0.deferral == .deferred(isSendable: false) && $0.property.asUnwrappedProperty == instance }),
 			          let instanceReader = firstReader(of: instance)
 			{
 				// The fill takes a `LazilyInstantiated` some route hands, which is no `SendableLazilyInstantiated`, where its tree reads
-				// the value too: generation found it (`ScopeGenerator.fillPlainMemoRoutesOfSendableWrapperReads`). A read of the
+				// the value too: generation found it (`ScopeGenerator.fillPlainMemoRoutesOfSendableWrapperReads`). Where the tree reads
+				// the label inside a `@Sendable` function, the fill binds the memo's value rather than the memo
+				// (`ScopeGenerator.fillDeferredLabelsReadInsideSendableFunction`), which the wrapper's reader cannot take either. A read of the
 				// optional wrapper only if available is a deliberate leniency: generation leaves it out (`fillSendableWrapperReads`),
 				// and the fill builds it where one module rejects the graph for reading the label in two forms.
 				findings.append(.init(hole: hole, kind: .sendableWrapperReadBesidePlainMemo(reader: reader, memo: memo, instanceReader: instanceReader, routes: routes)))
@@ -2511,10 +2522,11 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					SourceDiagnostic(severity: .note, location: field.declarationLocation, message: "`\(field.declaringType.asSource)` receives `\(field.property.asSource)` here."),
 				]
 			case let .declarationHiddenByField(reader, declaration, field, _):
-				let receive = reader.isOnlyIfAvailable ? "@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)" : "@\(Dependency.Source.receivedRawValue)"
 				let receivingSeam = "`\(declaration.receivingSeam.asSource)`"
+				// The seam receives the wrapper the declaration provides, required, as its tree receives the instance: a seam
+				// whose tree receives one label in two forms, an optional and a required one, is rejected.
 				return [
-					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which `\(declaration.declaringType.asSource)` builds where it calls `\(declaration.calledSeam.asSource)`, but \(scope) \(scopeCarries) only its instance, `\(field.property.asSource)`, which \(receivingSeam)’s tree receives. Declare `\(receive) let \(reader.property.asSource)` on \(receivingSeam), so the \(namesSeveralBuilders ? "builders’ values structs carry" : "builder’s values struct carries") it."),
+					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which `\(declaration.declaringType.asSource)` builds where it calls `\(declaration.calledSeam.asSource)`, but SafeDI hands \(namedBuilders) only its instance, `\(field.property.asSource)`, which \(receivingSeam)’s tree receives. Declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on \(receivingSeam), so SafeDI hands it to the builder\(namesSeveralBuilders ? "s" : "")."),
 					SourceDiagnostic(severity: .note, location: declaration.declarationLocation, message: "`\(declaration.declaringType.asSource)` declares `\(declaration.property.asSource)` here."),
 				]
 			case let .sendableWrapperReadBesidePlainMemo(reader, memo, instanceReader, routes):
@@ -2526,8 +2538,15 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				let trees = seams.count > 1 ? "trees read" : "tree reads"
 				// The reader requires the wrapper, so the value it receives instead is required too.
 				let instance = reader.property.asLazilyInstantiatedInstanceProperty ?? instanceReader.property
+				let builderTrees = seams.count > 1 ? "those builders’ trees receive" : "that builder’s tree receives"
+				let wrapperRemedy = "receive `\(reader.property.asSource)` wherever \(builderTrees) `\(instanceReader.property.asSource)`"
+				// Where the tree reads the label inside a `@Sendable` function, the fill binds the memo's value, which it creates where
+				// the fill is handed its values struct: a reader of the value there would read one created before inline creates it.
+				let remedy = memo.bindsMemo
+					? "Receive `\(instance.asSource)` on `\(reader.type.asSource)`, or \(wrapperRemedy)."
+					: "\(wrapperRemedy.prefix(1).uppercased())\(wrapperRemedy.dropFirst())."
 				var diagnostics = [
-					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(scope) \(scopeCarries) only as `\(memoProperty.asSource)`, since \(listed(seams)) \(trees) `\(reader.property.label)` outside a `@Sendable` function and `\(instanceReader.type.asSource)` receives its instance, `\(instanceReader.property.asSource)`. Receive `\(instance.asSource)` on `\(reader.type.asSource)`, or receive `\(reader.property.asSource)` wherever that builder’s tree receives `\(instanceReader.property.asSource)`."),
+					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which SafeDI hands \(namedBuilders) only as `\(memoProperty.asSource)`, since \(listed(seams)) \(trees) `\(reader.property.label)` outside a `@Sendable` function and `\(instanceReader.type.asSource)` receives its instance, `\(instanceReader.property.asSource)`. \(remedy)"),
 					SourceDiagnostic(severity: .note, location: instanceReader.declarationLocation, message: "`\(instanceReader.type.asSource)` receives `\(instanceReader.property.asSource)` here."),
 				]
 				// Seams that build one type in their trees note its receive once.
