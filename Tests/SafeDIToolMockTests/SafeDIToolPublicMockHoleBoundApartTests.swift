@@ -25,11 +25,10 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// `Screen` instantiates a hole whose label a type in the tree of a dependency `Screen` receives receives as another type,
-/// so a public mock binds the hole's site apart from its label, and the mock has another place, whose builder it would hand
-/// `Screen`'s values by label while it holds two under the hole's. A public mock is rejected, whichever of the two places is
-/// declared first. An internal mock, and a listed type's, takes the hole's dependency as a parameter under its label and
-/// has no site, so it accepts the shape: a deliberate gap. The neighbours that bind no hole apart beside another place are
-/// generated.
+/// so a public mock would bind the hole's site apart from its label and hand its builders `Screen`'s values by label while
+/// it holds two under the hole's. A public mock is rejected, whatever other place it has and in whichever order `Screen`
+/// declares its places. An internal mock, and a listed type's, takes the hole's dependency as a parameter under its label
+/// and has no site, so it accepts the shape: a deliberate gap. The neighbours that bind no hole apart are generated.
 struct SafeDIToolPublicMockHoleBoundApartTests: ~Copyable {
 	// MARK: Initialization
 
@@ -47,7 +46,7 @@ struct SafeDIToolPublicMockHoleBoundApartTests: ~Copyable {
 
 	@Test(arguments: HoleBoundApartShape.allShapes)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsHoleBoundApartError_whenPublicMockHasPlaceBesideHoleBoundApart(shape: HoleBoundApartShape) async {
+	mutating func mock_throwsHoleBoundApartError_whenPublicMockBindsHoleApart(shape: HoleBoundApartShape) async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				shape.diagnostics.map { diagnostic in
@@ -72,7 +71,7 @@ struct SafeDIToolPublicMockHoleBoundApartTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Screen.swift"]):8:5: error: SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Widget` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix.
+				\(fixtures["Screen.swift"]):8:5: error: SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Widget` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix.
 				\(fixtures["Settings.swift"]):7:5: note: `gizmo: Widget` is received here
 				"""
 			},
@@ -117,7 +116,7 @@ struct SafeDIToolPublicMockHoleBoundApartTests: ~Copyable {
 
 	@Test(arguments: [MockCaptureCaller.internal, .listed], HoleBoundApartShape.allShapes)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_generatesMock_whenInternalOrListedMockHasPlaceBesideHoleBoundApartInPublicMock(caller: MockCaptureCaller, shape: HoleBoundApartShape) async throws {
+	mutating func mock_generatesMock_whenInternalOrListedMockTakesHolePublicMockBindsApart(caller: MockCaptureCaller, shape: HoleBoundApartShape) async throws {
 		// The mock takes `Screen`'s hole as a parameter under its label and names the receive's value apart, so it has no site
 		// and hands no builder anything.
 		let output = try await executeSafeDIToolTest(
@@ -145,7 +144,7 @@ struct SafeDIToolPublicMockHoleBoundApartTests: ~Copyable {
 
 	@Test(arguments: HoleBoundApartControl.allControls)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_generatesMock_whenNoHoleIsBoundApartBesideAnotherPlace(control: HoleBoundApartControl) async throws {
+	mutating func mock_generatesMock_whenPublicMockBindsNoHoleApart(control: HoleBoundApartControl) async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: control.files,
 			buildSwiftOutputDirectory: true,
@@ -161,7 +160,7 @@ struct SafeDIToolPublicMockHoleBoundApartTests: ~Copyable {
 	private var filesToDelete: [URL]
 }
 
-/// A graph whose public mock of `Screen` binds a site of one of `Screen`'s holes apart from its label, beside another place.
+/// A graph whose public mock of `Screen` would bind a site of one of `Screen`'s holes apart from its label.
 struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 	/// A diagnostic the public mock's generation reports, at a line and column of a fixture file.
 	struct Diagnostic: Sendable {
@@ -225,7 +224,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 9, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 9, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Settings.swift", line: 7, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -297,7 +296,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 16, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -369,7 +368,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 7, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 7, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 16, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -449,7 +448,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 16, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -530,7 +529,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 7, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 7, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 16, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -603,7 +602,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 16, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -675,7 +674,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 7, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 7, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 16, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -756,7 +755,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 16, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -842,7 +841,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 7, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 7, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 16, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -921,7 +920,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 17, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -996,7 +995,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 7, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 7, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 17, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -1072,7 +1071,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 18, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -1147,7 +1146,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Widget?` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Widget?` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 17, column: 5, severity: "note", message: "`gizmo: Widget?` is received here"),
 			],
 			internalMockBody: """
@@ -1229,7 +1228,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Widget?` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Widget?` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 17, column: 5, severity: "note", message: "`gizmo: Widget?` is received here"),
 			],
 			internalMockBody: """
@@ -1311,7 +1310,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 10, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: any GizmoProtocol`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: any GizmoProtocol` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 10, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: any GizmoProtocol`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: any GizmoProtocol` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 19, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -1399,7 +1398,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 25, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -1491,7 +1490,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 9, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 9, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 17, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -1586,7 +1585,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 25, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -1688,7 +1687,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 25, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -1785,7 +1784,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Instantiator<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: Instantiator<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Instantiator<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: Instantiator<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 17, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -1872,7 +1871,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 17, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -1959,7 +1958,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Widget` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Widget` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 17, column: 5, severity: "note", message: "`gizmo: Widget` is received here"),
 			],
 			internalMockBody: """
@@ -2045,7 +2044,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 9, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 9, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 18, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -2133,7 +2132,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 17, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -2217,7 +2216,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Widget` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Widget` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 17, column: 5, severity: "note", message: "`gizmo: Widget` is received here"),
 			],
 			internalMockBody: """
@@ -2301,7 +2300,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 				""",
 			],
 			diagnostics: [
-				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand the right one to the other builders `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
 				.init(fileName: "Screen.swift", line: 17, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
 			],
 			internalMockBody: """
@@ -2353,20 +2352,8 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			    }
 			""",
 		),
-	]
-}
-
-/// A graph next to `HoleBoundApartShape` that binds no site of a hole apart beside another place, which a public mock
-/// generates, with the mock it generates.
-struct HoleBoundApartControl: CustomTestStringConvertible, Sendable {
-	let testDescription: String
-	let files: [String]
-	/// The whole mock file of `Screen`, given the path of `Screen.swift`, which a `#sourceLocation` directive names.
-	let mock: @Sendable (_ screenFixturePath: String) -> String
-
-	static let allControls: [HoleBoundApartControl] = [
-		HoleBoundApartControl(
-			testDescription: "single hole held as itself beside a built Instantiator receive, public caller",
+		HoleBoundApartShape(
+			testDescription: "built Instantiator receive, single hole held as itself",
 			files: [
 				"""
 				@Instantiable(generateMock: .public)
@@ -2397,35 +2384,14 @@ struct HoleBoundApartControl: CustomTestStringConvertible, Sendable {
 				public final class Gizmo: Instantiable { public init() {} }
 				""",
 			],
-			mock: { _ in """
-			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-			// Any modifications made to this file will be overwritten on subsequent builds.
-			// Please refrain from editing this file directly.
-
-			#if DEBUG
-			extension Screen {
-			    nonisolated public enum SafeDIMockScope_Gizmo {
-			        nonisolated public struct gizmo_Values {
-			            public let settingsBuilder: Instantiator<Settings>
-			        }
-
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let gizmo: (gizmo_Values) -> __safeDI_Built
-
-			            public init(gizmo: @escaping (gizmo_Values) -> __safeDI_Built) {
-			                self.gizmo = gizmo
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.gizmo = { _ in __safeDI_builder() }
-			            }
-			        }
-			    }
-
+			diagnostics: [
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 16, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
+			],
+			internalMockBody: """
 			    /// Overrides for the mock dependency tree.
-			    nonisolated public struct SafeDIOverrides {
-			        public init(
+			    struct SafeDIOverrides {
+			        init(
 			            gizmo: (() -> Widget)? = nil,
 			            settingsBuilder: ((Instantiator<Widget>) -> Settings)? = nil
 			        ) {
@@ -2435,8 +2401,8 @@ struct HoleBoundApartControl: CustomTestStringConvertible, Sendable {
 			            )
 			        }
 
-			        public var gizmo: (() -> Widget)? { __safeDI_storage.gizmo }
-			        public var settingsBuilder: ((Instantiator<Widget>) -> Settings)? { __safeDI_storage.settingsBuilder }
+			        var gizmo: (() -> Widget)? { __safeDI_storage.gizmo }
+			        var settingsBuilder: ((Instantiator<Widget>) -> Settings)? { __safeDI_storage.settingsBuilder }
 
 			        private let __safeDI_storage: __safeDI_Storage
 
@@ -2454,41 +2420,242 @@ struct HoleBoundApartControl: CustomTestStringConvertible, Sendable {
 			        }
 			    }
 
-			    public static func mock(
-			        gizmoBuilder: @escaping () -> Gizmo,
-			        gizmo: Instantiator<Widget>? = nil,
-			        settingsBuilder: Instantiator<Settings>? = nil,
-			        safeDIOverrides: SafeDIOverrides = .init()
-			    ) -> Screen {
-			        Screen.__safeDI_mock(gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder), gizmo: gizmo, settingsBuilder: settingsBuilder, safeDIOverrides: safeDIOverrides)
-			    }
-
-			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
-			    public static func __safeDI_mock(
-			        gizmoBuilder __safeDI_gizmoBuilder: Screen.SafeDIMockScope_Gizmo.__safeDI_Builder<Gizmo>,
-			        gizmo: Instantiator<Widget>? = nil,
-			        settingsBuilder: Instantiator<Settings>? = nil,
+			    static func mock(
+			        gizmo_Gizmo: Gizmo,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_gizmo() -> Widget {
 			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
 			        }
-			        let gizmo = if let gizmo { gizmo } else { Instantiator<Widget>(__safeDI_gizmo) }
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
 			        func __safeDI_settingsBuilder() -> Settings {
 			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        let settingsBuilder = if let settingsBuilder { settingsBuilder } else { Instantiator<Settings>(__safeDI_settingsBuilder) }
-			        let gizmo_Gizmo: Gizmo = __safeDI_gizmoBuilder.gizmo(SafeDIMockScope_Gizmo.gizmo_Values(settingsBuilder: settingsBuilder))
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_Gizmo)
 			    }
-			}
-
-			extension Screen {
-			    public enum __safeDI_Screen_mock_970B46925E2397B1 {}
-			}
-			#endif
-			""" },
+			""",
 		),
+		HoleBoundApartShape(
+			testDescription: "built Instantiator receive, single hole held as itself, which a child built as itself receives",
+			files: [
+				"""
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    public init(settingsBuilder: Instantiator<Settings>, gizmo: Gizmo, panel: Panel) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let settingsBuilder: Instantiator<Settings>
+				    @Instantiated public let gizmo: Gizmo
+				    @Instantiated public let panel: Panel
+				}
+				@Instantiable
+				public final class Panel: Instantiable {
+				    public init(gizmo: Gizmo) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let gizmo: Gizmo
+				}
+				@Instantiable
+				public final class Settings: Instantiable {
+				    public init(gizmo: Instantiator<Widget>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let gizmo: Instantiator<Widget>
+				}
+				@Instantiable
+				public final class Widget: Instantiable {
+				    public init() {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+
+				}
+				public final class Gizmo: Instantiable { public init() {} }
+				""",
+			],
+			diagnostics: [
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: Gizmo` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 25, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
+			],
+			internalMockBody: """
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            panel: ((Gizmo) -> Panel)? = nil,
+			            gizmo: (() -> Widget)? = nil,
+			            settingsBuilder: ((Instantiator<Widget>) -> Settings)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                panel: panel,
+			                gizmo: gizmo,
+			                settingsBuilder: settingsBuilder
+			            )
+			        }
+
+			        var panel: ((Gizmo) -> Panel)? { __safeDI_storage.panel }
+			        var gizmo: (() -> Widget)? { __safeDI_storage.gizmo }
+			        var settingsBuilder: ((Instantiator<Widget>) -> Settings)? { __safeDI_storage.settingsBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                panel: ((Gizmo) -> Panel)?,
+			                gizmo: (() -> Widget)?,
+			                settingsBuilder: ((Instantiator<Widget>) -> Settings)?
+			            ) {
+			                self.panel = panel
+			                self.gizmo = gizmo
+			                self.settingsBuilder = settingsBuilder
+			            }
+
+			            let panel: ((Gizmo) -> Panel)?
+			            let gizmo: (() -> Widget)?
+			            let settingsBuilder: ((Instantiator<Widget>) -> Settings)?
+			        }
+			    }
+
+			    static func mock(
+			        gizmo_Gizmo: Gizmo,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_panel() -> Panel {
+			            let gizmo: Gizmo = gizmo_Gizmo
+			            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(gizmo) } else { Panel(gizmo: gizmo) }
+			        }
+			        let panel: Panel = __safeDI_panel()
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
+			        }
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_Gizmo, panel: panel)
+			    }
+			""",
+		),
+		HoleBoundApartShape(
+			testDescription: "built Instantiator receive, single hole held in a LazilyInstantiated, which a child built as itself receives",
+			files: [
+				"""
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    public init(settingsBuilder: Instantiator<Settings>, gizmo: LazilyInstantiated<Gizmo>, panel: Panel) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let settingsBuilder: Instantiator<Settings>
+				    @Instantiated public let gizmo: LazilyInstantiated<Gizmo>
+				    @Instantiated public let panel: Panel
+				}
+				@Instantiable
+				public final class Panel: Instantiable {
+				    public init(gizmo: LazilyInstantiated<Gizmo>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let gizmo: LazilyInstantiated<Gizmo>
+				}
+				@Instantiable
+				public final class Settings: Instantiable {
+				    public init(gizmo: Instantiator<Widget>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let gizmo: Instantiator<Widget>
+				}
+				@Instantiable
+				public final class Widget: Instantiable {
+				    public init() {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+
+				}
+				public final class Gizmo: Instantiable { public init() {} }
+				""",
+			],
+			diagnostics: [
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: Instantiator<Widget>` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix."),
+				.init(fileName: "Screen.swift", line: 25, column: 5, severity: "note", message: "`gizmo: Instantiator<Widget>` is received here"),
+			],
+			internalMockBody: """
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            panel: ((LazilyInstantiated<Gizmo>) -> Panel)? = nil,
+			            gizmo: (() -> Widget)? = nil,
+			            settingsBuilder: ((Instantiator<Widget>) -> Settings)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                panel: panel,
+			                gizmo: gizmo,
+			                settingsBuilder: settingsBuilder
+			            )
+			        }
+
+			        var panel: ((LazilyInstantiated<Gizmo>) -> Panel)? { __safeDI_storage.panel }
+			        var gizmo: (() -> Widget)? { __safeDI_storage.gizmo }
+			        var settingsBuilder: ((Instantiator<Widget>) -> Settings)? { __safeDI_storage.settingsBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                panel: ((LazilyInstantiated<Gizmo>) -> Panel)?,
+			                gizmo: (() -> Widget)?,
+			                settingsBuilder: ((Instantiator<Widget>) -> Settings)?
+			            ) {
+			                self.panel = panel
+			                self.gizmo = gizmo
+			                self.settingsBuilder = settingsBuilder
+			            }
+
+			            let panel: ((LazilyInstantiated<Gizmo>) -> Panel)?
+			            let gizmo: (() -> Widget)?
+			            let settingsBuilder: ((Instantiator<Widget>) -> Settings)?
+			        }
+			    }
+
+			    static func mock(
+			        gizmo_LazilyInstantiated__Gizmo: LazilyInstantiated<Gizmo>,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_panel() -> Panel {
+			            let gizmo: LazilyInstantiated<Gizmo> = gizmo_LazilyInstantiated__Gizmo
+			            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(gizmo) } else { Panel(gizmo: gizmo) }
+			        }
+			        let panel: Panel = __safeDI_panel()
+			        func __safeDI_gizmo() -> Widget {
+			            if let safeDIBuilder = safeDIOverrides.gizmo { safeDIBuilder() } else { Widget() }
+			        }
+			        let gizmo = Instantiator<Widget>(__safeDI_gizmo)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_LazilyInstantiated__Gizmo, panel: panel)
+			    }
+			""",
+		),
+	]
+}
+
+/// A graph next to `HoleBoundApartShape` that binds no site of a hole apart, which a public mock generates, with the mock
+/// it generates.
+struct HoleBoundApartControl: CustomTestStringConvertible, Sendable {
+	let testDescription: String
+	let files: [String]
+	/// The whole mock file of `Screen`, given the path of `Screen.swift`, which a `#sourceLocation` directive names.
+	let mock: @Sendable (_ screenFixturePath: String) -> String
+
+	static let allControls: [HoleBoundApartControl] = [
 		HoleBoundApartControl(
 			testDescription: "two holes and no shared label, public caller",
 			files: [

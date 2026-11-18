@@ -1390,15 +1390,15 @@ struct PublicMockFinding: Hashable, Sendable {
 	}
 
 	/// `holeDependency`, a hole of `instantiable` the mock builds with a builder `mock()` takes, shares its label with
-	/// `receive`, which the mock binds beside it, and the mock has another place, whose builder it cannot hand the right
-	/// value of the label (`ScopeGenerator.publicMockHoleSiteBoundApartFinding`). Reported at the hole's declaration, with a
-	/// note at the receive. The one remedy renames the hole, which is local to `instantiable`: renaming the receive would
+	/// `receive`, which the mock binds beside it, so the mock cannot hand the builders `mock()` is passed the right value of
+	/// the label (`ScopeGenerator.publicMockHoleSiteBoundApartFinding`). Reported at the hole's declaration, with a note at
+	/// the receive. The one remedy renames the hole, which is local to `instantiable`: renaming the receive would
 	/// mean renaming the declaration that production hands it too.
 	static func holeSiteBoundApart(_ holeDependency: Dependency, receive: (receivingType: TypeDescription, receivedProperty: Property, declarationLocation: Dependency.DeclarationLocation?), of instantiable: Instantiable) -> PublicMockFinding {
 		let typeName = "`\(instantiable.concreteInstantiable.asSource)`"
 		let hole = "`\(holeDependency.property.asSource)`"
 		let receivedProperty = "`\(receive.receivedProperty.asSource)`"
-		let message = "SafeDI cannot generate the public mock of \(typeName): the mock builds \(hole), which \(typeName) instantiates, with a builder `mock()` is passed, and `\(receive.receivingType.asSource)` receives \(receivedProperty) with the same label, so the mock holds two values labeled `\(holeDependency.property.label)` and cannot hand the right one to the other builders `mock()` is passed. Declare \(hole) on \(typeName) under another label to fix."
+		let message = "SafeDI cannot generate the public mock of \(typeName): the mock builds \(hole), which \(typeName) instantiates, with a builder `mock()` is passed, and `\(receive.receivingType.asSource)` receives \(receivedProperty) with the same label, so the mock holds two values labeled `\(holeDependency.property.label)` and cannot hand `\(holeDependency.property.label)` to the builder `mock()` is passed. Declare \(hole) on \(typeName) under another label to fix."
 		return PublicMockFinding(sourceDiagnostics: [
 			SourceDiagnostic(severity: .error, location: holeDependency.declarationLocation, message: message),
 			SourceDiagnostic(severity: .note, location: receive.declarationLocation, message: "\(receivedProperty) is received here"),
@@ -1563,30 +1563,25 @@ extension ScopeGenerator {
 		return findings
 	}
 
-	/// A site of a hole of the mocked type that the mock binds apart from its label (`renamingAliases`), because a type in
-	/// the tree of a dependency the mocked type receives receives the label in a form the hole's declaration does not
-	/// provide, when the mock has a place besides that site. The builder of every other place is handed the values the
-	/// mocked type holds by their labels, and the mock holds two under this one, so it cannot hand the right one. The
-	/// sites bound apart are the ones `generateMockRootCode` binds apart: both read `mockRootTopLevelNames`. Whether the
-	/// other place comes before or after the site in the mocked type's declaration order is not consulted, so that
-	/// reordering two properties never makes the error appear or go away. The first such hole in the mocked type's
-	/// declaration order is reported, with a note at the first receive of its label the hole does not provide, in the order
-	/// the mock's tree first receives its dependencies.
+	/// A site of a hole of the mocked type that the mock would bind apart from its label (`renamingAliases`), because a type
+	/// in the tree of a dependency the mocked type receives receives the label in a form the hole's declaration does not
+	/// provide. The mock hands the builders `mock()` is passed the values the mocked type holds by their labels, and would
+	/// hold two under this one, so it cannot hand the right one: to the builder of another place, or to the site's own
+	/// builder, whose values can hold one built from the site. Every such site is rejected, whatever else the mock holds and
+	/// in whichever order the mocked type declares it, so `renamingAliases` never binds a site apart. The sites bound apart
+	/// are the ones `generateMockRootCode` binds apart: both read `mockRootTopLevelNames`. The first such hole in the mocked
+	/// type's declaration order is reported, with a note at the first receive of its label the hole does not provide, in
+	/// the order the mock's tree first receives its dependencies.
 	///
 	/// A deliberate gap: an internal mock, and a listed type's, takes such a dependency as a parameter under its label and
-	/// has no site, so it accepts the shape (`renamingAliases` says so too). A public mock whose only place is the site
-	/// hands that builder nothing under the label, and is accepted too.
+	/// has no site, so it accepts the shape (`renamingAliases` says so too).
 	private func publicMockHoleSiteBoundApartFinding(of instantiable: Instantiable, parameters: MockRootParameters) -> PublicMockFinding? {
-		guard let places = parameters.mockBuilders?.holes else { return nil }
 		let namesAliasesAreBoundApartFrom = Self.mockRootTopLevelNames(of: parameters, parameterNames: Self.mockRootParameterNames(of: parameters)).namesAliasesAreBoundApartFrom
-		var boundApartSiteByLabel = [String: SeamSignature.Hole]()
-		for case let .alias(alias) in parameters.parameterTree where Self.isBoundApart(alias, from: namesAliasesAreBoundApartFrom) {
-			if let site = alias.holeSite, places.contains(where: { $0.site != site.site }) {
-				boundApartSiteByLabel[alias.property.label] = site
-			}
+		var boundApartHoleLabels = Set<String>()
+		for case let .alias(alias) in parameters.parameterTree where alias.holeSite != nil && Self.isBoundApart(alias, from: namesAliasesAreBoundApartFrom) {
+			boundApartHoleLabels.insert(alias.property.label)
 		}
-		guard !boundApartSiteByLabel.isEmpty,
-		      let holeDependency = instantiable.dependencies.first(where: { boundApartSiteByLabel[$0.property.label] != nil }),
+		guard let holeDependency = instantiable.dependencies.first(where: { boundApartHoleLabels.contains($0.property.label) }),
 		      let receive = firstReceive(ofLabelOf: holeDependency.property)
 		else { return nil }
 		return PublicMockFinding.holeSiteBoundApart(holeDependency, receive: receive, of: instantiable)
