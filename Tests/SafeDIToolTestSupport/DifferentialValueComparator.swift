@@ -2499,6 +2499,9 @@ extension GraphFuzzerFixture {
 		if let probe = handWrittenRetentionProbe(generatedFiles: generatedFiles) ?? publicMockHandWrittenRetentionProbe(generatedFiles: generatedFiles) {
 			probes.append(probe)
 		}
+		if let probe = publicMockUnbuildableValueProbe(generatedFiles: generatedFiles) {
+			probes.append(probe)
+		}
 		let mockFileSuffix = "+SafeDIMock.swift"
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(mockFileSuffix) && GraphFuzzerMockOverrides.takesNoRequiredParameter(contents) {
 			// A split graph's generated files are keyed by their module's name.
@@ -2603,6 +2606,21 @@ extension GraphFuzzerFixture {
 			expression: "\(homeName).mock(\(label): { \(liveName)() })",
 			knownRightExpression: "\(typeNamePrefix)RetainApp.mock().retainHome",
 		)
+	}
+
+	/// A probe calling the generated `mock()` of `UnbuildableScreen`, the consumer the public mock corpus's draw of a value a
+	/// mock cannot build declares (`GraphFuzzerPublicMockDrawFeature.unbuildableValuePublicMockCall`), with a value of its
+	/// own: that `mock()` takes the value as a required parameter, so no other probe calls it, and the probe compares what
+	/// each path hands `UnbuildableCache`, which a call of a tier that omits the value would leave `nil`. The value is
+	/// `UnbuildableFilter`'s, or an array literal where the draw spells the value's type
+	/// `GraphFuzzerPublicMockDraw.unreadableUnbuildableValueType`, whose graph the tool accepts only with the omission walk
+	/// broken. `nil` when the graph has no such consumer, or the tool generated no mock of it.
+	private func publicMockUnbuildableValueProbe(generatedFiles: [String: String]) -> DifferentialValueProbe? {
+		let screenName = typeNamePrefix + "UnbuildableScreen"
+		guard generatedFiles.keys.contains(where: { $0 == "\(screenName)+SafeDIMock.swift" || $0.hasSuffix("/\(screenName)+SafeDIMock.swift") }) else { return nil }
+		let isUnreadable = swiftFileContent.contains { $0.contains("let unbuildableFilter: \(GraphFuzzerPublicMockDraw.unreadableUnbuildableValueType)\n") }
+		let value = isUnreadable ? "[1, 2, 3]" : "\(typeNamePrefix)UnbuildableFilter()"
+		return DifferentialValueProbe("\(screenName).mock(unbuildableFilter: \(value))")
 	}
 
 	/// A value of `type`, a plain type a host forwards, the same in every run: a standard type's fixed value, or the
