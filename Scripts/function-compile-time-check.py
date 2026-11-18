@@ -18,8 +18,9 @@ LOG is the output of a release build of the module with the compiler's timers on
 
 The optimizer then prints each pass over a function that took MILLISECONDS or more, and the type checker every body's
 time. A function's optimizer figure is therefore a lower bound: it leaves out the passes shorter than that. CI passes
-20, which prints about 1,400 lines for SafeDICore. Only the module's own functions count. A specialization the optimizer makes of one, and a closure inside one, is a function of
-its own here, under its own name ("generic specialization <…> of …", "closure #1 in …").
+20, which prints about 1,400 lines for SafeDICore. Only the module's own functions count. A specialization the
+optimizer makes of one, and a closure inside one, is a function of its own here, under its own name ("generic
+specialization <…> of …", "closure #1 in …").
 
 The type checker's timer names every accessor `_`, so this script reads the property's name from the source line the
 timer points at, which needs LOG's paths to exist: run it in the checkout that was built. A function is printed with
@@ -29,9 +30,11 @@ FILE (default `function-compile-time-waivers.txt` beside this script) lists the 
 one a line, as `sil` or `type-check`, a ceiling in seconds, and the start of the function's name as this script prints
 it (without the file and line, which move), separated by spaces; a `#` line is a comment and says why the function is
 waived and what removes it. A waived function fails only over its ceiling. A waiver fails when it matches two
-functions over the limit, since it then shelters one it was not written for, and when it matches nothing that takes
-even half the limit, so that the list shrinks when a function is split. Between half the limit and the limit the
-function is reported and the waiver kept, because a faster runner would otherwise fail an unrelated change.
+functions over the limit, since it then shelters one it was not written for. It also fails when its function takes
+under half of what the waiver was written for (its ceiling is 1.25 times that) and is under the limit, or takes under
+half the limit: the list then shrinks, or the ceiling comes down, in the change that splits the function, and a split
+function cannot grow back under an old ceiling. A function under the limit but over both halves is reported and its
+waiver kept, because a faster runner would otherwise fail an unrelated change.
 
 The limits are several times what any other function takes, because runners differ in speed by half.
 
@@ -70,16 +73,20 @@ def accessor_name(path, line):
     """The name of the property declared at a source line, or None: the type checker's timer calls every accessor `_`."""
     try:
         with open(path, errors="replace") as handle:
-            text = handle.read().splitlines()[line - 1]
-    except (OSError, IndexError):
+            text = handle.read().splitlines()
+    except OSError:
         return None
-    found = PROPERTY.findall(text)
-    return (found[-1][0] or found[-1][1]) if found else None
+    # The timer points at the accessor's brace, or at `get` on a line of its own a little below the declaration.
+    for index in range(line - 1, max(line - 5, -1), -1):
+        found = PROPERTY.search(text[index]) if index < len(text) else None
+        if found:
+            return found.group(1) or found.group(2)
+    return None
 
 
 def read_times(log, module, demangler):
     """Returns ({function: seconds in the optimizer}, {(function, "File.swift:LINE"): seconds in the type checker}, the
-    number of optimizer pass lines read) for the module's functions."""
+    number of optimizer pass lines read over the module's functions)."""
     marker = f"{len(module)}{module}"
     passes = collections.Counter()
     bodies = {}
@@ -88,8 +95,8 @@ def read_times(log, module, demangler):
         for line in handle:
             match = SIL_PASS.match(line.rstrip("\n"))
             if match:
-                pass_lines += 1
                 if match.group(2) and marker in match.group(2):
+                    pass_lines += 1
                     passes[match.group(2)] += float(match.group(1)) / 1000
                 continue
             match = TYPE_CHECK.match(line.rstrip("\n"))
@@ -130,7 +137,7 @@ def check(log, module, limits, waivers, demangler):
     if not bodies:
         return [], [f"{log} holds no type-checking time of a function of {module}: was the module compiled, with `-debug-time-function-bodies`?"], []
     if not pass_lines:
-        return [], [f"{log} holds no optimizer pass time: were `-sil-print-pass-time` and `-sil-min-pass-time` passed to a release build?"], []
+        return [], [f"{log} holds no optimizer pass time of a function of {module}: were `-sil-print-pass-time` and `-sil-min-pass-time` passed to a release build?"], []
     # Each entry: (the name a waiver matches, the name printed, seconds).
     times = {"sil": [(name, name, seconds) for name, seconds in optimizer.items()],
              "type-check": [(name, f"{name} ({place})", seconds) for (name, place), seconds in bodies.items()]}
@@ -159,11 +166,13 @@ def check(log, module, limits, waivers, demangler):
             if len(over) > 1:
                 failures.append(f"the waiver {text} matches {len(over)} functions over the limit ({', '.join(f'`{entry[1]}`' for entry in over)}): a waiver names one function")
             elif not over:
-                near = [entry for entry in covers if entry[2] > limits[kind] / 2]
+                # Half of what the waiver was written for (its ceiling is 1.25 times that), or half the limit when
+                # that is more: a runner twice as fast keeps the waiver, and a function that was split loses it.
+                near = [entry for entry in covers if entry[2] > max(limits[kind], waiver[1] / 1.25) / 2]
                 if near:
                     notes.append(f"the waiver {text} was not needed on this run: `{near[0][1]}` took {near[0][2]:.1f} s, under the limit of {limits[kind]:g} s but over half of it, so the waiver stays")
                 else:
-                    failures.append(f"the waiver {text} matches no function that takes even half the limit: remove it")
+                    failures.append(f"the waiver {text} matches no function that takes even half of what it was written for: remove it, or lower its ceiling to 1.25 times what the function takes now")
         within = [(seconds, printed) for _, printed, seconds in entries if seconds <= limits[kind]]
         if within:
             seconds, printed = max(within)
@@ -188,7 +197,7 @@ def self_test(directory):
     failures = []
     os.makedirs(f"{directory}/Sources/SafeDICore")
     with open(f"{directory}/Sources/SafeDICore/File.swift", "w") as handle:
-        handle.write("enum Errors {\n\tvar first: Int { 1 }\n\tvar second: Int { 2 }\n\tfunc long() {}\n}\n")
+        handle.write("enum Errors {\n\tvar first: Int { let one = 1; return one }\n\tvar second: Int { 2 }\n\tfunc long() {}\n\tvar third: Int {\n\t\tget {\n\t\t\t3\n\t\t}\n\t}\n}\n")
     body = lambda seconds, name, line=4, module="SafeDICore", kind="instance method": f"{seconds * 1000:.2f}ms\t{directory}/Sources/{module}/File.swift:{line}:5\t{kind} {module}.(file).Errors.{name}@{directory}/Sources/{module}/File.swift:{line}:5\n"
     getter = lambda seconds, line: body(seconds, "_", line=line, kind="getter")
     sil = lambda seconds, name, module="10SafeDICore": f"  {seconds * 1000:.3f} ms: sil-combine #12 @$s{module}{len(name)}{name}\n"
@@ -204,8 +213,8 @@ def self_test(directory):
         waiver_path = f"{directory}/{name}.waivers"
         with open(waiver_path, "w") as handle:
             handle.write(waivers)
-        # No demangler: the stand-in names are not mangled names.
-        rows, found, notes = check(path, "SafeDICore", {"sil": 10.0, "type-check": 5.0}, read_waivers(waiver_path), "no-such-demangler")
+        # `cat` for a demangler: the stand-in names are not mangled names.
+        rows, found, notes = check(path, "SafeDICore", {"sil": 10.0, "type-check": 5.0}, read_waivers(waiver_path), "cat")
         if len(found) != expected_failures or len(notes) != expected_notes or len(rows) != len(expected_rows) or any(expected not in row for expected, row in zip(expected_rows, rows)):
             failures.append(f"{name}: expected {expected_failures} failure(s), {expected_notes} note(s) and rows with {expected_rows!r}, got {found}, {notes} and {rows}")
 
@@ -220,8 +229,8 @@ def self_test(directory):
     expect("over-its-waiver", quiet + sil(3, "long") * 7 + body(9, "long()"), waivers, 2, ["**over its waiver**", within, "**over its waiver**", within])
     # The functions were split: both waivers must go.
     expect("waiver-unused", quiet, waivers, 2, [within, within])
-    # A faster runner: over half the limit, so the waivers stay and nothing fails.
-    expect("waiver-not-needed-on-this-run", quiet + sil(2, "long") * 3 + body(3, "long()"), waivers, 0, ["6.0 s | 10 s | " + within, "3.0 s | 5 s | " + within], expected_notes=2)
+    # A faster runner: under the limit, over half of what the waivers were written for (16 s and 6.4 s), so they stay.
+    expect("waiver-not-needed-on-this-run", quiet + sil(3, "long") * 3 + body(4, "long()"), waivers, 0, ["9.0 s | 10 s | " + within, "4.0 s | 5 s | " + within], expected_notes=2)
     # A waiver of one kind does not cover the other.
     expect("waiver-of-the-other-kind", quiet + body(6, "long()"), "sil 20 instance method SafeDICore.(file).Errors.long()\n", 2, [within, "**over the limit**", within])
     # Two getters of one type, which the timer names alike: each is a row under its property's name, and a waiver of one
@@ -231,10 +240,14 @@ def self_test(directory):
     expect("one-getter-waived", getters, "type-check 8 getter SafeDICore.(file).Errors.first\n", 1, [within, "Errors.second (File.swift:3)` | 7.0 s | 5 s | **over the limit**", "Errors.first (File.swift:2)` | 6.0 s | waived to 8 s | waived", within])
     # A waiver whose text starts two functions over the limit shelters one it was not written for.
     expect("waiver-matches-two", getters, "type-check 8 getter SafeDICore.(file).Errors.\n", 1, [within, "| waived |", "| waived |", within])
+    # A getter whose `get` is on a line of its own, two below its declaration.
+    expect("getter-on-its-own-line", quiet + getter(6, 6), "", 1, [within, "Errors.third (File.swift:6)` | 6.0 s", within])
+    # The function was split to 6 s, over half the limit, but its waiver was written for 200 s: it must go or come down.
+    expect("waiver-outgrown", quiet + sil(2, "long") * 3, "sil 250 $s10SafeDICore4long\n", 1, ["6.0 s | 10 s | " + within, within])
     expect("nothing-measured", "Build complete!\n", "", 1, [])
     expect("module-not-compiled", body(1, "other()", module="SwiftSyntax") + module_pass, "", 1, [])
-    # The optimizer's timer was lost: the type checker's lines alone do not pass.
-    expect("no-optimizer-times", body(0.3, "quiet()"), "", 1, [])
+    # The optimizer's timer was lost for this module: neither the type checker's lines nor another module's passes pass.
+    expect("no-optimizer-times", body(0.3, "quiet()") + module_pass + sil(60, "other", module="11SwiftSyntax"), "", 1, [])
     try:
         expect("waivers-malformed", quiet, "sil ten name\n", 0, [])
         failures.append("waivers-malformed: a ceiling that is not a number was accepted")
