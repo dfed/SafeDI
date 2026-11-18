@@ -195,11 +195,62 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		// The wrappers pair, so the second reference to the feature path's wrapper agrees, and the instance read last is
-		// compared: an exemption of the wrapper's line accepts the early read alone.
+		// Each meeting of the feature path's wrapper says it was read early, and the instance read last is compared: an
+		// exemption of the wrappers' lines accepts the early read alone.
 		#expect(try #require(comparison).differences == [
 			DifferentialValueDifference(probe: "Root()", path: ["<1> Root", "lazyB"], feature: "lazyB: <3> LazilyInstantiated<B> (already instantiated, instance read last)", knownRight: "lazyB: <3> LazilyInstantiated<B> (instance read last)"),
-			DifferentialValueDifference(probe: "Root()", path: ["<3>.instance", "a"], feature: "a: <5> A", knownRight: "a: <2> A (seen, first at <1> Root > a)"),
+			DifferentialValueDifference(probe: "Root()", path: ["<1> Root", "lazyBAgain"], feature: "lazyBAgain: <4> LazilyInstantiated<B> (already instantiated, instance read last)", knownRight: "lazyBAgain: <4> LazilyInstantiated<B> (instance read last)"),
+			DifferentialValueDifference(probe: "Root()", path: ["<3>.instance", "a"], feature: "a: <6> A", knownRight: "a: <2> A (seen, first at <1> Root > a)"),
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_acceptsTwoLazyWrappersAroundOneInstance_whenTheKnownRightPathSharesOneWrapperOfEachKind() async throws {
+		// A lazily instantiated wrapper is SafeDI's storage, whose value is its instance: each meeting of a wrapper
+		// describes the instance, so another wrapper around the same instance agrees with a shared one.
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: Self.twoLazyWrappersPath(initializerBody: "let lazyB = LazilyInstantiated { B(a: a) }\n        let sendableB = SendableLazilyInstantiated { B(a: a) }\n        self.init(a: a, lazyB: lazyB, lazyBAgain: LazilyInstantiated { lazyB.instance }, sendableB: sendableB, sendableBAgain: SendableLazilyInstantiated { sendableB.instance })"),
+			knownRight: Self.twoLazyWrappersPath(initializerBody: "let lazyB = LazilyInstantiated { B(a: a) }\n        let sendableB = SendableLazilyInstantiated { B(a: a) }\n        self.init(a: a, lazyB: lazyB, lazyBAgain: lazyB, sendableB: sendableB, sendableBAgain: sendableB)"),
+			probes: [DifferentialValueProbe("Root()")],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(comparison).differences == [])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_rejectsTheSecondInstance_whenTwoLazyWrappersHoldTwoInstancesWhereTheKnownRightPathSharesOneWrapper() async throws {
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: Self.twoLazyWrappersPath(initializerBody: "let lazyB = LazilyInstantiated { B(a: a) }\n        let sendableB = SendableLazilyInstantiated { B(a: a) }\n        self.init(a: a, lazyB: lazyB, lazyBAgain: LazilyInstantiated { B(a: a) }, sendableB: sendableB, sendableBAgain: SendableLazilyInstantiated { B(a: a) })"),
+			knownRight: Self.twoLazyWrappersPath(initializerBody: "let lazyB = LazilyInstantiated { B(a: a) }\n        let sendableB = SendableLazilyInstantiated { B(a: a) }\n        self.init(a: a, lazyB: lazyB, lazyBAgain: lazyB, sendableB: sendableB, sendableBAgain: sendableB)"),
+			probes: [DifferentialValueProbe("Root()")],
+			filesToDelete: &filesToDelete,
+		)
+
+		// The wrappers' lines agree; the second meeting of each kind describes another instance, where the known-right path's
+		// is the one the first meeting described.
+		#expect(try #require(comparison).differences == [
+			DifferentialValueDifference(probe: "Root()", path: ["<4>.instance"], feature: "<4>.instance: <8> B", knownRight: "<4>.instance: <7> B (seen, first at <3>.instance)"),
+			DifferentialValueDifference(probe: "Root()", path: ["<6>.instance"], feature: "<6>.instance: <10> B", knownRight: "<6>.instance: <8> B (seen, first at <5>.instance)"),
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_marksEachMeetingOfAnEarlyReadWrapper_whenTheFeaturePathReadsItsLazyWrapperBeforeTheProbe() async throws {
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: Self.twoLazyWrappersPath(initializerBody: "let lazyB = LazilyInstantiated { B(a: a) }\n        _ = lazyB.instance\n        let sendableB = SendableLazilyInstantiated { B(a: a) }\n        self.init(a: a, lazyB: lazyB, lazyBAgain: LazilyInstantiated { lazyB.instance }, sendableB: sendableB, sendableBAgain: sendableB)"),
+			knownRight: Self.twoLazyWrappersPath(initializerBody: "let lazyB = LazilyInstantiated { B(a: a) }\n        let sendableB = SendableLazilyInstantiated { B(a: a) }\n        self.init(a: a, lazyB: lazyB, lazyBAgain: lazyB, sendableB: sendableB, sendableBAgain: sendableB)"),
+			probes: [DifferentialValueProbe("Root()")],
+			filesToDelete: &filesToDelete,
+		)
+
+		// The early read marks the wrapper that was read at its meeting. The feature path's second wrapper around the
+		// instance was never read; the known-right path's second meeting is of the wrapper its first meeting found unread.
+		#expect(try #require(comparison).differences == [
+			DifferentialValueDifference(probe: "Root()", path: ["<1> Root", "lazyB"], feature: "lazyB: <3> LazilyInstantiated<B> (already instantiated, instance read last)", knownRight: "lazyB: <3> LazilyInstantiated<B> (instance read last)"),
 		])
 	}
 
@@ -1028,9 +1079,10 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		// A wrapper is a class, so a wrapper two properties share is numbered once, and its instantiator is called, or
-		// its instance read, once per visit. An instantiator is called twice. The instances the `LazilyInstantiated`
-		// wrappers hold are read after the rest.
+		// An instantiator is a class, so an instantiator two properties share is numbered once, and called once per
+		// visit, twice. A lazily instantiated wrapper is compared by its instance: each meeting of it, the second meeting
+		// of a shared one included, takes a number of its own and reads its instance after the rest, which the instance's
+		// identity numbers.
 		#expect(description == """
 		probe Root.make()
 		<1> Root
@@ -1050,12 +1102,13 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		  sendableAnyBBuilder: <12> SendableErasedInstantiator<(), B> (not traversed)
 		  lazyB: <13> LazilyInstantiated<B> (instance read last)
 		  sendableLazyB: <14> SendableLazilyInstantiated<B> (instance read last)
-		  lazyBAgain: <13> LazilyInstantiated<B> (seen)
+		  lazyBAgain: <15> LazilyInstantiated<B> (instance read last)
 		  bBuilderAgain: <2> Instantiator<B> (seen)
-		<13>.instance: <15> B
+		<13>.instance: <16> B
 		  a: <4> A (seen)
-		<14>.instance: <16> B
+		<14>.instance: <17> B
 		  a: <4> A (seen)
+		<15>.instance: <16> B (seen)
 
 		""")
 	}
@@ -3019,6 +3072,40 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		    public let a: A
 		    public let lazyB: LazilyInstantiated<B>
 		    \(stampProperty)
+		}
+		"""
+		return DifferentialValuePath(
+			fixtureFiles: ["Root.swift": fixture],
+			generatedFiles: ["Root+Make.swift": "extension Root {\n    convenience init() {\n        let a = A()\n        \(initializerBody)\n    }\n}\n"],
+		)
+	}
+
+	/// A root holding `a`, two `LazilyInstantiated` wrappers of `B` and two `SendableLazilyInstantiated` ones, each of
+	/// which `initializerBody` builds and passes to the root's initializer, in that order.
+	private static func twoLazyWrappersPath(initializerBody: String) -> DifferentialValuePath {
+		let fixture = """
+		public final class A: Sendable {
+		    public init() {}
+		}
+		public final class B: Sendable {
+		    public init(a: A) {
+		        self.a = a
+		    }
+		    public let a: A
+		}
+		public final class Root {
+		    public init(a: A, lazyB: LazilyInstantiated<B>, lazyBAgain: LazilyInstantiated<B>, sendableB: SendableLazilyInstantiated<B>, sendableBAgain: SendableLazilyInstantiated<B>) {
+		        self.a = a
+		        self.lazyB = lazyB
+		        self.lazyBAgain = lazyBAgain
+		        self.sendableB = sendableB
+		        self.sendableBAgain = sendableBAgain
+		    }
+		    public let a: A
+		    public let lazyB: LazilyInstantiated<B>
+		    public let lazyBAgain: LazilyInstantiated<B>
+		    public let sendableB: SendableLazilyInstantiated<B>
+		    public let sendableBAgain: SendableLazilyInstantiated<B>
 		}
 		"""
 		return DifferentialValuePath(
