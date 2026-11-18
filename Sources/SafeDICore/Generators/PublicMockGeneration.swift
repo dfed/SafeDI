@@ -94,37 +94,10 @@ struct PublicMockContext: Sendable {
 	}
 }
 
-/// A stored member of a generated public struct (`SafeDIOverrides`, or a module-level configuration), with the
-/// access its types allow.
-struct PublicStructMember {
-	/// The member's name, which is also its initializer parameter's label.
-	let name: String
-	/// The member's stored type.
-	let typeSource: String
-	/// The type of the initializer parameter that sets it, which an autoclosure parameter spells otherwise.
-	let parameterTypeSource: String
-	/// The member's access: the narrowest its types are proven at.
-	let access: AccessLevel
-	/// The default of the initializer parameter that sets it.
-	let defaultExpression: String
-	/// What an initializer that does not take the member assigns it.
-	let omittedValue: String
-	/// Whether the initializer parameter has no argument label.
-	let isUnlabeled: Bool
-	/// The member's documentation comment, when it has one.
-	let documentation: String?
-
-	/// The type the struct's storage (`ConfigurationStorage`) takes the member as: its stored type, or, where the
-	/// initializer takes the member as an `@autoclosure` of its stored function type, that type `@escaping`.
-	var storageParameterTypeSource: String {
-		parameterTypeSource == typeSource ? typeSource : "@escaping \(typeSource)"
-	}
-}
-
 extension ScopeGenerator {
 	/// The access levels at which a public struct with `members` has an initializer, widest first: `public`, which may
 	/// take no member, and each narrower level a member has.
-	static func publicInitializerLevels(of members: [PublicStructMember]) -> [AccessLevel] {
+	static func publicInitializerLevels(of members: [ConfigurationMember]) -> [AccessLevel] {
 		[.public] + Set(members.map(\.access)).filter { $0 < .public }.sorted(by: >)
 	}
 
@@ -132,38 +105,18 @@ extension ScopeGenerator {
 	/// `publicInitializerLevels(of:)`, each taking every member at or above its level, in member order, and setting
 	/// each member it omits to its `omittedValue`. The members are in the struct's storage (`ConfigurationStorage`),
 	/// which is not `Sendable`, since a public struct is not `Sendable` unless it declares it, which none of these does.
-	static func publicStructBody(members: [PublicStructMember], indent: String) -> [String] {
+	static func publicStructBody(members: [ConfigurationMember], indent: String) -> [String] {
 		// A mock's `SafeDIOverrides` whose only member was a closure its call cannot be handed keeps its initializer.
 		guard !members.isEmpty else { return ["\(indent)public init() {}"] }
-		let memberIndent = "\(indent)\(standardIndent)"
-		let storage = ConfigurationStorage(fields: members.map { member in
-			ConfigurationStorage.Field(
-				name: member.name,
-				typeSource: member.typeSource,
-				parameterTypeSource: member.storageParameterTypeSource,
-				accessPrefix: member.access == .internal ? "" : "\(member.access.spelledOnGeneratedDeclaration) ",
-				documentation: member.documentation,
-				isProvenSendable: false,
-			)
-		})
+		let storage = ConfigurationStorage(fields: members)
 		var lines = [String]()
 		for level in publicInitializerLevels(of: members) {
-			let takenMembers = members.filter { $0.access >= level }
-			let levelPrefix = level == .internal ? "" : "\(level.spelledOnGeneratedDeclaration) "
-			if takenMembers.isEmpty {
-				lines.append("\(indent)\(levelPrefix)init() {")
-			} else {
-				lines.append("\(indent)\(levelPrefix)init(")
-				lines.append(takenMembers.map { member in
-					"\(memberIndent)\(member.isUnlabeled ? "_ " : "")\(member.name): \(member.parameterTypeSource) = \(member.defaultExpression)"
-				}.joined(separator: ",\n"))
-				lines.append("\(indent)) {")
-			}
-			lines.append(contentsOf: storage.initialization(
-				to: members.map { $0.access >= level ? $0.name : $0.omittedValue },
-				indent: memberIndent,
+			lines.append(contentsOf: storage.initializer(
+				spelledWith: level == .internal ? "" : "\(level.spelledOnGeneratedDeclaration) ",
+				parameters: members.filter { $0.access >= level }.map(\.initializerParameter),
+				values: members.map { $0.access >= level ? $0.initializerValue : $0.omittedValue },
+				indent: indent,
 			))
-			lines.append("\(indent)}")
 			lines.append("")
 		}
 		// A public struct always has a member: a module-level configuration has its builder, and a public mock declares its
@@ -192,7 +145,7 @@ extension ScopeGenerator {
 	) -> String {
 		let concreteType = node.concreteType
 		let admittedModules: Set<String?> = [context.moduleName, context.moduleNameByType[concreteType]]
-		var members = [PublicStructMember]()
+		var members = [ConfigurationMember]()
 
 		// Each child the type builds itself, as an internal configuration struct holds it, except a child beneath a
 		// cycle edge, whose struct would contain itself.
@@ -249,7 +202,7 @@ extension ScopeGenerator {
 		let builderParameterTypes = node.builderParameterTypes
 		let builderAccess = context.access(ofTypes: builderParameterTypes + [concreteType], admittedModules: admittedModules).level
 		let builderType = publicBuilderType(of: node, requiresSendable: requiresSendable)
-		members.append(PublicStructMember(
+		members.append(ConfigurationMember(
 			name: ReservedName.configurationBuilderPropertyName,
 			typeSource: builderType,
 			parameterTypeSource: builderType,
@@ -311,10 +264,10 @@ extension ScopeGenerator {
 		context: PublicMockContext,
 		admittedModules: Set<String?>,
 		requiresSendable: Bool,
-	) -> PublicStructMember {
+	) -> ConfigurationMember {
 		if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: requiresSendable || child.requiresSendable) {
 			// The public mock another module generated takes its own `SafeDIOverrides`, which is `public`.
-			return PublicStructMember(
+			return ConfigurationMember(
 				name: name,
 				typeSource: publicMockOverridesMember.type,
 				parameterTypeSource: publicMockOverridesMember.type,
@@ -325,7 +278,7 @@ extension ScopeGenerator {
 				documentation: nil,
 			)
 		} else if child.needsConfigurationStruct, let configurationTypeName = context.configurationTypeNameByType[child.concreteType] {
-			return PublicStructMember(
+			return ConfigurationMember(
 				name: name,
 				typeSource: configurationTypeName,
 				parameterTypeSource: configurationTypeName,
@@ -342,7 +295,7 @@ extension ScopeGenerator {
 				ofTypes: child.callSiteArguments.map(\.typeDescription) + [child.instantiatedTypeDescription],
 				admittedModules: admittedModules,
 			).level
-			return PublicStructMember(
+			return ConfigurationMember(
 				name: name,
 				typeSource: closureType,
 				parameterTypeSource: closureType,
@@ -366,9 +319,9 @@ extension ScopeGenerator {
 		omittedValue: String,
 		requiresSendable: Bool,
 		documentation: String,
-	) -> PublicStructMember {
+	) -> ConfigurationMember {
 		if requiresSendable {
-			PublicStructMember(
+			ConfigurationMember(
 				name: name,
 				typeSource: "@Sendable () -> \(valueType.asSource)",
 				parameterTypeSource: "@autoclosure @escaping @Sendable () -> \(valueType.asSource)",
@@ -379,7 +332,7 @@ extension ScopeGenerator {
 				documentation: documentation,
 			)
 		} else {
-			PublicStructMember(
+			ConfigurationMember(
 				name: name,
 				typeSource: valueType.asSource,
 				parameterTypeSource: valueType.asSource,
@@ -760,7 +713,7 @@ struct PublicMockPlan: Sendable {
 	/// The empty enum every call names, whose name hashes the signature.
 	let guardTypeName: String
 	/// The members of `SafeDIOverrides` that hold the mocked type's own optional-typed default-valued parameters.
-	let defaultFields: [PublicStructMember]
+	let defaultFields: [ConfigurationMember]
 	/// The static methods in the mocked type's extension that evaluate its own optional-typed defaults.
 	let providerDeclarations: [String]
 	/// The lines that resolve each parameter taken as `T? = nil` in place of a non-optional default, before the tree.
@@ -941,7 +894,7 @@ extension ScopeGenerator {
 		var leadingParameters = [PublicMockParameter]()
 		var defaultResolutions = [String]()
 		var providerDeclarations = [String]()
-		var defaultFields = [PublicStructMember]()
+		var defaultFields = [ConfigurationMember]()
 		var constructionDefaultValues = [String: String]()
 		let bodyIndent = "\(standardIndent)\(standardIndent)"
 		/// The parameter of a default-valued `type` taken as `T? = nil`, resolved in the body to the default, whose access
@@ -1272,7 +1225,7 @@ extension ScopeGenerator {
 	static func publicSafeDIOverridesStruct(
 		rootChildren: [MockParameterNode],
 		rootLabelMap: [String: [TypeDescription: String]],
-		defaultFields: [PublicStructMember],
+		defaultFields: [ConfigurationMember],
 		mockedType: Instantiable,
 		context: PublicMockContext,
 		indent: String,

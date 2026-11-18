@@ -10294,7 +10294,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The children of `node` whose `SafeDIMockConfiguration` the struct generated from `node` nests as a field
-	/// (`configurationField(of:named:parentRequiresSendable:sendableConfigurationTypeNames:)`): each that no edge in
+	/// (`configurationMember(of:named:parentRequiresSendable:sendableConfigurationTypeNames:)`): each that no edge in
 	/// `cycleEdges` prunes, that needs a struct, and that calls no other module's public mock taking `safeDIOverrides`.
 	static func childrenWithNestedConfigurations(of node: MockParameterNode, cycleEdges: Set<CycleEdge>) -> [MockParameterNode] {
 		node.propertyChildren.filter { child in
@@ -10320,7 +10320,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
-		let memberIndent = "\(innerIndent)\(standardIndent)"
 
 		var lines = [String]()
 		lines.append("\(indent)/// Overrides for the mock dependency tree.")
@@ -10336,32 +10335,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return lines.joined(separator: "\n")
 		}
 
-		// Generate SafeDIOverrides init with root-level children and onlyIfAvailable entries.
-		let childFields = rootChildren.map { child in
-			configurationField(
+		// Generate SafeDIOverrides init with root-level children and onlyIfAvailable entries. Each parameter is named apart
+		// from `self`, which would hide the instance the overrides of what the mock receives only if available are assigned
+		// to.
+		let storage = ConfigurationStorage(fields: rootChildren.map { child in
+			configurationMember(
 				of: child,
 				named: disambiguatedLabel(for: child, labelMap: rootLabelMap),
 				parentRequiresSendable: false,
 				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 			)
-		}
-		let storage = ConfigurationStorage(fields: childFields.map(\.field))
-		lines.append("\(innerIndent)init(")
-		// Each parameter is named apart from `self`, which would hide the instance the overrides of what the mock receives only
-		// if available are assigned to.
-		var initParameters = childFields.map { "\(memberIndent)\($0.field.name.spelledAsAssigningParameter(labeled: $0.field.name)): \($0.field.typeSource) = \($0.defaultValue)" }
-		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
-			initParameters.append("\(memberIndent)\(onlyIfAvailableOverride.name.spelledAsAssigningParameter(labeled: onlyIfAvailableOverride.name)): \(onlyIfAvailableOverride.typeDescription.asSource) = nil")
-		}
-		lines.append(initParameters.joined(separator: ",\n"))
-		lines.append("\(innerIndent)) {")
-		if !storage.fields.isEmpty {
-			lines.append(contentsOf: storage.initialization(to: storage.fields.map(\.name.spelledAsAssigningParameterName), indent: memberIndent))
-		}
-		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
-			lines.append("\(memberIndent)self.\(onlyIfAvailableOverride.name) = \(onlyIfAvailableOverride.name.spelledAsAssigningParameterName)")
-		}
-		lines.append("\(innerIndent)}")
+		})
+		lines.append(contentsOf: storage.initializer(
+			spelledWith: "",
+			parameters: storage.fields.map(\.initializerParameter) + onlyIfAvailableOverrides.map { onlyIfAvailableOverride in
+				"\(onlyIfAvailableOverride.name.spelledAsAssigningParameter(labeled: onlyIfAvailableOverride.name)): \(onlyIfAvailableOverride.typeDescription.asSource) = nil"
+			},
+			values: storage.fields.map(\.initializerValue),
+			trailingStatements: onlyIfAvailableOverrides.map { onlyIfAvailableOverride in
+				"self.\(onlyIfAvailableOverride.name) = \(onlyIfAvailableOverride.name.spelledAsAssigningParameterName)"
+			},
+			indent: innerIndent,
+		))
 
 		// Generate the properties: those the storage holds, then the overrides of what the mock receives only if available.
 		lines.append("")
@@ -10378,19 +10373,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return lines.joined(separator: "\n")
 	}
 
-	/// The field of a configuration that configures how `child` is built, and the default of the initializer parameter
-	/// that sets it: the `SafeDIOverrides` of the public mock `child` calls, `child`'s own configuration when it has one,
-	/// or else an optional builder closure.
+	/// The member of a configuration that configures how `child` is built: the `SafeDIOverrides` of the public mock
+	/// `child` calls, `child`'s own configuration when it has one, or else an optional builder closure.
 	/// - Parameters:
-	///   - parentRequiresSendable: Whether the configuration that holds the field is `@Sendable`-typed, which makes each
+	///   - parentRequiresSendable: Whether the configuration that holds the member is `@Sendable`-typed, which makes each
 	///     of its closures `@Sendable`, as `child` being built in a `@Sendable` builder function does.
 	///   - sendableConfigurationTypeNames: The types whose configurations are `@Sendable`-typed, and so `Sendable`.
-	private static func configurationField(
+	private static func configurationMember(
 		of child: MockParameterNode,
 		named name: String,
 		parentRequiresSendable: Bool,
 		sendableConfigurationTypeNames: Set<String>,
-	) -> (field: ConfigurationStorage.Field, defaultValue: String) {
+	) -> ConfigurationMember {
 		let isSendable = parentRequiresSendable || child.requiresSendable
 		let (typeSource, defaultValue, isProvenSendable) = if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: isSendable) {
 			// A `@Sendable` closure that returns the overrides where the child is built in a `@Sendable` builder function,
@@ -10406,16 +10400,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// to capture a non-sendable override closure.
 			("(\(isSendable ? "@Sendable " : "")\(child.builderClosureType))?", "nil", isSendable)
 		}
-		return (
-			field: ConfigurationStorage.Field(
-				name: name,
-				typeSource: typeSource,
-				parameterTypeSource: typeSource,
-				accessPrefix: "",
-				documentation: nil,
-				isProvenSendable: isProvenSendable,
-			),
-			defaultValue: defaultValue,
+		return ConfigurationMember(
+			name: name,
+			typeSource: typeSource,
+			defaultExpression: defaultValue,
+			isProvenSendable: isProvenSendable,
 		)
 	}
 
@@ -10447,19 +10436,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// module whose declarations default to the main actor, the configuration of a type on the main actor is there too.
 		lines.append("\(indent)struct \(MockParameterNode.configurationStructName) {")
 
-		// Build init parameters in order: children, defaults, builder (last).
-		var initParameters = [String]()
-		var fields = [ConfigurationStorage.Field]()
-		func appendField(named name: String, typeSource: String, parameterTypeSource: String, isProvenSendable: Bool, documentation: String? = nil) {
-			fields.append(ConfigurationStorage.Field(
-				name: name,
-				typeSource: typeSource,
-				parameterTypeSource: parameterTypeSource,
-				accessPrefix: "",
-				documentation: documentation,
-				isProvenSendable: isProvenSendable,
-			))
-		}
+		// Build the members in the order the initializer takes them: children, defaults, builder (last).
+		var members = [ConfigurationMember]()
 
 		// Child edge parameters (disambiguated if labels collide).
 		// Exclude back-edges from `cycleEdges` — including them would nest a
@@ -10481,14 +10459,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A child whose call can hand its override closure no builder a person writes has no member
 		// (`MockParameterNode.offersOverrideClosure`).
 		for child in nonCycleChildren where child.offersOverrideClosure {
-			let (field, defaultValue) = configurationField(
+			members.append(configurationMember(
 				of: child,
 				named: disambiguatedLabel(for: child, labelMap: childLabelMap),
 				parentRequiresSendable: requiresSendable,
 				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
-			)
-			initParameters.append("\(innerIndent)\(standardIndent)\(field.name): \(field.typeSource) = \(defaultValue)")
-			fields.append(field)
+			))
 		}
 
 		// Default-valued parameters.
@@ -10500,19 +10476,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// An `@autoclosure` parameter is evaluated where the type is built: the struct stores a closure that
 				// returns the value, which its initializer takes as an autoclosure, as the parameter does, and the mock
 				// calls it once per construction (`resolveBuilderArguments`).
-				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping () -> \(typeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
-				appendField(named: defaultParameter.label, typeSource: "() -> \(typeSource)", parameterTypeSource: "@escaping () -> \(typeSource)", isProvenSendable: false)
+				members.append(ConfigurationMember(
+					name: defaultParameter.label,
+					typeSource: "() -> \(typeSource)",
+					parameterTypeSource: "@autoclosure @escaping () -> \(typeSource)",
+					storageParameterTypeSource: "@escaping () -> \(typeSource)",
+					defaultExpression: autoclosureDefault(defaultExpression(defaultParameter)),
+				))
 			} else if defaultParameter.isClosureType, !defaultParameter.isAutoclosure {
-				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(closureSendable)@escaping \(typeSource) = \(defaultExpression(defaultParameter))")
 				// The storage is proven `Sendable` only where the stored function type is `@Sendable` at its top: by the attribute
 				// added here, or by its own spelling. `closureSendable` reads the spelling's text, so a type that spells
 				// `@Sendable` only inside it stays unproven.
-				appendField(
-					named: defaultParameter.label,
+				members.append(ConfigurationMember(
+					name: defaultParameter.label,
 					typeSource: "\(closureSendable)\(typeSource)",
 					parameterTypeSource: "\(closureSendable)@escaping \(typeSource)",
+					storageParameterTypeSource: "\(closureSendable)@escaping \(typeSource)",
+					defaultExpression: defaultExpression(defaultParameter),
 					isProvenSendable: requiresSendable && (!closureSendable.isEmpty || defaultParameter.valueTypeDescription.isSendableFunction),
-				)
+				))
 			} else if requiresSendable {
 				// A `@Sendable` builder function cannot capture the value when its type is not `Sendable`, and
 				// SafeDI cannot tell whether it is, so the struct stores a `@Sendable` closure that returns the
@@ -10522,14 +10504,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// type is stored this way too, even when the parameter is declared `@escaping`. A closure's return type
 				// cannot be spelled `X!`, so an implicitly unwrapped value is returned as `X?`, which the parameter accepts.
 				let returnTypeSource = defaultParameter.valueTypeDescription.implicitlyUnwrappedOptionalSpelledAsOptional.asSource
-				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping @Sendable () -> \(returnTypeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
-				appendField(named: defaultParameter.label, typeSource: "@Sendable () -> \(returnTypeSource)", parameterTypeSource: "@escaping @Sendable () -> \(returnTypeSource)", isProvenSendable: true)
+				members.append(ConfigurationMember(
+					name: defaultParameter.label,
+					typeSource: "@Sendable () -> \(returnTypeSource)",
+					parameterTypeSource: "@autoclosure @escaping @Sendable () -> \(returnTypeSource)",
+					storageParameterTypeSource: "@escaping @Sendable () -> \(returnTypeSource)",
+					defaultExpression: autoclosureDefault(defaultExpression(defaultParameter)),
+					isProvenSendable: true,
+				))
 			} else {
 				// A parameter declared `@escaping` is of a function type, which the initializer stores, so it takes the
 				// value `@escaping` too, also when the type is a typealias of a function type.
 				let escaping = defaultParameter.isDeclaredEscaping ? "@escaping " : ""
-				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(escaping)\(typeSource) = \(defaultExpression(defaultParameter))")
-				appendField(named: defaultParameter.label, typeSource: typeSource, parameterTypeSource: "\(escaping)\(typeSource)", isProvenSendable: false)
+				members.append(ConfigurationMember(
+					name: defaultParameter.label,
+					typeSource: typeSource,
+					parameterTypeSource: "\(escaping)\(typeSource)",
+					storageParameterTypeSource: "\(escaping)\(typeSource)",
+					defaultExpression: defaultExpression(defaultParameter),
+				))
 			}
 		}
 
@@ -10537,22 +10530,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// the default construction (which may be @MainActor) is called in mock()
 		// rather than referenced in this nonisolated init.
 		let builderType = "(\(sendableAnnotation)\(node.concreteBuilderClosureType))?"
-		initParameters.append("\(innerIndent)\(standardIndent)_ \(ReservedName.configurationBuilderPropertyName): \(builderType) = nil")
-		appendField(
-			named: ReservedName.configurationBuilderPropertyName,
+		members.append(ConfigurationMember(
+			name: ReservedName.configurationBuilderPropertyName,
 			typeSource: builderType,
-			parameterTypeSource: builderType,
-			isProvenSendable: requiresSendable,
+			defaultExpression: "nil",
+			isUnlabeled: true,
 			documentation: "Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.",
-		)
-		let storage = ConfigurationStorage(fields: fields)
+			isProvenSendable: requiresSendable,
+		))
+		let storage = ConfigurationStorage(fields: members)
 
 		// Emit init.
-		lines.append("\(innerIndent)init(")
-		lines.append(initParameters.joined(separator: ",\n"))
-		lines.append("\(innerIndent)) {")
-		lines.append(contentsOf: storage.initialization(to: fields.map(\.name), indent: "\(innerIndent)\(standardIndent)"))
-		lines.append("\(innerIndent)}")
+		lines.append(contentsOf: storage.initializer(
+			spelledWith: "",
+			parameters: members.map(\.initializerParameter),
+			values: members.map(\.initializerValue),
+			indent: innerIndent,
+		))
 
 		// Emit the properties that read each field from the storage, and the storage. A field is a computed property, so an
 		// initializer a person writes in an extension calls `self.init(…)`, as the Manual asks (see "Configuration fields are
@@ -11001,127 +10995,99 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// bind the value of a `@Sendable` autoclosure parameter it instantiates. A
 					// function scope keeps child bindings from colliding with siblings'
 					// child bindings that share the same property label and gives these
-					// receiver bindings a place to live.
+					// receiver bindings a place to live. The function is emitted as an instantiator's is
+					// (`generateMockBuilderFunction`); only the binding of its result differs.
 					let propertyTypeName = node.instantiatedTypeDescription.asSource
 					let innerIndent = "\(indent)\(standardIndent)"
-					// The node's own receives have labels of their own, which neither its declarations nor its uncovered
-					// dependencies share.
-					let uncoveredDependencies = uncoveredInstantiatedDependencies(of: node)
-					// The parameters of the builder function, when a cycle closes on it, which hide the bindings of their
-					// labels inside it, as an instantiator's do (`generateInstantiatorBinding`).
-					let ownCycleParameters = node.cycleParameters
-					let ownCycleParameterForms = ownCycleParameters.flatMap(\.providedForms).sorted()
-					let functionDisambiguationMap = routingReceives(
-						of: uncoveredDependencies,
-						toParametersNamed: uncoveredDependencyNames,
-						in: removingRenames(
-							hiddenByDeclarationsOf: node.children,
-							parameters: ownCycleParameterForms,
-							from: combinedDisambiguationMap,
-						),
+					let functionBindingNames = builderFunctionBindingNames(
+						of: node,
+						flatParameterDisambiguationMap: combinedDisambiguationMap,
+						lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+						uncoveredDependencyNames: uncoveredDependencyNames,
 					)
-					let functionLazilyInstantiatedBindingNames = removingRenames(
-						hiddenByDeclarationsOf: node.children,
-						parameters: uncoveredDependencies.map(\.property) + ownCycleParameterForms,
-						from: lazilyInstantiatedBindingNames,
-					)
-					let functionParameters = ownCycleParameters.map(\.property)
-					let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: node.typesDeclaredEscaping).map(\.description).joined()
 					let callArguments = mockCycleParameterArguments(
 						for: node,
 						flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 						lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 					).joined(separator: ", ")
-					let functionDecorator = node.buildsInSendableFunction ? "@Sendable " : ""
-
 					let receiverBindings = emitReceiverBindings(
 						for: node.dependencies,
 						unavailableProperties: node.unavailableProperties,
 						lazilyInstantiatedInstanceProperties: node.lazilyInstantiatedInstanceProperties,
-						flatParameterDisambiguationMap: functionDisambiguationMap,
+						flatParameterDisambiguationMap: functionBindingNames.flatParameterDisambiguationMap,
 						bindingNamesPassedByName: bindingNamesPassedByName,
 						indent: innerIndent,
 					)
-
-					// A `@Sendable` function that is not already inside another one – one a cycle closes on from inside a
-					// `@Sendable` builder function – starts a new extraction, as an instantiator's does: every
-					// `safeDIOverrides` read in its body becomes a local declared before it.
-					let startedSendableOverrideExtractor: SendableOverrideExtractor? = if sendableOverrideExtractor == nil, node.buildsInSendableFunction {
-						SendableOverrideExtractor(functionName: functionName, names: overrideLocalNames)
-					} else {
-						nil
-					}
 					var childAncestors = ancestorTypes
 					childAncestors.insert(nodeTypeKey)
-					let childBindings = await generateMockBodyBindings(
-						items: node.children,
-						parentPath: nodePath,
-						indent: innerIndent,
-						ancestorTypes: childAncestors,
-						sendableOverrideExtractor: sendableOverrideExtractor ?? startedSendableOverrideExtractor,
-						flatParameterDisambiguationMap: functionDisambiguationMap,
-						enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
-						lazilyInstantiatedBindingNames: functionLazilyInstantiatedBindingNames,
-						uncoveredDependencyNames: uncoveredDependencyNames,
-						sendableAutoclosureParameters: sendableAutoclosureParameters,
-						parentConcreteType: node.concreteType.asSource,
-						cycleEdges: cycleEdges,
-						overridePathReachable: thisOverrideReachable,
-						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
-						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
-						publicMock: publicMock?.beneathRoot,
-						enclosingBindingNamesPassedByName: bindingNamesPassedByName,
-					)
-
-					let functionConstructionExpression = if let startedSendableOverrideExtractor {
-						// The caller read this node's own override and arguments outside any `@Sendable` function; the
-						// construction is inside this one, so it reads them into locals too.
-						mockConstructionExpression(
-							for: node,
-							overrideExpression: overrideExpression.map {
-								startedSendableOverrideExtractor.extract($0, localNameSuffix: ReservedName.configurationBuilderPropertyName)
-							},
-							arguments: mockBuilderArguments(
-								for: node,
-								nodePath: nodePath,
-								lazilyInstantiatedBindingNames: argumentLazilyInstantiatedBindingNames,
+					let builderFunction = await generateMockBuilderFunction(
+						for: node,
+						named: functionName,
+						parameters: node.cycleParameters.map(\.property),
+						indent: indent,
+						sendableOverrideExtractor: sendableOverrideExtractor,
+						overrideLocalNames: &overrideLocalNames,
+						leadingLines: node.memberCallsInsideBuilderFunction.map { valuesBinding in
+							"\(innerIndent)\(valuesBinding.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames))"
+						},
+						receiverBindings: receiverBindings,
+						sendableAutoclosureBindings: sendableAutoclosureBindings,
+						alwaysReturnsExplicitly: true,
+						childBindings: { functionSendableOverrideExtractor in
+							await generateMockBodyBindings(
+								items: node.children,
+								parentPath: nodePath,
+								indent: innerIndent,
+								ancestorTypes: childAncestors,
+								sendableOverrideExtractor: functionSendableOverrideExtractor,
+								flatParameterDisambiguationMap: functionBindingNames.flatParameterDisambiguationMap,
+								enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
+								lazilyInstantiatedBindingNames: functionBindingNames.lazilyInstantiatedBindingNames,
 								uncoveredDependencyNames: uncoveredDependencyNames,
-								sendableOverrideExtractor: startedSendableOverrideExtractor,
-								overrideReachable: thisOverrideReachable,
-								handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
+								sendableAutoclosureParameters: sendableAutoclosureParameters,
+								parentConcreteType: node.concreteType.asSource,
+								cycleEdges: cycleEdges,
+								overridePathReachable: thisOverrideReachable,
+								handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 								sendableConfigurationTypeNames: sendableConfigurationTypeNames,
-								publicMock: publicMock,
-								bindingNamesPassedByName: bindingNamesPassedByName,
-							),
-							overrideReachable: thisOverrideReachable,
-							handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
-							publicMock: publicMock,
-							publicMockOverridesIsSendableClosure: publicMockOverridesIsSendableClosure,
-							indent: innerIndent,
-						)
-					} else {
-						construction(at: innerIndent)
-					}
-					if let startedSendableOverrideExtractor {
-						overrideLocalNames = startedSendableOverrideExtractor.names
-						for extraction in startedSendableOverrideExtractor.extractions {
-							lines.append("\(indent)let \(extraction.localName) = \(extraction.expression)")
-						}
-					}
-
-					// The function's return type gives both branches of the `if`
-					// expression a contextual type, so no annotation is needed.
-					lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(propertyTypeName) {")
-					// A `@Sendable` function calls the members its places' routes need at its top (`memberCallsInsideBuilderFunction`).
-					for valuesBinding in node.memberCallsInsideBuilderFunction {
-						lines.append("\(innerIndent)\(valuesBinding.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames))")
-					}
-					await lines.append(contentsOf: callPreamble(of: node, indent: innerIndent))
-					lines.append(contentsOf: receiverBindings)
-					lines.append(contentsOf: sendableAutoclosureBindings)
-					lines.append(contentsOf: childBindings)
-					lines.append("\(innerIndent)return \(functionConstructionExpression)")
-					lines.append("\(indent)}")
+								publicMock: publicMock?.beneathRoot,
+								enclosingBindingNamesPassedByName: bindingNamesPassedByName,
+							)
+						},
+						construction: { startedSendableOverrideExtractor in
+							if let startedSendableOverrideExtractor {
+								// The caller read this node's own override and arguments outside any `@Sendable` function; the
+								// construction is inside this one, so it reads them into locals too.
+								mockConstructionExpression(
+									for: node,
+									overrideExpression: overrideExpression.map {
+										startedSendableOverrideExtractor.extract($0, localNameSuffix: ReservedName.configurationBuilderPropertyName)
+									},
+									arguments: mockBuilderArguments(
+										for: node,
+										nodePath: nodePath,
+										lazilyInstantiatedBindingNames: argumentLazilyInstantiatedBindingNames,
+										uncoveredDependencyNames: uncoveredDependencyNames,
+										sendableOverrideExtractor: startedSendableOverrideExtractor,
+										overrideReachable: thisOverrideReachable,
+										handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
+										sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+										publicMock: publicMock,
+										bindingNamesPassedByName: bindingNamesPassedByName,
+									),
+									overrideReachable: thisOverrideReachable,
+									handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
+									publicMock: publicMock,
+									publicMockOverridesIsSendableClosure: publicMockOverridesIsSendableClosure,
+									indent: innerIndent,
+								)
+							} else {
+								construction(at: innerIndent)
+							}
+						},
+					)
+					lines.append(contentsOf: builderFunction.extractions)
+					lines.append(contentsOf: builderFunction.function)
 					if let promotedParameterName {
 						lines.append("\(indent)let \(outerBindingName): \(propertyTypeName) = \(passing(promotedParameterName, orBuilding: "\(functionName)(\(callArguments))"))")
 					} else {
@@ -11722,45 +11688,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) async -> InstantiatorBindingLines {
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let innerIndent = "\(indent)\(standardIndent)"
-		// The parameters of the builder function a lazy cycle closes on, when this node declares it.
-		let ownCycleParameters = node.isPropertyCycle ? [] : node.cycleParameters
-		let ownCycleParameterForms = ownCycleParameters.flatMap(\.providedForms).sorted()
-		// The builder function's parameters and bindings hide the renames of their properties, and so do the dependencies
-		// the node's type instantiates that the mock cannot build. The node's own receives have labels of their own.
-		let uncoveredDependencies = uncoveredInstantiatedDependencies(of: node)
-		let builderDisambiguationMap = routingReceives(
-			of: uncoveredDependencies,
-			toParametersNamed: uncoveredDependencyNames,
-			in: removingRenames(
-				hiddenByDeclarationsOf: node.children,
-				parameters: forwardedProperties + ownCycleParameterForms,
-				from: flatParameterDisambiguationMap,
-			),
-		)
-		let builderLazilyInstantiatedBindingNames = builderLazilyInstantiatedBindingNames(for: node, from: lazilyInstantiatedBindingNames)
-
-		// Emit disambiguated-receiver rebinds inside the inner builder function
-		// so construction arguments resolve by bare label via Swift lexical
-		// scoping. Aliases on this node are handled as child items in the tree
-		// and emitted in production's topological order by
-		// `generateMockBodyBindings` below.
-		let receiverBindings = emitReceiverBindings(
-			for: node.dependencies,
-			unavailableProperties: node.unavailableProperties,
-			lazilyInstantiatedInstanceProperties: node.lazilyInstantiatedInstanceProperties,
-			flatParameterDisambiguationMap: builderDisambiguationMap,
-			bindingNamesPassedByName: bindingNamesPassedByName,
-			indent: innerIndent,
-		)
-
-		// Build the inner function parameter list (forwarded properties, and the parameters a lazy cycle closing on the
-		// function needs).
-		let functionParameters = forwardedProperties + ownCycleParameters.map(\.property)
-		let functionArguments = if functionParameters.isEmpty {
-			""
-		} else {
-			functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: node.typesDeclaredEscaping).map(\.description).joined()
-		}
 
 		// Build the forwarded arguments for the Instantiator closure call, followed by the bindings in scope here of the
 		// labels the function a lazy cycle closes on takes.
@@ -11776,92 +11703,129 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		let forwardedArguments = forwardedArgumentList.joined(separator: ", ")
 
-		let functionDecorator = if node.buildsInSendableFunction {
-			"@Sendable "
-		} else {
-			""
-		}
-
 		var lines = InstantiatorBindingLines()
 
 		// Emit the inner builder function (unless it's a property cycle).
 		// Children are generated INSIDE the function body because they may
 		// depend on forwarded properties that are only available as parameters.
 		if !node.isPropertyCycle {
-			// A `@Sendable` function that is not already inside another one
-			// starts a new extraction: every `safeDIOverrides` read in its body,
-			// including inside nested builder functions at any depth, becomes a
-			// local declared before it. Inside an enclosing `@Sendable` function,
-			// reads keep flowing to the outermost function's extractor, whose
-			// locals are already in scope.
-			let startedSendableOverrideExtractor: SendableOverrideExtractor? = if sendableOverrideExtractor == nil, node.buildsInSendableFunction {
-				SendableOverrideExtractor(functionName: functionName, names: overrideLocalNames)
-			} else {
-				nil
-			}
-
-			// Generate children's bindings inside the function body.
+			let functionBindingNames = builderFunctionBindingNames(
+				of: node,
+				flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+				lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+				uncoveredDependencyNames: uncoveredDependencyNames,
+			)
+			// Emit disambiguated-receiver rebinds inside the inner builder function
+			// so construction arguments resolve by bare label via Swift lexical
+			// scoping. Aliases on this node are handled as child items in the tree
+			// and emitted in production's topological order by
+			// `generateMockBodyBindings` below.
+			let receiverBindings = emitReceiverBindings(
+				for: node.dependencies,
+				unavailableProperties: node.unavailableProperties,
+				lazilyInstantiatedInstanceProperties: node.lazilyInstantiatedInstanceProperties,
+				flatParameterDisambiguationMap: functionBindingNames.flatParameterDisambiguationMap,
+				bindingNamesPassedByName: bindingNamesPassedByName,
+				indent: innerIndent,
+			)
 			// Include this node's type in ancestors so self-referencing
 			// cycles (e.g., Instantiator<Self>) are detected.
 			var functionAncestors = ancestorTypes
 			functionAncestors.insert(node.cycleNodeKey)
-			let childBindings = await generateMockBodyBindings(
-				items: node.children,
-				parentPath: nodePath,
-				indent: innerIndent,
-				ancestorTypes: functionAncestors,
-				sendableOverrideExtractor: sendableOverrideExtractor ?? startedSendableOverrideExtractor,
-				flatParameterDisambiguationMap: builderDisambiguationMap,
-				enclosingFunctionNames: enclosingFunctionNames,
-				lazilyInstantiatedBindingNames: builderLazilyInstantiatedBindingNames,
-				uncoveredDependencyNames: uncoveredDependencyNames,
-				sendableAutoclosureParameters: sendableAutoclosureParameters,
-				parentConcreteType: node.concreteType.asSource,
-				cycleEdges: cycleEdges,
-				overridePathReachable: overridePathReachable,
-				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
-				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
-				publicMock: publicMock?.beneathRoot,
-				enclosingBindingNamesPassedByName: bindingNamesPassedByName,
-			)
-
 			let nodeHandWrittenMockDefaultParameters = handWrittenMockDefaultParameters[node.concreteType, default: []]
-			let functionOverrideExpression: String?
-			let functionConstructionArguments: [String]
-			if let startedSendableOverrideExtractor {
-				// The caller read this node's own override and default arguments
-				// from `safeDIOverrides` because it is outside any `@Sendable`
-				// function; the construction below is inside this one, so read
-				// them into locals too. Override closures are read as optionals;
-				// the function body unwraps them and otherwise calls the default
-				// construction directly.
-				functionConstructionArguments = mockBuilderArguments(
-					for: node,
-					nodePath: nodePath,
-					lazilyInstantiatedBindingNames: ownCycleParameters.isEmpty ? lazilyInstantiatedBindingNames : builderLazilyInstantiatedBindingNames,
-					uncoveredDependencyNames: uncoveredDependencyNames,
-					sendableOverrideExtractor: startedSendableOverrideExtractor,
-					overrideReachable: overridePathReachable,
-					handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
-					sendableConfigurationTypeNames: sendableConfigurationTypeNames,
-					publicMock: publicMock,
-					bindingNamesPassedByName: bindingNamesPassedByName,
-				)
-				functionOverrideExpression = overrideExpression.map {
-					startedSendableOverrideExtractor.extract($0, localNameSuffix: ReservedName.configurationBuilderPropertyName)
-				}
-				overrideLocalNames = startedSendableOverrideExtractor.names
-				for extraction in startedSendableOverrideExtractor.extractions {
-					lines.prelude.append("\(indent)let \(extraction.localName) = \(extraction.expression)")
-				}
-			} else {
-				functionOverrideExpression = overrideExpression
-				// The caller read them for the construction inside this function, through the extractor of an enclosing
-				// `@Sendable` function if any.
-				functionConstructionArguments = arguments
+			// A member of a loop of builders first wraps again the functions of the members its tree receives inside the
+			// loop, so each receiver beneath reads a wrapper this call made.
+			// A `@Sendable` function calls the members its places' routes need at its top: their results are plain structs it
+			// could not capture.
+			var leadingLines = node.memberCallsInsideBuilderFunction.map { valuesBinding in
+				"\(innerIndent)\(valuesBinding.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames))"
 			}
-
-			let functionReturnType = node.instantiatedTypeDescription.asSource
+			leadingLines.append(contentsOf: loopMemberEmission?.rebindingLines ?? [])
+			let builderFunction = await generateMockBuilderFunction(
+				for: node,
+				named: functionName,
+				// The forwarded properties, and the parameters a lazy cycle closing on the function needs.
+				parameters: forwardedProperties + node.cycleParameters.map(\.property),
+				indent: indent,
+				sendableOverrideExtractor: sendableOverrideExtractor,
+				overrideLocalNames: &overrideLocalNames,
+				leadingLines: leadingLines,
+				receiverBindings: receiverBindings,
+				sendableAutoclosureBindings: sendableAutoclosureBindings,
+				alwaysReturnsExplicitly: false,
+				childBindings: { functionSendableOverrideExtractor in
+					await generateMockBodyBindings(
+						items: node.children,
+						parentPath: nodePath,
+						indent: innerIndent,
+						ancestorTypes: functionAncestors,
+						sendableOverrideExtractor: functionSendableOverrideExtractor,
+						flatParameterDisambiguationMap: functionBindingNames.flatParameterDisambiguationMap,
+						enclosingFunctionNames: enclosingFunctionNames,
+						lazilyInstantiatedBindingNames: functionBindingNames.lazilyInstantiatedBindingNames,
+						uncoveredDependencyNames: uncoveredDependencyNames,
+						sendableAutoclosureParameters: sendableAutoclosureParameters,
+						parentConcreteType: node.concreteType.asSource,
+						cycleEdges: cycleEdges,
+						overridePathReachable: overridePathReachable,
+						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+						publicMock: publicMock?.beneathRoot,
+						enclosingBindingNamesPassedByName: bindingNamesPassedByName,
+					)
+				},
+				construction: { startedSendableOverrideExtractor in
+					let functionOverrideExpression: String?
+					let functionConstructionArguments: [String]
+					if let startedSendableOverrideExtractor {
+						// The caller read this node's own override and default arguments
+						// from `safeDIOverrides` because it is outside any `@Sendable`
+						// function; the construction below is inside this one, so read
+						// them into locals too. Override closures are read as optionals;
+						// the function body unwraps them and otherwise calls the default
+						// construction directly.
+						functionConstructionArguments = mockBuilderArguments(
+							for: node,
+							nodePath: nodePath,
+							lazilyInstantiatedBindingNames: node.cycleParameters.isEmpty ? lazilyInstantiatedBindingNames : functionBindingNames.lazilyInstantiatedBindingNames,
+							uncoveredDependencyNames: uncoveredDependencyNames,
+							sendableOverrideExtractor: startedSendableOverrideExtractor,
+							overrideReachable: overridePathReachable,
+							handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
+							sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+							publicMock: publicMock,
+							bindingNamesPassedByName: bindingNamesPassedByName,
+						)
+						functionOverrideExpression = overrideExpression.map {
+							startedSendableOverrideExtractor.extract($0, localNameSuffix: ReservedName.configurationBuilderPropertyName)
+						}
+					} else {
+						functionOverrideExpression = overrideExpression
+						// The caller read them for the construction inside this function, through the extractor of an enclosing
+						// `@Sendable` function if any.
+						functionConstructionArguments = arguments
+					}
+					let builtConstructionExpression = mockConstructionExpression(
+						for: node,
+						overrideExpression: functionOverrideExpression,
+						arguments: functionConstructionArguments,
+						overrideReachable: overridePathReachable,
+						handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
+						publicMock: publicMock,
+						publicMockOverridesIsSendableClosure: publicMockOverridesIsSendableClosure,
+						indent: innerIndent,
+					)
+					// A public mock takes a lazily instantiated dependency it builds by value, so its builder function returns
+					// the value its caller passed, if any – unless a cycle closes on the function, whose cycle-closing scopes build
+					// the declaration they repeat again, as production does: then the wrapper's closure returns it instead.
+					return if let promotedParameterName, node.property.propertyType.isLazilyInstantiated, !node.isReferencedByCycleClosingScope {
+						passing(promotedParameterName, orBuilding: builtConstructionExpression)
+					} else {
+						builtConstructionExpression
+					}
+				},
+			)
+			lines.prelude.append(contentsOf: builderFunction.extractions)
 			// The payloads of the cases on the routes to the places beneath this function, bound before it. A loop's members
 			// each bind theirs in a `let`, which every member's function captures, here and in the mock's fills
 			// (`SeamHoles.holdsLoopPayloadsInBoxes`), where a seam's tree holds a loop's in one box (`ScopeGenerator.boxedLoops`):
@@ -11870,49 +11834,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for valuesBinding in node.valuesBindings {
 				lines.prelude.append("\(indent)\(valuesBinding.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames))")
 			}
-			lines.function.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
-			// A member of a loop of builders first wraps again the functions of the members its tree receives inside the
-			// loop, so each receiver beneath reads a wrapper this call made.
-			// A `@Sendable` function calls the members its places' routes need at its top: their results are plain structs it
-			// could not capture.
-			let memberCallLines = node.memberCallsInsideBuilderFunction.map { valuesBinding in
-				"\(innerIndent)\(valuesBinding.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames))"
-			}
-			lines.function.append(contentsOf: memberCallLines)
-			let rebindingLines = loopMemberEmission?.rebindingLines ?? []
-			lines.function.append(contentsOf: rebindingLines)
-			let preamble = await callPreamble(of: node, indent: innerIndent)
-			lines.function.append(contentsOf: preamble)
-			lines.function.append(contentsOf: receiverBindings)
-			lines.function.append(contentsOf: sendableAutoclosureBindings)
-			lines.function.append(contentsOf: childBindings)
-
-			// Swift's implicit-return rule only applies when the function
-			// body is a single expression. Fills, receiver bindings, autoclosure
-			// bindings, and child bindings all add extra statements, so any
-			// one forces an explicit `return`. The function's return type
-			// gives both branches of an `if` expression a contextual type.
-			let returnKeyword = memberCallLines.isEmpty && rebindingLines.isEmpty && preamble.isEmpty && childBindings.isEmpty && receiverBindings.isEmpty && sendableAutoclosureBindings.isEmpty ? "" : "return "
-			let builtConstructionExpression = mockConstructionExpression(
-				for: node,
-				overrideExpression: functionOverrideExpression,
-				arguments: functionConstructionArguments,
-				overrideReachable: overridePathReachable,
-				handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
-				publicMock: publicMock,
-				publicMockOverridesIsSendableClosure: publicMockOverridesIsSendableClosure,
-				indent: innerIndent,
-			)
-			// A public mock takes a lazily instantiated dependency it builds by value, so its builder function returns
-			// the value its caller passed, if any – unless a cycle closes on the function, whose cycle-closing scopes build
-			// the declaration they repeat again, as production does: then the wrapper's closure returns it instead.
-			let constructionExpression = if let promotedParameterName, node.property.propertyType.isLazilyInstantiated, !node.isReferencedByCycleClosingScope {
-				passing(promotedParameterName, orBuilding: builtConstructionExpression)
-			} else {
-				builtConstructionExpression
-			}
-			lines.function.append("\(innerIndent)\(returnKeyword)\(constructionExpression)")
-			lines.function.append("\(indent)}")
+			lines.function.append(contentsOf: builderFunction.function)
 		}
 		if let receivedFunction = loopMemberEmission?.receivedFunction {
 			lines.function.append(contentsOf: receivedFunction.lines)
@@ -11950,6 +11872,102 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		return lines
+	}
+
+	/// The names a mock node's builder function hands its body, for an instantiator node and a constant node alike: the
+	/// renames that `flatParameterDisambiguationMap` and `lazilyInstantiatedBindingNames` give, without those its
+	/// children's declarations, its forwarded properties and the parameters a lazy cycle closing on the function needs
+	/// hide, and, for the first, with the receives of the dependencies its type instantiates that the mock cannot build
+	/// routed to their `mock()` parameters (`uncoveredDependencyNames`). The node's own receives have labels of their own,
+	/// which neither its declarations nor its uncovered dependencies share. A constant node forwards nothing.
+	private static func builderFunctionBindingNames(
+		of node: MockParameterNode,
+		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
+		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
+		uncoveredDependencyNames: [String: [TypeDescription: String]],
+	) -> (flatParameterDisambiguationMap: [String: [TypeDescription: String]], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]]) {
+		let ownCycleParameterForms = node.isPropertyCycle ? [] : node.cycleParameters.flatMap(\.providedForms).sorted()
+		return (
+			flatParameterDisambiguationMap: routingReceives(
+				of: uncoveredInstantiatedDependencies(of: node),
+				toParametersNamed: uncoveredDependencyNames,
+				in: removingRenames(
+					hiddenByDeclarationsOf: node.children,
+					parameters: node.forwardedProperties.sorted() + ownCycleParameterForms,
+					from: flatParameterDisambiguationMap,
+				),
+			),
+			lazilyInstantiatedBindingNames: builderLazilyInstantiatedBindingNames(for: node, from: lazilyInstantiatedBindingNames),
+		)
+	}
+
+	/// The lines of a mock node's builder function `func <functionName>(<parameters>) -> <Type>`, which builds the node's
+	/// children and then the node, for an instantiator node, whose wrapper is handed the function, and a constant node
+	/// that needs a Swift scope of its own, whose binding calls it.
+	///
+	/// A `@Sendable` function that is not already inside another one starts a new extraction: every `safeDIOverrides`
+	/// read in its body, including inside nested builder functions at any depth, becomes a local declared before it
+	/// (`extractions`). Inside an enclosing `@Sendable` function, reads keep flowing to the outermost function's
+	/// extractor, whose locals are already in scope.
+	/// - Parameters:
+	///   - leadingLines: The lines the body begins with: the members a `@Sendable` function calls at its top, and a loop
+	///     member's rebindings.
+	///   - alwaysReturnsExplicitly: Whether the last line spells `return` when it is the body's only statement, as a
+	///     constant node's function does.
+	///   - childBindings: The children's bindings, generated with the extractor the body reads overrides through.
+	///   - construction: The expression that builds the node, given the extractor this function started, if any, through
+	///     which it reads the node's own override and arguments; called after `childBindings`.
+	private static func generateMockBuilderFunction(
+		for node: MockParameterNode,
+		named functionName: String,
+		parameters: [Property],
+		indent: String,
+		sendableOverrideExtractor: SendableOverrideExtractor?,
+		overrideLocalNames: inout GeneratedNameAllocator,
+		leadingLines: [String],
+		receiverBindings: [String],
+		sendableAutoclosureBindings: [String],
+		alwaysReturnsExplicitly: Bool,
+		childBindings generateChildBindings: (SendableOverrideExtractor?) async -> [String],
+		construction: (SendableOverrideExtractor?) -> String,
+	) async -> (extractions: [String], function: [String]) {
+		let innerIndent = "\(indent)\(standardIndent)"
+		let startedSendableOverrideExtractor: SendableOverrideExtractor? = if sendableOverrideExtractor == nil, node.buildsInSendableFunction {
+			SendableOverrideExtractor(functionName: functionName, names: overrideLocalNames)
+		} else {
+			nil
+		}
+		let childBindings = await generateChildBindings(sendableOverrideExtractor ?? startedSendableOverrideExtractor)
+		let constructionExpression = construction(startedSendableOverrideExtractor)
+		var extractions = [String]()
+		if let startedSendableOverrideExtractor {
+			overrideLocalNames = startedSendableOverrideExtractor.names
+			for extraction in startedSendableOverrideExtractor.extractions {
+				extractions.append("\(indent)let \(extraction.localName) = \(extraction.expression)")
+			}
+		}
+
+		let functionDecorator = node.buildsInSendableFunction ? "@Sendable " : ""
+		let functionArguments = if parameters.isEmpty {
+			""
+		} else {
+			parameters.initializerFunctionParameters(amongTypesDeclaredEscaping: node.typesDeclaredEscaping).map(\.description).joined()
+		}
+		// The function's return type gives both branches of an `if` expression a contextual type.
+		var function = ["\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(node.instantiatedTypeDescription.asSource) {"]
+		function.append(contentsOf: leadingLines)
+		let preamble = await callPreamble(of: node, indent: innerIndent)
+		function.append(contentsOf: preamble)
+		function.append(contentsOf: receiverBindings)
+		function.append(contentsOf: sendableAutoclosureBindings)
+		function.append(contentsOf: childBindings)
+		// Swift's implicit-return rule only applies when the function body is a single expression. Fills, receiver
+		// bindings, autoclosure bindings, and child bindings all add extra statements, so any one forces an explicit
+		// `return`.
+		let returnKeyword = alwaysReturnsExplicitly || !leadingLines.isEmpty || !preamble.isEmpty || !childBindings.isEmpty || !receiverBindings.isEmpty || !sendableAutoclosureBindings.isEmpty ? "return " : ""
+		function.append("\(innerIndent)\(returnKeyword)\(constructionExpression)")
+		function.append("\(indent)}")
+		return (extractions: extractions, function: function)
 	}
 
 	/// The lines `generateInstantiatorBinding` emits for one instantiator node, in the order they are emitted, in three
