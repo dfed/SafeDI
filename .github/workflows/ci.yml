@@ -1893,6 +1893,10 @@ jobs:
           command: command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }
       - name: Check the Script
         run: python3 -I Scripts/generate-time-check.py --self-test "$RUNNER_TEMP/generate-time-self-test"
+      # Scripts/compile-time-check.py is run by hand, and imports this job's
+      # script, so a change to either that breaks it fails here. About 35 s.
+      - name: Check the Compile Time Script
+        run: python3 -I Scripts/compile-time-check.py --self-test "$RUNNER_TEMP/compile-time-self-test"
       # For the reason "Build Tests on Linux" gives. The builds below stamp
       # again after each checkout of another commit, with this copy of the
       # script, which the checkout of the base commit cannot change.
