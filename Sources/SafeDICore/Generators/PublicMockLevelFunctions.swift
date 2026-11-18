@@ -21,7 +21,8 @@
 /// The level functions a call of another module's public mock declares for the builders it fills: one function per level
 /// of the called mock's tree and per set of values the routes to that level bind, each returning the level's builder
 /// struct. A route on which no level binds a value a fill reads hands the fill the caller's, which the root level function
-/// takes; a case that leads to a level function an enclosing call declares re-enters it (`Member.reentry`).
+/// takes; a case that leads to a level function an enclosing call declares re-enters it (`Member.reentry`), handing it the
+/// struct of each level of the caller's it takes, as a case that leads to a level of the call hands it on.
 struct PublicMockLevelFunctions: Sendable {
 	/// One level function.
 	struct Function: Sendable {
@@ -43,8 +44,9 @@ struct PublicMockLevelFunctions: Sendable {
 		/// The function of the level the case leads to, handed each value it takes.
 		case level(caseName: String, functionIndex: Int, arguments: [Argument])
 		/// The call of the level function an enclosing call declares for the enum the case holds, which the case re-enters,
-		/// handed what that function takes.
-		case reentry(caseName: String, call: String)
+		/// handed what that function takes: the struct of each level of the caller's it takes, which this function's own struct
+		/// of that level's member for the case returns, and the values `call` reads of the re-entering call's own scope.
+		case reentry(caseName: String, call: EnclosingLevelCall, carriedArguments: [Argument])
 
 		/// The fill of a member that fills its case's place with nothing but the payload, or `nil`.
 		var fillTakingOnlyItsPayload: ScopeGenerator.FillDispatcher.Case.Target? {
@@ -64,6 +66,14 @@ struct PublicMockLevelFunctions: Sendable {
 		/// For the struct of a level of the caller's that a fill inside a fill of the call is handed, the name the function
 		/// takes the struct of its own level under, whose member for the case returns it.
 		var carriedUpName: String?
+	}
+
+	/// A level function an enclosing call declares that a case of this call's re-enters: its name, and what the re-entering
+	/// call hands it of the values it takes of the caller's scope, read of the call's own
+	/// (`ScopeGeneratorUnderConstruction.enclosingLevelCalls`).
+	struct EnclosingLevelCall: Sendable {
+		let name: String
+		let arguments: [String]
 	}
 
 	/// A builder the call passes the root level function of: the label it passes it under, the key of the root dispatcher, and
@@ -89,8 +99,11 @@ struct PublicMockLevelFunctions: Sendable {
 	/// seam's root dispatcher reads the caller's declaration of it: a route on which no level binds a value a fill reads
 	/// hands the fill the caller's, so the place is filled there, as production fills it.
 	/// - Parameter enclosingLevelCalls: For each case's target that is a level function an enclosing call declares, by its
-	///   dispatcher's key, the call that re-enters it (`ScopeGeneratorUnderConstruction.enclosingLevelCalls`): a builder the
-	///   called mock holds of a type whose places the enclosing call fills.
+	///   dispatcher's key, the function and the values the call that re-enters it hands it
+	///   (`ScopeGeneratorUnderConstruction.enclosingLevelCalls`): a builder the called mock holds of a type whose places the
+	///   enclosing call fills. The case hands it, beside them, this function's own struct of each level of the caller's the
+	///   re-entered function takes (`FillDispatcher.Case.Target.reusedCarriedInnerScopes`), so a level function on a route to
+	///   such a case takes it.
 	/// - Parameter callerReads: The field each value the call's fills read of the caller's scope is taken as, by label, and
 	///   what the call hands it (`ScopeGenerator.FillCallerReads`).
 	/// - Parameter labelsHandedPastRootPayloads: The labels of `callerReads` whose value a root level's payload carries
@@ -104,7 +117,7 @@ struct PublicMockLevelFunctions: Sendable {
 		reservedNames: Set<String>,
 		callerReads: [String: (field: SeamSignature.Hole.Field, argument: String)],
 		labelsHandedPastRootPayloads: Set<String>,
-		enclosingLevelCalls: [String: String],
+		enclosingLevelCalls: [String: EnclosingLevelCall],
 	) {
 		callerArgumentByLabel = callerReads.mapValues(\.argument)
 		let dispatchersByKey = Dictionary(dispatchers.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
@@ -121,6 +134,16 @@ struct PublicMockLevelFunctions: Sendable {
 			for dispatcher in dispatchers {
 				for dispatcherCase in dispatcher.cases {
 					guard let target = dispatcherCase.target else { continue }
+					// A case that re-enters a level function an enclosing call declares hands it the struct of each level of the
+					// caller's it takes, as a case that leads to a level of this call does: this function's own struct of that level.
+					if enclosingLevelCalls[target.key] != nil {
+						for reused in target.reusedCarriedInnerScopes {
+							guard let carried = dispatcher.carriedInnerScopes.first(where: { $0.type == reused.type }) else { continue }
+							if relevantLabelsByKey[dispatcher.key, default: []].insert(carried.name).inserted {
+								changed = true
+							}
+						}
+					}
 					let read = fillParametersByKey[target.key].map { Set($0.map(\.property.label)) } ?? relevantLabelsByKey[target.key] ?? []
 					let carried = Set((dispatcherCase.values ?? []).map(\.property.label)).subtracting(labelsPayloadHidesNot(of: dispatcher))
 					for label in read.subtracting(carried).subtracting(dispatcherCase.labelsBoundLater) where relevantLabelsByKey[dispatcher.key, default: []].insert(label).inserted {
@@ -196,7 +219,14 @@ struct PublicMockLevelFunctions: Sendable {
 					}
 					members.append(.level(caseName: dispatcherCase.name, functionIndex: childIndex, arguments: arguments))
 				} else if let call = enclosingLevelCalls[target.key] {
-					members.append(.reentry(caseName: dispatcherCase.name, call: call))
+					// The re-entered function takes each struct under its own name for it, in its own order.
+					let carriedArguments = target.reusedCarriedInnerScopes.compactMap { reused in
+						relevantCarried.first { $0.type == reused.type }.map { carried in
+							let property = Property(label: carried.name, typeDescription: carried.type)
+							return Argument(label: reused.upName, readsPayload: true, heldForm: property, handedForm: property, carriedUpName: carried.upName)
+						}
+					}
+					members.append(.reentry(caseName: dispatcherCase.name, call: call, carriedArguments: carriedArguments))
 				}
 			}
 			functions[index].members = members
@@ -327,8 +357,9 @@ struct PublicMockLevelFunctions: Sendable {
 					let allArguments = arguments.map { argumentText($0, payloadName: valuesName, caseName: caseName) }
 					let readsValues = arguments.contains(where: \.readsPayload)
 					members.append(["\(caseName.spelledAsArgumentLabel): { \(readsValues ? valuesName : "_") in \(child.name)(\(allArguments.joined(separator: ", "))) }"])
-				case let .reentry(caseName, call):
-					members.append(["\(caseName.spelledAsArgumentLabel): { _ in \(call) }"])
+				case let .reentry(caseName, call, carriedArguments):
+					let allArguments = carriedArguments.map { argumentText($0, payloadName: valuesName, caseName: caseName) } + call.arguments
+					members.append(["\(caseName.spelledAsArgumentLabel): { \(carriedArguments.isEmpty ? "_" : valuesName) in \(call.name)(\(allArguments.joined(separator: ", "))) }"])
 				}
 			}
 			let builderType = TypeDescription.nested(name: ReservedName.builderStructTypeName, parentType: dispatcher.enumType, generics: [dispatcher.returnType])
