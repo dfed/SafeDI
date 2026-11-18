@@ -8225,9 +8225,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// which a consumer computes from the declaring module's view (`GraphFuzzerSeamDependencyDraw`); and a type built with
 	/// its hand-written mock inside another public mock of its module, whose extensions declare the function only generated
 	/// code calls beside the construction function of that name (seed 37); and a graph that puts a place beneath a
-	/// dependency the public mock promotes, which fails to compile until a public mock keeps such a place
-	/// (`placeBeneathPromotedDependencyReason`): `SelfPart` receiving `SelfNode`'s `SendableInstantiator` beside the place,
-	/// whose construction function forwards the flat `@autoclosure` parameter (seed 189). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
+	/// dependency the public mock promotes, which did not compile before a public mock kept such a place: `SelfPart`
+	/// receiving `SelfNode`'s `SendableInstantiator` beside the place, whose construction function forwarded a flat
+	/// `@autoclosure` parameter (seed 189, the adopter's own shape). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
 	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Beyond the corpus, seeds
 	/// 1339, 1649, 2687 and 2840 build a type whose public mock names `customMockName` erased to a concrete existential in
 	/// another module's public mock, whose shared construction function returned the eraser and did not compile
@@ -8396,63 +8396,8 @@ struct SafeDIToolGraphFuzzerTests {
 		),
 	]
 
-	/// `publicMockKnownIssuesBesideBuilderSurface` with each part of the builder surface added for its seeds, and then the
-	/// graphs whose place beneath a dependency the public mock promotes is dropped (`placeBeneathPromotedDependencyReason`).
-	static let publicMockKnownIssues = GraphFuzzerKnownIssue.adding(
-		placeBeneathPromotedDependencySignatures + [.renamedGraphDiffers(.dependencyTreeCode)],
-		reason: "\(placeBeneathPromotedDependencyReason), and a hand-written call that passes both of a place's builders, of which the mock takes one, converts that one alone, while under a renaming that moves the builders' labels it converts both",
-		seeds: publicMockPlaceBeneathPromotedDependencyCallerRenamedSeeds,
-		to: GraphFuzzerKnownIssue.adding(
-			placeBeneathPromotedDependencySignatures,
-			reason: placeBeneathPromotedDependencyReason,
-			seeds: publicMockPlaceBeneathPromotedDependencySeeds,
-			to: addingBuilderSurfaceShapes(seeds: publicMockBuilderSurfaceSeeds, to: publicMockKnownIssuesBesideBuilderSurface),
-		),
-	)
-
-	/// Why the graphs of the public mock corpus that put a place beneath a dependency the public mock promotes fail
-	/// (`GraphFuzzerPublicMockDrawFeature.holeHostReceivedByValue` and its neighbours, and
-	/// `selfBuildingPublicMockReceivesBuilder`): owned by the change that keeps such a place, which empties
-	/// `publicMockPlaceBeneathPromotedDependencySeeds` and `publicMockPlaceBeneathPromotedDependencyCallerRenamedSeeds`.
-	private static let placeBeneathPromotedDependencyReason = "A public mock drops a place beneath a dependency it promotes to its root – one a type of its tree receives that the mocked type does not declare – since no case of its enums reaches the place, so the place takes a flat parameter of the mock where the mock should take its builder, and the hand-written caller that passes the builder does not compile; where the mocked type is built again inside a `@Sendable` function, the mock’s construction function forwards the flat `@autoclosure` parameter by name, which does not compile either (M2)"
-
-	/// The compiler's errors for a dropped place beneath a promoted dependency: the hand-written caller's call of `T6`'s or
-	/// `SelfNode`'s mock, which lacks the flat parameter (as `hole`, or as `holeBuilder` for a hole spelled
-	/// `Instantiator<Hole>`), names a builder no overload of the mock takes, or passes the labels the mock names apart in
-	/// another order; and the construction function's forward of the flat `@autoclosure` parameter.
-	private static let placeBeneathPromotedDependencySignatures: [GraphFuzzerKnownIssue.Signature] = [
-		.compilerError(containing: "missing argument for parameter 'hole' in call"),
-		.compilerError(containing: "missing argument for parameter 'holeBuilder' in call"),
-		.compilerError(containing: "missing argument for parameter 'selfApi' in call"),
-		.compilerError(containing: "no exact matches in call to static method 'mock'"),
-		.compilerError(containing: "incorrect argument label in call (have 'holeSession_"),
-		.compilerError(containing: "add () to forward '@autoclosure' parameter"),
-	]
-
-	/// The public mock corpus's graphs that fail to compile because a place beneath a dependency the public mock promotes is
-	/// dropped (`placeBeneathPromotedDependencyReason`), observed from a run of the tool over the corpus: `T6`'s hole beneath
-	/// `HoleHost` that `HoleReceiver` receives (seed 609 receives it through a `SendableInstantiator`), and `SelfNode`'s
-	/// builder received by a type of its tree.
-	static let publicMockPlaceBeneathPromotedDependencySeeds: [UInt64] = [
-		2, 12, 15, 18, 22, 28, 33, 48, 49, 54, 57, 58, 62, 63, 64, 79, 84, 90, 92, 101,
-		103, 106, 109, 122, 129, 136, 160, 162, 165, 171, 181, 183, 185, 186, 190, 199, 204, 207, 211, 221,
-		223, 225, 238, 242, 244, 245, 248, 251, 261, 266, 274, 280, 281, 282, 283, 285, 296, 297, 302, 304,
-		312, 314, 319, 327, 330, 333, 335, 336, 344, 347, 350, 351, 352, 360, 366, 371, 383, 387, 389, 395,
-		398, 407, 409, 416, 417, 423, 424, 425, 428, 432, 433, 435, 438, 441, 445, 448, 453, 455, 456, 465,
-		468, 474, 477, 482, 498, 507, 510, 519, 521, 525, 527, 528, 539, 541, 542, 549, 556, 559, 561, 574,
-		575, 576, 577, 584, 589, 591, 595, 597, 598, 602, 606, 608, 609, 610, 632, 643, 646, 647, 653, 658,
-		659, 660, 663, 664, 669, 678, 685, 692, 693, 701, 703, 713, 717, 721, 730, 733, 734, 735, 757, 772,
-		775, 777, 778, 799, 814, 819, 820, 821, 823, 824, 828, 834, 840, 845, 846, 847, 848, 849, 852, 854,
-		863, 870, 872, 879, 886, 887, 891, 898, 902, 907, 927, 931, 935, 937, 940, 941, 946, 947, 953, 967,
-		971, 973, 974, 975, 979, 981, 985, 989, 992, 998,
-	]
-
-	/// The graphs of `publicMockPlaceBeneathPromotedDependencySeeds`' shape whose `SelfNode` is built again through a
-	/// `SendableInstantiator`, so the hand-written caller passes both of the place's builders: seed 189 is the adopter's own
-	/// shape, `SelfPart` receiving the builder beside the place.
-	static let publicMockPlaceBeneathPromotedDependencyCallerRenamedSeeds: [UInt64] = [
-		143, 156, 189, 222, 250, 264, 308, 317, 370, 394, 404, 479, 537, 564, 652, 673, 715, 901, 918, 923,
-	]
+	/// `publicMockKnownIssuesBesideBuilderSurface` with each part of the builder surface added for its seeds.
+	static let publicMockKnownIssues = addingBuilderSurfaceShapes(seeds: publicMockBuilderSurfaceSeeds, to: publicMockKnownIssuesBesideBuilderSurface)
 
 	/// The public mock corpus's graphs that fail each part of the builder surface today, observed from a run of the tool over
 	/// the corpus (`GraphFuzzerBuilderSurface`), each part's seeds apart: the base check (every graph with a hole the tool
