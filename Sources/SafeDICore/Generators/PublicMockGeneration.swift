@@ -1389,6 +1389,22 @@ struct PublicMockFinding: Hashable, Sendable {
 		])
 	}
 
+	/// `holeDependency`, a hole of `instantiable` the mock builds with a builder `mock()` takes, shares its label with
+	/// `receive`, which the mock binds beside it, and the mock has another place, whose builder it cannot hand the right
+	/// value of the label (`ScopeGenerator.publicMockHoleSiteBoundApartFinding`). Reported at the hole's declaration, with a
+	/// note at the receive. The one remedy renames the hole, which is local to `instantiable`: renaming the receive would
+	/// mean renaming the declaration that production hands it too.
+	static func holeSiteBoundApart(_ holeDependency: Dependency, receive: (receivingType: TypeDescription, receivedProperty: Property, declarationLocation: Dependency.DeclarationLocation?), of instantiable: Instantiable) -> PublicMockFinding {
+		let typeName = "`\(instantiable.concreteInstantiable.asSource)`"
+		let hole = "`\(holeDependency.property.asSource)`"
+		let receivedProperty = "`\(receive.receivedProperty.asSource)`"
+		let message = "SafeDI cannot generate the public mock of \(typeName): the mock builds \(hole), which \(typeName) instantiates, with a builder `mock()` is passed, and `\(receive.receivingType.asSource)` receives \(receivedProperty) with the same label, so the mock holds two values labeled `\(holeDependency.property.label)` and cannot hand the right one to the other builders `mock()` is passed. Declare \(hole) on \(typeName) under another label to fix."
+		return PublicMockFinding(sourceDiagnostics: [
+			SourceDiagnostic(severity: .error, location: holeDependency.declarationLocation, message: message),
+			SourceDiagnostic(severity: .note, location: receive.declarationLocation, message: "\(receivedProperty) is received here"),
+		])
+	}
+
 	/// `publicTierOmitsRequiredParameter`: the `public` tier the mock requires cannot take `parameter`.
 	static func omittedRequiredParameter(_ parameter: OmittedRequiredParameter, of instantiable: Instantiable) -> PublicMockFinding {
 		let typeName = "`\(instantiable.concreteInstantiable.asSource)`"
@@ -1540,7 +1556,81 @@ extension ScopeGenerator {
 				receivers: [(declaringType: hole.ownerType, dependency: Dependency(property: hole.property, source: .instantiated(fulfillingTypeDescription: nil, erasedToConcreteExistential: hole.erasedToConcreteExistential), declarationLocation: hole.declarationLocation))],
 			))
 		}
-		return omittedParameters.map { PublicMockFinding.omittedRequiredParameter($0, of: instantiable) }
+		var findings = omittedParameters.map { PublicMockFinding.omittedRequiredParameter($0, of: instantiable) }
+		if let holeSiteBoundApartFinding = publicMockHoleSiteBoundApartFinding(of: instantiable, parameters: parameters) {
+			findings.append(holeSiteBoundApartFinding)
+		}
+		return findings
+	}
+
+	/// A site of a hole of the mocked type that the mock binds apart from its label (`renamingAliases`), because a type in
+	/// the tree of a dependency the mocked type receives receives the label in a form the hole's declaration does not
+	/// provide, when the mock has a place besides that site. The builder of every other place is handed the values the
+	/// mocked type holds by their labels, and the mock holds two under this one, so it cannot hand the right one. The
+	/// sites bound apart are the ones `generateMockRootCode` binds apart: both read `mockRootTopLevelNames`. Whether the
+	/// other place comes before or after the site in the mocked type's declaration order is not consulted, so that
+	/// reordering two properties never makes the error appear or go away. The first such hole in the mocked type's
+	/// declaration order is reported, with a note at the first receive of its label the hole does not provide, in the order
+	/// the mock's tree first receives its dependencies.
+	///
+	/// A deliberate gap: an internal mock, and a listed type's, takes such a dependency as a parameter under its label and
+	/// has no site, so it accepts the shape (`renamingAliases` says so too). A public mock whose only place is the site
+	/// hands that builder nothing under the label, and is accepted too.
+	private func publicMockHoleSiteBoundApartFinding(of instantiable: Instantiable, parameters: MockRootParameters) -> PublicMockFinding? {
+		guard let places = parameters.mockBuilders?.holes else { return nil }
+		let namesAliasesAreBoundApartFrom = Self.mockRootTopLevelNames(of: parameters, parameterNames: Self.mockRootParameterNames(of: parameters)).namesAliasesAreBoundApartFrom
+		var boundApartSiteByLabel = [String: SeamSignature.Hole]()
+		for case let .alias(alias) in parameters.parameterTree where Self.isBoundApart(alias, from: namesAliasesAreBoundApartFrom) {
+			if let site = alias.holeSite, places.contains(where: { $0.site != site.site }) {
+				boundApartSiteByLabel[alias.property.label] = site
+			}
+		}
+		guard !boundApartSiteByLabel.isEmpty,
+		      let holeDependency = instantiable.dependencies.first(where: { boundApartSiteByLabel[$0.property.label] != nil }),
+		      let receive = firstReceive(ofLabelOf: holeDependency.property)
+		else { return nil }
+		return PublicMockFinding.holeSiteBoundApart(holeDependency, receive: receive, of: instantiable)
+	}
+
+	/// The first receive of `holeProperty`'s label in this mock root's tree that a declaration of `holeProperty` does not
+	/// provide, in the order the mock's tree first receives its dependencies (`inOrderTheMockTreeFirstReceives`): the trees
+	/// of the mocked type's own children, then those of the dependencies the mock promotes, each depth first, every type's
+	/// dependencies in declaration order before its children's trees, up to a type that declares the label itself.
+	private func firstReceive(ofLabelOf holeProperty: Property) -> (receivingType: TypeDescription, receivedProperty: Property, declarationLocation: Dependency.DeclarationLocation?)? {
+		let declaredProperties: Set<Property> = [holeProperty, holeProperty.asValidatedForDependencyCycles]
+		/// The property a dependency receives from the types above it: the fulfilling property of an alias, the declared
+		/// property of a receive, and `nil` for a property the type declares.
+		func receivedProperty(of dependency: Dependency) -> Property? {
+			switch dependency.source {
+			case .received:
+				dependency.property
+			case let .aliased(fulfillingProperty, _, _):
+				fulfillingProperty
+			case .instantiated, .forwarded:
+				nil
+			}
+		}
+		/// The generators among `generators` that build a type, last first, since the stack walks its last element next.
+		func typesToWalk(among generators: [ScopeGenerator]) -> [(generator: ScopeGenerator, instantiable: Instantiable)] {
+			generators.reversed().compactMap { generator in generator.builtInstantiable.map { (generator: generator, instantiable: $0) } }
+		}
+		var receive: (receivingType: TypeDescription, receivedProperty: Property, declarationLocation: Dependency.DeclarationLocation?)?
+		// A stack of its own, since a mock tree can be as deep as the module has types.
+		var typesLeftToWalk = typesToWalk(among: children)
+		while receive == nil, let typeToWalk = typesLeftToWalk.popLast() {
+			let builtInstantiable = typeToWalk.instantiable
+			if let dependency = builtInstantiable.dependencies.first(where: { dependency in
+				receivedProperty(of: dependency).map { property in
+					property.label == holeProperty.label && !Self.provides(property, declaredProperties: declaredProperties, forwardedProperties: [])
+				} ?? false
+			}), let property = receivedProperty(of: dependency) {
+				receive = (builtInstantiable.concreteInstantiable, property, dependency.declarationLocation)
+			} else if !builtInstantiable.dependencies.contains(where: { !$0.source.isReceived && $0.property.label == holeProperty.label }) {
+				// A type that declares the label itself is what the types it builds receive under it.
+				typesLeftToWalk += typesToWalk(among: typeToWalk.generator.children)
+			}
+		}
+		return receive
 	}
 
 	/// The declarations in `items`' tree that receive or instantiate a dependency, by its label, in tree order: the
