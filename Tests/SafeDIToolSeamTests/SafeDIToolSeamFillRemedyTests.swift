@@ -302,6 +302,43 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		)
 	}
 
+	// MARK: A value bound outside a `@Sendable` function
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingInstantiatorBesideForwarding_whenSendableFunctionBuildsLazyWrapper() async {
+		// A lazy wrapper is passed no forwarded value, so `K`, which would forward `n`, is built by an instantiator.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `n: Int`, which `Mid` forwards outside the `@Sendable` function that builds `k: SendableLazilyInstantiated<K>`, and SafeDI hands the builder for `K`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Forwarded let n: Int` on `K` too, and `k` as `SendableInstantiator<K>`, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Mid.swift"]):8:5: note: `Mid` declares `n: Int` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.midModules(
+					k: ["@Instantiated public let api: any Api"],
+					mid: ["@Forwarded public let n: Int", "@Instantiated public let k: SendableLazilyInstantiated<K>"],
+					live: ["@Received public let n: Int"],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenLazyWrapperBecomesInstantiatorOfTypeThatForwardsValueAsTheErrorSays() async throws {
+		try await expectRemedyBuildsInlineValues(
+			Self.midModules(
+				k: ["@Forwarded public let n: Int", "@Instantiated public let api: any Api"],
+				mid: ["@Forwarded public let n: Int", "@Instantiated public let k: SendableInstantiator<K>"],
+				live: ["@Received public let n: Int"],
+			),
+			probe: DifferentialValueProbe("{ () -> String in \"\\(Root().feature.midBuilder.instantiate(7).k.instantiate(9).api)\" }()"),
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -392,6 +429,24 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 			}()
 			""",
 		)
+	}
+
+	/// `Feature`, whose seam instantiates an instantiator of `Mid`, with `mid`, and whose `K`, with `k`, and `U`, which
+	/// receives `n`, are `Sendable`; and `App`, whose `Live` fills `Api`, a `Sendable` protocol, with `live`.
+	private static func midModules(k: [String], mid: [String], live: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: Sendable {}",
+				seamFixtureType(named: "U", declarations: ["@Received public let n: Int"], conformances: ", Sendable"),
+				seamFixtureType(named: "K", declarations: k, conformances: ", Sendable"),
+				seamFixtureType(named: "Mid", declarations: mid),
+				seamFixtureType(named: "Feature", isSeam: true, declarations: ["@Instantiated public let midBuilder: Instantiator<Mid>"]),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Feature\n\n" + SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "Live", fulfilling: "Api", declarations: live),
+				"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let feature: Feature"]),
+			], dependencies: ["Feature"]),
+		]
 	}
 
 	/// Expects `modules`, a remedied graph, to generate and compile in every module, and its seam build to construct the

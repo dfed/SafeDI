@@ -2366,6 +2366,16 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				let receiveOnSeamRemedy = declaration.declaringType == hole.scopeSeamType
 					? "Instantiate `\(declaration.property.label)` outside \(seamName) and declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on \(seamName), so the \(buildersPossessive) caller reads its own, or \(fulfillRemedy(seamModule))."
 					: capitalizedFulfillRemedy
+				/// The remedy that forwards `property` into the `@Sendable` function that builds `functionProperty`, of `builtType`,
+				/// `again` where an enclosing type forwards it already. Only an instantiator is passed forwarded values, so a lazy
+				/// wrapper becomes an instantiator of the type as well.
+				func forwardingRemedy(of property: Property, into functionProperty: Property, building builtType: TypeDescription, again: Bool) -> String {
+					let forward = "Declare `@\(Dependency.Source.forwardedRawValue) let \(property.asSource)` on `\(builtType.asSource)`\(again ? " too" : "")"
+					let instantiator = TypeDescription.simple(name: functionProperty.propertyType.isSendable ? Dependency.sendableInstantiatorType : Dependency.instantiatorType, generics: [builtType])
+					return ScopeGenerator.isBuilder(functionProperty)
+						? "\(forward), so that function binds it, or \(fulfillRemedy(seamModule))."
+						: "\(forward), and `\(functionProperty.label)` as `\(instantiator.asSource)`, so that function binds it, or \(fulfillRemedy(seamModule))."
+				}
 				/// The message of a declaration `seam` binds on a path to calls that present the places the finding names, whose
 				/// builders it passes up: each place itself, or the place a fill fills, when the reader is beneath a place inside
 				/// that fill. Every part a place decides – the seams whose calls present them, the builders, each remedy – comes
@@ -2420,7 +2430,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 						// A parameter of a builder function a cycle closes on is the value the cycle passes: only forwarding it
 						// into the `@Sendable` function binds it there.
 						"`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which `\(cycleParameter.takingType.asSource)`’s builder function takes as a parameter outside the `@Sendable` function that builds `\(functionProperty.asSource)`, because a cycle inside `\(cycleParameter.takingType.asSource)`’s tree passes it (`\(cycleParameter.declaringType.asSource)` \(cycleParameter.isForwarded ? "forwards" : "declares") `\(cycleParameter.property.asSource)`), and SafeDI hands \(namedBuilders) only what that function binds. "
-							+ (functionBuiltType.map { "Declare `@\(Dependency.Source.forwardedRawValue) let \(cycleParameter.property.asSource)` on `\($0.asSource)` too, so that function binds it, or \(fulfillRemedy(seamModule))." } ?? capitalizedFulfillRemedy)
+							+ (functionBuiltType.map { forwardingRemedy(of: cycleParameter.property, into: functionProperty, building: $0, again: true) } ?? capitalizedFulfillRemedy)
 					} else if let alias {
 						// An alias binds the label to another value than the caller's own of that label, which is all a fill reads:
 						// the type receives the label without the alias, and the seam's caller hands it the label's value.
@@ -2440,7 +2450,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					} else {
 						"`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which `\(declaration.declaringType.asSource)` \(isForwarded ? "forwards" : "declares") \(outside(functionProperty)) "
 							+ (isForwarded
-								? functionBuiltType.map { "Declare `@\(Dependency.Source.forwardedRawValue) let \(declaration.property.asSource)` on `\($0.asSource)` too, so that function binds it, or \(fulfillRemedy(seamModule))." } ?? capitalizedFulfillRemedy
+								? functionBuiltType.map { forwardingRemedy(of: declaration.property, into: functionProperty, building: $0, again: true) } ?? capitalizedFulfillRemedy
 								: receiveOnSeamRemedy)
 					}
 				}
