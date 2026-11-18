@@ -54,9 +54,10 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		#expect(output.modules["InnerMod"]?.generatedFiles == Self.expectedInnerModFiles)
 		#expect(output.modules["Feat"]?.generatedFiles == Self.expectedFeatFiles)
 		#expect(output.modules["App"]?.generatedFiles == Self.expectedAppFiles)
+		guard compileVerificationIsEnabled else { return }
 		let compilation = try #require(output.compilation)
 		#expect(compilation.failure == nil, "\(compilation.failure.map { "\($0)" } ?? "")")
-		guard compileVerificationIsEnabled, compilation.failure == nil else { return }
+		guard compilation.failure == nil else { return }
 		// The same types in one module, `Root` a root: what inline builds. `Live` receives `Root`’s `db`, as each of `K` and
 		// `Inner` does.
 		let inline = Self.inlineModules(liveReceive: "@Received let db: Db", liveInitializerParameter: "db: Db")
@@ -85,6 +86,7 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
+		guard compileVerificationIsEnabled else { return }
 		let compilation = try #require(output.compilation)
 		#expect(compilation.failure == nil, "\(compilation.failure.map { "\($0)" } ?? "")")
 	}
