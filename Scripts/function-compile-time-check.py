@@ -170,7 +170,7 @@ def check(log, module, limits, waivers, demangler):
                 # that is more: a runner twice as fast keeps the waiver, and a function that was split loses it.
                 near = [entry for entry in covers if entry[2] > max(limits[kind], waiver[1] / 1.25) / 2]
                 if near:
-                    notes.append(f"the waiver {text} was not needed on this run: `{near[0][1]}` took {near[0][2]:.1f} s, under the limit of {limits[kind]:g} s but over half of it, so the waiver stays")
+                    notes.append(f"the waiver {text} was not needed on this run: `{near[0][1]}` took {near[0][2]:.1f} s, under the limit of {limits[kind]:g} s but over half of what the waiver was written for, so the waiver stays")
                 else:
                     failures.append(f"the waiver {text} matches no function that takes even half of what it was written for: remove it, or lower its ceiling to 1.25 times what the function takes now")
         within = [(seconds, printed) for _, printed, seconds in entries if seconds <= limits[kind]]
