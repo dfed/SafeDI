@@ -22,6 +22,10 @@ The shapes (every name invented; `--shapes` picks among them, default all):
   E32-inline           the same graph, eight layers deep, with every type in the root's module and no seam.
   D20                  twenty screens with the same edges, each a seam in a module of its own, and a root with a
                        generated mock in module `App`: 22 modules.
+  I800-seam            eight hundred seams that reach none of one another in module `Feature`, seam i
+                       instantiating model i, both receiving `Service`, and a root in module `App` that instantiates
+                       `Service` and every seam. Computing a module's seam signatures once took time that grew with
+                       the square of its seams, which made this shape take 2.6 times as long on Linux.
 
 How it measures: one untimed run of each tool per shape, then N (default 5) timed runs of each, alternating base and
 head so that a busy moment on the machine falls on both. The figure compared is the median wall time. CPU time (user
@@ -110,11 +114,23 @@ def shape_d(count):
     return [(name, dependencies, (source if name == "Core" else "import SafeDI\n" + "".join(f"import {module}\n" for module in beneath[name]) + "\n" + source)) for name, dependencies, source in modules]
 
 
+def shape_i(count):
+    feature = "import SafeDI\n\n#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n\n"
+    feature += declaration("@Instantiable", "Service", [])
+    received = ("@Received", "service", "Service")
+    for seam in range(count):
+        feature += declaration("@Instantiable(generateDependencyTree: true)", f"Seam{seam}", [received, ("@Instantiated", f"model{seam}", f"Model{seam}")])
+        feature += declaration("@Instantiable", f"Model{seam}", [received])
+    app = declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", "service", "Service")] + [("@Instantiated", f"seam{seam}", f"Seam{seam}") for seam in range(count)])
+    return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + app)]
+
+
 SHAPES = {
     "E16-seam": lambda: shape_e(16, seam=True),
     "E24-seam": lambda: shape_e(24, seam=True),
     "E32-inline": lambda: shape_e(32, seam=False),
     "D20": lambda: shape_d(20),
+    "I800-seam": lambda: shape_i(800),
 }
 
 
