@@ -147,11 +147,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// form `FillDispatcher.dispatcherParameters(of:fillReads:)` types a dispatcher's parameter by, the form no fill
 			// reads optionally first, then in `Property` order, so neither the order of the fills nor of their cases decides it.
 			var callerReadFormsByLabel = [String: [Property: (field: SeamSignature.Hole.Field, arguments: Set<String>)]]()
-			var labelsHandedPastCalledMockCopy = Set<String>()
 			for child in propertiesToGenerate {
 				if let key = child.fillKey, child.fillEmitsCode {
 					fillParametersByKey[key] = child.fillParameterFields
-					labelsHandedPastCalledMockCopy.formUnion(child.fillCallerReads.labelsHandedPastCalledMockCopy)
 					for (label, argument) in child.fillCallerReads.argumentByLabel {
 						guard let field = child.fillCallerReads.parameterByLabel[label] else { continue }
 						callerReadFormsByLabel[label, default: [:]][field.property, default: (field, [])].arguments.insert(argument)
@@ -180,7 +178,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				},
 				reservedNames: namesTakenByCall.union(fillNames),
 				callerReads: callerReads,
-				labelsHandedPastRootPayloads: labelsHandedPastCalledMockCopy,
 				enclosingLevelCalls: enclosingLevelCalls,
 			)
 		} else {
@@ -1061,9 +1058,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// carries (`SeamHoles.innerScope(at:innerKey:)`): the fill takes it as a parameter, and each dispatcher that leads to
 		/// it passes it on from the root dispatcher's own parameter.
 		var innerScopeParameters = [SeamSignature.Hole.Field]()
-		/// The labels of `parameterByLabel` the level functions of a call of another module's public mock hand past the
-		/// called mock's by-value copy (`Scope.Fill.labelsHandedPastCalledMockCopy`).
-		var labelsHandedPastCalledMockCopy = Set<String>()
 		/// The property the caller's mock root binds for each caller's own value the fill reads from that binding, by label
 		/// (`Scope.Fill.mockRootBindingByLabel`): the fill binds the label to the name the mock spells for the property
 		/// (`FillPlaceBindings.rootBindingNames`).

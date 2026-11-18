@@ -838,7 +838,6 @@ private struct ScopeGeneratorUnderConstruction {
 			// (`callersOwnLabels(amongLabelsOf:carrying:at:reading:handedFrom:by:whereFillsReenterCall:)`). A label the payload
 			// carries the fill binds from the payload, the called mock's copy, which holds the caller's value, unless the copy does
 			// not provide every form the fill reads and no fill re-enters the call.
-			var callersOwnLabelsByCaseKey = [String: Set<String>]()
 			var mockRootBindingByLabelByCaseKey = [String: [String: Property]]()
 			var fillsReenterCall = false
 			if scope.publicMockCall != nil, let calledBuilders = scope.calledBuilders {
@@ -860,7 +859,6 @@ private struct ScopeGeneratorUnderConstruction {
 					let callersOwnLabels = Self.callersOwnLabels(amongLabelsOf: caseFields.fields, carrying: carriedLabels, at: places, reading: reads, handedFrom: childNearestDeclarations, by: publicMockCall, whereFillsReenterCall: fillsReenterCall)
 					caseFields.fields.removeAll { callersOwnLabels.labels.contains($0.property.label) }
 					caseFields.callerReadLabels.subtract(callersOwnLabels.labels)
-					callersOwnLabelsByCaseKey[caseKey] = callersOwnLabels.labels
 					mockRootBindingByLabelByCaseKey[caseKey] = callersOwnLabels.mockRootBindingByLabel
 					caseFieldsByCaseKey[caseKey] = caseFields
 				}
@@ -873,15 +871,10 @@ private struct ScopeGeneratorUnderConstruction {
 			// dispatcher's parameter, by a form that is no optional, then in `Property` order. Without such a call the fill
 			// reads the same declaration either way, and keeps capturing it. A caller's own value (above) is such a label too:
 			// the re-entering call hands its own nearest declaration, which is the one inline reads at the places it reaches.
-			// Where the fill reads it in a form the called mock's copy does not provide, the caller's wrapper, a level whose
-			// payload holds that by-value copy hands the fill the root level function's own parameter, past the copy
-			// (`Fill.labelsHandedPastCalledMockCopy`); where the copy provides every form the fill reads, the levels hand the
-			// copy, which holds the same value. A fill of the case's own places that reads such a wrapper and whose tree calls the
-			// called type's public mock, or one whose builders reach its places, is passed up before any fill is built
-			// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`), so a wrapper is handed past the copy only where
-			// the re-entering call is inside a fill of another call's place, as where the called type's fill builds a second
-			// called type whose own fill builds the first again.
-			var labelsHandedPastCalledMockCopyByCaseKey = [String: Set<String>]()
+			// The levels hand the fill the called mock's by-value copy of it, which holds the same value: a fill that reads the
+			// caller's wrapper beside its place's fields, which the copy does not provide, is passed up where its called type is
+			// re-entered, directly or through the fills of the calls its fills make, before any fill is built
+			// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`).
 			if fillsReenterCall {
 				for (caseKey, places) in placesByCaseKey {
 					guard var caseFields = caseFieldsByCaseKey[caseKey], let firstPlace = places.first else { continue }
@@ -892,19 +885,11 @@ private struct ScopeGeneratorUnderConstruction {
 							formsByLabel[property.label, default: []].insert(property)
 						}
 					}
-					let callersOwnLabels = callersOwnLabelsByCaseKey[caseKey] ?? []
 					for label in formsByLabel.keys.sorted() {
 						let forms = formsByLabel[label, default: []].sorted()
 						guard let property = forms.first(where: { !$0.typeDescription.isOptional }) ?? forms.first else { continue }
 						caseFields.fields.append(SeamSignature.Hole.Field(property: property, access: .public, declaringType: firstPlace.scopeSeamType, declarationLocation: nil))
 						caseFields.callerReadLabels.insert(label)
-						// Every place of the case holds the called mock's copy as its nearest declaration of a caller's own value.
-						if callersOwnLabels.contains(label),
-						   let copy = firstPlace.fields.first(where: { $0.property.label == label }),
-						   !Set(forms).isSubset(of: CycleParameter.forms(providedBy: copy.property))
-						{
-							labelsHandedPastCalledMockCopyByCaseKey[caseKey, default: []].insert(label)
-						}
 					}
 					caseFieldsByCaseKey[caseKey] = caseFields
 				}
@@ -934,7 +919,6 @@ private struct ScopeGeneratorUnderConstruction {
 					callerReadLabels: caseFields?.callerReadLabels ?? [],
 				)
 				fill.innerScopeParameters = Self.innerScopeParameters(ofFillOf: hole, seamHoles: seamHoles, callPath: callPath, calledBuilders: scope.calledBuilders)
-				fill.labelsHandedPastCalledMockCopy = labelsHandedPastCalledMockCopyByCaseKey[caseKey] ?? []
 				fill.mockRootBindingByLabel = mockRootBindingByLabelByCaseKey[caseKey] ?? [:]
 				// A label a route binds as a `LazilyInstantiated` and the caller hands from its own scope stays the wrapper, so the
 				// instance is created where the fill's tree reads it, as inline; where every read of it is only if available, the
@@ -1089,11 +1073,6 @@ private struct ScopeGeneratorUnderConstruction {
 		/// the fill takes the wrapper optionally, which the root dispatcher passes `nil` where the caller declares none, and its
 		/// tree reads the instance through the optional (see `fillUnderConstruction`).
 		var optionalLazilyInstantiatedLabels = Set<String>()
-		/// For the fill that generates the code of a case of a call of another module's public mock that a call inside its
-		/// fills re-enters, the labels among `callerReadLabels` of the caller's own values the fill reads in a form the
-		/// called mock's by-value copy at its root does not provide: the level functions hand each from the root level
-		/// function's parameter, past the copy a root level's payload carries (`PublicMockLevelFunctions`).
-		var labelsHandedPastCalledMockCopy = Set<String>()
 		/// For the fill that generates the code of a case of a call of another module's public mock, the property the caller's
 		/// mock root binds for each caller's own value whose nearest declaration is that binding, by label: the fill binds it
 		/// under the label from the name the mock spells (`Scope.CallersOwnLabels.mockRootBindingByLabel`).
@@ -1443,9 +1422,8 @@ private struct ScopeGeneratorUnderConstruction {
 	/// the call as `child` would inline, so the caller builds a required one first; the parameter the fill takes for it,
 	/// optional where no read requires it, so a route on which the caller declares none passes `nil`; and the argument the
 	/// root dispatcher passes: the caller's declaration of the parameter's form, its instance where the caller holds it
-	/// lazily, or `nil`. `labelsHandedToReenteredFunctions` are the labels of the values a call in `child`'s tree that
-	/// re-enters a root level function of an enclosing call hands it non-optional.
-	private static func callerReads(of fill: Fill, child: ScopeGenerator, labelsHandedToReenteredFunctions: Set<String>) -> ScopeGenerator.FillCallerReads {
+	/// lazily, or `nil`.
+	private static func callerReads(of fill: Fill, child: ScopeGenerator) -> ScopeGenerator.FillCallerReads {
 		var reads = ScopeGenerator.FillCallerReads()
 		// The inner scope, only where the fill's tree builds a place or a call that passes one up, whose case carries it, or a
 		// call that re-enters an enclosing call's fill, whose case's member is called on it.
@@ -1460,19 +1438,12 @@ private struct ScopeGeneratorUnderConstruction {
 			// again, which the scope that builds the loop declares, a scope inside the fill, since a fill's own generator finds
 			// no loops; or a parameter a lazy cycle closes on, whose declaration is inside the fill, since a cycle a fill closes
 			// on a declaration of the seam's tree is an error (`FillFinding.Kind.closesCycleInSeamTree`).
-			var forms = Set(child.receivedProperties.filter { $0.label == label })
-			// A call in `child`'s tree that re-enters a root level function hands it the fill's value of each label the function
-			// takes (`PublicMockLevelFunctions.Reentry`), so the fill takes that value as a required read where the function takes
-			// it non-optional, whatever the fill's own tree reads of it.
-			let isHandedToReenteredFunction = labelsHandedToReenteredFunctions.contains(label)
-			if isHandedToReenteredFunction {
-				forms.insert(field.property)
-			}
+			let forms = Set(child.receivedProperties.filter { $0.label == label })
 			guard !forms.isEmpty else { continue }
 			func isRequired(_ form: Property) -> Bool {
-				child.requiredReceivedProperties.contains(form) || (isHandedToReenteredFunction && form == field.property)
+				child.requiredReceivedProperties.contains(form)
 			}
-			let parameter = (isHandedToReenteredFunction || !fill.optionalLazilyInstantiatedLabels.contains(label)) && (forms.contains(where: isRequired) || field.property.typeDescription.isOptional)
+			let parameter = !fill.optionalLazilyInstantiatedLabels.contains(label) && (forms.contains(where: isRequired) || field.property.typeDescription.isOptional)
 				? field
 				: field.withProperty(field.property.asOptionalProperty)
 			reads.parameterByLabel[label] = parameter
@@ -1483,25 +1454,9 @@ private struct ScopeGeneratorUnderConstruction {
 				}
 			}
 			reads.argumentByLabel[label] = callerArgument(reading: parameter.property, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties)
-			if fill.labelsHandedPastCalledMockCopy.contains(label) {
-				reads.labelsHandedPastCalledMockCopy.insert(label)
-			}
 		}
 		reads.mockRootBindingByLabel = fill.mockRootBindingByLabel
 		return reads
-	}
-
-	/// The labels of the values the root level functions of enclosing calls that a call in `generator`'s tree re-enters
-	/// take non-optional, which the re-entering call reads of its own scope (`PublicMockLevelFunctions.Reentry`, found the
-	/// pass before).
-	private func labelsHandedToReenteredFunctions(by generator: ScopeGenerator) -> Set<String> {
-		var labels = Set<String>()
-		for key in generator.referencedFillNamesByKey.keys {
-			for property in enclosingLevelReentries[key]?.parameters ?? [] where !property.typeDescription.isOptional {
-				labels.insert(property.label)
-			}
-		}
-		return labels
 	}
 
 	/// What a call hands a parameter of `property`'s form that a fill reads of the scope enclosing the call, given that
@@ -1874,7 +1829,7 @@ private struct ScopeGeneratorUnderConstruction {
 				fields: fill.fields,
 				caseHoles: fill.caseHoles,
 				emitsCode: fill.emitsCode,
-				callerReads: Self.callerReads(of: fill, child: builtGenerator, labelsHandedToReenteredFunctions: labelsHandedToReenteredFunctions(by: builtGenerator)),
+				callerReads: Self.callerReads(of: fill, child: builtGenerator),
 				returnsWrapperBuilder: fill.returnsWrapperBuilder,
 				labelsHandedAsMemo: fill.labelsHandedAsMemo,
 				child: builtGenerator,
