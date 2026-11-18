@@ -407,6 +407,9 @@ public struct SeamSignature: Sendable {
 			/// The property of the scope on the site's path that the declaration's scope builds before it, or `nil`.
 			public let builtAfter: Property?
 			public let reason: Reason
+			/// Whether the seam's tree instantiates it with a tree that receives only labels the seam receives from its
+			/// caller, so that a type above the seam could build it and the seam receive it instead.
+			public internal(set) var isBuildableAboveSeam = false
 		}
 
 		/// A declaration a cycle in the seam's tree hands the site's owner when it builds it again: the site lies in the body
