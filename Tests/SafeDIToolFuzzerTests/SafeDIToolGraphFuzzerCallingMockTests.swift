@@ -1351,6 +1351,28 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 	}
 
+	/// Seed 804 draws the first `.public` graph of `fillHoldsBuilderOfEnclosingCalledType` whose third module's type holds
+	/// the enclosing called type in a `SendableInstantiator` and whose fill also instantiates `beacon: any Beacon`, which no
+	/// declaration fulfills: the fill is built in the `@Sendable` function of that builder, so the twin and the calling mock
+	/// take `beaconSendableBuilder`, and the no-scope initializer of the fill's level, of the plain family, whose member for
+	/// the call inside the fill returns the third module's `@Sendable` family's struct, takes a `@Sendable` builder. It fails
+	/// with that initializer taking a builder that is not `@Sendable`: neither the twin nor the mock compiles.
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_takesSendableBuilderThroughReentry_whenDrawnReenteringFillIsHeldInSendableInstantiator() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 804)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 804)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillHoldsBuilderOfEnclosingCalledType, caller: .public, place: .plain))
+		#expect(draw.enclosingBuilder == .sendableInstantiator)
+		#expect(draw.reenteringFillInstantiatesWhatNothingFulfills)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.map(\.label) == ["beaconSendableBuilder"])
+		#expect(result.comparedValues)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
 	/// The graphs of the shape whose fill holds a builder of the enclosing called type draw each builder, each caller kind
 	/// and each place in the pinned number of graphs, and, for each caller kind, a fill that also instantiates what nothing
 	/// fulfills. A `LazilyInstantiated` is drawn beside a deferred place only.
@@ -1367,7 +1389,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		}
 		print("calling-mock builders of the enclosing called type \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
 
-		#expect(counts == ["instantiator plain": 18, "instantiator deferred": 11, "sendableInstantiator plain": 12, "sendableInstantiator deferred": 11, "lazilyInstantiated deferred": 8, "internal": 20, "public": 20, "listed": 20, "reenteringFillInstantiatesWhatNothingFulfills internal": 8, "reenteringFillInstantiatesWhatNothingFulfills public": 6, "reenteringFillInstantiatesWhatNothingFulfills listed": 6])
+		#expect(counts == ["instantiator plain": 18, "instantiator deferred": 11, "sendableInstantiator plain": 12, "sendableInstantiator deferred": 11, "lazilyInstantiated deferred": 8, "internal": 20, "public": 20, "listed": 20, "reenteringFillInstantiatesWhatNothingFulfills internal": 13, "reenteringFillInstantiatesWhatNothingFulfills public": 12, "reenteringFillInstantiatesWhatNothingFulfills listed": 11])
 		#expect(GraphFuzzerCallingMockDraw(seed: 0).enclosingBuilder == nil)
 		#expect(!GraphFuzzerCallingMockDraw(seed: 0).reenteringFillInstantiatesWhatNothingFulfills)
 	}
@@ -1685,9 +1707,10 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	/// Each probed cell compares one graph of each leaf position it draws, a cell that draws a call (`CallerLazyValue.Call`)
 	/// also compares one graph of each call it draws and of each variation drawn after it, among its graphs that state
-	/// probes, and a cell that draws a builder of the enclosing called type one graph of each builder and one whose fill also
-	/// instantiates what nothing fulfills: its compared graphs are the first of each position, the first of each call and the
-	/// first of each such variation, or the first of each position, the first of each builder and the first such fill.
+	/// probes, and a cell that draws a builder of the enclosing called type one graph of each builder and, for each builder,
+	/// one whose fill also instantiates what nothing fulfills: its compared graphs are the first of each position, the first
+	/// of each call and the first of each such variation, or the first of each position, the first of each builder and the
+	/// first such fill beside each builder.
 	@Test
 	func comparesValues_comparesFirstGraphOfEachLeafPosition_inEachProbedCell() {
 		for cell in GraphFuzzerCallingMockCell.drawnCells {
@@ -1710,13 +1733,15 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 						firstSeeds.insert(first.seed)
 					}
 				}
-				let firstReenteringFillInstantiatingWhatNothingFulfills = draws.first { $0.reenteringFillInstantiatesWhatNothingFulfills }
-				if let first = firstReenteringFillInstantiatingWhatNothingFulfills {
-					firstSeeds.insert(first.seed)
+				var buildersOfReenteringFillsInstantiatingWhatNothingFulfills = Set<String>()
+				for builder in Set(builders) {
+					if let first = draws.first(where: { $0.enclosingBuilder?.rawValue == builder && $0.reenteringFillInstantiatesWhatNothingFulfills }) {
+						firstSeeds.insert(first.seed)
+						buildersOfReenteringFillsInstantiatingWhatNothingFulfills.insert(builder)
+					}
 				}
-				let comparesReenteringFillInstantiatingWhatNothingFulfills = compared.contains { $0.reenteringFillInstantiatesWhatNothingFulfills }
 				#expect(Set(compared.compactMap { $0.enclosingBuilder?.rawValue }) == Set(builders), "\(cell)")
-				#expect(comparesReenteringFillInstantiatingWhatNothingFulfills == (firstReenteringFillInstantiatingWhatNothingFulfills != nil), "\(cell)")
+				#expect(Set(compared.filter(\.reenteringFillInstantiatesWhatNothingFulfills).compactMap { $0.enclosingBuilder?.rawValue }) == buildersOfReenteringFillsInstantiatingWhatNothingFulfills, "\(cell)")
 				#expect(Set(compared.map(\.seed)) == firstSeeds, "\(cell)")
 			} else if calls.isEmpty {
 				#expect(compared.map { "\($0.tickerPosition)" }.sorted() == Set(draws.map { "\($0.tickerPosition)" }).sorted(), "\(cell)")
@@ -2076,8 +2101,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	/// type's root, the first graph of each cell with each call it draws (`CallerLazyValue.Call`), and the first that draws
 	/// a second place whose fill calls the called type again, and a place built in a `@Sendable` function too, whose mocks
 	/// only a compile judges; and, in the shape whose fill holds a builder of the enclosing called type, the first graph of
-	/// each cell with each builder it draws (`GraphFuzzerCallingMockDraw.EnclosingBuilder`), and the first whose fill also
-	/// instantiates what nothing fulfills (`reenteringFillInstantiatesWhatNothingFulfills`), whose re-entered level function
+	/// each cell with each builder it draws (`GraphFuzzerCallingMockDraw.EnclosingBuilder`), and the first with each builder
+	/// whose fill also instantiates what nothing fulfills (`reenteringFillInstantiatesWhatNothingFulfills`), whose
+	/// re-entered level function, and, beside a `SendableInstantiator`, the no-scope initializer of the fill's plain level,
 	/// only a compile judges. The other graphs of a probed cell differ from a compared one only in names and in variations
 	/// the tool run alone judges, and pass on their tool runs alone, the seam built again's too.
 	static func comparesValues(ofSeed seed: UInt64) -> Bool {
@@ -2087,7 +2113,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	/// The first seed of each cell and leaf position, and of each cell and call of the shape that draws one, and of each
 	/// cell and variation of that shape drawn after the call, in the corpus, among that shape's graphs that state probes;
 	/// and the first of each cell and builder of the shape whose fill holds a builder of the enclosing called type, and the
-	/// first of each cell of that shape whose fill also instantiates what nothing fulfills.
+	/// first of each cell and builder of that shape whose fill also instantiates what nothing fulfills.
 	static let comparedSeeds: Set<UInt64> = {
 		var seenCellsAndPositions = Set<String>()
 		var seenCellsAndCalls = Set<String>()
@@ -2108,7 +2134,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			if let builder = draw.enclosingBuilder, seenCellsAndCalls.insert("\(draw.cell) \(builder)").inserted {
 				seeds.insert(seed)
 			}
-			if draw.reenteringFillInstantiatesWhatNothingFulfills, seenCellsAndCalls.insert("\(draw.cell) reenteringFillInstantiatesWhatNothingFulfills").inserted {
+			if draw.reenteringFillInstantiatesWhatNothingFulfills, let builder = draw.enclosingBuilder, seenCellsAndCalls.insert("\(draw.cell) \(builder) reenteringFillInstantiatesWhatNothingFulfills").inserted {
 				seeds.insert(seed)
 			}
 		}
