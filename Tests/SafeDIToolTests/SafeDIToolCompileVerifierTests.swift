@@ -256,7 +256,7 @@ struct SafeDIToolCompileVerifierTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func verifyModulesCompile_omitsGeneratedCodeWarning_whenAnotherModulesFixtureDrawsTheSameMessage() async throws {
+	func verifyModulesCompile_omitsGeneratedCodeWarning_whenFixtureOfModuleItImportsDrawsTheSameMessage() async throws {
 		// `Feature`'s fixture spells `Service` without `any`, and `App`'s generated code spells it as `Feature` does.
 		let featureFixture = directory.appendingPathComponent("Feature.swift")
 		try "public protocol Service {}\n\npublic func use(_ service: Service) {}\n".write(to: featureFixture, atomically: true, encoding: .utf8)
@@ -297,6 +297,106 @@ struct SafeDIToolCompileVerifierTests: ~Copyable {
 		#expect(compilation.modules.map(\.moduleName) == ["Feature", "App"])
 		#expect(compilation.modules.map(\.generatedCodeWarnings) == [[], []])
 		#expect(compilation.modules.allSatisfy { $0.failure == nil })
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func verifyModulesCompile_reportsGeneratedCodeWarning_whenOnlyFixtureOfModuleImportingItDrawsTheSameMessage() async throws {
+		// `Feature`'s generated code spells `Service` without `any`, and only `App`, which imports `Feature`, spells it so in
+		// its fixture. `Feature`'s generated code cannot have copied a spelling of a module it cannot see.
+		let featureFixture = directory.appendingPathComponent("Feature.swift")
+		try "public protocol Service {}\n\npublic func use(_ service: any Service) {}\n".write(to: featureFixture, atomically: true, encoding: .utf8)
+		let appFixture = directory.appendingPathComponent("App.swift")
+		try "import Feature\n\npublic func useAgain(_ service: Service) {}\n".write(to: appFixture, atomically: true, encoding: .utf8)
+		var filesToDelete = [URL]()
+		defer {
+			for fileToDelete in filesToDelete {
+				try? FileManager.default.removeItem(at: fileToDelete)
+			}
+		}
+
+		let compilation = try #require(try await verifyModulesCompile(
+			[
+				ModuleCompileSources(
+					moduleName: "Feature",
+					packageName: nil,
+					dependencyModuleNames: [],
+					inputSwiftFiles: [featureFixture],
+					generatedFiles: ["Feature+SafeDI.swift": "func generated(_ service: Service) {}\n"],
+					activeCompilationConditions: [],
+					mockConditionalCompilation: nil,
+				),
+				ModuleCompileSources(
+					moduleName: "App",
+					packageName: nil,
+					dependencyModuleNames: ["Feature"],
+					inputSwiftFiles: [appFixture],
+					generatedFiles: [:],
+					activeCompilationConditions: [],
+					mockConditionalCompilation: nil,
+				),
+			],
+			recordsIssues: false,
+			filesToDelete: &filesToDelete,
+		))
+
+		#expect(compilation.modules.map(\.moduleName) == ["Feature", "App"])
+		let featureWarnings: [String] = try #require(compilation.modules.first).generatedCodeWarnings
+		// The compiler may report the warning more than once, as Swift 6.4 does.
+		#expect(!featureWarnings.isEmpty, "Unexpected warnings \(featureWarnings)")
+		#expect(featureWarnings.allSatisfy { $0.contains("Feature+SafeDI.swift:") && $0.contains(": warning: use of protocol 'Service' as a type must be written 'any Service'") }, "Unexpected warnings \(featureWarnings)")
+		let appWarnings: [String] = try #require(compilation.modules.last).generatedCodeWarnings
+		#expect(appWarnings == [])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func verifyModulesCompile_reportsGeneratedCodeWarning_whenFixtureOfModuleItImportsDrawsTheSameMessageOutsideExistentialAny() async throws {
+		// `Feature`'s fixture calls a deprecated function, and `App`'s generated code calls it too: generated code copies no
+		// spelling there, so the warning is generated code's own.
+		let featureFixture = directory.appendingPathComponent("Feature.swift")
+		try "@available(*, deprecated)\npublic func old() {}\n\npublic func callOld() {\n    old()\n}\n".write(to: featureFixture, atomically: true, encoding: .utf8)
+		let appFixture = directory.appendingPathComponent("App.swift")
+		try "import Feature\n".write(to: appFixture, atomically: true, encoding: .utf8)
+		var filesToDelete = [URL]()
+		defer {
+			for fileToDelete in filesToDelete {
+				try? FileManager.default.removeItem(at: fileToDelete)
+			}
+		}
+
+		let compilation = try #require(try await verifyModulesCompile(
+			[
+				ModuleCompileSources(
+					moduleName: "Feature",
+					packageName: nil,
+					dependencyModuleNames: [],
+					inputSwiftFiles: [featureFixture],
+					generatedFiles: [:],
+					activeCompilationConditions: [],
+					mockConditionalCompilation: nil,
+				),
+				ModuleCompileSources(
+					moduleName: "App",
+					packageName: nil,
+					dependencyModuleNames: ["Feature"],
+					inputSwiftFiles: [appFixture],
+					generatedFiles: ["App+SafeDI.swift": "import Feature\n\nfunc generated() {\n    old()\n}\n"],
+					activeCompilationConditions: [],
+					mockConditionalCompilation: nil,
+				),
+			],
+			recordsIssues: false,
+			filesToDelete: &filesToDelete,
+		))
+
+		#expect(compilation.modules.map(\.moduleName) == ["Feature", "App"])
+		let featureWarnings: [String] = try #require(compilation.modules.first).generatedCodeWarnings
+		#expect(featureWarnings == [])
+		let appWarnings: [String] = try #require(compilation.modules.last).generatedCodeWarnings
+		// The compiler may report the warning more than once, as Swift 6.4 does.
+		#expect(!appWarnings.isEmpty, "Unexpected warnings \(appWarnings)")
+		#expect(appWarnings.allSatisfy { $0.contains("App+SafeDI.swift:") && $0.contains(": warning: 'old()' is deprecated") }, "Unexpected warnings \(appWarnings)")
 	}
 
 	// MARK: Tests – Running a process

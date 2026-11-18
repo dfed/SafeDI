@@ -6560,6 +6560,16 @@ public actor DependencyTreeGenerator {
 				&& !isProvidedByMockedTypeAlias(receivedProperty)
 				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty.asUnwrappedProperty)
 		}
+		// The mocked type's own spelling of each property it receives, and of its unwrapped form, which the mock declares
+		// where it promotes that property. `==` reads `any P` and `P` as one type, so the received properties hold whichever
+		// spelling the walk met first, a receiver's deep in the tree before the mocked type's own, and a protocol the mocked
+		// type spells with `any` would lose it in the override and the binding, which warn in a module that enables the
+		// `ExistentialAny` upcoming feature.
+		var mockedTypeSpellingOfReceivedProperty = [Property: Property]()
+		for dependency in instantiable.dependencies where dependency.source.isReceived {
+			mockedTypeSpellingOfReceivedProperty[dependency.property.asUnwrappedProperty] = dependency.property.asUnwrappedProperty
+			mockedTypeSpellingOfReceivedProperty[dependency.property] = dependency.property
+		}
 		var promotedPropertiesToGenerate = [Scope.PropertyToGenerate]()
 		for receivedProperty in propertiesToPromote.sorted()
 			where receivedProperty.asUnwrappedProperty == receivedProperty || !propertiesToPromote.contains(receivedProperty.asUnwrappedProperty)
@@ -6568,7 +6578,7 @@ public actor DependencyTreeGenerator {
 				continue
 			}
 			promotedPropertiesToGenerate.append(.instantiated(
-				receivedProperty,
+				mockedTypeSpellingOfReceivedProperty[receivedProperty] ?? receivedProperty,
 				receivedScope,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 			))
