@@ -2509,18 +2509,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				))
 			}
 		}
-		let omissions = await tierOmissions(
+		let findings = await tierOmissions(
 			of: .type(instantiable),
 			walking: .seamTiers(referenceLocation: instantiable.declarationLocation, isOwnFile: isOwnFile),
 			propertiesGeneratedLater: [],
 			declarationsByLabel: declarationsByLabel,
 			enclosingCycleFunctions: [:],
-		).judged().compactMap {
-			if case let .seam(omission) = $0 {
-				omission
-			} else {
-				nil
-			}
+		).judged()
+		var omissions = [SeamTierOmission]()
+		for case let .seam(omission) in findings {
+			omissions.append(omission)
 		}
 		guard case let .root(_, seamRoot?) = scopeData else { return omissions }
 		// A provider that is a pass-through parameter of this seam is declared by no type: the receives in this seam's
@@ -2561,15 +2559,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// a parameter of a builder function a lazy cycle closes on, the value is the one each call of the function passes
 	/// (see `OmissionFindings`).
 	func publicMockTierOmissions(ofTreeRootedAt instantiable: Instantiable) async -> [PublicMockTierOmission] {
-		await tierOmissions(of: .type(instantiable), walking: .publicMockTiers(fillReferenceLocation: nil), propertiesGeneratedLater: [], declarationsByLabel: [:], enclosingCycleFunctions: [:])
+		let findings = await tierOmissions(of: .type(instantiable), walking: .publicMockTiers(fillReferenceLocation: nil), propertiesGeneratedLater: [], declarationsByLabel: [:], enclosingCycleFunctions: [:])
 			.judged()
-			.compactMap {
-				if case let .publicMock(omission) = $0 {
-					omission
-				} else {
-					nil
-				}
-			}
+		var omissions = [PublicMockTierOmission]()
+		for case let .publicMock(omission) in findings {
+			omissions.append(omission)
+		}
+		return omissions
 	}
 
 	/// The scope a walk of omissions visits: one that builds a type, or, in a mock's tree, a fill of a builder that a call of
