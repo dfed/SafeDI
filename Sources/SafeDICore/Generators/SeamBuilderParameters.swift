@@ -2307,6 +2307,16 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 						? "\(forward), so that function binds it, or \(fulfillRemedy(seamModule))."
 						: "\(forward), and `\(functionProperty.label)` as `\(instantiator.asSource)`, so that function binds it, or \(fulfillRemedy(seamModule))."
 				}
+				/// The remedy for the declaration, which the seam's tree instantiates outside the `@Sendable` function that builds
+				/// `functionProperty`, of `functionBuiltType`: where the seam's caller can build it, the seam receives it, which the
+				/// function's caller then reads; otherwise the type the function builds takes it forwarded.
+				func instantiatedOutsideFunctionRemedy(functionProperty: Property, functionBuiltType: TypeDescription?) -> String {
+					if declaration.isBuildableAboveSeam {
+						"Instantiate `\(declaration.property.label)` outside \(seamName) and declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on \(seamName), so the \(buildersPossessive) caller reads its own, or \(fulfillRemedy(seamModule))."
+					} else {
+						functionBuiltType.map { forwardingRemedy(of: declaration.property, into: functionProperty, building: $0, again: false) } ?? capitalizedFulfillRemedy
+					}
+				}
 				/// The message of a declaration `seam` binds on a path to calls that present the places the finding names, whose
 				/// builders it passes up: each place itself, or the place a fill fills, when the reader is beneath a place inside
 				/// that fill. Every part a place decides – the seams whose calls present them, the builders, each remedy – comes
@@ -2376,7 +2386,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 						"`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which `\(declaration.declaringType.asSource)` \(isForwarded ? "forwards" : "declares") \(outside(functionProperty)) "
 							+ (isForwarded
 								? functionBuiltType.map { forwardingRemedy(of: declaration.property, into: functionProperty, building: $0, again: true) } ?? capitalizedFulfillRemedy
-								: "Instantiate `\(declaration.property.label)` outside \(seamName) and declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on \(seamName), so the \(buildersPossessive) caller reads its own, or \(fulfillRemedy(seamModule)).")
+								: instantiatedOutsideFunctionRemedy(functionProperty: functionProperty, functionBuiltType: functionBuiltType))
 					}
 				}
 				// A parameter of a builder function a cycle closes on is noted where the cycle declares the value it passes.
