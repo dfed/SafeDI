@@ -48,8 +48,10 @@ public enum ReservedName: Hashable, Sendable {
 
 	// MARK: Initialization
 
-	/// The reserved name `name` collides with, or `nil` when it collides with none.
+	/// The reserved name `name` collides with, or `nil` when it collides with none. Backticks only quote a name, so
+	/// `name` is read without them: `` `__safeDI_editor` `` and `__safeDI_editor` name one property.
 	public init?(reserving name: String) {
+		let name = name.spelledWithoutBackticks
 		if name.utf8.starts(with: Self.builderFunctionNamePrefix.utf8) {
 			self = .builderFunctionName
 		} else if name == Self.mockOverridesParameterName {
