@@ -9236,7 +9236,11 @@ public actor DependencyTreeGenerator {
 	/// - **Places that disagree.** A hole type of a called type is passed up when two of its places' fills read different
 	///   `LazilyInstantiated` or `SendableLazilyInstantiated` values beside their fields, as where one place is beneath a
 	///   level that declares the value again and the called mock's by-value copy reaches the other: one fill serves every
-	///   place of a hole type, and no level that holds only the copy can hand it the wrapper.
+	///   place of a hole type, and no level that holds only the copy can hand it the wrapper. The gate also passes up some
+	///   places whose fills would build what inline builds, as a calling mock passed them up before its fills read the
+	///   caller's values, the stated cost of one rule: where the called mock holds no copy of the value, so each route hands
+	///   its fill the wrapper inline reads, and where the places hold the hole type in two builder forms, one of them an
+	///   `ErasedInstantiator`.
 	/// - Then, as a fill never passes a place up, a fill whose tree calls a public mock that now passes a builder up is not
 	///   filled either, until none is: its hole type is passed up too.
 	/// A hole type is never passed up in part, so no builder is half filled. Every other place is filled as before: a fill
