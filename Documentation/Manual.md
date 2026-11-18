@@ -729,6 +729,8 @@ A root’s generated `init()` builds the whole tree in the root’s module. In a
 
 A seam lets a feature module compile its own part of the tree. Decorate a type at a module’s boundary, such as a feature’s entry point, with `@Instantiable(generateDependencyTree: true)`. That type is a seam. Its own module generates the seam’s tree as an initializer that takes what the tree needs from outside. Trees in other modules call that initializer instead of building the seam’s tree themselves, so a change inside the seam’s tree recompiles only the seam’s module and the calls. Building a tree inline, by contrast, means the caller’s own generated code builds every type in it, as it does without a seam. Unlike a root, a seam may receive and forward dependencies. [Adopting SafeDI in a large codebase](#adopting-safedi-in-a-large-codebase) says where seams go. The Xcode project plugin [builds these trees inline instead](#limits-of-the-xcode-project-plugin).
 
+Modules that declare or call a seam need deployment targets of at least macOS 15, iOS 18, tvOS 18, watchOS 11 and visionOS 2, because a seam’s generated code can hold a value in a [`SendableLazilyInstantiated`](#sendable-wrappers), which needs those versions.
+
 For example, `Screen` receives a `User` and instantiates a `Cache`, which receives a `Database` and, only if available, a `Logger`:
 
 ```swift
