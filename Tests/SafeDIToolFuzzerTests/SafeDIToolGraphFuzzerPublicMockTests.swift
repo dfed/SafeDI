@@ -713,10 +713,10 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
 		}
 		let drawn: Set<GraphFuzzerPublicMockDrawFeature> = [.unbuildableValuePublicMockCall, .unbuildableValuePublicMockCallPublicTier, .unbuildableValuePublicMockCallTierOmits]
-		// Seed 5 passes a public class to the public tier; seed 2's consumer in another package reaches a public tier that
+		// Seed 5 passes a public class to the public tier; seed 155's consumer in another package reaches a public tier that
 		// omits `[3 of Int]`, the roll that fails with the omission walk's declarations reverted; seed 0 draws none.
 		#expect(features(ofSeed: 5).intersection(drawn) == [.unbuildableValuePublicMockCall, .unbuildableValuePublicMockCallPublicTier])
-		#expect(features(ofSeed: 2).intersection(drawn) == [.unbuildableValuePublicMockCall, .unbuildableValuePublicMockCallTierOmits])
+		#expect(features(ofSeed: 155).intersection(drawn) == [.unbuildableValuePublicMockCall, .unbuildableValuePublicMockCallTierOmits])
 		#expect(features(ofSeed: 0).isDisjoint(with: drawn))
 	}
 
