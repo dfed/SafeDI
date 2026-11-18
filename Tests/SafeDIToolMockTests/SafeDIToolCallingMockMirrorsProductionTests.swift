@@ -3677,10 +3677,9 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	/// `Live`, `LiveG`, `LiveOther` where `layout` has it, and `Root`, declared with `rootAttribute`, of
 	/// `reenteredThroughAnotherCallsFillModules`.
 	private static func reenteredThroughAnotherCallsFillAppTypes(rootAttribute: String, layout: ReenteredThroughAnotherCallsFillLayout) -> String {
-		var types: String
-		switch layout {
+		var types = switch layout {
 		case .fillBuildsOuterCallAgain:
-			types = """
+			"""
 			@Instantiable(fulfillingAdditionalTypes: [Api.self])
 			public final class Live: Api, Instantiable {
 			    public init(log: LazilyInstantiated<Log>, gBuilder: Instantiator<G>) {
@@ -3693,7 +3692,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			}
 			"""
 		case .otherPlacesFillBuildsOuterCallAgain:
-			types = """
+			"""
 			@Instantiable(fulfillingAdditionalTypes: [Api.self])
 			public final class Live: Api, Instantiable {
 			    public init(log: LazilyInstantiated<Log>) {
