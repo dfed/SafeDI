@@ -28,8 +28,8 @@ The audit behind the table searched every emitter file under `Generators/` (`Sco
 | What a public mock's root level functions read of the caller | `ScopeGenerator.init`, the caller reads of a public mock call | The first non-optional form per label, then that form's argument spellings | The same preference |
 | The root's extension, attributes, `convenience`, and "no dependencies emits nothing" | `generatePropertyCode`, the `.root` branch | `dependencies.isEmpty`, `generatedInitializerAttributes`, `declarationType` | Facts of the root's initializer |
 | A public mock call's argument per parameter | `generatePropertyCode`, the `.property` branch | The builder struct value, then the hole argument, then the dependency, whose lazily instantiated receive passes its instance | An argument source, chosen in that order |
-| Whether a public mock's construction is wrapped in braces | `PublicMockGeneration.passing(_:orBuilding:)` | Whether the spelled construction starts with `if ` | The construction says whether it is an `if` expression |
-| Whether a mock struct's default parameter closure gets `@Sendable` | The default parameters of a mock's configuration struct | Whether the spelled type contains `@Sendable` | Read from the `TypeDescription`, anywhere in it, as the text test does |
+| Whether a public mock's construction is wrapped in braces | `PublicMockGeneration.passing(_:orBuilding:)` | Whether the spelled construction starts with `if ` | The construction says whether it is an `if` expression; ported with the mock body |
+| Whether a mock struct's default parameter closure gets `@Sendable` | The default parameters of a mock's configuration struct | Whether the spelled type contains `@Sendable` | Read from the `TypeDescription`, anywhere in it, as the text test does; ported with the mock's configuration structs |
 | What an inlined fill case binds | `inlinedFill`, called from `generateProperties` | The fill's emitted lines (`(_ scope: `, ` = scope.`), and a scan of its body for the forwarded value's name | Text, until fills are planned as builder functions. The three conditions that are not text (a public mock's inlinable fills, the fills an override closure calls, and a fill that declares a function under a dispatcher that returns a builder struct) become one fact |
 | The bindings of a caller's mock root names in a wrapper-builder fill | `generateFillCode` | The fill's mock root bindings and the root's binding names, in sorted label order | A fact of the fill |
 | Whether a dispatcher's case targets a fill or another dispatcher | `FillDispatcher` | A key that is a string | An enum key, when seam bodies are planned |
@@ -48,3 +48,19 @@ Every fill of one call reads the same caller declarations, so within one form ev
 ## Empty chunks
 
 No body's statements include an empty chunk of text: every child scope a body emits writes at least one line. The only scope that writes nothing is a hole without a site, which exists only in a tree built to compute a seam's signature (`SeamHoles.site(at:)`), and such a tree generates no code. So a constant's body counts its statements without filtering empty strings, as the instantiator and lazy bodies do.
+
+## Where the ports live
+
+In `Sources/SafeDICore/Generators/Emission/`:
+
+- a construction's call and an erasure wrap: `ConstructionTarget`, `Expression`;
+- a binding's annotation: `BindingDeclaration`, one rule per form;
+- where an argument comes from, and the preference for a caller's argument: `ArgumentSource`, `CallArgument`;
+- a builder function's statements, and whether it writes `return`: `BuilderBody`;
+- a root's initializer: `RootInitializer`;
+- the conditions of a fill's inlining that read no text: `FillInlining`;
+- a fill's rebindings of the caller's mock root names: `FillCallerReads.mockRootRebindings(rootBindingNames:)`;
+- a loop member's box and `_received` names: `LoopMemberNames`;
+- the plan these spell into: `BuilderFunctionGraph`, `Statement`, `BuilderNode`, and `BuilderKey`, which nothing builds until the production emitter numbers its places.
+
+A mock's builder functions keep their own `return` rule, and the two mock rows above keep their text tests, until the mock body is planned: the mock body is rewritten then, and its configuration structs before it.

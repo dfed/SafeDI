@@ -6262,12 +6262,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				let argumentList = try instantiable.generateArgumentList()
 				guard let rootInitializer = RootInitializer(of: instantiable, argumentList: argumentList) else { return "" }
-				return try await rootInitializer.spelled(writing: generateProperties(
+				let children = try await generateProperties(
 					propertiesGeneratedLater: propertiesGeneratedLater,
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 					leadingMemberWhitespace: "        ",
 					fillPlaceBindings: fillPlaceBindings,
-				))
+				)
+				return rootInitializer.spelled(writing: BuilderFunctionGraph(body: children.map(Statement.verbatim)))
 			case let .mock(context):
 				return try await generateMockRootCode(
 					instantiable: instantiable,
@@ -6338,7 +6339,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				? builderCallArguments.map { "\($0.label): \($0.value)" }
 				: []
 			let constructionArguments = holeArgumentList.isEmpty ? argumentList : ([argumentList].filter { !$0.isEmpty } + holeArgumentList).joined(separator: ", ")
-			let returnLineSansReturn = Expression.construction(constructionTarget, arguments: constructionArguments).spelled
+			let construction = Expression.construction(constructionTarget, arguments: constructionArguments)
 			// The payloads of the cases on the routes to the places beneath this scope, bound before its builder function, where
 			// the scope's parent binds its labels: each field read as the parent's receivers read it.
 			let valuesBindingLines = builderFunctionNames.loopValuesBindingLines ?? valuesBindingLines
@@ -6427,28 +6428,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 				// The function a lazy cycle closes on also takes the parameters its cycle-closing scopes pass.
 				let functionParameters = forwardedProperties + (isPropertyCycle ? [] : cycleParameters.map(\.property))
-				let functionArguments = if functionParameters.isEmpty {
-					""
-				} else {
-					functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
-				}
-				// A fill that returns a wrapper's builder spells its builder function `nonisolated` where it is `@Sendable`, as the
-				// code that calls the fill is.
-				let functionDecorator = if buildsInSendableFunction {
-					fillReturnsWrapperBuilder ? Self.localFunctionPrefix(isSendable: true, isNonisolated: true) : sendableFunctionDecorator
-				} else {
-					""
-				}
 				let functionDeclaration = if isPropertyCycle {
 					""
 				} else {
-					"""
-					\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
-					\(generatedProperties.joined(separator: "\n"))
-					\(Self.standardIndent)\(BuilderBody(statements: generatedProperties).returnKeyword)\(returnLineSansReturn)\(constructionLineEnd)
-					}
-
-					"""
+					Statement.function(BuilderNode(
+						name: functionName,
+						isSendable: buildsInSendableFunction,
+						// A fill that returns a wrapper's builder spells its builder function `nonisolated` where it is `@Sendable`, as
+						// the code that calls the fill is.
+						isNonisolated: fillReturnsWrapperBuilder || sendableFunctionsAreNonisolated,
+						parameters: functionParameters,
+						typesDeclaredEscaping: typesDeclaredEscaping,
+						returnType: instantiable.concreteInstantiable,
+						body: BuilderBody(statements: generatedProperties),
+						value: construction,
+						lineEnd: constructionLineEnd,
+					)).spelled + "\n"
 				}
 
 				guard !isBuiltByFill else {
@@ -6549,14 +6544,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					leadingMemberWhitespace: Self.standardIndent,
 					fillPlaceBindings: fillPlaceBindings,
 				)
-				let functionDecorator = if buildsInSendableFunction {
-					sendableFunctionDecorator
-				} else {
-					""
-				}
 				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
-				let functionParameters = cycleParameters.map(\.property)
-				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
+				let function = BuilderNode(
+					name: functionName,
+					isSendable: buildsInSendableFunction,
+					isNonisolated: sendableFunctionsAreNonisolated,
+					parameters: cycleParameters.map(\.property),
+					typesDeclaredEscaping: typesDeclaredEscaping,
+					returnType: instantiable.concreteInstantiable,
+					body: BuilderBody(statements: generatedProperties),
+					value: construction,
+					lineEnd: constructionLineEnd,
+				)
 				let lastLine = if isBuiltByFill {
 					"return \(Expression.call(function: functionName, arguments: cycleArguments).erased(to: property.typeDescription.asInstantiatedType, where: erasedToConcreteExistential).spelled)"
 				} else {
@@ -6564,10 +6563,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 
 				return """
-				\(valuesBindingLines)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
-				\(generatedProperties.joined(separator: "\n"))
-				\(Self.standardIndent)\(BuilderBody(statements: generatedProperties).returnKeyword)\(returnLineSansReturn)\(constructionLineEnd)
-				}
+				\(valuesBindingLines)\(Statement.function(function).spelled)
 				\(lastLine)
 				"""
 			case .constant:
@@ -6590,15 +6586,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					leadingMemberWhitespace: Self.standardIndent,
 					fillPlaceBindings: fillPlaceBindings,
 				)
-				let functionDecorator = if buildsInSendableFunction {
-					sendableFunctionDecorator
-				} else {
-					""
-				}
-				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
-				let functionParameters = cycleParameters.map(\.property)
-				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
-
 				let body = BuilderBody(statements: generatedProperties)
 				let hasGeneratedContent = body.hasStatements
 				let propertyDeclaration = BindingDeclaration(
@@ -6617,22 +6604,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let functionDeclaration = if !hasGeneratedContent {
 					""
 				} else {
-					"""
-					\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
-					\(body.statements.joined(separator: "\n"))
-					\(Self.standardIndent)\(body.returnKeyword)\(returnLineSansReturn)\(constructionLineEnd)
-					}
-
-					"""
+					// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
+					Statement.function(BuilderNode(
+						name: functionName,
+						isSendable: buildsInSendableFunction,
+						isNonisolated: sendableFunctionsAreNonisolated,
+						parameters: cycleParameters.map(\.property),
+						typesDeclaredEscaping: typesDeclaredEscaping,
+						returnType: instantiable.concreteInstantiable,
+						body: body,
+						value: construction,
+						lineEnd: constructionLineEnd,
+					)).spelled + "\n"
 				}
-				let initializer = if !hasGeneratedContent {
-					Expression.construction(constructionTarget, arguments: constructionArguments).erased(to: property.typeDescription, where: erasedToConcreteExistential).spelled + constructionLineEnd
+				let binding = if !hasGeneratedContent {
+					Statement.binding(propertyDeclaration, construction.erased(to: property.typeDescription, where: erasedToConcreteExistential), lineEnd: constructionLineEnd)
 				} else {
-					Expression.call(function: functionName, arguments: callArguments).erased(to: property.typeDescription, where: erasedToConcreteExistential).spelled
+					Statement.binding(propertyDeclaration, Expression.call(function: functionName, arguments: callArguments).erased(to: property.typeDescription, where: erasedToConcreteExistential), lineEnd: "")
 				}
 
 				// The payloads a seam's tree binds before building a scope that leads to a place.
-				return "\(valuesBindingLines)\(functionDeclaration)\(propertyDeclaration.spelled) = \(initializer)\n"
+				return "\(valuesBindingLines)\(functionDeclaration)\(binding.spelled)\n"
 			}
 		case let .hole(property, _, site):
 			// A tree built only to compute the seam's signature has no site, and generates nothing.
