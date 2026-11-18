@@ -3301,7 +3301,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else if receivedProperty.propertyType.isNonSendableWrapper {
 				// No declaration in the tree provides the receive, so this is a mock, which declares the property at its
 				// root. Production rejects a receive whose label a declaration of another type holds, but a promoted
-				// sibling of the mocked type may make one, and `mock()` takes it as a parameter of its own.
+				// sibling of the mocked type may make one, which `mock()` takes as a parameter or binds from an override at its
+				// root.
 				wrapperProperty = receivedProperty
 				wrapperDeclaration = nil
 				capturingBuilder = enclosingSendableBuilders[0]
@@ -11719,8 +11720,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fulfillingPropertyIsLazilyInstantiatedInstance: alias.fulfillingPropertyIsLazilyInstantiatedInstance,
 				declarationReference: alias.declarationReference,
 				isBoundToNil: alias.isBoundToNil,
+				// A site of a hole stays one under its new name, which its builder still builds.
+				holeSite: alias.holeSite,
 				loop: alias.loop,
 				declaredProperty: alias.declaredProperty ?? alias.property,
+				holeSiteLazilyInstantiatedInstanceProperties: alias.holeSiteLazilyInstantiatedInstanceProperties,
 			))
 		}
 		return (renamedItems, bindingNames)

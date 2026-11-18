@@ -708,6 +708,33 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	}
 
 	@Test
+	func drawFeatures_readUnbuildableValueShapes_whenSeedsDrawThem() {
+		func features(ofSeed seed: UInt64) -> Set<GraphFuzzerPublicMockDrawFeature> {
+			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+		}
+		let drawn: Set<GraphFuzzerPublicMockDrawFeature> = [.unbuildableValuePublicMockCall, .unbuildableValuePublicMockCallPublicTier, .unbuildableValuePublicMockCallTierOmits]
+		// Seed 5 passes a public class to the public tier; seed 2's consumer in another package reaches a public tier that
+		// omits `[3 of Int]`, the roll that fails with the omission walk's declarations reverted; seed 0 draws none.
+		#expect(features(ofSeed: 5).intersection(drawn) == [.unbuildableValuePublicMockCall, .unbuildableValuePublicMockCallPublicTier])
+		#expect(features(ofSeed: 2).intersection(drawn) == [.unbuildableValuePublicMockCall, .unbuildableValuePublicMockCallTierOmits])
+		#expect(features(ofSeed: 0).isDisjoint(with: drawn))
+	}
+
+	@Test
+	func drawFeatures_readHoleLabelShapes_whenSeedsDrawThem() {
+		func features(ofSeed seed: UInt64) -> Set<GraphFuzzerPublicMockDrawFeature> {
+			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+		}
+		let drawn: Set<GraphFuzzerPublicMockDrawFeature> = [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInInstantiator, .holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated]
+		// Seed 0 holds the hole as itself, seed 31 in an `Instantiator`, seed 17 in a `LazilyInstantiated`; each fails to
+		// compile with a renamed hole site's hole reverted. Seed 1 draws none.
+		#expect(features(ofSeed: 0).intersection(drawn) == [.holeLabelReceivedByPromotedSibling])
+		#expect(features(ofSeed: 31).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInInstantiator])
+		#expect(features(ofSeed: 17).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated])
+		#expect(features(ofSeed: 1).isDisjoint(with: drawn))
+	}
+
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func outputFeatures_readNoBuilderStruct_whenPublicMockKeepsClosureOverEnum() {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [])
