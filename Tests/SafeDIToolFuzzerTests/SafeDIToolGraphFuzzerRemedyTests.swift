@@ -2620,6 +2620,19 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_leaveNoErrorAtTheReceive_whenTheSeamDeclaresTheLabelOutsideTheSendableFunctionThatBuildsTheCycle() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.sendableCycleRedeclarationGraph())
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.description) == ["gives `cache: S1_Cache` on `S1_Step` the label `cacheRelabeled`"])
+		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedySeamFillRelabelsCycleDeclarationReason)") {
+			#expect(runs.map(\.errorsAtSite) == [[]])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func unremediedSiteCount_countsASeamFillsError_whenItStatesOnlyTheRemedyThatFulfillsTheHoleInTheSeamsModule() async throws {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
 			"""
@@ -3125,6 +3138,94 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 				}
 
 				@Received let cache: S1_Cache
+			}
+			""",
+		]
+	}
+
+	/// Seed 1916's cycle, made minimal: a seam of `FuzzFeature`, `S1_Home`, declares `cache: S1_Cache` and builds `S1_Screen`,
+	/// the owner of a place of `S1_Service`, in a `SendableInstantiator`; `S1_Screen` builds `S1_Step` in another, which
+	/// declares `cache` again and builds `S1_Screen` again. The fill, `S1_Impl` in `FuzzApp`, receives `cache` only if
+	/// available, from a scope that holds the same values at every level of the cycle; relabeling `S1_Step`'s `cache` leaves
+	/// it reading `S1_Home`'s, outside the `@Sendable` function that builds `S1_Screen`.
+	private static func sendableCycleRedeclarationGraph() -> [String] {
+		[
+			"""
+			// module: FuzzFeature
+
+			@Instantiable(generateDependencyTree: true)
+			public final class S1_Home: Instantiable, Sendable {
+				public init(cache: S1_Cache, screenBuilder: SendableInstantiator<S1_Screen>) {
+					self.cache = cache
+					self.screenBuilder = screenBuilder
+				}
+
+				@Instantiated let cache: S1_Cache
+				@Instantiated let screenBuilder: SendableInstantiator<S1_Screen>
+			}
+
+			public protocol S1_Service: Sendable {}
+			""",
+			"""
+			// module: FuzzFeature
+
+			@Instantiable
+			public final class S1_Screen: Instantiable, Sendable {
+				public init(service: any S1_Service, stepBuilder: SendableInstantiator<S1_Step>) {
+					self.service = service
+					self.stepBuilder = stepBuilder
+				}
+
+				@Instantiated let service: any S1_Service
+				@Instantiated let stepBuilder: SendableInstantiator<S1_Step>
+			}
+			""",
+			"""
+			// module: FuzzFeature
+
+			@Instantiable
+			public final class S1_Step: Instantiable, Sendable {
+				public init(cache: S1_Cache, screenBuilder: SendableInstantiator<S1_Screen>) {
+					self.cache = cache
+					self.screenBuilder = screenBuilder
+				}
+
+				@Instantiated let cache: S1_Cache
+				@Instantiated let screenBuilder: SendableInstantiator<S1_Screen>
+			}
+			""",
+			"""
+			// module: FuzzFeature
+
+			@Instantiable
+			public final class S1_Cache: Instantiable, Sendable {
+				public init() {}
+			}
+			""",
+			"""
+			// module: FuzzApp
+			import FuzzFeature
+
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable, Sendable {
+				public init(home: S1_Home) {
+					self.home = home
+				}
+
+				@Instantiated let home: S1_Home
+			}
+			""",
+			"""
+			// module: FuzzApp, fills a hole
+			import FuzzFeature
+
+			@Instantiable(fulfillingAdditionalTypes: [S1_Service.self])
+			public final class S1_Impl: Instantiable, Sendable, S1_Service {
+				public init(cache: S1_Cache?) {
+					self.cache = cache
+				}
+
+				@Received(onlyIfAvailable: true) let cache: S1_Cache?
 			}
 			""",
 		]
