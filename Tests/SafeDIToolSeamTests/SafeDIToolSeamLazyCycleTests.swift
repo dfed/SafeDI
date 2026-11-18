@@ -1417,13 +1417,13 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            _ = Service.__safeDI_Service_mock_4D061AF06C28784E.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let service = Service.mock(safeDIOverrides: safeDIOverrides.aBuilder.service)
 		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_filter() -> Hub.Space.FilterProtocol {
+		                func __safeDI_filter() -> any Hub.Space.FilterProtocol {
 		                    let aBuilder = Instantiator<A> {
 		                        __safeDI_aBuilder(filter: nil)
 		                    }
 		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.filter.safeDIBuilder { safeDIBuilder(aBuilder) } else { AppFilter(aBuilder: aBuilder) }
 		                }
-		                let filter: Hub.Space.FilterProtocol = __safeDI_filter()
+		                let filter: any Hub.Space.FilterProtocol = __safeDI_filter()
 		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(filter) } else { Mid(filter: filter) }
 		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
@@ -1613,13 +1613,13 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            _ = Service.__safeDI_Service_mock_4D061AF06C28784E.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let service = Service.mock(safeDIOverrides: safeDIOverrides.aBuilder.service)
 		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_filter() -> Hub.Space.FilterProtocol {
+		                func __safeDI_filter() -> any Hub.Space.FilterProtocol {
 		                    let aBuilder = Instantiator<A> {
 		                        __safeDI_aBuilder(filter: nil)
 		                    }
 		                    return AppFilter.__safeDI_init(aBuilder: aBuilder, safeDIBuilder: safeDIOverrides.aBuilder.midBuilder.filter.safeDIBuilder)
 		                }
-		                let filter: Hub.Space.FilterProtocol = __safeDI_filter()
+		                let filter: any Hub.Space.FilterProtocol = __safeDI_filter()
 		                return Mid.__safeDI_init(filter: filter, safeDIBuilder: safeDIOverrides.aBuilder.midBuilder.safeDIBuilder)
 		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)

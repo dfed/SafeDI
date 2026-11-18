@@ -4397,7 +4397,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            api: (() -> SessionsApi)? = nil,
+		            api: (() -> any SessionsApi)? = nil,
 		            childA: ((any SessionsApi) -> ChildA)? = nil,
 		            childB: ((SessionsApi) -> ChildB)? = nil
 		        ) {
@@ -4408,7 +4408,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            )
 		        }
 
-		        var api: (() -> SessionsApi)? { __safeDI_storage.api }
+		        var api: (() -> any SessionsApi)? { __safeDI_storage.api }
 		        var childA: ((any SessionsApi) -> ChildA)? { __safeDI_storage.childA }
 		        var childB: ((SessionsApi) -> ChildB)? { __safeDI_storage.childB }
 
@@ -4416,7 +4416,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		        private final class __safeDI_Storage {
 		            init(
-		                api: (() -> SessionsApi)?,
+		                api: (() -> any SessionsApi)?,
 		                childA: ((any SessionsApi) -> ChildA)?,
 		                childB: ((SessionsApi) -> ChildB)?
 		            ) {
@@ -4425,7 +4425,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		                self.childB = childB
 		            }
 
-		            let api: (() -> SessionsApi)?
+		            let api: (() -> any SessionsApi)?
 		            let childA: ((any SessionsApi) -> ChildA)?
 		            let childB: ((SessionsApi) -> ChildB)?
 		        }
@@ -4434,7 +4434,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let api: SessionsApi = if let safeDIBuilder = safeDIOverrides.api { safeDIBuilder() } else { DefaultSessionsApi() }
+		        let api: any SessionsApi = if let safeDIBuilder = safeDIOverrides.api { safeDIBuilder() } else { DefaultSessionsApi() }
 		        let childA = if let safeDIBuilder = safeDIOverrides.childA { safeDIBuilder(api) } else { ChildA(api: api) }
 		        let childB = if let safeDIBuilder = safeDIOverrides.childB { safeDIBuilder(api) } else { ChildB(api: api) }
 		        return Root(childA: childA, childB: childB)
