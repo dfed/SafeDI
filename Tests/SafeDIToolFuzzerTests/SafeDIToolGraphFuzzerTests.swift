@@ -855,7 +855,7 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(results.contains { !$0.isAccepted && $0.failure == nil }, "Rejected none of \(Self.seamSmokeSeeds.count) graphs")
 	}
 
-	@Test(arguments: [(UInt64(153), GraphFuzzerGeneratorFeature.generateDependencyTree), (163, .generateDependencyTree), (98, .generateMockPublic), (208, .generateMockPublic)])
+	@Test(arguments: [(UInt64(153), GraphFuzzerGeneratorFeature.generateDependencyTree), (129, .generateDependencyTree), (98, .generateMockPublic), (208, .generateMockPublic)])
 	func seamDependencyDraw_importsOnlyTheModuleBeneath_whenDeclarationsMoveOrAChainIsDrawnBeneathSeamsModule(seed: UInt64, feature: GraphFuzzerGeneratorFeature) throws {
 		// Each module imports only what it lists under the module-info flow. Each module of the chain beneath the seam's module
 		// imports only the module beneath it, and a caller only the seam's module, except a module that lists every module
@@ -876,7 +876,7 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(!GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: fixture).isEmpty, "Seed \(seed): no caller reads through the seam's module's view")
 		let drawn = GraphFuzzerSeamDependencyDraw.drawn(in: fixture)
 		// Seed 208 moves a declaration beside its chain.
-		let expected: [UInt64: (movesDeclaration: Bool, drawsChain: Bool)] = [153: (true, false), 163: (false, true), 98: (true, false), 208: (true, true)]
+		let expected: [UInt64: (movesDeclaration: Bool, drawsChain: Bool)] = [153: (true, false), 129: (false, true), 98: (true, false), 208: (true, true)]
 		#expect(drawn.movesDeclaration == expected[seed]?.movesDeclaration)
 		#expect(drawn.drawsChain == expected[seed]?.drawsChain)
 		#expect(Set(modules).isSuperset(of: drawn.drawsChain ? [.seamDependency, .seamDependencyBase, .seamDependencyLeaf] : [.seamDependency]))
@@ -6899,6 +6899,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.retentionSeamValueBeforeBuilderForwardingPlace: 35,
 		.carriedLevel: 48,
 		.carriedLevelFillReadsForwarded: 16,
+		.carriedLevelFillReadsDeferredValue: 0,
+		.carriedLevelFillReadsDeferredValueRootDeclares: 0,
 		.carriedLevelTwoRoutes: 31,
 		.fillCallReadsOwnLevel: 64,
 		.fillCallReadsOwnLevelInsideSendableFill: 22,
@@ -7293,6 +7295,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.carriedLevel: 303,
 		.carriedLevelTwoRoutes: 217,
 		.carriedLevelFillReadsForwarded: 104,
+		.carriedLevelFillReadsDeferredValue: 0,
+		.carriedLevelFillReadsDeferredValueRootDeclares: 0,
 		.passingUpCopies: 259,
 		.passingUpCopiesFillReadsLabel: 128,
 		.passingUpCopiesSeamsBindLabel: 101,
