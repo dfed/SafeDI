@@ -34,6 +34,13 @@ indirect enum ArgumentSource: Hashable, Sendable {
 	case wrapper(of: ArgumentSource, wrapperType: TypeDescription)
 	/// The optional `value` mapped into a wrapper of type `wrapperType`, as `wrapper(of:wrapperType:)` makes one.
 	case optionalWrapper(of: ArgumentSource, wrapperType: TypeDescription)
+	/// What a call of another module's public mock passes a builder: the call of the builder's root level function, or the
+	/// struct the caller passes up (`ScopeGenerator.publicMockBuilderStructValuesByLabel`), held as spelled until seam
+	/// and public mock calls are planned.
+	case builderArgument(String)
+	/// What a seam call or a public mock's call passes for one of the seam's holes (`holeArgumentValuesByLabel`), held as
+	/// spelled until seam and public mock calls are planned.
+	case holeArgument(String)
 
 	var spelled: String {
 		switch self {
@@ -49,6 +56,9 @@ indirect enum ArgumentSource: Hashable, Sendable {
 			"\(wrapperType.asSource)({ \(value.spelled) })"
 		case let .optionalWrapper(value, wrapperType):
 			"\(value.spelled).map { value in \(wrapperType.asSource)({ value }) }"
+		case let .builderArgument(value),
+		     let .holeArgument(value):
+			value
 		}
 	}
 
