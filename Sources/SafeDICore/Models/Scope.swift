@@ -876,11 +876,10 @@ private struct ScopeGeneratorUnderConstruction {
 			// Where the fill reads it in a form the called mock's copy does not provide, the caller's wrapper, a level whose
 			// payload holds that by-value copy hands the fill the root level function's own parameter, past the copy
 			// (`Fill.labelsHandedPastCalledMockCopy`); where the copy provides every form the fill reads, the levels hand the
-			// copy, which holds the same value. A fill of the case's own places that reads such a wrapper and whose tree calls the
-			// called type's public mock, or one whose builders reach its places, is passed up before any fill is built
-			// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`), so a wrapper is handed past the copy only where
-			// the re-entering call is inside a fill of another call's place, as where the called type's fill builds a second
-			// called type whose own fill builds the first again.
+			// copy, which holds the same value. A fill that reads such a wrapper beside its place's fields is passed up where its
+			// called type is re-entered, directly or through the fills of the calls its fills make, before any fill is built
+			// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`), and no test or fixture reaches a wrapper handed
+			// past the copy here.
 			var labelsHandedPastCalledMockCopyByCaseKey = [String: Set<String>]()
 			if fillsReenterCall {
 				for (caseKey, places) in placesByCaseKey {
@@ -1434,7 +1433,9 @@ private struct ScopeGeneratorUnderConstruction {
 			var forms = Set(child.receivedProperties.filter { $0.label == label })
 			// A call in `child`'s tree that re-enters a root level function hands it the fill's value of each label the function
 			// takes (`PublicMockLevelFunctions.Reentry`), so the fill takes that value as a required read where the function takes
-			// it non-optional, whatever the fill's own tree reads of it.
+			// it non-optional, whatever the fill's own tree reads of it: as where a fill of a called type that holds no copy of the
+			// caller's value builds the called type again, itself or through another call's fill, and reads the value only if
+			// available, or not at all while the caller holds it lazily, beside a fill of another place that reads it by value.
 			let isHandedToReenteredFunction = labelsHandedToReenteredFunctions.contains(label)
 			if isHandedToReenteredFunction {
 				forms.insert(field.property)
