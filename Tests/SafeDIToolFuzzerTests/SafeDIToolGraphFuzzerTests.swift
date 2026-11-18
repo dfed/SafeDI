@@ -8290,8 +8290,8 @@ struct SafeDIToolGraphFuzzerTests {
 	/// by-name check, and the view that cannot call;
 	/// then the fill that reads a value the loop around `T6`'s hole declares again
 	/// (`GraphFuzzerOracle.publicMockStaleValueErrorMarker`), which rejects seeds 50, 85, 450, 555, 609, 688 and 967; and the
-	/// fill that reads the `holeContext` `T6` declares outside the `@Sendable` function above its hole
-	/// (`GraphFuzzerOracle.publicMockSendableFunctionCarryErrorMarker`), which rejects seed 157.
+	/// fill, in a module that calls `T6`'s public mock, that reads the `holeContext` `T6` declares outside the `@Sendable`
+	/// function above its hole (`GraphFuzzerOracle.publicMockSendableFunctionCarryErrorMarker`), which rejects seed 157.
 	static let publicMockCorpusErrorGraphCounts = [
 		96, 0, 0, 0, 36, 0, 0, 7,
 		// pins: derive on CI
@@ -8340,7 +8340,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockParametersSortedByLabelReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
-			seeds: [103, 106, 167, 251, 351, 433, 528, 562, 771, 836, 947, 947],
+			seeds: [103, 106, 167, 251, 351, 433, 528, 562, 771, 836, 947],
 		),
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
 		// cycle through it, in the gating draw of the shape #702 fixed, a `.public` type that builds itself again through
@@ -8592,6 +8592,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeHostReceivedThroughInstantiator: 38,
 		.holeHostReceivedThroughSendableInstantiator: 21,
 		.holeFillClosesLazyCycle: 15,
+		.holeFillReadsContextBoundOutsideSendableFunction: 1,
 		.holeFillReceivesField: 56,
 		.holeFillReceivesNonField: 40,
 		.holeFillReceivesFormBoundAgain: 25,
@@ -8711,9 +8712,6 @@ struct SafeDIToolGraphFuzzerTests {
 		.twoLeavesReceiveUnnameableDependency: 43,
 		.twoPublicMockTypes: 299,
 		.typeInExtensionOfInstantiable: 219,
-		.holeMockIsolatedToMainActor: 93,
-		.holeHandWrittenMockBuiltInPublicMock: 113,
-		.holeHandWrittenMockTakesNoOverrides: 29,
 	]
 
 	/// Seed 2760, whose mock of `S2760_T2` the tool rejected until a mock passed `nil` to a receive only if available that
