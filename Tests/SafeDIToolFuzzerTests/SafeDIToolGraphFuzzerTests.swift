@@ -8151,7 +8151,7 @@ struct SafeDIToolGraphFuzzerTests {
 		spellingDrawFeatures: [],
 		omittedValueGraphCount: publicMockCorpusOmittedValueGraphCount,
 		outputFeatureMinimumShares: publicMockCorpusOutputFeatureMinimumShares,
-		errorMarkers: GraphFuzzerOracle.publicMockOnlyErrorMarkers + [GraphFuzzerOracle.publicMockStaleValueErrorMarker],
+		errorMarkers: GraphFuzzerOracle.publicMockOnlyErrorMarkers + [GraphFuzzerOracle.publicMockStaleValueErrorMarker, GraphFuzzerOracle.publicMockSendableFunctionCarryErrorMarker],
 		errorGraphCounts: publicMockCorpusErrorGraphCounts,
 		publicMockDrawFeaturesCountedWhenAccepted: Set(GraphFuzzerPublicMockDrawFeature.allCases.filter(\.isCountedWhenAccepted)),
 		acceptedPublicMockDrawFeatureCounts: publicMockCorpusAcceptedDrawFeatureCounts,
@@ -8289,9 +8289,14 @@ struct SafeDIToolGraphFuzzerTests {
 	/// of `unbuildableValuePublicMockCallTierOmits`) and a nested leaf tier omitting a provided value, the mock condition, the
 	/// by-name check, and the view that cannot call;
 	/// then the fill that reads a value the loop around `T6`'s hole declares again
-	/// (`GraphFuzzerOracle.publicMockStaleValueErrorMarker`), which rejects seeds 50, 85, 450, 555, 609, 688 and 967.
-	// pins: derive on CI
-	static let publicMockCorpusErrorGraphCounts = [96, 0, 0, 0, 36, 0, 0, 7]
+	/// (`GraphFuzzerOracle.publicMockStaleValueErrorMarker`), which rejects seeds 50, 85, 450, 555, 609, 688 and 967; and the
+	/// fill that reads the `holeContext` `T6` declares outside the `@Sendable` function above its hole
+	/// (`GraphFuzzerOracle.publicMockSendableFunctionCarryErrorMarker`), which rejects seed 157.
+	static let publicMockCorpusErrorGraphCounts = [
+		96, 0, 0, 0, 36, 0, 0, 7,
+		// pins: derive on CI
+		0,
+	]
 
 	/// The ordinary suite's batch of the public mock corpus: graphs the tool accepts – a consumer in the same package
 	/// calling a public mock with `analytics.instance` of the wrapper it holds, M8.32's stated divergence, of a `@MainActor`
