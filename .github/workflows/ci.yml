@@ -1999,7 +1999,9 @@ jobs:
   # a release build (Scripts/function-compile-time-check.py): one initializer
   # took 40% of the module's release compile, in every release build of every
   # job, and no check said so. It builds SafeDICore alone, with the
-  # optimizer's and the type checker's timers on, and reads the log.
+  # optimizer's and the type checker's timers on, and reads the log. The
+  # build caches nothing, so it runs only when the change touches what it
+  # times: SafeDICore's sources, the package manifest or the check itself.
   function-compile-time:
     name: Check Function Compile Time on Linux
     needs: changes
@@ -2014,28 +2016,61 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+        with:
+          # Main's history, for the diff below.
+          fetch-depth: 0
       # Retried for the reason "Install curl for Codecov" gives.
       - name: Install Python
         uses: ./.github/actions/retry
         with:
           command: command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }
       - name: Check the Script
-        run: python3 -I Scripts/function-compile-time-check.py --self-test
+        run: python3 -I Scripts/function-compile-time-check.py --self-test "$RUNNER_TEMP/function-compile-time-self-test"
+      # A pull request is compared with the default branch, as `changes`
+      # compares it, because CI runs on the top pull request of a stack only;
+      # a push to main with the commit before it. Anything else, or a base
+      # that cannot be read, is timed.
+      - name: See Whether the Change Touches What Is Timed
+        id: scope
+        env:
+          BEFORE: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          base=
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            base=$(git merge-base "origin/$DEFAULT_BRANCH" HEAD || true)
+          elif [ "$GITHUB_EVENT_NAME" = push ] && git rev-parse --verify --quiet "$BEFORE^{commit}" > /dev/null; then
+            base=$BEFORE
+          fi
+          timed=true
+          if [ -n "$base" ] && git diff --quiet "$base" HEAD -- Sources/SafeDICore Package.swift Package.resolved \
+              Scripts/function-compile-time-check.py Scripts/function-compile-time-waivers.txt .github/workflows/ci.yml; then
+            timed=false
+            echo "Nothing this check times changed since $base." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "timed=$timed" >> "$GITHUB_OUTPUT"
       - name: Resolve Package Dependencies
+        if: ${{ steps.scope.outputs.timed == 'true' }}
         uses: ./.github/actions/retry
         with:
           command: swift package resolve
-      # Measured: 733 s on four cores, swift-syntax included, of which
-      # SafeDICore is about 400 s until its long initializer is split.
+      # Measured: 604 s and 733 s on four cores, swift-syntax included, of
+      # which SafeDICore is about 400 s until its long initializer is split.
+      # The optimizer prints each pass of 20 ms or more over one function:
+      # about 1,400 lines, 5% of the log, where 200 ms printed 62 and missed
+      # a function whose time is spread over short passes.
       - name: Build SafeDICore with the Compiler's Timers
+        if: ${{ steps.scope.outputs.timed == 'true' }}
         timeout-minutes: 25
         run: |
           set -o pipefail
           swift build -c release --traits sourceBuild --target SafeDICore -v \
             -Xswiftc -Xfrontend -Xswiftc -debug-time-function-bodies \
-            -Xswiftc -Xllvm -Xswiftc -sil-print-pass-time -Xswiftc -Xllvm -Xswiftc -sil-min-pass-time=200 \
+            -Xswiftc -Xllvm -Xswiftc -sil-print-pass-time -Xswiftc -Xllvm -Xswiftc -sil-min-pass-time=20 \
             > "$RUNNER_TEMP/function-compile-time.log" 2>&1 || { tail -n 200 "$RUNNER_TEMP/function-compile-time.log"; exit 1; }
       - name: Check Each Function's Time
+        if: ${{ steps.scope.outputs.timed == 'true' }}
         run: python3 -I Scripts/function-compile-time-check.py --summary "$GITHUB_STEP_SUMMARY" "$RUNNER_TEMP/function-compile-time.log"
 
   # Fuzzes each of the graph fuzzer's corpora whole – the base corpus, seeds

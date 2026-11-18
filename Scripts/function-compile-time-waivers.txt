@@ -1,11 +1,12 @@
 # Functions of SafeDICore known to be over a limit of function-compile-time-check.py: `sil` or `type-check`, a ceiling
-# in seconds, and the start of the function's name as the check prints it. A waiver that matches no function over the
-# limit fails the check, so remove a line in the change that brings its function under the limit.
+# in seconds, and the start of the function's name as the check prints it, without its file and line. Each ceiling is
+# 1.25 times the slowest measurement. A waiver that matches nothing near the limit fails the check, so remove a line
+# in the change that brings its function under the limit; never add one for new code.
 
-# A 646-line initializer whose computed blocks the optimizer handles as one function: 172 to 198 s measured, of which
-# one `sil-combine` run is 96 s. Splitting its blocks into functions of their own removes this line.
-sil 300 SafeDICore.ScopeGenerator.init(instantiable:
+# A 646-line initializer whose computed blocks the optimizer handles as one function. Measured 172 s, 189 s and 198 s, of
+# which one `sil-combine` run is 96 s. Splitting its blocks into functions of their own removes this line.
+sil 250 SafeDICore.ScopeGenerator.init(instantiable:
 
-# `sourceDiagnostics`, a switch whose arms join arrays with `+` over `map` and `sorted`: 10 to 12 s measured. Building
-# each arm's array with sequential appends removes this line.
-type-check 20 getter SafeDICore.(file).DependencyTreeGenerator.DependencyTreeGeneratorError._
+# A switch whose arms join arrays with `+` over `map` and `sorted`. Measured 9.9 s and 12.0 s. Building each arm's
+# array with sequential appends removes this line.
+type-check 15 getter SafeDICore.(file).DependencyTreeGenerator.DependencyTreeGeneratorError.sourceDiagnostics
