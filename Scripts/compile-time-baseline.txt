@@ -1,0 +1,18 @@
+# Lines `SafeDITool generate` writes for each module of each wide shape of compile-time-check.py: SHAPE MODULE LINES.
+# "Check Generate Time on Linux" fails when a module is more than 5% from its number. Never edit a number by hand:
+# `Scripts/compile-time-check.py --lines --write-baseline TOOL DIRECTORY` rewrites them from the tool of the commit
+# under test and keeps these comments. Say why a number moved in a comment above it.
+P1-40 Screens 3291
+P1-40 Feat 460
+P1-40 App 999
+P1-200 Screens 16411
+P1-200 Feat 1740
+P1-200 App 4839
+P2-40 Feat 18227
+P2-40 App 753
+P2-200 Feat 138467
+P2-200 App 3633
+N1-40 Feature 2082
+N1-40 App 264
+N1-200 Feature 10242
+N1-200 App 1224
