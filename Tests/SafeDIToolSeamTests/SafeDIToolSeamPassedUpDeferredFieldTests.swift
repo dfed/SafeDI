@@ -5293,9 +5293,1026 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		])
 	}
 
+	// MARK: A fill whose tree reads the value and its `SendableLazilyInstantiated`
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillTakesSendableMemo_whenTreeReadsValueAndSendableWrapperAndCallingSeamBuildsPlacesTypeOnItsOwnRoute() async throws {
+		// `ThingImpl` reads `chainToken` and builds `WrapperReader`, which reads `TopRoot`'s `SendableLazilyInstantiated`.
+		// `Outer` passes up only `SeamB`'s place, whose `SendableInstantiator` defers `chainToken` `@Sendable`, and `Mid` builds
+		// `Worker` in `midWorkerBuilder` too, where the root dispatcher hands the caller's declaration: the fill takes
+		// `SeamB`'s `SendableLazilyInstantiated`, which the root dispatcher hands as `TopRoot`'s own, so `WrapperReader` reads a
+		// wrapper on both routes and `ChainToken` is created when a `Worker` is first built, as in the one-module build.
+		let modules = Self.chainTokenModules(thingImpl: Self.thingImplReadingValueAndSendableWrapper, topChainToken: "@Instantiated let chainToken: SendableLazilyInstantiated<ChainToken>", midWorkerBuilder: true, outerHoldsOnlySeamB: true)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+
+		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Outer {
+		    nonisolated public enum SafeDIScope_HoleService {
+		        nonisolated public struct seamB_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let seamB: (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+
+		            public init(seamB: @escaping (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		                self.seamB = seamB
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.seamB = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    // SafeDI counts `HoleService` as `public`: no module it reads declares it narrower. If `HoleService` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_chainToken: @autoclosure @escaping @Sendable () -> ChainToken, __safeDI_holeServiceBuilder: SafeDIScope_HoleService.__safeDI_Builder<any HoleService>) {
+		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        func __safeDI_seamB() -> SeamB {
+		            _ = SeamB.__safeDI_SeamB_DC2838BAE7387202.self
+		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.seamB_Values()))
+		        }
+		        let seamB: SeamB = __safeDI_seamB()
+		        self.init(seamB: seamB)
+		    }
+		}
+
+		extension Outer {
+		    public enum __safeDI_Outer_315CDB5B658F55C9 {}
+		}
+
+		extension Seam {
+		    nonisolated public enum SafeDIScope_HoleService {
+		        nonisolated public struct holeService_Values {
+		            public var chainToken: ChainToken { __safeDI_chainToken.instance }
+		            public let leafBuilder: Instantiator<ChainLeaf>
+		            public let __safeDI_chainToken: LazilyInstantiated<ChainToken>
+
+		            init(chainToken: LazilyInstantiated<ChainToken>, leafBuilder: Instantiator<ChainLeaf>) {
+		                __safeDI_chainToken = chainToken
+		                self.leafBuilder = leafBuilder
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let holeService: (holeService_Values) -> __safeDI_Built
+
+		            public init(holeService: @escaping (holeService_Values) -> __safeDI_Built) {
+		                self.holeService = holeService
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeService = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_chainToken: @autoclosure @escaping () -> ChainToken, __safeDI_holeServiceBuilder: SafeDIScope_HoleService.__safeDI_Builder<any HoleService>) {
+		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        func __safeDI_leafBuilder() -> ChainLeaf {
+		            ChainLeaf(chainToken: chainToken.instance)
+		        }
+		        let leafBuilder = Instantiator<ChainLeaf>(__safeDI_leafBuilder)
+		        let holeService: any HoleService = __safeDI_holeServiceBuilder.holeService(SafeDIScope_HoleService.holeService_Values(chainToken: chainToken, leafBuilder: leafBuilder))
+		        self.init(leafBuilder: leafBuilder, holeService: holeService)
+		    }
+		}
+
+		extension Seam {
+		    public enum __safeDI_Seam_2AD7242F90FE57C2 {}
+		}
+
+		extension SeamB {
+		    nonisolated public enum SafeDIScope_HoleService {
+		        nonisolated public struct holeService_Values {
+		            public var chainToken: ChainToken { __safeDI_chainToken.instance }
+		            public let leafBuilder: SendableInstantiator<ChainLeaf>
+		            public let __safeDI_chainToken: SendableLazilyInstantiated<ChainToken>
+
+		            init(chainToken: SendableLazilyInstantiated<ChainToken>, leafBuilder: SendableInstantiator<ChainLeaf>) {
+		                __safeDI_chainToken = chainToken
+		                self.leafBuilder = leafBuilder
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let holeService: (holeService_Values) -> __safeDI_Built
+
+		            public init(holeService: @escaping (holeService_Values) -> __safeDI_Built) {
+		                self.holeService = holeService
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeService = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_chainToken: @autoclosure @escaping @Sendable () -> ChainToken, __safeDI_holeServiceBuilder: SafeDIScope_HoleService.__safeDI_Builder<any HoleService>) {
+		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        @Sendable nonisolated func __safeDI_leafBuilder() -> ChainLeaf {
+		            ChainLeaf(chainToken: chainToken.instance)
+		        }
+		        let leafBuilder = SendableInstantiator<ChainLeaf>(__safeDI_leafBuilder)
+		        let holeService: any HoleService = __safeDI_holeServiceBuilder.holeService(SafeDIScope_HoleService.holeService_Values(chainToken: chainToken, leafBuilder: leafBuilder))
+		        self.init(leafBuilder: leafBuilder, holeService: holeService)
+		    }
+		}
+
+		extension SeamB {
+		    public enum __safeDI_SeamB_DC2838BAE7387202 {}
+		}
+		"""])
+		#expect(output.modules["Other"]?.generatedFiles == ["Other.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Mid {
+		    nonisolated public enum SafeDIScope_ThingService {
+		        nonisolated public struct outer_holeServiceBuilder_Values {
+		            public var chainToken: ChainToken { __safeDI_chainToken.instance }
+		            public let __safeDI_chainToken: SendableLazilyInstantiated<ChainToken>
+
+		            init(chainToken: SendableLazilyInstantiated<ChainToken>) {
+		                __safeDI_chainToken = chainToken
+		            }
+		        }
+
+		        nonisolated public struct midWorkerBuilder_Values {
+		            public var chainToken: ChainToken { __safeDI_chainToken.instance }
+		            public let outer: Outer
+		            public let __safeDI_chainToken: SendableLazilyInstantiated<ChainToken>
+
+		            init(chainToken: SendableLazilyInstantiated<ChainToken>, outer: Outer) {
+		                __safeDI_chainToken = chainToken
+		                self.outer = outer
+		            }
+		        }
+
+		        nonisolated public enum HoleImpl_Scope {
+		            nonisolated public struct workerBuilder_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.workerBuilder = workerBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.workerBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        nonisolated public enum Worker_Scope {
+		            nonisolated public struct thing_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let thing: (thing_Values) -> __safeDI_Built
+
+		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                    self.thing = thing
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.thing = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
+		            public let midWorkerBuilder: (midWorkerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(outer_holeServiceBuilder: @escaping (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>, midWorkerBuilder: @escaping (midWorkerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
+		                self.midWorkerBuilder = midWorkerBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.outer_holeServiceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		                self.midWorkerBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    // SafeDI counts `ThingService` as `public`: no module it reads declares it narrower. If `ThingService` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_chainToken: @autoclosure @escaping @Sendable () -> ChainToken, __safeDI_thingServiceBuilder: SafeDIScope_ThingService.__safeDI_Builder<any ThingService>) {
+		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        let __safeDI_thingServiceBuilder_outer_holeServiceBuilder = __safeDI_thingServiceBuilder.outer_holeServiceBuilder(SafeDIScope_ThingService.outer_holeServiceBuilder_Values(chainToken: chainToken))
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_315CDB5B658F55C9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_holeServiceBuilder_SeamB_holeService(_ scope: SeamB.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
+		                func __safeDI_holeService() -> HoleImpl {
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    func __safeDI_workerBuilder() -> Worker {
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        return Worker(thing: thing)
+		                    }
+		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
+		                    return HoleImpl(workerBuilder: workerBuilder)
+		                }
+		                let holeService: any HoleService = __safeDI_holeService()
+		                return holeService
+		            }
+		            func __safeDI_holeServiceBuilder_Outer(up: Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>>) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<any HoleService> {
+		                .init(seamB: { values in __safeDI_holeServiceBuilder_SeamB(up: up.seamB(values)) })
+		            }
+		            func __safeDI_holeServiceBuilder_SeamB(up: SeamB.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>>) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<any HoleService> {
+		                .init(holeService: { scope in __safeDI_holeServiceBuilder_SeamB_holeService(scope, __safeDI_outer_holeServiceBuilder: up.holeService(scope)) })
+		            }
+		            return Outer(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder_Outer(up: __safeDI_thingServiceBuilder_outer_holeServiceBuilder))
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        let __safeDI_thingServiceBuilder_midWorkerBuilder = __safeDI_thingServiceBuilder.midWorkerBuilder(SafeDIScope_ThingService.midWorkerBuilder_Values(chainToken: chainToken, outer: outer))
+		        func __safeDI_midWorkerBuilder() -> Worker {
+		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		            return Worker(thing: thing)
+		        }
+		        let midWorkerBuilder = Instantiator<Worker>(__safeDI_midWorkerBuilder)
+		        self.init(outer: outer, midWorkerBuilder: midWorkerBuilder)
+		    }
+		}
+
+		extension Mid {
+		    public enum __safeDI_Mid_787AB232D7981AEF {}
+		}
+		"""])
+		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Other)
+		import Other
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension TopRoot {
+		    public convenience init() {
+		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		            ChainToken()
+		        }
+		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        func __safeDI_mid() -> Mid {
+		            _ = Mid.__safeDI_Mid_787AB232D7981AEF.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
+		                func __safeDI_thing() -> ThingImpl {
+		                    let reader = WrapperReader(chainToken: chainToken)
+		                    return ThingImpl(chainToken: chainToken.instance, reader: reader)
+		                }
+		                let thing: any ThingService = __safeDI_thing()
+		                return thing
+		            }
+		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
+		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() }, midWorkerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: chainToken) })
+		            }
+		            func __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: SendableLazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService> {
+		                .init(workerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: chainToken) })
+		            }
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: SendableLazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<any ThingService> {
+		                .init(thing: { scope in __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(scope, chainToken: chainToken) })
+		            }
+		            func __safeDI_thingServiceBuilder_Mid_Outer() -> Outer.SafeDIScope_HoleService.__safeDI_Builder<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		                .init(seamB: { _ in __safeDI_thingServiceBuilder_Mid_SeamB() })
+		            }
+		            func __safeDI_thingServiceBuilder_Mid_SeamB() -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		                .init(holeService: { values in __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: values.__safeDI_chainToken) })
+		            }
+		            return Mid(__safeDI_chainToken: chainToken.instance, __safeDI_thingServiceBuilder: __safeDI_thingServiceBuilder_Mid())
+		        }
+		        let mid: Mid = __safeDI_mid()
+		        self.init(chainToken: chainToken, mid: mid)
+		    }
+		}
+		"""])
+		try await expectCreationOrderEqualsOneModuleBuild(output, modules: modules, seams: ["seamB"], midBuilders: ["midWorkerBuilder"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillTakesSeamsSendableMemo_whenTreeReadsValueAndSendableWrapperAndOnlySeamDefersValueInSendableLazilyInstantiated() async throws {
+		// As above, without `Mid`'s own route: every route hands `SeamB`'s memo, which the fill takes as it is.
+		let modules = Self.chainTokenModules(thingImpl: Self.thingImplReadingValueAndSendableWrapper, topChainToken: "@Instantiated let chainToken: SendableLazilyInstantiated<ChainToken>", outerHoldsOnlySeamB: true)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+
+		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Outer {
+		    nonisolated public enum SafeDIScope_HoleService {
+		        nonisolated public struct seamB_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let seamB: (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+
+		            public init(seamB: @escaping (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		                self.seamB = seamB
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.seamB = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    // SafeDI counts `HoleService` as `public`: no module it reads declares it narrower. If `HoleService` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_chainToken: @autoclosure @escaping @Sendable () -> ChainToken, __safeDI_holeServiceBuilder: SafeDIScope_HoleService.__safeDI_Builder<any HoleService>) {
+		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        func __safeDI_seamB() -> SeamB {
+		            _ = SeamB.__safeDI_SeamB_DC2838BAE7387202.self
+		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.seamB_Values()))
+		        }
+		        let seamB: SeamB = __safeDI_seamB()
+		        self.init(seamB: seamB)
+		    }
+		}
+
+		extension Outer {
+		    public enum __safeDI_Outer_315CDB5B658F55C9 {}
+		}
+
+		extension Seam {
+		    nonisolated public enum SafeDIScope_HoleService {
+		        nonisolated public struct holeService_Values {
+		            public var chainToken: ChainToken { __safeDI_chainToken.instance }
+		            public let leafBuilder: Instantiator<ChainLeaf>
+		            public let __safeDI_chainToken: LazilyInstantiated<ChainToken>
+
+		            init(chainToken: LazilyInstantiated<ChainToken>, leafBuilder: Instantiator<ChainLeaf>) {
+		                __safeDI_chainToken = chainToken
+		                self.leafBuilder = leafBuilder
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let holeService: (holeService_Values) -> __safeDI_Built
+
+		            public init(holeService: @escaping (holeService_Values) -> __safeDI_Built) {
+		                self.holeService = holeService
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeService = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_chainToken: @autoclosure @escaping () -> ChainToken, __safeDI_holeServiceBuilder: SafeDIScope_HoleService.__safeDI_Builder<any HoleService>) {
+		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        func __safeDI_leafBuilder() -> ChainLeaf {
+		            ChainLeaf(chainToken: chainToken.instance)
+		        }
+		        let leafBuilder = Instantiator<ChainLeaf>(__safeDI_leafBuilder)
+		        let holeService: any HoleService = __safeDI_holeServiceBuilder.holeService(SafeDIScope_HoleService.holeService_Values(chainToken: chainToken, leafBuilder: leafBuilder))
+		        self.init(leafBuilder: leafBuilder, holeService: holeService)
+		    }
+		}
+
+		extension Seam {
+		    public enum __safeDI_Seam_2AD7242F90FE57C2 {}
+		}
+
+		extension SeamB {
+		    nonisolated public enum SafeDIScope_HoleService {
+		        nonisolated public struct holeService_Values {
+		            public var chainToken: ChainToken { __safeDI_chainToken.instance }
+		            public let leafBuilder: SendableInstantiator<ChainLeaf>
+		            public let __safeDI_chainToken: SendableLazilyInstantiated<ChainToken>
+
+		            init(chainToken: SendableLazilyInstantiated<ChainToken>, leafBuilder: SendableInstantiator<ChainLeaf>) {
+		                __safeDI_chainToken = chainToken
+		                self.leafBuilder = leafBuilder
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let holeService: (holeService_Values) -> __safeDI_Built
+
+		            public init(holeService: @escaping (holeService_Values) -> __safeDI_Built) {
+		                self.holeService = holeService
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeService = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_chainToken: @autoclosure @escaping @Sendable () -> ChainToken, __safeDI_holeServiceBuilder: SafeDIScope_HoleService.__safeDI_Builder<any HoleService>) {
+		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        @Sendable nonisolated func __safeDI_leafBuilder() -> ChainLeaf {
+		            ChainLeaf(chainToken: chainToken.instance)
+		        }
+		        let leafBuilder = SendableInstantiator<ChainLeaf>(__safeDI_leafBuilder)
+		        let holeService: any HoleService = __safeDI_holeServiceBuilder.holeService(SafeDIScope_HoleService.holeService_Values(chainToken: chainToken, leafBuilder: leafBuilder))
+		        self.init(leafBuilder: leafBuilder, holeService: holeService)
+		    }
+		}
+
+		extension SeamB {
+		    public enum __safeDI_SeamB_DC2838BAE7387202 {}
+		}
+		"""])
+		#expect(output.modules["Other"]?.generatedFiles == ["Other.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Mid {
+		    nonisolated public enum SafeDIScope_ThingService {
+		        nonisolated public struct outer_holeServiceBuilder_Values {
+		            public var chainToken: ChainToken { __safeDI_chainToken.instance }
+		            public let __safeDI_chainToken: SendableLazilyInstantiated<ChainToken>
+
+		            init(chainToken: SendableLazilyInstantiated<ChainToken>) {
+		                __safeDI_chainToken = chainToken
+		            }
+		        }
+
+		        nonisolated public enum HoleImpl_Scope {
+		            nonisolated public struct workerBuilder_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.workerBuilder = workerBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.workerBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        nonisolated public enum Worker_Scope {
+		            nonisolated public struct thing_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let thing: (thing_Values) -> __safeDI_Built
+
+		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                    self.thing = thing
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.thing = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
+
+		            public init(outer_holeServiceBuilder: @escaping (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>) {
+		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.outer_holeServiceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		            }
+		        }
+		    }
+
+		    // SafeDI counts `ThingService` as `public`: no module it reads declares it narrower. If `ThingService` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_chainToken: @autoclosure @escaping @Sendable () -> ChainToken, __safeDI_thingServiceBuilder: SafeDIScope_ThingService.__safeDI_Builder<any ThingService>) {
+		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        let __safeDI_thingServiceBuilder_outer_holeServiceBuilder = __safeDI_thingServiceBuilder.outer_holeServiceBuilder(SafeDIScope_ThingService.outer_holeServiceBuilder_Values(chainToken: chainToken))
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_315CDB5B658F55C9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_holeServiceBuilder_SeamB_holeService(_ scope: SeamB.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
+		                func __safeDI_holeService() -> HoleImpl {
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    func __safeDI_workerBuilder() -> Worker {
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        return Worker(thing: thing)
+		                    }
+		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
+		                    return HoleImpl(workerBuilder: workerBuilder)
+		                }
+		                let holeService: any HoleService = __safeDI_holeService()
+		                return holeService
+		            }
+		            func __safeDI_holeServiceBuilder_Outer(up: Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>>) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<any HoleService> {
+		                .init(seamB: { values in __safeDI_holeServiceBuilder_SeamB(up: up.seamB(values)) })
+		            }
+		            func __safeDI_holeServiceBuilder_SeamB(up: SeamB.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>>) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<any HoleService> {
+		                .init(holeService: { scope in __safeDI_holeServiceBuilder_SeamB_holeService(scope, __safeDI_outer_holeServiceBuilder: up.holeService(scope)) })
+		            }
+		            return Outer(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder_Outer(up: __safeDI_thingServiceBuilder_outer_holeServiceBuilder))
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+
+		extension Mid {
+		    public enum __safeDI_Mid_83D97ED3FF522210 {}
+		}
+		"""])
+		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Other)
+		import Other
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension TopRoot {
+		    public convenience init() {
+		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		            ChainToken()
+		        }
+		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        func __safeDI_mid() -> Mid {
+		            _ = Mid.__safeDI_Mid_83D97ED3FF522210.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
+		                func __safeDI_thing() -> ThingImpl {
+		                    let reader = WrapperReader(chainToken: chainToken)
+		                    return ThingImpl(chainToken: chainToken.instance, reader: reader)
+		                }
+		                let thing: any ThingService = __safeDI_thing()
+		                return thing
+		            }
+		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
+		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() })
+		            }
+		            func __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: SendableLazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService> {
+		                .init(workerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: chainToken) })
+		            }
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: SendableLazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<any ThingService> {
+		                .init(thing: { scope in __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(scope, chainToken: chainToken) })
+		            }
+		            func __safeDI_thingServiceBuilder_Mid_Outer() -> Outer.SafeDIScope_HoleService.__safeDI_Builder<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		                .init(seamB: { _ in __safeDI_thingServiceBuilder_Mid_SeamB() })
+		            }
+		            func __safeDI_thingServiceBuilder_Mid_SeamB() -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		                .init(holeService: { values in __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: values.__safeDI_chainToken) })
+		            }
+		            return Mid(__safeDI_chainToken: chainToken.instance, __safeDI_thingServiceBuilder: __safeDI_thingServiceBuilder_Mid())
+		        }
+		        let mid: Mid = __safeDI_mid()
+		        self.init(chainToken: chainToken, mid: mid)
+		    }
+		}
+		"""])
+		try await expectCreationOrderEqualsOneModuleBuild(output, modules: modules, seams: ["seamB"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillReadsCallersSendableWrapper_whenTreeReadsOnlySendableWrapperAndTwoPassingUpSeamsDeferValueUnlike() async throws {
+		// `ThingImpl` reads only `WrapperReader`'s wrapper, with `Seam` deferring `chainToken` in a `LazilyInstantiated` and
+		// `SeamB` in a `SendableLazilyInstantiated`: the fill takes no memo and reads `TopRoot`'s declaration.
+		let modules = Self.chainTokenModules(thingImpl: Self.thingImplReadingOnlySendableWrapper, topChainToken: "@Instantiated let chainToken: SendableLazilyInstantiated<ChainToken>", outerHoldsSeamB: true)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+
+		"""])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Outer {
+		    nonisolated public enum SafeDIScope_HoleService {
+		        nonisolated public struct seamB_Values: Sendable {}
+
+		        nonisolated public struct seam_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let seamB: (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+
+		            public init(seamB: @escaping (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>, seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		                self.seamB = seamB
+		                self.seam = seam
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.seamB = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.seam = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    // SafeDI counts `HoleService` as `public`: no module it reads declares it narrower. If `HoleService` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_chainToken: @autoclosure @escaping @Sendable () -> ChainToken, __safeDI_holeServiceBuilder: SafeDIScope_HoleService.__safeDI_Builder<any HoleService>) {
+		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        func __safeDI_seamB() -> SeamB {
+		            _ = SeamB.__safeDI_SeamB_DC2838BAE7387202.self
+		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.seamB_Values()))
+		        }
+		        let seamB: SeamB = __safeDI_seamB()
+		        func __safeDI_seam() -> Seam {
+		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		        }
+		        let seam: Seam = __safeDI_seam()
+		        self.init(seam: seam, seamB: seamB)
+		    }
+		}
+
+		extension Outer {
+		    public enum __safeDI_Outer_964A004ABC6F5712 {}
+		}
+
+		extension Seam {
+		    nonisolated public enum SafeDIScope_HoleService {
+		        nonisolated public struct holeService_Values {
+		            public var chainToken: ChainToken { __safeDI_chainToken.instance }
+		            public let leafBuilder: Instantiator<ChainLeaf>
+		            public let __safeDI_chainToken: LazilyInstantiated<ChainToken>
+
+		            init(chainToken: LazilyInstantiated<ChainToken>, leafBuilder: Instantiator<ChainLeaf>) {
+		                __safeDI_chainToken = chainToken
+		                self.leafBuilder = leafBuilder
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let holeService: (holeService_Values) -> __safeDI_Built
+
+		            public init(holeService: @escaping (holeService_Values) -> __safeDI_Built) {
+		                self.holeService = holeService
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeService = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_chainToken: @autoclosure @escaping () -> ChainToken, __safeDI_holeServiceBuilder: SafeDIScope_HoleService.__safeDI_Builder<any HoleService>) {
+		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        func __safeDI_leafBuilder() -> ChainLeaf {
+		            ChainLeaf(chainToken: chainToken.instance)
+		        }
+		        let leafBuilder = Instantiator<ChainLeaf>(__safeDI_leafBuilder)
+		        let holeService: any HoleService = __safeDI_holeServiceBuilder.holeService(SafeDIScope_HoleService.holeService_Values(chainToken: chainToken, leafBuilder: leafBuilder))
+		        self.init(leafBuilder: leafBuilder, holeService: holeService)
+		    }
+		}
+
+		extension Seam {
+		    public enum __safeDI_Seam_2AD7242F90FE57C2 {}
+		}
+
+		extension SeamB {
+		    nonisolated public enum SafeDIScope_HoleService {
+		        nonisolated public struct holeService_Values {
+		            public var chainToken: ChainToken { __safeDI_chainToken.instance }
+		            public let leafBuilder: SendableInstantiator<ChainLeaf>
+		            public let __safeDI_chainToken: SendableLazilyInstantiated<ChainToken>
+
+		            init(chainToken: SendableLazilyInstantiated<ChainToken>, leafBuilder: SendableInstantiator<ChainLeaf>) {
+		                __safeDI_chainToken = chainToken
+		                self.leafBuilder = leafBuilder
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let holeService: (holeService_Values) -> __safeDI_Built
+
+		            public init(holeService: @escaping (holeService_Values) -> __safeDI_Built) {
+		                self.holeService = holeService
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeService = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_chainToken: @autoclosure @escaping @Sendable () -> ChainToken, __safeDI_holeServiceBuilder: SafeDIScope_HoleService.__safeDI_Builder<any HoleService>) {
+		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        @Sendable nonisolated func __safeDI_leafBuilder() -> ChainLeaf {
+		            ChainLeaf(chainToken: chainToken.instance)
+		        }
+		        let leafBuilder = SendableInstantiator<ChainLeaf>(__safeDI_leafBuilder)
+		        let holeService: any HoleService = __safeDI_holeServiceBuilder.holeService(SafeDIScope_HoleService.holeService_Values(chainToken: chainToken, leafBuilder: leafBuilder))
+		        self.init(leafBuilder: leafBuilder, holeService: holeService)
+		    }
+		}
+
+		extension SeamB {
+		    public enum __safeDI_SeamB_DC2838BAE7387202 {}
+		}
+		"""])
+		#expect(output.modules["Other"]?.generatedFiles == ["Other.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Mid {
+		    nonisolated public enum SafeDIScope_ThingService {
+		        nonisolated public struct outer_holeServiceBuilder_Values {
+		            public var chainToken: ChainToken { __safeDI_chainToken.instance }
+		            public let __safeDI_chainToken: SendableLazilyInstantiated<ChainToken>
+
+		            init(chainToken: SendableLazilyInstantiated<ChainToken>) {
+		                __safeDI_chainToken = chainToken
+		            }
+		        }
+
+		        nonisolated public enum HoleImpl_Scope {
+		            nonisolated public struct workerBuilder_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.workerBuilder = workerBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.workerBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        nonisolated public enum Worker_Scope {
+		            nonisolated public struct thing_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let thing: (thing_Values) -> __safeDI_Built
+
+		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                    self.thing = thing
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.thing = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
+
+		            public init(outer_holeServiceBuilder: @escaping (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>) {
+		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.outer_holeServiceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		            }
+		        }
+		    }
+
+		    // SafeDI counts `ThingService` as `public`: no module it reads declares it narrower. If `ThingService` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_chainToken: @autoclosure @escaping @Sendable () -> ChainToken, __safeDI_thingServiceBuilder: SafeDIScope_ThingService.__safeDI_Builder<any ThingService>) {
+		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        let __safeDI_thingServiceBuilder_outer_holeServiceBuilder = __safeDI_thingServiceBuilder.outer_holeServiceBuilder(SafeDIScope_ThingService.outer_holeServiceBuilder_Values(chainToken: chainToken))
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_964A004ABC6F5712.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_holeServiceBuilder_SeamB_SeamB_holeService(_ scope: SeamB.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
+		                func __safeDI_holeService() -> HoleImpl {
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    func __safeDI_workerBuilder() -> Worker {
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        return Worker(thing: thing)
+		                    }
+		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
+		                    return HoleImpl(workerBuilder: workerBuilder)
+		                }
+		                let holeService: any HoleService = __safeDI_holeService()
+		                return holeService
+		            }
+		            func __safeDI_holeServiceBuilder_Seam_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
+		                func __safeDI_holeService() -> HoleImpl {
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    func __safeDI_workerBuilder() -> Worker {
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        return Worker(thing: thing)
+		                    }
+		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
+		                    return HoleImpl(workerBuilder: workerBuilder)
+		                }
+		                let holeService: any HoleService = __safeDI_holeService()
+		                return holeService
+		            }
+		            func __safeDI_holeServiceBuilder_Outer(up: Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>>) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<any HoleService> {
+		                .init(seamB: { values in __safeDI_holeServiceBuilder_SeamB(up: up.seamB(values)) }, seam: { values in __safeDI_holeServiceBuilder_Seam(up: up.seam(values)) })
+		            }
+		            func __safeDI_holeServiceBuilder_SeamB(up: SeamB.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>>) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<any HoleService> {
+		                .init(holeService: { scope in __safeDI_holeServiceBuilder_SeamB_SeamB_holeService(scope, __safeDI_outer_holeServiceBuilder: up.holeService(scope)) })
+		            }
+		            func __safeDI_holeServiceBuilder_Seam(up: Seam.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>>) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<any HoleService> {
+		                .init(holeService: { scope in __safeDI_holeServiceBuilder_Seam_Seam_holeService(scope, __safeDI_outer_holeServiceBuilder: up.holeService(scope)) })
+		            }
+		            return Outer(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder_Outer(up: __safeDI_thingServiceBuilder_outer_holeServiceBuilder))
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+
+		extension Mid {
+		    public enum __safeDI_Mid_F23FC3F4F4EE1753 {}
+		}
+		"""])
+		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Other)
+		import Other
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension TopRoot {
+		    public convenience init() {
+		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		            ChainToken()
+		        }
+		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
+		        func __safeDI_mid() -> Mid {
+		            _ = Mid.__safeDI_Mid_F23FC3F4F4EE1753.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values) -> any ThingService {
+		                func __safeDI_thing() -> ThingImpl {
+		                    let reader = WrapperReader(chainToken: chainToken)
+		                    return ThingImpl(reader: reader)
+		                }
+		                let thing: any ThingService = __safeDI_thing()
+		                return thing
+		            }
+		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
+		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() })
+		            }
+		            func __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope() -> Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService> {
+		                .init(workerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope() })
+		            }
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope() -> Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<any ThingService> {
+		                .init(thing: { scope in __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(scope) })
+		            }
+		            func __safeDI_thingServiceBuilder_Mid_Outer() -> Outer.SafeDIScope_HoleService.__safeDI_Builder<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		                .init(seamB: { _ in __safeDI_thingServiceBuilder_Mid_SeamB() }, seam: { _ in __safeDI_thingServiceBuilder_Mid_Seam() })
+		            }
+		            func __safeDI_thingServiceBuilder_Mid_SeamB() -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		                .init(holeService: { _ in __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope() })
+		            }
+		            func __safeDI_thingServiceBuilder_Mid_Seam() -> Seam.SafeDIScope_HoleService.__safeDI_Builder<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		                .init(holeService: { _ in __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope() })
+		            }
+		            return Mid(__safeDI_chainToken: chainToken.instance, __safeDI_thingServiceBuilder: __safeDI_thingServiceBuilder_Mid())
+		        }
+		        let mid: Mid = __safeDI_mid()
+		        self.init(chainToken: chainToken, mid: mid)
+		    }
+		}
+		"""])
+		try await expectCreationOrderEqualsOneModuleBuild(output, modules: modules, seams: ["seam", "seamB"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// A `thingImpl` for `chainTokenModules` that receives `chainToken` and builds `WrapperReader`, which receives the
+	/// `SendableLazilyInstantiated` the root declares: `ThingImpl` logs whether the reader's wrapper holds the instance it
+	/// was handed, so the creation log compares the values too.
+	private static let thingImplReadingValueAndSendableWrapper = """
+	@Instantiable(fulfillingAdditionalTypes: [ThingService.self])
+	public final class ThingImpl: Instantiable, ThingService {
+		public init(chainToken: ChainToken, reader: WrapperReader) {
+			self.chainToken = chainToken
+			self.reader = reader
+			log.append(reader.chainToken.instance === chainToken ? "ThingImpl shares ChainToken" : "ThingImpl holds another ChainToken")
+		}
+		@Received let chainToken: ChainToken
+		@Instantiated let reader: WrapperReader
+	}
+
+	@Instantiable
+	public final class WrapperReader: Instantiable, Sendable {
+		public init(chainToken: SendableLazilyInstantiated<ChainToken>) { self.chainToken = chainToken; log.append("WrapperReader") }
+		@Received let chainToken: SendableLazilyInstantiated<ChainToken>
+	}
+	"""
+
+	/// A `thingImpl` for `chainTokenModules` that builds `WrapperReader` and receives no `chainToken` itself.
+	private static let thingImplReadingOnlySendableWrapper = """
+	@Instantiable(fulfillingAdditionalTypes: [ThingService.self])
+	public final class ThingImpl: Instantiable, ThingService {
+		public init(reader: WrapperReader) { self.reader = reader; log.append("ThingImpl") }
+		@Instantiated let reader: WrapperReader
+	}
+
+	@Instantiable
+	public final class WrapperReader: Instantiable, Sendable {
+		public init(chainToken: SendableLazilyInstantiated<ChainToken>) { self.chainToken = chainToken; log.append("WrapperReader") }
+		@Received let chainToken: SendableLazilyInstantiated<ChainToken>
+	}
+	"""
 
 	/// `HoleImpl` as `chainTokenModules` declares it by default: it builds `Worker` in an `Instantiator`.
 	private static let holeImplBuildingWorker = """
@@ -5315,8 +6332,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 	/// `Mid` builds `Worker` itself too where `midWorker`, and in `midWorkerBuilder`, an `Instantiator`, where
 	/// `midWorkerBuilder`. Where `outerHoldsSeamB`, `Outer` builds `SeamB` too, which holds `holeService` and builds
 	/// `ChainLeaf` in a `SendableInstantiator`, so it defers `chainToken` `@Sendable`, or, where
-	/// `seamBReadsValueOnlyIfAvailable`, builds `OptionalChainLeaf`, which receives it only if available. Every type that is
-	/// built logs it to `log`.
+	/// `seamBReadsValueOnlyIfAvailable`, builds `OptionalChainLeaf`, which receives it only if available; where
+	/// `outerHoldsOnlySeamB`, `Outer` builds `SeamB` and no `Seam`. Every type that is built logs it to `log`.
 	private static func chainTokenModules(
 		thingImpl: String = """
 		@Instantiable(fulfillingAdditionalTypes: [ThingService.self])
@@ -5331,6 +6348,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		midWorker: Bool = false,
 		midWorkerBuilder: Bool = false,
 		outerHoldsSeamB: Bool = false,
+		outerHoldsOnlySeamB: Bool = false,
 		seamBReadsValueOnlyIfAvailable: Bool = false,
 		outerDeclaresChainToken: Bool = false,
 		midChainToken: String? = nil,
@@ -5361,6 +6379,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		let topChainTokenType = topChainToken.components(separatedBy: ": ").last ?? ""
 		let outerDeclarations = if outerDeclaresChainToken {
 			"public init(chainToken: LazilyInstantiated<ChainToken>, seam: Seam) { self.chainToken = chainToken; self.seam = seam; log.append(\"Outer\") }\n\t@Instantiated public let chainToken: LazilyInstantiated<ChainToken>"
+		} else if outerHoldsOnlySeamB {
+			"public init(seamB: SeamB) { self.seamB = seamB; log.append(\"Outer\") }\n\t@Instantiated public let seamB: SeamB"
 		} else if outerHoldsSeamB {
 			"public init(seam: Seam, seamB: SeamB) { self.seam = seam; self.seamB = seamB; log.append(\"Outer\") }\n\t@Instantiated public let seamB: SeamB"
 		} else {
@@ -5376,7 +6396,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 			@Received(onlyIfAvailable: true) let chainToken: ChainToken?
 		}
 		""" : ""
-		let seamB = outerHoldsSeamB ? """
+		let outerSeamDeclaration = outerHoldsOnlySeamB ? "" : "\n\t@Instantiated public let seam: Seam"
+		let seamB = outerHoldsSeamB || outerHoldsOnlySeamB ? """
 
 
 		@Instantiable(generateDependencyTree: true)
@@ -5431,8 +6452,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 			@Instantiable(generateDependencyTree: true)
 			public final class Outer: Instantiable, @unchecked Sendable {
-				\(outerDeclarations)
-				@Instantiated public let seam: Seam
+				\(outerDeclarations)\(outerSeamDeclaration)
 			}\(seamB)
 			"""], dependencies: ["Core"]),
 			ModuleFixture(name: "Other", packageName: "Min", swiftFileContent: ["""
@@ -5472,10 +6492,10 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 	/// Expects the order in which `output`, the run of `modules`, builds its types to equal that of the one-module build:
 	/// every module's declarations in one module, which builds every seam inline. The probe builds `TopRoot`, then calls
-	/// each of `HoleImpl`'s `builders` in turn, then each of `Mid`'s `midBuilders`, logging each step, and returns what was
-	/// logged; or it is `probeLines`.
+	/// each of `HoleImpl`'s `builders` in turn, the `HoleImpl` of each of `Outer`'s `seams` in turn, then each of `Mid`'s
+	/// `midBuilders`, logging each step, and returns what was logged; or it is `probeLines`.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func expectCreationOrderEqualsOneModuleBuild(_ output: MultiModuleTestOutput, modules: [ModuleFixture], builders: [String] = ["workerBuilder"], midBuilders: [String] = [], probeLines givenProbeLines: [String]? = nil, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+	private mutating func expectCreationOrderEqualsOneModuleBuild(_ output: MultiModuleTestOutput, modules: [ModuleFixture], seams: [String] = ["seam"], builders: [String] = ["workerBuilder"], midBuilders: [String] = [], probeLines givenProbeLines: [String]? = nil, sourceLocation: SourceLocation = #_sourceLocation) async throws {
 		guard compileVerificationIsEnabled else { return }
 		let declarations = modules.map { module in
 			module.swiftFileContent.joined(separator: "\n\n").components(separatedBy: "\n").filter { !$0.hasPrefix("import ") }.joined(separator: "\n")
@@ -5483,9 +6503,11 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		let oneModule = [ModuleFixture(name: "App", packageName: "Min", swiftFileContent: ["import SafeDI\n" + declarations.joined(separator: "\n")])]
 		let oneModuleOutput = try await executeSafeDIToolMultiModuleTest(modules: oneModule, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		var probeLines = ["{ () -> [String] in", "\tlog = []", "\tlet root = TopRoot()", "\tlog.append(\"built TopRoot\")"]
-		for builder in builders {
-			probeLines.append("\t_ = (root.mid.outer.seam.holeService as! HoleImpl).\(builder).instantiate()")
-			probeLines.append("\tlog.append(\"called \(builder)\")")
+		for seam in seams {
+			for builder in builders {
+				probeLines.append("\t_ = (root.mid.outer.\(seam).holeService as! HoleImpl).\(builder).instantiate()")
+				probeLines.append("\tlog.append(\"called \(seam == "seam" ? builder : "\(seam).\(builder)")\")")
+			}
 		}
 		for builder in midBuilders {
 			probeLines.append("\t_ = root.mid.\(builder).instantiate()")
