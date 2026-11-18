@@ -603,6 +603,93 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		)
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases, CallerLazyWrapper.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceInsideReenteringCallWithCallersLazyValue_whenFillBuildsCalledTypeAgain(caller: CallingMockCaller, wrapper: CallerLazyWrapper) async throws {
+		// The adopter’s shape above, with `Live` also building `F` again, so the call of `F`’s mock inside the fill re-enters
+		// the call’s root level function. Each `Live` holds the `log` nearest its call, which is `Root`’s on both, as inline.
+		try await expectValuesEqualInline(
+			mock: Self.reenteringCallModules(caller: caller.attribute, rootLog: "\(wrapper.name)<Log>", fillLog: "\(wrapper.name)<Log>", place: .plain),
+			inline: Self.reenteringCallInlineModules(rootLog: "\(wrapper.name)<Log>", fillLog: "\(wrapper.name)<Log>", place: .plain),
+			caller: caller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.reenteringCallProbes(place: .plain, rootInstance: "root.log.instance", fillInstance: "log.instance"),
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallerLazyWrapper.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceInsideReenteringCallWithCallersLazyValue_whenListedCallersFillBuildsCalledTypeAgain(wrapper: CallerLazyWrapper) async throws {
+		// As above, for a caller its module lists in `additionalMocksToGenerate`, whose mock is internal.
+		try await expectValuesEqualInline(
+			mock: Self.reenteringCallModules(caller: "@Instantiable(isRoot: true)", rootLog: "\(wrapper.name)<Log>", fillLog: "\(wrapper.name)<Log>", place: .plain, listsCaller: true),
+			inline: Self.reenteringCallInlineModules(rootLog: "\(wrapper.name)<Log>", fillLog: "\(wrapper.name)<Log>", place: .plain),
+			caller: .internal,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.reenteringCallProbes(place: .plain, rootInstance: "root.log.instance", fillInstance: "log.instance"),
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceInsideReenteringCallWithNearerLazyValue_whenFillDeclaresLabelAgainAboveCall(caller: CallingMockCaller) async throws {
+		// As above, with `Live` building `M`, which instantiates a `log` of its own and builds `F` again: the `Live` of that
+		// `F` holds `M`’s `log`, the declaration nearest the call that re-enters the root level function, as inline.
+		try await expectValuesEqualInline(
+			mock: Self.reenteringCallModules(caller: caller.attribute, rootLog: "LazilyInstantiated<Log>", fillLog: "LazilyInstantiated<Log>", place: .plain, redeclaredAboveCall: true),
+			inline: Self.reenteringCallInlineModules(rootLog: "LazilyInstantiated<Log>", fillLog: "LazilyInstantiated<Log>", place: .plain, redeclaredAboveCall: true),
+			caller: caller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.reenteringCallProbes(place: .plain, rootInstance: "root.log.instance", fillInstance: "log.instance", redeclaredAboveCall: true),
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsDeferredPlaceInsideReenteringCallWithCallersLazyValue_whenFillBuildsCalledTypeAgain() async throws {
+		// As above, with `A` holding the place as an `ErasedInstantiator<Int, any Api>` whose fill forwards `id`.
+		try await expectValuesEqualInline(
+			mock: Self.reenteringCallModules(caller: CallingMockCaller.internal.attribute, rootLog: "LazilyInstantiated<Log>", fillLog: "LazilyInstantiated<Log>", place: .deferred),
+			inline: Self.reenteringCallInlineModules(rootLog: "LazilyInstantiated<Log>", fillLog: "LazilyInstantiated<Log>", place: .deferred),
+			caller: .internal,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.reenteringCallProbes(place: .deferred, rootInstance: "root.log.instance", fillInstance: "log.instance"),
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases, ["Log", "LazilyInstantiated<Log>"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceInsideReenteringCallWithCallersValue_whenFillReceivingValueBuildsCalledTypeAgain(caller: CallingMockCaller, rootLog: String) async throws {
+		// As above, with `Live` receiving `log: Log`, which `F`’s copy provides on every level, and `Root` holding it by
+		// value or lazily.
+		try await expectValuesEqualInline(
+			mock: Self.reenteringCallModules(caller: caller.attribute, rootLog: rootLog, fillLog: "Log", place: .plain),
+			inline: Self.reenteringCallInlineModules(rootLog: rootLog, fillLog: "Log", place: .plain),
+			caller: caller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.reenteringCallProbes(place: .plain, rootInstance: rootLog == "Log" ? "root.log" : "root.log.instance", fillInstance: "log"),
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsReenteredTreeInInlineOrder_whenFillBuildsCalledTypeAgain() async throws {
+		// The first test above, with `Log` and `Live` recording when each is created: building `F` again and reading the
+		// inner `Live`’s `log` creates what inline creates, in its order. The record starts once `Root` is built: before, the
+		// call hands `F`’s mock `log.instance`, which creates `Log` at the call rather than where `Z` reads it, a known
+		// difference (`public-mock-builders.md`, “A lazy value a call hands over”).
+		let creationOrder = { (root: String) in
+			"{ let root = \(root); Log.created = []; let f = (root.f.a.api as! Live).fBuilder.instantiate(); Log.created.append(\"F again\"); _ = (f.a.api as! Live).log.instance; Log.created.append(\"read\"); return Log.created.joined(separator: \", \") }()"
+		}
+		try await expectValuesEqualInline(
+			mock: Self.reenteringCallModules(caller: CallingMockCaller.internal.attribute, rootLog: "LazilyInstantiated<Log>", fillLog: "LazilyInstantiated<Log>", place: .plain, logsCreation: true),
+			inline: Self.reenteringCallInlineModules(rootLog: "LazilyInstantiated<Log>", fillLog: "LazilyInstantiated<Log>", place: .plain, logsCreation: true),
+			caller: .internal,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: [DifferentialValueProbe(name: "creation order", expression: creationOrder("Root.mock()"), knownRightExpression: creationOrder("Root()"))],
+		)
+	}
+
 	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func generate_fillsPlaceFromCallersOwnValue_whenTwinFillsIt(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
@@ -1327,9 +1414,123 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		]
 	}
 
+	/// `lazyValueBelowCalledRootModules`’ shape with a fill that builds the called type again: `Live` also instantiates
+	/// `fBuilder: Instantiator<F>`, so the call of `F`’s mock inside the fill re-enters the call’s root level function.
+	/// `Root` holds `log` as `rootLog`, and `Live` receives it as `fillLog`. Where `redeclaredAboveCall`, `Live`
+	/// instantiates `m: M` instead, which instantiates a `log` of its own as `fillLog`, and `fBuilder`. Where
+	/// `logsCreation`, `Log` and `Live` record their creation in `Log.created`.
+	private static func reenteringCallModules(caller: String, rootLog: String, fillLog: String, place: CalledMockPlace, listsCaller: Bool = false, redeclaredAboveCall: Bool = false, logsCreation: Bool = false) -> [ModuleFixture] {
+		var appFiles = [
+			"AppTypes.swift": """
+			import Feat
+			import SafeDI
+
+			\(reenteringFill(fillLog: fillLog, place: place, redeclaredAboveCall: redeclaredAboveCall, logsCreation: logsCreation))
+
+			\(caller)
+			public final class Root: Instantiable {
+			    public init(log: \(rootLog), f: F) {
+			        self.log = log
+			        self.f = f
+			    }
+
+			    @Instantiated public let log: \(rootLog)
+			    @Instantiated public let f: F
+			}
+			""",
+		]
+		if listsCaller {
+			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"])\n"
+		}
+		return [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: [
+				"FeatTypes.swift": lazyValueBelowCalledRootFeatureTypes(callee: twinCalledTypes, place: place, receivesOnlyIfAvailable: false, layout: .belowRoot, logsCreation: logsCreation),
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Feat"]),
+		]
+	}
+
+	/// `reenteringCallModules`’ types in one module, `Root` a root: what inline builds.
+	private static func reenteringCallInlineModules(rootLog: String, fillLog: String, place: CalledMockPlace, redeclaredAboveCall: Bool = false, logsCreation: Bool = false) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+				"AppTypes.swift": lazyValueBelowCalledRootFeatureTypes(callee: "@Instantiable", place: place, receivesOnlyIfAvailable: false, layout: .belowRoot, logsCreation: logsCreation) + """
+
+
+				\(reenteringFill(fillLog: fillLog, place: place, redeclaredAboveCall: redeclaredAboveCall, logsCreation: logsCreation))
+
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(log: \(rootLog), f: F) {
+				        self.log = log
+				        self.f = f
+				    }
+
+				    @Instantiated public let log: \(rootLog)
+				    @Instantiated public let f: F
+				}
+				""",
+			]),
+		]
+	}
+
+	/// `Live`, which fills the place, receives `log: fillLog` and builds `F` again: itself, or, where `redeclaredAboveCall`,
+	/// through `M`, which also instantiates a `log: fillLog` of its own.
+	private static func reenteringFill(fillLog: String, place: CalledMockPlace, redeclaredAboveCall: Bool, logsCreation: Bool) -> String {
+		guard redeclaredAboveCall else {
+			return place.fill(receiving: "log: \(fillLog)", instantiating: ["fBuilder: Instantiator<F>"], logsCreation: logsCreation)
+		}
+		return place.fill(receiving: "log: \(fillLog)", instantiating: ["m: M"], logsCreation: logsCreation) + """
+
+
+		@Instantiable
+		public final class M: Instantiable {
+		    public init(log: \(fillLog), fBuilder: Instantiator<F>) {
+		        self.log = log
+		        self.fBuilder = fBuilder
+		    }
+
+		    @Instantiated public let log: \(fillLog)
+		    @Instantiated public let fBuilder: Instantiator<F>
+		}
+		"""
+	}
+
+	/// What `Root`’s mock and inline `Root` build, whether the `Live` that fills the place holds the instance `Root`’s `log`
+	/// holds (`rootInstance`), and whether the `Live` of the `F` that `Live` builds again holds it too, each `Live`’s read as
+	/// `fillInstance`: for a deferred place, the `Live` its builder builds for `id` 7. Where `redeclaredAboveCall`, `M`
+	/// builds `F` again, and the inner `Live` holds `M`’s instead.
+	private static func reenteringCallProbes(place: CalledMockPlace, rootInstance: String, fillInstance: String, redeclaredAboveCall: Bool = false) -> [DifferentialValueProbe] {
+		let live = { (f: String) in
+			switch place {
+			case .plain:
+				"(\(f).a.api as! Live)"
+			case .deferred:
+				"(\(f).a.apiBuilder.instantiate(7) as! Live)"
+			}
+		}
+		let outerLive = live("root.f")
+		let caller = redeclaredAboveCall ? "\(outerLive).m" : outerLive
+		let innerLive = live("\(caller).fBuilder.instantiate()")
+		let (innerHolder, innerInstance) = redeclaredAboveCall ? ("M’s", "\(caller).\(fillInstance)") : ("Root’s", rootInstance)
+		return [
+			DifferentialValueProbe(name: "Root", expression: "Root.mock()", knownRightExpression: "Root()"),
+			DifferentialValueProbe(
+				name: "Live’s log is Root’s",
+				expression: "{ let root = Root.mock(); return \(outerLive).\(fillInstance) === \(rootInstance) }()",
+				knownRightExpression: "{ let root = Root(); return \(outerLive).\(fillInstance) === \(rootInstance) }()",
+			),
+			DifferentialValueProbe(
+				name: "the Live of F built again holds \(innerHolder) log",
+				expression: "{ let root = Root.mock(); return \(innerLive).\(fillInstance) === \(innerInstance) }()",
+				knownRightExpression: "{ let root = Root(); return \(innerLive).\(fillInstance) === \(innerInstance) }()",
+			),
+		]
+	}
+
 	/// `Z` receives `log` only if available, as `Log?`, where `receivesOnlyIfAvailable`. `layout` says where the place is,
-	/// and whether `B` declares `log` again above `A`.
-	private static func lazyValueBelowCalledRootFeatureTypes(callee: String, place: CalledMockPlace, receivesOnlyIfAvailable: Bool, layout: LazyValueLayout) -> String {
+	/// and whether `B` declares `log` again above `A`. Where `logsCreation`, `Log` records its creation in `Log.created`.
+	private static func lazyValueBelowCalledRootFeatureTypes(callee: String, place: CalledMockPlace, receivesOnlyIfAvailable: Bool, layout: LazyValueLayout, logsCreation: Bool = false) -> String {
 		let zLog = receivesOnlyIfAvailable ? "Log?" : "Log"
 		let zReceive = receivesOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received"
 		var a = """
@@ -1399,15 +1600,31 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			}
 			"""
 		}
+		let log = if logsCreation {
+			"""
+			@Instantiable
+			public final class Log: Instantiable, Sendable {
+			    public init() {
+			        Log.created.append("Log")
+			    }
+
+			    nonisolated(unsafe) public static var created = [String]()
+			}
+			"""
+		} else {
+			"""
+			@Instantiable
+			public final class Log: Instantiable, Sendable {
+			    public init() {}
+			}
+			"""
+		}
 		return """
 		import SafeDI
 
 		public protocol Api {}
 
-		@Instantiable
-		public final class Log: Instantiable, Sendable {
-		    public init() {}
-		}
+		\(log)
 
 		\(a)
 
@@ -3763,35 +3980,38 @@ enum CalledMockPlace: CaseIterable, CustomTestStringConvertible, Sendable {
 		}
 	}
 
-	/// `Live`, which fills the place and receives `received`, a label and its type.
-	func fill(receiving received: String) -> String {
+	/// `Live`, which fills the place and receives `received`, a label and its type, and instantiates each of `instantiated`;
+	/// where `logsCreation`, it records its creation in `Log.created`.
+	func fill(receiving received: String, instantiating instantiated: [String] = [], logsCreation: Bool = false) -> String {
 		let label = String(received.prefix { $0 != ":" })
-		switch self {
-		case .plain:
-			return """
-			@Instantiable(fulfillingAdditionalTypes: [Api.self])
-			public final class Live: Api, Instantiable {
-			    public init(\(received)) {
-			        self.\(label) = \(label)
-			    }
-
-			    @Received public let \(received)
-			}
-			"""
-		case .deferred:
-			return """
-			@Instantiable
-			public final class Live: Api, Instantiable {
-			    public init(id: Int, \(received)) {
-			        self.id = id
-			        self.\(label) = \(label)
-			    }
-
-			    @Forwarded public let id: Int
-			    @Received public let \(received)
-			}
-			"""
+		var attribute = "@Instantiable(fulfillingAdditionalTypes: [Api.self])"
+		var parameters = [String]()
+		var assignments = [String]()
+		var declarations = [String]()
+		if self == .deferred {
+			attribute = "@Instantiable"
+			parameters.append("id: Int")
+			assignments.append("self.id = id")
+			declarations.append("@Forwarded public let id: Int")
 		}
+		parameters.append(received)
+		assignments.append("self.\(label) = \(label)")
+		declarations.append("@Received public let \(received)")
+		for dependency in instantiated {
+			let dependencyLabel = String(dependency.prefix { $0 != ":" })
+			parameters.append(dependency)
+			assignments.append("self.\(dependencyLabel) = \(dependencyLabel)")
+			declarations.append("@Instantiated public let \(dependency)")
+		}
+		if logsCreation {
+			assignments.append("Log.created.append(\"Live\")")
+		}
+		var lines = [attribute, "public final class Live: Api, Instantiable {", "    public init(\(parameters.joined(separator: ", "))) {"]
+		lines += assignments.map { "        \($0)" }
+		lines += ["    }", ""]
+		lines += declarations.map { "    \($0)" }
+		lines.append("}")
+		return lines.joined(separator: "\n")
 	}
 
 	var testDescription: String {
