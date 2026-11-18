@@ -77,6 +77,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		callSiteLazilyInstantiatedInstanceProperties: Set<Property>? = nil,
 		reboundProperties: Set<Property> = [],
 		previousPassReceivedBuilderLoops: ReceivedBuilderLoops? = nil,
+		previousPassFillSendableWrapperReads: [String: [String: Property]] = [:],
 		previousPassPublicMockLevelReentries: [String: PublicMockLevelFunctions.Reentry] = [:],
 		enclosingLevelCalls: [String: PublicMockLevelFunctions.EnclosingLevelCall] = [:],
 		namesBoundBySeam: Set<String> = [],
@@ -395,8 +396,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillStructBoundLabelsChangedInTree = true
 			}
 		}
+		// A fill some route hands the memo of a label its tree also reads as a `SendableLazilyInstantiated` takes that wrapper
+		// as the memo where every route can hand it (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`):
+		// the pass before finds those reads. Nearly no scope calls such a seam.
+		var fillSendableWrapperReads = [String: [String: Property]]()
+		for fill in propertiesToGenerate where !fill.fillLabelsHandedAsMemo.isEmpty {
+			guard let key = fill.fillKey, let built = fill.children.first else { continue }
+			var instancePropertyByLabel = [String: Property]()
+			for property in built.receivedProperties.sorted() where fill.fillLabelsHandedAsMemo.contains(property.label) && property.propertyType == .sendableLazilyInstantiated && !property.typeDescription.isOptional && instancePropertyByLabel[property.label] == nil {
+				instancePropertyByLabel[property.label] = property.asLazilyInstantiatedInstanceProperty
+			}
+			if !instancePropertyByLabel.isEmpty {
+				fillSendableWrapperReads[key] = instancePropertyByLabel
+			}
+		}
+		// The fills were built with the reads the pass before found.
+		if fillSendableWrapperReads != previousPassFillSendableWrapperReads {
+			fillStructBoundLabelsChangedInTree = true
+		}
 		self.fillDeferredLabelsHiddenByReenteringCalls = fillDeferredLabelsHiddenByReenteringCalls
 		self.fillDeferredLabelsReadInsideSendableFunction = fillDeferredLabelsReadInsideSendableFunction
+		self.fillSendableWrapperReads = fillSendableWrapperReads
 		self.fillStructBoundLabelsChangedInTree = fillStructBoundLabelsChangedInTree
 		self.referencedFillNamesByKey = referencedFillNamesByKey.filter { !ownFillKeys.contains($0.key) }
 		self.fillKeysReferencedFromSendableFunction = fillKeysReferencedFromSendableFunction.subtracting(ownFillKeys)
@@ -884,6 +904,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillCallerReads = FillCallerReads()
 		fillDeferredLabelsHiddenByReenteringCalls = [:]
 		fillDeferredLabelsReadInsideSendableFunction = [:]
+		fillSendableWrapperReads = [:]
 		fillStructBoundLabelsChangedInTree = false
 		constructsWithHandWrittenMock = false
 		referencedFillNamesByKey = [:]
@@ -987,6 +1008,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillCallerReads = FillCallerReads()
 		fillDeferredLabelsHiddenByReenteringCalls = [:]
 		fillDeferredLabelsReadInsideSendableFunction = [:]
+		fillSendableWrapperReads = [:]
 		fillStructBoundLabelsChangedInTree = false
 		constructsWithHandWrittenMock = false
 		referencedFillNamesByKey = [:]
@@ -1054,6 +1076,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var parameterByLabel = [String: SeamSignature.Hole.Field]()
 		/// What the root dispatcher passes the parameter of each such label, where the caller does not build it later.
 		var argumentByLabel = [String: String]()
+		/// What the root dispatcher hands of each label the fill takes as a `SendableLazilyInstantiated` memo some route hands
+		/// it (`Scope.Fill.labelsHandedAsMemo`): the caller's declaration of that wrapper, or one made of the caller's value, so
+		/// the fill's tree reads the caller's own wrapper where it reads the wrapper, as inline.
+		var memoArgumentByLabel = [String: String]()
 		/// The scope value the inner seam handed the fill, which a place inside its tree, or a call there that passes one up,
 		/// carries (`SeamHoles.innerScope(at:innerKey:)`): the fill takes it as a parameter, and each dispatcher that leads to
 		/// it passes it on from the root dispatcher's own parameter.
@@ -1372,16 +1398,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		/// Whether a dispatcher takes `field`, a form a target takes, in place of `existing`, the field of the same property it
 		/// takes so far: a memo in place of the value, and a `SendableLazilyInstantiated` in place of a `LazilyInstantiated`. A
-		/// target takes a `SendableLazilyInstantiated` only where every route hands it one (`memosHanded(toFillOf:labels:among:)`),
-		/// so a dispatcher on its routes is handed one too, which it hands a target that takes the other as a memo of its own
-		/// (`structDeclaration`). The order makes the form independent of the order the targets are met in.
+		/// target takes a `SendableLazilyInstantiated` only where every route that hands a memo hands it one, and another route
+		/// a value only where its tree reads that wrapper too (`memosHanded(toFillOf:labels:readingSendableWrapper:among:)`), so
+		/// a dispatcher on its routes is handed one too, or a value it makes one of, which it hands a target that takes the other
+		/// as a memo of its own (`structDeclaration`). The order makes the form independent of the order the targets are met in.
 		private static func handsForm(_ field: SeamSignature.Hole.Field, inPlaceOf existing: SeamSignature.Hole.Field?) -> Bool {
 			guard let existing else { return true }
 			return field.bindsMemo && (!existing.bindsMemo || (field.deferral == .deferred(isSendable: true) && existing.deferral != .deferred(isSendable: true)))
 		}
 
 		/// The memo a fill takes of a label some route hands it as the memo of a deferred parameter a level on a carried route
-		/// holds (see `memosHanded(toFillOf:labels:among:)`): the form of that parameter, and its deferral.
+		/// holds (see `memosHanded(toFillOf:labels:readingSendableWrapper:among:)`): the form of that parameter, and its deferral.
 		struct HandedMemo: Hashable {
 			let property: Property
 			let deferral: SeamSignature.Parameter.Deferral
@@ -1410,7 +1437,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// route hands as a memo is left out, and so is one whose memos differ in more than optionality, which no one memo
 		/// type holds: the fill takes the value. Found as a fixed point over the dispatchers, which can recurse: a route that comes back to a dispatcher already
 		/// on it hands what that dispatcher's other routes hand.
-		static func memosHanded(toFillOf fillKey: String, labels: Set<String>, among dispatchers: [FillDispatcher]) -> [String: HandedMemo] {
+		///
+		/// Where the fill's tree also reads the label as a `SendableLazilyInstantiated` of the memo's form
+		/// (`readingSendableWrapper`, by that wrapper's instance property) and every route that hands a memo hands that one, the
+		/// fill takes it although another route hands the value, which that route makes the memo of: the caller's declaration of
+		/// the wrapper itself at the root dispatcher (`FillCallerReads.memoArgumentByLabel`). So the tree reads the wrapper where
+		/// it reads the wrapper and its instance where it reads the value, as inline reads one declaration both ways; a
+		/// `LazilyInstantiated` it would take instead is no `SendableLazilyInstantiated`.
+		static func memosHanded(toFillOf fillKey: String, labels: Set<String>, readingSendableWrapper: [String: Property], among dispatchers: [FillDispatcher]) -> [String: HandedMemo] {
 			var casesByTargetKey = [String: [(dispatcher: FillDispatcher, dispatcherCase: Case)]]()
 			for dispatcher in dispatchers {
 				for dispatcherCase in dispatcher.cases {
@@ -1456,7 +1490,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				      handed.memos.allSatisfy({ $0.property.asUnwrappedProperty == memo.property.asUnwrappedProperty }),
 				      let property = handed.memos.allSatisfy({ $0.property == memo.property }) ? memo.property : handed.memos.first(where: { $0.property.typeDescription.isOptional })?.property
 				else { continue }
-				memoByLabel[label] = handed.memos.count == 1 && !handed.handsValue ? memo : HandedMemo(property: property, deferral: .deferred(isSendable: false))
+				let takesSendableWrapperReadToo = readingSendableWrapper[label] == memo.property && memo.deferral == .deferred(isSendable: true)
+				memoByLabel[label] = handed.memos.count == 1 && (!handed.handsValue || takesSendableWrapperReadToo) ? memo : HandedMemo(property: property, deferral: .deferred(isSendable: false))
 			}
 			return memoByLabel
 		}
@@ -1920,6 +1955,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			inlinedFills: [String: InlinedFill],
 			parametersByKey: [String: [SeamSignature.Hole.Field]] = [:],
 			callerArgumentByLabel: [String: String] = [:],
+			callerMemoArgumentByLabel: [String: String] = [:],
 			typesDeclaredEscaping: Set<TypeDescription> = [],
 			fillsTakingPayloadFields: Set<String> = [],
 		) -> String {
@@ -1948,6 +1984,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				parameters: parameters,
 				parametersByKey: parametersByKey,
 				ownValue: ownValue(of:),
+				callerMemoArgument: { callerMemoArgumentByLabel[$0] },
 				valuesName: name("values"),
 				scopeName: name("scope"),
 				typesDeclaredEscaping: typesDeclaredEscaping,
@@ -1968,6 +2005,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			parameters: [SeamSignature.Hole.Field],
 			parametersByKey: [String: [SeamSignature.Hole.Field]],
 			ownValue: (String) -> String,
+			callerMemoArgument: (String) -> String?,
 			valuesName: String,
 			scopeName: String,
 			typesDeclaredEscaping: Set<TypeDescription>,
@@ -1993,6 +2031,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else if let ownParameter = parameters.first(where: { $0.property.label == label }) {
 					let source = HandedSource(ownParameter, readsMemo: ownParameter.bindsMemo, expression: ownValue(label))
 					return ("\(label.spelledAsArgumentLabel): \(source.handed(to: parameter, capturingExpression: false))", false)
+				} else if parameter.bindsMemo, parameter.deferral == .deferred(isSendable: true), let memoArgument = callerMemoArgument(label) {
+					// The root dispatcher hands a target that takes a `SendableLazilyInstantiated` the caller's declaration of it, or
+					// one made of the caller's value (`ScopeGenerator.FillCallerReads.memoArgumentByLabel`).
+					return ("\(label.spelledAsArgumentLabel): \(memoArgument)", false)
 				} else {
 					// The root dispatcher hands the caller's declaration, in the form a target that takes the value takes it
 					// (`ScopeGenerator.FillCallerReads`).
@@ -3744,9 +3786,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// which cannot capture the memo: the fill binds the struct's by-value member for them instead (see
 	/// `Scope.fillUnderConstruction`). Empty for nearly every scope.
 	let fillDeferredLabelsReadInsideSendableFunction: [String: Set<String>]
+	/// For a seam call, by the key of each of its fills, the labels some route hands the fill as a memo
+	/// (`fillLabelsHandedAsMemo`) that its tree also reads as a `SendableLazilyInstantiated`, each with the instance property
+	/// that wrapper holds: the fill takes that wrapper as the memo where every route can hand it
+	/// (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`). Empty for nearly every scope.
+	let fillSendableWrapperReads: [String: [String: Property]]
 	/// Whether a fill in this subtree binds other fields from its struct than its call's
-	/// `fillDeferredLabelsHiddenByReenteringCalls` ask, or binds a memo `fillDeferredLabelsReadInsideSendableFunction` binds
-	/// by value, which another pass of `Scope.createScopeGenerator` corrects.
+	/// `fillDeferredLabelsHiddenByReenteringCalls` ask, binds a memo `fillDeferredLabelsReadInsideSendableFunction` binds
+	/// by value, or reads a `SendableLazilyInstantiated` of a label it takes another memo of (`fillSendableWrapperReads`),
+	/// which another pass of `Scope.createScopeGenerator` corrects.
 	let fillStructBoundLabelsChangedInTree: Bool
 
 	/// For a fill, whether it binds a field bound from a deferred parameter from its struct, as its memo or by value
@@ -5267,6 +5315,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// fill reads it only if available and this scope declares none, or builds it later. A value one fill reads where
 		// another reads it too is passed as the fill that finds it available reads it.
 		var callerArgumentsByLabel = [String: Set<String>]()
+		var callerMemoArgumentsByLabel = [String: Set<String>]()
 		// The fills a level function's member hands each field of its payload they read, rather than the payload: those that
 		// return a wrapper's builder, and those an override closure of the call is handed a function over, which the closure
 		// calls with the caller's values.
@@ -5290,6 +5339,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						let forms = callerReads.dependencies.map(\.property).filter { $0.label == label }
 						callerArgumentsByLabel[label, default: []].insert(forms.allSatisfy(child.unavailableProperties.contains) ? "nil" : argument)
 					}
+					for (label, argument) in callerReads.memoArgumentByLabel {
+						callerMemoArgumentsByLabel[label, default: []].insert(argument)
+					}
 				}
 			}
 		}
@@ -5308,6 +5360,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let callerArgumentByLabel = callerArgumentsByLabel.compactMapValues { arguments in
 			arguments.filter { $0 != "nil" }.min() ?? arguments.min()
 		}
+		// Every fill of the call reads the one declaration enclosing it, so each spells it alike.
+		let callerMemoArgumentByLabel = callerMemoArgumentsByLabel.compactMapValues { $0.min() }
 		// A public mock's caller declares level functions of its own (`PublicMockLevelFunctions`); a seam's caller its
 		// dispatchers, each value handed on per label (`dispatcherParameters(of:fillReads:)`).
 		let callDispatchers = publicMockLevelFunctions == nil ? fillDispatchers : []
@@ -5364,6 +5418,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				inlinedFills: inlinedFills,
 				parametersByKey: parametersByKey,
 				callerArgumentByLabel: callerArgumentByLabel,
+				callerMemoArgumentByLabel: callerMemoArgumentByLabel,
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				fillsTakingPayloadFields: fillsTakingPayloadFields,
 			))
@@ -12469,7 +12524,7 @@ extension SeamSignature.Hole.Field {
 	}
 
 	/// The field as a fill is handed it where it takes `memo`, the memo of a deferred parameter that a level on a carried route
-	/// holds, or one its routes make (`FillDispatcher.memosHanded(toFillOf:labels:among:)`): a field of that parameter's
+	/// holds, or one its routes make (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`): a field of that parameter's
 	/// form and deferral, which the fill binds as the memo, or by value where its tree reads it inside a `@Sendable` function,
 	/// as it binds a passed-up place's (`Scope.fillUnderConstruction`). The field the place carries can be another level's
 	/// form of the label, further out, such as the wrapper a type above the deferring seam declares; the memo is the value
