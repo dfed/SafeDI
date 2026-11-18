@@ -2942,9 +2942,10 @@ extension GraphFuzzerOracle {
 	}
 
 	/// The differences of `comparison`, a `generateMockPublic` graph's, that are the shape matrix's two stated divergences,
-	/// each derived from a leaf call – a call of a `.public` type's mock (`<prefix>T<i>.mock(`, or `.__safeDI_mock(`) in the
-	/// generated mock of the probe's type, read from the graph's generated code – rather than from the difference's text
-	/// alone, so that any other value a leaf call builds still fails:
+	/// each derived from a leaf call – a call of a `.public` type's mock (`<prefix>T<i>.mock(` or `<prefix>PromoteNode.mock(`,
+	/// or `.__safeDI_mock(`; `leafCalls(ofMockedType:in:prefix:)`) in the generated mock of the probe's type, read from the
+	/// graph's generated code – rather than from the difference's text alone, so that any other value a leaf call builds
+	/// still fails:
 	/// - M8.32 (`isEarlyReadHeldInstance`): a leaf call that passes `<label>.instance` of a lazily instantiated dependency
 	///   its caller holds reads that instance before the probe's value is built. The leaf wraps the instance again, a
 	///   second wrapper where the known-right path shares the caller's, which the comparator compares by its instance, so
@@ -2973,10 +2974,10 @@ extension GraphFuzzerOracle {
 		}
 	}
 
-	/// A call, in a mocked type's generated mock, of a `.public` type's mock: the label the leaf is held under (`t<i>`, or
-	/// `anyT<i>` for a leaf held through its eraser, whose call the eraser wraps), the labels it passes a value – anything
-	/// but `nil` or the calling mock's own parameter that defaults to `nil` and that no binding of the mock shadows – and
-	/// those it passes a wrapper's `.instance`.
+	/// A call, in a mocked type's generated mock, of a `.public` type's mock: the label the leaf is held under (`t<i>`,
+	/// `anyT<i>` for a leaf held through its eraser, whose call the eraser wraps, or `promoteNode`), the labels it passes a
+	/// value – anything but `nil` or the calling mock's own parameter that defaults to `nil` and that no binding of the mock
+	/// shadows – and those it passes a wrapper's `.instance`.
 	struct PublicMockLeafCall: Equatable {
 		let leafLabel: String
 		let passedLabels: Set<String>
@@ -2984,10 +2985,14 @@ extension GraphFuzzerOracle {
 	}
 
 	/// Each call of a `.public` type's mock – `<prefix>T0` to `<prefix>T2` and `<prefix>T6`, held under `t0` to `t2` and
-	/// `t6`, or under `anyT<i>` through an eraser – in the generated mock of `typeName`, in any module: of its `mock(`, or of
-	/// the function only generated code calls, `__safeDI_mock(`, which a call of a mock that takes builders makes. A consumer
-	/// holds each leaf it reaches under one label, so a mock wraps either every call of a leaf in the leaf's eraser or none.
+	/// `t6`, or under `anyT<i>` through an eraser, and `<prefix>PromoteNode`, held under `promoteNode`, whose mock a consumer
+	/// that can build the `PromoteOther` it promotes hands that instance (`drawPromotedHolePublicMock`) – in the generated
+	/// mock of `typeName`, in any module: of its `mock(`, or of the function only generated code calls, `__safeDI_mock(`,
+	/// which a call of a mock that takes builders makes. A consumer holds each leaf it reaches under one label, so a mock
+	/// wraps either every call of a leaf in the leaf's eraser or none.
 	static func leafCalls(ofMockedType typeName: String, in generatedFiles: [String: String], prefix: String) -> [PublicMockLeafCall] {
+		let leaves = [0, 1, 2, 6].map { PublicMockLeaf(typeName: "\(prefix)T\($0)", label: "t\($0)", eraser: (typeName: "\(prefix)AnyT\($0)", label: "anyT\($0)")) }
+			+ [PublicMockLeaf(typeName: "\(prefix)PromoteNode", label: "promoteNode", eraser: nil)]
 		var calls = [PublicMockLeafCall]()
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName == "\(typeName)+SafeDIMock.swift" || fileName.hasSuffix("/\(typeName)+SafeDIMock.swift") {
 			// The calling mock's own parameters that default to `nil`, which the parameterless probe leaves `nil`, unless a
@@ -2996,14 +3001,16 @@ extension GraphFuzzerOracle {
 				expression.matches(in: contents, range: NSRange(contents.startIndex..., in: contents)).compactMap { Range($0.range(at: 1), in: contents).map { String(contents[$0]) } }
 			} ?? [])
 			let unpassedParameters = mockParametersDefaultingToNil(in: contents).subtracting(boundNames)
-			for index in [0, 1, 2, 6] {
+			for leaf in leaves {
 				let mockFunctionNames = ["mock", "__safeDI_mock"]
-				let isErased = mockFunctionNames.contains { contents.contains("\(prefix)AnyT\(index)(\(prefix)T\(index).\($0)(") }
+				let erasedLabel = leaf.eraser.flatMap { eraser in
+					mockFunctionNames.contains { contents.contains("\(eraser.typeName)(\(leaf.typeName).\($0)(") } ? eraser.label : nil
+				}
 				for mockFunctionName in mockFunctionNames {
-					for call in initializerCalls(of: "\(prefix)T\(index).\(mockFunctionName)", in: contents) {
+					for call in initializerCalls(of: "\(leaf.typeName).\(mockFunctionName)", in: contents) {
 						let arguments = call.filter { $0.label != "safeDIOverrides" }
 						calls.append(PublicMockLeafCall(
-							leafLabel: isErased ? "anyT\(index)" : "t\(index)",
+							leafLabel: erasedLabel ?? leaf.label,
 							passedLabels: Set(arguments.filter { $0.value != "nil" && !unpassedParameters.contains($0.value) }.map(\.label)),
 							instanceLabels: Set(arguments.filter { $0.value.hasSuffix(".instance") }.map(\.label)),
 						))
@@ -3012,6 +3019,14 @@ extension GraphFuzzerOracle {
 			}
 		}
 		return calls
+	}
+
+	/// A `.public` type whose mock's calls are leaf calls: its name, the label a consumer holds it under, and, where the draw
+	/// has a consumer wrap it in an eraser, the eraser's name and the label a consumer holds the erased leaf under.
+	private struct PublicMockLeaf {
+		let typeName: String
+		let label: String
+		let eraser: (typeName: String, label: String)?
 	}
 
 	/// The names of the parameters that default to `nil` of every `static func mock(` that `contents` declares.
