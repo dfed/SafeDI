@@ -2267,6 +2267,13 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					"outside the `@Sendable` function that builds `\(functionProperty.asSource)`, and \(scope) \(scopeCarries) only what that function binds."
 				}
 				let capitalizedFulfillRemedy = "\(fulfillRemedy(seamModule).prefix(1).uppercased())\(fulfillRemedy(seamModule).dropFirst())."
+				// Receiving on the seam a value that a place built inside a `@Sendable` function reads reaches the place only where the
+				// seam declares the value itself: a type of its tree, or a seam it calls, that declares it still binds it outside the
+				// function, and a seam it calls carries its own receive of it in the struct its fill binds, so the place would get the
+				// same error. Only the fulfilling type is offered there.
+				let receiveOnSeamRemedy = declaration.declaringType == hole.scopeSeamType
+					? "Instantiate `\(declaration.property.label)` outside \(seamName) and declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on \(seamName), so the \(buildersPossessive) caller reads its own, or \(fulfillRemedy(seamModule))."
+					: capitalizedFulfillRemedy
 				/// The message of a declaration `seam` binds on a path to calls that present the places the finding names, whose
 				/// builders it passes up: each place itself, or the place a fill fills, when the reader is beneath a place inside
 				/// that fill. Every part a place decides – the seams whose calls present them, the builders, each remedy – comes
@@ -2337,7 +2344,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 						"`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which `\(declaration.declaringType.asSource)` \(isForwarded ? "forwards" : "declares") \(outside(functionProperty)) "
 							+ (isForwarded
 								? functionBuiltType.map { "Declare `@\(Dependency.Source.forwardedRawValue) let \(declaration.property.asSource)` on `\($0.asSource)` too, so that function binds it, or \(fulfillRemedy(seamModule))." } ?? capitalizedFulfillRemedy
-								: "Instantiate `\(declaration.property.label)` outside \(seamName) and declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on \(seamName), so the \(buildersPossessive) caller reads its own, or \(fulfillRemedy(seamModule)).")
+								: receiveOnSeamRemedy)
 					}
 				}
 				// A parameter of a builder function a cycle closes on is noted where the cycle declares the value it passes.
