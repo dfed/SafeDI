@@ -6409,7 +6409,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 7, 12, 14, 18, 25, 30, 40, 59, 62, 70, 94, 97, 98, 99, 133, 161, 212, 267, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x15700969C402497A
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x560C03722E6D9293
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -6419,7 +6419,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xC0705F12980BC5BC
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xA7E4E133E5A5EFF7
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -7014,7 +7014,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// rejects as it rejects the seam whose own tree receives both forms. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 609, 705, 743, 850, 892, 969, 1_010, 1_020, 1_450, 1_815, 1_837, 1_890, 1_986, 2_006, 3_575, 4_668]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x51CB3CE5E1D674C2
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x41A75FB1D3B1FACD
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -7462,6 +7462,11 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: remedySeamFillCycleReceiveNotSendableReason,
 			signatures: [.remedyLeavesErrorAtSite(.receiveOnTypeTheCycleBuilds, containing: "cannot be received inside a `@Sendable` function")],
 			seeds: [1_916],
+		),
+		GraphFuzzerKnownIssue(
+			reason: remedySuggestionHiddenByCloserDeclarationReason,
+			signatures: [.remedyLeavesErrorAtSite(.receiveSuggestedProperty, containing: "is hidden in chain")],
+			seeds: [1_034, 1_120, 1_791, 1_879],
 		),
 	]
 
@@ -8070,6 +8075,12 @@ struct SafeDIToolGraphFuzzerTests {
 
 	private static let seamTraversalLimitReason = "A graph whose probes traverse more wrappers than a graph compared on its own may traverse, so the comparator describes none of its values beneath the point where its traversals run out (Intended: an oracle limit, not a SafeDI defect; raising the comparator's traversal bound for one graph would lengthen every graph's comparison)"
 
+
+	/// The remedy oracle's finding in the label-forms and alias draws of seams split across modules: an error at a receive
+	/// no declaration fulfills suggests every form of the label the chain declares, the first of which a closer declaration
+	/// of the label with another type hides (seed 1034: `FormsHost` declares `formsUser: FormsUser?` above `FormsSummary`,
+	/// whose `formsUser: LazilyInstantiated<FormsUser>` the error offers `formsUser: FormsUser` first).
+	private static let remedySuggestionHiddenByCloserDeclarationReason = "An error at a receive suggests every form of the label its chain declares, among them one that a closer declaration of the label with another type hides, so receiving that suggestion leaves the receive hidden"
 
 	private static let seamMockBuilderOrderReason = "A seam's own mock takes a builder for each hole its tree cannot fill, labeled after the hole type's name and sorted among its parameters by label, so moving type names across wrapper names reorders the mock's parameters"
 
@@ -8694,6 +8705,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeHandWrittenMockTakesNoOverrides: 29,
 	]
 
+	/// Seed 2760, whose mock of `S2760_T2` the tool rejected until a mock passed `nil` to a receive only if available that
+	/// another receive's form pins (#718): `S2760_T2` instantiates `t3: LazilyInstantiated<S2760_Unbuildable1>`, which its
+	/// mock takes as a parameter, and builds `S2760_T1` through a `SendableErasedInstantiator`, and `S2760_T1` receives `t3`
+	/// by value, so the mock reads the lazy value inside the `@Sendable` function, which does not compile.
+	private static let mockCapturesLazilyInstantiatedValueInSendableFunctionReason = "A mock reads a `LazilyInstantiated` value its mocked type instantiates, and takes as a parameter, inside the `@Sendable` function of a `Sendable` builder whose tree receives the value, where the mock reports no error, so the generated mock does not compile"
+
 	private static let mockParameterAndFieldOrderReason = "A mock's parameters and fields are sorted by label, so a renaming that reorders labels reorders them (Intended: CLAUDE.md's \"What may follow names\" allows a label sort of equivalent parameters, so the rename oracle's reordering here is expected, not a defect)"
 
 	private static let lazyCycleConfigurationFieldReason = "Which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct, with the reads of it, is present under one naming and absent under another"
@@ -8860,6 +8877,15 @@ struct SafeDIToolGraphFuzzerTests {
 				.remedyLeavesErrorAtSite(.declareAsSendableWrapper, containing: "is hidden in chain"),
 			],
 			seeds: [1_436, 4_829],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(mockCapturesLazilyInstantiatedValueInSendableFunctionReason); and \(lazyCycleConfigurationFieldReason); and \(mockParameterAndFieldOrderReason)",
+			signatures: [
+				.compilerError(containing: "with non-Sendable type 'LazilyInstantiated<"),
+				.renamedGraphDiffers(.mockConfigurationFieldPresence),
+				.renamedGraphDiffers(.mockParameterAndFieldOrder),
+			],
+			seeds: [2_760],
 		),
 		GraphFuzzerKnownIssue(
 			reason: compileTimeAssertionsDifferBetweenIntegrationsReason,
