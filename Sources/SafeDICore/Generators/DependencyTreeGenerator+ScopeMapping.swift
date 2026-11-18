@@ -77,12 +77,17 @@ extension DependencyTreeGenerator {
 				throw DependencyTreeGeneratorError.holesInSeamsOfUnnamedModule(holes)
 			}
 		}
+		// Only hand-written code could build a type that cannot be a hole. Found once: looked up for each type a seam reaches,
+		// it scanned every declaration once per seam.
+		var typesInstantiatedAsNoHole = Set<TypeDescription>()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
+			for dependency in instantiable.dependencies where dependency.isInstantiated && !Self.canBeHole(dependency) {
+				typesInstantiatedAsNoHole.insert(dependency.asInstantiatedType)
+			}
+		}
 		for seamType in generatedSeamTypes {
 			for typeDescription in typesReached(from: [seamType]) where typeDescriptionToFulfillingInstantiableMap[typeDescription]?.mockOnly != false {
-				// Only hand-written code could build a type that cannot be a hole.
-				if typeDescriptionToFulfillingInstantiableMap.values.contains(where: { instantiable in
-					instantiable.dependencies.contains { $0.isInstantiated && $0.asInstantiatedType == typeDescription && !Self.canBeHole($0) }
-				}) {
+				if typesInstantiatedAsNoHole.contains(typeDescription) {
 					typesToReport.insert(typeDescription)
 				}
 			}
