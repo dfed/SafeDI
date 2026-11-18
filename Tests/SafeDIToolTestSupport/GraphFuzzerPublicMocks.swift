@@ -316,19 +316,42 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// (`GraphFuzzerOracle.addingOverrideClosureCallers(to:of:)`).
 	case overrideClosureCallPlaceIsErasedInstantiator
 
+	/// On a stream of its own (`publicMockUnbuildableValueRandomSeedMask`), a value a consumer's mock cannot build, passed to
+	/// the public mock it calls: `UnbuildableScreen`, a mocked consumer, instantiates `unbuildableFilter`, of a plain type, and
+	/// `UnbuildableService`, a `.public` type of the declaring module beneath which `UnbuildableCache` receives it only if
+	/// available.
+	case unbuildableValuePublicMockCall
+	/// The value is of a public class, which every tier takes.
+	case unbuildableValuePublicMockCallPublicTier
+	/// The consumer is in another package and the value is of `[3 of Int]`, which SafeDI proves `package`: the public tier
+	/// the consumer calls omits it, which the tool reports (`leafTierOmitsProvidedValue`) rather than passing `nil`, so no
+	/// graph of this shape is accepted.
+	case unbuildableValuePublicMockCallTierOmits
+	/// On a stream of its own (`publicMockHoleLabelRandomSeedMask`), a hole whose label a promoted sibling receives as another
+	/// type: `LabelHome`, a `.public` type, instantiates `labelGadget` of a type no declaration fulfills, and receives
+	/// `labelPanelBuilder`, whose `LabelPanel` receives `labelGadget: Instantiator<LabelWidget>`, so that the public mock binds
+	/// the hole's value under a name of its own. The hole is held as itself, or as one of the wrappers below.
+	case holeLabelReceivedByPromotedSibling
+	case holeLabelReceivedByPromotedSiblingHeldInInstantiator
+	case holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated
+
 	/// The shapes of `overrideClosureCall` whose call can hand an override closure no builder a person writes, so that the
 	/// consumer's overrides hold no member for it.
 	static let overrideClosureCannotHandShapes: Set<GraphFuzzerPublicMockDrawFeature> = [.overrideClosureCallPublicCallerPassesPlaceUp, .overrideClosureCallFillReadsCalledMocksOtherPlace, .overrideClosureCallFillReadsValueCalledMockRenames]
 
 	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,
 	/// `retentionPublicMockValueBeforeBuilder…`, `sharedConstructionPublicMock…`, `keywordLabeledPublicMock…`,
-	/// `overrideClosure…`, and `T6`'s mock isolated to the main actor or built with its hand-written mock in another public
-	/// mock) draws this shape, whose count in accepted graphs the public mock corpus pins too
-	/// (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
+	/// `overrideClosure…`, `unbuildableValuePublicMockCall…`, `holeLabelReceivedByPromotedSibling…`, and `T6`'s mock isolated
+	/// to the main actor or built with its hand-written mock in another public mock) draws this shape, whose count in accepted
+	/// graphs the public mock corpus pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
+	/// `unbuildableValuePublicMockCallTierOmits` is not one: the tool rejects every graph of it, which
+	/// `publicMockCorpusOmittedValueGraphCount` counts.
 	var isCountedWhenAccepted: Bool {
 		rawValue.hasPrefix("selfBuildingPublicMock") || rawValue.hasPrefix("placeInsidePublicMockFill") || isRetentionShape
 			|| rawValue.hasPrefix("sharedConstructionPublicMock") || rawValue.hasPrefix("keywordLabeledPublicMock")
 			|| rawValue.hasPrefix("overrideClosureCall")
+			|| rawValue.hasPrefix("unbuildableValuePublicMockCall") && self != .unbuildableValuePublicMockCallTierOmits
+			|| rawValue.hasPrefix("holeLabelReceivedByPromotedSibling")
 			|| self == .holeMockIsolatedToMainActor || self == .holeHandWrittenMockBuiltInPublicMock
 	}
 
@@ -580,6 +603,10 @@ struct GraphFuzzerPublicMockDraw {
 		drawKeywordLabeledPublicMock(random: &keywordLabelRandom)
 		var overrideClosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockOverrideClosureRandomSeedMask)
 		drawOverrideClosurePublicMockCall(random: &overrideClosureRandom)
+		var unbuildableValueRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockUnbuildableValueRandomSeedMask)
+		drawUnbuildableValuePassedToPublicMock(random: &unbuildableValueRandom)
+		var holeLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleLabelRandomSeedMask)
+		drawHoleLabelReceivedByPromotedSibling(random: &holeLabelRandom)
 	}
 
 	/// The files of the graph, each beginning with its module's marker: as drawn, or, for the known-right path of the
@@ -694,6 +721,13 @@ struct GraphFuzzerPublicMockDraw {
 	/// Draws only a call of a public mock whose override member is a closure (`drawOverrideClosurePublicMockCall`): rolls
 	/// added after the rest of the draw was pinned, so that its other shapes are drawn as before.
 	static let publicMockOverrideClosureRandomSeedMask: UInt64 = 0x7075626D6B6F7663
+	/// Draws only a value a consumer's mock cannot build, passed to the public mock it calls
+	/// (`drawUnbuildableValuePassedToPublicMock`): rolls added after the rest of the draw was pinned, so that its other
+	/// shapes are drawn as before.
+	static let publicMockUnbuildableValueRandomSeedMask: UInt64 = 0x7075626D6B756276
+	/// Draws only a hole whose label a promoted sibling receives as another type (`drawHoleLabelReceivedByPromotedSibling`):
+	/// rolls added after the rest of the draw was pinned, so that its other shapes are drawn as before.
+	static let publicMockHoleLabelRandomSeedMask: UInt64 = 0x7075626D6B686C62
 	/// Draws only whether an `ErasedInstantiator` hole forwards a value, `holeTicket: Int`, which `HoleFill` forwards
 	/// (`holeForwardsValue`): a roll added after the rest of the draw was pinned, so that its other shapes are drawn as
 	/// before.
@@ -2410,6 +2444,94 @@ struct GraphFuzzerPublicMockDraw {
 		files.append(File(module: consumerModule, declarations: consumerDeclarations))
 	}
 
+	/// A value a consumer's mock cannot build, passed to the public mock it calls, in one graph in five: `UnbuildableScreen`,
+	/// a mocked consumer in one consumer module, instantiates `unbuildableFilter`, of a type no `@Instantiable` declares, so
+	/// that its `mock()` takes it, and `UnbuildableService`, a `.public` type of the declaring module with an `internal`
+	/// initializer, so that its mock calls the public mock. Beneath `UnbuildableService`, `UnbuildableCache` receives the
+	/// value only if available. The value is of `UnbuildableFilter`, a public class beside `UnbuildableService`, which every
+	/// tier takes (`unbuildableValuePublicMockCallPublicTier`), unless the consumer is in another package and a roll of four
+	/// in ten says otherwise: then it is of `[3 of Int]`, whose spelling SafeDI cannot read, which only `UnbuildableCache`'s
+	/// `package` initializer mentions, so that SafeDI proves it `package`, the public tier the consumer calls omits it, and
+	/// the tool rejects the graph (`leafTierOmitsProvidedValue`) rather than pass `nil`
+	/// (`unbuildableValuePublicMockCallTierOmits`). A consumer in the declaring module's package is never handed `[3 of Int]`:
+	/// it would reach the `package` tier and be accepted, so the value differential and the compile, which smoke seeds make on
+	/// macOS too, where `InlineArray` needs macOS 26, would read it. A type SafeDI reads the spelling of is proven as its
+	/// declaration says, so a consumer in another package that can name it reaches a tier that takes it. The value
+	/// differential calls the consumer's `mock()` with a value of its own (`GraphFuzzerFixture.publicMockUnbuildableValueProbe`).
+	/// Every roll is made before any is read.
+	private mutating func drawUnbuildableValuePassedToPublicMock(random: inout GraphFuzzerRandomNumberGenerator) {
+		let drawsShape = random.percentChance(20)
+		let omitsValueRoll = random.percentChance(40)
+		let consumerModuleRoll = random.integer(in: 0...1)
+		let consumerModules = consumerModules
+		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
+		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
+		let tierOmitsValue = omitsValueRoll && consumerModule == .otherPackageCaller
+		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
+		let filterName = name("UnbuildableFilter")
+		let valueType = tierOmitsValue ? Self.unreadableUnbuildableValueType : filterName
+		var cache = InstantiableClass(name: name("UnbuildableCache"), conformances: conformances)
+		cache.initializerAccess = tierOmitsValue ? .package : .public
+		cache.properties = [Property(attribute: "@Received(onlyIfAvailable: true)", label: "unbuildableFilter", type: "\(valueType)?")]
+		var service = InstantiableClass(name: name("UnbuildableService"), conformances: conformances)
+		service.mockGeneration = ".public"
+		// An `internal` initializer, which no consumer module can call, so that the consumer's mock calls the public mock.
+		service.initializerAccess = .internal
+		service.properties = [Property(attribute: "@Instantiated", label: "unbuildableCache", type: cache.name)]
+		var screen = InstantiableClass(name: name("UnbuildableScreen"), conformances: conformances)
+		screen.mockGeneration = "true"
+		screen.properties = [
+			Property(attribute: "@Instantiated", label: "unbuildableFilter", type: valueType),
+			Property(attribute: "@Instantiated", label: "unbuildableService", type: service.name),
+		]
+		var declarations = [Self.renderer(of: service), Self.renderer(of: cache)]
+		if !tierOmitsValue {
+			declarations.append { rendering in
+				"\(rendering.modifier(.public))final class \(filterName): Sendable {\n\t\(rendering.modifier(.public))init() {}\n}"
+			}
+		}
+		files.append(File(module: .seamModule, declarations: declarations))
+		files.append(File(module: consumerModule, declarations: [Self.renderer(of: screen)]))
+	}
+
+	/// The type of the value `drawUnbuildableValuePassedToPublicMock` hands a public mock whose tier omits it: an
+	/// `InlineArray`, whose spelling SafeDI cannot read.
+	static let unreadableUnbuildableValueType = "[3 of Int]"
+
+	/// A hole whose label a promoted sibling receives as another type, in one graph in five: `LabelHome`, a `.public` type of
+	/// the declaring module, instantiates `labelGadget` of `LabelGadget`, which conforms to `Instantiable` by hand, so that no
+	/// declaration fulfills it and its public mock takes a builder for the place – as itself, an `Instantiator`, or a
+	/// `LazilyInstantiated`, a third of the draws each – and receives `labelPanelBuilder: Instantiator<LabelPanel>`, which its
+	/// mock builds at its root, beside the hole. `LabelPanel` receives `labelGadget: Instantiator<LabelWidget>`, which
+	/// `mock()` takes, so that the mock binds the hole's value under a name of its own. `LabelWidget` conforms to
+	/// `Instantiable` by hand too. Every roll is made before any is read.
+	private mutating func drawHoleLabelReceivedByPromotedSibling(random: inout GraphFuzzerRandomNumberGenerator) {
+		let drawsShape = random.percentChance(20)
+		let holeKindRoll = random.integer(in: 0...2)
+		guard drawsShape, !hasDifferingMockCondition else { return }
+		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
+		let gadgetName = name("LabelGadget")
+		let widgetName = name("LabelWidget")
+		let holeType = switch holeKindRoll {
+		case 0: gadgetName
+		case 1: "Instantiator<\(gadgetName)>"
+		default: "LazilyInstantiated<\(gadgetName)>"
+		}
+		var panel = InstantiableClass(name: name("LabelPanel"), conformances: conformances)
+		panel.properties = [Property(attribute: "@Received", label: "labelGadget", type: "Instantiator<\(widgetName)>")]
+		var home = InstantiableClass(name: name("LabelHome"), conformances: conformances)
+		home.mockGeneration = ".public"
+		home.properties = [
+			Property(attribute: "@Received", label: "labelPanelBuilder", type: "Instantiator<\(panel.name)>"),
+			Property(attribute: "@Instantiated", label: "labelGadget", type: holeType),
+		]
+		// Each conforms to `Instantiable` by hand, so that no `@Instantiable` declaration fulfills it.
+		let handConformingClasses: [(Rendering) -> String] = [gadgetName, widgetName].map { typeName in
+			{ rendering in "\(rendering.modifier(.public))final class \(typeName): Instantiable, Sendable {\n\t\(rendering.modifier(.public))init() {}\n}" }
+		}
+		files.append(File(module: .seamModule, declarations: [Self.renderer(of: home), Self.renderer(of: panel)] + handConformingClasses))
+	}
+
 	/// Declares `Logger`, its production type `ConsoleLogger`, which instantiates `Level`, and a fake: a class at `package`
 	/// or `internal` access in a file with no SafeDI content, as a macro expansion would declare it, extended by a
 	/// `mockOnly` extension spelling `package` or no access level, whose `mock` takes a defaulted parameter half the
@@ -3550,6 +3672,18 @@ extension GraphFuzzerPublicMockDraw {
 			}
 			if features.isDisjoint(with: GraphFuzzerPublicMockDrawFeature.overrideClosureCannotHandShapes) {
 				features.insert(.overrideClosureCallCanHand)
+			}
+		}
+		if let cache = types.declarations["\(prefix)UnbuildableCache"], types.declarations["\(prefix)UnbuildableScreen"] != nil {
+			features.insert(.unbuildableValuePublicMockCall)
+			features.insert(cache.properties.contains { $0.type == "\(unreadableUnbuildableValueType)?" } ? .unbuildableValuePublicMockCallTierOmits : .unbuildableValuePublicMockCallPublicTier)
+		}
+		if let home = types.declarations["\(prefix)LabelHome"], let hole = home.properties.first(where: { $0.label == "labelGadget" }) {
+			features.insert(.holeLabelReceivedByPromotedSibling)
+			if hole.type.hasPrefix("Instantiator<") {
+				features.insert(.holeLabelReceivedByPromotedSiblingHeldInInstantiator)
+			} else if hole.type.hasPrefix("LazilyInstantiated<") {
+				features.insert(.holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated)
 			}
 		}
 		return features
