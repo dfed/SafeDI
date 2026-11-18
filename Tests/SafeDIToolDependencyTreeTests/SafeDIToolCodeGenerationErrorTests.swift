@@ -284,7 +284,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultNetworkService.swift"]):7:5: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService. No @Instantiable declaration fulfills `URLSession`, so SafeDI cannot instantiate it. Declare `@Forwarded let urlSession: URLSession` on a type below `RootViewController` in the chain, and pass the value to the `Instantiator` that builds that type; or decorate `URLSession`, or an extension of it, with @Instantiable and declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain, to fix.
+				\(fixtures["DefaultNetworkService.swift"]):7:5: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService. No @Instantiable declaration fulfills `URLSession`, so SafeDI cannot instantiate it. Decorate `URLSession`, or an extension of it, with @Instantiable, or list `URLSession` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it, and declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain to fix. Or declare `@Forwarded let urlSession: URLSession` on a type below `RootViewController` in the chain, and pass the value to the `Instantiator` that builds that type.
 				"""
 			},
 		) {
@@ -2494,7 +2494,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):5:29: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> URLSessionWrapper. No @Instantiable declaration fulfills `URLSession`, so SafeDI cannot instantiate it. Declare `@Forwarded let urlSession: URLSession` on a type below `RootViewController` in the chain, and pass the value to the `Instantiator` that builds that type; or decorate `URLSession`, or an extension of it, with @Instantiable and declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain, to fix.
+				\(fixtures["File.swift"]):5:29: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> URLSessionWrapper. No @Instantiable declaration fulfills `URLSession`, so SafeDI cannot instantiate it. Decorate `URLSession`, or an extension of it, with @Instantiable, or list `URLSession` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it, and declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain to fix. Or declare `@Forwarded let urlSession: URLSession` on a type below `RootViewController` in the chain, and pass the value to the `Instantiator` that builds that type.
 				"""
 			},
 		) {
@@ -4998,7 +4998,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Grandchild.swift"]):7:5: error: @Received property `missing: Missing` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grandchild. No @Instantiable declaration fulfills `Missing`, so SafeDI cannot instantiate it. Declare `@Forwarded let missing: Missing` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type; or decorate `Missing`, or an extension of it, with @Instantiable and declare `@Instantiated let missing: Missing` on `Root` or on another type in the chain, to fix.
+				\(fixtures["Grandchild.swift"]):7:5: error: @Received property `missing: Missing` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grandchild. No @Instantiable declaration fulfills `Missing`, so SafeDI cannot instantiate it. Decorate `Missing`, or an extension of it, with @Instantiable, or list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it, and declare `@Instantiated let missing: Missing` on `Root` or on another type in the chain to fix. Or declare `@Forwarded let missing: Missing` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type.
 				"""
 			},
 		) {
@@ -5712,7 +5712,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):4:5: error: @Received property `user: User?` is not @Instantiated or @Forwarded in chain: Root -> Parent -> Child. No @Instantiable declaration fulfills `User`, so SafeDI cannot instantiate it. Declare `@Forwarded let user: User?` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type; or decorate `User`, or an extension of it, with @Instantiable, declare `@Instantiated let user: User` on `Root` or on another type in the chain, and add `onlyIfAvailable: true` to this property’s `@Received`, which then accepts the non-optional form, to fix.
+				\(fixtures["Child.swift"]):4:5: error: @Received property `user: User?` is not @Instantiated or @Forwarded in chain: Root -> Parent -> Child. No @Instantiable declaration fulfills `User`, so SafeDI cannot instantiate it. Decorate `User`, or an extension of it, with @Instantiable, or list `User` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it, and declare `@Instantiated let user: User` on `Root` or on another type in the chain, and add `onlyIfAvailable: true` to this property’s `@Received`, which then accepts the non-optional form, to fix. Or declare `@Forwarded let user: User?` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type.
 				"""
 			},
 		) {
@@ -5747,6 +5747,147 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithUnfulfilledReceiveOfExistential_throwsErrorNamingProtocolToListAmongFulfilledTypes() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Feature.swift"]):4:5: error: @Received property `api: any Api` is not @Instantiated or @Forwarded in chain: Root -> Feature. No @Instantiable declaration fulfills `Api`, so SafeDI cannot instantiate it. Decorate `Api`, or an extension of it, with @Instantiable, or list `Api` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it, and declare `@Instantiated let api: any Api` on `Root` or on another type in the chain to fix. Or declare `@Forwarded let api: any Api` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"public protocol Api {}",
+					Self.unfulfilledApiRoot,
+					Self.apiReceiver(attribute: "@Received", type: "any Api"),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithUnfulfilledRequiredReceiveOfOptionalExistential_throwsErrorNamingProtocolToListAmongFulfilledTypes() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Feature.swift"]):4:5: error: @Received property `api: (any Api)?` is not @Instantiated or @Forwarded in chain: Root -> Feature. No @Instantiable declaration fulfills `Api`, so SafeDI cannot instantiate it. Decorate `Api`, or an extension of it, with @Instantiable, or list `Api` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it, and declare `@Instantiated let api: any Api` on `Root` or on another type in the chain, and add `onlyIfAvailable: true` to this property’s `@Received`, which then accepts the non-optional form, to fix. Or declare `@Forwarded let api: (any Api)?` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"public protocol Api {}",
+					Self.unfulfilledApiRoot,
+					Self.apiReceiver(attribute: "@Received", type: "(any Api)?"),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_generatesTree_whenTypeListsReceivedProtocolAmongFulfilledTypesAsUnfulfilledReceiveErrorSays() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"public protocol Api {}",
+				Self.apiInstantiatingRoot(type: "any Api"),
+				Self.apiListingDefaultApi,
+				Self.apiReceiver(attribute: "@Received", type: "any Api"),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles?["Root+SafeDI.swift"] == Self.apiInstantiatingRootExtension(apiDeclaration: "let api: any Api = DefaultApi()"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_generatesTree_whenTypeListsProtocolAndOptionalReceiveIsOnlyIfAvailableAsUnfulfilledReceiveErrorSays() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"public protocol Api {}",
+				Self.apiInstantiatingRoot(type: "any Api"),
+				Self.apiListingDefaultApi,
+				Self.apiReceiver(attribute: "@Received(onlyIfAvailable: true)", type: "(any Api)?"),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles?["Root+SafeDI.swift"] == Self.apiInstantiatingRootExtension(apiDeclaration: "let api: any Api = DefaultApi()"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_generatesTree_whenReceivedTypeIsDecoratedAsUnfulfilledReceiveErrorSays() async throws {
+		// The error for the undecorated `Api` is the one above, with `Api` in place of `any Api`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				Self.apiInstantiatingRoot(type: "Api"),
+				"""
+				@Instantiable
+				public final class Api: Instantiable {
+				    public init() {}
+				}
+				""",
+				Self.apiReceiver(attribute: "@Received", type: "Api"),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles?["Root+SafeDI.swift"] == Self.apiInstantiatingRootExtension(apiDeclaration: "let api = Api()"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_generatesTree_whenReceiverForwardsExistentialAsUnfulfilledReceiveErrorSays() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"public protocol Api {}",
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(featureBuilder: Instantiator<Feature>) {
+				        self.featureBuilder = featureBuilder
+				    }
+
+				    @Instantiated let featureBuilder: Instantiator<Feature>
+				}
+				""",
+				Self.apiReceiver(attribute: "@Forwarded", type: "any Api"),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles?["Root+SafeDI.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_featureBuilder(api: any Api) -> Feature {
+		            Feature(api: api)
+		        }
+		        let featureBuilder = Instantiator<Feature> {
+		            __safeDI_featureBuilder(api: $0)
+		        }
+		        self.init(featureBuilder: featureBuilder)
+		    }
+		}
+		""")
 	}
 
 	@Test
@@ -7548,7 +7689,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		// No `@Instantiable` declaration fulfills `Clock`, so `@Instantiated let clock: Clock` would be rejected in turn.
 		await assertThrowsError(
 			diagnostics: { fixtures in
-				"\(fixtures["Child.swift"]):6:5: error: @Received property `clock: Clock` is not @Instantiated or @Forwarded in chain: Root -> Child. No @Instantiable declaration fulfills `Clock`, so SafeDI cannot instantiate it. Declare `@Forwarded let clock: Clock` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type; or decorate `Clock`, or an extension of it, with @Instantiable and declare `@Instantiated let clock: Clock` on `Root` or on another type in the chain, to fix."
+				"\(fixtures["Child.swift"]):6:5: error: @Received property `clock: Clock` is not @Instantiated or @Forwarded in chain: Root -> Child. No @Instantiable declaration fulfills `Clock`, so SafeDI cannot instantiate it. Decorate `Clock`, or an extension of it, with @Instantiable, or list `Clock` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it, and declare `@Instantiated let clock: Clock` on `Root` or on another type in the chain to fix. Or declare `@Forwarded let clock: Clock` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type."
 			},
 		) {
 			try await executeSafeDIToolTest(
@@ -7577,6 +7718,67 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	}
 
 	// MARK: Private
+
+	/// `Root`, which instantiates `Feature` and nothing that fulfills what `Feature` receives.
+	private static let unfulfilledApiRoot = """
+	@Instantiable(isRoot: true)
+	public final class Root: Instantiable {
+	    public init(feature: Feature) { self.feature = feature }
+	    @Instantiated let feature: Feature
+	}
+	"""
+
+	/// `DefaultApi`, which lists `Api` among the types it fulfills.
+	private static let apiListingDefaultApi = """
+	@Instantiable(fulfillingAdditionalTypes: [Api.self])
+	public final class DefaultApi: Api, Instantiable {
+	    public init() {}
+	}
+	"""
+
+	/// `Feature`, which declares `api` of `type` with `attribute`.
+	private static func apiReceiver(attribute: String, type: String) -> String {
+		"""
+		@Instantiable
+		public final class Feature: Instantiable {
+		    public init(api: \(type)) { self.api = api }
+		    \(attribute) let api: \(type)
+		}
+		"""
+	}
+
+	/// `Root`, which instantiates `api` of `type` and `Feature`.
+	private static func apiInstantiatingRoot(type: String) -> String {
+		"""
+		@Instantiable(isRoot: true)
+		public final class Root: Instantiable {
+		    public init(api: \(type), feature: Feature) {
+		        self.api = api
+		        self.feature = feature
+		    }
+
+		    @Instantiated let api: \(type)
+		    @Instantiated let feature: Feature
+		}
+		"""
+	}
+
+	/// The file generated for `apiInstantiatingRoot`, which binds `api` with `apiDeclaration`.
+	private static func apiInstantiatingRootExtension(apiDeclaration: String) -> String {
+		"""
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		extension Root {
+		    public convenience init() {
+		        \(apiDeclaration)
+		        let feature = Feature(api: api)
+		        self.init(api: api, feature: feature)
+		    }
+		}
+		"""
+	}
 
 	private var filesToDelete = [URL]()
 
