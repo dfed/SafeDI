@@ -2391,7 +2391,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let handed = declaringType == calledType ? "`\(calledType)`’s values" : "that value"
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):\(appLine):5: error: `DefaultService` receives `token: Token`, \(boundOnPath), but `\(calledType)` passes the builder for `Page`’s `service: any Service` (`service` of `serviceBuilder`) on from its own caller, which cannot hand it \(handed). Declare `@Received let token: Token` on `Page`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Service` in module `\(calledTypeModule)` or a module it lists among its SafeDI dependencies, so `\(calledType)` fills the builder itself.
+			\(fixtures["App"]!["AppTypes.swift"]):\(appLine):5: error: `DefaultService` receives `token: Token`, \(boundOnPath), but `\(calledType)` passes the builder for `Page`’s `service: any Service` (`service` of `serviceBuilder`) on from its own caller, which cannot hand it \(handed). Declare `@Received let token: Token` on `Page`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Service` in module `\(calledTypeModule)` or a module it lists among its SafeDI dependencies, so `\(calledType)` fills the builder itself.
 			\(fixtures[declaringModule]!["\(declaringModule)Types.swift"]):\(declarationLine):5: note: `\(declaringType)` declares `token: Token` here.
 			"""
 		}
