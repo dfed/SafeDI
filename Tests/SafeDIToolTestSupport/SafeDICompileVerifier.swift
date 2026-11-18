@@ -160,9 +160,15 @@ func verifyModulesCompile(
 		// A later module would import a module that did not build, so its failure would say nothing new.
 		guard outcome.failure == nil else { break }
 	}
-	// A warning any module's fixture draws is the fixture's wherever generated code draws it too.
-	let messagesInputsDraw = compiledOutcomes.reduce(into: Set<String>()) { $0.formUnion($1.inputWarningMessages) }
-	let outcomes = compiledOutcomes.map { $0.excludingGeneratedCodeWarnings(withMessagesIn: messagesInputsDraw) }
+	// A missing `any` that the fixture of a module a module imports draws is that fixture's wherever the module's generated
+	// code copies its spelling. `dependencyModuleNames` lists every module a module imports, those it imports through
+	// another included, since its compile searches only theirs.
+	let inputWarningMessagesByModuleName = Dictionary(compiledOutcomes.map { ($0.moduleName, $0.inputWarningMessages) }) { first, _ in first }
+	let outcomes = zip(checks, compiledOutcomes).map { check, outcome in
+		outcome.excludingGeneratedCodeWarnings(withExistentialAnyMessagesIn: check.sources.dependencyModuleNames.reduce(into: Set<String>()) { messages, dependencyModuleName in
+			messages.formUnion(inputWarningMessagesByModuleName[dependencyModuleName] ?? [])
+		})
+	}
 	if recordsIssues {
 		for outcome in outcomes {
 			outcome.recordIssues(skippingVerificationBy: "pass `compileVerification: .skipped`", sourceLocation: sourceLocation)
@@ -180,8 +186,12 @@ let standaloneVerificationModuleName = "SafeDICodegenVerification"
 /// The upcoming feature that has the compiler warn where a protocol is spelled as a type without `any`, which every
 /// compile check and every graph fuzzer compile enables. Swift 6.2 warns rather than fails there, so a fixture that spells a
 /// protocol without `any` still compiles, and its warning is its own (`warningsOnlyGeneratedCodeDraws`,
-/// `warnings(_:excludingMessagesIn:)`); generated code that drops an `any` the fixture spells draws a warning of its own.
+/// `warnings(_:excludingExistentialAnyMessagesIn:)`); generated code that drops an `any` the fixture spells draws a warning
+/// of its own.
 let existentialAnyFeature = "ExistentialAny"
+
+/// What ends the message of a warning the compiler reports under `existentialAnyFeature`: its diagnostic group.
+private let existentialAnyDiagnosticGroup = "[#\(existentialAnyFeature)]"
 
 private func locateBuildArtifacts(sourceLocation: SourceLocation) -> SafeDIBuildArtifacts? {
 	guard let artifacts = SafeDIBuildArtifactLocator.locate() else {
@@ -267,20 +277,21 @@ struct ModuleCompileOutcome {
 	/// Why the module did not compile, or `nil` when it did.
 	let failure: ModuleCompileFailure?
 	/// The warning lines the compiler reported in the generated files whose message it did not also report in
-	/// an input file: of this module, and, in a compile of several modules, of any of them.
+	/// an input file of this module, nor, in a compile of several modules, for a missing `any`, in an input file of a
+	/// module this one imports (`warnings(_:excludingExistentialAnyMessagesIn:)`).
 	let generatedCodeWarnings: [String]
 	/// The messages of the warnings the compiler reported in the module's input files.
 	let inputWarningMessages: Set<String>
 	/// The directory the module's sources were staged in, where the compiler wrote its output.
 	let directory: URL
 
-	/// This outcome without the generated code's warnings whose message is one of `messages`.
-	func excludingGeneratedCodeWarnings(withMessagesIn messages: Set<String>) -> ModuleCompileOutcome {
+	/// This outcome without the generated code's warnings of a missing `any` whose message is one of `messages`.
+	func excludingGeneratedCodeWarnings(withExistentialAnyMessagesIn messages: Set<String>) -> ModuleCompileOutcome {
 		ModuleCompileOutcome(
 			moduleName: moduleName,
 			result: result,
 			failure: failure,
-			generatedCodeWarnings: warnings(generatedCodeWarnings, excludingMessagesIn: messages),
+			generatedCodeWarnings: warnings(generatedCodeWarnings, excludingExistentialAnyMessagesIn: messages),
 			inputWarningMessages: inputWarningMessages,
 			directory: directory,
 		)
@@ -461,14 +472,15 @@ func warningMessagesInputsDraw(inCompilerOutput compilerOutput: String, inputFil
 	})
 }
 
-/// `warnings`, warning lines of the compiler's output, without those whose message is one of `messages`: those another
-/// module's fixture draws too. A module's generated code spells a type as the declarations it reads spell it, so where a
-/// dependency's fixture draws a warning by how it spells a type, such as a protocol spelled without `any` under the
-/// `ExistentialAny` upcoming feature, the module whose generated code names the type draws the same warning, which is the
-/// fixture's, not the generator's.
-func warnings(_ warnings: [String], excludingMessagesIn messages: Set<String>) -> [String] {
+/// `warnings`, warning lines of the compiler's output, without those of a missing `any` (`existentialAnyFeature`) whose
+/// message is one of `messages`: those the fixture of a module the compiled module imports draws too. A module's generated
+/// code spells a protocol as the declarations it reads spell it, so where such a fixture spells a protocol without `any`,
+/// the module whose generated code names the type draws the same warning, which is the fixture's, not the generator's. A
+/// warning of any other kind, and one only the fixture of a module that imports the compiled module draws, whose spelling
+/// the compiled module cannot have read, stays generated code's own.
+func warnings(_ warnings: [String], excludingExistentialAnyMessagesIn messages: Set<String>) -> [String] {
 	warnings.filter { line in
-		guard let markerRange = line.range(of: warningMarker) else { return true }
+		guard line.hasSuffix(existentialAnyDiagnosticGroup), let markerRange = line.range(of: warningMarker) else { return true }
 		return !messages.contains(String(line[markerRange.upperBound...]))
 	}
 }
