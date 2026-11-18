@@ -302,6 +302,11 @@ struct GraphFuzzerCallingMockDraw {
 			case .callerCalls, .fillCallsAgain:
 				nil
 			}
+			// Drawn after the intermediate type, so the graphs keep the values drawn before.
+			secondPlaceCallsAgain = random.element(of: [false, true])
+			// Drawn last, and only for the `Sendable` wrapper: a `LazilyInstantiated` a fill reads inside a `@Sendable` function is
+			// an error, in production too (`SafeDIToolCallingMockMirrorsProductionTests`' `ReenteringWrapperPair`).
+			buildsPlaceInSendableFunctionToo = wrapper == "SendableLazilyInstantiated" ? random.element(of: [false, true]) : false
 		}
 
 		/// Which type of the caller's module calls the called type, and whether the fill calls it again.
@@ -328,6 +333,13 @@ struct GraphFuzzerCallingMockDraw {
 		let call: Call
 		/// The name of the mocked intermediate type that calls the called type, or `nil` where the caller calls it.
 		let intermediate: String?
+		/// Whether the called type also instantiates a second level, `Hub`, holding a second place, `navigator`, of another
+		/// protocol, whose fill reads nothing and instantiates an `Instantiator` of the called type, whose build re-enters the
+		/// called type's tree from that fill and fills the first place again there.
+		let secondPlaceCallsAgain: Bool
+		/// Whether the called type also instantiates a `SendableInstantiator` of the level between, so it builds the place in
+		/// plain code and inside that instantiator's `@Sendable` function, outside which the called mock binds the value.
+		let buildsPlaceInSendableFunctionToo: Bool
 	}
 
 	/// How the caller and the called type's tree hold the value, for the shape whose fill receives the caller's lazy value
@@ -615,8 +627,40 @@ struct GraphFuzzerCallingMockDraw {
 				knownRightExpression: holdsCallersInstance("\(caller)()", fill: reentered),
 			))
 		}
+		func holdsCallersWrapper(_ call: String, fill filledExpression: String) -> String {
+			"{ let caller = \(call); return (\(filledExpression) as! \(fill)).\(value) === caller.\(value) }()"
+		}
+		let instantiatedPlace = switch cell.place {
+		case .plain:
+			""
+		case .deferred:
+			".instantiate(7)"
+		}
+		if callerLazyValue?.secondPlaceCallsAgain == true {
+			let reenteredThroughSecondPlace = "(caller.\(calledType).\(Self.secondLevelLabel).\(Self.secondPlaceLabel) as! \(names.callerModuleName).\(Self.secondFillName)).\(reenteredCalledType).\(placeInCalledType)\(instantiatedPlace)"
+			probes.append(DifferentialValueProbe(
+				name: "\(names.fill) re-entered through \(Self.secondFillName) holds \(names.caller).\(value)",
+				expression: holdsCallersWrapper("\(caller).mock()", fill: reenteredThroughSecondPlace),
+				knownRightExpression: holdsCallersWrapper("\(caller)()", fill: reenteredThroughSecondPlace),
+			))
+		}
+		if callerLazyValue?.buildsPlaceInSendableFunctionToo == true {
+			let builtInSendableFunction = "caller.\(calledType).\(names.between.lowercasedFirst)Builder.instantiate().\(placeLabel)\(instantiatedPlace)"
+			probes.append(DifferentialValueProbe(
+				name: "\(names.fill) built in a @Sendable function holds \(names.caller).\(value)",
+				expression: holdsCallersWrapper("\(caller).mock()", fill: builtInSendableFunction),
+				knownRightExpression: holdsCallersWrapper("\(caller)()", fill: builtInSendableFunction),
+			))
+		}
 		return probes
 	}
+
+	/// The second place's protocol, the label of the level that holds it and its own, and the type that fills it, of the
+	/// shape whose fill receives the caller's lazy value below the called type's root (`CallerLazyValue.secondPlaceCallsAgain`).
+	static let secondPlaceProtocol = "Navigator"
+	static let secondLevelLabel = "hub"
+	static let secondPlaceLabel = "navigator"
+	static let secondFillName = "LiveNavigator"
 
 	/// An expression of the caller `call` builds and the fill its deferred place `place` builds for `id` 7, as one tuple, so
 	/// the comparator identifies a value the fill receives against the caller's own.
@@ -1348,6 +1392,28 @@ struct GraphFuzzerCallingMockDraw {
 		let receivesOnlyIfAvailable = callerLazyValue?.receivesOnlyIfAvailable == true
 		let siblingValueType = receivesOnlyIfAvailable ? "\(names.value)?" : names.value
 		let siblingAttribute = receivesOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received"
+		var innerProperties = [(label: between, type: names.between), (label: sibling, type: names.sibling)]
+		var secondLevel = ""
+		if callerLazyValue?.secondPlaceCallsAgain == true {
+			innerProperties.append((label: Self.secondLevelLabel, type: "Hub"))
+			secondLevel = """
+
+
+			public protocol \(Self.secondPlaceProtocol): AnyObject {}
+
+			@Instantiable
+			public final class Hub: Instantiable {
+			    init(\(Self.secondPlaceLabel): any \(Self.secondPlaceProtocol)) { self.\(Self.secondPlaceLabel) = \(Self.secondPlaceLabel) }
+			    @Instantiated public let \(Self.secondPlaceLabel): any \(Self.secondPlaceProtocol)
+			}
+			"""
+		}
+		if callerLazyValue?.buildsPlaceInSendableFunctionToo == true {
+			innerProperties.append((label: "\(between)Builder", type: "SendableInstantiator<\(names.between)>"))
+		}
+		let innerParameters = innerProperties.map { "\($0.label): \($0.type)" }.joined(separator: ", ")
+		let innerAssignments = innerProperties.map { "self.\($0.label) = \($0.label)" }.joined(separator: "; ")
+		let innerDeclarations = innerProperties.map { "    @Instantiated public let \($0.label): \($0.type)" }.joined(separator: "\n")
 		return """
 		import SafeDI
 
@@ -1372,10 +1438,9 @@ struct GraphFuzzerCallingMockDraw {
 
 		@Instantiable(generateDependencyTree: true, generateMock: .public)
 		public final class \(names.inner): Instantiable {
-		    init(\(between): \(names.between), \(sibling): \(names.sibling)) { self.\(between) = \(between); self.\(sibling) = \(sibling) }
-		    @Instantiated public let \(between): \(names.between)
-		    @Instantiated public let \(sibling): \(names.sibling)
-		}
+		    init(\(innerParameters)) { \(innerAssignments) }
+		\(innerDeclarations)
+		}\(secondLevel)
 		"""
 	}
 
@@ -1394,6 +1459,15 @@ struct GraphFuzzerCallingMockDraw {
 			"import SafeDI\nimport \(names.innerModuleName)",
 			fillDeclaration(named: names.fill, protocolName: names.hole, received: (value, wrapped), instantiated: instantiated, isPublic: callerIsPublic),
 		]
+		if callerLazyValue?.secondPlaceCallsAgain == true {
+			declarations.append("""
+			@Instantiable(fulfillingAdditionalTypes: [(any \(Self.secondPlaceProtocol)).self])
+			\(callerAccess)final class \(Self.secondFillName): \(Self.secondPlaceProtocol), Instantiable {
+			    \(callerAccess)init(\(inner)Builder: Instantiator<\(names.inner)>) { self.\(inner)Builder = \(inner)Builder }
+			    @Instantiated let \(inner)Builder: Instantiator<\(names.inner)>
+			}
+			""")
+		}
 		if let intermediate = callerLazyValue?.intermediate {
 			var properties = [(attribute: "@Instantiated", label: inner, type: names.inner)]
 			if callerLazyValue?.call == .mockedIntermediateReceivingValueCalls {
