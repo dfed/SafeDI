@@ -506,6 +506,49 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		#expect(besideSeams.modules["Tests"]?.generatedFiles == publicMocksOnly.modules["Tests"]?.generatedFiles)
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases, CallerLazyValueForm.all)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceBelowCalledTypesRootWithCallersLazyValue_whenCalledMockHoldsValueByValue(caller: CallingMockCaller, form: CallerLazyValueForm) async throws {
+		let (wrapper, place) = (form.wrapper, form.place)
+		// `F`’s mock binds `log` by value, as the call hands it the caller’s instance, and its place is a level below its root,
+		// beneath `A`. `Live` fills it and receives the caller’s lazily held `log`, so the place is filled on that route, as the
+		// twin fills it, and `Live` holds the caller’s instance, as inline.
+		try await expectValuesEqualInline(
+			mock: Self.lazyValueBelowCalledRootModules(caller: caller.attribute, callee: Self.twinCalledTypes, wrapper: wrapper, place: place),
+			inline: Self.lazyValueBelowCalledRootInlineModules(wrapper: wrapper, place: place),
+			caller: caller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.lazyValueBelowCalledRootProbes(place: place),
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallerLazyWrapper.allCases, CalledMockPlace.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceBelowCalledTypesRootWithCallersLazyValue_whenListedCallersCalledMockHoldsValueByValue(wrapper: CallerLazyWrapper, place: CalledMockPlace) async throws {
+		// As above, for a caller its module lists in `additionalMocksToGenerate`, whose mock is internal.
+		try await expectValuesEqualInline(
+			mock: Self.lazyValueBelowCalledRootModules(caller: "@Instantiable(isRoot: true)", callee: Self.twinCalledTypes, wrapper: wrapper, place: place, listsCaller: true),
+			inline: Self.lazyValueBelowCalledRootInlineModules(wrapper: wrapper, place: place),
+			caller: .internal,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.lazyValueBelowCalledRootProbes(place: place),
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceBelowCalledTypesRootWithCallersLazyValue_whenCalledMockHoldsValueOnlyIfAvailable(caller: CallingMockCaller) async throws {
+		// As above, with `Z` receiving `log` only if available, so `F`’s mock binds `log: Log?`, from which no level can make
+		// the `LazilyInstantiated<Log>` `Live` requires: only the caller’s own wrapper fills the place, as the twin fills it.
+		try await expectValuesEqualInline(
+			mock: Self.lazyValueBelowCalledRootModules(caller: caller.attribute, callee: Self.twinCalledTypes, wrapper: .lazilyInstantiated, place: .plain, receivesOnlyIfAvailable: true),
+			inline: Self.lazyValueBelowCalledRootInlineModules(wrapper: .lazilyInstantiated, place: .plain, receivesOnlyIfAvailable: true),
+			caller: caller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.lazyValueBelowCalledRootProbes(place: .plain),
+		)
+	}
+
 	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func generate_fillsPlaceFromCallersOwnValue_whenTwinFillsIt(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
@@ -1170,6 +1213,129 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	}
 
 	// MARK: Fixtures
+
+	/// The adopter’s shape: `F`, a seam and public mock in module `Feat`, builds `A`, whose initializer `App` cannot call, so
+	/// its place is a level below `F`’s root, and `Z`, which receives `log`, so `F`’s mock binds `log` by value. `Live` fills
+	/// the place and receives `log` in `wrapper`’s form, which `Root` instantiates. Where `listsCaller`, module `App` lists
+	/// `Root` in `additionalMocksToGenerate`.
+	private static func lazyValueBelowCalledRootModules(caller: String, callee: String, wrapper: CallerLazyWrapper, place: CalledMockPlace, listsCaller: Bool = false, receivesOnlyIfAvailable: Bool = false) -> [ModuleFixture] {
+		var appFiles = [
+			"AppTypes.swift": """
+			import Feat
+			import SafeDI
+
+			\(place.fill(receiving: "log: \(wrapper.name)<Log>"))
+
+			\(caller)
+			public final class Root: Instantiable {
+			    public init(log: \(wrapper.name)<Log>, f: F) {
+			        self.log = log
+			        self.f = f
+			    }
+
+			    @Instantiated public let log: \(wrapper.name)<Log>
+			    @Instantiated public let f: F
+			}
+			""",
+		]
+		if listsCaller {
+			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"])\n"
+		}
+		return [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: [
+				"FeatTypes.swift": lazyValueBelowCalledRootFeatureTypes(callee: callee, place: place, receivesOnlyIfAvailable: receivesOnlyIfAvailable),
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Feat"]),
+		]
+	}
+
+	/// `lazyValueBelowCalledRootModules`’ types in one module, `Root` a root: what inline builds.
+	private static func lazyValueBelowCalledRootInlineModules(wrapper: CallerLazyWrapper, place: CalledMockPlace, receivesOnlyIfAvailable: Bool = false) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+				"AppTypes.swift": lazyValueBelowCalledRootFeatureTypes(callee: "@Instantiable", place: place, receivesOnlyIfAvailable: receivesOnlyIfAvailable) + """
+
+
+				\(place.fill(receiving: "log: \(wrapper.name)<Log>"))
+
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(log: \(wrapper.name)<Log>, f: F) {
+				        self.log = log
+				        self.f = f
+				    }
+
+				    @Instantiated public let log: \(wrapper.name)<Log>
+				    @Instantiated public let f: F
+				}
+				""",
+			]),
+		]
+	}
+
+	/// `Z` receives `log` only if available, as `Log?`, where `receivesOnlyIfAvailable`.
+	private static func lazyValueBelowCalledRootFeatureTypes(callee: String, place: CalledMockPlace, receivesOnlyIfAvailable: Bool) -> String {
+		let zLog = receivesOnlyIfAvailable ? "Log?" : "Log"
+		let zReceive = receivesOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received"
+		return """
+		import SafeDI
+
+		public protocol Api {}
+
+		@Instantiable
+		public final class Log: Instantiable, Sendable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class A: Instantiable {
+		    init(\(place.label): \(place.type)) {
+		        self.\(place.label) = \(place.label)
+		    }
+
+		    \(place.attribute) public let \(place.label): \(place.type)
+		}
+
+		@Instantiable
+		public final class Z: Instantiable {
+		    init(log: \(zLog)) {
+		        self.log = log
+		    }
+
+		    \(zReceive) public let log: \(zLog)
+		}
+
+		\(callee)
+		public final class F: Instantiable {
+		    public init(a: A, z: Z) {
+		        self.a = a
+		        self.z = z
+		    }
+
+		    @Instantiated public let a: A
+		    @Instantiated public let z: Z
+		}
+		"""
+	}
+
+	/// What `Root`’s mock and inline `Root` build, and whether the `Live` that fills the place holds the instance `Root`’s
+	/// `log` holds: for a deferred place, the `Live` its builder builds for `id` 7.
+	private static func lazyValueBelowCalledRootProbes(place: CalledMockPlace) -> [DifferentialValueProbe] {
+		let live = switch place {
+		case .plain:
+			"(root.f.a.api as! Live)"
+		case .deferred:
+			"(root.f.a.apiBuilder.instantiate(7) as! Live)"
+		}
+		return [
+			DifferentialValueProbe(name: "Root", expression: "Root.mock()", knownRightExpression: "Root()"),
+			DifferentialValueProbe(
+				name: "Live’s log is Root’s",
+				expression: "{ let root = Root.mock(); return \(live).log.instance === root.log.instance }()",
+				knownRightExpression: "{ let root = Root(); return \(live).log.instance === root.log.instance }()",
+			),
+		]
+	}
 
 	/// `seamBuiltAgainModules`’ types in one module, `Root` a root: what inline builds.
 	private static let seamBuiltAgainInlineModules = [
@@ -3387,6 +3553,112 @@ enum MockConditionCaller: CustomTestStringConvertible {
 			}
 			#endif
 			"""]
+		}
+	}
+}
+
+/// The wrapper a calling mock’s caller holds a value in, which a fill receives.
+enum CallerLazyWrapper: CaseIterable, CustomTestStringConvertible, Sendable {
+	case lazilyInstantiated
+	case sendableLazilyInstantiated
+
+	var name: String {
+		switch self {
+		case .lazilyInstantiated:
+			"LazilyInstantiated"
+		case .sendableLazilyInstantiated:
+			"SendableLazilyInstantiated"
+		}
+	}
+
+	var testDescription: String {
+		name
+	}
+}
+
+/// A wrapper a calling mock’s caller holds a value in, and a place of the called public mock: each pair, for a test that
+/// also varies the caller.
+struct CallerLazyValueForm: CustomTestStringConvertible, Sendable {
+	static let all = CallerLazyWrapper.allCases.flatMap { wrapper in CalledMockPlace.allCases.map { Self(wrapper: wrapper, place: $0) } }
+
+	let wrapper: CallerLazyWrapper
+	let place: CalledMockPlace
+
+	var testDescription: String {
+		"\(wrapper.testDescription), \(place.testDescription)"
+	}
+}
+
+/// How a called public mock holds the place a calling mock fills: by value, as `any Api`, or as an `ErasedInstantiator`
+/// whose fill forwards `id`.
+enum CalledMockPlace: CaseIterable, CustomTestStringConvertible, Sendable {
+	case plain
+	case deferred
+
+	var label: String {
+		switch self {
+		case .plain:
+			"api"
+		case .deferred:
+			"apiBuilder"
+		}
+	}
+
+	var type: String {
+		switch self {
+		case .plain:
+			"any Api"
+		case .deferred:
+			"ErasedInstantiator<Int, any Api>"
+		}
+	}
+
+	var attribute: String {
+		switch self {
+		case .plain:
+			"@Instantiated"
+		case .deferred:
+			"@Instantiated(fulfilledByType: \"Live\")"
+		}
+	}
+
+	/// `Live`, which fills the place and receives `received`, a label and its type.
+	func fill(receiving received: String) -> String {
+		let label = String(received.prefix { $0 != ":" })
+		switch self {
+		case .plain:
+			return """
+			@Instantiable(fulfillingAdditionalTypes: [Api.self])
+			public final class Live: Api, Instantiable {
+			    public init(\(received)) {
+			        self.\(label) = \(label)
+			    }
+
+			    @Received public let \(received)
+			}
+			"""
+		case .deferred:
+			return """
+			@Instantiable
+			public final class Live: Api, Instantiable {
+			    public init(id: Int, \(received)) {
+			        self.id = id
+			        self.\(label) = \(label)
+			    }
+
+			    @Forwarded public let id: Int
+			    @Received public let \(received)
+			}
+			"""
+		}
+	}
+
+	var testDescription: String {
+		switch self {
+		case .plain:
+			"plain place"
+		case .deferred:
+			"deferred place"
 		}
 	}
 }
