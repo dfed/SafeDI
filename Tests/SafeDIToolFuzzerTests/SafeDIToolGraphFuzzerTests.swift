@@ -8192,6 +8192,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.overrideClosureCallCanHand: 180,
 		.overrideClosureCallFillReadsCalledMocksOtherPlace: 37,
 		.overrideClosureCallFillReadsCalledMocksParameter: 40,
+		// pins: derive on CI
+		.overrideClosureCallFillReadsConsumersValue: 0,
 		.overrideClosureCallFillReadsValueCalledMockRenames: 40,
 		.overrideClosureCallInternalCallerPassesPlaceUp: 86,
 		.overrideClosureCallPlaceIsErasedInstantiator: 91,
@@ -8598,6 +8600,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.overrideClosureCallCanHand: 200,
 		.overrideClosureCallFillReadsCalledMocksOtherPlace: 43,
 		.overrideClosureCallFillReadsCalledMocksParameter: 45,
+		// pins: derive on CI
+		.overrideClosureCallFillReadsConsumersValue: 0,
 		.overrideClosureCallFillReadsValueCalledMockRenames: 41,
 		.overrideClosureCallInternalCallerPassesPlaceUp: 98,
 		.overrideClosureCallPublicCallerPassesPlaceUp: 96,
