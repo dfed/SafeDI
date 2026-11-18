@@ -6429,16 +6429,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// by-value parameter whose label the tree holds as a lazily instantiated property is passed its instance, as
 				// a call outside a fill is (`dependencyArgument`).
 				mockInitializer.arguments.map { argument in
-					let value = publicMockBuilderStructValuesByLabel[argument.innerLabel] ?? holeArgumentValuesByLabel[argument.innerLabel] ?? instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }).map { dependency in
-						if unavailableProperties.contains(dependency.property) {
-							"nil"
-						} else if dependency.source.isReceived, lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
-							"\(argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
-						} else {
-							argument.innerLabel
-						}
-					} ?? argument.innerLabel
-					return "\(argument.label.spelledAsArgumentLabel): \(value)"
+					let dependency = instantiable.dependencies.first { $0.property.label == argument.innerLabel }
+					let source: ArgumentSource = if let builderValue = publicMockBuilderStructValuesByLabel[argument.innerLabel] {
+						.builderArgument(builderValue)
+					} else if let holeValue = holeArgumentValuesByLabel[argument.innerLabel] {
+						.holeArgument(holeValue)
+					} else if let dependency, unavailableProperties.contains(dependency.property) {
+						.nil
+					} else if let dependency, dependency.source.isReceived, lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
+						.lazyInstance(label: argument.innerLabel, throughOptional: false)
+					} else {
+						// A parameter no dependency takes reads the nearest declaration of its label, as a dependency does.
+						.binding(label: argument.innerLabel)
+					}
+					return CallArgument(label: argument.label, source: source).spelled
 				}.joined(separator: ", ")
 			} else if constructsWithHandWrittenMock, let mockInitializer = instantiable.mockInitializer {
 				// A type a fill builds with its hand-written mock is passed what the mock takes of its dependencies, as an
