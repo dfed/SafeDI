@@ -222,6 +222,83 @@ struct SafeDIToolCompileVerifierTests: ~Copyable {
 		#expect(warnings.allSatisfy { $0.hasPrefix("\(fixture.path):1:13: warning: initialization of immutable value 'unused' was never used") }, "Unexpected warnings \(warnings)")
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func verifyModulesCompile_reportsGeneratedCodeWarning_whenGeneratedCodeSpellsProtocolThatFixtureSpellsWithAny() async throws {
+		let fixture = directory.appendingPathComponent("Fixture.swift")
+		try "public protocol Service {}\n\npublic func use(_ service: any Service) {}\n".write(to: fixture, atomically: true, encoding: .utf8)
+		var filesToDelete = [URL]()
+		defer {
+			for fileToDelete in filesToDelete {
+				try? FileManager.default.removeItem(at: fileToDelete)
+			}
+		}
+
+		let compilation = try #require(try await verifyModulesCompile(
+			[ModuleCompileSources(
+				moduleName: "Probe",
+				packageName: nil,
+				dependencyModuleNames: [],
+				inputSwiftFiles: [fixture],
+				generatedFiles: ["Fixture+SafeDI.swift": "func generated(_ service: Service) {}\n"],
+				activeCompilationConditions: [],
+				mockConditionalCompilation: nil,
+			)],
+			recordsIssues: false,
+			filesToDelete: &filesToDelete,
+		))
+
+		// The compiler may report the warning more than once, as Swift 6.4 does.
+		let warnings = try #require(compilation.modules.first).generatedCodeWarnings
+		#expect(!warnings.isEmpty, "Unexpected warnings \(warnings)")
+		#expect(warnings.allSatisfy { $0.contains("Fixture+SafeDI.swift:") && $0.contains(": warning: use of protocol 'Service' as a type must be written 'any Service'") }, "Unexpected warnings \(warnings)")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func verifyModulesCompile_omitsGeneratedCodeWarning_whenAnotherModulesFixtureDrawsTheSameMessage() async throws {
+		// `Feature`'s fixture spells `Service` without `any`, and `App`'s generated code spells it as `Feature` does.
+		let featureFixture = directory.appendingPathComponent("Feature.swift")
+		try "public protocol Service {}\n\npublic func use(_ service: Service) {}\n".write(to: featureFixture, atomically: true, encoding: .utf8)
+		let appFixture = directory.appendingPathComponent("App.swift")
+		try "import Feature\n".write(to: appFixture, atomically: true, encoding: .utf8)
+		var filesToDelete = [URL]()
+		defer {
+			for fileToDelete in filesToDelete {
+				try? FileManager.default.removeItem(at: fileToDelete)
+			}
+		}
+
+		let compilation = try #require(try await verifyModulesCompile(
+			[
+				ModuleCompileSources(
+					moduleName: "Feature",
+					packageName: nil,
+					dependencyModuleNames: [],
+					inputSwiftFiles: [featureFixture],
+					generatedFiles: [:],
+					activeCompilationConditions: [],
+					mockConditionalCompilation: nil,
+				),
+				ModuleCompileSources(
+					moduleName: "App",
+					packageName: nil,
+					dependencyModuleNames: ["Feature"],
+					inputSwiftFiles: [appFixture],
+					generatedFiles: ["App+SafeDI.swift": "import Feature\n\nfunc generated(_ service: Service) {}\n"],
+					activeCompilationConditions: [],
+					mockConditionalCompilation: nil,
+				),
+			],
+			recordsIssues: false,
+			filesToDelete: &filesToDelete,
+		))
+
+		#expect(compilation.modules.map(\.moduleName) == ["Feature", "App"])
+		#expect(compilation.modules.map(\.generatedCodeWarnings) == [[], []])
+		#expect(compilation.modules.allSatisfy { $0.failure == nil })
+	}
+
 	// MARK: Tests – Running a process
 
 	@Test
