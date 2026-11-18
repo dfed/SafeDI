@@ -3,6 +3,7 @@
                              [--timeout SECONDS] [--compile-every-shape] [--base-build DIRECTORY] [--swiftc PATH]
                              [--summary FILE]
                              BASE_TOOL HEAD_TOOL BUILD DIRECTORY
+       compile-time-check.py --lines [--baseline FILE] [--write-baseline] [--summary FILE] TOOL DIRECTORY
        compile-time-check.py --self-test DIRECTORY
 
 Compares what two builds of `SafeDITool` generate for wide dependency graphs by what it costs to compile: the number
@@ -47,6 +48,15 @@ not passed.
 
 Exit status: 0 no shape at or over a limit; 1 one is, the head failed on one, the base's code did not compile, or
 nothing was compared; 2 usage, or DIRECTORY exists.
+
+--lines is the part every pull request runs ("Check Generate Time on Linux"): TOOL generates every shape, nothing is
+compiled, and each module's generated lines are compared with the number recorded for it in FILE (default
+`compile-time-baseline.txt` beside this script). Lines have no noise, so the limit is tight: it exits 1 when a module's
+lines are more than 5% over its baseline, printing every shape's lines beside its baseline with the percentage. It also
+exits 1 when they are more than 5% under, so that a gain is recorded and cannot be given back unnoticed, and when the
+file and the shapes do not name the same modules. A change that means to move a number runs it with `--write-baseline`,
+which rewrites FILE's numbers from TOOL, the tool of the commit under test, keeping the file's comments, and commits
+the file: the growth is then a line of the pull request's diff, with its reason in a comment above it.
 
 --self-test DIRECTORY runs the comparison with stand-in tools and a stand-in compiler and checks each verdict above.
 """
@@ -274,6 +284,89 @@ def compare(tools, builds, swiftc, directory, shapes, runs, limit, line_limit, o
     return rows, failures
 
 
+# MARK: Lines against a baseline
+
+LINES_TOLERANCE = 0.05
+
+
+def read_baseline(path):
+    """Returns ({(shape, module): lines}, {(shape, module): the comment lines above it}, the comment lines after the last entry)."""
+    counts, comments, pending = {}, {}, []
+    with open(path) as handle:
+        for line in handle.read().splitlines():
+            fields = line.split()
+            if not fields or fields[0].startswith("#"):
+                pending.append(line)
+            elif len(fields) == 3 and fields[2].isdigit() and (fields[0], fields[1]) not in counts:
+                counts[(fields[0], fields[1])] = int(fields[2])
+                comments[(fields[0], fields[1])] = pending
+                pending = []
+            else:
+                raise Failure(f"{path}: not `SHAPE MODULE LINES`, or a module named twice: {line!r}")
+    return counts, comments, pending
+
+
+def generated_lines(tool, directory):
+    """Returns {(shape, module): lines} for every module of every shape for which TOOL generates a hundred lines."""
+    counts = {}
+    for shape, (build_shape, _) in SHAPES.items():
+        modules = build_shape()
+        sources = f"{directory}/{shape}/sources"
+        for name, _, source in modules:
+            write(f"{sources}/{name}/Types.swift", source)
+        generate_time_check.generate(tool, modules, sources, f"{directory}/{shape}/generated")
+        for name, lines in line_counts(modules, f"{directory}/{shape}/generated").items():
+            if lines >= SMALLEST_MEASURED_LINES:
+                counts[(shape, name)] = lines
+    return counts
+
+
+def check_lines(tool, directory, baseline, write_baseline, summary):
+    counts = generated_lines(tool, directory)
+    if write_baseline:
+        _, comments, trailing = read_baseline(baseline) if os.path.exists(baseline) else ({}, {}, [])
+        text = []
+        if not comments:
+            # A file of comments alone is a heading.
+            text, trailing = trailing, []
+        for key, lines in counts.items():
+            text += comments.get(key, []) + [f"{key[0]} {key[1]} {lines}"]
+        with open(baseline, "w") as handle:
+            handle.write("\n".join(text + trailing) + "\n")
+        print(f"wrote {len(counts)} modules' lines to {baseline}")
+        return 0
+    recorded, _, _ = read_baseline(baseline)
+    rows, failures = [], []
+    for key in list(recorded) + [key for key in counts if key not in recorded]:
+        shape, name = key
+        if key not in counts:
+            failures.append(f"{shape}, module {name}: the baseline records {recorded[key]} lines, and the tool generates under {SMALLEST_MEASURED_LINES} or the shape has no such module")
+            rows.append(f"| {shape} | {name} | {recorded[key]} | | | **not generated** |")
+        elif key not in recorded:
+            failures.append(f"{shape}, module {name}: the tool generates {counts[key]} lines, and the baseline records none")
+            rows.append(f"| {shape} | {name} | | {counts[key]} | | **not in the baseline** |")
+        else:
+            change = counts[key] / recorded[key] - 1
+            verdict = "within 5%"
+            if change > LINES_TOLERANCE:
+                verdict = "**over the baseline**"
+                failures.append(f"{shape}, module {name}: {counts[key]} lines generated against a baseline of {recorded[key]} ({change:+.1%})")
+            elif change < -LINES_TOLERANCE:
+                verdict = "**under the baseline: record the gain**"
+                failures.append(f"{shape}, module {name}: {counts[key]} lines generated against a baseline of {recorded[key]} ({change:+.1%}); record the gain")
+            rows.append(f"| {shape} | {name} | {recorded[key]} | {counts[key]} | {change:+.1%} | {verdict} |")
+    lines = ["Lines of generated code for each wide shape, against the baseline (a module fails more than 5% from it).", "",
+             "| Shape | Module | Baseline | Generated | Change | Verdict |", "|---|---|---|---|---|---|"] + rows + [""] + [f"- {failure}" for failure in failures]
+    if failures:
+        lines += ["", f"If the change is meant, rewrite the baseline with this commit's tool (`compile-time-check.py --lines --write-baseline TOOL DIRECTORY`), say why in a comment above the number, and commit {os.path.basename(baseline)}."]
+    text = "\n".join(lines) + "\n"
+    print(text)
+    if summary:
+        with open(summary, "a") as handle:
+            handle.write(text)
+    return 1 if failures else 0
+
+
 def report(rows, failures, runs, limit, line_limit, summary):
     lines = [f"Compile cost of generated code, head against base: lines generated (a shape fails at {line_limit:g} times the base's), and `swiftc`'s time over each module with its generated file, median of {runs} alternating runs (a shape fails at {limit:g} times the base's CPU time).", "",
              "| Shape | Module | Measure | Base (wall / CPU) | Head (wall / CPU) | Head / base | Verdict |", "|---|---|---|---|---|---|---|"] + rows
@@ -364,6 +457,28 @@ def self_test(directory):
     slow = tool("slow", 20000)
     expect("head-stopped", same, slow, 2, [within, over, within, over], timeout=1)
     expect("both-stopped", slow, tool("slow-too", 20000), 0, [within, within, within, "not compared"], timeout=1)
+    # Lines against a baseline: written by one tool, read back, then compared with tools 4% and 6% away each way.
+    baseline = f"{directory}/baseline.txt"
+    write(baseline, "# kept: heading\n")
+    check_lines(tool("heading", 100), f"{directory}/lines-heading", baseline, True, None)
+    with open(baseline) as handle:
+        if not handle.read().startswith("# kept: heading\nP1-40 Screens 100\n"):
+            failures.append("lines: a baseline of comments alone did not keep them as its heading")
+    write(baseline, "# kept: heading\n# kept: above Feat\nP1-40 Feat 1\n# kept: last\n")
+    recorded = tool("recorded", 1000, lines=200)
+    if check_lines(recorded, f"{directory}/lines-write", baseline, True, None) != 0:
+        failures.append("lines: writing the baseline failed")
+    with open(baseline) as handle:
+        written = handle.read()
+    if "# kept: heading\n# kept: above Feat\nP1-40 Feat 1000\n" not in written or not written.endswith("# kept: last\n") or "P2-200 Feat 1000" not in written or " Core " in written:
+        failures.append(f"lines: the baseline written is {written!r}")
+    for name, feat, expected in (("same", 1000, 0), ("a-little-over", 1040, 0), ("over", 1060, 1), ("a-little-under", 960, 0), ("under", 940, 1)):
+        if check_lines(tool(f"lines-{name}", feat, lines=200), f"{directory}/lines-{name}", baseline, False, None) != expected:
+            failures.append(f"lines: {name} did not exit {expected}")
+    # A module the baseline lacks, and one the tool no longer generates a hundred lines for.
+    write(baseline, "\n".join(line for line in written.splitlines() if line != "N1-40 App 200") + "\nN1-40 Gone 300\n")
+    if check_lines(recorded, f"{directory}/lines-names", baseline, False, None) != 1:
+        failures.append("lines: a baseline naming other modules than the shapes did not fail")
     for name, (shape, _) in SHAPES.items():
         modules = shape()
         seen = set()
@@ -379,14 +494,21 @@ def self_test(directory):
 
 def main(arguments):
     options = {"--runs": "3", "--limit": "1.5", "--line-limit": "1.25", "--shapes": ",".join(SHAPES), "--optimizations": "Onone,O",
-               "--timeout": "600", "--base-build": None, "--swiftc": "swiftc", "--summary": None}
+               "--timeout": "600", "--base-build": None, "--swiftc": "swiftc", "--summary": None,
+               "--baseline": os.path.join(os.path.dirname(os.path.abspath(__file__)), "compile-time-baseline.txt")}
     positional = []
     self_testing = False
     compile_every_shape = False
+    lines_only = False
+    write_baseline = False
     while arguments:
         argument = arguments.pop(0)
         if argument == "--self-test":
             self_testing = True
+        elif argument == "--lines":
+            lines_only = True
+        elif argument == "--write-baseline":
+            write_baseline = True
         elif argument == "--compile-every-shape":
             compile_every_shape = True
         elif argument in options and arguments:
@@ -396,7 +518,7 @@ def main(arguments):
     shapes = options["--shapes"].split(",")
     unknown = [shape for shape in shapes if shape not in SHAPES]
     runs = int(options["--runs"])
-    if len(positional) != (1 if self_testing else 4) or unknown or runs < 1:
+    if len(positional) != (1 if self_testing else 2 if lines_only else 4) or (write_baseline and not lines_only) or unknown or runs < 1:
         print(__doc__.split("\n\n")[0] + (f"\nunknown shape(s): {', '.join(unknown)}; the shapes are {', '.join(SHAPES)}" if unknown else ""), file=sys.stderr)
         return 2
     directory = os.path.abspath(positional[-1])
@@ -405,6 +527,12 @@ def main(arguments):
         return 2
     if self_testing:
         return self_test(directory)
+    elif lines_only:
+        try:
+            return check_lines(os.path.abspath(positional[0]), directory, options["--baseline"], write_baseline, options["--summary"])
+        except Failure as failure:
+            print(failure, file=sys.stderr)
+            return 2
     else:
         build = os.path.abspath(positional[2])
         builds = {"base": os.path.abspath(options["--base-build"]) if options["--base-build"] else build, "head": build}
