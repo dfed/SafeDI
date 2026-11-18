@@ -15566,7 +15566,9 @@ enum GraphFuzzerOracle {
 	/// fails in one module is left out of the modules after it. A failing graph is then compiled without its
 	/// generated code, module by module, to tell a generator defect from a fixture the fuzzer got wrong. A graph that
 	/// compiles fails when a compile it passed reports a warning in its generated code – the seam callers among it –
-	/// that its fixture does not draw, as `verifyGeneratedCodeCompiles` fails a test (`warningsOnlyGeneratedCodeDraws`).
+	/// that its fixture does not draw in any of its modules, as `verifyGeneratedCodeCompiles` fails a test
+	/// (`warningsOnlyGeneratedCodeDraws`, `warnings(_:excludingMessagesIn:)`). Every compile enables `ExistentialAny`
+	/// (`existentialAnyFeature`), so generated code that drops an `any` its fixture spells fails the graph.
 	/// Each graph's hand-written calls `C` of its seams' readable initializers
 	/// (`GraphFuzzerBuilderSurface.addingBuilderCalls(to:seamTypeAccess:modules:)`) compile with its generated code; a graph
 	/// whose every error is in them is compiled again without them, and fails as `builderCallDoesNotCompile` only where its
@@ -15649,6 +15651,7 @@ enum GraphFuzzerOracle {
 		var combinedFailures = [UInt64: UnitDiagnostics]()
 		var builderCallFailures = [UInt64: UnitDiagnostics]()
 		var generatedCodeWarnings = [UInt64: [String]]()
+		var inputWarningMessages = [UInt64: Set<String>]()
 		for (configurationIndex, modulesWithoutPackage) in packageConfigurations.enumerated() {
 			let combinedUnitsByModule = combinedUnitsByConfigurationAndModule[modulesWithoutPackage] ?? [:]
 			var moduleOutputDirectories = [GraphFuzzerModule: URL]()
@@ -15672,7 +15675,13 @@ enum GraphFuzzerOracle {
 				combinedFailures.merge(moduleCompilation.failures) { first, _ in first }
 				builderCallFailures.merge(moduleCompilation.builderCallFailures) { first, _ in first }
 				generatedCodeWarnings.merge(moduleCompilation.generatedCodeWarnings) { $0 + $1 }
+				inputWarningMessages.merge(moduleCompilation.inputWarningMessages) { $0.union($1) }
 			}
+		}
+		// A warning a graph's fixture draws in any of its modules is the fixture's wherever its generated code draws it too.
+		for (seed, warningLines) in generatedCodeWarnings {
+			let remainingWarnings = warnings(warningLines, excludingMessagesIn: inputWarningMessages[seed] ?? [])
+			generatedCodeWarnings[seed] = remainingWarnings.isEmpty ? nil : remainingWarnings
 		}
 		// Each failing graph's fixture alone, module by module. These units hold no generated code, so they record no
 		// warnings.
@@ -15780,10 +15789,14 @@ enum GraphFuzzerOracle {
 		/// Why each unit's hand-written calls `C` fail to compile, where nothing else of the unit reports an error.
 		var builderCallFailures = [UInt64: UnitDiagnostics]()
 		var generatedCodeWarnings = [UInt64: [String]]()
+		/// The messages of the warnings each unit's fixture draws, which its graph's generated code in another module may
+		/// draw too (`warnings(_:excludingMessagesIn:)`).
+		var inputWarningMessages = [UInt64: Set<String>]()
 
 		/// Records the warnings `unit`'s generated code draws in `compilerOutput`, the output of a compile that
-		/// `unit` passed, which reports every warning in `unit`'s files.
+		/// `unit` passed, which reports every warning in `unit`'s files, and those its fixture draws.
 		mutating func recordGeneratedCodeWarnings(of unit: CompilationUnit, inCompilerOutput compilerOutput: String) throws {
+			inputWarningMessages[unit.seed, default: []].formUnion(warningMessagesInputsDraw(inCompilerOutput: compilerOutput, inputFiles: unit.inputFiles))
 			let warnings = try warningsOnlyGeneratedCodeDraws(
 				inCompilerOutput: compilerOutput,
 				generatedFiles: unit.generatedFiles,
@@ -15817,6 +15830,7 @@ enum GraphFuzzerOracle {
 				emitsModule: emitsModule,
 				moduleSearchPaths: moduleSearchPaths,
 				definesDebug: definesDebug,
+				upcomingFeatures: [existentialAnyFeature],
 			)
 		}
 		var remainingUnits = units

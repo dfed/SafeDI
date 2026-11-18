@@ -1133,24 +1133,38 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
-	/// The receiver as an `@Instantiable` type.
+	/// The receiver as an `@Instantiable` type: the type a scope builds, which names it in maps and comparisons. An
+	/// existential loses its `any`, so never spell it as a type in generated code; spell `asInstantiatedTypeSpelledAsDeclared`.
 	var asInstantiatedType: TypeDescription {
+		instantiatedType(keepingAny: false)
+	}
+
+	/// `asInstantiatedType` as code that declares a value of it spells it: an existential keeps its `any`, and an opaque
+	/// parameter's `some P`, which a stored value or a closure's return type cannot spell, is spelled `any P`, which the
+	/// parameter accepts. So the code compiles in a module that enables the `ExistentialAny` upcoming feature.
+	var asInstantiatedTypeSpelledAsDeclared: TypeDescription {
+		instantiatedType(keepingAny: true)
+	}
+
+	private func instantiatedType(keepingAny: Bool) -> TypeDescription {
 		switch self {
 		case let .simple(name, generics):
 			if let builtGeneric = Self.builtGeneric(inGenerics: generics, ofTypeNamed: name) {
 				if builtGeneric.mayWrapInstantiatedType {
-					generics[builtGeneric.index].asInstantiatedType
+					generics[builtGeneric.index].instantiatedType(keepingAny: keepingAny)
 				} else {
 					generics[builtGeneric.index]
 				}
 			} else {
 				self
 			}
-		case let .any(typeDescription),
-		     let .implicitlyUnwrappedOptional(typeDescription),
-		     let .optional(typeDescription),
-		     let .some(typeDescription):
-			typeDescription.asInstantiatedType
+		case let .any(typeDescription):
+			keepingAny ? self : typeDescription.asInstantiatedType
+		case let .some(typeDescription):
+			keepingAny ? .any(typeDescription) : typeDescription.asInstantiatedType
+		case let .implicitlyUnwrappedOptional(typeDescription),
+		     let .optional(typeDescription):
+			typeDescription.instantiatedType(keepingAny: keepingAny)
 		case .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown, .variadic, .void:
 			self
 		}
