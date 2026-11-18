@@ -188,6 +188,95 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		}
 	}
 
+	// MARK: An instantiator a place's fill reads, whose own place's fill reads what the seam binds
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenOneTypeOfTheFillingModuleInstantiatesTwoHolesWhoseImplementationsReceiveEachOtherAsTheErrorSays() async throws {
+		// The remedy of `SafeDIToolSeamReceivedBuilderCycleTests`' error where the implementations of two holes receive each
+		// other's instantiators: `Screen` instantiates `pair`, which `App`'s `LivePair` fills, and whose tree builds both.
+		try await expectRemedyBuildsInlineValues(
+			Self.screenModules(
+				screen: ["@Instantiated public let pair: any Pair"],
+				app: [
+					SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LivePair", fulfilling: "Pair", declarations: [Self.detailBuilder, Self.settingsBuilder]),
+					Self.defaultDetail(declarations: [Self.receivedSettingsBuilder]),
+					Self.defaultSettings(declarations: [Self.receivedDetailBuilder]),
+				],
+				root: ["@Instantiated public let screen: Screen"],
+			),
+			probe: DifferentialValueProbe(
+				name: "the instantiator each implementation reads",
+				expression: """
+				{ () -> [Bool] in
+				    let pair = Root().screen.pair as? LivePair
+				    let detail = pair?.detailBuilder.instantiate() as? DefaultDetail
+				    let settings = detail?.settingsBuilder.instantiate() as? DefaultSettings
+				    return [detail != nil, settings?.detailBuilder.instantiate() is DefaultDetail]
+				}()
+				""",
+			),
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingToInstantiateAboveTheSeam_whenFillReceivesHoleBuiltAfterItWhoseImplementationReceivesNothing() async {
+		// `DefaultSettings`, which fills `settingsBuilder`, receives nothing, so a type above `Screen` can build
+		// `settingsBuilder`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultDetail.swift"]):9:5: error: `DefaultDetail` receives `settingsBuilder: ErasedInstantiator<(), any Settings>`, which `Screen`’s tree builds only after it calls the builder for `Screen`’s `detailBuilder: ErasedInstantiator<(), any Detail>` (`detailBuilder` of `defaultDetail_DetailBuilder`), so SafeDI does not hand it to that builder. Instantiate `settingsBuilder` on a type above `Screen`, and receive it on `Screen` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `DefaultDetail` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Screen.swift"]):9:5: note: `Screen` declares `settingsBuilder: ErasedInstantiator<(), any Settings>` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.screenModules(
+					screen: [Self.detailBuilder, Self.settingsBuilder],
+					app: [Self.defaultDetail(declarations: [Self.receivedSettingsBuilder]), Self.defaultSettings(declarations: [])],
+					root: ["@Instantiated public let screen: Screen"],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenTypeAboveTheSeamInstantiatesHoleWhoseImplementationReceivesNothingAsTheErrorSays() async throws {
+		try await expectRemedyBuildsInlineValues(
+			Self.screenModules(
+				screen: [Self.detailBuilder, Self.receivedSettingsBuilder],
+				app: [Self.defaultDetail(declarations: [Self.receivedSettingsBuilder]), Self.defaultSettings(declarations: [])],
+				root: [Self.settingsBuilder, "@Instantiated public let screen: Screen"],
+			),
+			probe: DifferentialValueProbe(
+				name: "the settings instantiator DefaultDetail reads",
+				expression: "{ () -> [Bool] in [(Root().screen.detailBuilder.instantiate() as? DefaultDetail)?.settingsBuilder.instantiate() is DefaultSettings] }()",
+			),
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenTypeAboveTheSeamInstantiatesHoleWhoseImplementationReceivesItAsTheErrorSays() async throws {
+		// The remedy of `SafeDIToolSeamReceivedBuilderCycleTests`' error where a hole's implementation receives the hole's own
+		// instantiator: `Root` instantiates `detailBuilder`, which `Screen` receives. The implementation reads the
+		// instantiator that builds it, which the type above the seam then holds.
+		try await expectRemedyBuildsInlineValues(
+			Self.screenModules(
+				screen: [Self.receivedDetailBuilder],
+				app: [Self.defaultDetail(declarations: [Self.receivedDetailBuilder])],
+				root: [Self.detailBuilder, "@Instantiated public let screen: Screen"],
+			),
+			probe: DifferentialValueProbe(
+				name: "the detail instantiator DefaultDetail reads",
+				expression: "{ () -> [Bool] in [(Root().screen.detailBuilder.instantiate() as? DefaultDetail)?.detailBuilder.instantiate() is DefaultDetail] }()",
+			),
+		)
+	}
+
 	// MARK: A value declared on a cycle
 
 	@Test
@@ -242,18 +331,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		// The `A` `Hub` builds has no `count` above it, and the one `B` builds again receives `B`'s, as `LiveApi` does
 		// inline, the remedy the error offers where `LiveApi` receives `count` only if available.
 		try await expectRemedyBuildsInlineValues(
-			[
-				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
-					"public protocol Api {}",
-					seamFixtureType(named: "A", declarations: ["@Forwarded public let name: String", "@Received(onlyIfAvailable: true) public let count: Int?", "@Instantiated public let api: any Api", "@Instantiated public let bBuilder: Instantiator<B>"]),
-					seamFixtureType(named: "B", declarations: ["@Forwarded public let count: Int", "@Instantiated public let aBuilder: Instantiator<A>"]),
-					seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let aBuilder: Instantiator<A>"]),
-				]),
-				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
-					"import Feature\n\n" + SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let name: String?", "@Received(onlyIfAvailable: true) public let count: Int?"]),
-					"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"]),
-				], dependencies: ["Feature"]),
-			],
+			Self.hubCycleModules(aDeclarations: ["@Received(onlyIfAvailable: true) public let count: Int?"]),
 			probe: DifferentialValueProbe(
 				name: "A's api at each level",
 				expression: """
@@ -273,20 +351,7 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		// `C` builds `B` again, so `B`'s function takes `count`, which `X` passes it first and `C` from then on; the error, of
 		// `count` as a parameter of `B`'s function, offers the receive on `A`, the type `B` builds again.
 		try await expectRemedyBuildsInlineValues(
-			[
-				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
-					"public protocol Api {}",
-					seamFixtureType(named: "A", declarations: ["@Received(onlyIfAvailable: true) public let count: Int?", "@Instantiated public let api: any Api", "@Instantiated public let xBuilder: Instantiator<X>"]),
-					seamFixtureType(named: "X", declarations: ["@Forwarded public let count: Int", "@Instantiated public let bBuilder: Instantiator<B>"]),
-					seamFixtureType(named: "B", declarations: ["@Received(onlyIfAvailable: true) public let count: Int?", "@Instantiated public let cBuilder: Instantiator<C>", "@Instantiated public let aBuilder: Instantiator<A>"]),
-					seamFixtureType(named: "C", declarations: ["@Forwarded public let count: Int", "@Instantiated public let bBuilder: Instantiator<B>"]),
-					seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let aBuilder: Instantiator<A>"]),
-				]),
-				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
-					"import Feature\n\n" + SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let count: Int?"]),
-					"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"]),
-				], dependencies: ["Feature"]),
-			],
+			Self.nestedCycleModules(aDeclarations: ["@Received(onlyIfAvailable: true) public let count: Int?"]),
 			probe: DifferentialValueProbe(
 				name: "A's api at each level",
 				expression: """
@@ -299,6 +364,55 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 				}()
 				""",
 			),
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingReceiveOnlyIfAvailableOnTheTypeBuiltAgain_whenFillReceivesValueTheCycleDeclaresOnlyIfAvailable() async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):11:5: error: `LiveApi` receives `count: Int?`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`’s `count`, but SafeDI hands the builder for `A`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received(onlyIfAvailable: true) let count: Int?` on `A`, so each `A` receives the `count` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` declares `count: Int` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.hubCycleModules(aDeclarations: []), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingReceiveOnTheTypeBuiltAgain_whenFillReceivesValueANestedCyclePasses() async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B`’s builder function takes as a parameter between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again, because a cycle inside `B`’s tree passes it (`C` declares `count: Int`). Inline, the `A` built again receives the `count` that parameter is passed, but SafeDI hands the builder for `A`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received(onlyIfAvailable: true) let count: Int?` on `A`, so each `A` receives the `count` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["C.swift"]):8:5: note: `C` declares `count: Int` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.nestedCycleModules(aDeclarations: []), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingReceiveOnTheConcreteTypeBuiltAgain_whenCycleClosesOnErasedInstantiator() async {
+		// The cycle closes on an instantiator erased to `any StepScreen`: the receive goes on `Step`, the type it builds.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: ErasedInstantiator<(), any StepScreen>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but SafeDI hands the builder for `Step`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let cache: Cache` on `Step`, so each `Step` receives the `cache` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `Screen` declares `cache: Cache` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.screenCycleModules(stepBuilder: Self.erasedStepBuilder, stepDeclarations: ["@Instantiated public let api: any Api"]), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenConcreteTypeBuiltAgainByErasedInstantiatorReceivesValueAsTheErrorSays() async throws {
+		try await expectRemedyBuildsInlineValues(
+			Self.screenCycleModules(stepBuilder: Self.erasedStepBuilder, stepDeclarations: ["@Received public let cache: Cache", "@Instantiated public let api: any Api"]),
+			probe: Self.liveCacheAtEachLevel(api: "api", castingStepTo: " as! Step"),
 		)
 	}
 
@@ -374,6 +488,77 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingForwardingIntoInstantiator_whenValueBoundOutsideSendableLazyWrapperReceivesForwardedValue() async {
+		// `U` receives the `n` `Mid` forwards, so no type above `Feature` can build it, and a lazy wrapper is passed no
+		// forwarded value: `K` takes `u` forwarded, built by an instantiator.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `u: U`, which `Mid` declares outside the `@Sendable` function that builds `k: SendableLazilyInstantiated<K>`, and SafeDI hands the builder for `K`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Forwarded let u: U` on `K`, and `k` as `SendableInstantiator<K>`, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Mid.swift"]):10:5: note: `Mid` declares `u: U` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.midModules(
+					k: ["@Instantiated public let api: any Api"],
+					mid: ["@Forwarded public let n: Int", "@Instantiated public let u: U", "@Instantiated public let k: SendableLazilyInstantiated<K>"],
+					live: ["@Received public let u: U"],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingForwarding_whenValueBoundOutsideSendableFunctionIsHoleWhoseImplementationReceivesForwardedValue() async {
+		// `usage` is a hole, which `LiveUsage` fills and which receives the `n` `Mid` forwards, so no type above `Feature` can
+		// build it: `K` takes it forwarded instead.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `usage: any Usage`, which `Mid` declares outside the `@Sendable` function that builds `k: SendableInstantiator<K>`, and SafeDI hands the builder for `K`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Forwarded let usage: any Usage` on `K`, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Mid.swift"]):10:5: note: `Mid` declares `usage: any Usage` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.midModules(
+					k: ["@Instantiated public let api: any Api"],
+					mid: ["@Forwarded public let n: Int", "@Instantiated public let usage: any Usage", "@Instantiated public let k: SendableInstantiator<K>"],
+					live: ["@Received public let usage: any Usage"],
+					app: [SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveUsage", fulfilling: "Usage", declarations: ["@Received public let n: Int"])],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingOnlyToFulfillThePlace_whenValueIsBoundOutsideBuilderFunctionACycleMakesSendable() async {
+		// `X`, which a `SendableInstantiator` builds, instantiates `K` again, so `K`'s builder function is `@Sendable`. `K` is
+		// built by value: forwarding `n` into it would need an instantiator of it, which `X` cannot build by value.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `n: Int`, which `Mid` forwards outside the `@Sendable` function that builds `k: K`, and SafeDI hands the builder for `K`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Mid.swift"]):8:5: note: `Mid` declares `n: Int` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.midModules(
+					k: ["@Instantiated public let api: any Api", "@Instantiated public let xBuilder: SendableInstantiator<X>"],
+					mid: ["@Forwarded public let n: Int", "@Instantiated public let k: K"],
+					live: ["@Received public let n: Int"],
+					feature: [seamFixtureType(named: "X", declarations: ["@Instantiated public let k: K"], conformances: ", Sendable")],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -429,17 +614,17 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		]
 	}
 
-	/// `Feature`, whose seam `Home` instantiates `Screen`, which instantiates `cache` and then `Step`, with
-	/// `stepDeclarations` and an instantiator of `Screen`, and `Panel`, which instantiates `api: any Api`; and `App`, whose
-	/// `Live` fills `Api` and receives `cache`.
-	private static func screenCycleModules(stepDeclarations: [String]) -> [ModuleFixture] {
+	/// `Feature`, whose seam `Home` instantiates `Screen`, which instantiates `cache` and then `stepBuilder`, an instantiator
+	/// of `Step`, which fulfills `StepScreen`, with `stepDeclarations` and an instantiator of `Screen`, and `Panel`, which
+	/// instantiates `api: any Api`; and `App`, whose `Live` fills `Api` and receives `cache`.
+	private static func screenCycleModules(stepBuilder: String = "@Instantiated public let stepBuilder: Instantiator<Step>", stepDeclarations: [String]) -> [ModuleFixture] {
 		[
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
-				"public protocol Api {}",
+				"public protocol Api {}\npublic protocol StepScreen {}",
 				seamFixtureType(named: "Cache", isFinalClass: true, declarations: []),
 				seamFixtureType(named: "Home", isSeam: true, declarations: ["@Instantiated public let screen: Screen"]),
-				seamFixtureType(named: "Screen", declarations: ["@Instantiated public let cache: Cache", "@Instantiated public let stepBuilder: Instantiator<Step>"]),
-				seamFixtureType(named: "Step", declarations: stepDeclarations + ["@Instantiated public let screenBuilder: Instantiator<Screen>"]),
+				seamFixtureType(named: "Screen", declarations: ["@Instantiated public let cache: Cache", stepBuilder]),
+				seamFixtureType(named: "Step", declarations: stepDeclarations + ["@Instantiated public let screenBuilder: Instantiator<Screen>"], conformances: ", StepScreen"),
 				seamFixtureType(named: "Panel", declarations: ["@Instantiated public let api: any Api"]),
 			]),
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
@@ -449,37 +634,110 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		]
 	}
 
+	/// An instantiator of `Step` erased to `any StepScreen`, for `screenCycleModules`.
+	private static let erasedStepBuilder = #"@Instantiated(fulfilledByType: "Step") public let stepBuilder: ErasedInstantiator<(), any StepScreen>"#
+
 	/// Whether the `Live` beneath the `Step` that `Home`'s `Screen` builds, at `api` from the step, reads that `Screen`'s
-	/// `cache`, and whether the one beneath the `Step` that `Screen` builds again reads that `Screen`'s.
-	private static func liveCacheAtEachLevel(api: String) -> DifferentialValueProbe {
+	/// `cache`, and whether the one beneath the `Step` that `Screen` builds again reads that `Screen`'s. Each built step is
+	/// cast as `castingStepTo` says.
+	private static func liveCacheAtEachLevel(api: String, castingStepTo cast: String = "") -> DifferentialValueProbe {
 		DifferentialValueProbe(
 			name: "Live's cache at each level",
 			expression: """
 			{ () -> [Bool] in
 			    let screen = Root().home.screen
-			    let step = screen.stepBuilder.instantiate()
+			    let step = screen.stepBuilder.instantiate()\(cast)
 			    let screenAgain = step.screenBuilder.instantiate()
-			    let stepAgain = screenAgain.stepBuilder.instantiate()
+			    let stepAgain = screenAgain.stepBuilder.instantiate()\(cast)
 			    return [(step.\(api) as? Live)?.cache === screen.cache, (stepAgain.\(api) as? Live)?.cache === screenAgain.cache]
 			}()
 			""",
 		)
 	}
 
-	/// `Feature`, whose seam instantiates an instantiator of `Mid`, with `mid`, and whose `K`, with `k`, and `U`, which
-	/// receives `n`, are `Sendable`; and `App`, whose `Live` fills `Api`, a `Sendable` protocol, with `live`.
-	private static func midModules(k: [String], mid: [String], live: [String]) -> [ModuleFixture] {
+	/// `Feature`, with `feature`, whose seam instantiates an instantiator of `Mid`, with `mid`, and whose `K`, with `k`, and
+	/// `U`, which receives `n`, are `Sendable`, as are its protocols `Api` and `Usage`; and `App`, with `app`, whose `Live`
+	/// fills `Api` with `live`.
+	private static func midModules(k: [String], mid: [String], live: [String], feature: [String] = [], app: [String] = []) -> [ModuleFixture] {
 		[
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
-				"public protocol Api: Sendable {}",
+				"public protocol Api: Sendable {}\npublic protocol Usage: Sendable {}",
 				seamFixtureType(named: "U", declarations: ["@Received public let n: Int"], conformances: ", Sendable"),
 				seamFixtureType(named: "K", declarations: k, conformances: ", Sendable"),
 				seamFixtureType(named: "Mid", declarations: mid),
 				seamFixtureType(named: "Feature", isSeam: true, declarations: ["@Instantiated public let midBuilder: Instantiator<Mid>"]),
+			] + feature),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ([
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "Live", fulfilling: "Api", declarations: live),
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let feature: Feature"]),
+			] + app).map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		]
+	}
+
+	/// `Feature`, which declares `Detail`, `Settings` and `Pair`, and whose seam `Screen` holds `screen`; and `App`, which
+	/// declares `app`, and whose root holds `root`.
+	private static func screenModules(screen: [String], app: [String], root: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Detail {}\npublic protocol Settings {}\npublic protocol Pair {}",
+				seamFixtureType(named: "Screen", isSeam: true, declarations: screen),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: (app + [
+				seamFixtureType(named: "Root", isRoot: true, declarations: root),
+			]).map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		]
+	}
+
+	private static let detailBuilder = #"@Instantiated(fulfilledByType: "DefaultDetail") public let detailBuilder: ErasedInstantiator<(), any Detail>"#
+	private static let settingsBuilder = #"@Instantiated(fulfilledByType: "DefaultSettings") public let settingsBuilder: ErasedInstantiator<(), any Settings>"#
+	private static let receivedDetailBuilder = "@Received public let detailBuilder: ErasedInstantiator<(), any Detail>"
+	private static let receivedSettingsBuilder = "@Received public let settingsBuilder: ErasedInstantiator<(), any Settings>"
+
+	/// `App`'s `DefaultDetail`, which fulfills `Detail`, with `declarations`.
+	private static func defaultDetail(declarations: [String]) -> String {
+		seamFixtureType(named: "DefaultDetail", declarations: declarations, conformances: ", Detail")
+	}
+
+	/// `App`'s `DefaultSettings`, which fulfills `Settings`, with `declarations`.
+	private static func defaultSettings(declarations: [String]) -> String {
+		seamFixtureType(named: "DefaultSettings", declarations: declarations, conformances: ", Settings")
+	}
+
+	/// `Feature`, whose seam `Hub` instantiates an instantiator of `A`, with `aDeclarations`, which forwards `name` and
+	/// instantiates `api: any Api` and an instantiator of `B`, which forwards `count` and instantiates `A` again; and `App`,
+	/// whose `LiveApi` fills `Api` and receives `name` and `count` only if available.
+	private static func hubCycleModules(aDeclarations: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api {}",
+				seamFixtureType(named: "A", declarations: ["@Forwarded public let name: String"] + aDeclarations + ["@Instantiated public let api: any Api", "@Instantiated public let bBuilder: Instantiator<B>"]),
+				seamFixtureType(named: "B", declarations: ["@Forwarded public let count: Int", "@Instantiated public let aBuilder: Instantiator<A>"]),
+				seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let aBuilder: Instantiator<A>"]),
 			]),
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
-				"import Feature\n\n" + SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "Live", fulfilling: "Api", declarations: live),
-				"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let feature: Feature"]),
+				"import Feature\n\n" + SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let name: String?", "@Received(onlyIfAvailable: true) public let count: Int?"]),
+				"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"]),
+			], dependencies: ["Feature"]),
+		]
+	}
+
+	/// `Feature`, whose seam `Hub` instantiates an instantiator of `A`, with `aDeclarations`, which instantiates
+	/// `api: any Api` and an instantiator of `X`, which forwards `count` and instantiates an instantiator of `B`, which
+	/// instantiates one of `C`, which forwards `count` and builds `B` again, and one of `A` again; and `App`, whose
+	/// `LiveApi` fills `Api` and receives `count` only if available.
+	private static func nestedCycleModules(aDeclarations: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api {}",
+				seamFixtureType(named: "A", declarations: aDeclarations + ["@Instantiated public let api: any Api", "@Instantiated public let xBuilder: Instantiator<X>"]),
+				seamFixtureType(named: "X", declarations: ["@Forwarded public let count: Int", "@Instantiated public let bBuilder: Instantiator<B>"]),
+				seamFixtureType(named: "B", declarations: ["@Received(onlyIfAvailable: true) public let count: Int?", "@Instantiated public let cBuilder: Instantiator<C>", "@Instantiated public let aBuilder: Instantiator<A>"]),
+				seamFixtureType(named: "C", declarations: ["@Forwarded public let count: Int", "@Instantiated public let bBuilder: Instantiator<B>"]),
+				seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let aBuilder: Instantiator<A>"]),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Feature\n\n" + SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let count: Int?"]),
+				"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"]),
 			], dependencies: ["Feature"]),
 		]
 	}

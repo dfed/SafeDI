@@ -970,6 +970,61 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTwinsErrorOfferingOnlyToFulfillThePlace_whenFillInsideSendableFunctionReadsValueNoTypeAboveCalledMockCanBuild() async {
+		// As `…whenFillInsideSendableFunctionReadsValueCalledMockBindsOutsideIt`, but `Tag` receives the `key` `Outer`
+		// instantiates, so no type above `Outer` can build it, and the `@Sendable` function is `Outer`'s fill of `Inner`'s
+		// `service`, whose fulfiller `DefaultService` no forwarded value reaches: `Inner`, in `Feature`, declares `service`.
+		let diagnostics = { (fixtures: [String: FixturePaths]) in
+			"""
+			\(fixtures["App"]!["LiveGadget.swift"]):10:5: error: `LiveGadget` receives `tag: Tag`, which `Outer` declares outside the `@Sendable` function that builds `service: any Service`, and SafeDI hands the builder for `DefaultService`’s `gadget: any Gadget` (`gadget` of `gadgetSendableBuilder`) only what that function binds. Declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["Outer.swift"]):12:5: note: `Outer` declares `tag: Tag` here.
+			"""
+		}
+		await expectTwinsError(
+			feature: Self.inner(screen: ["@Forwarded public let id: Int"], innerScreenBuilder: "SendableInstantiator<Screen>", conformances: ", Sendable"),
+			middle: [
+				seamFixtureType(named: "Key", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+				seamFixtureType(named: "Tag", isFinalClass: true, declarations: ["@Received public let key: Key"], conformances: ", Sendable"),
+				Self.fulfillingType(named: "DefaultService", fulfilling: "Service", declarations: ["@Instantiated public let gadget: any Gadget"], conformances: ", Sendable"),
+				Self.publicMockType(named: "Outer", declarations: ["@Instantiated public let key: Key", "@Instantiated public let tag: Tag", "@Instantiated public let inner: Inner"], conformances: ", Sendable"),
+			],
+			app: [
+				Self.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received public let tag: Tag"], conformances: ", Sendable"),
+				Self.mockedRoot(declarations: ["@Instantiated public let outer: Outer"]),
+			],
+			diagnostics: diagnostics,
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTwinsErrorOfferingOnlyToFulfillThePlace_whenFillInsideSendableFunctionReadsValueTypeInCalledMocksTreeForwards() async {
+		// As above, but `Holder`, which `Outer` instantiates, forwards `tag`: forwarding it on into `DefaultService` would
+		// change the type of `Inner`'s `service`, which `Feature` declares.
+		let diagnostics = { (fixtures: [String: FixturePaths]) in
+			"""
+			\(fixtures["App"]!["LiveGadget.swift"]):10:5: error: `LiveGadget` receives `tag: Tag`, which `Holder` forwards outside the `@Sendable` function that builds `service: any Service`, and SafeDI hands the builder for `DefaultService`’s `gadget: any Gadget` (`gadget` of `gadgetSendableBuilder`) only what that function binds. Declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["Holder.swift"]):10:5: note: `Holder` declares `tag: Tag` here.
+			"""
+		}
+		await expectTwinsError(
+			feature: Self.inner(screen: ["@Forwarded public let id: Int"], innerScreenBuilder: "SendableInstantiator<Screen>", conformances: ", Sendable"),
+			middle: [
+				seamFixtureType(named: "Tag", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+				Self.fulfillingType(named: "DefaultService", fulfilling: "Service", declarations: ["@Instantiated public let gadget: any Gadget"], conformances: ", Sendable"),
+				seamFixtureType(named: "Holder", declarations: ["@Forwarded public let tag: Tag", "@Instantiated public let inner: Inner"], conformances: ", Sendable"),
+				Self.publicMockType(named: "Outer", declarations: ["@Instantiated public let holderBuilder: Instantiator<Holder>"], conformances: ", Sendable"),
+			],
+			app: [
+				Self.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received public let tag: Tag"], conformances: ", Sendable"),
+				Self.mockedRoot(declarations: ["@Instantiated public let outer: Outer"]),
+			],
+			diagnostics: diagnostics,
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_nestsEachTypeInsideFillByType_whenPublicMocksPlaceIsTwoTypesDeepInsideFill() async throws {
 		// `DefaultService` builds `Widget`, which binds `tool` before its `gadget`: `DefaultService_Scope` holds
 		// `Widget_Scope`, whose level carries `tool`.

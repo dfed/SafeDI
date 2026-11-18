@@ -363,7 +363,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_compilesCallingMockAndItsCall_whenOneAppTypeInstantiatesBothBuildersAsW4ErrorSays(caller: CallingMockCaller) async throws {
+	mutating func generate_compilesCallingMockAndItsCall_whenOneAppTypeInstantiatesBothBuildersAsTheErrorSays(caller: CallingMockCaller) async throws {
 		// The first remedy of W4’s error: `App`’s `LivePair` instantiates `feedBuilder` and `settingsBuilder`, and `SignedIn`
 		// instantiates it in their place. `Feed`, which `LivePair` builds, and its initializer are `public`, as the access
 		// errors’ fix-its make them.
@@ -433,7 +433,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 	@Test(arguments: CallingMockCaller.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_acceptsCallingMockAndTwin_whenCalledTypesModuleFulfillsSettingsAsW4ErrorSays(caller: CallingMockCaller) async throws {
+	mutating func generate_acceptsCallingMockAndTwin_whenCalledTypesModuleFulfillsSettingsAsTheErrorSays(caller: CallingMockCaller) async throws {
 		// The second remedy of W4’s error: `Feature` declares the type that fills `settingsBuilder`.
 		_ = try await executeSafeDIToolMultiModuleTest(modules: Self.w4FulfilledInFeatureModules(caller: caller.attribute, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		_ = try await executeSafeDIToolMultiModuleTest(modules: Self.w4FulfilledInFeatureModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
