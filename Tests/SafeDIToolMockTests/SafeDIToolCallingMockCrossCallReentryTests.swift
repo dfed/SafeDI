@@ -2095,12 +2095,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		try await expectCompilesAndBuildsInlineValues(of: graph, output: output, modules: modules, probes: [Self.pageBinderBuildsProbe])
 	}
 
-	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: GraphFuzzerCallingMockCell.Caller.allCases)
+	@Test(arguments: GraphFuzzerCallingMockCell.Caller.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_createsReenteredTreeInInlineOrder_whenReenteringCallHandsLazyValue(caller: GraphFuzzerCallingMockCell.Caller) async throws {
-		// The first graph above with `token` a `LazilyInstantiated<Token>` and `Token` recording its creation: the call of
-		// `Book` hands the re-entered level function `Middle`’s wrapper, so building `Page` again creates no `Token`, and
-		// reading the inner `DefaultService`’s `token` creates `Middle`’s, as inline creates it.
+	mutating func generate_passesPlaceUpWhole_whenFillReadingCallersLazyValueReachesCalledTypeAgainThroughAnotherPublicMock(caller: GraphFuzzerCallingMockCell.Caller) async throws {
+		// The first graph above with `token` a `LazilyInstantiated<Token>`: the fill of `Page`’s place reads the caller’s
+		// wrapper beside its fields, and the `Book` its tree builds holds a builder of `Page`, so `Page` is re-entered, and the
+		// calling mock passes `Page`’s place up whole (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`), where
+		// the twin fills it: `mock()` takes `serviceBuilder`, and the generated code compiles.
 		let graph = Self.graph(caller: caller, builder: "Instantiator", deferredPlace: false, fillReadsCallersToken: true, token: "LazilyInstantiated<Token>", typeBetweenDeclaresToken: true)
 		let modules = graph.modules(.mock)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
@@ -2208,87 +2209,161 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 		#endif
 		"""])
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
-		#if canImport(Core)
-		import Core
-		#endif
-		#if canImport(Mid)
-		import Mid
-		#endif
-		#if canImport(SafeDI)
-		import SafeDI
-		#endif
+		let expectedApp = switch caller {
+		case .internal, .listed:
+			generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(Mid)
+			import Mid
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
 
-		#if DEBUG
-		extension Screen {
-		    /// Overrides for the mock dependency tree.
-		    \(spelling.overrides)struct SafeDIOverrides {
-		        \(spelling.member)init(
-		            token: (() -> Token)? = nil
-		        ) {
-		            __safeDI_storage = __safeDI_Storage(
-		                token: token
-		            )
-		        }
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            token: (() -> Token)? = nil,
+			            page: ((@escaping () -> any Service) -> Page)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                token: token,
+			                page: page
+			            )
+			        }
 
-		        \(spelling.member)var token: (() -> Token)? { __safeDI_storage.token }
+			        var token: (() -> Token)? { __safeDI_storage.token }
+			        var page: ((@escaping () -> any Service) -> Page)? { __safeDI_storage.page }
 
-		        private let __safeDI_storage: __safeDI_Storage
+			        private let __safeDI_storage: __safeDI_Storage
 
-		        private final class __safeDI_Storage {
-		            init(
-		                token: (() -> Token)?
-		            ) {
-		                self.token = token
-		            }
+			        private final class __safeDI_Storage {
+			            init(
+			                token: (() -> Token)?,
+			                page: ((@escaping () -> any Service) -> Page)?
+			            ) {
+			                self.token = token
+			                self.page = page
+			            }
 
-		            let token: (() -> Token)?
-		        }
-		    }
+			            let token: (() -> Token)?
+			            let page: ((@escaping () -> any Service) -> Page)?
+			        }
+			    }
 
-		    \(spelling.member)static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Screen {
-		        func __safeDI_token() -> Token {
-		            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
-		        }
-		        let token = LazilyInstantiated<Token>(__safeDI_token)
-		        func __safeDI_page() -> Page {
-		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, token: LazilyInstantiated<Token>) -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    func __safeDI_middle() -> Middle {
-		                        func __safeDI_token() -> Token {
-		                            Token()
-		                        }
-		                        let token = LazilyInstantiated<Token>(__safeDI_token)
-		                        func __safeDI_book() -> Book {
-		                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-		                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page(token: token) })
-		                            }
-		                            return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
-		                        }
-		                        let book: Book = __safeDI_book()
-		                        return Middle(token: token, book: book)
-		                    }
-		                    let middle: Middle = __safeDI_middle()
-		                    return DefaultService(token: token, middle: middle)
-		                }
-		                let service: any Service = __safeDI_service()
-		                return service
-		            }
-		            func __safeDI_serviceBuilder_Page(token: LazilyInstantiated<Token>) -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, token: token) })
-		            }
-		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-		            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(token: token))
-		        }
-		        let page: Page = __safeDI_page()
-		        return Screen(token: token, page: page)
-		    }
+			    static func mock(
+			        serviceBuilder: @escaping () -> any Service,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        let __safeDI_serviceBuilder = serviceBuilder
+			        func __safeDI_token() -> Token {
+			            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+			        }
+			        let token = LazilyInstantiated<Token>(__safeDI_token)
+			        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+			        func __safeDI_page() -> Page {
+			            let serviceBuilder: () -> any Service = __safeDI_serviceBuilder
+			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder(serviceBuilder) } else { Page.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder)) }
+			        }
+			        let page: Page = __safeDI_page()
+			        return Screen(token: token, page: page)
+			    }
+			}
+			#endif
+			"""
+		case .public:
+			generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(Mid)
+			import Mid
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    nonisolated public enum SafeDIMockScope_Service {
+			        nonisolated public struct page_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let page: (page_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+
+			            public init(page: @escaping (page_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+			                self.page = page
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.page = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			            }
+			        }
+			    }
+
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            token: (() -> Token)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                token: token
+			            )
+			        }
+
+			        public var token: (() -> Token)? { __safeDI_storage.token }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                token: (() -> Token)?
+			            ) {
+			                self.token = token
+			            }
+
+			            let token: (() -> Token)?
+			        }
+			    }
+
+			    public static func mock(
+			        serviceBuilder: @escaping () -> any Service,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        serviceBuilder __safeDI_serviceBuilder: Screen.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_token() -> Token {
+			            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+			        }
+			        let token = LazilyInstantiated<Token>(__safeDI_token)
+			        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+			        let page = Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.page(SafeDIMockScope_Service.page_Values()))
+			        return Screen(token: token, page: page)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_mock_7E006A95F19F521D {}
+			}
+			#endif
+			"""
 		}
-		\(spelling.guardExtension)#endif
-		"""])
-		try await expectCompilesAndBuildsInlineValues(of: graph, output: output, modules: modules, probes: [Self.lazyTokenCreationOrderProbe])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": expectedApp])
+		if compileVerificationIsEnabled {
+			let compilation = try #require(output.compilation)
+			#expect(compilation.failure == nil, "\(compilation.failure.map { "\($0)" } ?? "")")
+		}
 	}
 
 	@Test(arguments: GraphFuzzerCallingMockCell.Caller.allCases, HiddenToken.allCases)
@@ -2604,15 +2679,6 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		return DifferentialValueProbe(name: "the token the re-entered fill reads", expression: read("App.Screen.mock()"), knownRightExpression: read("App.Screen()"))
 	}
 
-	/// What the lazy cell compares: when each `Token` is created as `Screen` is built, its `page`’s `Book` builds `Page`
-	/// again, and the `DefaultService` there reads its `token`, and whether that reads `Middle`’s.
-	private static let lazyTokenCreationOrderProbe = {
-		let read = { (screen: String) in
-			"{ App.Token.created = []; let screen = \(screen); App.Token.created.append(\"Screen\"); let service = screen.page.service as! App.DefaultService; let inner = service.middle.book.pageBuilder.instantiate().service as! App.DefaultService; App.Token.created.append(\"Page again\"); let token = inner.token.instance; App.Token.created.append(\"read\"); return (App.Token.created.joined(separator: \", \"), token === service.middle.token.instance) }()"
-		}
-		return DifferentialValueProbe(name: "creation order", expression: read("App.Screen.mock()"), knownRightExpression: read("App.Screen()"))
-	}()
-
 	/// What the cell whose `Page` receives `token` compares: whether the `DefaultService` that `Book`’s builder builds reads
 	/// `Book`’s `token`, the declaration nearest it, and whether it reads `Screen`’s.
 	private static let calledMocksTokenProbe = {
@@ -2645,8 +2711,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 	/// The graph: module `Core` declares `Page`, whose place of `Service` no type `Core` sees fulfills; module `Mid` declares
 	/// `Book`, which holds `Page` in a `builder`; and module `App` declares `DefaultService`, which fills `Page`’s place and
 	/// builds `Book`, and the caller `Screen`, which builds `Page`, and, where `fillReadsCallersToken`, a `Token` the fill
-	/// receives, as `token`, a `Token` or a `LazilyInstantiated<Token>`, whose `Token` records its creation in
-	/// `Token.created`. Where `typeBetweenDeclaresToken`, the fill builds `Book` through `Middle`, which declares a `token` of
+	/// receives, as `token`, a `Token` or a `LazilyInstantiated<Token>`. Where `typeBetweenDeclaresToken`, the fill builds `Book` through `Middle`, which declares a `token` of
 	/// its own; where `enclosingCallIsOfHolder`, `Screen` builds `Shelf`, a public mock of `Mid` that holds `Page` in an
 	/// `Instantiator`, in place of `Page`; where `middleHoldsFilledType`, `Middle` holds `Page` in an `Instantiator` itself,
 	/// in place of `Book`; where `calledMockHoldsBuilderBeneathRoot`, `Book` holds, in an `Instantiator`, `Binder`, a plain
@@ -2755,11 +2820,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 				declarations.append("""
 				@Instantiable
 				public final class Token: Instantiable {
-				    public init() {
-				        Token.created.append("Token")
-				    }
-
-				    nonisolated(unsafe) public static var created = [String]()
+				    public init() {}
 				}
 				""")
 			}
