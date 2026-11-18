@@ -29,4 +29,12 @@ struct BuilderBody: Hashable, Sendable {
 	var hasStatements: Bool {
 		!statements.isEmpty
 	}
+
+	/// What precedes the value on the body's last line: `return ` after statements, and nothing in a body that is only its
+	/// value, which Swift returns implicitly. One rule for every builder function the production emitter writes: a
+	/// constant's, an instantiator's, a lazy wrapper's and a loop member's `_received` function. A mock's builder functions
+	/// keep a rule of their own, over the six kinds of line they write (`ScopeGenerator.generateInstantiatorBinding`).
+	var returnKeyword: String {
+		hasStatements ? "return " : ""
+	}
 }
