@@ -417,7 +417,455 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 		], "Unexpected output \(output.generatedFiles ?? [:])")
 	}
 
+	// MARK: Tests – A received protocol spelled apart
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsPromotedReceiveAsMockedTypeDeclaresIt_whenMockedTypeSpellsAnyWhereReceiverInItsTreeSpellsBare() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				Self.serviceFixture,
+				Self.grandChildFixture(sharedType: "Service"),
+				Self.loneFixture(sharedType: "any Service"),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Lone+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Lone {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            shared: (() -> any Service)? = nil,
+			            grand: ((Service) -> GrandChild)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                shared: shared,
+			                grand: grand
+			            )
+			        }
+
+			        var shared: (() -> any Service)? { __safeDI_storage.shared }
+			        var grand: ((Service) -> GrandChild)? { __safeDI_storage.grand }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                shared: (() -> any Service)?,
+			                grand: ((Service) -> GrandChild)?
+			            ) {
+			                self.shared = shared
+			                self.grand = grand
+			            }
+
+			            let shared: (() -> any Service)?
+			            let grand: ((Service) -> GrandChild)?
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        let shared: any Service = if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
+			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
+			        return Lone(shared: shared, grand: grand)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		], "Unexpected output \(output.generatedFiles ?? [:])")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsPromotedReceiveAsMockedTypeDeclaresIt_whenMockedTypeSpellsBareWhereReceiverInItsTreeSpellsAny() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				Self.serviceFixture,
+				Self.grandChildFixture(sharedType: "any Service"),
+				Self.loneFixture(sharedType: "Service"),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Lone+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Lone {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            shared: (() -> Service)? = nil,
+			            grand: ((any Service) -> GrandChild)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                shared: shared,
+			                grand: grand
+			            )
+			        }
+
+			        var shared: (() -> Service)? { __safeDI_storage.shared }
+			        var grand: ((any Service) -> GrandChild)? { __safeDI_storage.grand }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                shared: (() -> Service)?,
+			                grand: ((any Service) -> GrandChild)?
+			            ) {
+			                self.shared = shared
+			                self.grand = grand
+			            }
+
+			            let shared: (() -> Service)?
+			            let grand: ((any Service) -> GrandChild)?
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        let shared: Service = if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
+			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
+			        return Lone(shared: shared, grand: grand)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		], "Unexpected output \(output.generatedFiles ?? [:])")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsPromotedReceiveAsMockedTypeDeclaresIt_whenMockedTypeReceivesOptionalProtocolOnlyIfAvailable() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				Self.serviceFixture,
+				Self.grandChildFixture(sharedType: "Service"),
+				Self.loneFixture(sharedType: "(any Service)?", receivedAttribute: "@Received(onlyIfAvailable: true)"),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Lone+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Lone {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            shared: (() -> any Service)? = nil,
+			            grand: ((Service) -> GrandChild)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                shared: shared,
+			                grand: grand
+			            )
+			        }
+
+			        var shared: (() -> any Service)? { __safeDI_storage.shared }
+			        var grand: ((Service) -> GrandChild)? { __safeDI_storage.grand }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                shared: (() -> any Service)?,
+			                grand: ((Service) -> GrandChild)?
+			            ) {
+			                self.shared = shared
+			                self.grand = grand
+			            }
+
+			            let shared: (() -> any Service)?
+			            let grand: ((Service) -> GrandChild)?
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        let shared: any Service = if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
+			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
+			        return Lone(shared: shared, grand: grand)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		], "Unexpected output \(output.generatedFiles ?? [:])")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsPromotedReceiveAsMockedTypeDeclaresIt_whenMockedTypeReceivesLazilyInstantiatedProtocol() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				Self.serviceFixture,
+				Self.grandChildFixture(sharedType: "LazilyInstantiated<Service>"),
+				Self.loneFixture(sharedType: "LazilyInstantiated<any Service>"),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Lone+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Lone {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            shared: (() -> any Service)? = nil,
+			            grand: ((LazilyInstantiated<Service>) -> GrandChild)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                shared: shared,
+			                grand: grand
+			            )
+			        }
+
+			        var shared: (() -> any Service)? { __safeDI_storage.shared }
+			        var grand: ((LazilyInstantiated<Service>) -> GrandChild)? { __safeDI_storage.grand }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                shared: (() -> any Service)?,
+			                grand: ((LazilyInstantiated<Service>) -> GrandChild)?
+			            ) {
+			                self.shared = shared
+			                self.grand = grand
+			            }
+
+			            let shared: (() -> any Service)?
+			            let grand: ((LazilyInstantiated<Service>) -> GrandChild)?
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        func __safeDI_shared() -> any Service {
+			            if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
+			        }
+			        let shared = LazilyInstantiated<any Service>(__safeDI_shared)
+			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
+			        return Lone(shared: shared, grand: grand)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		], "Unexpected output \(output.generatedFiles ?? [:])")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsPromotedReceiveAsMockedTypeDeclaresIt_whenModuleListsMockedTypeInAdditionalMocksToGenerate() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [],
+			swiftFileContentByFilePath: [
+				"SafeDIConfiguration.swift": """
+				#SafeDIConfiguration(additionalMocksToGenerate: ["Lone"])
+				""",
+				"Service.swift": Self.serviceFixture,
+				"GrandChild.swift": Self.grandChildFixture(sharedType: "Service"),
+				"Lone.swift": Self.loneFixture(sharedType: "any Service", instantiableAttribute: "@Instantiable"),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Lone+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Lone {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            shared: (() -> any Service)? = nil,
+			            grand: ((Service) -> GrandChild)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                shared: shared,
+			                grand: grand
+			            )
+			        }
+
+			        var shared: (() -> any Service)? { __safeDI_storage.shared }
+			        var grand: ((Service) -> GrandChild)? { __safeDI_storage.grand }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                shared: (() -> any Service)?,
+			                grand: ((Service) -> GrandChild)?
+			            ) {
+			                self.shared = shared
+			                self.grand = grand
+			            }
+
+			            let shared: (() -> any Service)?
+			            let grand: ((Service) -> GrandChild)?
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        let shared: any Service = if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
+			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
+			        return Lone(shared: shared, grand: grand)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		], "Unexpected output \(output.generatedFiles ?? [:])")
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsPromotedReceiveAsMockedTypeDeclaresIt_whenMockIsPublicAndReceiverInItsTreeIsInModuleItImports(integration: MultiModuleIntegration) async throws {
+		// `Core` spells `Service` without `any`, as a module that has not enabled `ExistentialAny` may, and `Feature`, which
+		// has, spells it with `any`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Core", packageName: "Core", swiftFileContentByFilePath: [
+					"Service.swift": "import SafeDI\n\n" + Self.serviceFixture,
+					"GrandChild.swift": "import SafeDI\n\n" + Self.grandChildFixture(sharedType: "Service"),
+				]),
+				ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContentByFilePath: [
+					"Lone.swift": "import Core\nimport SafeDI\n\n" + Self.loneFixture(sharedType: "any Service", instantiableAttribute: "@Instantiable(generateMock: .public)"),
+				], dependencies: ["Core"]),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let mockFile = generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Lone {
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            shared: (() -> any Service)? = nil,
+		            grand: ((Service) -> GrandChild)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                shared: shared,
+		                grand: grand
+		            )
+		        }
+
+		        public var shared: (() -> any Service)? { __safeDI_storage.shared }
+		        public var grand: ((Service) -> GrandChild)? { __safeDI_storage.grand }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                shared: (() -> any Service)?,
+		                grand: ((Service) -> GrandChild)?
+		            ) {
+		                self.shared = shared
+		                self.grand = grand
+		            }
+
+		            let shared: (() -> any Service)?
+		            let grand: ((Service) -> GrandChild)?
+		        }
+		    }
+
+		    public static func mock(
+		        shared: (any Service)? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Lone {
+		        let shared: any Service = if let shared { shared } else if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
+		        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
+		        return Lone(shared: shared, grand: grand)
+		    }
+		}
+
+		extension Lone {
+		    public enum __safeDI_Lone_mock_FE2EA18EBD87E595 {}
+		}
+		#endif
+		"""
+		let featureFiles: [String: String] = output.modules["Feature"]?.generatedFiles ?? [:]
+		switch integration {
+		case .moduleInfo:
+			#expect(featureFiles == ["Feature.swift": mockFile], "Unexpected output \(featureFiles)")
+		case .swiftPackagePlugin:
+			let mockedFile: String? = featureFiles["Lone+SafeDIMock.swift"]
+			#expect(mockedFile == mockFile, "Unexpected output \(featureFiles)")
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// `Service`, and `DefaultService`, which fulfills it.
+	private static let serviceFixture = """
+	public protocol Service: Sendable {}
+
+	@Instantiable(fulfillingAdditionalTypes: [Service.self])
+	public final class DefaultService: Service, Instantiable {
+	    public init() {}
+	}
+	"""
+
+	/// `GrandChild`, which receives `shared` as `sharedType` spells it.
+	private static func grandChildFixture(sharedType: String) -> String {
+		"""
+		@Instantiable
+		public final class GrandChild: Instantiable {
+		    public init(shared: \(sharedType)) {
+		        self.shared = shared
+		    }
+
+		    @Received let shared: \(sharedType)
+		}
+		"""
+	}
+
+	/// `Lone`, whose mock is generated, which receives `shared` as `sharedType` spells it, and instantiates `GrandChild`.
+	private static func loneFixture(
+		sharedType: String,
+		receivedAttribute: String = "@Received",
+		instantiableAttribute: String = "@Instantiable(generateMock: true)",
+	) -> String {
+		"""
+		\(instantiableAttribute)
+		public final class Lone: Instantiable {
+		    public init(shared: \(sharedType), grand: GrandChild) {
+		        self.shared = shared
+		        self.grand = grand
+		    }
+
+		    \(receivedAttribute) let shared: \(sharedType)
+		    @Instantiated let grand: GrandChild
+		}
+		"""
+	}
 }
