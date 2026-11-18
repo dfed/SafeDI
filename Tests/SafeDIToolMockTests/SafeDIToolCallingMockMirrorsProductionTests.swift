@@ -171,9 +171,11 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsTwinsCycle_whenCallingMocksAppOnlyScreenBuiltByValueReceivesBuilderOfScreenThatReceivesIt(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
+		// `AppSettings` fills `SignedIn`’s `settings`, so receiving `feedBuilder` only if available would read a value
+		// `SignedIn`’s tree binds after it calls that fill’s builder: the error states only the removal.
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: Dependency cycle: @Instantiated `feedBuilder: ErasedInstantiator<(), any FeedPage>` -> @Received `settings: any SettingsPage` -> @Received `feedBuilder: ErasedInstantiator<(), any FeedPage>`. `feedBuilder: ErasedInstantiator<(), any FeedPage>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: Dependency cycle: @Instantiated `feedBuilder: ErasedInstantiator<(), any FeedPage>` -> @Received `settings: any SettingsPage` -> @Received `feedBuilder: ErasedInstantiator<(), any FeedPage>`. `feedBuilder: ErasedInstantiator<(), any FeedPage>` is received while it is still being instantiated. Remove this @Received property.
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {
@@ -408,19 +410,12 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_reachesAcceptedGraphWithTwinsValues_whenCycleErrorsOptionalReceiveIsFollowedThroughEachRemedy(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
-		// The dependency cycle’s second remedy, followed through every error it leads to: receiving `feedBuilder` only if
-		// available draws W4’s error, whose first remedy draws two access errors, whose fix-its end in an accepted graph.
-		// Each step’s text is the twin’s; the calling mock reports the same at each step.
-		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"""
-			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: Dependency cycle: @Instantiated `feedBuilder: ErasedInstantiator<(), any FeedPage>` -> @Received `settings: any SettingsPage` -> @Received `feedBuilder: ErasedInstantiator<(), any FeedPage>`. `feedBuilder: ErasedInstantiator<(), any FeedPage>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(modules: Self.w4ConstantCycleModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
-		}
+	mutating func generate_reachesAcceptedGraphWithTwinsValues_whenFillsOptionalReceiveIsFollowedThroughEachRemedy(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
+		// The plain W4 cycle with `feedBuilder` received only if available, which the cycle error does not state since it
+		// leads to W4’s error, followed through every error it leads to: W4’s first remedy draws two access errors, whose
+		// fix-its end in an accepted graph. Each step’s text is the twin’s; the calling mock reports the same at each step.
 
-		// Step 1: `AppSettings` receives `feedBuilder` only if available, as the cycle error says.
+		// Step 1: `AppSettings` receives `feedBuilder` only if available.
 		let w4Diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: `AppSettings` receives `feedBuilder: ErasedInstantiator<(), any FeedPage>?`, which `SignedIn`’s tree builds only after it calls the builder for `SignedIn`’s `settings: any SettingsPage` (`settings` of `settingsPageBuilder`), so that builder’s values struct does not carry it. Instantiate `feedBuilder` on a type above `SignedIn`, and receive it on `SignedIn` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `SettingsPage` in module `Feature` or a module it lists among its SafeDI dependencies.
@@ -2429,7 +2424,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		]
 	}
 
-	/// The plain W4 cycle with its second remedy applied: `AppSettings` receives `feedBuilder` only if available.
+	/// The plain W4 cycle with `feedBuilder` received only if available by `AppSettings`, which leads to W4’s error.
 	private static func w4ConstantCycleOptionalModules(caller: String, callee: String) -> [ModuleFixture] {
 		[
 			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContentByFilePath: [
@@ -2500,7 +2495,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		]
 	}
 
-	/// The plain W4 cycle with its second remedy applied, then W4’s first remedy as worded: `Root` instantiates `feedBuilder`,
+	/// The plain W4 cycle received only if available, then W4’s first remedy as worded: `Root` instantiates `feedBuilder`,
 	/// and `SignedIn` receives it in place of its `@Instantiated` declaration.
 	private static func w4ConstantCycleOptionalW4RemediedModules(caller: String, callee: String) -> [ModuleFixture] {
 		[
