@@ -5705,18 +5705,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	nonisolated private func cycleParameterArguments(unavailableProperties: Set<Property>) -> [String] {
 		cycleParameters.map { parameter in
 			let label = parameter.property.label
-			let value = if unavailableProperties.contains(parameter.property) {
-				"nil"
-			} else if let instanceRead = callSiteLazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceRead(of: parameter.property) {
+			let source: ArgumentSource = if unavailableProperties.contains(parameter.property) {
+				.nil
+			} else if let instanceSource = callSiteLazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceSource(of: parameter.property, boundAs: label) {
 				// A deliberate gap: reading the instance here creates it when the function is called, not when a receiver in
 				// the function's body first reads it. Mock generation does the same (`mockCycleParameterArguments`). See
 				// "Eager instances at a lazy cycle's calls" in `.claude/rules/cycle-generation.md`. Beneath a fill that takes the
 				// wrapper optionally, the instance is read through the optional.
-				"\(label)\(instanceRead)"
+				instanceSource
 			} else {
-				label
+				.binding(label: label)
 			}
-			return "\(label.spelledAsArgumentLabel): \(value)"
+			return CallArgument(label: label, source: source).spelled
 		}
 	}
 
@@ -6076,13 +6076,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The arguments a builder function of a type whose `@Forwarded` properties are `forwardedProperties`, in their order,
 	/// is passed from `forwardedValue`: the value itself for one property, and its elements by label for several.
 	private static func forwardedArguments(of forwardedProperties: [Property], spreading forwardedValue: String) -> [String] {
-		let forwardedPropertiesHaveLabels = forwardedProperties.count > 1
+		let isOnly = forwardedProperties.count == 1
 		return forwardedProperties.map {
-			if forwardedPropertiesHaveLabels {
-				"\($0.label.spelledAsArgumentLabel): \(forwardedValue).\($0.label)"
-			} else {
-				"\($0.label.spelledAsArgumentLabel): \(forwardedValue)"
-			}
+			CallArgument(label: $0.label, source: .forwardedSpread(label: $0.label, isOnly: isOnly, spreadName: forwardedValue)).spelled
 		}
 	}
 
@@ -6538,7 +6534,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							handing: functionName,
 							forwardedArguments: (
 								Self.forwardedArguments(of: forwardedProperties, spreading: "$0")
-									+ cycleParameters.map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.label)" },
+									+ cycleParameters.map { CallArgument(label: $0.property.label, source: .binding(label: $0.property.label)).spelled },
 							).joined(separator: ", "),
 						))
 					} else {
@@ -6626,7 +6622,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						let memberDeclaration = builderFunctionNames.loopMemberDeclarations[unwrappedProperty] ?? builderFunctionNames.loopMemberDeclarations[unwrappedProperty.asOptionalProperty]
 						if let memberDeclaration {
 							memberLines.append(Self.indented(memberDeclaration))
-							return "\(parameter.property.label.spelledAsArgumentLabel): \(parameter.property.label)"
+							return CallArgument(label: parameter.property.label, source: .binding(label: parameter.property.label)).spelled
 						} else {
 							return argument
 						}
@@ -6634,7 +6630,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let receivedFunctionParameters = forwardedProperties.isEmpty
 						? ""
 						: forwardedProperties.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
-					let callArguments = (forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments).joined(separator: ", ")
+					let callArguments = (forwardedProperties.map { CallArgument(label: $0.label, source: .binding(label: $0.label)).spelled } + cycleArguments).joined(separator: ", ")
 					let receivedFunctionDecorator = buildsInSendableFunction || property.propertyType.isSendable ? sendableFunctionDecorator : ""
 					let receivedFunctionDeclaration = """
 					\(receivedFunctionDecorator)func \(receivedFunctionName)(\(receivedFunctionParameters)) -> \(concreteTypeName) {
