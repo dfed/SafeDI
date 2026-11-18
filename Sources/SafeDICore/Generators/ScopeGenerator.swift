@@ -8023,8 +8023,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// builds places of, with the type of the mock's builder (`passedUpBuilderFamilies`), is that builder, as the seam takes
 	/// one builder for both, and is no parameter of its own (`passedUpProperties`). The builders the calls pass up for a
 	/// hole type and family the mock builds no place of are one builder, which every such call is handed, when the calls
-	/// pass them up as one type; calls that pass them up as different types forward different values, an error the mock
-	/// root reports (`DependencyTreeGenerator.placesForwardingOtherValuesErrors`), so they stay parameters of their own.
+	/// pass them up as one type, as the mock takes them: a builder a `@Sendable` builder function captures is of the
+	/// `@Sendable` family and taken `@Sendable`, so it joins the `@Sendable` builder of its hole type that a call passes up;
+	/// calls that pass them up as different types forward different values, an error the mock root reports
+	/// (`DependencyTreeGenerator.placesForwardingOtherValuesErrors`), so they stay parameters of their own.
 	///
 	/// A builder is labeled from what it builds alone, as a seam's builder is (`DependencyTreeGenerator.stems(of:)`), with
 	/// `_` appended while another parameter of `mock()` has the label (`otherParameterLabels`, and the flat received
@@ -8067,6 +8069,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			fillPlacesByFamily[family, default: []].append(fillPlace)
 		}
+		// The type a builder the calls pass up is taken as: `@Sendable` where a `@Sendable` builder function captures it, an
+		// instantiator's `Builder` through its `Sendable` twin (`TypeDescription.asSendableBuilder`).
+		func passedUpType(of property: Property) -> TypeDescription {
+			capturedBySendableFunctions.contains(property) && !property.typeDescription.isSendableFunction ? property.typeDescription.asSendableBuilder : property.typeDescription
+		}
 		// The builders the calls pass up for a family the mock builds no place of, by family, in the order of the flat received
 		// properties, which is a sorted order.
 		var passedUpOnlyPropertiesByFamily = [MockRootParameters.SeamMockBuilder.Family: [Property]]()
@@ -8080,7 +8087,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		for family in passedUpOnlyFamiliesInOrder {
 			let properties = passedUpOnlyPropertiesByFamily[family, default: []]
-			if Set(properties.map(\.typeDescription.strippingEscaping.asSource)).count == 1 {
+			// A builder a `@Sendable` function captures is of the `@Sendable` family (`passedUpBuilderFamilies`) and is taken
+			// `@Sendable`, so it is one builder with a `@Sendable` builder that a call passes up for the same places.
+			if Set(properties.map { passedUpType(of: $0).strippingEscaping.asSource }).count == 1 {
 				familiesInOrder.append(family)
 			} else {
 				passedUpOnlyPropertiesByFamily[family] = nil
@@ -8096,7 +8105,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for property in flatReceivedProperties {
 			guard let family = passedUpBuilderFamilies[property], placesByFamily[family] != nil || fillPlacesByFamily[family] != nil else { continue }
 			let placeProperties = placesByFamily[family, default: []].map(\.property) + fillPlacesByFamily[family, default: []].map(\.dependency.property)
-			if property.typeDescription.strippingEscaping.asSource == MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: placeProperties, in: family).strippingEscaping.asSource {
+			if passedUpType(of: property).strippingEscaping.asSource == MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: placeProperties, in: family).strippingEscaping.asSource {
 				passedUpPropertiesByFamily[family, default: []].append(property)
 			}
 		}
@@ -8105,12 +8114,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var builders = familiesInOrder.map { family in
 			let stem = stems[family.holeType, default: ""]
 			let label = labels.claim(family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
-			// A builder with no place of its own is passed up as the calls pass it up, `@Sendable` where a `@Sendable` builder
-			// function captures it: an instantiator's `Builder` through its `Sendable` twin (`TypeDescription.asSendableBuilder`).
-			let passedUpType = passedUpOnlyPropertiesByFamily[family]?.first.map { property in
-				let type = capturedBySendableFunctions.contains(property) && !property.typeDescription.isSendableFunction ? property.typeDescription.asSendableBuilder : property.typeDescription
-				return type.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
-			}
+			// A builder with no place of its own is passed up as the calls pass it up.
+			let passedUpType = passedUpOnlyPropertiesByFamily[family]?.first.map { passedUpType(of: $0).asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping) }
 			return MockRootParameters.SeamMockBuilder(label: label, internalName: label, family: family, places: placesByFamily[family, default: []], fillPlaces: fillPlacesByFamily[family, default: []], passedUpProperties: passedUpPropertiesByFamily[family, default: []], passedUpType: passedUpType)
 		}
 		builders.sort { $0.label < $1.label }
