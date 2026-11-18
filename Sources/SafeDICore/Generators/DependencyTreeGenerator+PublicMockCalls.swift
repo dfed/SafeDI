@@ -1,0 +1,407 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+extension DependencyTreeGenerator {
+	/// The public mock another module generated for each type this module's mock trees reach but cannot build: a type
+	/// declared with `generateMock: .public` in a module SafeDI knows, whose tree, as this module would build it inline
+	/// – the public mocks of other types in it called, as they are wherever they cannot be built – constructs a
+	/// declaration this module cannot reach. A tree this module can build is built inline, as before public mocks.
+	func publicMockCalls(in typeDescriptionToScopeMap: [TypeDescription: Scope]) async throws -> [TypeDescription: PublicMockCall] {
+		guard !seams.foreignPublicMocks.isEmpty, let emittingModule = emittingModuleToCheck else { return [:] }
+		let foreignPublicMockTypes = Set(seams.foreignPublicMocks.keys)
+		var publicMockCalls = [TypeDescription: PublicMockCall]()
+		var receivedPropertiesCache = ReceivedPropertiesCache()
+		for type in foreignPublicMockTypes.sorted() {
+			guard let foreignPublicMock = seams.foreignPublicMocks[type],
+			      let scope = typeDescriptionToScopeMap[type],
+			      scope.instantiable.concreteInstantiable == type
+			else { continue }
+			// What building the type inline constructs: its tree, with its hand-written mock where the mock would build it
+			// with one (its own `customMockName` method, or a `mockOnly` mock this module sees), and the tree of each
+			// dependency its tree requires that the mock would build beside it. Other modules' public mock types are left
+			// out: each is built inline where it can be and called where it cannot.
+			let typesLeftOut = foreignPublicMockTypes.subtracting([type])
+			var constructions = Self.constructions(
+				inTreeRootedAt: scope,
+				rootIsConstructedWithMockMethod: scope.instantiable.mockInitializer != nil,
+				rootReferenceLocation: nil,
+				isMock: true,
+				emittingModule: emittingModule,
+				extendedTypes: extendedTypeDeclarations,
+				leavingOut: typesLeftOut,
+			)
+			let receivedProperties = Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache)
+			for property in receivedProperties.received.subtracting(receivedProperties.onlyIfAvailable).sorted() {
+				guard let receivedScope = typeDescriptionToScopeMap[property.typeDescription.asInstantiatedType],
+				      !foreignPublicMockTypes.contains(receivedScope.instantiable.concreteInstantiable),
+				      Self.mockCanBuild(property, from: receivedScope)
+				else { continue }
+				constructions += Self.constructions(
+					inTreeRootedAt: receivedScope,
+					rootIsConstructedWithMockMethod: receivedScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType),
+					rootReferenceLocation: nil,
+					isMock: true,
+					emittingModule: emittingModule,
+					extendedTypes: extendedTypeDeclarations,
+					leavingOut: typesLeftOut,
+				)
+			}
+			guard !Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty, let ownPlan = try await foreignPublicMockPlan(of: type, declaredBy: foreignPublicMock, modulesReadByRunOfModule: emittingModule.modulesReadByRunOfModule) else { continue }
+			let requirement = AccessLevel.required(toConstructFrom: emittingModule.identity, declaredIn: foreignPublicMock.declaringModule, isOwnFile: false)
+			// The narrowest tier the module reaches: every module reaches the `public` one.
+			let tier = ownPlan.plan.tiers.last { $0.satisfies(requirement) } ?? .public
+			let tierParameters = ownPlan.plan.parameters(ofTier: tier)
+			publicMockCalls[type] = PublicMockCall(
+				type: type,
+				tier: tier,
+				passedParameters: tierParameters.compactMap { parameter in
+					switch parameter.role {
+					case let .forwarded(property):
+						PublicMockCall.PassedParameter(name: parameter.name, type: parameter.type, dependency: Dependency(property: property, source: .forwarded, declarationLocation: ownPlan.instantiable.declarationLocation), isBuiltWhenNil: false, builder: nil)
+					case let .received(property, isRequired):
+						// A required parameter the declaring module named apart from another of its label – a dependency it cannot
+						// build – has no default to leave it to, so the leaf receives it under the parameter's name, which the
+						// calling mock then takes it by.
+						PublicMockCall.PassedParameter(
+							name: parameter.name,
+							type: parameter.type,
+							dependency: Dependency(
+								property: isRequired && parameter.name != property.label ? Property(label: parameter.name, typeDescription: property.typeDescription) : property,
+								source: .received(onlyIfAvailable: !isRequired),
+								declarationLocation: ownPlan.instantiable.declarationLocation,
+							),
+							isBuiltWhenNil: parameter.isBuiltWhenNil,
+							builtWrapper: parameter.builtWrapper,
+							builder: parameter.builder,
+						)
+					case .constructionDefault, .overrides:
+						nil
+					}
+				},
+				// Every parameter a narrower tier takes is a received dependency or a default-valued parameter: a narrower
+				// required one keeps the public tier from being generated.
+				omittedParameters: ownPlan.plan.parameters.filter { parameter in
+					guard parameter.access < tier, case .received = parameter.role else { return false }
+					return true
+				} + ownPlan.plan.noTierParameters,
+				takesOverrides: tierParameters.contains { parameter in
+					if case .overrides = parameter.role {
+						true
+					} else {
+						false
+					}
+				},
+				guardTypeName: ownPlan.plan.guardTypeName,
+				comment: foreignPublicMock.callComment,
+				declaringModule: foreignPublicMock.declaringModule,
+				callerModule: emittingModule.identity,
+				requirement: requirement,
+				declaringModuleMockCondition: foreignPublicMock.declaringModuleMockCondition,
+				callerModuleMockCondition: seams.currentModuleMockCondition,
+				receiversByLabel: ownPlan.receiversByLabel,
+				// A builder's `Builder` type, which a calling internal mock that passes its places up takes, is a function too.
+				typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.intersection(tierParameters.map(\.type)).union(tierParameters.compactMap { $0.builder?.readableParameterType.nameDeclaredEscaping }),
+				calledBuilders: CalledBuilders(
+					holes: (ownPlan.plan.holes + ownPlan.plan.unpresentedHoles).map { $0.atTier(tier) },
+					builders: ownPlan.plan.builders.map { $0.atTier(tier) },
+					scopeEnums: ownPlan.plan.scopeEnums,
+				),
+			)
+		}
+		return publicMockCalls
+	}
+
+	/// The plan of the public mock that `foreignPublicMock`'s module generated for `type`, computed as that module
+	/// computed it, from the declarations it sees; `nil` when that module could not generate it, which its own run
+	/// reports.
+	/// - Parameter modulesReadByRunOfModule: See `EmittingModule.init`.
+	private func foreignPublicMockPlan(
+		of type: TypeDescription,
+		declaredBy foreignPublicMock: SeamResolution.ForeignPublicMock,
+		modulesReadByRunOfModule: (@Sendable (_ moduleName: String) -> TypeAccessProof.ModuleReach.ModulesRead)?,
+	) async throws -> OwnPublicMockPlan? {
+		guard let moduleName = foreignPublicMock.declaringModule.moduleName else { return nil }
+		let generator: DependencyTreeGenerator
+		if let existingGenerator = publicMockGeneratorsByModuleName[moduleName] {
+			generator = existingGenerator
+		} else {
+			generator = DependencyTreeGenerator(
+				importStatements: [],
+				mockImportStatements: [],
+				typeDescriptionToFulfillingInstantiableMap: foreignPublicMock.visibleInstantiables,
+				aliasDeclarationReferences: aliasDeclarationReferences,
+				compilesGeneratedMocks: compilesGeneratedMocks,
+				// The declaring module's files are not this run's own: its declarations record its name.
+				emittingModule: EmittingModule(
+					identity: foreignPublicMock.declaringModule,
+					isOwnFile: { _ in false },
+					isReadableFile: { _ in false },
+					additionalMocksToGenerateLocation: nil,
+					modulesReadByRunOfModule: modulesReadByRunOfModule,
+				),
+				// The public mocks of the modules the declaring module sees, which its mock trees call in turn.
+				seams: SeamResolution(
+					currentModule: foreignPublicMock.declaringModule,
+					currentModuleMockCondition: foreignPublicMock.declaringModuleMockCondition,
+					generatedSeams: [],
+					foreignSeams: [:],
+					// Read from that module's view of the modules it depends on, or, under the target graph, from every
+					// module's.
+					foreignPublicMocks: seams.foreignDeclarations(seenByModuleNamed: moduleName).publicMocks.filter { entry in
+						entry.value.declaringModule.moduleName != moduleName && foreignPublicMock.visibleInstantiables[entry.key] != nil
+					},
+					// The views of every module, so that the plans this one computes in turn read what each of those modules
+					// saw, never what this module's filter left: under module info a public mock two modules beneath this one
+					// is not among the public mocks this module sees.
+					foreignDeclarationsSeenByModule: seams.foreignDeclarationsSeenByModule,
+				),
+				plainTypeDeclarations: foreignPublicMock.visiblePlainTypeDeclarations,
+			)
+			publicMockGeneratorsByModuleName[moduleName] = generator
+		}
+		return try await generator.publicMockPlan(ofOwnType: type)
+	}
+
+	/// The finding that the modules calling the public mock of `instantiable` compute another signature for it, when
+	/// the declarations they see differ from this run's (`SeamResolution.callersVisibleInstantiables`), as a seam's
+	/// callers' view is checked: the mock is computed again over the callers' view, as they compute it, and a mock whose
+	/// guard – which hashes what every call depends on – they compute otherwise is reported, naming
+	/// a declaration they cannot see, in a seam's three tiers: the earliest by source location of those that declare a
+	/// receiver of a parameter the callers would not take as such, else of those that fulfill such a parameter's type,
+	/// else of those the mock's tree reaches. `nil` when the callers compute the same guard, or see every declaration
+	/// the tree reaches.
+	func callersViewFinding(of instantiable: Instantiable) async throws -> PublicMockFinding? {
+		guard let callersVisibleInstantiables = seams.callersVisibleInstantiables else { return nil }
+		let type = instantiable.concreteInstantiable
+		guard let ownPlan = try await publicMockPlan(ofOwnType: type) else { return nil }
+		let callersGenerator = DependencyTreeGenerator(
+			importStatements: [],
+			mockImportStatements: [],
+			typeDescriptionToFulfillingInstantiableMap: callersVisibleInstantiables,
+			aliasDeclarationReferences: aliasDeclarationReferences,
+			compilesGeneratedMocks: compilesGeneratedMocks,
+			emittingModule: emittingModule,
+			seams: seams,
+			plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations,
+		)
+		// A computation over the callers' view that fails reports its own error, as the callers' generation would.
+		let callersPlan = try await callersGenerator.publicMockPlan(ofOwnType: type)
+		guard callersPlan?.plan.guardTypeName != ownPlan.plan.guardTypeName else { return nil }
+		struct ParameterShape: Hashable {
+			let name: String
+			let type: String
+			let access: AccessLevel
+			let defaultKind: PublicMockParameter.DefaultKind
+			init(_ parameter: PublicMockParameter) {
+				name = parameter.name
+				type = parameter.type.withoutAny.asSource
+				access = parameter.access
+				defaultKind = parameter.defaultKind
+			}
+		}
+		let callersShapes = Set((callersPlan?.plan.parameters ?? []).map(ParameterShape.init))
+		let differingParameters = ownPlan.plan.parameters.filter { !callersShapes.contains(ParameterShape($0)) }
+		let unseenTypes = Set(typeDescriptionToFulfillingInstantiableMap.values.map(\.concreteInstantiable))
+			.subtracting(callersVisibleInstantiables.values.map(\.concreteInstantiable))
+		func earliest(_ types: some Sequence<TypeDescription>) -> TypeDescription? {
+			types
+				.filter(unseenTypes.contains)
+				.compactMap { typeDescriptionToFulfillingInstantiableMap[$0] }
+				.min { Dependency.DeclarationLocation.precedesInSourceOrder($0.declarationLocation, $1.declarationLocation) }?
+				.concreteInstantiable
+		}
+		let receivingTypes = differingParameters.flatMap { ownPlan.receiversByLabel[$0.name, default: []].map(\.declaringType) }
+		let fulfillingTypes = differingParameters.compactMap { typeDescriptionToFulfillingInstantiableMap[$0.type.unwrapped.asInstantiatedType]?.concreteInstantiable }
+		// A type the tree reaches is built as the declaration that fulfills it, which can be another type: a protocol's
+		// fulfiller, which builds a place of this mock's tree or of a public mock it calls.
+		let reachedTypes = Self.typesReachable(fromRoots: [type], in: typeDescriptionToFulfillingInstantiableMap)
+			.compactMap { typeDescriptionToFulfillingInstantiableMap[$0]?.concreteInstantiable }
+		return if let declaration = earliest(receivingTypes) ?? earliest(fulfillingTypes) ?? earliest(reachedTypes) {
+			PublicMockFinding.callersCannotSee(declaration, of: instantiable)
+		} else {
+			// Without a plain declaration that proves a parameter, the callers count its type as one SafeDI reads no
+			// declaration of.
+			Self.earliestUnseenPlainDeclaration(provingAnyOf: differingParameters.map(\.accessCause)).map {
+				PublicMockFinding.callersCannotSeePlainDeclaration($0, of: instantiable)
+			}
+		}
+	}
+
+	/// The plan of the public mock of `type`, declared with `generateMock: .public` among this generator's
+	/// declarations, as its module computes it: the type's mock root is built as `generateMockCode` builds it. The
+	/// module's own run reports what keeps its public mock from being generated.
+	func publicMockPlan(ofOwnType type: TypeDescription) async throws -> OwnPublicMockPlan? {
+		guard let declaredInstantiable = typeDescriptionToFulfillingInstantiableMap[type],
+		      declaredInstantiable.generateMock == .public
+		else { return nil }
+		var receivedPropertiesCache = ReceivedPropertiesCache()
+		let mockScopes: MockScopes
+		if let memoizedPublicMockPlanScopes {
+			mockScopes = memoizedPublicMockPlanScopes
+		} else {
+			mockScopes = try await self.mockScopes(additionalMocksToGenerate: [], mockEmittingModule: emittingModuleToCheck, receivedPropertiesCache: &receivedPropertiesCache)
+			memoizedPublicMockPlanScopes = mockScopes
+		}
+		let rootMockScopes = mockScopes.forMockRoot(declaredInstantiable)
+		guard let scope = rootMockScopes.typeDescriptionToScopeMap[declaredInstantiable.concreteInstantiable] else { return nil }
+		let instantiable = mockRootInstantiable(for: declaredInstantiable, scope: scope)
+		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
+		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
+		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
+		let mockRoot = try await createMockRoot(
+			for: instantiable,
+			scope: scope,
+			generatedMockReason: .generateMock,
+			mockScopes: rootMockScopes,
+			// The declaring module's own run checked its constructions.
+			emittingModule: nil,
+			receivedPropertiesCache: &receivedPropertiesCache,
+			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
+			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
+			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+		)
+		let context = publicMockContext
+		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults)
+		return OwnPublicMockPlan(
+			instantiable: instantiable,
+			plan: ScopeGenerator.publicMockPlan(
+				of: instantiable,
+				parameters: parameters,
+				parameterNames: ScopeGenerator.mockRootParameterNames(of: parameters),
+				context: context,
+			),
+			receiversByLabel: ScopeGenerator.receivers(in: parameters.parameterTree, mockedType: instantiable),
+			typesDeclaredEscaping: parameters.typesDeclaredEscaping,
+		)
+	}
+
+	/// The instantiable of the leaf scope through which a mock tree calls `publicMockCall`: `instantiable`, declaring
+	/// the whole signature as its dependencies – the parameters of the tier the call reaches as the dependencies they
+	/// stand for, and each parameter that tier omits as a receive only if available – and built by a mock method that
+	/// takes the tier's parameters. One dependency per label: a required parameter the declaring module named apart is
+	/// declared under its name (`publicMockCalls(in:)`), and a second form of a label that has a default is left to it.
+	/// - Parameter takesBuildersFromOwnEnums: Whether the leaf is in a public mock's tree, which hands each place it does not
+	///   fill up in a case of its own enums (`Scope.builderCallArguments`), so it receives no builder; an internal mock's
+	///   receives each builder that reaches a place the call does not fill, which the mock takes as a parameter.
+	static func publicMockLeafInstantiable(of instantiable: Instantiable, calling publicMockCall: PublicMockCall, takesBuildersFromOwnEnums: Bool) -> Instantiable {
+		var dependencies = [Dependency]()
+		var arguments = [Initializer.Argument]()
+		var labels = Set<String>()
+		let passedUpBuilderLabels = takesBuildersFromOwnEnums ? [] : Set(publicMockCall.passedUpBuilders.map(\.label))
+		for parameter in publicMockCall.passedParameters where labels.insert(parameter.dependency.property.label).inserted {
+			// A builder the call fills is passed its fill or dispatcher (`ScopeGenerator.BuilderCallArgument`), so the leaf
+			// receives nothing for it.
+			if parameter.builder.map({ passedUpBuilderLabels.contains($0.label) }) ?? true {
+				dependencies.append(parameter.dependency)
+			}
+			arguments.append(Initializer.Argument(outerLabel: parameter.name, innerLabel: parameter.dependency.property.label, typeDescription: parameter.type))
+		}
+		for parameter in publicMockCall.omittedParameters {
+			guard case let .received(property, _) = parameter.role, labels.insert(property.label).inserted else { continue }
+			dependencies.append(Dependency(
+				property: property.typeDescription.isOptional ? property : property.asOptionalProperty,
+				source: .received(onlyIfAvailable: true),
+				declarationLocation: instantiable.declarationLocation,
+			))
+		}
+		var leaf = Instantiable(
+			instantiableType: instantiable.concreteInstantiable,
+			isRoot: false,
+			initializer: instantiable.initializer,
+			additionalInstantiables: Array(instantiable.instantiableTypes.dropFirst()),
+			dependencies: dependencies,
+			declarationType: instantiable.declarationType,
+			access: instantiable.access,
+			enclosingTypeAccess: instantiable.enclosingTypeAccess,
+			enclosingExtensionAccess: instantiable.enclosingExtensionAccess,
+			mockInitializer: Initializer(access: AccessDeclaration(level: publicMockCall.tier), arguments: arguments),
+			mockReturnType: instantiable.concreteInstantiable,
+			// The tiers are declared in an extension of the type in the declaring module's generated file.
+			mockDeclarationAccess: AccessDeclaration(level: .internal, isExtension: true),
+			mockDeclarationModuleName: publicMockCall.declaringModule.moduleName,
+			mockDeclarationPackageName: publicMockCall.declaringModule.packageName,
+			declarationLocation: instantiable.declarationLocation,
+			moduleName: instantiable.moduleName,
+			packageName: instantiable.packageName,
+		)
+		leaf.sourceFilePath = instantiable.sourceFilePath
+		return leaf
+	}
+
+	/// An error for each declaration that keeps one of `constructions` from compiling in `emittingModule`.
+	/// - Parameters:
+	///   - extendedTypes: The declarations the module reads, among which the declaration of a type an extension
+	///     extends bounds the types declared in or by that extension.
+	///   - mockRoot: The type whose mock makes the constructions, which the error names, or `nil` for production
+	///     code.
+	static func inaccessibleConstructions(
+		_ constructions: [Construction],
+		from emittingModule: EmittingModule,
+		extendedTypes: ExtendedTypeDeclarations,
+		mockRoot: DependencyTreeGeneratorError.InaccessibleConstruction.MockRoot? = nil,
+	) -> [DependencyTreeGeneratorError.InaccessibleConstruction] {
+		var inaccessibleConstructions = [DependencyTreeGeneratorError.InaccessibleConstruction]()
+		for construction in constructions {
+			let instantiable = construction.instantiable
+			let accessNeeds = construction.accessNeeds
+			// Nearly every construction is of `public` declarations, which need nothing more.
+			guard !accessNeeds.allSatisfy({ $0.level.satisfies(.public) }) else { continue }
+			for accessNeed in accessNeeds {
+				let declaringModule = emittingModule.declaringModule(of: accessNeed, constructing: instantiable)
+				let requirement = emittingModule.requirement(of: accessNeed, constructing: instantiable)
+				guard !accessNeed.level.satisfies(requirement) else { continue }
+				inaccessibleConstructions.append(DependencyTreeGeneratorError.InaccessibleConstruction(
+					constructedType: instantiable.concreteInstantiable,
+					constructedTypeDeclaredName: instantiable.declaredName,
+					accessNeed: accessNeed,
+					requirement: requirement,
+					emittingModule: emittingModule.identity,
+					declaringModule: declaringModule,
+					readableDeclarationLocation: accessNeed.access.declarationStartLocation.flatMap { declarationStartLocation in
+						emittingModule.isReadableFile(declarationStartLocation.filePath) ? declarationStartLocation : nil
+					},
+					referenceLocation: construction.referenceLocation,
+					constructedTypeDeclarationLocation: instantiable.declarationLocation,
+					seamRemedy: construction.seamCandidateOnPaths.candidate.flatMap { candidate in
+						Self.seamRemedy(offeredBy: candidate, toWiden: accessNeed, declaredIn: declaringModule, extendedTypes: extendedTypes)
+					},
+					inlineSeam: construction.inlineSeam,
+					publicMockCandidate: construction.publicMockCandidate,
+					mockRoot: mockRoot,
+				))
+			}
+		}
+		return inaccessibleConstructions
+	}
+
+	/// The comment on a production construction of `instantiable` when it is a seam that every tree of this run builds
+	/// inline because SafeDI does not know which module declares it – one neither this module generates nor another
+	/// module's run generated the initializer of (`SeamResolution.foreignSeams`) – so the initializer SafeDI generates
+	/// for the seam is called only by hand-written code; `nil` otherwise. A mock builds every seam's tree inline whether
+	/// or not SafeDI knows the seam's module, so the cause the comment gives would be wrong there, and a mock's
+	/// constructions carry none.
+	func builtInlineSeamComment(for instantiable: Instantiable) -> String? {
+		guard instantiable.generatesDependencyTree,
+		      seams.foreignSeams[instantiable.concreteInstantiable] == nil,
+		      !seams.generatedSeams.contains(instantiable.concreteInstantiable)
+		else { return nil }
+		return "// Built inline: SafeDI does not know which module declares `\(instantiable.concreteInstantiable.asSource)`, so this tree cannot call the initializer SafeDI generates for it."
+	}
+}
