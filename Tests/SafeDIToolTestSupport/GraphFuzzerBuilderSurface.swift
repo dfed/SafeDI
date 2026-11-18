@@ -214,6 +214,11 @@ extension GraphFuzzerKnownIssue {
 	/// no entry lists form an entry of the shape alone. The planned builder structs empty `seeds`, which then changes
 	/// nothing.
 	static func adding(_ signature: Signature, reason: String, seeds: [UInt64], to issues: [GraphFuzzerKnownIssue]) -> [GraphFuzzerKnownIssue] {
+		adding([signature], reason: reason, seeds: seeds, to: issues)
+	}
+
+	/// `issues` with a shape of several signatures added for `seeds`, as `adding(_:reason:seeds:to:)` adds one.
+	static func adding(_ signatures: [Signature], reason: String, seeds: [UInt64], to issues: [GraphFuzzerKnownIssue]) -> [GraphFuzzerKnownIssue] {
 		let shapeSeeds = Set(seeds)
 		var listedSeeds = Set<UInt64>()
 		var result = [GraphFuzzerKnownIssue]()
@@ -225,12 +230,12 @@ extension GraphFuzzerKnownIssue {
 				result.append(GraphFuzzerKnownIssue(reason: issue.reason, signatures: issue.signatures, seeds: otherSeeds))
 			}
 			if !sharedSeeds.isEmpty {
-				result.append(GraphFuzzerKnownIssue(reason: "\(issue.reason); and \(reason)", signatures: issue.signatures + [signature], seeds: sharedSeeds))
+				result.append(GraphFuzzerKnownIssue(reason: "\(issue.reason); and \(reason)", signatures: issue.signatures + signatures, seeds: sharedSeeds))
 			}
 		}
 		let seedsAlone = seeds.filter { !listedSeeds.contains($0) }
 		if !seedsAlone.isEmpty {
-			result.append(GraphFuzzerKnownIssue(reason: reason, signatures: [signature], seeds: seedsAlone))
+			result.append(GraphFuzzerKnownIssue(reason: reason, signatures: signatures, seeds: seedsAlone))
 		}
 		return result
 	}
