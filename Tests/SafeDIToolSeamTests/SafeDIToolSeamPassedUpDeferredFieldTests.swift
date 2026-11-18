@@ -5370,26 +5370,26 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		let optionalChainLeaf = seamBReadsValueOnlyIfAvailable ? """
 
 
-			@Instantiable
-			public final class OptionalChainLeaf: Instantiable, Sendable {
-				public init(chainToken: ChainToken?) { self.chainToken = chainToken; log.append("OptionalChainLeaf") }
-				@Received(onlyIfAvailable: true) let chainToken: ChainToken?
-			}
-			""" : ""
+		@Instantiable
+		public final class OptionalChainLeaf: Instantiable, Sendable {
+			public init(chainToken: ChainToken?) { self.chainToken = chainToken; log.append("OptionalChainLeaf") }
+			@Received(onlyIfAvailable: true) let chainToken: ChainToken?
+		}
+		""" : ""
 		let seamB = outerHoldsSeamB ? """
 
 
-			@Instantiable(generateDependencyTree: true)
-			public final class SeamB: Instantiable, @unchecked Sendable {
-				public init(leafBuilder: SendableInstantiator<\(seamBLeaf)>, holeService: any HoleService) {
-					self.leafBuilder = leafBuilder
-					self.holeService = holeService
-					log.append("SeamB")
-				}
-				@Instantiated public let leafBuilder: SendableInstantiator<\(seamBLeaf)>
-				@Instantiated public let holeService: any HoleService
-			}\(optionalChainLeaf)
-			""" : ""
+		@Instantiable(generateDependencyTree: true)
+		public final class SeamB: Instantiable, @unchecked Sendable {
+			public init(leafBuilder: SendableInstantiator<\(seamBLeaf)>, holeService: any HoleService) {
+				self.leafBuilder = leafBuilder
+				self.holeService = holeService
+				log.append("SeamB")
+			}
+			@Instantiated public let leafBuilder: SendableInstantiator<\(seamBLeaf)>
+			@Instantiated public let holeService: any HoleService
+		}\(optionalChainLeaf)
+		""" : ""
 		let topRootDeclarations = outerDeclaresChainToken || midDeclaresChainToken
 			? "public init(mid: Mid) { self.mid = mid; log.append(\"TopRoot\") }"
 			: "public init(chainToken: \(topChainTokenType), mid: Mid) { self.chainToken = chainToken; self.mid = mid; log.append(\"TopRoot\") }\n\t\(topChainToken)"
