@@ -1259,14 +1259,156 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		""")
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases, [ReenteredFunctionReadShape.Reentry.direct, .throughChild, .throughOtherCall])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlacesWithCallersValue_whenFillBuildingCalledTypeAgainReadsNoneOfValueCallerHoldsByValue(caller: CallingMockCallerKind, reentry: ReenteredFunctionReadShape.Reentry) async throws {
+		// The neighbour of `generate_passesBothPlacesUpWhole_whenFillBuildingCalledTypeAgainReadsNoneOfValueCallerHoldsLazily`
+		// whose `Root` holds `log: Log`, which no declaration holds lazily: the fill that builds `F` again captures `Root`’s
+		// `log`, which the re-entered function takes, so both places stay filled, and each `Live` holds `Root`’s `log`, as
+		// inline.
+		let shape = ReenteredFunctionReadShape(reentry: reentry, fillReadsLogOnlyIfAvailable: false, rootWrapper: nil)
+		try await expectValuesEqualInline(
+			mock: Self.reenteredFunctionModules(caller: caller, shape: shape),
+			inline: Self.reenteredFunctionInlineModules(shape: shape),
+			caller: caller.callingMockCaller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.reenteredFunctionProbes(shape: shape),
+		)
+	}
+
 	// MARK: Tests – a place passed up whole where a fill of a re-entered call reads the caller’s lazy value
+
+	@Test(arguments: CallingMockCallerKind.allCases, ReenteredFunctionReadShape.passedUp)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesBothPlacesUpWhole_whenFillBuildingCalledTypeAgainReadsNoneOfValueCallerHoldsLazily(caller: CallingMockCallerKind, shape: ReenteredFunctionReadShape) async throws {
+		// `F` holds no `log`. `Live` fills its place `api`, below its root, receiving `Root`’s `log` by value or only if
+		// available, so the call’s root level function takes `log`. `Live2` fills its place `api2`, reads no `log`, and builds
+		// `F` again, itself, through its child `Nav`, or through `G`’s public mock, whose place `LiveG` fills by building `F`.
+		// `Root` holds `log` lazily, and the fill that builds `F` again would hand the re-entered function `Root`’s wrapper,
+		// so `api` is passed up whole (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`), and
+		// then `api2`, whose fill calls `F`’s mock, which now passes `api` up. Through `G`, filling both compiled, a stated
+		// cost of the rule.
+		let wrapper = try #require(shape.rootWrapper)
+		try await expectPassesPlacesUpWhole(
+			mock: Self.reenteredFunctionModules(caller: caller, shape: shape),
+			caller: caller,
+			wrapper: wrapper,
+			builders: [.api2, .api],
+			guards: PassedUpGuards(calledType: "1F67931C545189ED", root: "5D2B855AE809553B"),
+			calledMockTakesLog: false,
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesBothPlacesUpWhole_whenFillBuildingCalledTypeAgainReadsNoneOfValueCallerReceivesLazily() async throws {
+		// The first shape of `generate_passesBothPlacesUpWhole_whenFillBuildingCalledTypeAgainReadsNoneOfValueCallerHoldsLazily`
+		// in a feature module whose root lives in a module that depends on it: `Screen`, the calling mock, receives `log` as a
+		// `LazilyInstantiated`, which no type of `App` instantiates and its mock builds. `api` and `api2` are passed up whole,
+		// as there.
+		let shape = ReenteredFunctionReadShape(reentry: .direct, fillReadsLogOnlyIfAvailable: false, rootWrapper: .lazilyInstantiated)
+		var appTypes = Self.reenteredFunctionAppTypes(shape: shape, rootAttribute: "@Instantiable(isRoot: true)")
+		appTypes = String(appTypes[..<(try #require(appTypes.range(of: "\n\n@Instantiable(isRoot: true)")).lowerBound)])
+		appTypes += """
+
+
+		@Instantiable(generateMock: true)
+		public final class Screen: Instantiable {
+		    public init(log: LazilyInstantiated<Log>, f: F) {
+		        self.log = log
+		        self.f = f
+		    }
+
+		    @Received public let log: LazilyInstantiated<Log>
+		    @Instantiated public let f: F
+		}
+		"""
+		let mock = [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": "import SafeDI\n\n" + Self.reenteredFunctionFeatureTypes(shape: shape, callee: Self.twinCalledTypes)]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": "import Feat\nimport SafeDI\n\n" + appTypes], dependencies: ["Feat"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modules(mock, callingMockCaller: .internal, handWrittenCall: "import Feat\n\nfinal class StubApi: Api {}\nfinal class StubApi2: Api2 {}\n\nfunc callMock() {\n    _ = Screen.mock(api2Builder: { StubApi2() }, apiBuilder: { StubApi() })\n}\n"),
+			integration: .moduleInfo,
+			compileVerification: .returningOutcomeOnly,
+			filesToDelete: &filesToDelete,
+		)
+		if compileVerificationIsEnabled {
+			let compilation = try #require(output.compilation)
+			#expect(compilation.failure == nil, "\(compilation.failure.map { "\($0)" } ?? "")")
+		}
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Feat)
+		import Feat
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            f: F.SafeDIOverrides = .init(),
+		            log: (() -> Log)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                f: f,
+		                log: log
+		            )
+		        }
+
+		        var f: F.SafeDIOverrides { __safeDI_storage.f }
+		        var log: (() -> Log)? { __safeDI_storage.log }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                f: F.SafeDIOverrides,
+		                log: (() -> Log)?
+		            ) {
+		                self.f = f
+		                self.log = log
+		            }
+
+		            let f: F.SafeDIOverrides
+		            let log: (() -> Log)?
+		        }
+		    }
+
+		    static func mock(
+		        api2Builder: @escaping () -> any Api2,
+		        apiBuilder: @escaping () -> any Api,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let __safeDI_api2Builder = api2Builder
+		        let __safeDI_apiBuilder = apiBuilder
+		        _ = F.__safeDI_F_mock_1F67931C545189ED.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_f() -> F {
+		            let api2Builder: () -> any Api2 = __safeDI_api2Builder
+		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
+		            return F.__safeDI_mock(api2Builder: .init(__safeDI_noScope: api2Builder), apiBuilder: .init(__safeDI_noScope: apiBuilder), safeDIOverrides: safeDIOverrides.f)
+		        }
+		        let f: F = __safeDI_f()
+		        func __safeDI_log() -> Log {
+		            if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
+		        }
+		        let log = LazilyInstantiated<Log>(__safeDI_log)
+		        return Screen(log: log, f: f)
+		    }
+		}
+		#endif
+		""")
+	}
 
 	@Test(arguments: CallingMockCallerKind.allCases, CallerLazyWrapper.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesPlaceUpWhole_whenFillReadingCallersLazyValueBuildsCalledTypeAgain(caller: CallingMockCallerKind, wrapper: CallerLazyWrapper) async throws {
 		// The adopter’s shape (`lazyValueBelowCalledRootModules`), with `Live` also building `F` again, so `F` is re-entered,
 		// and `Live` reads `Root`’s wrapper beside its place’s fields: `Root`’s mock passes `api` up whole, as the twin’s
-		// fill could not be mirrored there (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`).
+		// fill could not be mirrored there (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`).
 		try await expectPassesPlacesUpWhole(
 			mock: Self.reenteringCallModules(caller: caller.attribute(listed: "@Instantiable(isRoot: true)"), rootLog: "\(wrapper.name)<Log>", fillLog: "\(wrapper.name)<Log>", place: .plain, listsCaller: caller == .listed),
 			caller: caller,
@@ -1770,7 +1912,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		// `F`’s place `api`, whose fill `Live` reads `Root`’s `LazilyInstantiated<Log>`, is inside a fill of `G`’s place, and
 		// `G` is built again inside `F`’s fills, through a third called type `H` where `layout` says so: `F` is re-entered
 		// through the fills of the calls its fills make, so `api` is passed up whole, and so is `G`’s place, whose fill builds
-		// `F`, which now passes a builder up (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`). `Root`’s mock
+		// `F`, which now passes a builder up (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`). `Root`’s mock
 		// takes `G`’s builder, whatever is between `G` and the call that re-enters `F`.
 		try await expectPassesPlacesUpWhole(
 			mock: Self.reenteredThroughAnotherCallsFillModules(caller: caller, layout: layout),
@@ -1786,7 +1928,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesPlaceOnCalledTypesRootUpWhole_whenFillReadingCallersLazyValueBuildsAnotherCalledTypeThatBuildsItAgain(caller: CallingMockCallerKind) async throws {
 		// The cell below, with `LiveG` building `F` again: `F` is re-entered through `G`’s fill, so `api`, on `F`’s root
-		// level, is passed up whole (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`), where filling it named a
+		// level, is passed up whole (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`), where filling it named a
 		// builder of `G`’s the mock does not take.
 		try await expectPassesPlacesUpWhole(
 			mock: Self.secondCallFromCalledTypesRootModules(caller: caller, secondCallBuildsFirstAgain: true),
@@ -1823,7 +1965,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		// it up. No call re-enters `F`. Where `F`’s by-value copy of `log` reaches the first place, no level that holds only
 		// the copy can hand `Live` the wrapper. Where `F` holds no copy (`levelBesidePlaceWithoutCopy`), or the second place is
 		// an `ErasedInstantiator` (`levelBesideErasedPlace`), filling both places built what inline builds, so passing them up
-		// is the gate’s stated cost (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`).
+		// is the gate’s stated cost (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`).
 		var builders = [PassedUpBuilder.api]
 		var guards = PassedUpGuards(calledType: "F1E8D579CB81D9A6", root: "60281D4498053F73")
 		var calledMockTakesLog = true
@@ -2914,6 +3056,9 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		if builders.contains(where: { $0.builtType == "any Api" }) {
 			stubs += "final class StubApi: Api {}\n"
 		}
+		if builders.contains(where: { $0.builtType == "any Api2" }) {
+			stubs += "final class StubApi2: Api2 {}\n"
+		}
 		if builders.contains(where: { $0.builtType == "any GApi" }) {
 			stubs += "final class StubGApi: GApi {}\n"
 		}
@@ -2960,6 +3105,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		static let sendableApi = PassedUpBuilder(label: "apiSendableBuilder", readableType: "@Sendable () -> any Api", builtType: "any Api", enumName: "SafeDISendableMockScope_Api", noScopeClosureType: "@Sendable () -> __safeDI_Built", isSendable: true, stubArgument: "{ StubApi() }")
 		static let erasedApi = PassedUpBuilder(label: "apiBuilder", readableType: "ErasedInstantiator<(), any Api>.Builder", builtType: "any Api", enumName: "SafeDIMockScope_Api", noScopeClosureType: "ErasedInstantiator<(), __safeDI_Built>.Builder", isSendable: false, stubArgument: "{ _ in StubApi() }")
 		static let liveApi = PassedUpBuilder(label: "live_ApiBuilder", readableType: "ErasedInstantiator<Int, any Api>.Builder", builtType: "any Api", enumName: "SafeDIMockScope_Live_Api", noScopeClosureType: "ErasedInstantiator<Int, __safeDI_Built>.Builder", isSendable: false, stubArgument: "{ _ in StubApi() }")
+		static let api2 = PassedUpBuilder(label: "api2Builder", readableType: "() -> any Api2", builtType: "any Api2", enumName: "SafeDIMockScope_Api2", noScopeClosureType: "() -> __safeDI_Built", isSendable: false, stubArgument: "{ StubApi2() }")
 		static let other = PassedUpBuilder(label: "otherBuilder", readableType: "() -> any Other", builtType: "any Other", enumName: "SafeDIMockScope_Other", noScopeClosureType: "() -> __safeDI_Built", isSendable: false, stubArgument: "{ StubOther() }")
 		static let gApi = PassedUpBuilder(label: "gApiBuilder", readableType: "() -> any GApi", builtType: "any GApi", enumName: "SafeDIMockScope_GApi", noScopeClosureType: "() -> __safeDI_Built", isSendable: false, stubArgument: "{ StubGApi() }")
 
@@ -3378,9 +3524,12 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		return types
 	}
 
-	/// `Live`, `Live2`, `LiveG` where `shape` builds `F` again through `G`, and `Root`, declared with `rootAttribute`.
+	/// `Live`, `Live2`, `LiveG` where `shape` builds `F` again through `G`, `Nav` where it builds `F` again through a child
+	/// of `Live2`, and `Root`, declared with `rootAttribute`.
 	private static func reenteredFunctionAppTypes(shape: ReenteredFunctionReadShape, rootAttribute: String) -> String {
 		let builtAgain = shape.reentry == .throughOtherCall ? "G" : "F"
+		let liveLog = shape.liveReadsLogOnlyIfAvailable ? "Log?" : "Log"
+		let liveReceive = shape.liveReadsLogOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received"
 		var live2Parameters = [String]()
 		var live2Assignments = [String]()
 		var live2Declarations = [String]()
@@ -3389,17 +3538,23 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			live2Assignments.append("self.log = log")
 			live2Declarations.append("@Received(onlyIfAvailable: true) public let log: Log?")
 		}
-		live2Parameters.append("builder: Instantiator<\(builtAgain)>")
-		live2Assignments.append("self.builder = builder")
-		live2Declarations.append("@Instantiated public let builder: Instantiator<\(builtAgain)>")
+		if shape.reentry == .throughChild {
+			live2Parameters.append("nav: Nav")
+			live2Assignments.append("self.nav = nav")
+			live2Declarations.append("@Instantiated public let nav: Nav")
+		} else {
+			live2Parameters.append("builder: Instantiator<\(builtAgain)>")
+			live2Assignments.append("self.builder = builder")
+			live2Declarations.append("@Instantiated public let builder: Instantiator<\(builtAgain)>")
+		}
 		var types = """
 		@Instantiable(fulfillingAdditionalTypes: [Api.self])
 		public final class Live: Api, Instantiable {
-		    public init(log: Log) {
+		    public init(log: \(liveLog)) {
 		        self.log = log
 		    }
 
-		    @Received public let log: Log
+		    \(liveReceive) public let log: \(liveLog)
 		}
 
 		@Instantiable(fulfillingAdditionalTypes: [Api2.self])
@@ -3411,7 +3566,10 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		\(live2Declarations.map { "    \($0)" }.joined(separator: "\n"))
 		}
 		"""
-		if shape.reentry == .throughOtherCall {
+		switch shape.reentry {
+		case .direct:
+			break
+		case .throughOtherCall:
 			types += """
 
 
@@ -3422,6 +3580,19 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			    }
 
 			    @Instantiated public let f: F
+			}
+			"""
+		case .throughChild:
+			types += """
+
+
+			@Instantiable
+			public final class Nav: Instantiable {
+			    public init(builder: Instantiator<F>) {
+			        self.builder = builder
+			    }
+
+			    @Instantiated public let builder: Instantiator<F>
 			}
 			"""
 		}
@@ -3450,6 +3621,8 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		let builtAgain = switch shape.reentry {
 		case .direct:
 			"\(outerLive2).builder.instantiate()"
+		case .throughChild:
+			"\(outerLive2).nav.builder.instantiate()"
 		case .throughOtherCall:
 			"(\(outerLive2).builder.instantiate().ga.gapi as! LiveG).f"
 		}
@@ -7388,16 +7561,23 @@ struct CallerLazyValueForm: CustomTestStringConvertible, Sendable {
 }
 
 /// How a fill that builds a called type holding no copy of the caller’s `log` again reads `log`, which the re-entered
-/// call’s root level function takes by value: only if available, or not at all; how it builds the called type again,
-/// itself or through another called type whose fill builds it; and the wrapper the caller holds `log` in, if any.
+/// call’s root level function takes, as `Live`, which fills a place below the called type’s root, reads it: by value, or
+/// only if available; how it builds the called type again, itself, through a child of its tree, or through another called
+/// type whose fill builds it; and the wrapper the caller holds `log` in, if any.
 struct ReenteredFunctionReadShape: CustomTestStringConvertible, Sendable {
+	init(reentry: Reentry, fillReadsLogOnlyIfAvailable: Bool, rootWrapper: CallerLazyWrapper?, liveReadsLogOnlyIfAvailable: Bool = false) {
+		self.reentry = reentry
+		self.fillReadsLogOnlyIfAvailable = fillReadsLogOnlyIfAvailable
+		self.rootWrapper = rootWrapper
+		self.liveReadsLogOnlyIfAvailable = liveReadsLogOnlyIfAvailable
+	}
+
 	/// Each shape whose fill takes `log` only because the re-entered function takes it, so that it hands the function
 	/// the value it takes (`Scope.labelsHandedToReenteredFunctions(by:)`). Where the caller holds `log` by value and the
 	/// fill reads none, a fill that does not take it captures the caller’s value, which is what the function takes, so
-	/// those shapes do not depend on it. A fill that reads no `log`, with the caller holding `log` lazily, captures the
-	/// caller’s wrapper where the function takes the value or its optional, which does not compile with this mechanism or
-	/// without it, where it builds the called type again itself or through a child of its tree, and where it re-enters
-	/// through another call’s fill a function that takes `log` only if available: a known defect it does not reach.
+	/// those shapes do not depend on it. Where the fill reads no `log` and the caller holds it lazily, the calling mock
+	/// passes both places up (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`), so no fill
+	/// takes it.
 	static let all: [Self] = {
 		var shapes = [Self]()
 		let rootWrappers: [CallerLazyWrapper?] = [nil, .lazilyInstantiated, .sendableLazilyInstantiated]
@@ -7406,20 +7586,34 @@ struct ReenteredFunctionReadShape: CustomTestStringConvertible, Sendable {
 				shapes.append(Self(reentry: reentry, fillReadsLogOnlyIfAvailable: true, rootWrapper: rootWrapper))
 			}
 		}
-		for rootWrapper in CallerLazyWrapper.allCases {
-			shapes.append(Self(reentry: .throughOtherCall, fillReadsLogOnlyIfAvailable: false, rootWrapper: rootWrapper))
+		return shapes
+	}()
+
+	/// Each shape whose fill reads no `log` while the caller holds it lazily, which the calling mock passes up: for each
+	/// way of building the called type again, `Live` reading `log` by value or only if available, and each wrapper.
+	static let passedUp: [Self] = {
+		var shapes = [Self]()
+		for reentry in [Reentry.direct, .throughChild, .throughOtherCall] {
+			for liveReadsLogOnlyIfAvailable in [false, true] {
+				for rootWrapper in CallerLazyWrapper.allCases {
+					shapes.append(Self(reentry: reentry, fillReadsLogOnlyIfAvailable: false, rootWrapper: rootWrapper, liveReadsLogOnlyIfAvailable: liveReadsLogOnlyIfAvailable))
+				}
+			}
 		}
 		return shapes
 	}()
 
 	enum Reentry: Sendable {
 		case direct
+		case throughChild
 		case throughOtherCall
 	}
 
 	let reentry: Reentry
 	let fillReadsLogOnlyIfAvailable: Bool
 	let rootWrapper: CallerLazyWrapper?
+	/// Whether `Live` receives `log` only if available, as `Log?`, rather than by value.
+	let liveReadsLogOnlyIfAvailable: Bool
 
 	/// The type of the caller’s `log`.
 	var rootLog: String {
@@ -7427,8 +7621,16 @@ struct ReenteredFunctionReadShape: CustomTestStringConvertible, Sendable {
 	}
 
 	var testDescription: String {
-		var description = reentry == .direct ? "built again by the fill" : "built again through another call’s fill"
+		var description = switch reentry {
+		case .direct:
+			"built again by the fill"
+		case .throughChild:
+			"built again through a child of the fill"
+		case .throughOtherCall:
+			"built again through another call’s fill"
+		}
 		description += fillReadsLogOnlyIfAvailable ? ", read only if available" : ", not read"
+		description += liveReadsLogOnlyIfAvailable ? ", Live reads it only if available" : ""
 		description += ", caller holds \(rootLog)"
 		return description
 	}

@@ -307,6 +307,9 @@ struct GraphFuzzerCallingMockDraw {
 			// Drawn last, and only for the `Sendable` wrapper: a `LazilyInstantiated` a fill reads inside a `@Sendable` function is
 			// an error, in production too (`SafeDIToolCallingMockMirrorsProductionTests`' `ReenteringWrapperPair`).
 			buildsPlaceInSendableFunctionToo = wrapper == "SendableLazilyInstantiated" ? random.element(of: [false, true]) : false
+			// Drawn after everything else, and only where the second place's fill, which reads nothing, calls the called type
+			// again: the shape the gate for a value held lazily that such a fill does not read is for.
+			fillReadsInstanceCalledTypeDoesNotHold = secondPlaceCallsAgain ? random.element(of: [false, true]) : false
 		}
 
 		/// Which type of the caller's module calls the called type, and whether the fill calls it again.
@@ -340,10 +343,17 @@ struct GraphFuzzerCallingMockDraw {
 		/// Whether the called type also instantiates a `SendableInstantiator` of the level between, so it builds the place in
 		/// plain code and inside that instantiator's `@Sendable` function, outside which the called mock binds the value.
 		let buildsPlaceInSendableFunctionToo: Bool
+		/// Whether the fill receives the value by value, the caller's wrapper's instance, rather than the wrapper, and the
+		/// called type's sibling receives none of it, so the called type holds no copy: the re-entered call's root level
+		/// function takes the value, which the second place's fill, reading none of it, holds only as the caller's wrapper,
+		/// so the calling mock passes both places up (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`).
+		/// Drawn only where `secondPlaceCallsAgain`.
+		let fillReadsInstanceCalledTypeDoesNotHold: Bool
 
 		/// Whether a fill calls the called type again: the fill that receives the wrapper, or the second place's. The fill
-		/// that receives the wrapper reads it beside its place's fields, since the called mock binds the value by value, so
-		/// the calling mock passes the place up whole, and the second place, whose fill calls the called type, which then
+		/// that receives the wrapper reads it beside its place's fields, since the called mock binds the value by value, or,
+		/// where `fillReadsInstanceCalledTypeDoesNotHold`, reads the instance, which the second place's fill does not read,
+		/// so the calling mock passes the place up whole, and the second place, whose fill calls the called type, which then
 		/// passes a builder up (`GraphFuzzerCallingMockGraph.fillGatePassesUp`).
 		var reentersCalledType: Bool {
 			call == .fillCallsAgain || secondPlaceCallsAgain
@@ -1425,6 +1435,11 @@ struct GraphFuzzerCallingMockDraw {
 		let receivesOnlyIfAvailable = callerLazyValue?.receivesOnlyIfAvailable == true
 		let siblingValueType = receivesOnlyIfAvailable ? "\(names.value)?" : names.value
 		let siblingAttribute = receivesOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received"
+		var siblingBody = "    init(\(value): \(siblingValueType)) { self.\(value) = \(value) }\n    \(siblingAttribute) public let \(value): \(siblingValueType)"
+		if callerLazyValue?.fillReadsInstanceCalledTypeDoesNotHold == true {
+			// The called type holds no copy of the value.
+			siblingBody = "    init() {}"
+		}
 		var innerProperties = [(label: between, type: names.between), (label: sibling, type: names.sibling)]
 		var secondLevel = ""
 		if callerLazyValue?.secondPlaceCallsAgain == true {
@@ -1465,8 +1480,7 @@ struct GraphFuzzerCallingMockDraw {
 
 		@Instantiable
 		public final class \(names.sibling): Instantiable {
-		    init(\(value): \(siblingValueType)) { self.\(value) = \(value) }
-		    \(siblingAttribute) public let \(value): \(siblingValueType)
+		\(siblingBody)
 		}
 
 		@Instantiable(generateDependencyTree: true, generateMock: .public)
@@ -1488,9 +1502,10 @@ struct GraphFuzzerCallingMockDraw {
 		let inner = names.inner.lowercasedFirst
 		let wrapped = "\(callerLazyValue?.wrapper ?? "LazilyInstantiated")<\(names.value)>"
 		let instantiated: (label: String, type: String)? = callerLazyValue?.call == .fillCallsAgain ? ("\(inner)Builder", "Instantiator<\(names.inner)>") : nil
+		let fillReceived = callerLazyValue?.fillReadsInstanceCalledTypeDoesNotHold == true ? names.value : wrapped
 		var declarations = [
 			"import SafeDI\nimport \(names.innerModuleName)",
-			fillDeclaration(named: names.fill, protocolName: names.hole, received: (value, wrapped), instantiated: instantiated, isPublic: callerIsPublic),
+			fillDeclaration(named: names.fill, protocolName: names.hole, received: (value, fillReceived), instantiated: instantiated, isPublic: callerIsPublic),
 		]
 		if callerLazyValue?.secondPlaceCallsAgain == true {
 			declarations.append("""
@@ -1645,9 +1660,10 @@ struct GraphFuzzerCallingMockGraph {
 	/// root initializer there.
 	let comparesValuesWithInline: Bool
 	/// Whether the called type is re-entered – a fill of one of its places calls it again – and a fill of one of its places
-	/// reads, beside the place's fields, a `LazilyInstantiated` or `SendableLazilyInstantiated` value, so the calling mock
-	/// passes `expectedPassUpLabels` up whole where the twin fills them: contract rule 7's listed difference
-	/// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`).
+	/// reads, beside the place's fields, a `LazilyInstantiated` or `SendableLazilyInstantiated` value, or, below the called
+	/// type's root, the instance of one the module holds, which a fill that calls the called type again reads none of, so
+	/// the calling mock passes `expectedPassUpLabels` up whole where the twin fills them: contract rule 7's listed difference
+	/// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`).
 	let fillGatePassesUp: Bool
 
 	/// Whether the tool skips the twin's error in the mock: the error is one it checks only where the generated mocks
@@ -1886,9 +1902,10 @@ enum GraphFuzzerCallingMockPassUpReason: String, CaseIterable, Comparable {
 	/// The build leaves the mock condition inactive (`GraphFuzzerCallingMockGraph.MockBuild`), so the tool does not check
 	/// the fill production rejects, and passes its place up (`GraphFuzzerCallingMockGraph.mockSkipsTwinsError`).
 	case mockConditionIsInactive
-	/// The called type is re-entered, and a fill of one of its places reads a lazy value beside the place's fields, so the
-	/// mock passes that place's hole type up whole, and every fill that calls the called type then, where the twin fills
-	/// them: contract rule 7's listed difference (`GraphFuzzerCallingMockGraph.fillGatePassesUp`).
+	/// The called type is re-entered, and a fill of one of its places reads a lazy value beside the place's fields, or the
+	/// instance of one the module holds, which a fill that calls the called type again does not read, so the mock passes
+	/// that place's hole type up whole, and every fill that calls the called type then, where the twin fills them: contract
+	/// rule 7's listed difference (`GraphFuzzerCallingMockGraph.fillGatePassesUp`).
 	case fillOfReenteredCallReadsLazyValue
 
 	static func < (lhs: Self, rhs: Self) -> Bool {

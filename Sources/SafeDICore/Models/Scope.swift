@@ -874,8 +874,8 @@ private struct ScopeGeneratorUnderConstruction {
 			// The levels hand the fill the called mock's by-value copy of it, which holds the same value: a fill that reads the
 			// caller's wrapper beside its place's fields, which the copy does not provide, is passed up where its called type is
 			// re-entered, directly or through the fills of the calls its fills make, before any fill is built
-			// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`), and an optional copy where a fill requires the
-			// value is an error.
+			// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`), and an optional copy where a
+			// fill requires the value is an error.
 			if fillsReenterCall {
 				for (caseKey, places) in placesByCaseKey {
 					guard var caseFields = caseFieldsByCaseKey[caseKey], let firstPlace = places.first else { continue }
@@ -1416,7 +1416,9 @@ private struct ScopeGeneratorUnderConstruction {
 			// takes (`PublicMockLevelFunctions.Reentry`), so the fill takes that value as a required read where the function takes
 			// it non-optional, whatever the fill's own tree reads of it: as where a fill of a called type that holds no copy of the
 			// caller's value builds the called type again, itself or through another call's fill, and reads the value only if
-			// available, or not at all while the caller holds it lazily, beside a fill of another place that reads it by value.
+			// available, beside a fill of another place that reads it by value. Where such a fill reads none of a value the
+			// module holds lazily, the place is passed up before any fill is built
+			// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`).
 			let isHandedToReenteredFunction = labelsHandedToReenteredFunctions.contains(label)
 			if isHandedToReenteredFunction {
 				forms.insert(field.property)
@@ -1425,7 +1427,7 @@ private struct ScopeGeneratorUnderConstruction {
 			func isRequired(_ form: Property) -> Bool {
 				child.requiredReceivedProperties.contains(form) || (isHandedToReenteredFunction && form == field.property)
 			}
-			let parameter = (isHandedToReenteredFunction || !fill.optionalLazilyInstantiatedLabels.contains(label)) && (forms.contains(where: isRequired) || field.property.typeDescription.isOptional)
+			let parameter = !fill.optionalLazilyInstantiatedLabels.contains(label) && (forms.contains(where: isRequired) || field.property.typeDescription.isOptional)
 				? field
 				: field.withProperty(field.property.asOptionalProperty)
 			reads.parameterByLabel[label] = parameter
