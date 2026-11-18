@@ -195,7 +195,12 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 			Issue.record("Did not throw error!")
 		} catch let error as SafeDIToolMultiModuleTestError {
 			#expect(error.moduleName == "App")
-			#expect("\(error.underlyingError)".split(separator: "\n").first.map(String.init) == diagnostics(error.fixtures).split(separator: "\n").first.map(String.init))
+			// Each side is bound apart: Xcode 26.0’s Swift 6.2 (swiftlang-6.2.0) gives up type-checking the comparison written
+			// as one expression inside `#expect` ("unable to type-check this expression in reasonable time"); Linux’s Swift 6.2.4
+			// accepts it.
+			let reportedFirstLine: String? = "\(error.underlyingError)".split(separator: "\n").first.map(String.init)
+			let expectedFirstLine: String? = diagnostics(error.fixtures).split(separator: "\n").first.map(String.init)
+			#expect(reportedFirstLine == expectedFirstLine)
 		}
 	}
 
