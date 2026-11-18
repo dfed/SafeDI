@@ -152,10 +152,11 @@ extension DependencyTreeGenerator {
 			ownScopeEnums[key] ?? calledSeamsEnums[key]
 		}
 		// A call reaches its enums through its fills too, where it passes no place up: a public mock, which computes no
-		// called mock's signature, reads them from each call whose tree leads to a place.
+		// called mock's signature, reads them from each call whose tree leads to a place, or holds a call that re-enters an
+		// enclosing call's fill or level function, whose case on the type that makes it holds the re-entering call's enum.
 		var generatorsToVisit = [generator]
 		while let visited = generatorsToVisit.popLast() {
-			for child in visited.children where child.containsBuildSite || child.passesUpBuilder {
+			for child in visited.children where child.containsBuildSite || child.passesUpBuilder || child.holdsCallReenteringEnclosingFill {
 				for scopeEnum in child.calledBuilders?.scopeEnums ?? [] where calledSeamsEnums[scopeEnum.key] == nil {
 					calledSeamsEnums[scopeEnum.key] = scopeEnum
 				}

@@ -9099,9 +9099,8 @@ public actor DependencyTreeGenerator {
 	///
 	/// Gates then pass a hole type of a called type up whole, every place of it, where the twin fills it: a re-entered called
 	/// type whose fill reads a lazy value beside its place's fields; one whose fill below its root reads by value a value the
-	/// module holds lazily, while a fill that builds it again reads none of it; a fill that re-enters its called type and
-	/// instantiates a type nothing the module sees fulfills; and places of one hole type whose fills read different lazy
-	/// values (`holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`). Contract rule 7 lists the difference
+	/// module holds lazily, while a fill that builds it again reads none of it; and places of one hole type whose fills read
+	/// different lazy values (`holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`). Contract rule 7 lists the difference
 	/// (`seam-and-mock-contract.md`).
 	private func holesFilled(
 		byCallsOf publicMockCalls: [TypeDescription: PublicMockCall],
@@ -9174,7 +9173,6 @@ public actor DependencyTreeGenerator {
 			received = DependencyTreeGenerator.collectReceivedProperties(from: fulfillingScope, cache: &cache).received
 			receivedBesideFields = received.subtracting(fieldForms)
 			var calledTypes = Set<TypeDescription>()
-			var instantiatesWhatNothingFulfills = false
 			var visitedScopes = Set<ObjectIdentifier>()
 			// A stack of its own, since a tree can be as deep as the module has types.
 			var scopesToVisit = [fulfillingScope]
@@ -9183,19 +9181,11 @@ public actor DependencyTreeGenerator {
 				if let publicMockCall = scope.publicMockCall {
 					calledTypes.insert(publicMockCall.type)
 				}
-				var builtProperties = Set<Property>()
-				for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
-					builtProperties.insert(property)
+				for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
 					scopesToVisit.append(childScope)
-				}
-				// A property no scope builds is a type no declaration the module sees fulfills, which a mock binds from a builder
-				// (`ScopeGenerator.fillPlaces(insideSendableFunction:)`), as `typesThatCannotBeHoles(inTreeRootedAt:)` reads it.
-				if scope.publicMockCall == nil, scope.instantiable.dependencies.contains(where: { $0.isInstantiated && !builtProperties.contains($0.property) }) {
-					instantiatesWhatNothingFulfills = true
 				}
 			}
 			calledTypesInTree = calledTypes
-			self.instantiatesWhatNothingFulfills = instantiatesWhatNothingFulfills
 		}
 
 		let calledType: TypeDescription
@@ -9206,8 +9196,6 @@ public actor DependencyTreeGenerator {
 		let receivedBesideFields: Set<Property>
 		/// The types whose public mocks the fill's tree calls.
 		let calledTypesInTree: Set<TypeDescription>
-		/// Whether the fill's tree instantiates a type no declaration the module sees fulfills.
-		let instantiatesWhatNothingFulfills: Bool
 
 		var key: HoleTypeOfCall {
 			HoleTypeOfCall(calledType: calledType, holeType: hole.holeType)
@@ -9236,12 +9224,6 @@ public actor DependencyTreeGenerator {
 	///   passed up when a fill of one of its places reads, beside the place's fields, a `LazilyInstantiated` or
 	///   `SendableLazilyInstantiated` value: the called mock binds the value by value, so no level of the re-entered call
 	///   holds the wrapper the twin hands that fill.
-	/// - **A re-entering fill that instantiates what nothing fulfills.** A hole type of a called type is passed up when the
-	///   tree of a fill of one of its places calls a public mock whose builders reach its places, another than the called
-	///   type's own, and instantiates a type no declaration the module sees fulfills, which the mock binds from a builder its
-	///   caller hands it: a `.public` caller hands that builder through the struct of its own level the re-entered level
-	///   function takes, which that call, re-entering the level function an enclosing call declares, does not hand on, where a
-	///   call of the called type itself does.
 	/// - **A value held lazily that a fill building the called type again does not read.** A hole type of a re-entered
 	///   called type is passed up when a fill of one of its places below the called type's root reads, beside the place's
 	///   fields, by value or only if available, a value that a declaration of the module's mock trees holds in a
@@ -9298,13 +9280,6 @@ public actor DependencyTreeGenerator {
 				if readsLazyValue || readsLazilyHeldValueAFillBuildingCalledTypeAgainDoesNot {
 					passedUp.insert(fill.key)
 				}
-			}
-			// A call of the called type itself inside the fill re-enters its root level function and hands it the structs it
-			// takes, so only a call of another public mock whose builders reach the places counts here.
-			for fill in fills where fill.calledType == calledType && fill.instantiatesWhatNothingFulfills && fill.calledTypesInTree.contains(where: { calledTypeInFill in
-				calledTypeInFill != calledType && publicMockCalls[calledTypeInFill]?.holes.contains { sites.contains($0.site) } == true
-			}) {
-				passedUp.insert(fill.key)
 			}
 		}
 		var lazyValuesReadBesideFieldsByKey = [HoleTypeOfCall: Set<Property>]()
