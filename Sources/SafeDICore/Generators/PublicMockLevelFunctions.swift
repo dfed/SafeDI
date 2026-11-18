@@ -271,6 +271,10 @@ struct PublicMockLevelFunctions: Sendable {
 		/// call of the function reads them of the caller's: the nearest declaration enclosing it, so the place is filled with
 		/// what inline reads there.
 		let parameters: [Property]
+		/// The labels of the values the re-entering call also hands the called mock itself of its own scope, its received
+		/// parameters (`PublicMockCall.labelsHandedFromCallersScope`), which the call that declares the function adds
+		/// (`Scope`'s `enclosingLevelReentriesOfThisCall`).
+		var labelsHandedToCalledMock = Set<String>()
 	}
 
 	/// What a call that re-enters the root level function of a dispatcher whose key is in `keys` hands it, by the

@@ -859,6 +859,149 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		)
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases, ReenteringWrapperPair.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceOnCalledTypesRootWithCallersLazyValue_whenOtherPlacesFillBelowRootBuildsCalledTypeAgain(caller: CallingMockCallerKind, pair: ReenteringWrapperPair) async throws {
+		// `F` holds the place `api` on its own level, which `Live` fills, reading `Root`’s wrapper as the caller’s own value, and
+		// `B`, beneath `F`, holds `other`, whose fill `LiveOther` reads no `log` and builds `F` again: the call of `F`’s mock
+		// inside that fill hands `F` `log` of the fill’s scope, so the fill takes `Root`’s wrapper non-optional, and the
+		// `Live` of each `F` holds it, as inline.
+		try await expectValuesEqualInline(
+			mock: Self.rootLevelReaderModules(caller: caller, pair: pair, variation: .plain),
+			inline: Self.rootLevelReaderInlineModules(pair: pair, variation: .plain),
+			caller: caller.callingMockCaller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.rootLevelReaderProbes(variation: .plain),
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases, [RootLevelReaderVariation.mockedTypeBetween, .otherPlaceTwoLevelsDown, .erasedPlace, .receivedOnlyIfAvailable])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceOnCalledTypesRootWithCallersLazyValue_whenOtherPlacesFillBuildsCalledTypeAgainInNeighbourShape(caller: CallingMockCallerKind, variation: RootLevelReaderVariation) async throws {
+		// As above, with a mocked `Mid` between `Root` and `F`, `B` a level further down, the place an `ErasedInstantiator`,
+		// or `Z` receiving `log` only if available: the `Live` of each `F` holds `Root`’s wrapper, as inline.
+		try await expectValuesEqualInline(
+			mock: Self.rootLevelReaderModules(caller: caller, pair: .lazilyInstantiatedInInstantiator, variation: variation),
+			inline: Self.rootLevelReaderInlineModules(pair: .lazilyInstantiatedInInstantiator, variation: variation),
+			caller: caller.callingMockCaller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.rootLevelReaderProbes(variation: variation),
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsReenteredTreeInInlineOrder_whenOtherPlacesFillBuildsCalledTypeAgainBesidePlaceOnCalledTypesRoot(caller: CallingMockCallerKind) async throws {
+		// The first cell above, with `Log` and `Live` recording when each is created: building `F` again through `LiveOther`
+		// and reading the inner `Live`’s `log` creates what inline creates, in its order. The record starts once `Root` is
+		// built, which creates `Log` for `Z`.
+		let creationOrder = { (root: String) in
+			"{ let root = \(root); Log.created = []; let f = (root.f.b.other as! LiveOther).fBuilder.instantiate(); Log.created.append(\"F again\"); _ = (f.api as! Live).log.instance; Log.created.append(\"read\"); return Log.created.joined(separator: \", \") }()"
+		}
+		try await expectValuesEqualInline(
+			mock: Self.rootLevelReaderModules(caller: caller, pair: .lazilyInstantiatedInInstantiator, variation: .plain, logsCreation: true),
+			inline: Self.rootLevelReaderInlineModules(pair: .lazilyInstantiatedInInstantiator, variation: .plain, logsCreation: true),
+			caller: caller.callingMockCaller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: [DifferentialValueProbe(name: "creation order", expression: creationOrder("Root.mock()"), knownRightExpression: creationOrder("Root()"))],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsReenteringCallCallersWrapperNonOptional_whenPlaceOnCalledTypesRootReadsIt() async throws {
+		// The first cell above for an internal caller and a `LazilyInstantiated`: `LiveOther`’s fill takes `Root`’s wrapper
+		// non-optional, for the call of `F`’s mock inside it hands `F` its instance, and the root level function of `other`
+		// takes it so too, while `api`’s fill reads `Root`’s own.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.rootLevelReaderModules(caller: .internal, pair: .lazilyInstantiatedInInstantiator, variation: .plain),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feat)
+		import Feat
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            log: (() -> Log)? = nil,
+		            f: F.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                log: log,
+		                f: f
+		            )
+		        }
+
+		        var log: (() -> Log)? { __safeDI_storage.log }
+		        var f: F.SafeDIOverrides { __safeDI_storage.f }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                log: (() -> Log)?,
+		                f: F.SafeDIOverrides
+		            ) {
+		                self.log = log
+		                self.f = f
+		            }
+
+		            let log: (() -> Log)?
+		            let f: F.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_log() -> Log {
+		            if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
+		        }
+		        let log = LazilyInstantiated<Log>(__safeDI_log)
+		        func __safeDI_f() -> F {
+		            func __safeDI_otherBuilder_F_B_Scope_other(_ scope: F.SafeDIMockScope_Other.B_Scope.other_Values, log: LazilyInstantiated<Log>) -> any Other {
+		                func __safeDI_other() -> LiveOther {
+		                    func __safeDI_fBuilder() -> F {
+		                        F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_F(), otherBuilder: __safeDI_otherBuilder_F(log: log), log: log.instance)
+		                    }
+		                    let fBuilder = Instantiator<F>(__safeDI_fBuilder)
+		                    return LiveOther(fBuilder: fBuilder)
+		                }
+		                let other: any Other = __safeDI_other()
+		                return other
+		            }
+		            func __safeDI_apiBuilder_F() -> F.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(api: { _ in
+		                    let api: any Api = Live(log: log)
+		                    return api
+		                })
+		            }
+		            func __safeDI_otherBuilder_F(log: LazilyInstantiated<Log>) -> F.SafeDIMockScope_Other.__safeDI_Builder<any Other> {
+		                .init(b: { _ in __safeDI_otherBuilder_F_B_Scope(log: log) })
+		            }
+		            func __safeDI_otherBuilder_F_B_Scope(log: LazilyInstantiated<Log>) -> F.SafeDIMockScope_Other.B_Scope.__safeDI_Builder<any Other> {
+		                .init(other: { scope in __safeDI_otherBuilder_F_B_Scope_other(scope, log: log) })
+		            }
+		            _ = F.__safeDI_F_mock_5DD5A60BEFB14B01.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_F(), otherBuilder: __safeDI_otherBuilder_F(log: log), log: log.instance, safeDIOverrides: safeDIOverrides.f)
+		        }
+		        let f: F = __safeDI_f()
+		        return Root(log: log, f: f)
+		    }
+		}
+		#endif
+		"""])
+	}
+
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_createsReenteredTreeInInlineOrder_whenFillBuildsCalledTypeAgain() async throws {
@@ -2746,6 +2889,228 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				knownRightExpression: "{ let root = Root(); return (\(reentered).a.api as! Live).log === root.log }()",
 			),
 		]
+	}
+
+	/// The adopter’s shape with its place on the called type’s root level and a second place below it whose fill builds the
+	/// called type again: `F` holds `api`, which `Live` fills, receiving `Root`’s `log` in `pair`’s wrapper; `B`, whose place
+	/// `other` `LiveOther` fills, reading no `log` and instantiating `fBuilder` in `pair`’s instantiator; and `Z`, which
+	/// receives `log`, so `F`’s mock binds `log` by value. `variation` changes one thing of that shape. `caller` decides
+	/// `Root`’s attribute, or that `App` lists it in `additionalMocksToGenerate`. Where `logsCreation`, `Log` and `Live`
+	/// record their creation in `Log.created`.
+	private static func rootLevelReaderModules(caller: CallingMockCallerKind, pair: ReenteringWrapperPair, variation: RootLevelReaderVariation, logsCreation: Bool = false) -> [ModuleFixture] {
+		var appFiles = [
+			"AppTypes.swift": "import Feat\nimport SafeDI\n\n" + rootLevelReaderAppTypes(rootAttribute: caller.attribute(listed: "@Instantiable(isRoot: true)"), pair: pair, variation: variation, logsCreation: logsCreation),
+		]
+		if caller == .listed {
+			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"])\n"
+		}
+		return [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": rootLevelReaderFeatureTypes(callee: twinCalledTypes, variation: variation, logsCreation: logsCreation)]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Feat"]),
+		]
+	}
+
+	/// `rootLevelReaderModules`’ types in one module, `Root` a root: what inline builds.
+	private static func rootLevelReaderInlineModules(pair: ReenteringWrapperPair, variation: RootLevelReaderVariation, logsCreation: Bool = false) -> [ModuleFixture] {
+		var types = rootLevelReaderFeatureTypes(callee: "@Instantiable", variation: variation, logsCreation: logsCreation)
+		types += "\n\n"
+		types += rootLevelReaderAppTypes(rootAttribute: "@Instantiable(isRoot: true)", pair: pair, variation: variation, logsCreation: logsCreation)
+		return [ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": types])]
+	}
+
+	/// `F`, declared with `callee`, and the types its tree builds, of `rootLevelReaderModules`.
+	private static func rootLevelReaderFeatureTypes(callee: String, variation: RootLevelReaderVariation, logsCreation: Bool) -> String {
+		var zLog = "Log"
+		var zReceive = "@Received"
+		if variation == .receivedOnlyIfAvailable {
+			zLog = "Log?"
+			zReceive = "@Received(onlyIfAvailable: true)"
+		}
+		var place = (label: "api", type: "any Api", attribute: "@Instantiated")
+		if variation == .erasedPlace {
+			place = (label: "apiBuilder", type: "ErasedInstantiator<(), any Api>", attribute: "@Instantiated(fulfilledByType: \"Api\")")
+		}
+		var holder = (label: "b", type: "B")
+		var log = """
+		@Instantiable
+		public final class Log: Instantiable, Sendable {
+		    public init() {}
+		}
+		"""
+		if logsCreation {
+			log = """
+			@Instantiable
+			public final class Log: Instantiable, Sendable {
+			    public init() {
+			        Log.created.append("Log")
+			    }
+
+			    nonisolated(unsafe) public static var created = [String]()
+			}
+			"""
+		}
+		var types = """
+		import SafeDI
+
+		public protocol Api {}
+
+		public protocol Other {}
+
+		\(log)
+
+		@Instantiable
+		public final class Z: Instantiable {
+		    init(log: \(zLog)) {
+		        self.log = log
+		    }
+
+		    \(zReceive) public let log: \(zLog)
+		}
+
+		@Instantiable
+		public final class B: Instantiable {
+		    init(other: any Other) {
+		        self.other = other
+		    }
+
+		    @Instantiated public let other: any Other
+		}
+
+
+		"""
+		if variation == .otherPlaceTwoLevelsDown {
+			holder = (label: "bb", type: "BB")
+			types += """
+			@Instantiable
+			public final class BB: Instantiable {
+			    init(b: B) {
+			        self.b = b
+			    }
+
+			    @Instantiated public let b: B
+			}
+
+
+			"""
+		}
+		types += """
+		\(callee)
+		public final class F: Instantiable {
+		    public init(\(place.label): \(place.type), \(holder.label): \(holder.type), z: Z) {
+		        self.\(place.label) = \(place.label)
+		        self.\(holder.label) = \(holder.label)
+		        self.z = z
+		    }
+
+		    \(place.attribute) public let \(place.label): \(place.type)
+		    @Instantiated public let \(holder.label): \(holder.type)
+		    @Instantiated public let z: Z
+		}
+		"""
+		return types
+	}
+
+	/// `Live`, `LiveOther`, `Mid` where `variation` puts it between `Root` and `F`, and `Root`, declared with
+	/// `rootAttribute`, of `rootLevelReaderModules`; where `logsCreation`, `Live` records its creation in `Log.created`.
+	private static func rootLevelReaderAppTypes(rootAttribute: String, pair: ReenteringWrapperPair, variation: RootLevelReaderVariation, logsCreation: Bool) -> String {
+		let log = "\(pair.wrapper.name)<Log>"
+		let fBuilder = "\(pair.instantiator)<F>"
+		var rootHeld = (label: "f", type: "F")
+		var liveCreation = ""
+		if logsCreation {
+			liveCreation = "\n        Log.created.append(\"Live\")"
+		}
+		var types = """
+		@Instantiable(fulfillingAdditionalTypes: [Api.self])
+		public final class Live: Api, Instantiable {
+		    public init(log: \(log)) {
+		        self.log = log\(liveCreation)
+		    }
+
+		    @Received public let log: \(log)
+		}
+
+		@Instantiable(fulfillingAdditionalTypes: [Other.self])
+		public final class LiveOther: Other, Instantiable {
+		    public init(fBuilder: \(fBuilder)) {
+		        self.fBuilder = fBuilder
+		    }
+
+		    @Instantiated public let fBuilder: \(fBuilder)
+		}
+
+
+		"""
+		if variation == .mockedTypeBetween {
+			rootHeld = (label: "mid", type: "Mid")
+			types += """
+			@Instantiable(generateMock: true)
+			public final class Mid: Instantiable {
+			    public init(f: F) {
+			        self.f = f
+			    }
+
+			    @Instantiated public let f: F
+			}
+
+
+			"""
+		}
+		types += """
+		\(rootAttribute)
+		public final class Root: Instantiable {
+		    public init(log: \(log), \(rootHeld.label): \(rootHeld.type)) {
+		        self.log = log
+		        self.\(rootHeld.label) = \(rootHeld.label)
+		    }
+
+		    @Instantiated public let log: \(log)
+		    @Instantiated public let \(rootHeld.label): \(rootHeld.type)
+		}
+		"""
+		return types
+	}
+
+	/// What `Root`’s mock and inline `Root` build; whether the `Live` that fills `F`’s place holds `Root`’s wrapper; whether
+	/// the `Live` and the `Z` of the `F` that `LiveOther` builds again hold `Root`’s wrapper and its value; and, where
+	/// `variation` puts `Mid` between, whether the two `Live`s of `Mid`’s own mock hold one wrapper.
+	private static func rootLevelReaderProbes(variation: RootLevelReaderVariation) -> [DifferentialValueProbe] {
+		var f = "root.f"
+		if variation == .mockedTypeBetween {
+			f = "root.mid.f"
+		}
+		var other = "\(f).b.other"
+		if variation == .otherPlaceTwoLevelsDown {
+			other = "\(f).bb.b.other"
+		}
+		let reentered = "(\(other) as! LiveOther).fBuilder.instantiate()"
+		func live(of f: String) -> String {
+			variation == .erasedPlace ? "(\(f).apiBuilder.instantiate() as! Live)" : "(\(f).api as! Live)"
+		}
+		var probes = [
+			DifferentialValueProbe(name: "Root", expression: "Root.mock()", knownRightExpression: "Root()"),
+			DifferentialValueProbe(
+				name: "Live’s log is Root’s",
+				expression: "{ let root = Root.mock(); return \(live(of: f)).log === root.log }()",
+				knownRightExpression: "{ let root = Root(); return \(live(of: f)).log === root.log }()",
+			),
+			DifferentialValueProbe(
+				name: "the Live of F built again holds Root’s log",
+				expression: "{ let root = Root.mock(); return \(live(of: reentered)).log === root.log }()",
+				knownRightExpression: "{ let root = Root(); return \(live(of: reentered)).log === root.log }()",
+			),
+			DifferentialValueProbe(
+				name: "the Z of F built again holds Root’s Log",
+				expression: "{ let root = Root.mock(); return \(reentered).z.log === root.log.instance }()",
+				knownRightExpression: "{ let root = Root(); return \(reentered).z.log === root.log.instance }()",
+			),
+		]
+		if variation == .mockedTypeBetween {
+			let midsReentered = "(mid.f.b.other as! LiveOther).fBuilder.instantiate()"
+			let midsLivesShareLog = "{ let mid = Mid.mock(); return \(live(of: midsReentered)).log === \(live(of: "mid.f")).log }()"
+			probes.append(DifferentialValueProbe(name: "the Lives of Mid’s mock hold one log", expression: midsLivesShareLog, knownRightExpression: midsLivesShareLog))
+		}
+		return probes
 	}
 
 	/// `seamBuiltAgainModules`’ types in one module, `Root` a root: what inline builds.
@@ -5157,6 +5522,33 @@ enum ReenteringOtherPlaceLayout: CaseIterable, CustomTestStringConvertible, Send
 			"other place beside the place"
 		case .childOfOtherFill:
 			"other fill’s child builds F again"
+		}
+	}
+}
+
+/// What changes in the shape whose place reading the caller’s lazy value is on the called type’s root level while a second
+/// place’s fill builds the called type again: nothing, a mocked type between the caller and the called type, the second
+/// place a level further down, the first place an `ErasedInstantiator`, or the called type’s tree receiving the value
+/// only if available.
+enum RootLevelReaderVariation: CustomTestStringConvertible, Sendable {
+	case plain
+	case mockedTypeBetween
+	case otherPlaceTwoLevelsDown
+	case erasedPlace
+	case receivedOnlyIfAvailable
+
+	var testDescription: String {
+		switch self {
+		case .plain:
+			"as drawn"
+		case .mockedTypeBetween:
+			"mocked type between"
+		case .otherPlaceTwoLevelsDown:
+			"other place two levels down"
+		case .erasedPlace:
+			"erased place"
+		case .receivedOnlyIfAvailable:
+			"received only if available"
 		}
 	}
 }

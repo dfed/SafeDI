@@ -1639,6 +1639,14 @@ struct PublicMockCall: Sendable {
 		return builders.filter { !calledBuilders.sitesReachedOnItsRoutes(by: $0, in: enumsByKey).isSubset(of: filledSites) }
 	}
 
+	/// The labels of the received values the call hands the mock from the caller's scope: each received parameter it passes
+	/// that is no builder.
+	var labelsHandedFromCallersScope: Set<String> {
+		Set(passedParameters.compactMap { parameter in
+			parameter.builder == nil && parameter.dependency.source.isReceived ? parameter.dependency.property.label : nil
+		})
+	}
+
 	/// Whether the leaf that makes the call receives `property` as a builder it passes up, which an internal mock takes as a
 	/// parameter of its own (see `passedUpBuilders`).
 	func passesUpBuilder(receivedAs property: Property) -> Bool {

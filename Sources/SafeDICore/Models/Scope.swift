@@ -869,7 +869,8 @@ private struct ScopeGeneratorUnderConstruction {
 			// Where the fill reads it in a form the called mock's copy does not provide, the caller's wrapper, a level whose
 			// payload holds that by-value copy hands the fill the root level function's own parameter, past the copy
 			// (`Fill.labelsHandedPastCalledMockCopy`); where the copy provides every form the fill reads, the levels hand the
-			// copy, which holds the same value.
+			// copy, which holds the same value: where the copy is a wrapper, one the called mock made of its own around the
+			// instance, which is a known defect (`public-mock-builders.md`, “The caller's own value”).
 			var labelsHandedPastCalledMockCopyByCaseKey = [String: Set<String>]()
 			if scope.publicMockCall != nil, let calledBuilders = scope.calledBuilders, Self.callsInsideFills(of: holeArguments, reenter: calledBuilders) {
 				for (caseKey, places) in placesByCaseKey {
@@ -986,13 +987,18 @@ private struct ScopeGeneratorUnderConstruction {
 			enclosingCarriedInnerScopesOfThisCall[dispatcher.key] = dispatcher.carriedInnerScopes
 		}
 		self.enclosingCarriedInnerScopesOfThisCall = enclosingCarriedInnerScopesOfThisCall
-		// A root level function of this call that takes nothing hides an enclosing call's of the same dispatcher; what each
-		// takes the pass before decided from the call's level functions (`ScopeGenerator.publicMockRootLevelReentries`).
+		// A root level function of this call hides an enclosing call's of the same dispatcher, also where it takes nothing;
+		// what each takes the pass before decided from the call's level functions (`ScopeGenerator.publicMockRootLevelReentries`).
+		// A call that re-enters one also hands the called mock the values the call's tier receives, of its own scope
+		// (`Reentry.labelsHandedToCalledMock`).
 		var enclosingLevelReentriesOfThisCall = enclosingLevelReentries
-		if scope.publicMockCall != nil {
+		if let publicMockCall = scope.publicMockCall {
 			let rootLevelReentries = previousPassGenerator?.publicMockRootLevelReentries ?? [:]
+			let labelsHandedToCalledMock = publicMockCall.labelsHandedFromCallersScope
 			for dispatcher in dispatchersOfThisCall {
-				enclosingLevelReentriesOfThisCall[dispatcher.key] = rootLevelReentries[dispatcher.key]
+				var reentry = rootLevelReentries[dispatcher.key] ?? PublicMockLevelFunctions.Reentry(upName: nil, parameters: [])
+				reentry.labelsHandedToCalledMock = labelsHandedToCalledMock
+				enclosingLevelReentriesOfThisCall[dispatcher.key] = reentry
 			}
 		}
 		self.enclosingLevelReentriesOfThisCall = enclosingLevelReentriesOfThisCall
@@ -1388,9 +1394,9 @@ private struct ScopeGeneratorUnderConstruction {
 	/// the call as `child` would inline, so the caller builds a required one first; the parameter the fill takes for it,
 	/// optional where no read requires it, so a route on which the caller declares none passes `nil`; and the argument the
 	/// root dispatcher passes: the caller's declaration of the parameter's form, its instance where the caller holds it
-	/// lazily, or `nil`. `labelsHandedToReenteredFunctions` are the labels of the values a call in `child`'s tree that
-	/// re-enters a root level function of an enclosing call hands it non-optional.
-	private static func callerReads(of fill: Fill, child: ScopeGenerator, labelsHandedToReenteredFunctions: Set<String>) -> ScopeGenerator.FillCallerReads {
+	/// lazily, or `nil`. `reenteringCallReads` are the labels of the values a call in `child`'s tree that re-enters a root
+	/// level function of an enclosing call reads of its own scope.
+	private static func callerReads(of fill: Fill, child: ScopeGenerator, reenteringCallReads: ReenteringCallReads) -> ScopeGenerator.FillCallerReads {
 		var reads = ScopeGenerator.FillCallerReads()
 		// The inner scope, only where the fill's tree builds a place or a call that passes one up, whose case carries it, or a
 		// call that re-enters an enclosing call's fill, whose case's member is called on it.
@@ -1407,9 +1413,14 @@ private struct ScopeGeneratorUnderConstruction {
 			// on a declaration of the seam's tree is an error (`FillFinding.Kind.closesCycleInSeamTree`).
 			var forms = Set(child.receivedProperties.filter { $0.label == label })
 			// A call in `child`'s tree that re-enters a root level function hands it the fill's value of each label the function
-			// takes (`PublicMockLevelFunctions.Reentry`), so the fill takes that value as a required read where the function takes
-			// it non-optional, whatever the fill's own tree reads of it.
-			let isHandedToReenteredFunction = labelsHandedToReenteredFunctions.contains(label)
+			// takes (`PublicMockLevelFunctions.Reentry`), and hands the called mock itself the fill's value of each label its
+			// tier receives, which `child`'s tree then receives from outside the fill. The fill takes that value as a required
+			// read, in the field's form, which the function takes or would take: where the function takes it non-optional,
+			// whatever the fill's own tree reads of it, and where the call hands it to the called mock, also where no function
+			// takes it non-optional, as where the fill that reads it is on the called mock's root level and reads the caller's
+			// declaration.
+			let isHandedToReenteredFunction = reenteringCallReads.handedToFunctions.contains(label)
+				|| (!forms.isEmpty && reenteringCallReads.handedToCalledMock.contains(label))
 			if isHandedToReenteredFunction {
 				forms.insert(field.property)
 			}
@@ -1435,17 +1446,26 @@ private struct ScopeGeneratorUnderConstruction {
 		return reads
 	}
 
-	/// The labels of the values the root level functions of enclosing calls that a call in `generator`'s tree re-enters
-	/// take non-optional, which the re-entering call reads of its own scope (`PublicMockLevelFunctions.Reentry`, found the
-	/// pass before).
-	private func labelsHandedToReenteredFunctions(by generator: ScopeGenerator) -> Set<String> {
-		var labels = Set<String>()
-		for key in generator.referencedFillNamesByKey.keys {
-			for property in enclosingLevelReentries[key]?.parameters ?? [] where !property.typeDescription.isOptional {
-				labels.insert(property.label)
+	/// The labels of the values a call in a fill's tree that re-enters a root level function of an enclosing call reads of
+	/// its own scope.
+	private struct ReenteringCallReads {
+		/// Those the functions take non-optional, which the call hands them.
+		var handedToFunctions = Set<String>()
+		/// Those the call hands the called mock itself, as the values its tier receives.
+		var handedToCalledMock = Set<String>()
+	}
+
+	/// What the calls in `generator`'s tree that re-enter the root level functions of enclosing calls read of their own
+	/// scope (`PublicMockLevelFunctions.Reentry`, which the pass before found the functions' parameters of).
+	private func reenteringCallReads(in generator: ScopeGenerator) -> ReenteringCallReads {
+		var reads = ReenteringCallReads()
+		for reentry in generator.referencedFillNamesByKey.keys.compactMap({ enclosingLevelReentries[$0] }) {
+			for property in reentry.parameters where !property.typeDescription.isOptional {
+				reads.handedToFunctions.insert(property.label)
 			}
+			reads.handedToCalledMock.formUnion(reentry.labelsHandedToCalledMock)
 		}
-		return labels
+		return reads
 	}
 
 	/// What a call hands a parameter of `property`'s form that a fill reads of the scope enclosing the call, given that
@@ -1518,9 +1538,7 @@ private struct ScopeGeneratorUnderConstruction {
 		handedFrom callerDeclarations: NearestDeclarations,
 		by call: PublicMockCall,
 	) -> Set<String> {
-		let labelsHandedFromCaller = Set(call.passedParameters.compactMap { parameter in
-			parameter.builder == nil && parameter.dependency.source.isReceived ? parameter.dependency.property.label : nil
-		})
+		let labelsHandedFromCaller = call.labelsHandedFromCallersScope
 		// Whether the fill reads the caller's declaration of `label` at `place`: where the place carries a field of the label,
 		// where that field is the called mock's copy; where it carries none, always. A place carries no field of a label no
 		// level holds on its route, where the fill reads the caller's declaration already (`callerReadLabels`), nor at a place
@@ -1756,7 +1774,7 @@ private struct ScopeGeneratorUnderConstruction {
 				fields: fill.fields,
 				caseHoles: fill.caseHoles,
 				emitsCode: fill.emitsCode,
-				callerReads: Self.callerReads(of: fill, child: builtGenerator, labelsHandedToReenteredFunctions: labelsHandedToReenteredFunctions(by: builtGenerator)),
+				callerReads: Self.callerReads(of: fill, child: builtGenerator, reenteringCallReads: reenteringCallReads(in: builtGenerator)),
 				returnsWrapperBuilder: fill.returnsWrapperBuilder,
 				child: builtGenerator,
 			)

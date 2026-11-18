@@ -89,7 +89,8 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 	/// type of the called type's tree receives that value by value, or only if available (`CallerLazyValue`): production
 	/// fills the place, handing the fill the wrapper the caller holds, so the calling mock must too, which its values,
 	/// compared with the same types built inline, show. The called type is called by the caller, by a mocked intermediate
-	/// type the caller instantiates, or by the caller with the fill calling it again (`CallerLazyValue.Call`).
+	/// type the caller instantiates, or by the caller with the fill calling it again (`CallerLazyValue.Call`). Some graphs
+	/// hold the place on the called type's root level instead (`CallerLazyValue.placeOnCalledTypesRoot`).
 	case fillReceivesCallersLazyValueBelowCalledRoot
 
 	static func < (lhs: Self, rhs: Self) -> Bool {
@@ -307,6 +308,10 @@ struct GraphFuzzerCallingMockDraw {
 			// Drawn last, and only for the `Sendable` wrapper: a `LazilyInstantiated` a fill reads inside a `@Sendable` function is
 			// an error, in production too (`SafeDIToolCallingMockMirrorsProductionTests`' `ReenteringWrapperPair`).
 			buildsPlaceInSendableFunctionToo = wrapper == "SendableLazilyInstantiated" ? random.element(of: [false, true]) : false
+			// Drawn after every other variation, and not where the fill calls the called type again: a place on the called mock's
+			// root level whose fill builds the called type again is the third known defect of “The caller's own value”
+			// (`public-mock-builders.md`), whose re-entered call is handed another wrapper than inline's.
+			placeOnCalledTypesRoot = call == .fillCallsAgain ? false : random.element(of: [false, true])
 		}
 
 		/// Which type of the caller's module calls the called type, and whether the fill calls it again.
@@ -340,6 +345,11 @@ struct GraphFuzzerCallingMockDraw {
 		/// Whether the called type also instantiates a `SendableInstantiator` of the level between, so it builds the place in
 		/// plain code and inside that instantiator's `@Sendable` function, outside which the called mock binds the value.
 		let buildsPlaceInSendableFunctionToo: Bool
+		/// Whether the called type holds the place itself, on its root level, in place of the level between, which it then
+		/// declares only where it builds that level inside a `SendableInstantiator` (`buildsPlaceInSendableFunctionToo`), so
+		/// that the fill that reads the caller's value is on the root level while a second place's fill re-enters
+		/// (`secondPlaceCallsAgain`).
+		let placeOnCalledTypesRoot: Bool
 	}
 
 	/// How the caller and the called type's tree hold the value, for the shape whose fill receives the caller's lazy value
@@ -567,8 +577,8 @@ struct GraphFuzzerCallingMockDraw {
 		let caller = "\(names.callerModuleName).\(names.caller)"
 		let fill = "\(names.callerModuleName).\(names.fill)"
 		let placeLabel = holePlace(protocolName: names.hole, fillName: names.fill).label
-		// The place below the called type's root, from the called type.
-		let placeInCalledType = "\(names.between.lowercasedFirst).\(placeLabel)"
+		// The place below the called type's root, or on it, from the called type.
+		let placeInCalledType = callerLazyValue?.placeOnCalledTypesRoot == true ? placeLabel : "\(names.between.lowercasedFirst).\(placeLabel)"
 		let calledType = if let intermediate = callerLazyValue?.intermediate {
 			"\(intermediate.lowercasedFirst).\(names.inner.lowercasedFirst)"
 		} else {
@@ -1383,7 +1393,8 @@ struct GraphFuzzerCallingMockDraw {
 	/// The called type's module of the fill that receives the caller's lazy value below the called type's root. The called
 	/// type, a seam and public mock, instantiates the level between, whose initializer the caller's module cannot call, so
 	/// the place the level between holds is below the called type's root, and a sibling that receives the value by value,
-	/// or only if available, so the called type's tree binds it.
+	/// or only if available, so the called type's tree binds it. Where the place is on the called type's root level, the
+	/// called type holds it in place of the level between.
 	private var lazyValueBelowCalledRootModuleContent: String {
 		let place = holePlace(protocolName: names.hole, fillName: names.fill)
 		let between = names.between.lowercasedFirst
@@ -1392,10 +1403,26 @@ struct GraphFuzzerCallingMockDraw {
 		let receivesOnlyIfAvailable = callerLazyValue?.receivesOnlyIfAvailable == true
 		let siblingValueType = receivesOnlyIfAvailable ? "\(names.value)?" : names.value
 		let siblingAttribute = receivesOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received"
-		var innerProperties = [(label: between, type: names.between), (label: sibling, type: names.sibling)]
+		var innerProperties = [(attribute: "@Instantiated", label: between, type: names.between), (attribute: "@Instantiated", label: sibling, type: names.sibling)]
+		let placeIsOnRoot = callerLazyValue?.placeOnCalledTypesRoot == true
+		if placeIsOnRoot {
+			innerProperties[0] = (attribute: place.attribute, label: place.label, type: place.type)
+		}
+		var betweenDeclaration = """
+
+
+		@Instantiable
+		public final class \(names.between): Instantiable {
+		    init(\(place.label): \(place.type)) { self.\(place.label) = \(place.label) }
+		    \(place.attribute) public let \(place.label): \(place.type)
+		}
+		"""
+		if placeIsOnRoot, callerLazyValue?.buildsPlaceInSendableFunctionToo != true {
+			betweenDeclaration = ""
+		}
 		var secondLevel = ""
 		if callerLazyValue?.secondPlaceCallsAgain == true {
-			innerProperties.append((label: Self.secondLevelLabel, type: "Hub"))
+			innerProperties.append((attribute: "@Instantiated", label: Self.secondLevelLabel, type: "Hub"))
 			secondLevel = """
 
 
@@ -1409,11 +1436,11 @@ struct GraphFuzzerCallingMockDraw {
 			"""
 		}
 		if callerLazyValue?.buildsPlaceInSendableFunctionToo == true {
-			innerProperties.append((label: "\(between)Builder", type: "SendableInstantiator<\(names.between)>"))
+			innerProperties.append((attribute: "@Instantiated", label: "\(between)Builder", type: "SendableInstantiator<\(names.between)>"))
 		}
 		let innerParameters = innerProperties.map { "\($0.label): \($0.type)" }.joined(separator: ", ")
 		let innerAssignments = innerProperties.map { "self.\($0.label) = \($0.label)" }.joined(separator: "; ")
-		let innerDeclarations = innerProperties.map { "    @Instantiated public let \($0.label): \($0.type)" }.joined(separator: "\n")
+		let innerDeclarations = innerProperties.map { "    \($0.attribute) public let \($0.label): \($0.type)" }.joined(separator: "\n")
 		return """
 		import SafeDI
 
@@ -1422,13 +1449,7 @@ struct GraphFuzzerCallingMockDraw {
 		@Instantiable
 		public final class \(names.value): Instantiable, Sendable {
 		    public init() {}
-		}
-
-		@Instantiable
-		public final class \(names.between): Instantiable {
-		    init(\(place.label): \(place.type)) { self.\(place.label) = \(place.label) }
-		    \(place.attribute) public let \(place.label): \(place.type)
-		}
+		}\(betweenDeclaration)
 
 		@Instantiable
 		public final class \(names.sibling): Instantiable {

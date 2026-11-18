@@ -1246,6 +1246,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillReceivesCallersLazyValueBelowCalledRoot, caller: .internal, place: .plain))
 		#expect(draw.callerLazyValue?.call == .mockedIntermediateReceivingValueCalls)
 		#expect(draw.callerLazyValue?.receivesOnlyIfAvailable == true)
+		#expect(draw.callerLazyValue?.placeOnCalledTypesRoot == false)
 		#expect(draw.graph.comparesValuesWithInline)
 		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
 		#expect(result.passUps.isEmpty)
@@ -1253,20 +1254,49 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 	}
 
-	/// Seed 766 draws a graph of `fillReceivesCallersLazyValueBelowCalledRoot/internal/plain` whose called type also holds a
+	/// Seed 782 draws a graph of `fillReceivesCallersLazyValueBelowCalledRoot/listed/plain` whose called type also holds a
 	/// second level with a second place, whose fill reads nothing and builds the called type again, so the call inside that
 	/// fill re-enters the root level function, which takes the caller's wrapper (`CallerLazyValue.secondPlaceCallsAgain`).
-	/// It fails with the second fill's taking that wrapper reverted, when the fill takes it optionally and hands the
-	/// optional to the re-entered function, and the mock does not compile.
+	/// It fails with the second fill's taking each value the re-entering call reads reverted, when the fill takes the
+	/// wrapper optionally and hands the optional to the re-entered function, and the mock does not compile. The half of that
+	/// rule for the values the called mock receives also takes every value the re-entered function takes here, so the graph
+	/// fails only with both halves reverted.
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func callingMock_buildsInlineValues_whenDrawnSecondPlacesFillCallsCalledTypeAgain() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 782)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 782)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillReceivesCallersLazyValueBelowCalledRoot, caller: .listed, place: .plain))
+		#expect(draw.callerLazyValue?.call == .callerCalls)
+		#expect(draw.callerLazyValue?.secondPlaceCallsAgain == true)
+		#expect(draw.callerLazyValue?.buildsPlaceInSendableFunctionToo == false)
+		#expect(draw.callerLazyValue?.placeOnCalledTypesRoot == false)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.isEmpty)
+		#expect(result.comparedValues)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// Seed 766 draws a graph of `fillReceivesCallersLazyValueBelowCalledRoot/internal/plain` whose called type holds the
+	/// place on its own root level (`CallerLazyValue.placeOnCalledTypesRoot`), whose fill reads the caller's wrapper as the
+	/// caller's own value, beside a second level with a second place, whose fill reads nothing and builds the called type
+	/// again (`CallerLazyValue.secondPlaceCallsAgain`), where the called type receives the value only if available. No root
+	/// level function takes the wrapper non-optional, but the call inside the second fill hands the called mock its
+	/// instance. It fails with the second fill's taking the values the called mock receives reverted, when the fill takes
+	/// the wrapper optionally and the call reads its instance as though it did not, and the mock does not compile.
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_buildsInlineValues_whenDrawnSecondPlacesFillCallsCalledTypeAgainBesidePlaceOnCalledTypesRoot() async throws {
 		let draw = GraphFuzzerCallingMockDraw(seed: 766)
 
 		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 766)
 
 		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillReceivesCallersLazyValueBelowCalledRoot, caller: .internal, place: .plain))
 		#expect(draw.callerLazyValue?.call == .callerCalls)
+		#expect(draw.callerLazyValue?.receivesOnlyIfAvailable == true)
+		#expect(draw.callerLazyValue?.placeOnCalledTypesRoot == true)
 		#expect(draw.callerLazyValue?.secondPlaceCallsAgain == true)
 		#expect(draw.callerLazyValue?.buildsPlaceInSendableFunctionToo == false)
 		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
@@ -1291,6 +1321,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(draw.callerLazyValue?.receivesOnlyIfAvailable == true)
 		#expect(draw.callerLazyValue?.buildsPlaceInSendableFunctionToo == true)
 		#expect(draw.callerLazyValue?.secondPlaceCallsAgain == false)
+		#expect(draw.callerLazyValue?.placeOnCalledTypesRoot == false)
 		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
 		#expect(result.passUps.isEmpty)
 		#expect(result.comparedValues)
@@ -1299,8 +1330,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	/// The graphs of the shape whose fill receives the caller's lazy value below the called type's root draw each wrapper,
 	/// each way the called type's tree receives the value, each call (`CallerLazyValue.Call`), each caller kind, each place,
-	/// a second place whose fill calls the called type again, and, for the `Sendable` wrapper, a place built in a
-	/// `@Sendable` function too, in the pinned number of graphs, each in at least ten, and the cell test compiles and
+	/// a second place whose fill calls the called type again, for the `Sendable` wrapper a place built in a `@Sendable`
+	/// function too, and the place on the called type's root level, in the pinned number of graphs, each in at least ten
+	/// (the place on the root level beside a second place that calls again in nine), and the cell test compiles and
 	/// compares the pinned number of them, each call with each place among them, and each later variation.
 	@Test
 	func fillReceivesCallersLazyValueBelowCalledRootDraw_drawsEachVariation_inPinnedNumberOfGraphs() {
@@ -1376,6 +1408,18 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			"mockedIntermediateReceivingValueCalls public": 6,
 			"no intermediate": 33,
 			"onlyIfAvailable": 28,
+			"placeOnCalledTypesRoot": 19,
+			"placeOnCalledTypesRoot deferred": 9,
+			"placeOnCalledTypesRoot internal": 5,
+			"placeOnCalledTypesRoot listed": 6,
+			"placeOnCalledTypesRoot plain": 10,
+			"placeOnCalledTypesRoot public": 8,
+			"placeOnCalledTypesRoot secondPlaceCallsAgain": 9,
+			"placeOnCalledTypesRoot secondPlaceCallsAgain deferred": 4,
+			"placeOnCalledTypesRoot secondPlaceCallsAgain internal": 3,
+			"placeOnCalledTypesRoot secondPlaceCallsAgain listed": 1,
+			"placeOnCalledTypesRoot secondPlaceCallsAgain plain": 5,
+			"placeOnCalledTypesRoot secondPlaceCallsAgain public": 5,
 			"plain": 30,
 			"public": 20,
 			"secondPlaceCallsAgain": 30,
@@ -1384,29 +1428,35 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			"secondPlaceCallsAgain listed": 6,
 			"secondPlaceCallsAgain plain": 12,
 			"secondPlaceCallsAgain public": 11,
-			"compared": 32,
+			"compared": 35,
 			"compared LazilyInstantiated byValue": 9,
-			"compared LazilyInstantiated onlyIfAvailable": 8,
+			"compared LazilyInstantiated onlyIfAvailable": 11,
 			"compared SendableLazilyInstantiated byValue": 8,
 			"compared SendableLazilyInstantiated onlyIfAvailable": 7,
 			"compared buildsPlaceInSendableFunctionToo": 9,
 			"compared buildsPlaceInSendableFunctionToo deferred": 3,
 			"compared buildsPlaceInSendableFunctionToo plain": 6,
-			"compared callerCalls": 9,
-			"compared callerCalls deferred": 4,
-			"compared callerCalls plain": 5,
+			"compared callerCalls": 11,
+			"compared callerCalls deferred": 5,
+			"compared callerCalls plain": 6,
 			"compared fillCallsAgain": 8,
 			"compared fillCallsAgain deferred": 4,
 			"compared fillCallsAgain plain": 4,
 			"compared mockedIntermediateCalls": 6,
 			"compared mockedIntermediateCalls deferred": 4,
 			"compared mockedIntermediateCalls plain": 2,
-			"compared mockedIntermediateReceivingValueCalls": 9,
-			"compared mockedIntermediateReceivingValueCalls deferred": 4,
+			"compared mockedIntermediateReceivingValueCalls": 10,
+			"compared mockedIntermediateReceivingValueCalls deferred": 5,
 			"compared mockedIntermediateReceivingValueCalls plain": 5,
-			"compared secondPlaceCallsAgain": 17,
-			"compared secondPlaceCallsAgain deferred": 10,
-			"compared secondPlaceCallsAgain plain": 7,
+			"compared placeOnCalledTypesRoot": 13,
+			"compared placeOnCalledTypesRoot deferred": 6,
+			"compared placeOnCalledTypesRoot plain": 7,
+			"compared placeOnCalledTypesRoot secondPlaceCallsAgain": 6,
+			"compared placeOnCalledTypesRoot secondPlaceCallsAgain deferred": 3,
+			"compared placeOnCalledTypesRoot secondPlaceCallsAgain plain": 3,
+			"compared secondPlaceCallsAgain": 19,
+			"compared secondPlaceCallsAgain deferred": 11,
+			"compared secondPlaceCallsAgain plain": 8,
 		])
 		#expect(GraphFuzzerCallingMockDraw(seed: 0).callerLazyValue == nil)
 	}
@@ -1939,7 +1989,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	}()
 
 	/// The variations `draw` draws after the call, of the shape whose fill receives the caller's lazy value below the called
-	/// type's root (`CallerLazyValue.secondPlaceCallsAgain`, `buildsPlaceInSendableFunctionToo`).
+	/// type's root (`CallerLazyValue.secondPlaceCallsAgain`, `buildsPlaceInSendableFunctionToo`, `placeOnCalledTypesRoot`),
+	/// and the place on the root level with a second place whose fill calls the called type again, as one more.
 	static func callerLazyValueVariationsDrawnAfterTheCall(of draw: GraphFuzzerCallingMockDraw) -> [String] {
 		var variations = [String]()
 		if draw.callerLazyValue?.secondPlaceCallsAgain == true {
@@ -1947,6 +1998,12 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		}
 		if draw.callerLazyValue?.buildsPlaceInSendableFunctionToo == true {
 			variations.append("buildsPlaceInSendableFunctionToo")
+		}
+		if draw.callerLazyValue?.placeOnCalledTypesRoot == true {
+			variations.append("placeOnCalledTypesRoot")
+			if draw.callerLazyValue?.secondPlaceCallsAgain == true {
+				variations.append("placeOnCalledTypesRoot secondPlaceCallsAgain")
+			}
 		}
 		return variations
 	}
