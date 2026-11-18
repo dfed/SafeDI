@@ -202,7 +202,7 @@ extension ScopeGenerator {
 		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
 		// A child whose call can hand its override closure no builder a person writes has no member
 		// (`MockParameterNode.offersOverrideClosure`).
-		for child in nonCycleChildren where child.offersOverrideClosure {
+		for child in MockParameterNode.inInlineOrder(nonCycleChildren) where child.offersOverrideClosure {
 			members.append(publicMember(
 				for: child,
 				named: disambiguatedLabel(for: child, labelMap: childLabelMap),
@@ -1291,7 +1291,7 @@ extension ScopeGenerator {
 	) -> String {
 		// A child whose call can hand its override closure no builder a person writes has no member
 		// (`MockParameterNode.offersOverrideClosure`).
-		let members = rootChildren.filter(\.offersOverrideClosure).map { child in
+		let members = MockParameterNode.inInlineOrder(rootChildren.filter(\.offersOverrideClosure)).map { child in
 			publicMember(
 				for: child,
 				named: disambiguatedLabel(for: child, labelMap: rootLabelMap),
