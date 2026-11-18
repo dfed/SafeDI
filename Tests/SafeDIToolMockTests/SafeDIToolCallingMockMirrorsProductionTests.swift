@@ -1157,6 +1157,101 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsReenteredFunctionCallersValue_whenFillBuildingCalledTypeAgainReadsValueOnlyIfAvailable() async throws {
+		// The first shape of `generate_fillsPlacesWithCallersValue_whenFillBuildingCalledTypeAgainReadsLessOfValueThanReenteredFunctionTakes`:
+		// `Live2` reads `log` only if available and builds `F` again itself, and `Root` holds `log: Log`. The fill of `api2`
+		// takes `log: Log`, as `__safeDI_apiBuilder_F` and `__safeDI_api2Builder_F`, the root level functions its call
+		// re-enters, do, and hands it on.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.reenteredFunctionModules(caller: .internal, shape: ReenteredFunctionReadShape(reentry: .direct, fillReadsLogOnlyIfAvailable: true, rootWrapper: nil)),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Feat)
+		import Feat
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            log: (() -> Log)? = nil,
+		            f: F.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                log: log,
+		                f: f
+		            )
+		        }
+
+		        var log: (() -> Log)? { __safeDI_storage.log }
+		        var f: F.SafeDIOverrides { __safeDI_storage.f }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                log: (() -> Log)?,
+		                f: F.SafeDIOverrides
+		            ) {
+		                self.log = log
+		                self.f = f
+		            }
+
+		            let log: (() -> Log)?
+		            let f: F.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let log = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
+		        func __safeDI_f() -> F {
+		            func __safeDI_api2Builder_F_B_Scope_api2(_ scope: F.SafeDIMockScope_Api2.B_Scope.api2_Values, log: Log) -> any Api2 {
+		                func __safeDI_api2() -> Live2 {
+		                    func __safeDI_builder() -> F {
+		                        F.__safeDI_mock(api2Builder: __safeDI_api2Builder_F(log: log), apiBuilder: __safeDI_apiBuilder_F(log: log))
+		                    }
+		                    let builder = Instantiator<F>(__safeDI_builder)
+		                    return Live2(log: log, builder: builder)
+		                }
+		                let api2: any Api2 = __safeDI_api2()
+		                return api2
+		            }
+		            func __safeDI_api2Builder_F(log: Log) -> F.SafeDIMockScope_Api2.__safeDI_Builder<any Api2> {
+		                .init(b: { _ in __safeDI_api2Builder_F_B_Scope(log: log) })
+		            }
+		            func __safeDI_api2Builder_F_B_Scope(log: Log) -> F.SafeDIMockScope_Api2.B_Scope.__safeDI_Builder<any Api2> {
+		                .init(api2: { scope in __safeDI_api2Builder_F_B_Scope_api2(scope, log: log) })
+		            }
+		            func __safeDI_apiBuilder_F(log: Log) -> F.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(a: { _ in __safeDI_apiBuilder_F_A_Scope(log: log) })
+		            }
+		            func __safeDI_apiBuilder_F_A_Scope(log: Log) -> F.SafeDIMockScope_Api.A_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { _ in
+		                    let api: any Api = Live(log: log)
+		                    return api
+		                })
+		            }
+		            _ = F.__safeDI_F_mock_1F67931C545189ED.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return F.__safeDI_mock(api2Builder: __safeDI_api2Builder_F(log: log), apiBuilder: __safeDI_apiBuilder_F(log: log), safeDIOverrides: safeDIOverrides.f)
+		        }
+		        let f: F = __safeDI_f()
+		        return Root(log: log, f: f)
+		    }
+		}
+		#endif
+		""")
+	}
+
 	// MARK: Tests – a place passed up whole where a fill of a re-entered call reads the caller’s lazy value
 
 	@Test(arguments: CallingMockCallerKind.allCases, CallerLazyWrapper.allCases)
@@ -7239,9 +7334,10 @@ struct ReenteredFunctionReadShape: CustomTestStringConvertible, Sendable {
 	/// Each shape whose fill takes `log` only because the re-entered function takes it, so that it hands the function
 	/// the value it takes (`Scope.labelsHandedToReenteredFunctions(by:)`). Where the caller holds `log` by value and the
 	/// fill reads none, a fill that does not take it captures the caller’s value, which is what the function takes, so
-	/// those shapes do not depend on it. A fill that reads no `log` and builds the called type again itself, with the
-	/// caller holding `log` lazily, captures the caller’s wrapper where the function takes the value, which does not
-	/// compile with this mechanism or without it: a known defect it does not reach.
+	/// those shapes do not depend on it. A fill that reads no `log`, with the caller holding `log` lazily, captures the
+	/// caller’s wrapper where the function takes the value or its optional, which does not compile with this mechanism or
+	/// without it, where it builds the called type again itself or through a child of its tree, and where it re-enters
+	/// through another call’s fill a function that takes `log` only if available: a known defect it does not reach.
 	static let all: [Self] = {
 		var shapes = [Self]()
 		let rootWrappers: [CallerLazyWrapper?] = [nil, .lazilyInstantiated, .sendableLazilyInstantiated]
