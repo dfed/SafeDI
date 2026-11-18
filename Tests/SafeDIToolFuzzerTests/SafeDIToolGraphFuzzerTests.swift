@@ -8128,6 +8128,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.selfBuildingPublicMockFillReadsToken: 74,
 		.selfBuildingPublicMockPassedUp: 76,
 		.selfBuildingPublicMockPlaceBeneath: 116,
+		.selfBuildingPublicMockReceivesBuilder: 180,
 		.selfBuildingPublicMockThroughSendableInstantiator: 33,
 		.selfBuildingPublicMockThroughStep: 91,
 		.sharedConstructionPublicMock: 247,
@@ -8183,7 +8184,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0xA76D5B5D65E6E197
+	static let publicMockCorpusFixtureHash: UInt64 = 0x75E5FAEF8D8D9A2A
 	static let publicMockCorpusAcceptedSeedCount = 856
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x00FC421C8B43BC22
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -8223,7 +8224,10 @@ struct SafeDIToolGraphFuzzerTests {
 	/// beneath the declaring module (seed 98) and a chain of public mocks through the three modules beneath it (seed 208),
 	/// which a consumer computes from the declaring module's view (`GraphFuzzerSeamDependencyDraw`); and a type built with
 	/// its hand-written mock inside another public mock of its module, whose extensions declare the function only generated
-	/// code calls beside the construction function of that name (seed 37). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
+	/// code calls beside the construction function of that name (seed 37); and a graph that puts a place beneath a
+	/// dependency the public mock promotes, which fails to compile until a public mock keeps such a place
+	/// (`placeBeneathPromotedDependencyReason`): `SelfPart` receiving `SelfNode`'s `SendableInstantiator` beside the place,
+	/// whose construction function forwards the flat `@autoclosure` parameter (seed 189). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
 	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Beyond the corpus, seeds
 	/// 1339, 1649, 2687 and 2840 build a type whose public mock names `customMockName` erased to a concrete existential in
 	/// another module's public mock, whose shared construction function returned the eraser and did not compile
@@ -8233,9 +8237,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// code did not compile before each construction had a function of its own
 	/// (`SafeDIToolPublicMockSharedConstructionTests`); seed 555 draws it in the graph the tool rejects.
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
-	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
+	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x6811652CBED7F527
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x59C881F608EC7DD1
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -8392,8 +8396,63 @@ struct SafeDIToolGraphFuzzerTests {
 		),
 	]
 
-	/// `publicMockKnownIssuesBesideBuilderSurface` with each part of the builder surface added for its seeds.
-	static let publicMockKnownIssues = addingBuilderSurfaceShapes(seeds: publicMockBuilderSurfaceSeeds, to: publicMockKnownIssuesBesideBuilderSurface)
+	/// `publicMockKnownIssuesBesideBuilderSurface` with each part of the builder surface added for its seeds, and then the
+	/// graphs whose place beneath a dependency the public mock promotes is dropped (`placeBeneathPromotedDependencyReason`).
+	static let publicMockKnownIssues = GraphFuzzerKnownIssue.adding(
+		placeBeneathPromotedDependencySignatures + [.renamedGraphDiffers(.dependencyTreeCode)],
+		reason: "\(placeBeneathPromotedDependencyReason), and a hand-written call that passes both of a place's builders, of which the mock takes one, converts that one alone, while under a renaming that moves the builders' labels it converts both",
+		seeds: publicMockPlaceBeneathPromotedDependencyCallerRenamedSeeds,
+		to: GraphFuzzerKnownIssue.adding(
+			placeBeneathPromotedDependencySignatures,
+			reason: placeBeneathPromotedDependencyReason,
+			seeds: publicMockPlaceBeneathPromotedDependencySeeds,
+			to: addingBuilderSurfaceShapes(seeds: publicMockBuilderSurfaceSeeds, to: publicMockKnownIssuesBesideBuilderSurface),
+		),
+	)
+
+	/// Why the graphs of the public mock corpus that put a place beneath a dependency the public mock promotes fail
+	/// (`GraphFuzzerPublicMockDrawFeature.holeHostReceivedByValue` and its neighbours, and
+	/// `selfBuildingPublicMockReceivesBuilder`): owned by the change that keeps such a place, which empties
+	/// `publicMockPlaceBeneathPromotedDependencySeeds` and `publicMockPlaceBeneathPromotedDependencyCallerRenamedSeeds`.
+	private static let placeBeneathPromotedDependencyReason = "A public mock drops a place beneath a dependency it promotes to its root – one a type of its tree receives that the mocked type does not declare – since no case of its enums reaches the place, so the place takes a flat parameter of the mock where the mock should take its builder, and the hand-written caller that passes the builder does not compile; where the mocked type is built again inside a `@Sendable` function, the mock’s construction function forwards the flat `@autoclosure` parameter by name, which does not compile either (M2)"
+
+	/// The compiler's errors for a dropped place beneath a promoted dependency: the hand-written caller's call of `T6`'s or
+	/// `SelfNode`'s mock, which lacks the flat parameter (as `hole`, or as `holeBuilder` for a hole spelled
+	/// `Instantiator<Hole>`), names a builder no overload of the mock takes, or passes the labels the mock names apart in
+	/// another order; and the construction function's forward of the flat `@autoclosure` parameter.
+	private static let placeBeneathPromotedDependencySignatures: [GraphFuzzerKnownIssue.Signature] = [
+		.compilerError(containing: "missing argument for parameter 'hole' in call"),
+		.compilerError(containing: "missing argument for parameter 'holeBuilder' in call"),
+		.compilerError(containing: "missing argument for parameter 'selfApi' in call"),
+		.compilerError(containing: "no exact matches in call to static method 'mock'"),
+		.compilerError(containing: "incorrect argument label in call (have 'holeSession_"),
+		.compilerError(containing: "add () to forward '@autoclosure' parameter"),
+	]
+
+	/// The public mock corpus's graphs that fail to compile because a place beneath a dependency the public mock promotes is
+	/// dropped (`placeBeneathPromotedDependencyReason`), observed from a run of the tool over the corpus: `T6`'s hole beneath
+	/// `HoleHost` that `HoleReceiver` receives (seed 609 receives it through a `SendableInstantiator`), and `SelfNode`'s
+	/// builder received by a type of its tree.
+	static let publicMockPlaceBeneathPromotedDependencySeeds: [UInt64] = [
+		2, 12, 15, 18, 22, 28, 33, 48, 49, 54, 57, 58, 62, 63, 64, 79, 84, 90, 92, 101,
+		103, 106, 109, 122, 129, 136, 160, 162, 165, 171, 181, 183, 185, 186, 190, 199, 204, 207, 211, 221,
+		223, 225, 238, 242, 244, 245, 248, 251, 261, 266, 274, 280, 281, 282, 283, 285, 296, 297, 302, 304,
+		312, 314, 319, 327, 330, 333, 335, 336, 344, 347, 350, 351, 352, 360, 366, 371, 383, 387, 389, 395,
+		398, 407, 409, 416, 417, 423, 424, 425, 428, 432, 433, 435, 438, 441, 445, 448, 453, 455, 456, 465,
+		468, 474, 477, 482, 498, 507, 510, 519, 521, 525, 527, 528, 539, 541, 542, 549, 556, 559, 561, 574,
+		575, 576, 577, 584, 589, 591, 595, 597, 598, 602, 606, 608, 609, 610, 632, 643, 646, 647, 653, 658,
+		659, 660, 663, 664, 669, 678, 685, 692, 693, 701, 703, 713, 717, 721, 730, 733, 734, 735, 757, 772,
+		775, 777, 778, 799, 814, 819, 820, 821, 823, 824, 828, 834, 840, 845, 846, 847, 848, 849, 852, 854,
+		863, 870, 872, 879, 886, 887, 891, 898, 902, 907, 927, 931, 935, 937, 940, 941, 946, 947, 953, 967,
+		971, 973, 974, 975, 979, 981, 985, 989, 992, 998,
+	]
+
+	/// The graphs of `publicMockPlaceBeneathPromotedDependencySeeds`' shape whose `SelfNode` is built again through a
+	/// `SendableInstantiator`, so the hand-written caller passes both of the place's builders: seed 189 is the adopter's own
+	/// shape, `SelfPart` receiving the builder beside the place.
+	static let publicMockPlaceBeneathPromotedDependencyCallerRenamedSeeds: [UInt64] = [
+		143, 156, 189, 222, 250, 264, 308, 317, 370, 394, 404, 479, 537, 564, 652, 673, 715, 901, 918, 923,
+	]
 
 	/// The public mock corpus's graphs that fail each part of the builder surface today, observed from a run of the tool over
 	/// the corpus (`GraphFuzzerBuilderSurface`), each part's seeds apart: the base check (every graph with a hole the tool
@@ -8417,7 +8476,7 @@ struct SafeDIToolGraphFuzzerTests {
 			468, 469, 472, 474, 477, 478, 479, 481, 482, 484, 486, 488, 490, 492, 494, 497, 498, 499, 503, 507,
 			508, 510, 511, 515, 516, 519, 521, 522, 525, 526, 527, 528, 532, 537, 539, 540, 541, 542, 543, 545,
 			549, 550, 556, 558, 559, 561, 563, 564, 565, 567, 568, 571, 572, 575, 576, 577, 580, 581, 584, 587,
-			589, 592, 594, 595, 597, 598, 601, 602, 605, 606, 607, 608, 610, 611, 612, 614, 616, 618, 619, 621,
+			589, 592, 594, 595, 597, 598, 601, 602, 605, 606, 607, 608, 609, 610, 611, 612, 614, 616, 618, 619, 621,
 			622, 623, 624, 627, 631, 632, 635, 636, 638, 639, 642, 643, 644, 645, 646, 647, 648, 649, 651, 652,
 			653, 654, 655, 658, 659, 660, 663, 664, 669, 670, 671, 673, 675, 677, 678, 679, 681, 682, 685, 691,
 			692, 693, 695, 697, 699, 700, 701, 703, 706, 707, 708, 711, 713, 714, 715, 716, 717, 718, 720, 721,
@@ -8452,7 +8511,7 @@ struct SafeDIToolGraphFuzzerTests {
 			3, 12, 22, 28, 59, 60, 64, 65, 79, 87, 88, 97, 106, 107, 117, 119, 128, 130, 136, 156,
 			166, 199, 221, 230, 238, 242, 251, 259, 262, 264, 269, 273, 284, 296, 314, 327, 328, 332, 344, 351,
 			370, 386, 397, 402, 406, 423, 425, 435, 449, 455, 456, 459, 463, 474, 477, 489, 497, 510, 537, 539,
-			543, 549, 551, 559, 562, 587, 606, 629, 635, 647, 648, 658, 668, 679, 692, 699, 716, 723, 724, 725,
+			543, 549, 551, 559, 562, 587, 606, 609, 629, 635, 647, 648, 658, 668, 679, 692, 699, 716, 723, 724, 725,
 			743, 779, 786, 790, 797, 821, 833, 834, 836, 876, 892, 904, 906, 909, 911, 912, 919, 936, 947, 958,
 			959, 977, 983, 995,
 		],
@@ -8531,15 +8590,15 @@ struct SafeDIToolGraphFuzzerTests {
 		.bothConsumerModules: 393,
 		.childDefaultNamingOwnStaticMember: 452,
 		.closureDefault: 225,
-		.consumerHoldsLazilyInstantiatedWrapper: 262,
+		.consumerHoldsLazilyInstantiatedWrapper: 257,
 		.consumerHoldsOmittedValue: 188,
-		.consumerInstantiatesLeaf: 655,
+		.consumerInstantiatesLeaf: 653,
 		.consumerReachesHoleTypeThroughTwoPublicMocks: 57,
 		.consumerReachesHoleTypeUnderTwoLabels: 87,
 		.consumerReachesHoleTypeWithFill: 155,
 		.consumerReachesHoleTypeWithoutFill: 166,
 		.consumerReceivesLazilyInstantiatedWrapper: 136,
-		.consumerReceivesLeaf: 550,
+		.consumerReceivesLeaf: 553,
 		.customMockName: 369,
 		.declaringModuleConfigurationFile: 30,
 		.erasedConstantLeaf: 119,
@@ -8550,9 +8609,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.fakeMockDependencyBoundParameter: 221,
 		.fakeTypeInternal: 344,
 		.holderlessOmittedValue: 57,
-		.holeBeneathInstantiator: 67,
-		.holeBeneathLazilyInstantiated: 82,
-		.holeBeneathSendableWrapper: 21,
+		.holeBeneathInstantiator: 35,
+		.holeBeneathLazilyInstantiated: 47,
+		.holeBeneathSendableWrapper: 12,
 		.holeCallerInOtherPackage: 278,
 		.holeCallerInSamePackage: 120,
 		.holeDeclaredAsErasedConstant: 77,
@@ -8561,19 +8620,25 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeDeclaredAsInstantiator: 34,
 		.holeFakeAlone: 7,
 		.holeFakeBesideFill: 12,
+		.holeHandWrittenMockBuiltInPublicMock: 113,
+		.holeHandWrittenMockTakesNoOverrides: 29,
+		.holeHostReceivedByValue: 17,
+		.holeHostReceivedThroughInstantiator: 38,
+		.holeHostReceivedThroughSendableInstantiator: 21,
 		.holeFillClosesLazyCycle: 15,
 		.holeFillReceivesField: 56,
 		.holeFillReceivesNonField: 40,
-		.holeFillReceivesFormBoundAgain: 28,
+		.holeFillReceivesFormBoundAgain: 25,
 		.holeFillReceivesRootLevelValue: 38,
 		.holeFillReceivesRootLevelWrapper: 15,
 		.holeForwardsValue: 43,
 		.holeInsideLoop: 131,
 		.holeLoopDeclaresContextAgain: 74,
+		.holeMockIsolatedToMainActor: 93,
 		.holeOnPublicMockType: 228,
-		.holeRootLevelHoldsValues: 108,
-		.holeRootLevelHoldsWrapper: 90,
-		.holeRootReceivesLabelInTwoForms: 97,
+		.holeRootLevelHoldsValues: 111,
+		.holeRootLevelHoldsWrapper: 91,
+		.holeRootReceivesLabelInTwoForms: 92,
 		.holeScopeHoldsPackageValue: 103,
 		.holeScopeHoldsPublicValue: 225,
 		.placeInsidePublicMockFill: 355,
@@ -8587,6 +8652,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.selfBuildingPublicMockFillReadsToken: 84,
 		.selfBuildingPublicMockPassedUp: 82,
 		.selfBuildingPublicMockPlaceBeneath: 127,
+		.selfBuildingPublicMockReceivesBuilder: 200,
 		.selfBuildingPublicMockThroughSendableInstantiator: 35,
 		.selfBuildingPublicMockThroughStep: 103,
 		.retentionPublicMockValueBeforeBuilder: 144,
@@ -8630,7 +8696,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.omittedValueProviderAfterLeaf: 101,
 		.omittedValueProviderAndLeafReceiveEachOther: 51,
 		.omittedValueProviderBeforeLeaf: 100,
-		.omittedValueProviderUnderSendableBuilder: 32,
+		.omittedValueProviderUnderSendableBuilder: 30,
 		.onePublicMockType: 369,
 		.optionalDefaultOfPackageType: 282,
 		.optionalDefaultOfPublicType: 267,
@@ -8644,12 +8710,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.plainTypePublicInitializerTakes: 200,
 		.protocolSlotFilledByFake: 686,
 		.publicConsumer: 331,
-		.publicConsumerLeavesLeafLabelUnprovided: 103,
+		.publicConsumerLeavesLeafLabelUnprovided: 106,
 		.qualifiedAllowlistedParameterType: 93,
 		.requiredParameterNarrowerThanPublic: 96,
 		.samePackageConsumerModuleOnly: 306,
 		.sendableErasedInstantiatorLeaf: 15,
-		.sendableWrapperAboveLeaf: 189,
+		.sendableWrapperAboveLeaf: 180,
 		.spelledChildDefault: 147,
 		.spelledClosure: 84,
 		.spelledConsumerPasses: 109,
