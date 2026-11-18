@@ -698,11 +698,12 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
 		}
 		let drawn: Set<GraphFuzzerPublicMockDrawFeature> = [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInInstantiator, .holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated]
-		// Seed 0 holds the hole as itself, seed 31 in an `Instantiator`, seed 17 in a `LazilyInstantiated`; each fails to
-		// compile with a renamed hole site's hole reverted. Seed 1 draws none.
-		#expect(features(ofSeed: 0).intersection(drawn) == [.holeLabelReceivedByPromotedSibling])
-		#expect(features(ofSeed: 31).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInInstantiator])
-		#expect(features(ofSeed: 17).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated])
+		// Seed 663 holds the hole as itself, seed 937 in an `Instantiator`, seed 815 in a `LazilyInstantiated`; the tool
+		// rejects each, and each is accepted and fails to compile with `publicMockHoleSiteBoundApartFinding` reverted. Seed 1
+		// draws none.
+		#expect(features(ofSeed: 663).intersection(drawn) == [.holeLabelReceivedByPromotedSibling])
+		#expect(features(ofSeed: 937).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInInstantiator])
+		#expect(features(ofSeed: 815).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated])
 		#expect(features(ofSeed: 1).isDisjoint(with: drawn))
 	}
 

@@ -8173,11 +8173,13 @@ struct SafeDIToolGraphFuzzerTests {
 	/// compares with their read twin.
 	static let publicMockCorpusReadTwinGraphCount = 260
 	/// How many of the public mock corpus's graphs the tool rejects with each of a public mock's own errors, in the order
-	/// of `GraphFuzzerOracle.publicMockOnlyErrorMarkers`: the public tier, a narrower enclosing type, a leaf tier (the graphs
+	/// of `GraphFuzzerOracle.publicMockOnlyErrorMarkers`: the public tier or a hole bound apart from its label (the graphs of
+	/// `holeLabelReceivedByPromotedSibling`), a narrower enclosing type, a leaf tier (the graphs
 	/// of `unbuildableValuePublicMockCallTierOmits`) and a nested leaf tier omitting a provided value, the mock condition, the
 	/// by-name check, and the view that cannot call;
 	/// then the fill that reads a value the loop around `T6`'s hole declares again
 	/// (`GraphFuzzerOracle.publicMockStaleValueErrorMarker`), which rejects seeds 50, 85, 450, 555, 609, 688 and 967.
+	// pins: derive on CI
 	static let publicMockCorpusErrorGraphCounts = [96, 0, 0, 0, 36, 0, 0, 7]
 
 	/// The ordinary suite's batch of the public mock corpus: graphs the tool accepts – a consumer in the same package
@@ -8229,7 +8231,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [3, 33, 99, 186, 213, 289, 301, 302, 387, 468, 542, 549, 561, 566, 583, 598, 616, 618, 649, 653, 677,
+			seeds: [3, 33, 99, 186, 213, 289, 301, 302, 387, 468, 542, 561, 566, 583, 598, 616, 618, 649, 653, 677,
 			        697, 701, 703, 717, 832, 833, 840, 884, 907, 946],
 		),
 		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
@@ -8296,7 +8298,7 @@ struct SafeDIToolGraphFuzzerTests {
 			        550, 558, 563, 571, 575, 592, 601, 608, 619, 624, 651, 664, 678, 679, 682, 693, 699, 713, 716, 739,
 			        747, 753, 758, 766, 770, 775, 787, 792, 827, 834, 838, 843, 844, 846, 847, 849, 851, 853, 859, 872,
 			        877, 879, 883, 888, 890, 891, 898, 899, 902, 903, 926, 933, 934, 940, 943, 958, 966, 971, 975, 979,
-			        981, 988, 989, 991, 995],
+			        988, 989, 991, 995],
 		),
 		// The root-level stream's label in two forms in a graph with a lazy cycle whose back-edge the move across wrapper
 		// names moves: `SelfStep`'s, or the stale-value draw's loop around `T6`'s hole (`HoleHost` and `HoleLoop`).
@@ -8320,7 +8322,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(publicMockParametersSortedByLabelReason); and \(publicMockLeakReason)",
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)] + publicMockLeakSignatures,
-			seeds: [433, 528, 947],
+			seeds: [433, 947],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(publicMockParametersSortedByLabelReason); and \(lazyCycleConfigurationFieldReason)",
@@ -8399,11 +8401,11 @@ struct SafeDIToolGraphFuzzerTests {
 			394, 395, 397, 398, 401, 402, 404, 406, 409, 411, 412, 413, 415, 416, 417, 421, 423, 424, 425, 428,
 			429, 431, 432, 433, 434, 436, 438, 440, 441, 442, 443, 445, 448, 453, 455, 456, 459, 463, 465, 467,
 			468, 469, 472, 474, 477, 478, 479, 481, 482, 484, 486, 488, 490, 492, 494, 497, 498, 499, 503, 507,
-			508, 510, 511, 515, 516, 519, 521, 522, 525, 526, 527, 528, 532, 537, 539, 540, 541, 542, 543, 545,
-			549, 550, 556, 558, 559, 561, 563, 564, 565, 567, 568, 571, 572, 575, 576, 577, 580, 581, 584, 587,
-			589, 592, 594, 595, 597, 598, 601, 602, 605, 606, 607, 608, 610, 611, 612, 614, 616, 618, 619, 621,
+			508, 510, 511, 515, 516, 519, 521, 522, 525, 526, 527, 532, 537, 539, 540, 541, 542, 543, 545,
+			550, 556, 558, 559, 561, 563, 564, 565, 567, 568, 571, 572, 575, 576, 577, 580, 581, 584, 587,
+			589, 592, 594, 595, 597, 598, 601, 602, 605, 606, 608, 610, 611, 612, 614, 616, 618, 619, 621,
 			622, 623, 624, 627, 631, 632, 635, 636, 638, 639, 642, 643, 644, 645, 646, 647, 648, 649, 651, 652,
-			653, 654, 655, 658, 659, 660, 663, 664, 669, 670, 671, 673, 675, 677, 678, 679, 681, 682, 685, 691,
+			653, 654, 655, 658, 659, 660, 664, 669, 670, 671, 673, 675, 677, 678, 679, 681, 682, 685, 691,
 			692, 693, 695, 697, 699, 700, 701, 703, 706, 707, 708, 711, 713, 714, 715, 716, 717, 718, 720, 721,
 			722, 723, 724, 725, 727, 728, 730, 732, 733, 734, 735, 737, 739, 740, 741, 743, 746, 747, 748, 751,
 			753, 757, 758, 765, 766, 768, 770, 772, 773, 774, 775, 776, 777, 778, 779, 781, 782, 783, 784, 786,
@@ -8411,9 +8413,9 @@ struct SafeDIToolGraphFuzzerTests {
 			821, 823, 824, 825, 827, 828, 832, 833, 834, 838, 839, 840, 843, 844, 845, 846, 847, 848, 849, 850,
 			851, 852, 853, 854, 858, 860, 861, 862, 863, 864, 865, 866, 870, 872, 873, 875, 877, 879, 880, 881,
 			883, 884, 885, 886, 887, 888, 889, 890, 891, 892, 896, 897, 898, 899, 901, 902, 903, 904, 906, 907,
-			909, 910, 911, 912, 913, 915, 917, 918, 919, 923, 926, 927, 930, 931, 933, 934, 935, 936, 937, 940,
+			909, 910, 911, 912, 913, 915, 917, 918, 919, 923, 926, 927, 930, 931, 933, 934, 935, 936, 940,
 			941, 943, 944, 946, 947, 950, 951, 953, 956, 958, 959, 960, 961, 962, 963, 965, 966, 970, 971, 973,
-			974, 975, 977, 978, 979, 981, 983, 985, 987, 988, 989, 990, 991, 992, 993, 995, 996, 998,
+			974, 975, 977, 978, 979, 983, 985, 987, 988, 989, 990, 991, 992, 993, 995, 996, 998,
 		],
 		labels: [
 			19, 64, 119, 166, 211, 230, 299, 307, 333, 406, 415, 456, 486, 510, 597, 658, 692, 743, 748,
@@ -8426,7 +8428,7 @@ struct SafeDIToolGraphFuzzerTests {
 		sameSupplyBuilderKindFlips: [
 			12, 28, 60, 62, 73, 92, 97, 106, 107, 165, 219, 221, 242, 262, 273, 284, 299, 316, 318, 327,
 			328, 337, 350, 361, 397, 406, 417, 423, 435, 449, 455, 463, 489, 559, 562, 563, 564, 587, 591, 595,
-			598, 606, 635, 644, 646, 647, 648, 663, 664, 666, 668, 670, 680, 724, 741, 743, 790, 812, 821, 833,
+			598, 606, 635, 644, 646, 647, 648, 664, 666, 668, 670, 680, 724, 741, 743, 790, 812, 821, 833,
 			876, 880, 888, 940, 958, 995,
 		],
 		sameSupplyBuilderKindFlipsReason: publicMockBuilderFormFlipReason,
@@ -8436,7 +8438,7 @@ struct SafeDIToolGraphFuzzerTests {
 			3, 12, 22, 28, 59, 60, 64, 65, 79, 87, 88, 97, 106, 107, 117, 119, 128, 130, 136, 156,
 			166, 199, 221, 230, 238, 242, 251, 259, 262, 264, 269, 273, 284, 296, 314, 327, 328, 332, 344, 351,
 			370, 386, 397, 402, 406, 423, 425, 435, 449, 455, 456, 459, 463, 474, 477, 489, 497, 510, 537, 539,
-			543, 549, 551, 559, 562, 587, 606, 629, 635, 647, 648, 658, 668, 679, 692, 699, 716, 723, 724, 725,
+			543, 551, 559, 562, 587, 606, 629, 635, 647, 648, 658, 668, 679, 692, 699, 716, 723, 724, 725,
 			743, 779, 786, 790, 797, 821, 833, 834, 836, 876, 892, 904, 906, 909, 911, 912, 919, 936, 947, 958,
 			959, 977, 983, 995,
 		],
@@ -8597,9 +8599,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.unbuildableValuePublicMockCall: 198,
 		.unbuildableValuePublicMockCallPublicTier: 191,
 		.unbuildableValuePublicMockCallTierOmits: 7,
-		.holeLabelReceivedByPromotedSibling: 186,
-		.holeLabelReceivedByPromotedSiblingHeldInInstantiator: 51,
-		.holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated: 76,
+		.holeLabelReceivedByPromotedSibling: 8,
+		.holeLabelReceivedByPromotedSiblingHeldInInstantiator: 2,
+		.holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated: 3,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,

@@ -11305,14 +11305,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fulfillingPropertyIsLazilyInstantiatedInstance: alias.fulfillingPropertyIsLazilyInstantiatedInstance,
 				declarationReference: alias.declarationReference,
 				isBoundToNil: alias.isBoundToNil,
-				// A site of a hole stays one under its new name, which its builder still builds. A public mock with another
-				// place would hand that place's builder the label's other value, so `publicMockFindings` rejects it
-				// (`publicMockHoleSiteBoundApartFinding`). An internal mock, and a listed type's, takes the dependency as a
-				// parameter under its label and has no site, so it accepts the shape: a deliberate gap.
-				holeSite: alias.holeSite,
+				// No site of a hole is renamed: `publicMockFindings` rejects a public mock that would bind one apart
+				// (`publicMockHoleSiteBoundApartFinding`), since it would hand its builders two values under the label. An
+				// internal mock, and a listed type's, takes the dependency as a parameter under its label and has no site, so
+				// it accepts the shape: a deliberate gap.
 				loop: alias.loop,
 				declaredProperty: alias.declaredProperty ?? alias.property,
-				holeSiteLazilyInstantiatedInstanceProperties: alias.holeSiteLazilyInstantiatedInstanceProperties,
 			))
 		}
 		return (renamedItems, bindingNames)
