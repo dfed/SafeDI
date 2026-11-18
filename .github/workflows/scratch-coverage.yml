@@ -1,0 +1,310 @@
+name: Coverage
+
+# A bin/linux-coverage run: runs SafeDI's whole suite with coverage for this commit on Linux runners, as CI's Linux
+# test jobs in ci.yml do (their container, their build arguments, main's build and passed compile-check caches, the
+# test bundle run directly), exports the lcov as "Build and Test on Linux" does for Codecov, and reports every line
+# under Sources/ and Plugins/ that no test executed (or, with a base, every changed one). linux-coverage writes this
+# file and the report script (.github/linux-coverage/report.py) into a scratch commit, pushes it to its own coverage/
+# branch, and deletes the branch when the run ends. It runs only on pushes to that branch, reads the repository and
+# nothing else, uses no secrets, and saves no cache: a cache saved under a scratch branch could serve no other branch.
+#
+# Three stages, as CI splits its own Linux work ("Build Tests on Linux", then the jobs that run its bundle):
+#   build   builds the tests once, or downloads the bundle a CI run built from the same sources, and uploads it;
+#   test    runs the bundle in shards side by side, each a disjoint part of the suite, and uploads each shard's
+#           merged profile;
+#   report  merges the shards' profiles, exports the lcov and writes the report, in the `coverage-out` artifact.
+# Every test runs in exactly one shard: shard k runs what its own patterns match and no earlier shard's patterns
+# match, and the last shard runs what no pattern matches, so a test no pattern names is still run. Merged profiles
+# sum their counters, so the merged profile holds, for every line, the sum of the shards' counts: a line is unexecuted
+# in the report exactly when no shard executed it, as in a run of the whole suite in one process.
+on:
+  push:
+    branches:
+    - coverage/6affdaac1-74855
+
+# `actions: read` downloads the test bundle of the CI run linux-coverage names, when it names one.
+permissions:
+  contents: read
+  actions: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # The Linux test jobs' arguments: release, -enable-testing, atomic counter updates (exact counts; #507).
+  SWIFT_TEST_ARGUMENTS: -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
+  PRODUCTS: .build/x86_64-unknown-linux-gnu/release
+  # The commit measured (this commit's parent), and the merge-base whose diff limits the report (empty: every line).
+  COVERAGE_SHA: 6affdaac15fb8235dcf3a2b3595ac9c5aeef2244
+  COVERAGE_BASE: 20a0ba07bdf9cf64a7979e9fd0a66488b4d884fe
+  USE_COMPILE_CHECK_CACHE: true
+  # The ci.yml run whose "Build Tests on Linux" built this commit's sources with the arguments above, or empty.
+  # linux-coverage names one only after checking what its header says; the build job then downloads that run's
+  # bundle instead of building, and builds after all if the download fails.
+  BUNDLE_RUN: 
+
+jobs:
+  build:
+    name: Build Tests for Coverage on Linux
+    runs-on: ubuntu-latest
+    # The Linux test jobs' container ("Build Tests on Linux" in ci.yml).
+    container: swift:6.2
+    timeout-minutes: 50
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Start the Clock
+        run: date +%s > "$RUNNER_TEMP/build-start"
+      # `graph-fuzzer-test-bundle.tar.gz`, what "Build Tests on Linux" packages. A failure (an expired or deleted
+      # bundle) only leaves the steps below to build.
+      - name: Download the CI Run's Test Bundle
+        id: ci-bundle
+        if: ${{ env.BUNDLE_RUN != '' }}
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: graph-fuzzer-test-bundle
+          path: ci-bundle
+          run-id: ${{ env.BUNDLE_RUN }}
+          github-token: ${{ github.token }}
+      # Restore only: the Linux test job's key, so main's swift-syntax and other dependency products apply.
+      - name: Restore the Linux Test Job's Build Directory
+        if: ${{ steps.ci-bundle.outcome != 'success' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: .build
+          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/ci.yml') }}
+          restore-keys: |
+            spm-release-${{ runner.os }}-swift-6.2-
+      - name: Resolve Package Dependencies
+        if: ${{ steps.ci-bundle.outcome != 'success' }}
+        run: |
+          git config --global --add safe.directory '*'
+          for _ in 1 2 3 4; do swift package resolve && exit 0; sleep 15; done
+          exit 1
+      # "Build Tests on Linux" has taken 14.9 minutes with main's build cache restored (run 44034763455); the limit
+      # is about twice that.
+      - name: Build Tests
+        if: ${{ steps.ci-bundle.outcome != 'success' }}
+        timeout-minutes: 35
+        run: |
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          swift build --build-tests $SWIFT_TEST_ARGUMENTS
+      # What "Build Tests on Linux" packages: the bundle, the tools it starts, and the module the tests compile against.
+      - name: Package Test Bundle
+        env:
+          CI_BUNDLE: ${{ steps.ci-bundle.outcome }}
+        run: |
+          mkdir -p coverage-build
+          if [ "$CI_BUNDLE" = success ]; then
+            mv ci-bundle/graph-fuzzer-test-bundle.tar.gz coverage-build/test-bundle.tar.gz
+            echo "coverage-timing start=$(cat "$RUNNER_TEMP/build-start") build_end=$(date +%s) bundle=ci-run-$BUNDLE_RUN" > coverage-build/timing.txt
+            exit 0
+          fi
+          echo "coverage-timing start=$(cat "$RUNNER_TEMP/build-start") build_end=$(date +%s) bundle=built" > coverage-build/timing.txt
+          tar -czf coverage-build/test-bundle.tar.gz \
+            "$PRODUCTS/SafeDIPackageTests.xctest" \
+            "$PRODUCTS/SafeDITool" \
+            "$PRODUCTS/SafeDIMacros-tool" \
+            "$PRODUCTS/Modules/SafeDI.swiftmodule" \
+            .build/workspace-state.json
+      - name: Upload Test Bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-build
+          path: coverage-build
+          retention-days: 1
+          if-no-files-found: error
+
+  test:
+    name: Test for Coverage on Linux (${{ matrix.name }})
+    needs: build
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # A shard runs the tests its `filter` patterns match, less those its `skip` patterns match. Each shard's
+        # `skip` is every earlier shard's `filter`, and the last shard has no `filter`: that is what makes the
+        # shards disjoint and complete whatever the patterns are. Patterns are regular expressions matched anywhere
+        # in a test's name, which starts with its test target; a pattern holds no space.
+        include:
+          - name: fuzzer
+            filter: "SafeDIToolFuzzerTests"
+            skip: ""
+          - name: seams
+            filter: "SafeDIToolSeamTests"
+            skip: "SafeDIToolFuzzerTests"
+          - name: rest
+            filter: ""
+            skip: "SafeDIToolFuzzerTests SafeDIToolSeamTests"
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Download Test Bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: coverage-build
+          path: coverage-build
+      - name: Unpack Test Bundle
+        run: |
+          git config --global --add safe.directory '*'
+          tar -xzf coverage-build/test-bundle.tar.gz
+          mkdir -p coverage-shard "$RUNNER_TEMP/profiles"
+      - name: Compute Compile Check Identity
+        id: compile-check-identity
+        if: ${{ env.USE_COMPILE_CHECK_CACHE == 'true' && hashFiles('.github/scripts/compile-check-identity.sh') != '' }}
+        run: |
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          identity=$(.github/scripts/compile-check-identity.sh $SWIFT_TEST_ARGUMENTS)
+          test "${#identity}" -eq 64
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+      # The checks main's Linux test job passed under the same identity, as that job restores them. Skipping a passed
+      # compile check is what CI's Linux upload to Codecov does too.
+      - name: Restore Passed Compile Checks
+        if: ${{ steps.compile-check-identity.outputs.identity != '' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: .compile-check-cache
+          key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-
+      # The whole suite in one job has taken 18.9 minutes in CI ("Build and Test on Linux", run 44034763455); a
+      # shard runs a part of it, and the limit is about twice the whole.
+      - name: Test
+        timeout-minutes: 40
+        env:
+          SHARD_FILTER: ${{ matrix.filter }}
+          SHARD_SKIP: ${{ matrix.skip }}
+          # One raw profile per process, as "Build and Test on Linux" writes them.
+          LLVM_PROFILE_FILE: ${{ runner.temp }}/profiles/shard-%p.profraw
+        run: |
+          set +e -o pipefail
+          if [ -f .compile-check-cache/passed.txt ]; then
+            export SAFEDI_COMPILE_CHECK_PASSED_CACHE=$GITHUB_WORKSPACE/.compile-check-cache/passed.txt
+            echo "compile-check cache: $(wc -l < .compile-check-cache/passed.txt) passed checks restored"
+          else
+            echo "compile-check cache: none"
+          fi
+          arguments=(--testing-library swift-testing)
+          for pattern in $SHARD_FILTER; do arguments+=(--filter "$pattern"); done
+          for pattern in $SHARD_SKIP; do arguments+=(--skip "$pattern"); done
+          start=$(date +%s)
+          "$PRODUCTS/SafeDIPackageTests.xctest" "${arguments[@]}" 2>&1 | tee coverage-shard/test.log
+          status=$?
+          echo "$status" > coverage-shard/test-status
+          echo "coverage-timing test_start=$start test_end=$(date +%s) status=$status" > coverage-shard/timing.txt
+          exit 0
+      # A shard that ran no test, or whose tests all crashed, has no profile; the report then says so and counts
+      # nothing, where a silent gap would list every line that shard alone executes.
+      - name: Merge the Shard's Profiles
+        run: |
+          shopt -s nullglob
+          profiles=("$RUNNER_TEMP"/profiles/*.profraw)
+          echo "${#profiles[@]} raw profile(s)"
+          if [ ${#profiles[@]} -gt 0 ]; then
+            llvm-profdata merge -sparse "${profiles[@]}" -o coverage-shard/shard.profdata
+          fi
+      - name: Upload the Shard's Output
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-shard-${{ matrix.name }}
+          path: coverage-shard
+          retention-days: 1
+          if-no-files-found: warn
+
+  report:
+    name: Report Coverage on Linux
+    needs: [build, test]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 20
+    env:
+      EXPECTED_SHARDS: fuzzer seams rest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # The whole history only when a base's diff is needed.
+          fetch-depth: 0
+      - name: Download the Build's and the Shards' Output
+        uses: actions/download-artifact@v8
+        with:
+          path: coverage-in
+          pattern: coverage-*
+      - name: Merge Profiles and Report Unexecuted Lines
+        run: |
+          set +e
+          git config --global --add safe.directory '*'
+          mkdir -p coverage-out
+          command -v python3 >/dev/null || { apt-get update -q && apt-get install -y -q --no-install-recommends python3; } > coverage-out/apt.log 2>&1
+          cat coverage-in/coverage-build/timing.txt > coverage-out/timing.txt 2>/dev/null
+          # Every shard must have run to its end and left a profile: a shard missing here would make every line only
+          # it executes read as unexecuted.
+          status=0 missing="" profiles=()
+          for shard in $EXPECTED_SHARDS; do
+            directory=coverage-in/coverage-shard-$shard
+            { echo "=== shard $shard"; cat "$directory/test.log" 2>/dev/null; } >> coverage-out/test.log
+            sed "s/^coverage-timing /coverage-timing shard=$shard /" "$directory/timing.txt" >> coverage-out/timing.txt 2>/dev/null
+            shard_status=$(cat "$directory/test-status" 2>/dev/null)
+            if [ -z "$shard_status" ] || [ ! -f "$directory/shard.profdata" ]; then
+              missing="$missing $shard"
+            else
+              profiles+=("$directory/shard.profdata")
+              [ "$shard_status" = 0 ] || status=$shard_status
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "no coverage report: shard(s)$missing did not finish or left no profile" | tee coverage-out/report.txt
+            exit 0
+          fi
+          echo "$status" > coverage-out/test-status
+          if ! tar -xzf coverage-in/coverage-build/test-bundle.tar.gz; then
+            echo "no coverage report: the build's test bundle is missing" | tee coverage-out/report.txt
+            exit 0
+          fi
+          executable=$PRODUCTS/SafeDIPackageTests.xctest
+          if ! llvm-profdata merge -sparse "${profiles[@]}" -o coverage-out/merged.profdata; then
+            echo "no coverage report: the shards' profiles did not merge" | tee coverage-out/report.txt
+            exit 0
+          fi
+          # The Linux test job's export, less the dependencies' files under .build.
+          llvm-cov export -format=lcov "$executable" -instr-profile coverage-out/merged.profdata > "$RUNNER_TEMP/full.lcov"
+          awk -v build="$GITHUB_WORKSPACE/.build/" '
+            /^SF:/ { keep = index(substr($0, 4), build) != 1 }
+            keep { print }
+            /^end_of_record$/ { keep = 0 }
+          ' "$RUNNER_TEMP/full.lcov" > coverage-out/coverage.lcov
+          rm -f coverage-out/merged.profdata
+          diff_arguments=()
+          if [ -n "$COVERAGE_BASE" ]; then
+            git diff -U0 --no-color "$COVERAGE_BASE" "$COVERAGE_SHA" -- 'Sources/*.swift' 'Plugins/*.swift' > coverage-out/changed.diff
+            diff_arguments=(coverage-out/changed.diff)
+          fi
+          python3 -I .github/linux-coverage/report.py coverage-out/coverage.lcov "$GITHUB_WORKSPACE" coverage-out "${diff_arguments[@]}" > coverage-out/report.txt
+          echo "$?" > coverage-out/report-status
+          tail -5 coverage-out/report.txt
+          echo "coverage-timing report_end=$(date +%s)" >> coverage-out/timing.txt
+      - name: Upload Coverage Output
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-out
+          path: coverage-out
+          if-no-files-found: warn
+          retention-days: 3
+      # The run succeeds only when the tests passed and no counted line went unexecuted.
+      - name: Report Status
+        if: ${{ always() }}
+        run: |
+          test "$(cat coverage-out/test-status 2>/dev/null)" = 0 || { echo "the tests failed or did not run"; exit 1; }
+          test "$(cat coverage-out/report-status 2>/dev/null)" = 0 || { tail -3 coverage-out/report.txt; exit 1; }
