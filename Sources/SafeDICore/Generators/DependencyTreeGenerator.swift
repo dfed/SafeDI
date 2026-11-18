@@ -9098,9 +9098,10 @@ public actor DependencyTreeGenerator {
 	/// (`validateFillsInstantiateOnlyWhatCanBeFulfilled`).
 	///
 	/// Gates then pass a hole type of a called type up whole, every place of it, where the twin fills it: a re-entered called
-	/// type whose fill reads a lazy value beside its place's fields, a fill that re-enters its called type and instantiates
-	/// a type nothing the module sees fulfills, and places of one hole type whose fills read different lazy values
-	/// (`holeTypesTheFillGatesPassUp(of:in:)`). Contract rule 7 lists the difference
+	/// type whose fill reads a lazy value beside its place's fields; one whose fill below its root reads by value a value the
+	/// module holds lazily, while a fill that builds it again reads none of it; a fill that re-enters its called type and
+	/// instantiates a type nothing the module sees fulfills; and places of one hole type whose fills read different lazy
+	/// values (`holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`). Contract rule 7 lists the difference
 	/// (`seam-and-mock-contract.md`).
 	private func holesFilled(
 		byCallsOf publicMockCalls: [TypeDescription: PublicMockCall],
@@ -9142,7 +9143,14 @@ public actor DependencyTreeGenerator {
 				fills.append(GatedFill(calledType: calledType, hole: hole, fulfillingScope: fulfillingScope, cache: &receivedPropertiesCache))
 			}
 		}
-		let holeTypesPassedUp = Self.holeTypesTheFillGatesPassUp(of: fills, in: publicMockCalls)
+		// Each value a declaration of the module's mock trees holds in a `LazilyInstantiated` or `SendableLazilyInstantiated`,
+		// by its label and instance type, whatever the declaration: one the module instantiates, or one a type receives whose
+		// tree's root lives in a module that depends on this one.
+		var lazilyHeldValues = Set<Property>()
+		for scope in typeDescriptionToScopeMap.values {
+			lazilyHeldValues.formUnion(scope.instantiable.dependencies.compactMap(\.property.asLazilyInstantiatedInstanceProperty))
+		}
+		let holeTypesPassedUp = Self.holeTypesTheFillGatesPassUp(of: fills, in: publicMockCalls, lazilyHeldValues: lazilyHeldValues)
 		var filledHoles = [TypeDescription: [SeamSignature.Hole]]()
 		for fill in fills where !holeTypesPassedUp.contains(fill.key) {
 			filledHoles[fill.calledType, default: []].append(fill.hole)
@@ -9234,6 +9242,17 @@ public actor DependencyTreeGenerator {
 	///   caller hands it: a `.public` caller hands that builder through the struct of its own level the re-entered level
 	///   function takes, which that call, re-entering the level function an enclosing call declares, does not hand on, where a
 	///   call of the called type itself does.
+	/// - **A value held lazily that a fill building the called type again does not read.** A hole type of a re-entered
+	///   called type is passed up when a fill of one of its places below the called type's root reads, beside the place's
+	///   fields, by value or only if available, a value that a declaration of the module's mock trees holds in a
+	///   `LazilyInstantiated` or `SendableLazilyInstantiated` (`lazilyHeldValues`, by label and instance type), and a fill of
+	///   the called type that builds it again reads no form of that label. The levels below the root take the value from
+	///   the re-entered call's root level function, and the fill that builds the called type again holds only its caller's
+	///   wrapper, which it would hand that function. The gate decides for the whole module, as the others do, since it does
+	///   not see the callers, so it also passes up places whose caller holds the value by value while another declaration
+	///   holds it lazily, and places of a called type built again only through another called type's fill, which compile
+	///   filled where the fill below the root reads the value by value, the stated cost of one rule, as before calling mocks
+	///   filled their places.
 	/// - **Places that disagree.** A hole type of a called type is passed up when two of its places' fills read different
 	///   `LazilyInstantiated` or `SendableLazilyInstantiated` values beside their fields, as where one place is beneath a
 	///   level that declares the value again and the called mock's by-value copy reaches the other: one fill serves every
@@ -9245,27 +9264,40 @@ public actor DependencyTreeGenerator {
 	/// - Then, as a fill never passes a place up, a fill whose tree calls a public mock that now passes a builder up is not
 	///   filled either, until none is: its hole type is passed up too.
 	/// A hole type is never passed up in part, so no builder is half filled. Every other place is filled as before: a fill
-	/// that reads only its place's fields, or values by value, whether or not its called type is re-entered.
-	private static func holeTypesTheFillGatesPassUp(of fills: [GatedFill], in publicMockCalls: [TypeDescription: PublicMockCall]) -> Set<HoleTypeOfCall> {
+	/// that reads only its place's fields, or values by value that no declaration holds lazily or that every fill building
+	/// its called type again reads too, whether or not its called type is re-entered.
+	private static func holeTypesTheFillGatesPassUp(of fills: [GatedFill], in publicMockCalls: [TypeDescription: PublicMockCall], lazilyHeldValues: Set<Property>) -> Set<HoleTypeOfCall> {
 		var calledTypesByCalledType = [TypeDescription: Set<TypeDescription>]()
 		for fill in fills {
 			calledTypesByCalledType[fill.calledType, default: []].formUnion(fill.calledTypesInTree)
 		}
 		var passedUp = Set<HoleTypeOfCall>()
-		for (calledType, calledTypesInFills) in calledTypesByCalledType {
+		for calledType in calledTypesByCalledType.keys {
 			let sites = Set(publicMockCalls[calledType]?.holes.map(\.site) ?? [])
-			// The called types the fills of `calledType` call, those their own fills call, and so on.
-			var reachedCalledTypes = Set<TypeDescription>()
-			var calledTypesToVisit = Array(calledTypesInFills)
-			while let reachedCalledType = calledTypesToVisit.popLast() {
-				guard reachedCalledTypes.insert(reachedCalledType).inserted else { continue }
-				calledTypesToVisit.append(contentsOf: calledTypesByCalledType[reachedCalledType] ?? [])
+			/// Whether a tree that calls `calledTypesInTree` builds `calledType` again: one of them, those their fills call, and
+			/// so on, is `calledType`, or a called type whose builders reach its places.
+			func buildsCalledTypeAgain(_ calledTypesInTree: Set<TypeDescription>) -> Bool {
+				var reachedCalledTypes = Set<TypeDescription>()
+				var calledTypesToVisit = Array(calledTypesInTree)
+				while let reachedCalledType = calledTypesToVisit.popLast() {
+					guard reachedCalledTypes.insert(reachedCalledType).inserted else { continue }
+					calledTypesToVisit.append(contentsOf: calledTypesByCalledType[reachedCalledType] ?? [])
+				}
+				return reachedCalledTypes.contains { reachedCalledType in
+					reachedCalledType == calledType || publicMockCalls[reachedCalledType]?.holes.contains { sites.contains($0.site) } == true
+				}
 			}
-			let isReentered = reachedCalledTypes.contains { reachedCalledType in
-				reachedCalledType == calledType || publicMockCalls[reachedCalledType]?.holes.contains { sites.contains($0.site) } == true
-			}
-			for fill in fills where fill.calledType == calledType && isReentered && !fill.lazyValuesReadBesideFields.isEmpty {
-				passedUp.insert(fill.key)
+			let fillsBuildingCalledTypeAgain = fills.filter { $0.calledType == calledType && buildsCalledTypeAgain($0.calledTypesInTree) }
+			for fill in fills where fill.calledType == calledType && !fillsBuildingCalledTypeAgain.isEmpty {
+				let readsLazyValue = !fill.lazyValuesReadBesideFields.isEmpty
+				// A place below the called type's root, whose level takes the value from the root level function: its site path
+				// holds the property of a level between.
+				let readsLazilyHeldValueAFillBuildingCalledTypeAgainDoesNot = fill.hole.sitePath.count > 1 && fill.receivedBesideFields.contains { value in
+					lazilyHeldValues.contains(value.asUnwrappedProperty) && fillsBuildingCalledTypeAgain.contains { !$0.received.contains { $0.label == value.label } }
+				}
+				if readsLazyValue || readsLazilyHeldValueAFillBuildingCalledTypeAgainDoesNot {
+					passedUp.insert(fill.key)
+				}
 			}
 			// A call of the called type itself inside the fill re-enters its root level function and hands it the structs it
 			// takes, so only a call of another public mock whose builders reach the places counts here.

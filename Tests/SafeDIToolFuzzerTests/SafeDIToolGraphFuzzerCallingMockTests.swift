@@ -1257,15 +1257,41 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 	}
 
-	/// Seed 766 draws a graph of `fillReceivesCallersLazyValueBelowCalledRoot/internal/plain` whose called type also holds a
+	/// Seed 763 draws a graph of `fillReceivesCallersLazyValueBelowCalledRoot/public/deferred` whose called type also holds a
 	/// second level with a second place, whose fill reads nothing and builds the called type again
 	/// (`CallerLazyValue.secondPlaceCallsAgain`), so the called type is re-entered, and the place's fill reads the caller's
 	/// wrapper beside its fields: the mock passes the place up whole, and then the second place, whose fill calls the
-	/// called type, where the twin fills both (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`). It fails
-	/// with that gate reverted, when the mock fills both places and passes nothing up.
+	/// called type, where the twin fills both (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`).
+	/// It fails with that gate reverted, when the mock fills both places and passes nothing up.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func callingMock_passesPlacesUpWhole_whenDrawnSecondPlacesFillCallsCalledTypeAgain() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 763)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 763)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillReceivesCallersLazyValueBelowCalledRoot, caller: .public, place: .deferred))
+		#expect(draw.callerLazyValue?.call == .callerCalls)
+		#expect(draw.callerLazyValue?.secondPlaceCallsAgain == true)
+		#expect(draw.callerLazyValue?.buildsPlaceInSendableFunctionToo == false)
+		#expect(draw.callerLazyValue?.fillReadsInstanceCalledTypeDoesNotHold == false)
+		#expect(draw.graph.fillGatePassesUp)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels)
+		#expect(result.passUps.map(\.reason) == [.fillOfReenteredCallReadsLazyValue, .fillOfReenteredCallReadsLazyValue])
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// Seed 766 draws a graph of `fillReceivesCallersLazyValueBelowCalledRoot/internal/plain` whose fill reads the caller's
+	/// value by value while the called type holds no copy of it, and whose second place's fill reads none of it and builds
+	/// the called type again (`CallerLazyValue.fillReadsInstanceCalledTypeDoesNotHold`): the re-entered call's root level
+	/// function takes the value, which the second place's fill holds only as the caller's wrapper, so the mock passes the
+	/// place up whole, and then the second place, where the twin fills both
+	/// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`). It fails with that gate reverted,
+	/// when the mock fills both places and passes nothing up.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_passesPlacesUpWhole_whenDrawnSecondPlacesFillLeavesValueHeldLazilyUnreadAndCallsCalledTypeAgain() async throws {
 		let draw = GraphFuzzerCallingMockDraw(seed: 766)
 
 		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 766)
@@ -1273,7 +1299,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillReceivesCallersLazyValueBelowCalledRoot, caller: .internal, place: .plain))
 		#expect(draw.callerLazyValue?.call == .callerCalls)
 		#expect(draw.callerLazyValue?.secondPlaceCallsAgain == true)
-		#expect(draw.callerLazyValue?.buildsPlaceInSendableFunctionToo == false)
+		#expect(draw.callerLazyValue?.fillReadsInstanceCalledTypeDoesNotHold == true)
 		#expect(draw.graph.fillGatePassesUp)
 		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
 		#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels)
@@ -1412,6 +1438,12 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			"fillCallsAgain internal": 4,
 			"fillCallsAgain listed": 7,
 			"fillCallsAgain public": 3,
+			"fillReadsInstanceCalledTypeDoesNotHold": 13,
+			"fillReadsInstanceCalledTypeDoesNotHold deferred": 8,
+			"fillReadsInstanceCalledTypeDoesNotHold internal": 4,
+			"fillReadsInstanceCalledTypeDoesNotHold listed": 3,
+			"fillReadsInstanceCalledTypeDoesNotHold plain": 5,
+			"fillReadsInstanceCalledTypeDoesNotHold public": 6,
 			"internal": 20,
 			"listed": 20,
 			"mockedIntermediateCalls": 12,
@@ -2016,6 +2048,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		}
 		if draw.callerLazyValue?.buildsPlaceInSendableFunctionToo == true {
 			variations.append("buildsPlaceInSendableFunctionToo")
+		}
+		if draw.callerLazyValue?.fillReadsInstanceCalledTypeDoesNotHold == true {
+			variations.append("fillReadsInstanceCalledTypeDoesNotHold")
 		}
 		return variations
 	}

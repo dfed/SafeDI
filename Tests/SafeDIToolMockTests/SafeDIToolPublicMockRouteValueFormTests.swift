@@ -1609,7 +1609,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		// `generate_fillsPlaceWithCallersLazyValue_whenCalledMockBindsValueByValueBelowItsRoot`, with `Live` also building
 		// `F` again, so `F` is re-entered, and `Live` reads `Root`’s `LazilyInstantiated` beside its place’s fields, which `F`’s
 		// mock binds by value: the calling mock passes the place up whole, and `mock()` takes its builder, where the twin
-		// fills it (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`).
+		// fills it (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`).
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feat", packageName: "feat", swiftFileContent: [
