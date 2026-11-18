@@ -282,8 +282,9 @@ extension DependencyTreeGenerator {
 				placeHolding.builtTypeByTypeAndProperty[SeamDeclarationGraph.TypeAndProperty(type: type, property: property)]
 			}
 			// In the type's declaration order, then the children a public mock's root builds that the type does not declare, in the
-			// order the root builds them: the received dependencies the mock promotes to its root
-			// (`createMockRootScopeGenerator`), whose trees' places are the mock's places like any other's.
+			// order the mock's tree first receives them (`inOrderTheMockTreeFirstReceives`), which is not always the order the root
+			// builds them in: the received dependencies the mock promotes to its root (`createMockRootScopeGenerator`), whose
+			// trees' places are the mock's places like any other's.
 			var caseProperties = instantiable.dependencies.map(\.property)
 			let declaredProperties = Set(caseProperties)
 			for child in build.children {
