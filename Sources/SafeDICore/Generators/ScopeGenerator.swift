@@ -136,7 +136,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			fieldsCarriedBySites = []
 		}
 		passesUpBuilder = !passedUpHoles.isEmpty || propertiesToGenerate.contains(where: \.passesUpBuilder)
-		self.typesDeclaredEscaping = Self.typesDeclaredEscaping(
+		typesDeclaredEscaping = Self.typesDeclaredEscaping(
 			instantiable: instantiable,
 			publicMockCall: publicMockCall,
 			seamCall: seamCall,
