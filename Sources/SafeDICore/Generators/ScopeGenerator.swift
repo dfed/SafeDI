@@ -7377,6 +7377,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
+	/// The arguments of the initializer, or hand-written mock, that the mock of `instantiable` constructs it with which take
+	/// a default value and are none of its dependencies, each with its default: `mock()` takes each under its label
+	/// (`MockRootParameters.rootDefaultParameters`), which no binding of its tree keeps.
+	static func defaultValuedMockParameterArguments(of instantiable: Instantiable) -> [(argument: Initializer.Argument, defaultExpression: String)] {
+		let rootConstructionInitializer = instantiable.mockInitializer ?? instantiable.initializer
+		let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
+		return (rootConstructionInitializer?.arguments ?? []).compactMap { argument in
+			guard !dependencyLabels.contains(argument.innerLabel),
+			      argument.label != "_",
+			      let defaultExpression = argument.defaultValueExpression
+			else { return nil }
+			return (argument, defaultExpression)
+		}
+	}
+
 	/// The parameters this scope's `mock()` takes as a mock root. See `MockRootParameters`.
 	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to.
 	func mockRootParameters(instantiable: Instantiable, mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> MockRootParameters {
@@ -7411,27 +7426,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		} else {
 			instantiable.initializer
 		}
-		let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
 		var rootDefaultParameters = [MockRootParameters.RootDefaultParameter]()
 		// The parameters of `mock()` that keep their labels, which a binding of the root's tree would hide: the
 		// forwarded parameters, which are passed on under their labels, and the default-valued ones, whose labels
 		// are those of the construction initializer.
 		var parametersKeepingTheirLabels = forwardedDependencies.map(\.property)
-		if let rootConstructionInitializer {
-			for argument in rootConstructionInitializer.arguments {
-				guard argument.hasDefaultValue,
-				      !dependencyLabels.contains(argument.innerLabel),
-				      argument.label != "_",
-				      let defaultExpression = argument.defaultValueExpression
-				else { continue }
-				rootDefaultParameters.append(MockRootParameters.RootDefaultParameter(
-					label: argument.label,
-					typeSource: argument.typeDescription.asFunctionParameter.asSource,
-					defaultExpression: defaultExpression,
-					typeDescription: argument.typeDescription.strippingEscaping,
-				))
-				parametersKeepingTheirLabels.append(Property(label: argument.label, typeDescription: argument.typeDescription))
-			}
+		for (argument, defaultExpression) in Self.defaultValuedMockParameterArguments(of: instantiable) {
+			rootDefaultParameters.append(MockRootParameters.RootDefaultParameter(
+				label: argument.label,
+				typeSource: argument.typeDescription.asFunctionParameter.asSource,
+				defaultExpression: defaultExpression,
+				typeDescription: argument.typeDescription.strippingEscaping,
+			))
+			parametersKeepingTheirLabels.append(Property(label: argument.label, typeDescription: argument.typeDescription))
 		}
 		// A forwarded parameter takes the default the construction gives the parameter of its label, else the hand-written
 		// mock its type has.
