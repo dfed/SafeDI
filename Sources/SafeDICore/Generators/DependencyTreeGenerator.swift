@@ -9094,9 +9094,10 @@ public actor DependencyTreeGenerator {
 	/// type is among `typesNoDeclarationCanFulfillByCalledType`, which production reports
 	/// (`validateFillsInstantiateOnlyWhatCanBeFulfilled`).
 	///
-	/// A gate then passes a hole type of a called type up whole, every place of it, where the twin fills it: a re-entered
-	/// called type whose fill reads a lazy value beside its place's fields (`holeTypesTheFillGatesPassUp(of:in:)`).
-	/// Contract rule 7 lists the difference (`seam-and-mock-contract.md`).
+	/// Two gates then pass a hole type of a called type up whole, every place of it, where the twin fills it: a re-entered
+	/// called type whose fill reads a lazy value beside its place's fields, and places of one hole type whose fills read
+	/// different lazy values (`holeTypesTheFillGatesPassUp(of:in:)`). Contract rule 7 lists the difference
+	/// (`seam-and-mock-contract.md`).
 	private func holesFilled(
 		byCallsOf publicMockCalls: [TypeDescription: PublicMockCall],
 		in typeDescriptionToScopeMap: [TypeDescription: Scope],
@@ -9207,6 +9208,10 @@ public actor DependencyTreeGenerator {
 	///   fill of one of its places reads, beside the place's fields, a `LazilyInstantiated` or `SendableLazilyInstantiated`
 	///   value: the called mock binds the value by value, so no level of the re-entered call holds the wrapper the twin
 	///   hands that fill.
+	/// - **Places that disagree.** A hole type of a called type is passed up when two of its places' fills read different
+	///   `LazilyInstantiated` or `SendableLazilyInstantiated` values beside their fields, as where one place is beneath a
+	///   level that declares the value again and the called mock's by-value copy reaches the other: one fill serves every
+	///   place of a hole type, and no level that holds only the copy can hand it the wrapper.
 	/// - Then, as a fill never passes a place up, a fill whose tree calls a public mock that now passes a builder up is not
 	///   filled either, until none is: its hole type is passed up too.
 	/// A hole type is never passed up in part, so no builder is half filled. Every other place is filled as before: a fill
@@ -9225,6 +9230,12 @@ public actor DependencyTreeGenerator {
 				calledTypeInFill == calledType || publicMockCalls[calledTypeInFill]?.holes.contains { sites.contains($0.site) } == true
 			}
 			for fill in fills where fill.calledType == calledType && isReentered && !fill.lazyValuesReadBesideFields.isEmpty {
+				passedUp.insert(fill.key)
+			}
+		}
+		var lazyValuesReadBesideFieldsByKey = [HoleTypeOfCall: Set<Property>]()
+		for fill in fills {
+			if let other = lazyValuesReadBesideFieldsByKey.updateValue(fill.lazyValuesReadBesideFields, forKey: fill.key), other != fill.lazyValuesReadBesideFields {
 				passedUp.insert(fill.key)
 			}
 		}
