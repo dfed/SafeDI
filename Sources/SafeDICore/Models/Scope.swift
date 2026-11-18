@@ -866,11 +866,11 @@ private struct ScopeGeneratorUnderConstruction {
 			// dispatcher's parameter, by a form that is no optional, then in `Property` order. Without such a call the fill
 			// reads the same declaration either way, and keeps capturing it. A caller's own value (above) is such a label too:
 			// the re-entering call hands its own nearest declaration, which is the one inline reads at the places it reaches.
-			// Where the fill reads it in a form the called mock's copy does not provide, the caller's wrapper, a level whose
-			// payload holds that by-value copy hands the fill the root level function's own parameter, past the copy
-			// (`Fill.labelsHandedPastCalledMockCopy`); where the copy provides every form the fill reads, the levels hand the
-			// copy, which holds the same value: where the copy is a wrapper, one the called mock made of its own around the
-			// instance, which is a known defect (`public-mock-builders.md`, “The caller's own value”).
+			// Where the fill reads it in a form the called mock's copy does not provide, the caller's wrapper, or reads the
+			// wrapper the copy is, which the called mock made of its own around the instance, a level whose payload holds that
+			// copy hands the fill the root level function's own parameter, past the copy (`Fill.labelsHandedPastCalledMockCopy`);
+			// where the copy provides every form the fill reads and the fill reads no wrapper of it, the levels hand the copy,
+			// which holds the same value.
 			var labelsHandedPastCalledMockCopyByCaseKey = [String: Set<String>]()
 			if scope.publicMockCall != nil, let calledBuilders = scope.calledBuilders, Self.callsInsideFills(of: holeArguments, reenter: calledBuilders) {
 				for (caseKey, places) in placesByCaseKey {
@@ -889,11 +889,14 @@ private struct ScopeGeneratorUnderConstruction {
 						caseFields.fields.append(SeamSignature.Hole.Field(property: property, access: .public, declaringType: firstPlace.scopeSeamType, declarationLocation: nil))
 						caseFields.callerReadLabels.insert(label)
 						// Every place of the case holds the called mock's copy as its nearest declaration of a caller's own value.
-						if callersOwnLabels.contains(label),
-						   let copy = firstPlace.fields.first(where: { $0.property.label == label }),
-						   !Set(forms).isSubset(of: CycleParameter.forms(providedBy: copy.property))
-						{
-							labelsHandedPastCalledMockCopyByCaseKey[caseKey, default: []].insert(label)
+						if callersOwnLabels.contains(label), let copy = firstPlace.fields.first(where: { $0.property.label == label }) {
+							// A wrapper the copy is never the caller's: the called mock takes the value by value and wraps the instance
+							// again, so a fill that reads the wrapper is handed the caller's, as one that reads a form the copy does not
+							// provide is.
+							let fillReadsCopysWrapper = copy.property.propertyType.isLazilyInstantiated && forms.contains(where: \.propertyType.isLazilyInstantiated)
+							if fillReadsCopysWrapper || !Set(forms).isSubset(of: CycleParameter.forms(providedBy: copy.property)) {
+								labelsHandedPastCalledMockCopyByCaseKey[caseKey, default: []].insert(label)
+							}
 						}
 					}
 					caseFieldsByCaseKey[caseKey] = caseFields
@@ -1061,8 +1064,8 @@ private struct ScopeGeneratorUnderConstruction {
 		var optionalLazilyInstantiatedLabels = Set<String>()
 		/// For the fill that generates the code of a case of a call of another module's public mock that a call inside its
 		/// fills re-enters, the labels among `callerReadLabels` of the caller's own values the fill reads in a form the
-		/// called mock's by-value copy at its root does not provide: the level functions hand each from the root level
-		/// function's parameter, past the copy a root level's payload carries (`PublicMockLevelFunctions`).
+		/// called mock's copy at its root does not provide, or as the wrapper the copy is: the level functions hand each from
+		/// the root level function's parameter, past the copy a root level's payload carries (`PublicMockLevelFunctions`).
 		var labelsHandedPastCalledMockCopy = Set<String>()
 		/// The labels of the fields of the hole's struct the fill binds from the struct (see `fillUnderConstruction`):
 		/// every field but one bound from a deferred parameter, which the fill reads from the caller's scope.

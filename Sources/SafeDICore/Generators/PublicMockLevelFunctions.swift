@@ -116,9 +116,9 @@ struct PublicMockLevelFunctions: Sendable {
 	/// - Parameter callerReads: The field each value the call's fills read of the caller's scope is taken as, by label, and
 	///   what the call hands it (`ScopeGenerator.FillCallerReads`).
 	/// - Parameter labelsHandedPastRootPayloads: The labels of `callerReads` whose value a root level's payload carries
-	///   only as the called mock's by-value copy of the caller's own value, which does not provide the form a fill reads
-	///   (`Scope.Fill.labelsHandedPastCalledMockCopy`): a root level function hands the level beneath its own parameter of
-	///   such a label rather than the payload's copy.
+	///   only as the called mock's copy of the caller's own value, which does not provide the form a fill reads, or is a
+	///   wrapper of the called mock's own that a fill reads (`Scope.Fill.labelsHandedPastCalledMockCopy`): a root level
+	///   function hands the level beneath its own parameter of such a label rather than the payload's copy.
 	init(
 		dispatchers: [ScopeGenerator.FillDispatcher],
 		fillParametersByKey: [String: [SeamSignature.Hole.Field]],

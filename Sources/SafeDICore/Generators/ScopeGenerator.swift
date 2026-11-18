@@ -1052,7 +1052,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// it passes it on from the root dispatcher's own parameter.
 		var innerScopeParameters = [SeamSignature.Hole.Field]()
 		/// The labels of `parameterByLabel` the level functions of a call of another module's public mock hand past the
-		/// called mock's by-value copy (`Scope.Fill.labelsHandedPastCalledMockCopy`).
+		/// called mock's copy (`Scope.Fill.labelsHandedPastCalledMockCopy`).
 		var labelsHandedPastCalledMockCopy = Set<String>()
 	}
 
