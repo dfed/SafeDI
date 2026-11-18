@@ -8712,9 +8712,6 @@ struct SafeDIToolGraphFuzzerTests {
 		.twoLeavesReceiveUnnameableDependency: 43,
 		.twoPublicMockTypes: 299,
 		.typeInExtensionOfInstantiable: 219,
-		.holeMockIsolatedToMainActor: 93,
-		.holeHandWrittenMockBuiltInPublicMock: 113,
-		.holeHandWrittenMockTakesNoOverrides: 29,
 	]
 
 	/// Seed 2760, whose mock of `S2760_T2` the tool rejected until a mock passed `nil` to a receive only if available that
