@@ -8191,16 +8191,18 @@ struct SafeDIToolGraphFuzzerTests {
 	/// value oracle compares.
 	static let publicMockCorpusValueOracleInspectedGraphCount = 856
 	/// How many of the public mock corpus's graphs the tool rejects because a caller provides a value the tier of the public
-	/// mock it calls omits (`leafTierOmitsProvidedValue`), which the long run counts as it counts the seam's. None since
-	/// SafeDI reads `Dock`'s declaration inside a platform-conditioned block: the draw holds no value of a type SafeDI
-	/// proves narrower than its own access.
+	/// mock it calls omits (`leafTierOmitsProvidedValue`), which the long run counts as it counts the seam's: the graphs of
+	/// `GraphFuzzerPublicMockDrawFeature.unbuildableValuePublicMockCallTierOmits`, a value of a type whose spelling SafeDI
+	/// cannot read that the consumer's `mock()` is passed because it cannot build it. No holder of `Dock` is one, since SafeDI
+	/// reads `Dock`'s declaration inside a platform-conditioned block. Pins: derived on CI.
 	static let publicMockCorpusOmittedValueGraphCount = 0
 	/// How many of the public mock corpus's graphs name a type no declaration SafeDI reads declares, which the oracle
 	/// compares with their read twin.
 	static let publicMockCorpusReadTwinGraphCount = 260
 	/// How many of the public mock corpus's graphs the tool rejects with each of a public mock's own errors, in the order
-	/// of `GraphFuzzerOracle.publicMockOnlyErrorMarkers`: the public tier, a narrower enclosing type, a leaf tier and a
-	/// nested leaf tier omitting a provided value, the mock condition, the by-name check, and the view that cannot call;
+	/// of `GraphFuzzerOracle.publicMockOnlyErrorMarkers`: the public tier, a narrower enclosing type, a leaf tier (the graphs
+	/// of `unbuildableValuePublicMockCallTierOmits`) and a nested leaf tier omitting a provided value, the mock condition, the
+	/// by-name check, and the view that cannot call;
 	/// then the fill that reads a value the loop around `T6`'s hole declares again
 	/// (`GraphFuzzerOracle.publicMockStaleValueErrorMarker`), which rejects seeds 50, 85, 450, 555, 609, 688 and 967.
 	static let publicMockCorpusErrorGraphCounts = [96, 0, 0, 0, 36, 0, 0, 7]
@@ -8621,6 +8623,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.overrideClosureCallInternalCallerPassesPlaceUp: 98,
 		.overrideClosureCallPublicCallerPassesPlaceUp: 96,
 		.overrideClosureCallPlaceIsErasedInstantiator: 98,
+		.unbuildableValuePublicMockCall: 198,
+		.unbuildableValuePublicMockCallPublicTier: 153,
+		.unbuildableValuePublicMockCallTierOmits: 45,
+		.holeLabelReceivedByPromotedSibling: 186,
+		.holeLabelReceivedByPromotedSiblingHeldInInstantiator: 51,
+		.holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated: 76,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,
