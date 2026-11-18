@@ -1147,6 +1147,23 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		)
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases, ReenteredFunctionReadShape.all)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlacesWithCallersValue_whenFillBuildingCalledTypeAgainReadsLessOfValueThanReenteredFunctionTakes(caller: CallingMockCallerKind, shape: ReenteredFunctionReadShape) async throws {
+		// `F` holds no `log`. `Live` fills its place `api`, below its root, receiving `Root`’s `log: Log`, so the call’s root
+		// level function takes `log: Log`. `Live2` fills its place `api2` and builds `F` again, itself or through `G`’s public
+		// mock, whose place `LiveG` fills by building `F`, so a call inside the fill re-enters that function, while `Live2`
+		// reads `log` only if available, or not at all. The fill takes `log` as the re-entered function does
+		// (`Scope.labelsHandedToReenteredFunctions(by:)`), and each `Live` and `Live2` holds `Root`’s `log`, as inline.
+		try await expectValuesEqualInline(
+			mock: Self.reenteredFunctionModules(caller: caller, shape: shape),
+			inline: Self.reenteredFunctionInlineModules(shape: shape),
+			caller: caller.callingMockCaller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.reenteredFunctionProbes(shape: shape),
+		)
+	}
+
 	// MARK: Tests – a place passed up whole where a fill of a re-entered call reads the caller’s lazy value
 
 	@Test(arguments: CallingMockCallerKind.allCases, CallerLazyWrapper.allCases)
@@ -3166,6 +3183,198 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				knownRightExpression: "{ let root = Root(); return \(innerLive).\(fillInstance) === \(innerInstance) }()",
 			),
 		]
+	}
+
+	/// `F`, a seam and public mock in module `Feat` that holds no `log`, with places `api`, beneath `A`, and `api2`, beneath
+	/// `B`, each a level below its root; and, where `shape` builds `F` again through another call, `G`, a seam and public
+	/// mock there too, whose place `gapi` is beneath `GA`. In `App`, `Live` fills `api`, receiving `Root`’s `log: Log`;
+	/// `Live2` fills `api2`, receiving `log` as `shape` says, and builds `F` again, itself or through `G`, whose place
+	/// `LiveG` fills by building `F`. `Root` holds `log` as `shape` says. `caller` decides `Root`’s attribute, or that `App`
+	/// lists it in `additionalMocksToGenerate`.
+	private static func reenteredFunctionModules(caller: CallingMockCallerKind, shape: ReenteredFunctionReadShape) -> [ModuleFixture] {
+		var appFiles = [
+			"AppTypes.swift": "import Feat\nimport SafeDI\n\n" + reenteredFunctionAppTypes(shape: shape, rootAttribute: caller.attribute(listed: "@Instantiable(isRoot: true)")),
+		]
+		if caller == .listed {
+			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"])\n"
+		}
+		return [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": "import SafeDI\n\n" + reenteredFunctionFeatureTypes(shape: shape, callee: twinCalledTypes)]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Feat"]),
+		]
+	}
+
+	/// `reenteredFunctionModules`’ types in one module, `Root` a root: what inline builds.
+	private static func reenteredFunctionInlineModules(shape: ReenteredFunctionReadShape) -> [ModuleFixture] {
+		var types = "import SafeDI\n\n"
+		types += reenteredFunctionFeatureTypes(shape: shape, callee: "@Instantiable")
+		types += "\n\n"
+		types += reenteredFunctionAppTypes(shape: shape, rootAttribute: "@Instantiable(isRoot: true)")
+		return [ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": types])]
+	}
+
+	/// `F`, declared with `callee`, the types its tree builds, and, where `shape` builds `F` again through another call, `G`,
+	/// declared with `callee` too.
+	private static func reenteredFunctionFeatureTypes(shape: ReenteredFunctionReadShape, callee: String) -> String {
+		var types = """
+		public protocol Api {}
+
+		public protocol Api2 {}
+
+		@Instantiable
+		public final class Log: Instantiable, Sendable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class A: Instantiable {
+		    init(api: any Api) {
+		        self.api = api
+		    }
+
+		    @Instantiated public let api: any Api
+		}
+
+		@Instantiable
+		public final class B: Instantiable {
+		    init(api2: any Api2) {
+		        self.api2 = api2
+		    }
+
+		    @Instantiated public let api2: any Api2
+		}
+
+		\(callee)
+		public final class F: Instantiable {
+		    public init(a: A, b: B) {
+		        self.a = a
+		        self.b = b
+		    }
+
+		    @Instantiated public let a: A
+		    @Instantiated public let b: B
+		}
+		"""
+		if shape.reentry == .throughOtherCall {
+			types += """
+
+
+			public protocol GApi {}
+
+			@Instantiable
+			public final class GA: Instantiable {
+			    init(gapi: any GApi) {
+			        self.gapi = gapi
+			    }
+
+			    @Instantiated public let gapi: any GApi
+			}
+
+			\(callee)
+			public final class G: Instantiable {
+			    public init(ga: GA) {
+			        self.ga = ga
+			    }
+
+			    @Instantiated public let ga: GA
+			}
+			"""
+		}
+		return types
+	}
+
+	/// `Live`, `Live2`, `LiveG` where `shape` builds `F` again through `G`, and `Root`, declared with `rootAttribute`.
+	private static func reenteredFunctionAppTypes(shape: ReenteredFunctionReadShape, rootAttribute: String) -> String {
+		let builtAgain = shape.reentry == .throughOtherCall ? "G" : "F"
+		var live2Parameters = [String]()
+		var live2Assignments = [String]()
+		var live2Declarations = [String]()
+		if shape.fillReadsLogOnlyIfAvailable {
+			live2Parameters.append("log: Log?")
+			live2Assignments.append("self.log = log")
+			live2Declarations.append("@Received(onlyIfAvailable: true) public let log: Log?")
+		}
+		live2Parameters.append("builder: Instantiator<\(builtAgain)>")
+		live2Assignments.append("self.builder = builder")
+		live2Declarations.append("@Instantiated public let builder: Instantiator<\(builtAgain)>")
+		var types = """
+		@Instantiable(fulfillingAdditionalTypes: [Api.self])
+		public final class Live: Api, Instantiable {
+		    public init(log: Log) {
+		        self.log = log
+		    }
+
+		    @Received public let log: Log
+		}
+
+		@Instantiable(fulfillingAdditionalTypes: [Api2.self])
+		public final class Live2: Api2, Instantiable {
+		    public init(\(live2Parameters.joined(separator: ", "))) {
+		\(live2Assignments.map { "        \($0)" }.joined(separator: "\n"))
+		    }
+
+		\(live2Declarations.map { "    \($0)" }.joined(separator: "\n"))
+		}
+		"""
+		if shape.reentry == .throughOtherCall {
+			types += """
+
+
+			@Instantiable(fulfillingAdditionalTypes: [GApi.self])
+			public final class LiveG: GApi, Instantiable {
+			    public init(f: F) {
+			        self.f = f
+			    }
+
+			    @Instantiated public let f: F
+			}
+			"""
+		}
+		types += """
+
+
+		\(rootAttribute)
+		public final class Root: Instantiable {
+		    public init(log: \(shape.rootLog), f: F) {
+		        self.log = log
+		        self.f = f
+		    }
+
+		    @Instantiated public let log: \(shape.rootLog)
+		    @Instantiated public let f: F
+		}
+		"""
+		return types
+	}
+
+	/// What `Root`’s mock and inline `Root` build, and whether the `Live` of `Root`’s `F`, and the `Live` of the `F` its
+	/// `Live2` builds again, hold the instance `Root`’s `log` holds; where `Live2` reads `log`, whether each `Live2` does too.
+	private static func reenteredFunctionProbes(shape: ReenteredFunctionReadShape) -> [DifferentialValueProbe] {
+		let rootInstance = shape.rootWrapper == nil ? "root.log" : "root.log.instance"
+		let outerLive2 = "(root.f.b.api2 as! Live2)"
+		let builtAgain = switch shape.reentry {
+		case .direct:
+			"\(outerLive2).builder.instantiate()"
+		case .throughOtherCall:
+			"(\(outerLive2).builder.instantiate().ga.gapi as! LiveG).f"
+		}
+		var holders = [
+			("Live", "(root.f.a.api as! Live)"),
+			("the Live of F built again", "(\(builtAgain).a.api as! Live)"),
+		]
+		if shape.fillReadsLogOnlyIfAvailable {
+			holders.append(("Live2", outerLive2))
+			holders.append(("the Live2 of F built again", "(\(builtAgain).b.api2 as! Live2)"))
+		}
+		var probes = [DifferentialValueProbe(name: "Root", expression: "Root.mock()", knownRightExpression: "Root()")]
+		for (name, holder) in holders {
+			probes.append(DifferentialValueProbe(
+				name: "\(name) holds Root’s log",
+				expression: "{ let root = Root.mock(); return \(holder).log === \(rootInstance) }()",
+				knownRightExpression: "{ let root = Root(); return \(holder).log === \(rootInstance) }()",
+			))
+		}
+		return probes
 	}
 
 	/// `Z` receives `log` only if available, as `Log?`, where `receivesOnlyIfAvailable`. `layout` says where the place is,
@@ -7080,6 +7289,52 @@ struct CallerLazyValueForm: CustomTestStringConvertible, Sendable {
 
 	var testDescription: String {
 		"\(wrapper.testDescription), \(place.testDescription)"
+	}
+}
+
+/// How a fill that builds a called type holding no copy of the caller’s `log` again reads `log`, which the re-entered
+/// call’s root level function takes by value: only if available, or not at all; how it builds the called type again,
+/// itself or through another called type whose fill builds it; and the wrapper the caller holds `log` in, if any.
+struct ReenteredFunctionReadShape: CustomTestStringConvertible, Sendable {
+	/// Each shape whose fill takes `log` only because the re-entered function takes it, so that it hands the function
+	/// the value it takes (`Scope.labelsHandedToReenteredFunctions(by:)`). Where the caller holds `log` by value and the
+	/// fill reads none, a fill that does not take it captures the caller’s value, which is what the function takes, so
+	/// those shapes do not depend on it. A fill that reads no `log` and builds the called type again itself, with the
+	/// caller holding `log` lazily, captures the caller’s wrapper where the function takes the value, which does not
+	/// compile with this mechanism or without it: a known defect it does not reach.
+	static let all: [Self] = {
+		var shapes = [Self]()
+		let rootWrappers: [CallerLazyWrapper?] = [nil, .lazilyInstantiated, .sendableLazilyInstantiated]
+		for reentry in [Reentry.direct, .throughOtherCall] {
+			for rootWrapper in rootWrappers {
+				shapes.append(Self(reentry: reentry, fillReadsLogOnlyIfAvailable: true, rootWrapper: rootWrapper))
+			}
+		}
+		for rootWrapper in CallerLazyWrapper.allCases {
+			shapes.append(Self(reentry: .throughOtherCall, fillReadsLogOnlyIfAvailable: false, rootWrapper: rootWrapper))
+		}
+		return shapes
+	}()
+
+	enum Reentry: Sendable {
+		case direct
+		case throughOtherCall
+	}
+
+	let reentry: Reentry
+	let fillReadsLogOnlyIfAvailable: Bool
+	let rootWrapper: CallerLazyWrapper?
+
+	/// The type of the caller’s `log`.
+	var rootLog: String {
+		rootWrapper.map { "\($0.name)<Log>" } ?? "Log"
+	}
+
+	var testDescription: String {
+		var description = reentry == .direct ? "built again by the fill" : "built again through another call’s fill"
+		description += fillReadsLogOnlyIfAvailable ? ", read only if available" : ", not read"
+		description += ", caller holds \(rootLog)"
+		return description
 	}
 }
 
