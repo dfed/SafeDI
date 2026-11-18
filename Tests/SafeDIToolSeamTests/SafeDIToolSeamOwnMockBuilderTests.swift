@@ -2398,6 +2398,185 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 	}
 
+	@Test
+	mutating func generate_takesOneSendableBuilderForOwnPlaceAndCalledMocksPlace_whenCalledMockIsBuiltInSendableFunction() async throws {
+		// `Screen` builds `Gadget`'s place of `Api` and `D`, another module's public mock with a place of `Api` of its own, each
+		// in a `@Sendable` builder function, so both places are of the `@Sendable` family: the seam takes one builder for
+		// both, and so does its mock, which takes the builder `D`'s mock passes up `@Sendable`.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "Core", swiftFileContent: [
+				"""
+				import SafeDI
+
+				public protocol Api: Sendable {}
+
+				@Instantiable(generateDependencyTree: true, generateMock: .public)
+				public final class D: Instantiable, Sendable {
+				    init(api: any Api) {
+				        self.api = api
+				    }
+
+				    @Instantiated let api: any Api
+				}
+				""",
+			]),
+			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContent: [
+				"""
+				import Core
+				import SafeDI
+
+				@Instantiable(generateDependencyTree: true, generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(dBuilder: SendableInstantiator<D>, gadgetBuilder: SendableInstantiator<Gadget>) {
+				        self.dBuilder = dBuilder
+				        self.gadgetBuilder = gadgetBuilder
+				    }
+
+				    @Instantiated let dBuilder: SendableInstantiator<D>
+				    @Instantiated let gadgetBuilder: SendableInstantiator<Gadget>
+				}
+
+				@Instantiable
+				public final class Gadget: Instantiable, Sendable {
+				    public init(api: any Api) {
+				        self.api = api
+				    }
+
+				    @Instantiated let api: any Api
+				}
+				""",
+			], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Screen {
+		    nonisolated public enum SafeDIScope_Api {
+		        nonisolated public enum Gadget_Scope {
+		            nonisolated public struct api_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let api: (api_Values) -> __safeDI_Built
+
+		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                    self.api = api
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.api = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+		    }
+
+		    nonisolated public enum SafeDISendableScope_Api {
+		        nonisolated public struct dBuilder_Values: Sendable {}
+
+		        nonisolated public struct gadgetBuilder_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let dBuilder: @Sendable (dBuilder_Values) -> D.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
+		            public let gadgetBuilder: @Sendable (gadgetBuilder_Values) -> SafeDIScope_Api.Gadget_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(dBuilder: @escaping @Sendable (dBuilder_Values) -> D.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>, gadgetBuilder: @escaping @Sendable (gadgetBuilder_Values) -> SafeDIScope_Api.Gadget_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.dBuilder = dBuilder
+		                self.gadgetBuilder = gadgetBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.dBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.gadgetBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
+		        @Sendable nonisolated func __safeDI_dBuilder() -> D {
+		            _ = D.__safeDI_D_46F8289AEC73F305.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return D(__safeDI_apiBuilder: __safeDI_apiSendableBuilder.dBuilder(SafeDISendableScope_Api.dBuilder_Values()))
+		        }
+		        let dBuilder = SendableInstantiator<D>(__safeDI_dBuilder)
+		        @Sendable nonisolated func __safeDI_gadgetBuilder() -> Gadget {
+		            let __safeDI_apiSendableBuilder_gadgetBuilder = __safeDI_apiSendableBuilder.gadgetBuilder(SafeDISendableScope_Api.gadgetBuilder_Values())
+		            let api: any Api = __safeDI_apiSendableBuilder_gadgetBuilder.api(SafeDIScope_Api.Gadget_Scope.api_Values())
+		            return Gadget(api: api)
+		        }
+		        let gadgetBuilder = SendableInstantiator<Gadget>(__safeDI_gadgetBuilder)
+		        self.init(dBuilder: dBuilder, gadgetBuilder: gadgetBuilder)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_2A58D81765F32205 {}
+		}
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            dBuilder: (@Sendable (@escaping () -> any Api) -> D)? = nil,
+		            gadgetBuilder: (@Sendable (any Api) -> Gadget)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                dBuilder: dBuilder,
+		                gadgetBuilder: gadgetBuilder
+		            )
+		        }
+
+		        var dBuilder: (@Sendable (@escaping () -> any Api) -> D)? { __safeDI_storage.dBuilder }
+		        var gadgetBuilder: (@Sendable (any Api) -> Gadget)? { __safeDI_storage.gadgetBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                dBuilder: (@Sendable (@escaping () -> any Api) -> D)?,
+		                gadgetBuilder: (@Sendable (any Api) -> Gadget)?
+		            ) {
+		                self.dBuilder = dBuilder
+		                self.gadgetBuilder = gadgetBuilder
+		            }
+
+		            let dBuilder: (@Sendable (@escaping () -> any Api) -> D)?
+		            let gadgetBuilder: (@Sendable (any Api) -> Gadget)?
+		        }
+		    }
+
+		    static func mock(
+		        apiSendableBuilder: @escaping @Sendable () -> any Api,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        _ = D.__safeDI_D_mock_1410F11B00C13F09.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let __safeDI_dBuilder__safeDIBuilder = safeDIOverrides.dBuilder
+		        @Sendable func __safeDI_dBuilder() -> D {
+		            let apiBuilder: () -> any Api = apiSendableBuilder
+		            return if let safeDIBuilder = __safeDI_dBuilder__safeDIBuilder { safeDIBuilder(apiBuilder) } else { D.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder)) }
+		        }
+		        let dBuilder = SendableInstantiator<D>(__safeDI_dBuilder)
+		        let __safeDI_gadgetBuilder__safeDIBuilder = safeDIOverrides.gadgetBuilder
+		        @Sendable func __safeDI_gadgetBuilder() -> Gadget {
+		            let api: any Api = apiSendableBuilder()
+		            return if let safeDIBuilder = __safeDI_gadgetBuilder__safeDIBuilder { safeDIBuilder(api) } else { Gadget(api: api) }
+		        }
+		        let gadgetBuilder = SendableInstantiator<Gadget>(__safeDI_gadgetBuilder)
+		        return Screen(dBuilder: dBuilder, gadgetBuilder: gadgetBuilder)
+		    }
+		}
+		#endif
+		"""])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

@@ -294,8 +294,14 @@ extension DependencyTreeGenerator {
 			for property in caseProperties {
 				guard let child = childrenByProperty[property] else { continue }
 				let isCall = child.holeSite == nil && !child.passedUpHoles.isEmpty
+				// Where the type binds the property: a mock's root declares a child it promotes for an optional receive as the
+				// non-optional value it builds (`levelDeclarations`), so what it binds before that child is found by that binding.
+				let boundProperty = type == seamType && bindsReceivesAgain ? Self.mockRootBinding(ofChild: property, of: instantiable) : property
+				func boundPosition() -> Int {
+					declarations.firstIndex { $0.property == boundProperty } ?? declarations.count
+				}
 				if plainProperties.contains(property) {
-					let position = declarations.firstIndex { $0.property == property } ?? declarations.count
+					let position = boundPosition()
 					// A member of the property's loop of builders (`ScopeGenerator.ReceivedBuilderLoops`) is still being built where
 					// the loop's payloads are bound, before the loop's first function: the property's own function wraps again what
 					// its tree receives of it. It is bound later than the payload, as the declarations after the property are.
@@ -356,8 +362,7 @@ extension DependencyTreeGenerator {
 						let fillCase = SeamDeclarationGraph.FillCase(property: property, filledBuilder: filledBuilder)
 						guard let fulfiller = placeHolding.fulfillerTypeByTypeAndFillCase[SeamDeclarationGraph.TypeAndFillCase(type: type, fillCase: fillCase)] else { continue }
 						if plainFills.contains(fillCase) {
-							let position = declarations.firstIndex { $0.property == property } ?? declarations.count
-							plainCases.append(DraftCase(property: property, kind: .fill(filledBuilder, builderLabel: builderLabel, passingUpSeamStem: passingUpSeamStem, fulfiller: fulfiller, isSendable: false), fields: Array(declarations[..<position])))
+							plainCases.append(DraftCase(property: property, kind: .fill(filledBuilder, builderLabel: builderLabel, passingUpSeamStem: passingUpSeamStem, fulfiller: fulfiller, isSendable: false), fields: Array(declarations[..<boundPosition()])))
 						}
 						if sendableOwnFills.contains(fillCase) {
 							sendableCases.append(DraftCase(property: property, kind: .fill(filledBuilder, builderLabel: builderLabel, passingUpSeamStem: passingUpSeamStem, fulfiller: fulfiller, isSendable: false), fields: nil))
