@@ -87,30 +87,33 @@ enum GraphFuzzerRemedyKind: String, CaseIterable, Comparable {
 	/// so the receive reaches the declaration above it. A hidden receive that is a required optional is not a shape anyone
 	/// writes, and gets no remedy; nor does a hiding declaration that `T` renames, or whose new label `T` already declares.
 	case relabelHidingDeclaration = "relabel-hiding-declaration"
-	/// "Declare `@Received let x: X` on `S`, so the builder’s values struct carries it", or its only-if-available
-	/// spelling, for a fill that reads a value the scope its builder is handed does not carry: a seam that passes the
-	/// builder up binds it, a call that builds the seam again hides it, or the place whose fill builds the seam again
-	/// carries it. Each seam the error names declares the property it spells, as it spells it.
+	/// "Declare `@Received let x: X` on `S`, so SafeDI hands it to the builder", or its only-if-available spelling, for a
+	/// fill that reads a value the scope its builder is handed does not carry: a seam that passes the builder up binds it,
+	/// a call that builds the seam again hides it, or the place whose fill builds the seam again carries it. Each seam the
+	/// error names declares the property it spells, as it spells it.
 	case receiveOnSeam = "receive-on-seam"
 	/// "receive it only if available on `S` and `R`, with `@Received(onlyIfAvailable: true) let x: X?`", for a fill that
 	/// requires a value a call that builds the seam again hides: the seam declares the property, and the fill's receive
 	/// becomes it.
 	case receiveOnlyIfAvailableOnSeamAndReader = "receive-only-if-available-on-seam-and-reader"
-	/// "Declare `@Forwarded let x: X` on `T` too, so that function binds it", for a fill inside a `@Sendable` function that
-	/// reads a value its builder's type forwards outside that function: `T`, the type the function builds, forwards the
-	/// property too. The remedy states nothing of the wrapper that builds `T`, so it changes none.
+	/// "Declare `@Forwarded let x: X` on `T`, so that function binds it", for a fill inside a `@Sendable` function that
+	/// reads a value bound outside that function, with "too" where its builder's type forwards it: `T`, the type the
+	/// function builds, forwards the property. Where the error adds "and `w` as `SendableInstantiator<T>`", since only an
+	/// instantiator is passed forwarded values, each type that instantiates `w` in the lazy wrapper the error names declares
+	/// it as that instantiator; otherwise the remedy changes no wrapper.
 	case forwardIntoSendableFunction = "forward-into-sendable-function"
 	/// "Instantiate `x` outside `S` and declare `@Received let x: X` on `S`", for a fill inside a `@Sendable` function that
-	/// reads a value declared outside that function, and "instantiate `x` on a type above `S`, and receive it on `T` in
-	/// place of its @Instantiated declaration", for one that reads an instantiator the seam's tree builds after the
+	/// reads a value the seam declares outside that function, and "instantiate `x` on a type above `S`, and receive it on
+	/// `T` in place of its @Instantiated declaration", for one that reads an instantiator the seam's tree builds after the
 	/// builder or is building there: the declaration moves out of the seam to the builder's callers. Each type outside `S`'s
 	/// tree that builds `S`, or, for a seam that passes the builder up, each of its own such callers in its place, declares
 	/// it as the error's declaring type did, that type receives it in place of the declaration, and, where the error says
 	/// so, `S` receives it too.
 	case instantiateOutsideSeam = "instantiate-outside-seam"
-	/// "Give `x` on `T` another label", for a fill that reads a value a cycle in the seam's tree declares again: `T`'s
-	/// property takes the label `xRelabeled`, with its initializer parameter and assignment.
-	case relabelCycleDeclaration = "relabel-cycle-declaration"
+	/// "Declare `@Received let x: X` on `T`, so each `T` receives the `x` of its own level and hands it on", or its
+	/// only-if-available spelling, for a fill that reads a value a cycle in the seam's tree declares again: `T`, the type
+	/// the cycle builds again, declares the property it spells, as it spells it.
+	case receiveOnTypeTheCycleBuilds = "receive-on-type-the-cycle-builds"
 
 	/// The words a failure line of a remedy of this kind begins with (`GraphFuzzerRemedyRun.failureLine`), which a known
 	/// issue's signature reads.
@@ -244,18 +247,27 @@ enum GraphFuzzerRemedies {
 
 		/// A remedy the error of a seam's fill states (`SeamFillRemedy.remedies(statedIn:notes:)`).
 		enum SeamFillRemedy: Equatable {
-			/// "Declare `@Received let x: X` on `S`, so the builder’s values struct carries it", or of several seams.
+			/// "Declare `@Received let x: X` on `S`, so SafeDI hands it to the builder", or of several seams.
 			case receiveOnSeam(property: GraphFuzzerRemedyProperty, seams: [String])
 			/// "receive it only if available on `S` and `R`, with `@Received(onlyIfAvailable: true) let x: X?`".
 			case receiveOnlyIfAvailableOnSeamAndReader(property: GraphFuzzerRemedyProperty, seam: String, reader: String)
-			/// "Declare `@Forwarded let x: X` on `T` too, so that function binds it".
-			case forwardIntoSendableFunction(property: GraphFuzzerRemedyProperty, builtType: String)
+			/// "Declare `@Forwarded let x: X` on `T`, so that function binds it", with "too" or without, and with "and `w` as
+			/// `SendableInstantiator<T>`" (`wrapper`, which also spells the lazy wrapper the error says builds `w`) or without.
+			case forwardIntoSendableFunction(property: GraphFuzzerRemedyProperty, builtType: String, wrapper: RetypedWrapper?)
 			/// "Instantiate `x` outside `S` and declare `@Received let x: X` on `S`" (`seamReceives`), whose declaring type a
 			/// note names, or "instantiate `x` on a type above `S`, and receive it on `T` in place of its @Instantiated
 			/// declaration".
 			case instantiateOutsideSeam(label: String, seam: String, declaringType: String, seamReceives: Bool)
-			/// "Give `x` on `T` another label".
-			case relabelCycleDeclaration(label: String, declaringType: String)
+			/// "Declare `@Received let x: X` on `T`, so each `T` receives the `x` of its own level and hands it on".
+			case receiveOnTypeTheCycleBuilds(property: GraphFuzzerRemedyProperty, builtType: String)
+
+			/// The lazy wrapper a forward's advice declares as an instantiator: its label, the type the error says it is
+			/// declared as, and the type the advice declares it as.
+			struct RetypedWrapper: Equatable {
+				let label: String
+				let declaredType: String
+				let instantiatorType: String
+			}
 
 			/// Whether `message` is the error of a seam's fill: a receive in its tree, "`R` receives `x: X`, which …", or a
 			/// call in it that passes a value on, "The call by which `T` instantiates `S` (`s`) passes on `x: X`, which …".
@@ -273,19 +285,25 @@ enum GraphFuzzerRemedies {
 			/// sentence the oracle cannot read as it reads these is left out.
 			static func remedies(statedIn message: String, notes: [String]) -> [SeamFillRemedy] {
 				var remedies = [SeamFillRemedy]()
-				// "Declare `@Received let x: X` on `S`, so the builder’s values struct carries it" (or "on `S` and `T`, so the
-				// builders’ values structs carry it"). A form followed by anything else, such as ", with `x` declared on every
-				// route to `S`", states a condition the oracle does not meet.
+				// "Declare `@Received let x: X` on `S`, so SafeDI hands it to the builder" (or "on `S` and `T`, so SafeDI hands
+				// it to the builders"), and "Declare `@Received let x: X` on `T`, so each `T` receives the `x` of its own level
+				// and hands it on". A form followed by anything else, such as ", with `x` declared on every route to `S`",
+				// states a condition the oracle does not meet.
 				var searchStart = message.startIndex
 				while let declareRange = message.range(of: "Declare `@Received", range: searchStart..<message.endIndex) {
 					searchStart = declareRange.upperBound
 					let propertyStart = message.index(declareRange.lowerBound, offsetBy: "Declare `".count)
 					guard let onRange = message.range(of: "` on `", range: propertyStart..<message.endIndex),
-					      let soRange = message.range(of: ", so the builder", range: onRange.upperBound..<message.endIndex),
+					      let soRange = message.range(of: ", so ", range: onRange.upperBound..<message.endIndex),
 					      let receive = property(declaredIn: message[propertyStart..<onRange.lowerBound]),
-					      let seams = backtickedNames(in: message[message.index(before: onRange.upperBound)..<soRange.lowerBound])
+					      let types = backtickedNames(in: message[message.index(before: onRange.upperBound)..<soRange.lowerBound])
 					else { continue }
-					remedies.append(.receiveOnSeam(property: receive, seams: seams))
+					let purpose = message[soRange.upperBound...]
+					if purpose.hasPrefix("SafeDI hands it to the builder") {
+						remedies.append(.receiveOnSeam(property: receive, seams: types))
+					} else if types.count == 1, purpose.hasPrefix("each `\(types[0])` receives the `\(receive.label)` of its own level and hands it on") {
+						remedies.append(.receiveOnTypeTheCycleBuilds(property: receive, builtType: types[0]))
+					}
 				}
 				// "receive it only if available on `S` and `R`, with `@Received(onlyIfAvailable: true) let x: X?`;"
 				let onlyIfAvailablePrefix = "receive it only if available on `"
@@ -301,15 +319,36 @@ enum GraphFuzzerRemedies {
 						remedies.append(.receiveOnlyIfAvailableOnSeamAndReader(property: receive, seam: seam, reader: reader))
 					}
 				}
-				// "Declare `@Forwarded let x: X` on `T` too, so that function binds it"
+				// "Declare `@Forwarded let x: X` on `T`, so that function binds it", with " too" after `T` where the builder's type
+				// forwards it already, and ", and `w` as `SendableInstantiator<T>`" before ", so" where a lazy wrapper builds `T`,
+				// which the error names as the function's: "the `@Sendable` function that builds `w: SendableLazilyInstantiated<T>`".
 				if let declareRange = message.range(of: "Declare `@Forwarded "),
 				   let onRange = message.range(of: "` on `", range: declareRange.upperBound..<message.endIndex),
-				   let tooRange = message.range(of: "` too, so that function binds it", range: onRange.upperBound..<message.endIndex),
+				   let builtTypeEnd = message.range(of: "`", range: onRange.upperBound..<message.endIndex),
 				   let forwarded = property(declaredIn: message[message.index(declareRange.lowerBound, offsetBy: "Declare `".count)..<onRange.lowerBound])
 				{
-					let builtType = String(message[onRange.upperBound..<tooRange.lowerBound])
-					if !builtType.contains("`") {
-						remedies.append(.forwardIntoSendableFunction(property: forwarded, builtType: builtType))
+					let builtType = String(message[onRange.upperBound..<builtTypeEnd.lowerBound])
+					var rest = message[builtTypeEnd.upperBound...]
+					if rest.hasPrefix(" too") {
+						rest = rest.dropFirst(" too".count)
+					}
+					var wrapper: RetypedWrapper?
+					let wrapperPrefix = ", and `"
+					if rest.hasPrefix(wrapperPrefix),
+					   let asRange = rest.range(of: "` as `"),
+					   let typeEnd = rest.range(of: "`", range: asRange.upperBound..<rest.endIndex)
+					{
+						let label = String(rest[rest.index(rest.startIndex, offsetBy: wrapperPrefix.count)..<asRange.lowerBound])
+						let functionPrefix = "the `@Sendable` function that builds `\(label): "
+						if let functionRange = message.range(of: functionPrefix),
+						   let declaredTypeEnd = message.range(of: "`", range: functionRange.upperBound..<message.endIndex)
+						{
+							wrapper = RetypedWrapper(label: label, declaredType: String(message[functionRange.upperBound..<declaredTypeEnd.lowerBound]), instantiatorType: String(rest[asRange.upperBound..<typeEnd.lowerBound]))
+						}
+						rest = wrapper == nil ? rest : rest[typeEnd.upperBound...]
+					}
+					if rest.hasPrefix(", so that function binds it"), !builtType.isEmpty {
+						remedies.append(.forwardIntoSendableFunction(property: forwarded, builtType: builtType, wrapper: wrapper))
 					}
 				}
 				// "Instantiate `x` outside `S` and declare `@Received let x: X` on `S`, so the builder’s caller reads its own":
@@ -341,17 +380,6 @@ enum GraphFuzzerRemedies {
 					let declaringType = String(message[receiveRange.upperBound..<placeRange.lowerBound])
 					if ![label, seam, declaringType].contains(where: { $0.contains("`") }) {
 						remedies.append(.instantiateOutsideSeam(label: label, seam: seam, declaringType: declaringType, seamReceives: false))
-					}
-				}
-				// "Give `x` on `T` another label"
-				if let giveRange = message.range(of: " Give `"),
-				   let onRange = message.range(of: "` on `", range: giveRange.upperBound..<message.endIndex),
-				   let labelRange = message.range(of: "` another label", range: onRange.upperBound..<message.endIndex)
-				{
-					let label = String(message[giveRange.upperBound..<onRange.lowerBound])
-					let declaringType = String(message[onRange.upperBound..<labelRange.lowerBound])
-					if !label.contains("`"), !label.contains(":"), !declaringType.contains("`") {
-						remedies.append(.relabelCycleDeclaration(label: label, declaringType: declaringType))
 					}
 				}
 				return remedies
@@ -553,7 +581,7 @@ enum GraphFuzzerRemedies {
 					return nil
 				}
 			} else if SeamFillRemedy.isSeamFillError(message) {
-				// "`R` receives `x: X`, which … Declare `@Received let x: X` on `S`, so the builder’s values struct carries it, or
+				// "`R` receives `x: X`, which … Declare `@Received let x: X` on `S`, so SafeDI hands it to the builder, or
 				// declare an @Instantiable type that fulfills `P` in module `M` …": the remedies beside the one that fulfills the
 				// hole in the seam's module, which the oracle does not judge.
 				let remedies = SeamFillRemedy.remedies(statedIn: message, notes: notes)
@@ -1052,11 +1080,26 @@ enum GraphFuzzerRemedies {
 			description = "declares `\(property.attribute) let \(property.label): \(property.type)` on `\(seam)` and \(site)"
 			edits = [(seam, adding(property)), (reader, replacing(label: site.label, with: property))]
 			checkedTypeNames = [seam]
-		case let .forwardIntoSendableFunction(property, builtType):
+		case let .forwardIntoSendableFunction(property, builtType, wrapper):
 			kind = .forwardIntoSendableFunction
-			description = "declares `\(property.attribute) let \(property.label): \(property.type)` on `\(builtType)`"
 			edits = [(builtType, adding(property))]
 			checkedTypeNames = [builtType]
+			if let wrapper {
+				// Each type that instantiates the wrapper as the error spells it declares it as the instantiator.
+				let declaringTypes = files.namesOfTypes(declaringPropertyLabeled: wrapper.label, typed: [wrapper.declaredType])
+					.filter { files.property(labeled: wrapper.label, ofTypeNamed: $0)?.attribute.hasPrefix("@Instantiated") == true }
+				guard !declaringTypes.isEmpty else { return nil }
+				let retypingWrapper: ([GraphFuzzerRemedyProperty]) -> [GraphFuzzerRemedyProperty]? = { properties in
+					properties.map { $0.label == wrapper.label && $0.type == wrapper.declaredType ? GraphFuzzerRemedyProperty(attribute: $0.attribute, label: $0.label, type: wrapper.instantiatorType) : $0 }
+				}
+				for typeName in declaringTypes {
+					edits.append((typeName, retypingWrapper))
+				}
+				checkedTypeNames += declaringTypes
+				description = "declares `\(property.attribute) let \(property.label): \(property.type)` on `\(builtType)`, and `\(wrapper.label)` on \(named(declaringTypes)) as `\(wrapper.instantiatorType)`"
+			} else {
+				description = "declares `\(property.attribute) let \(property.label): \(property.type)` on `\(builtType)`"
+			}
 		case let .instantiateOutsideSeam(label, seam, declaringType, seamReceives):
 			// The declaration moves to the builder's callers, the types outside the seam that build it, and its type and the
 			// seam receive it.
@@ -1074,13 +1117,11 @@ enum GraphFuzzerRemedies {
 			edits += builders.map { ($0, adding(declaration)) }
 			description = "declares `\(declaration.attribute) let \(label): \(declaration.type)` on \(named(builders)), and `\(receive.attribute) let \(label): \(receive.type)` on \(named(receivers)) in place of `\(declaringType)`’s declaration"
 			checkedTypeNames = receivers + builders + [builtTypeName(of: declaration)].compactMap(\.self)
-		case let .relabelCycleDeclaration(label, declaringType):
-			let newLabel = "\(label)Relabeled"
-			guard let declaration = files.property(labeled: label, ofTypeNamed: declaringType) else { return nil }
-			kind = .relabelCycleDeclaration
-			description = "gives `\(label): \(declaration.type)` on `\(declaringType)` the label `\(newLabel)`"
-			edits = [(declaringType, replacing(label: label, with: GraphFuzzerRemedyProperty(attribute: declaration.attribute, label: newLabel, type: declaration.type)))]
-			checkedTypeNames = [declaringType]
+		case let .receiveOnTypeTheCycleBuilds(property, builtType):
+			kind = .receiveOnTypeTheCycleBuilds
+			description = "declares `\(property.attribute) let \(property.label): \(property.type)` on `\(builtType)`"
+			edits = [(builtType, adding(property))]
+			checkedTypeNames = [builtType]
 		}
 		var editedFiles = files
 		for (typeName, edit) in edits {
