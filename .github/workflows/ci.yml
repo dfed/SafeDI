@@ -1648,12 +1648,14 @@ jobs:
           mv .generate-time/cached/SafeDITool .generate-time/base/SafeDITool
           swift build -c release --product SafeDITool
           cp .build/release/SafeDITool .generate-time/head/SafeDITool
-      # The comparison took 2.0 and 2.3 minutes (the same runs). The limit is
-      # more than twice that because a slower generator is what this step
-      # exists to report: the largest seam graph took 12 to 19 seconds a run
-      # in those runs, and at five times that the step takes 9 minutes.
+      # The comparison took 2.0 and 2.3 minutes (the same runs), and the
+      # I800-seam shape, added later, takes 13 seconds more (probe run
+      # 44359835414). The limit is more than twice that because a slower
+      # generator is what this step exists to report: the largest seam graph
+      # took 12 to 19 seconds a run in those runs, and at five times that the
+      # step takes 9 minutes, and about 10 with I800-seam.
       - name: Compare Generate Time
-        timeout-minutes: 10
+        timeout-minutes: 12
         run: |
           python3 -I Scripts/generate-time-check.py --summary "$GITHUB_STEP_SUMMARY" \
             .generate-time/base/SafeDITool .generate-time/head/SafeDITool "$RUNNER_TEMP/generate-time"
