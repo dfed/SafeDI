@@ -1473,9 +1473,16 @@ jobs:
       # The integrations job's scratch and DerivedData directories are saved
       # once per runner image and Package.resolved, about 690 and 520 MB
       # compressed (229 MB a scratch directory and 259 MB a DerivedData, run
-      # 44203313851), and the entry before stays until it ages out. Only the
-      # newest of each is restored.
-      - name: Delete All but the Newest Scratch Directories of the Integrations Job
+      # 44203313851), and a run restores only the entry of its own image, by
+      # its exact key. So one entry stays for each image still in use: the
+      # newest saved for the highest image version, and the newest saved for
+      # any other image that a run restored in the last two days. While GitHub
+      # is moving runners, main's runs land on both images, and keeping the
+      # newest entry alone would delete the other image's on every push, so
+      # each run would build from nothing; two days after the last run on the
+      # older image its entry goes. A hundred entries are listed, which the
+      # repository's 10 GB cannot hold at these sizes.
+      - name: Delete the Scratch Directories of the Integrations Job That No Image in Use Restores
         timeout-minutes: 1
         continue-on-error: true
         env:
@@ -1483,16 +1490,34 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           REF: ${{ github.ref }}
         run: |
+          in_use_since=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%S)
           for prefix in example-native-scratch-v1- example-xcodebuild-derived-data-v1-; do
-            if ! older=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -f sort=created_at -f direction=desc -F per_page=100 --jq '.actions_caches[1:][] | "\(.id) \(.key)"' 2>&1); then
-              echo "::warning::Listing $REF's entries under $prefix failed: $(printf '%s' "$older" | tr '\r\n' '  ')"
+            # Newest saved first.
+            if ! entries=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -f sort=created_at -f direction=desc -F per_page=100 --jq '.actions_caches[] | "\(.id) \(.last_accessed_at) \(.key)"' 2>&1); then
+              echo "::warning::Listing $REF's entries under $prefix failed: $(printf '%s' "$entries" | tr '\r\n' '  ')"
               continue
             fi
-            if [ -z "$older" ]; then
-              echo "$REF has one entry or none under $prefix."
+            # <prefix>macOS-xcode-<Xcode version>-<image version, three numbers>-<hash>
+            pattern="s/^${prefix}macOS-xcode-[0-9.]+-([0-9]+\.[0-9]+\.[0-9]+)-.*$/\1/p"
+            highest=$(printf '%s\n' "$entries" | cut -d ' ' -f 3 | sed -n -E "$pattern" | sort -t . -k 1,1n -k 2,2n -k 3,3n | tail -n 1)
+            if [ -z "$highest" ]; then
+              echo "$REF has no entry under $prefix whose key names an image."
               continue
             fi
-            printf '%s\n' "$older" | while read -r id key; do
+            kept=" "
+            printf '%s\n' "$entries" | while read -r id accessed key; do
+              image=$(printf '%s\n' "$key" | sed -n -E "$pattern")
+              # A key this pattern does not read stays.
+              if [ -z "$image" ]; then
+                continue
+              fi
+              # The first entry met for an image is its newest.
+              if [ "${kept#* $image }" = "$kept" ]; then
+                kept="$kept$image "
+                if [ "$image" = "$highest" ] || [[ "$accessed" > "$in_use_since" ]]; then
+                  continue
+                fi
+              fi
               if deleted=$(gh api -X DELETE "repos/$REPOSITORY/actions/caches/$id" 2>&1); then
                 echo "Deleted $key."
               else
