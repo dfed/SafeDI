@@ -49,7 +49,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	mutating func generate_reportsTwinsError_whenCallingMocksFillReceivesValueOuterCalledTypeBuilds(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePaymentService` receives `cart: Cart`, which `StoreScreen` builds where it calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it `StoreScreen`’s values. Declare `@Received let cart: Cart` on `CheckoutScreen`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
+			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePaymentService` receives `cart: Cart`, which `StoreScreen` builds where it calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it `StoreScreen`’s values. Declare `@Received let cart: Cart` on `CheckoutScreen`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
 			\(fixtures["Store"]!["StoreTypes.swift"]):16:5: note: `StoreScreen` declares `cart: Cart` here.
 			"""
 		}
@@ -68,7 +68,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		// declarations it reports.
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(NormalizedFilePath(fixtures["App"]!.compilerPath(of: "AppTypes.swift")).path):11:5: error: `LivePaymentService` receives `cart: Cart`, which `StoreScreen` builds where it calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it `StoreScreen`’s values. Declare `@Received let cart: Cart` on `CheckoutScreen`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
+			\(NormalizedFilePath(fixtures["App"]!.compilerPath(of: "AppTypes.swift")).path):11:5: error: `LivePaymentService` receives `cart: Cart`, which `StoreScreen` builds where it calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it `StoreScreen`’s values. Declare `@Received let cart: Cart` on `CheckoutScreen`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
 			\(NormalizedFilePath(fixtures["Store"]!.compilerPath(of: "StoreTypes.swift")).path):16:5: note: `StoreScreen` declares `cart: Cart` here.
 			"""
 		}
@@ -85,7 +85,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	mutating func generate_reportsTwinsError_whenCallingMocksFillReceivesValueMiddleCalledTypeBuilds(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):12:5: error: `LivePaymentService` receives `cart: Cart`, which `OrderScreen` builds where it calls `CheckoutScreen`, but `OrderScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it `OrderScreen`’s values. Declare `@Received let cart: Cart` on `CheckoutScreen`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `PaymentService` in module `Order` or a module it lists among its SafeDI dependencies, so `OrderScreen` fills the builder itself.
+			\(fixtures["App"]!["AppTypes.swift"]):12:5: error: `LivePaymentService` receives `cart: Cart`, which `OrderScreen` builds where it calls `CheckoutScreen`, but `OrderScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it `OrderScreen`’s values. Declare `@Received let cart: Cart` on `CheckoutScreen`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `PaymentService` in module `Order` or a module it lists among its SafeDI dependencies, so `OrderScreen` fills the builder itself.
 			\(fixtures["Order"]!["OrderTypes.swift"]):16:5: note: `OrderScreen` declares `cart: Cart` here.
 			"""
 		}
@@ -105,7 +105,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		// inline too: it declares it a plain type.
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePaymentService` receives `cart: Cart`, which `OrderScreen` builds on the path where `StoreScreen` calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let cart: Cart` on `CheckoutScreen`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
+			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePaymentService` receives `cart: Cart`, which `OrderScreen` builds on the path where `StoreScreen` calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let cart: Cart` on `CheckoutScreen`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
 			\(fixtures["Store"]!["StoreTypes.swift"]):16:5: note: `OrderScreen` declares `cart: Cart` here.
 			"""
 		}
@@ -122,7 +122,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	mutating func generate_reportsTwinsError_whenCallingMocksFillReceivesValueOuterCalledTypeBuildsOnlyIfAvailable(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePaymentService` receives `cart: Cart?`, which `StoreScreen` builds where it calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it `StoreScreen`’s values. Declare `@Received let cart: Cart?` on `CheckoutScreen`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
+			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePaymentService` receives `cart: Cart?`, which `StoreScreen` builds where it calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it `StoreScreen`’s values. Declare `@Received let cart: Cart?` on `CheckoutScreen`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
 			\(fixtures["Store"]!["StoreTypes.swift"]):16:5: note: `StoreScreen` declares `cart: Cart` here.
 			"""
 		}
@@ -139,7 +139,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	mutating func generate_reportsTwinsError_whenCallingMocksFillReceivesValueLoopBuildsOnPathToCall(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePaymentService` receives `cart: Cart`, which `Page` builds on the path where `StoreScreen` calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let cart: Cart` on `CheckoutScreen`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
+			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePaymentService` receives `cart: Cart`, which `Page` builds on the path where `StoreScreen` calls `CheckoutScreen`, but `StoreScreen` passes the builder for `CheckoutScreen`’s `payments: any PaymentService` (`payments` of `paymentServiceBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let cart: Cart` on `CheckoutScreen`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `PaymentService` in module `Store` or a module it lists among its SafeDI dependencies, so `StoreScreen` fills the builder itself.
 			\(fixtures["Store"]!["StoreTypes.swift"]):17:5: note: `Page` declares `cart: Cart` here.
 			"""
 		}
@@ -156,7 +156,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	mutating func generate_reportsTwinsError_whenCallingMocksAppOnlyScreenReceivesBuilderCalledTypeBuildsAfterCallingIt(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: `AppSettings` receives `feedBuilder: ErasedInstantiator<(), any FeedPage>`, which `SignedIn`’s tree builds only after it calls the builder for `SignedIn`’s `settingsBuilder: ErasedInstantiator<(), any SettingsPage>` (`settingsBuilder` of `appSettings_SettingsPageBuilder`), so that builder’s values struct does not carry it. Instantiate `feedBuilder` on a type above `SignedIn`, and receive it on `SignedIn` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `AppSettings` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: `AppSettings` receives `feedBuilder: ErasedInstantiator<(), any FeedPage>`, which `SignedIn`’s tree builds only after it calls the builder for `SignedIn`’s `settingsBuilder: ErasedInstantiator<(), any SettingsPage>` (`settingsBuilder` of `appSettings_SettingsPageBuilder`), so SafeDI does not hand it to that builder. Instantiate `feedBuilder` on a type above `SignedIn`, and receive it on `SignedIn` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `AppSettings` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["FeatureTypes.swift"]):35:5: note: `SignedIn` declares `feedBuilder: ErasedInstantiator<(), any FeedPage>` here.
 			"""
 		}
@@ -193,7 +193,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		// and builds inline’s values, which the twin’s error would say of it falsely.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: `LiveApi` receives `logger: Logger`, which `Home`’s tree builds where it instantiates `Home` again, but that call passes the builder `Home` takes for `Home`’s `api: any Api` on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let logger: Logger` on `Home`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies, so `Home` fills the builder itself.
+			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: `LiveApi` receives `logger: Logger`, which `Home`’s tree builds where it instantiates `Home` again, but that call passes the builder `Home` takes for `Home`’s `api: any Api` on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let logger: Logger` on `Home`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies, so `Home` fills the builder itself.
 			\(fixtures["Feature"]!["FeatureTypes.swift"]):22:5: note: `Loop` declares `logger: Logger` here.
 			"""
 		}) {
@@ -218,7 +218,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		// builder on as module `App` fills it, whose scope there does not carry `cart`, so the twin reports it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePayments` receives `cart: Cart?`, which the builder for `CartScreen`’s `payments: any Payments` (`payments` of `paymentsBuilder`) carries from `CartScreen`, and that builder’s fill instantiates `Checkout` again (`retryBuilder`). Inline, `LivePayments` would read `CartScreen`’s `cart` inside that `Checkout`, but the call passes the builder on as module `App` fills it, whose scope there does not carry `cart`, so `LivePayments` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let cart: Cart?` on `Checkout`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Payments` in module `Shared` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["AppTypes.swift"]):11:5: error: `LivePayments` receives `cart: Cart?`, which the builder for `CartScreen`’s `payments: any Payments` (`payments` of `paymentsBuilder`) carries from `CartScreen`, and that builder’s fill instantiates `Checkout` again (`retryBuilder`). Inline, `LivePayments` would read `CartScreen`’s `cart` inside that `Checkout`, but the call passes the builder on as module `App` fills it, whose scope there does not carry `cart`, so `LivePayments` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let cart: Cart?` on `Checkout`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Payments` in module `Shared` or a module it lists among its SafeDI dependencies.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.reenteringFillModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
@@ -325,7 +325,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_compilesCallingMockAndItsCall_whenInnerCalledTypeReceivesOuterValueAsW1ErrorSays(caller: CallingMockCaller) async throws {
 		// The first remedy of the error `LivePaymentService`’s receive of `StoreScreen`’s `cart` gets: `CheckoutScreen`
-		// receives `cart`, so the builder’s values struct carries it.
+		// receives `cart`, so SafeDI hands it to the builder.
 		try await expectRemedyWorks(
 			mock: Self.w1RemediedModules(caller: caller.attribute, callee: Self.twinCalledTypes),
 			twin: Self.w1RemediedModules(caller: Self.twinCaller, callee: Self.twinCalledTypes),
@@ -423,7 +423,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		// Step 1: `AppSettings` receives `feedBuilder` only if available, as the cycle error says.
 		let w4Diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: `AppSettings` receives `feedBuilder: ErasedInstantiator<(), any FeedPage>?`, which `SignedIn`’s tree builds only after it calls the builder for `SignedIn`’s `settings: any SettingsPage` (`settings` of `settingsPageBuilder`), so that builder’s values struct does not carry it. Instantiate `feedBuilder` on a type above `SignedIn`, and receive it on `SignedIn` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `SettingsPage` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["AppTypes.swift"]):10:5: error: `AppSettings` receives `feedBuilder: ErasedInstantiator<(), any FeedPage>?`, which `SignedIn`’s tree builds only after it calls the builder for `SignedIn`’s `settings: any SettingsPage` (`settings` of `settingsPageBuilder`), so SafeDI does not hand it to that builder. Instantiate `feedBuilder` on a type above `SignedIn`, and receive it on `SignedIn` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `SettingsPage` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["FeatureTypes.swift"]):35:5: note: `SignedIn` declares `feedBuilder: ErasedInstantiator<(), any FeedPage>` here.
 			"""
 		}

@@ -2011,7 +2011,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
 			"""
 		}
@@ -2031,7 +2031,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
 			"""
 		}
@@ -2049,7 +2049,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received let x: X` on `SubB`, with `x` declared on every route to `SubB`, so the builder’s values struct carries it; receive it only if available on `SubB` and `DefaultGadget`, with `@Received(onlyIfAvailable: true) let x: X?`; or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received let x: X` on `SubB`, with `x` declared on every route to `SubB`, so SafeDI hands it to the builder; receive it only if available on `SubB` and `DefaultGadget`, with `@Received(onlyIfAvailable: true) let x: X?`; or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
 			"""
 		}
@@ -2066,7 +2066,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
 			"""
 		}
@@ -2082,7 +2082,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subBBuilder`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subBBuilder`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
 			"""
 		}
@@ -2100,7 +2100,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `Holder` declares on the path from the builder for `SubB`’s `second: any Second` (`second` of `secondBuilder`) to the call by which `Holder` instantiates `SubB` again (`subBBuilder`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `Holder`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `Holder` declares on the path from the builder for `SubB`’s `second: any Second` (`second` of `secondBuilder`) to the call by which `Holder` instantiates `SubB` again (`subBBuilder`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `Holder`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["Holder.swift"]):10:5: note: `Holder` declares `x: X` here.
 			"""
 		}
@@ -2117,7 +2117,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subBBuilder`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subBBuilder`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
 			"""
 		}
@@ -2135,7 +2135,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerFile: "DefaultGizmo.swift", readerLineInMiddle: 9) { readerLocation, fixtures in
 			"""
-			\(readerLocation): error: `DefaultGizmo` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGizmo` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
 			"""
 		}
@@ -2162,7 +2162,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		]
 		await assertThrowsMultiModuleError(inModule: "Outer", diagnostics: { fixtures in
 			"""
-			\(fixtures["Outer"]!["DefaultGadget.swift"]):11:5: error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Outer"]!["DefaultGadget.swift"]):11:5: error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
 			"""
 		}) {
@@ -2183,7 +2183,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`) and `Holder` declares on the path from the builder for `SubB`’s `second: any Second` (`second` of `secondBuilder`) to the call by which `Holder` instantiates `SubB` again (`subBBuilder`), but those calls pass the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s and `Holder`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`) and `Holder` declares on the path from the builder for `SubB`’s `second: any Second` (`second` of `secondBuilder`) to the call by which `Holder` instantiates `SubB` again (`subBBuilder`), but those calls pass the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s and `Holder`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
 			\(fixtures["Middle"]!["Holder.swift"]):10:5: note: `Holder` declares `x: X` here.
 			"""
@@ -2201,7 +2201,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`) and `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subBBuilder`), but those calls pass the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`) and `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subBBuilder`), but those calls pass the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["DefaultFirst.swift"]):11:5: note: `DefaultFirst` declares `x: X` here.
 			"""
 		}
@@ -2220,7 +2220,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `Relay` builds where it calls `SubB`, but `Relay` passes the builder for `SubB`’s `second: any Second` (`second` of `secondBuilder`) on from its own caller, which cannot hand it `Relay`’s values. Declare `@Received let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies, so `Relay` fills the builder itself.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `Relay` builds where it calls `SubB`, but `Relay` passes the builder for `SubB`’s `second: any Second` (`second` of `secondBuilder`) on from its own caller, which cannot hand it `Relay`’s values. Declare `@Received let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies, so `Relay` fills the builder itself.
 			\(fixtures["Feature"]!["Relay.swift"]):8:5: note: `Relay` declares `x: X` here.
 			"""
 		}
@@ -2238,7 +2238,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `Relay` (`relay`), which instantiates `SubB` again, but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `Relay` (`relay`), which instantiates `SubB` again, but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
 			"""
 		}
@@ -2405,7 +2405,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			"""
 		}
 	}
@@ -2422,7 +2422,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get another value. Declare `@Received let x: X` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get another value. Declare `@Received let x: X` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			"""
 		}
 	}
@@ -2438,7 +2438,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			"""
 		}
 	}
@@ -2454,7 +2454,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subBBuilder`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subBBuilder`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			"""
 		}
 	}
@@ -2471,7 +2471,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB` and `subBBuilder`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but those calls pass the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB` and `subBBuilder`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but those calls pass the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			"""
 		}
 	}
@@ -2489,7 +2489,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builders for `SubA`’s `first: any First` (`first` of `firstBuilder_SubA`) and `SubC`’s `first: any First` (`first` of `firstBuilder_SubC`) carry from `SubA` and `SubC`, and each of their fills instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s or `SubC`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builders for `SubA`’s `first: any First` (`first` of `firstBuilder_SubA`) and `SubC`’s `first: any First` (`first` of `firstBuilder_SubC`) carry from `SubA` and `SubC`, and each of their fills instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s or `SubC`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			"""
 		}
 	}
@@ -2506,7 +2506,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subBBuilder`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subBBuilder`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			"""
 		}
 	}
@@ -2523,7 +2523,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerFile: "DefaultGizmo.swift", readerLineInMiddle: 9) { readerLocation, _ in
 			"""
-			\(readerLocation): error: `DefaultGizmo` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGizmo` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGizmo` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGizmo` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGizmo` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGizmo` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			"""
 		}
 	}
@@ -2549,7 +2549,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		]
 		await assertThrowsMultiModuleError(inModule: "Outer", diagnostics: { fixtures in
 			"""
-			\(fixtures["Outer"]!["DefaultGadget.swift"]):11:5: error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Outer"]!["DefaultGadget.swift"]):11:5: error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -2571,7 +2571,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `Relay` (`relayBuilder`), which instantiates `SubB` again. Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `Relay` (`relayBuilder`), which instantiates `SubB` again. Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			"""
 		}
 	}
@@ -2589,7 +2589,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subBBuilder`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (`first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subBBuilder`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
 			"""
 		}
 	}

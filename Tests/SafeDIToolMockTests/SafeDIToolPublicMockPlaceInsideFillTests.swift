@@ -921,7 +921,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 		// The twin reports that, so the calling mock reports the same.
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["LiveGadget.swift"]):10:5: error: `LiveGadget` receives `tag: Tag`, which `Outer` declares outside the `@Sendable` function that builds `service: any Service`, and the values struct SafeDI hands the builder for `DefaultService`’s `gadget: any Gadget` (`gadget` of `gadgetSendableBuilder`) carries only what that function binds. Instantiate `tag` outside `Outer` and declare `@Received let tag: Tag` on `Outer`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["LiveGadget.swift"]):10:5: error: `LiveGadget` receives `tag: Tag`, which `Outer` declares outside the `@Sendable` function that builds `service: any Service`, and SafeDI hands the builder for `DefaultService`’s `gadget: any Gadget` (`gadget` of `gadgetSendableBuilder`) only what that function binds. Instantiate `tag` outside `Outer` and declare `@Received let tag: Tag` on `Outer`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["Outer.swift"]):10:5: note: `Outer` declares `tag: Tag` here.
 			"""
 		}
@@ -948,7 +948,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 		// the calling mock reports the same.
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["LiveGadget.swift"]):10:5: error: `LiveGadget` receives `tag: Tag`, which `Outer` declares outside the `@Sendable` function that builds `service: any Service`, and the values struct SafeDI hands the builder for `DefaultService`’s `gadget: any Gadget` (`gadget` of `gadgetSendableBuilder`) carries only what that function binds. Instantiate `tag` outside `Outer` and declare `@Received let tag: Tag` on `Outer`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["LiveGadget.swift"]):10:5: error: `LiveGadget` receives `tag: Tag`, which `Outer` declares outside the `@Sendable` function that builds `service: any Service`, and SafeDI hands the builder for `DefaultService`’s `gadget: any Gadget` (`gadget` of `gadgetSendableBuilder`) only what that function binds. Instantiate `tag` outside `Outer` and declare `@Received let tag: Tag` on `Outer`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["Outer.swift"]):10:5: note: `Outer` declares `tag: Tag` here.
 			"""
 		}

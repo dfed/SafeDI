@@ -1634,7 +1634,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let property = onlyIfAvailable ? "settingsBuilder: ErasedInstantiator<(), any Settings>?" : "settingsBuilder: ErasedInstantiator<(), any Settings>"
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultDetail.swift"]):9:5: error: `DefaultDetail` receives `\(property)`, which `Screen`’s tree builds only after it calls the builder for `Screen`’s `detailBuilder: ErasedInstantiator<(), any Detail>` (`detailBuilder` of `defaultDetail_DetailBuilder`), so that builder’s values struct does not carry it. Instantiate `settingsBuilder` on a type above `Screen`, and receive it on `Screen` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `DefaultDetail` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultDetail.swift"]):9:5: error: `DefaultDetail` receives `\(property)`, which `Screen`’s tree builds only after it calls the builder for `Screen`’s `detailBuilder: ErasedInstantiator<(), any Detail>` (`detailBuilder` of `defaultDetail_DetailBuilder`), so SafeDI does not hand it to that builder. Instantiate `settingsBuilder` on a type above `Screen`, and receive it on `Screen` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `DefaultDetail` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Screen.swift"]):9:5: note: `Screen` declares `settingsBuilder: ErasedInstantiator<(), any Settings>` here.
 			"""
 		}) {

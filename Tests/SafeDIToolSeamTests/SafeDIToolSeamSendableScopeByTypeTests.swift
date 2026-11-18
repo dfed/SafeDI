@@ -806,7 +806,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// a place is handed only what that function binds.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultWidget.swift"]):9:5: error: `DefaultWidget` receives `part: Part`, which `Shell` declares outside the `@Sendable` function that builds `panelBuilder: SendableInstantiator<Panel>`, and the values struct SafeDI hands the builder for `Panel`’s `widget: any Widget` (`widget` of `widgetSendableBuilder`) carries only what that function binds. Instantiate `part` outside `Host` and declare `@Received let part: Part` on `Host`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Widget` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultWidget.swift"]):9:5: error: `DefaultWidget` receives `part: Part`, which `Shell` declares outside the `@Sendable` function that builds `panelBuilder: SendableInstantiator<Panel>`, and SafeDI hands the builder for `Panel`’s `widget: any Widget` (`widget` of `widgetSendableBuilder`) only what that function binds. Instantiate `part` outside `Host` and declare `@Received let part: Part` on `Host`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Widget` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Shell.swift"]):8:5: note: `Shell` declares `part: Part` here.
 			"""
 		}) {
@@ -838,7 +838,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// another value, so the read is an error, whose remedy drops the alias rather than receiving `service` again.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `service: Service`, which `Home` receives as the caller’s `appService` outside the `@Sendable` function that builds `screenBuilder: SendableInstantiator<Screen>`, and the values struct SafeDI hands the builder for `Screen`’s `api: any Api` (`api` of `apiSendableBuilder`) carries only what that function binds. Declare `@Received let service: Service` on `Home` without `fulfilledByDependencyNamed: "appService"`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `service: Service`, which `Home` receives as the caller’s `appService` outside the `@Sendable` function that builds `screenBuilder: SendableInstantiator<Screen>`, and SafeDI hands the builder for `Screen`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Received let service: Service` on `Home` without `fulfilledByDependencyNamed: "appService"`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Home.swift"]):8:5: note: `Home` receives `service: Service` here.
 			"""
 		}) {
@@ -870,7 +870,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// the alias on `Mid` and has `service` instantiated outside `Home`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `service: Service`, which `Mid` receives as `appService` outside the `@Sendable` function that builds `screenBuilder: SendableInstantiator<Screen>`, and the values struct SafeDI hands the builder for `Screen`’s `api: any Api` (`api` of `apiSendableBuilder`) carries only what that function binds. Declare `@Received let service: Service` on `Mid` without `fulfilledByDependencyNamed: "appService"`, and instantiate `service` outside `Home`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `service: Service`, which `Mid` receives as `appService` outside the `@Sendable` function that builds `screenBuilder: SendableInstantiator<Screen>`, and SafeDI hands the builder for `Screen`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Received let service: Service` on `Mid` without `fulfilledByDependencyNamed: "appService"`, and instantiate `service` outside `Home`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Mid.swift"]):8:5: note: `Mid` receives `service: Service` here.
 			"""
 		}) {
@@ -1016,7 +1016,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// `Detail`: inline it reads `Tab`'s, which the place is not handed, so it is an error rather than a silent `nil`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultWidget.swift"]):9:5: error: `DefaultWidget` receives `tabName: String?`, which `Tab` forwards outside the `@Sendable` function that builds `detailBuilder: SendableInstantiator<Detail>`, and the values struct SafeDI hands the builder for `Detail`’s `widget: any Widget` (`widget` of `widgetSendableBuilder`) carries only what that function binds. Declare `@Forwarded let tabName: String` on `Detail` too, so that function binds it, or declare an @Instantiable type that fulfills `Widget` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultWidget.swift"]):9:5: error: `DefaultWidget` receives `tabName: String?`, which `Tab` forwards outside the `@Sendable` function that builds `detailBuilder: SendableInstantiator<Detail>`, and SafeDI hands the builder for `Detail`’s `widget: any Widget` (`widget` of `widgetSendableBuilder`) only what that function binds. Declare `@Forwarded let tabName: String` on `Detail` too, so that function binds it, or declare an @Instantiable type that fulfills `Widget` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Tab.swift"]):8:5: note: `Tab` declares `tabName: String` here.
 			"""
 		}) {
@@ -1047,7 +1047,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// outside the function, and only forwarding `tag` into `C` binds it there.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag?`, which `A`’s builder function takes as a parameter outside the `@Sendable` function that builds `cBuilder: SendableInstantiator<C>`, because a cycle inside `A`’s tree passes it (`B` forwards `tag: Tag`), and the values struct SafeDI hands the builder for `C`’s `api: any Api` (`api` of `apiSendableBuilder`) carries only what that function binds. Declare `@Forwarded let tag: Tag` on `C` too, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag?`, which `A`’s builder function takes as a parameter outside the `@Sendable` function that builds `cBuilder: SendableInstantiator<C>`, because a cycle inside `A`’s tree passes it (`B` forwards `tag: Tag`), and SafeDI hands the builder for `C`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Forwarded let tag: Tag` on `C` too, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` forwards `tag: Tag` here.
 			"""
 		}) {
@@ -1212,7 +1212,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// nothing, so no forwarded property can carry `tag` into it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultWidget.swift"]):11:5: error: `DefaultWidget` receives `tag: Tag?`, which `A`’s builder function takes as a parameter outside the `@Sendable` function that builds `widgetBuilder: SendableErasedInstantiator<Int, any Widget>`, because a cycle inside `A`’s tree passes it (`B` forwards `tag: Tag`), and the values struct SafeDI hands the builder for `A`’s `widgetBuilder: SendableErasedInstantiator<Int, any Widget>` (`widgetBuilder` of `defaultWidget_WidgetSendableBuilder`) carries only what that function binds. Declare an @Instantiable type that fulfills `DefaultWidget` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultWidget.swift"]):11:5: error: `DefaultWidget` receives `tag: Tag?`, which `A`’s builder function takes as a parameter outside the `@Sendable` function that builds `widgetBuilder: SendableErasedInstantiator<Int, any Widget>`, because a cycle inside `A`’s tree passes it (`B` forwards `tag: Tag`), and SafeDI hands the builder for `A`’s `widgetBuilder: SendableErasedInstantiator<Int, any Widget>` (`widgetBuilder` of `defaultWidget_WidgetSendableBuilder`) only what that function binds. Declare an @Instantiable type that fulfills `DefaultWidget` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` forwards `tag: Tag` here.
 			"""
 		}) {
@@ -1244,7 +1244,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// `C`'s `mark` inline, which `C` declares outside the `@Sendable` function that builds that `T`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `mark: Mark?`, which `C` declares outside the `@Sendable` function that builds `tBuilder: SendableInstantiator<T>`, and the values struct SafeDI hands the builder for `T`’s `api: any Api` (`api` of `apiSendableBuilder`) carries only what that function binds. Instantiate `mark` outside `Hub` and declare `@Received let mark: Mark` on `Hub`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `mark: Mark?`, which `C` declares outside the `@Sendable` function that builds `tBuilder: SendableInstantiator<T>`, and SafeDI hands the builder for `T`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Instantiate `mark` outside `Hub` and declare `@Received let mark: Mark` on `Hub`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["C.swift"]):8:5: note: `C` declares `mark: Mark` here.
 			"""
 		}) {
@@ -1322,7 +1322,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			\(fixtures["Middle"]!["Mid.swift"]):11:5: note: `Mid` declares `tag: Tag` here.
 			"""
 			let boundOutsideSendableFunction = """
-			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag?`, which `Mid` declares outside the `@Sendable` function that builds `dBuilder: SendableInstantiator<D>`, and the values struct SafeDI hands the builder for `D`’s `api: any Api` (`api` of `apiSendableBuilder`) carries only what that function binds. Instantiate `tag` outside `Mid` and declare `@Received let tag: Tag` on `Mid`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Middle` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag?`, which `Mid` declares outside the `@Sendable` function that builds `dBuilder: SendableInstantiator<D>`, and SafeDI hands the builder for `D`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Instantiate `tag` outside `Mid` and declare `@Received let tag: Tag` on `Mid`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Middle` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Middle"]!["Mid.swift"]):11:5: note: `Mid` declares `tag: Tag` here.
 			"""
 			return reversesFileNames ? boundOutsideSendableFunction + "\n" + boundByPassingUpSeam : boundByPassingUpSeam + "\n" + boundOutsideSendableFunction
@@ -1449,7 +1449,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// property can carry `title` into it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultWidget.swift"]):11:5: error: `DefaultWidget` receives `title: String?`, which `Shell` forwards outside the `@Sendable` function that builds `widgetBuilder: SendableErasedInstantiator<Int, any Widget>`, and the values struct SafeDI hands the builder for `Shell`’s `widgetBuilder: SendableErasedInstantiator<Int, any Widget>` (`widgetBuilder` of `defaultWidget_WidgetSendableBuilder`) carries only what that function binds. Declare an @Instantiable type that fulfills `DefaultWidget` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultWidget.swift"]):11:5: error: `DefaultWidget` receives `title: String?`, which `Shell` forwards outside the `@Sendable` function that builds `widgetBuilder: SendableErasedInstantiator<Int, any Widget>`, and SafeDI hands the builder for `Shell`’s `widgetBuilder: SendableErasedInstantiator<Int, any Widget>` (`widgetBuilder` of `defaultWidget_WidgetSendableBuilder`) only what that function binds. Declare an @Instantiable type that fulfills `DefaultWidget` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Shell.swift"]):8:5: note: `Shell` declares `title: String` here.
 			"""
 		}) {
@@ -1468,7 +1468,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// `Host` receives it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultWidget.swift"]):11:5: error: `DefaultWidget` receives `part: Part`, which `Shell` declares outside the `@Sendable` function that builds `widgetBuilder: SendableErasedInstantiator<Int, any Widget>`, and the values struct SafeDI hands the builder for `Shell`’s `widgetBuilder: SendableErasedInstantiator<Int, any Widget>` (`widgetBuilder` of `defaultWidget_WidgetSendableBuilder`) carries only what that function binds. Instantiate `part` outside `Host` and declare `@Received let part: Part` on `Host`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `DefaultWidget` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultWidget.swift"]):11:5: error: `DefaultWidget` receives `part: Part`, which `Shell` declares outside the `@Sendable` function that builds `widgetBuilder: SendableErasedInstantiator<Int, any Widget>`, and SafeDI hands the builder for `Shell`’s `widgetBuilder: SendableErasedInstantiator<Int, any Widget>` (`widgetBuilder` of `defaultWidget_WidgetSendableBuilder`) only what that function binds. Instantiate `part` outside `Host` and declare `@Received let part: Part` on `Host`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `DefaultWidget` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Shell.swift"]):8:5: note: `Shell` declares `part: Part` here.
 			"""
 		}) {
@@ -1487,7 +1487,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// function binds, so `A`'s `name` is outside it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `name: String?`, which `A` forwards outside the `@Sendable` function that builds `bBuilder: SendableInstantiator<B>`, and the values struct SafeDI hands the builder for `B`’s `api: any Api` (`api` of `apiSendableBuilder`) carries only what that function binds. Declare `@Forwarded let name: String` on `B` too, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `name: String?`, which `A` forwards outside the `@Sendable` function that builds `bBuilder: SendableInstantiator<B>`, and SafeDI hands the builder for `B`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Forwarded let name: String` on `B` too, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["A.swift"]):8:5: note: `A` declares `name: String` here.
 			"""
 		}) {

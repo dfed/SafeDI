@@ -635,7 +635,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// fulfilling declaration is `Service`'s, which `App` knows only from the hole.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Home` builds after `profile`, since `Theme` receives `profile` only if available, so the values struct SafeDI hands the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) does not carry it. Receive `profile` on `Theme` some other way, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Home` builds after `profile`, since `Theme` receives `profile` only if available, so SafeDI does not hand it to the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`). Receive `profile` on `Theme` some other way, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Base"]!["Home.swift"]):9:5: note: `Home` declares `theme: Theme` here.
 			"""
 		}) {
@@ -667,7 +667,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// itself is `Shell`'s, which `App` knows only from the hole.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Shell` builds where it calls `Service`, but `Shell` passes the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`’s values. Declare `@Received let theme: Theme` on `Service`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `UserService` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Shell` builds where it calls `Service`, but `Shell` passes the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`’s values. Declare `@Received let theme: Theme` on `Service`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `UserService` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
 			note: `Shell` declares `theme: Theme` here.
 			"""
 		}) {
@@ -699,7 +699,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `Service` only from the hole `Shell` passes up.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["TokenUserService.swift"]):10:5: error: `TokenUserService` receives `token: [3 of Int]`, which the values struct SafeDI hands the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) carries only at `internal` access, and module `App` is not module `Feature`. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(token:profile:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
+			\(fixtures["App"]!["TokenUserService.swift"]):10:5: error: `TokenUserService` receives `token: [3 of Int]`, which SafeDI hands the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) only at `internal` access, and module `App` is not module `Feature`. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(token:profile:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
 			note: `Screen` declares `token: [3 of Int]` here.
 			"""
 		}) {
@@ -1726,7 +1726,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// passed to that call, is one function, which reads `Root`'s.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the path from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Flow`, with `logger` declared on every route to `Flow`, so the builder’s values struct carries it; receive it only if available on `Flow` and `DefaultRouter`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the path from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Flow`, with `logger` declared on every route to `Flow`, so SafeDI hands it to the builder; receive it only if available on `Flow` and `DefaultRouter`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["App"]!["Middle.swift"]):10:5: note: `Middle` declares `logger: Logger` here.
 			"""
 		}) {
@@ -1746,7 +1746,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// the builders' labels.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the paths from the builders for `Profile`’s `router: any Router` (`router` of `routerBuilder`) and `Profile`’s `routerLater: ErasedInstantiator<(), any Router>` (`routerLater` of `defaultRouter_RouterBuilder`) to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Flow`, with `logger` declared on every route to `Flow`, so the builder’s values struct carries it; receive it only if available on `Flow` and `DefaultRouter`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies and declare an @Instantiable type that fulfills `DefaultRouter` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the paths from the builders for `Profile`’s `router: any Router` (`router` of `routerBuilder`) and `Profile`’s `routerLater: ErasedInstantiator<(), any Router>` (`routerLater` of `defaultRouter_RouterBuilder`) to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Flow`, with `logger` declared on every route to `Flow`, so SafeDI hands it to the builder; receive it only if available on `Flow` and `DefaultRouter`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies and declare an @Instantiable type that fulfills `DefaultRouter` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["App"]!["Middle.swift"]):10:5: note: `Middle` declares `logger: Logger` here.
 			"""
 		}) {
@@ -1782,7 +1782,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		]
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the paths from the builders for `Profile`’s `router: any Router` (`router` of `routerBuilder`) and `Profile`’s `routerLater: ErasedInstantiator<(), any Router>` (`routerLater` of `defaultRouter_RouterBuilder`) to the call by which `Middle` instantiates `Shell` (`shellBuilder`), which instantiates `Flow` again, but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Flow`, with `logger` declared on every route to `Flow`, so the builder’s values struct carries it; receive it only if available on `Flow` and `DefaultRouter`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies and declare an @Instantiable type that fulfills `DefaultRouter` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the paths from the builders for `Profile`’s `router: any Router` (`router` of `routerBuilder`) and `Profile`’s `routerLater: ErasedInstantiator<(), any Router>` (`routerLater` of `defaultRouter_RouterBuilder`) to the call by which `Middle` instantiates `Shell` (`shellBuilder`), which instantiates `Flow` again, but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Flow`, with `logger` declared on every route to `Flow`, so SafeDI hands it to the builder; receive it only if available on `Flow` and `DefaultRouter`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies and declare an @Instantiable type that fulfills `DefaultRouter` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["App"]!["Middle.swift"]):10:5: note: `Middle` declares `logger: Logger` here.
 			"""
 		}) {
@@ -1819,7 +1819,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		]
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `MiddleAlpha` declares on the path from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which `MiddleAlpha` instantiates `Flow` again (`flowBuilder`) and `MiddleZed` declares on the path from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which `MiddleZed` instantiates `Flow` again (`flowBuilder`), but those calls pass the builder on as module `App` fills it, which cannot hand it `MiddleAlpha`’s and `MiddleZed`’s values. Declare `@Received let logger: Logger` on `Flow`, with `logger` declared on every route to `Flow`, so the builder’s values struct carries it; receive it only if available on `Flow` and `DefaultRouter`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `MiddleAlpha` declares on the path from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which `MiddleAlpha` instantiates `Flow` again (`flowBuilder`) and `MiddleZed` declares on the path from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which `MiddleZed` instantiates `Flow` again (`flowBuilder`), but those calls pass the builder on as module `App` fills it, which cannot hand it `MiddleAlpha`’s and `MiddleZed`’s values. Declare `@Received let logger: Logger` on `Flow`, with `logger` declared on every route to `Flow`, so SafeDI hands it to the builder; receive it only if available on `Flow` and `DefaultRouter`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["App"]!["MiddleAlpha.swift"]):10:5: note: `MiddleAlpha` declares `logger: Logger` here.
 			\(fixtures["App"]!["MiddleZed.swift"]):10:5: note: `MiddleZed` declares `logger: Logger` here.
 			"""
@@ -1856,7 +1856,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		]
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `MiddleAlpha` declares on the path from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which `MiddleAlpha` instantiates `Flow` again (`flowBuilder`) and `MiddleZed` declares on the path from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which `MiddleZed` instantiates `Flow` again (`flowBuilder`), but those calls pass the builder on as module `App` fills it, which cannot hand it `MiddleAlpha`’s and `MiddleZed`’s values. Declare `@Received let logger: Logger` on `Flow`, with `logger` declared on every route to `Flow`, so the builder’s values struct carries it; receive it only if available on `Flow` and `DefaultRouter`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `MiddleAlpha` declares on the path from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which `MiddleAlpha` instantiates `Flow` again (`flowBuilder`) and `MiddleZed` declares on the path from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which `MiddleZed` instantiates `Flow` again (`flowBuilder`), but those calls pass the builder on as module `App` fills it, which cannot hand it `MiddleAlpha`’s and `MiddleZed`’s values. Declare `@Received let logger: Logger` on `Flow`, with `logger` declared on every route to `Flow`, so SafeDI hands it to the builder; receive it only if available on `Flow` and `DefaultRouter`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["App"]!["File1.swift"]):10:5: note: `MiddleZed` declares `logger: Logger` here.
 			\(fixtures["App"]!["File2.swift"]):10:5: note: `MiddleAlpha` declares `logger: Logger` here.
 			"""
@@ -1887,7 +1887,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		]
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the paths from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) and `Screen`’s `screenRouter: any Router` (`screenRouter` of `routerBuilder`) to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Flow`, with `logger` declared on every route to `Flow`, so the builder’s values struct carries it; receive it only if available on `Flow` and `DefaultRouter`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the paths from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) and `Screen`’s `screenRouter: any Router` (`screenRouter` of `routerBuilder`) to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Flow`, with `logger` declared on every route to `Flow`, so SafeDI hands it to the builder; receive it only if available on `Flow` and `DefaultRouter`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["App"]!["Middle.swift"]):10:5: note: `Middle` declares `logger: Logger` here.
 			"""
 		}) {
@@ -2006,7 +2006,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// one function, reads `Root`'s.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultTracker.swift"]):9:5: error: `DefaultTracker` receives `logger: Logger`, which `Middle` declares on the path from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Flow`, with `logger` declared on every route to `Flow`, so the builder’s values struct carries it; receive it only if available on `Flow` and `DefaultTracker`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `Tracker` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultTracker.swift"]):9:5: error: `DefaultTracker` receives `logger: Logger`, which `Middle` declares on the path from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Flow`, with `logger` declared on every route to `Flow`, so SafeDI hands it to the builder; receive it only if available on `Flow` and `DefaultTracker`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `Tracker` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["App"]!["Middle.swift"]):10:5: note: `Middle` declares `logger: Logger` here.
 			"""
 		}) {
@@ -2326,7 +2326,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// and the struct carries the seam's received `theme` no more, which `Home`'s hides.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `theme: Theme`, which `Home` builds after `profile`, since `Theme` receives `profile` only if available, so the values struct SafeDI hands the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) does not carry it. Receive `profile` on `Theme` some other way, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `theme: Theme`, which `Home` builds after `profile`, since `Theme` receives `profile` only if available, so SafeDI does not hand it to the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`). Receive `profile` on `Theme` some other way, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Home.swift"]):9:5: note: `Home` declares `theme: Theme` here.
 			"""
 		}) {
@@ -2496,7 +2496,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `Shell`'s values, and `Shell`'s caller, which fills the builder, does not hold them.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Shell` builds where it calls `Service`, but `Shell` passes the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`’s values. Declare `@Received let theme: Theme` on `Service`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `UserService` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Shell` builds where it calls `Service`, but `Shell` passes the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`’s values. Declare `@Received let theme: Theme` on `Service`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `UserService` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
 			\(fixtures["Mid"]!["Shell.swift"]):10:5: note: `Shell` declares `theme: Theme` here.
 			"""
 		}) {
@@ -2788,7 +2788,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `logger`; the one fill `App` generates reads `Root`'s, which a nested copy of the fill would read again a level down.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Middle` declares on the path from the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) to the call by which `X` instantiates `Service` again (`service`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Service`, with `logger` declared on every route to `Service`, so the builder’s values struct carries it; receive it only if available on `Service` and `DefaultUserService`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Middle` declares on the path from the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) to the call by which `X` instantiates `Service` again (`service`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`’s values. Declare `@Received let logger: Logger` on `Service`, with `logger` declared on every route to `Service`, so SafeDI hands it to the builder; receive it only if available on `Service` and `DefaultUserService`, with `@Received(onlyIfAvailable: true) let logger: Logger?`; or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["App"]!["Middle.swift"]):11:5: note: `Middle` declares `logger: Logger` here.
 			"""
 		}) {
@@ -2814,7 +2814,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `DefaultUserService` `Shell`'s `logger`, which `Shell`'s copy of the builder does not carry.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `logger: Logger`, which `Shell` builds where it calls `Inner`, but `Shell` passes the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`’s values. Declare `@Received let logger: Logger` on `Inner`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `logger: Logger`, which `Shell` builds where it calls `Inner`, but `Shell` passes the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`’s values. Declare `@Received let logger: Logger` on `Inner`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
 			\(fixtures["Feature"]!["Shell.swift"]):8:5: note: `Shell` declares `logger: Logger` here.
 			"""
 		}) {
@@ -2847,9 +2847,9 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// calls hide `logger` from the fill of `userService`, whichever place's file comes first, so both are reported.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `logger: Logger`, which `Shell1` builds where it calls `Inner`, but `Shell1` passes the builder for `ProfileA`’s `userService: any UserService` (`userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell1`’s values. Declare `@Received let logger: Logger` on `Inner`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Shell1` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `logger: Logger`, which `Shell1` builds where it calls `Inner`, but `Shell1` passes the builder for `ProfileA`’s `userService: any UserService` (`userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell1`’s values. Declare `@Received let logger: Logger` on `Inner`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Shell1` fills the builder itself.
 			\(fixtures["Feature"]!["Shell1.swift"]):8:5: note: `Shell1` declares `logger: Logger` here.
-			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `logger: Logger`, which `Shell2` builds where it calls `Inner`, but `Shell2` passes the builder for `ProfileA`’s `userService: any UserService` (`userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell2`’s values. Declare `@Received let logger: Logger` on `Inner`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Shell2` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `logger: Logger`, which `Shell2` builds where it calls `Inner`, but `Shell2` passes the builder for `ProfileA`’s `userService: any UserService` (`userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell2`’s values. Declare `@Received let logger: Logger` on `Inner`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Shell2` fills the builder itself.
 			\(fixtures["Feature"]!["Shell2.swift"]):8:5: note: `Shell2` declares `logger: Logger` here.
 			"""
 		}) {
@@ -3442,7 +3442,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// would be `Profile`'s, bound inside `Service`'s tree on the path, which `Shell`'s caller does not hold.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultLogger.swift"]):10:5: error: `DefaultLogger` receives `cache: Cache`, which `Profile` builds on the path where `Shell` calls `Inner2`, but `Shell` passes the builder for `Inner2`’s `logger: any Logger` (`logger` of `loggerBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let cache: Cache` on `Inner2`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Logger` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
+			\(fixtures["App"]!["DefaultLogger.swift"]):10:5: error: `DefaultLogger` receives `cache: Cache`, which `Profile` builds on the path where `Shell` calls `Inner2`, but `Shell` passes the builder for `Inner2`’s `logger: any Logger` (`logger` of `loggerBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let cache: Cache` on `Inner2`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Logger` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
 			\(fixtures["Feature"]!["Profile.swift"]):8:5: note: `Profile` declares `cache: Cache` here.
 			"""
 		}) {
@@ -3677,7 +3677,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `Service`'s builder on unchanged, so the one fill `App` generates would read `Root`'s.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Service`’s tree builds where it instantiates `Service` again, but that call passes the builder `Service` takes for `Profile`’s `userService: any UserService` on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let logger: Logger` on `Service`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Service`’s tree builds where it instantiates `Service` again, but that call passes the builder `Service` takes for `Profile`’s `userService: any UserService` on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let logger: Logger` on `Service`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service` fills the builder itself.
 			\(fixtures["Feature"]!["X.swift"]):8:5: note: `X` declares `logger: Logger` here.
 			"""
 		}) {
@@ -3698,7 +3698,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// never changes it. `Service` declares `profile` before `account`, and the first run's file names sort the other way.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Service`’s tree builds where it instantiates `Service` again, but that call passes the builder `Service` takes for `Account`’s `userService: any UserService` and `Profile`’s `userService: any UserService` on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let logger: Logger` on `Service`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Service`’s tree builds where it instantiates `Service` again, but that call passes the builder `Service` takes for `Account`’s `userService: any UserService` and `Profile`’s `userService: any UserService` on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let logger: Logger` on `Service`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service` fills the builder itself.
 			\(fixtures["Feature"]!["X.swift"]):8:5: note: `X` declares `logger: Logger` here.
 			"""
 		}) {
@@ -3743,7 +3743,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// both builders, in the order of their places' types and labels, whichever file declares each place.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Service`’s tree builds where it instantiates `Service` again, but that call passes the builders `Service` takes for `Account`’s `userService: any UserService` and `Profile`’s `userService: AnyUserService` on unchanged, so the caller that fills them cannot hand them those values. Declare `@Received let logger: Logger` on `Service`, so the builders’ values structs carry it, or declare an @Instantiable type that fulfills `DefaultUserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service` fills the builders itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Service`’s tree builds where it instantiates `Service` again, but that call passes the builders `Service` takes for `Account`’s `userService: any UserService` and `Profile`’s `userService: AnyUserService` on unchanged, so the caller that fills them cannot hand them those values. Declare `@Received let logger: Logger` on `Service`, so SafeDI hands it to the builders, or declare an @Instantiable type that fulfills `DefaultUserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service` fills the builders itself.
 			\(fixtures["Feature"]!["X.swift"]):8:5: note: `X` declares `logger: Logger` here.
 			"""
 		}) {
@@ -3781,7 +3781,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// the other way.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which the values struct SafeDI hands the builder for `Account`’s `backupUserService: any UserService` (`backupUserService` of `userServiceBuilder`), `Account`’s `userService: any UserService` (`userService` of `userServiceBuilder`), `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`), and `Settings`’s `userService: any UserService` (`userService` of `userServiceBuilder`) carries only at `package` access, and module `App` is not in package `Shop`. `Session`’s own `@Instantiable` declaration is `package`. Declare `Session` `public`, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
+			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which SafeDI hands the builder for `Account`’s `backupUserService: any UserService` (`backupUserService` of `userServiceBuilder`), `Account`’s `userService: any UserService` (`userService` of `userServiceBuilder`), `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`), and `Settings`’s `userService: any UserService` (`userService` of `userServiceBuilder`) only at `package` access, and module `App` is not in package `Shop`. `Session`’s own `@Instantiable` declaration is `package`. Declare `Session` `public`, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
 			\(fixtures["Feature"]!["Service.swift"]):10:5: note: `Service` declares `session: Session` here.
 			"""
 		}) {
@@ -3813,7 +3813,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// names both builders, in the order of their places' types and labels, whichever file declares each place.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `badge: Badge?`, which `Service`’s tree builds only after it calls the builders for `Account`’s `userService: any UserService` (`userService` of `defaultUserService_UserServiceBuilder`) and `Profile`’s `userService: AnyUserService` (`userService` of `defaultUserService_AnyUserServiceBuilder`), so those builders’ values structs do not carry it. Declare an @Instantiable type that fulfills `DefaultUserService` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `badge: Badge?`, which `Service`’s tree builds only after it calls the builders for `Account`’s `userService: any UserService` (`userService` of `defaultUserService_UserServiceBuilder`) and `Profile`’s `userService: AnyUserService` (`userService` of `defaultUserService_AnyUserServiceBuilder`), so SafeDI does not hand it to those builders. Declare an @Instantiable type that fulfills `DefaultUserService` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Service.swift"]):9:5: note: `Service` declares `badge: Badge` here.
 			"""
 		}) {
@@ -3845,7 +3845,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// scopes, whichever file declares each place.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `session: Session`, which the values structs SafeDI hands the builders for `Account`’s `userService: any UserService` (`userService` of `defaultUserService_UserServiceBuilder`) and `Profile`’s `userService: AnyUserService` (`userService` of `defaultUserService_AnyUserServiceBuilder`) carry only at `package` access, and module `App` is not in package `Shop`. `Session`’s own `@Instantiable` declaration is `package`. Declare `Session` `public`, or declare an @Instantiable type that fulfills `DefaultUserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `session: Session`, which SafeDI hands the builders for `Account`’s `userService: any UserService` (`userService` of `defaultUserService_UserServiceBuilder`) and `Profile`’s `userService: AnyUserService` (`userService` of `defaultUserService_AnyUserServiceBuilder`) only at `package` access, and module `App` is not in package `Shop`. `Session`’s own `@Instantiable` declaration is `package`. Declare `Session` `public`, or declare an @Instantiable type that fulfills `DefaultUserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
 			\(fixtures["Feature"]!["Service.swift"]):9:5: note: `Service` declares `session: Session` here.
 			"""
 		}) {
@@ -3877,7 +3877,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// whichever file declares each place.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `logger: Logger`, which `Service` declares outside the `@Sendable` function that builds `holderBuilder: SendableInstantiator<Holder>`, and the values structs SafeDI hands the builders for `Account`’s `userService: any UserService` (`userService` of `defaultUserService_UserServiceSendableBuilder`) and `Profile`’s `userService: AnyUserService` (`userService` of `defaultUserService_AnyUserServiceSendableBuilder`) carry only what that function binds. Instantiate `logger` outside `Service` and declare `@Received let logger: Logger` on `Service`, so the builders’ caller reads its own, or declare an @Instantiable type that fulfills `DefaultUserService` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `logger: Logger`, which `Service` declares outside the `@Sendable` function that builds `holderBuilder: SendableInstantiator<Holder>`, and SafeDI hands the builders for `Account`’s `userService: any UserService` (`userService` of `defaultUserService_UserServiceSendableBuilder`) and `Profile`’s `userService: AnyUserService` (`userService` of `defaultUserService_AnyUserServiceSendableBuilder`) only what that function binds. Instantiate `logger` outside `Service` and declare `@Received let logger: Logger` on `Service`, so the builders’ caller reads its own, or declare an @Instantiable type that fulfills `DefaultUserService` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Service.swift"]):8:5: note: `Service` declares `logger: Logger` here.
 			"""
 		}) {
@@ -3910,7 +3910,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// it, whichever file declares each seam.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `theme: Theme`, which `Home` builds after `profile`, since `Theme` receives `profile` only if available, so the values structs SafeDI hands the builders for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) in `ServiceA`’s tree and `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) in `ServiceB`’s tree do not carry it. Receive `profile` on `Theme` some other way, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `theme: Theme`, which `Home` builds after `profile`, since `Theme` receives `profile` only if available, so SafeDI does not hand it to the builders for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) in `ServiceA`’s tree and `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) in `ServiceB`’s tree. Receive `profile` on `Theme` some other way, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Home.swift"]):9:5: note: `Home` declares `theme: Theme` here.
 			"""
 		}) {
@@ -3945,7 +3945,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// parent.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which the values struct SafeDI hands the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) carries only at `package` access, and module `App` is not in package `Shop`. `Session`’s own `@Instantiable` declaration is `package`. Declare `Session` `public`, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
+			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which SafeDI hands the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) only at `package` access, and module `App` is not in package `Shop`. `Session`’s own `@Instantiable` declaration is `package`. Declare `Session` `public`, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
 			\(fixtures["Feature"]!["Service.swift"]):9:5: note: `Service` declares `session: Session` here.
 			"""
 		}) {
@@ -4146,7 +4146,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// label reaches `Service`'s own builder through the builder `Other` passes up, which `Service` presents to `Other`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Other` builds where it calls `Service`, but `Other` passes the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Other`’s values. Declare `@Received let logger: Logger` on `Service`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Other` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Other` builds where it calls `Service`, but `Other` passes the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Other`’s values. Declare `@Received let logger: Logger` on `Service`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Other` fills the builder itself.
 			\(fixtures["Feature"]!["Other.swift"]):8:5: note: `Other` declares `logger: Logger` here.
 			"""
 		}) {
@@ -4945,7 +4945,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// fill reads `z`, which inline builds before `p2`. A deliberate gap of the start order, reported with the reorder.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["ZLedger.swift"]):9:5: error: `ZLedger` receives `z: Z`, which `Service`’s dependency tree builds after `p2`, since `Z` requires `p1`, which carries another builder, so the values struct SafeDI hands the builder for `P2`’s `ledger: any Ledger` (`ledger` of `ledgerBuilder`) does not carry it. Declare `z` before `p2` in `Service`, or declare an @Instantiable type that fulfills `Ledger` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["ZLedger.swift"]):9:5: error: `ZLedger` receives `z: Z`, which `Service`’s dependency tree builds after `p2`, since `Z` requires `p1`, which carries another builder, so SafeDI does not hand it to the builder for `P2`’s `ledger: any Ledger` (`ledger` of `ledgerBuilder`). Declare `z` before `p2` in `Service`, or declare an @Instantiable type that fulfills `Ledger` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Service.swift"]):11:5: note: `Service` declares `z: Z` here.
 			"""
 		}) {
@@ -4977,7 +4977,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `nil` for, while `ThemedUserService` requires `theme: Theme`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["ThemedUserService.swift"]):9:5: error: `ThemedUserService` receives `theme: Theme`, which the values struct SafeDI hands the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) carries only as `theme: Theme?`, since `Service`’s tree receives it only if available. Declare `@Received let theme: Theme` on `Service`, or receive it on `ThemedUserService` with `@Received(onlyIfAvailable: true) let theme: Theme?`.
+			\(fixtures["App"]!["ThemedUserService.swift"]):9:5: error: `ThemedUserService` receives `theme: Theme`, which SafeDI hands the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) only as `theme: Theme?`, since `Service`’s tree receives it only if available. Declare `@Received let theme: Theme` on `Service`, or receive it on `ThemedUserService` with `@Received(onlyIfAvailable: true) let theme: Theme?`.
 			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
 			"""
 		}) {
@@ -5693,7 +5693,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// in another package, cannot read.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which the values struct SafeDI hands the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) carries only at `package` access, and module `App` is not in package `Shop`. `Session`’s own `@Instantiable` declaration is `package`. Declare `Session` `public`, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
+			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which SafeDI hands the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) only at `package` access, and module `App` is not in package `Shop`. `Session`’s own `@Instantiable` declaration is `package`. Declare `Session` `public`, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
 			\(fixtures["Feature"]!["Service.swift"]):8:5: note: `Service` declares `session: Session` here.
 			"""
 		}) {
@@ -5720,7 +5720,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// another package, and giving it the package name lets it read the `package` field, so that remedy comes first.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which the values struct SafeDI hands the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) carries only at `package` access, and module `App` is not told it is in package `Shop`. `Session`’s own `@Instantiable` declaration is `package`. Give module `App` the package name of module `Feature` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package; declare `Session` `public`; or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
+			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which SafeDI hands the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) only at `package` access, and module `App` is not told it is in package `Shop`. `Session`’s own `@Instantiable` declaration is `package`. Give module `App` the package name of module `Feature` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package; declare `Session` `public`; or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
 			\(fixtures["Feature"]!["Service.swift"]):8:5: note: `Service` declares `session: Session` here.
 			"""
 		}) {
@@ -6024,7 +6024,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// access, which `App` cannot read.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["TokenUserService.swift"]):9:5: error: `TokenUserService` receives `token: [3 of Int]`, which the values struct SafeDI hands the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) carries only at `internal` access, and module `App` is not module `Feature`. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(token:profile:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
+			\(fixtures["App"]!["TokenUserService.swift"]):9:5: error: `TokenUserService` receives `token: [3 of Int]`, which SafeDI hands the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`) only at `internal` access, and module `App` is not module `Feature`. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(token:profile:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
 			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `Screen` declares `token: [3 of Int]` here.
 			"""
 		}) {
@@ -6805,7 +6805,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// struct does not carry it; `DefaultUserService` receives it only if available.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `badge: Badge?`, which `Service`’s tree builds only after it calls the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`), so that builder’s values struct does not carry it. Declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `badge: Badge?`, which `Service`’s tree builds only after it calls the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`), so SafeDI does not hand it to that builder. Declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Service.swift"]):9:5: note: `Service` declares `badge: Badge` here.
 			"""
 		}) {
@@ -6832,7 +6832,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `Mid` as what builds it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `badge: Badge?`, which `Mid` builds only after `Service`’s tree calls the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`), so that builder’s values struct does not carry it. Declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `badge: Badge?`, which `Mid` builds only after `Service`’s tree calls the builder for `Profile`’s `userService: any UserService` (`userService` of `userServiceBuilder`), so SafeDI does not hand it to that builder. Declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Mid.swift"]):9:5: note: `Mid` declares `badge: Badge` here.
 			"""
 		}) {
