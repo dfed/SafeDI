@@ -298,12 +298,12 @@ struct GraphFuzzerCallingMockDraw {
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .fillInstantiatesTypeNoDeclarationCanFulfill, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot:
 			nil
 		}
-		// Drawn after the builder, and only for its shape, so no graph that draws no builder changes. Not beside a
-		// `SendableInstantiator`: there the twin's code does not compile, where main's does (the plain struct of the fill's
-		// level holds a member that returns the third module's `@Sendable` family's struct, which its no-scope initializer
-		// cannot build from the builder it is handed), a regression of the seam's builder structs that the calling mock
-		// shares, listed for a fix of its own (`fuzzer-calling-mocks.md`, "Not drawn yet").
-		reenteringFillInstantiatesWhatNothingFulfills = enclosingBuilder != nil && enclosingBuilder != .sendableInstantiator && random.element(of: [false, true])
+		// Drawn after the builder, and only for its shape, so no graph that draws no builder changes. Beside a
+		// `SendableInstantiator`, the fill is built in that builder's `@Sendable` function, so the builder is of the
+		// `@Sendable` family, and the plain struct of the fill's level holds a member that returns the third module's
+		// `@Sendable` family's struct, whose no-scope initializer takes a `@Sendable` builder
+		// (`ScopeGenerator.LevelBuilderForms.takesSendableBuilder(atLevel:)`).
+		reenteringFillInstantiatesWhatNothingFulfills = enclosingBuilder != nil && random.element(of: [false, true])
 	}
 
 	static let callingMockRandomSeedMask: UInt64 = 0x63616C6C6D6F636B
@@ -428,10 +428,16 @@ struct GraphFuzzerCallingMockDraw {
 	let reenteringFillInstantiatesWhatNothingFulfills: Bool
 
 	/// The protocol no declaration fulfills that the fill instantiates where `reenteringFillInstantiatesWhatNothingFulfills`,
-	/// the plain class a probe hands its builder, and the builder's label.
+	/// and the plain class a probe hands its builder.
 	static let beaconProtocol = "Beacon"
 	static let beaconStub = "StubBeacon"
-	static let beaconBuilderLabel = "beaconBuilder"
+
+	/// The label of the builder of what the fill instantiates where `reenteringFillInstantiatesWhatNothingFulfills`: of the
+	/// `@Sendable` family where the third module's type holds the enclosing called type in a `SendableInstantiator`, whose
+	/// `@Sendable` builder function re-enters the fill.
+	var beaconBuilderLabel: String {
+		enclosingBuilder == .sendableInstantiator ? "beaconSendableBuilder" : "beaconBuilder"
+	}
 
 	/// The build of the calling mock's module the tool is told of: one that compiles the generated mocks, but in the shape
 	/// whose fill the tool does not check where the mock condition is inactive.
@@ -521,7 +527,7 @@ struct GraphFuzzerCallingMockDraw {
 		case .callersOwnValue, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot:
 			[]
 		case .fillHoldsBuilderOfEnclosingCalledType:
-			reenteringFillInstantiatesWhatNothingFulfills ? [Self.beaconBuilderLabel] : []
+			reenteringFillInstantiatesWhatNothingFulfills ? [beaconBuilderLabel] : []
 		case .implementationReceivesWhatNothingProvides:
 			[names.token.lowercasedFirst]
 		case .noVisibleImplementation:
@@ -587,7 +593,7 @@ struct GraphFuzzerCallingMockDraw {
 		case .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
 			expectedBuilders.map(\.label)
 		case .fillHoldsBuilderOfEnclosingCalledType:
-			reenteringFillInstantiatesWhatNothingFulfills ? [Self.beaconBuilderLabel] : []
+			reenteringFillInstantiatesWhatNothingFulfills ? [beaconBuilderLabel] : []
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot:
 			[]
 		}
@@ -797,7 +803,7 @@ struct GraphFuzzerCallingMockDraw {
 		// Where the fill instantiates what nothing fulfills, both calls hand its builder the stub.
 		let stub = "{ \(names.callerModuleName).\(Self.beaconStub)() }"
 		let calls = if reenteringFillInstantiatesWhatNothingFulfills {
-			(mock: "\(caller).mock(\(Self.beaconBuilderLabel): \(stub))", twin: "\(caller)(__safeDI_\(Self.beaconBuilderLabel): .init(__safeDI_noScope: \(stub)))")
+			(mock: "\(caller).mock(\(beaconBuilderLabel): \(stub))", twin: "\(caller)(__safeDI_\(beaconBuilderLabel): .init(__safeDI_noScope: \(stub)))")
 		} else {
 			(mock: "\(caller).mock()", twin: "\(caller)()")
 		}
