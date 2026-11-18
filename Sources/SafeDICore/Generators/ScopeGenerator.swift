@@ -5972,17 +5972,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.typeDescription
 			.unwrapped
 			.spelledForConstruction
-		let instantiatedTypeDescription = property
-			.typeDescription
-			.unwrapped
-			.asInstantiatedType
-			.asSource
 		return if forwardedArguments.isEmpty, !erasedToConcreteExistential {
 			"\(unwrappedTypeDescription)(\(functionName))"
 		} else if erasedToConcreteExistential {
 			"""
 			\(unwrappedTypeDescription) {
-			\(Self.standardIndent)\(instantiatedTypeDescription)(\(functionName)(\(forwardedArguments)))
+			\(Self.standardIndent)\(Expression.erasure(.call(function: functionName, arguments: forwardedArguments), as: property.typeDescription.unwrapped.asInstantiatedType).spelled)
 			}
 			"""
 		} else {
@@ -6336,23 +6331,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 			}
 			let concreteTypeName = instantiable.concreteInstantiable.asSource
-			let instantiationDeclaration = if publicMockCall != nil {
-				"\(concreteTypeName).\(publicMockCall?.functionName ?? InstantiableVisitor.mockMethodName)"
+			let constructionTarget: ConstructionTarget = if let publicMockCall {
+				.mock(instantiable.concreteInstantiable, name: publicMockCall.functionName)
 			} else if constructsWithHandWrittenMock {
-				"\(concreteTypeName).\(instantiable.customMockName ?? InstantiableVisitor.mockMethodName)"
+				.mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName)
 			} else if instantiable.declarationType.isExtension {
-				"\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
+				.instantiate(instantiable.concreteInstantiable)
 			} else {
-				concreteTypeName
+				.initializer(instantiable.concreteInstantiable)
 			}
 			// A seam call passes a builder for each of the seam's holes after the tier's parameters; a call of a public
 			// mock passes them among its arguments.
 			let holeArgumentList = publicMockCall == nil
 				? builderCallArguments.map { "\($0.label): \($0.value)" }
 				: []
-			let returnLineSansReturn = holeArgumentList.isEmpty
-				? "\(instantiationDeclaration)(\(argumentList))"
-				: "\(instantiationDeclaration)(\(([argumentList].filter { !$0.isEmpty } + holeArgumentList).joined(separator: ", ")))"
+			let constructionArguments = holeArgumentList.isEmpty ? argumentList : ([argumentList].filter { !$0.isEmpty } + holeArgumentList).joined(separator: ", ")
+			let returnLineSansReturn = Expression.construction(constructionTarget, arguments: constructionArguments).spelled
 			// The payloads of the cases on the routes to the places beneath this scope, bound before its builder function, where
 			// the scope's parent binds its labels: each field read as the parent's receivers read it.
 			let valuesBindingLines = builderFunctionNames.loopValuesBindingLines ?? valuesBindingLines
@@ -6475,8 +6469,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 					var builderArguments = Self.forwardedArguments(of: forwardedProperties, spreading: forwardedName)
 					builderArguments += cycleParameterArguments(unavailableProperties: unavailableProperties)
-					let builderCall = "\(functionName)(\(builderArguments.joined(separator: ", ")))"
-					let builtValue = erasedToConcreteExistential ? "\(property.typeDescription.unwrapped.asInstantiatedType.asSource)(\(builderCall))" : builderCall
+					let builtValue = Expression.call(function: functionName, arguments: builderArguments.joined(separator: ", "))
+						.erased(to: property.typeDescription.unwrapped.asInstantiatedType, where: erasedToConcreteExistential)
+						.spelled
 					return "\(valuesBindingLines)\(functionDeclaration)return { \(forwardedProperties.isEmpty ? "_" : forwardedName) in \(builtValue) }"
 				}
 				if let receivedFunctionName = builderFunctionNames.receivedFunctionName {
@@ -6539,7 +6534,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let lazilyInstantiatedInstantiation = if erasedToConcreteExistential {
 					"""
 					\(unwrappedTypeDescription) {
-					\(Self.standardIndent)\(property.typeDescription.asInstantiatedType.asSource)(\(functionName)(\(cycleArguments)))
+					\(Self.standardIndent)\(Expression.erasure(.call(function: functionName, arguments: cycleArguments), as: property.typeDescription.asInstantiatedType).spelled)
 					}
 					"""
 				} else if cycleArguments.isEmpty {
@@ -6569,9 +6564,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
 				let functionParameters = cycleParameters.map(\.property)
 				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
-				let builderCall = "\(functionName)(\(cycleArguments))"
 				let lastLine = if isBuiltByFill {
-					"return \(erasedToConcreteExistential ? "\(property.typeDescription.asInstantiatedType.asSource)(\(builderCall))" : builderCall)"
+					"return \(Expression.call(function: functionName, arguments: cycleArguments).erased(to: property.typeDescription.asInstantiatedType, where: erasedToConcreteExistential).spelled)"
 				} else {
 					"let \(property.label) = \(lazilyInstantiatedInstantiation)"
 				}
@@ -6589,11 +6583,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// A scope that closes a cycle declares no function: it calls the function of the declaration it repeats
 					// with that function's cycle parameters, typed as a constant with content is. A closer builds nothing, so
 					// it holds no seam's site and `valuesBindingLines` is empty, as it is for every closer.
-					let call = "\(closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames))(\(callArguments))"
+					let call = Expression.call(function: closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames), arguments: callArguments)
 					return if erasedToConcreteExistential {
-						"\(valuesBindingLines)let \(property.label) = \(property.typeDescription.asSource)(\(call))\n"
+						"\(valuesBindingLines)let \(property.label) = \(Expression.erasure(call, as: property.typeDescription).spelled)\n"
 					} else {
-						"\(valuesBindingLines)let \(property.asSource) = \(call)\n"
+						"\(valuesBindingLines)let \(property.asSource) = \(call.spelled)\n"
 					}
 				}
 				let generatedProperties = try await memberCallLines + seamGuardLines + fillPlaceBindingLines + generateProperties(
@@ -6638,17 +6632,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 					"""
 				}
-				let existentialWrappedReturn = if erasedToConcreteExistential {
-					"\(property.typeDescription.asSource)(\(returnLineSansReturn))"
-				} else {
-					returnLineSansReturn
-				}
 				let initializer = if !hasGeneratedContent {
-					existentialWrappedReturn + constructionLineEnd
-				} else if erasedToConcreteExistential {
-					"\(property.typeDescription.asSource)(\(functionName)(\(callArguments)))"
+					Expression.construction(constructionTarget, arguments: constructionArguments).erased(to: property.typeDescription, where: erasedToConcreteExistential).spelled + constructionLineEnd
 				} else {
-					"\(functionName)(\(callArguments))"
+					Expression.call(function: functionName, arguments: callArguments).erased(to: property.typeDescription, where: erasedToConcreteExistential).spelled
 				}
 
 				// The payloads a seam's tree binds before building a scope that leads to a place.
