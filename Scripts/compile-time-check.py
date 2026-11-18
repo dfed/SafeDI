@@ -34,15 +34,19 @@ The shapes (every name invented; `--shapes` picks among them, default all), at 4
 
 How it measures: each tool generates each shape once, and the generated files' lines are counted, which has no noise.
 Then, for each optimization level (default `-Onone` and `-O`, whole-module), N (default 3) compiles of each tool's
-output, alternating base and head. The figure compared is each module's median wall time; CPU time is printed beside
-it. A module for which neither tool generates a hundred lines is not compared. A compile that takes longer than SECONDS (default 600) is stopped: when both tools' code is
+output, alternating base and head. The figure compared is each module's median CPU time (user and system, of the
+compiler and its children), because wall time on a loaded machine varies by half between two runs of the same code;
+wall time is printed beside it. A module for which neither tool generates a hundred lines is not compared. A compile that takes longer than SECONDS (default 600) is stopped: when both tools' code is
 stopped the row is not compared on time, and when only the head's is, the row fails. A module fails on time only
 when the head's median is also more than a second above the base's.
 
 A shape the base tool cannot generate is reported and not compared. A shape the head tool cannot generate, or whose
-generated code does not compile, fails the check.
+generated code does not compile, fails the check. So does a shape whose base code does not compile, which is what a
+missing or wrong `--base-build` looks like, and so does a run that compared nothing: a check that measured nothing has
+not passed.
 
-Exit status: 0 no shape at or over a limit; 1 one is, or the head failed on one; 2 usage, or DIRECTORY exists.
+Exit status: 0 no shape at or over a limit; 1 one is, the head failed on one, the base's code did not compile, or
+nothing was compared; 2 usage, or DIRECTORY exists.
 
 --self-test DIRECTORY runs the comparison with stand-in tools and a stand-in compiler and checks each verdict above.
 """
@@ -244,8 +248,8 @@ def compare(tools, builds, swiftc, directory, shapes, runs, limit, line_limit, o
                     failures.append(f"{shape}: the head tool's code did not compile: {failure}")
                     rows.append(f"| {shape} | | -{optimization} | | did not compile | | **failed** |")
                 else:
-                    print(f"{shape}: the base tool's code did not compile at -{optimization}, so it is not compared: {failure}", flush=True)
-                    rows.append(f"| {shape} | | -{optimization} | did not compile | | | not compared |")
+                    failures.append(f"{shape}: the base tool's code did not compile at -{optimization}, so nothing was compared (does `--base-build` name the base commit's build?): {failure}")
+                    rows.append(f"| {shape} | | -{optimization} | did not compile | | | **not compared** |")
                 continue
             if stopped:
                 figure = lambda label: f"over {timeout:g} s" if label in stopped else "compiled"
@@ -259,17 +263,19 @@ def compare(tools, builds, swiftc, directory, shapes, runs, limit, line_limit, o
             for name in measured:
                 median = {label: (statistics.median(times[name][0] for times in values), statistics.median(times[name][1] for times in values)) for label, values in samples.items()}
                 figure = lambda label: f"{median[label][0]:.1f} s / {median[label][1]:.1f} s"
-                ratio = median["head"][0] / median["base"][0]
-                over = ratio >= limit and median["head"][0] - median["base"][0] > NOISE_FLOOR_SECONDS
+                ratio = median["head"][1] / max(median["base"][1], 0.001)
+                over = ratio >= limit and median["head"][1] - median["base"][1] > NOISE_FLOOR_SECONDS
                 if over:
-                    failures.append(f"{shape}, module {name}: the head tool's code took {ratio:.2f} times as long to compile at -{optimization} ({median['head'][0]:.1f} s against {median['base'][0]:.1f} s, median wall of {runs}); the limit is {limit:g}")
+                    failures.append(f"{shape}, module {name}: the head tool's code took {ratio:.2f} times as long to compile at -{optimization} ({median['head'][1]:.1f} s against {median['base'][1]:.1f} s of CPU, median of {runs}); the limit is {limit:g}")
                 rows.append(f"| {shape} | {name} | -{optimization} | {figure('base')} | {figure('head')} | {ratio:.2f} | {'**over the limit**' if over else 'within the limit'} |")
                 print(f"{shape} {name} -{optimization}: base {figure('base')}, head {figure('head')} (wall / CPU), ratio {ratio:.2f}", flush=True)
+    if not failures and not any(row.endswith(("| within the limit |", "| **over the limit** |")) for row in rows):
+        failures.append("nothing was compared, so the check has not passed")
     return rows, failures
 
 
 def report(rows, failures, runs, limit, line_limit, summary):
-    lines = [f"Compile cost of generated code, head against base: lines generated (a shape fails at {line_limit:g} times the base's), and `swiftc`'s time over each module with its generated file, median of {runs} alternating runs (a shape fails at {limit:g} times the base's wall time).", "",
+    lines = [f"Compile cost of generated code, head against base: lines generated (a shape fails at {line_limit:g} times the base's), and `swiftc`'s time over each module with its generated file, median of {runs} alternating runs (a shape fails at {limit:g} times the base's CPU time).", "",
              "| Shape | Module | Measure | Base (wall / CPU) | Head (wall / CPU) | Head / base | Verdict |", "|---|---|---|---|---|---|---|"] + rows
     lines += [""] + [f"- {failure}" for failure in failures]
     text = "\n".join(lines) + "\n"
@@ -293,13 +299,15 @@ open(option("--combined-output"), "w").write("// generated\\n" * lines)
 open(option("--module-info-output"), "w").write("")
 """
 
-# Sleeps a ten-thousandth of a second for each line of the generated file, and fails on a file of exactly 130 lines.
+# Computes for a ten-thousandth of a second for each line of the generated file, and fails on a file of exactly 130
+# lines. It computes and does not sleep, because the check compares CPU time.
 STAND_IN_COMPILER = """#!/usr/bin/env python3
 import sys, time
 lines = sum(1 for _ in open(sys.argv[-1]))
 if lines == 130:
     sys.exit("stand-in: does not compile")
-time.sleep(lines / 10000)
+while time.process_time() < lines / 10000:
+    pass
 """
 
 
@@ -348,10 +356,11 @@ def self_test(directory):
     expect("under-the-floor", wide, tool("wider-again", 1600, lines=5000), 1, [within, over, within, within, within, within], floor=10.0)
     expect("shorter", wider, wide, 0, [within] * 6)
     expect("head-does-not-compile", same, tool("does-not-compile", 130), 2, [within, over, within, "**failed**"])
-    expect("base-does-not-compile", tool("base-does-not-compile", 130), same, 0, [within, within, within, "not compared"])
+    expect("base-does-not-compile", tool("base-does-not-compile", 130), same, 1, [within, within, within, "**not compared**"])
     expect("head-refuses", same, tool("head-refuses", 100, refuses=True), 1, ["**failed**"])
-    expect("base-refuses", tool("base-refuses", 100, refuses=True), same, 0, ["not compared"])
-    # 20,000 lines sleep two seconds, over a limit of one.
+    # The one shape of this run was not compared, so the run compared nothing.
+    expect("base-refuses", tool("base-refuses", 100, refuses=True), same, 1, ["not compared"])
+    # 20,000 lines compute for two seconds, over a limit of one.
     slow = tool("slow", 20000)
     expect("head-stopped", same, slow, 2, [within, over, within, over], timeout=1)
     expect("both-stopped", slow, tool("slow-too", 20000), 0, [within, within, within, "not compared"], timeout=1)
