@@ -85,9 +85,10 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_startsTasksForFewScopes_whenTreeIsCreatedAgainForItsLazyCycle() async throws {
 		// The step builds a session of its own, which the screen it builds again receives: the tree is created a second time
-		// with the parameter the screen's builder function takes. The first pass starts its scopes' code as it creates them,
-		// and the second once its tree exists: 12 each, the ternary tree's 10 shared generators and the root's two other
-		// small subtrees (42 each without the construction memo). Every scope of both passes started early: 2,196.
+		// with the parameter the screen's builder function takes. A module without seams builds its roots' trees while their
+		// scopes are validated and starts their code once the validation passes, so only the last pass's scopes start: 12,
+		// the ternary tree's 10 shared generators and the root's two other small subtrees (42 without the construction
+		// memo). Starting each pass's scopes as it creates them: 24. Every scope of both passes started early: 2,196.
 		let cycle = [
 			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Received let session: Session", "@Instantiated let stepBuilder: Instantiator<Step>"]),
 			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
@@ -98,7 +99,37 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 			beneath: ["Root"],
 			rootDeclarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"],
 		) + cycle)
-		#expect(starts == 24)
+		#expect(starts == 12)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_startsNoTask_whenValidationRejectsTreeBuiltWhileItsScopesAreValidated() async {
+		// A module without seams builds its roots' trees while their scopes are validated. `Broken` receives what nothing
+		// provides, so the validation throws: the trees are dropped unread, their task is cancelled, and none of their
+		// code starts, where the ternary tree alone would start 10. When the build was left running, it built the rejected
+		// trees, and started their code, after `generate` had returned; whether it started any before is a race, so a
+		// regression fails this test on most runs rather than all, and holds the memory of a test process that runs on.
+		let (stream, continuation) = AsyncStream.makeStream(of: Void.self)
+		await #expect(throws: (any Error).self) {
+			try await CodeTaskStart.$observer.withValue({ continuation.yield(()) }) {
+				try await executeSafeDIToolTest(
+					swiftFileContent: Self.ternaryTree(depth: Self.depth, beneath: ["Root"], rootDeclarations: ["@Instantiated let broken: Broken"]) + [
+						seamFixtureType(named: "Broken", isFinalClass: true, declarations: ["@Received let missing: Missing"]),
+						seamFixtureType(named: "Missing", isFinalClass: true, declarations: []),
+					],
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+					skipCompileVerification: true,
+				)
+			}
+		}
+		continuation.finish()
+		var starts = 0
+		for await _ in stream {
+			starts += 1
+		}
+		#expect(starts == 0)
 	}
 
 	// MARK: Private

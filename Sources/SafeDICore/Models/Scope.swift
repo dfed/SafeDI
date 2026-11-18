@@ -455,6 +455,47 @@ extension ConstructionGraph {
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
 	) throws -> ScopeGenerator {
+		var codeStartsLeftToCaller: [ScopeGenerator]?
+		return try createScopeGenerator(
+			for: property,
+			nearestDeclarations: nearestDeclarations,
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			seamRoot: seamRoot,
+			mockBuilders: mockBuilders,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			forMockGeneration: forMockGeneration,
+			startsCodeGeneration: startsCodeGeneration,
+			validatesForwardedProperties: validatesForwardedProperties,
+			declaredTypeNames: declaredTypeNames,
+			constructionMemo: &constructionMemo,
+			codeStartsLeftToCaller: &codeStartsLeftToCaller,
+		)
+	}
+
+	/// Starts the code of the generators a `createScopeGenerator(for:…)` left to its caller, in order.
+	static func startCode(of codeStartsLeftToCaller: [ScopeGenerator]) {
+		for generator in codeStartsLeftToCaller {
+			ScopeGeneratorUnderConstruction.startCodeGeneration(of: generator)
+		}
+	}
+
+	/// `createScopeGenerator(for:…)`, which, when `codeStartsLeftToCaller` is not `nil`, starts none of the tree's code
+	/// but appends to it the generators whose code to start, in order, for a caller that builds a tree before it knows the
+	/// tree is valid: no code is generated from a tree that is never used.
+	func createScopeGenerator(
+		for property: Property?,
+		nearestDeclarations: NearestDeclarations = NearestDeclarations(),
+		lazilyInstantiatedInstanceProperties: Set<Property>,
+		seamRoot: ScopeGenerator.SeamRoot? = nil,
+		mockBuilders: DependencyTreeGenerator.ShapedBuilders? = nil,
+		erasedToConcreteExistential: Bool,
+		forMockGeneration: Bool = false,
+		startsCodeGeneration: Bool = true,
+		validatesForwardedProperties: Bool = true,
+		declaredTypeNames: DeclaredTypeNames,
+		constructionMemo: inout ConstructionMemo,
+		codeStartsLeftToCaller: inout [ScopeGenerator]?,
+	) throws -> ScopeGenerator {
 		let scopeGenerator = try createdTree(
 			for: property,
 			nearestDeclarations: nearestDeclarations,
@@ -467,6 +508,7 @@ extension ConstructionGraph {
 			validatesForwardedProperties: validatesForwardedProperties,
 			declaredTypeNames: declaredTypeNames,
 			constructionMemo: &constructionMemo,
+			codeStartsLeftToCaller: &codeStartsLeftToCaller,
 		)
 		try checkWithMemoOracle(
 			for: property,
@@ -503,6 +545,8 @@ extension ConstructionGraph {
 			// shares it across every tree created with this memo, whatever the memo's own sharing, so that the oracle judges
 			// every reuse either sharing makes.
 			var oracleMemo = constructionMemo.oracleMemo
+			// Neither build starts code.
+			var noCodeStarts: [ScopeGenerator]?
 			let treeBuiltWithMemo = try createdTree(
 				for: property,
 				nearestDeclarations: nearestDeclarations,
@@ -515,6 +559,7 @@ extension ConstructionGraph {
 				validatesForwardedProperties: validatesForwardedProperties,
 				declaredTypeNames: declaredTypeNames,
 				constructionMemo: &oracleMemo,
+				codeStartsLeftToCaller: &noCodeStarts,
 			)
 			constructionMemo.oracleMemo = oracleMemo
 			// A build that reused no generator built every place as the build without the memo does, so there is nothing
@@ -535,6 +580,7 @@ extension ConstructionGraph {
 					validatesForwardedProperties: validatesForwardedProperties,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &unusedMemo,
+					codeStartsLeftToCaller: &noCodeStarts,
 				)
 			}
 			observer(treeBuiltWithMemo, treeBuiltWithoutMemo)
@@ -554,6 +600,7 @@ extension ConstructionGraph {
 		validatesForwardedProperties: Bool,
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
+		codeStartsLeftToCaller: inout [ScopeGenerator]?,
 	) throws -> ScopeGenerator {
 		var previousPassGenerator: ScopeGenerator?
 		var firstPassMemo = ConstructionMemo()
@@ -568,13 +615,14 @@ extension ConstructionGraph {
 		let sharesMemo = seamRoot == nil && mockBuilders == nil
 		var placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?
 		var scopeGenerator: ScopeGenerator
-		var generatorsToStart: [ScopeGenerator]?
+		// A caller that starts the tree's code itself has the generators of the last pass collected from the first.
+		var generatorsToStart: [ScopeGenerator]? = codeStartsLeftToCaller.map { _ in [] }
 		// Every scope of the tree is enclosed by these, so they are held in storage each scope's copy shares.
 		let nearestDeclarations = nearestDeclarations.sharingDeclarations()
 		var startOrderChanged: Bool
 		var reusedGenerators = false
 		repeat {
-			if previousPassGenerator != nil {
+			if previousPassGenerator != nil || codeStartsLeftToCaller != nil {
 				generatorsToStart = []
 			}
 			var passMemo = previousPassGenerator == nil && sharesMemo ? constructionMemo.memoForFirstPass : ConstructionMemo()
@@ -615,11 +663,16 @@ extension ConstructionGraph {
 				}
 			}
 		} while startOrderChanged || scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree || scopeGenerator.receivedBuilderLoopsChangedInTree
-		for generator in generatorsToStart ?? [] {
-			ScopeGeneratorUnderConstruction.startCodeGeneration(of: generator)
+		if codeStartsLeftToCaller != nil {
+			codeStartsLeftToCaller?.append(contentsOf: generatorsToStart ?? [])
+		} else {
+			for generator in generatorsToStart ?? [] {
+				ScopeGeneratorUnderConstruction.startCodeGeneration(of: generator)
+			}
 		}
 		// The entries of a tree are kept only once its construction returns. A mock root whose construction throws keeps
-		// none, and its error, `ErasedInstantiatorForwardedPropertiesMismatchError`, the only one construction throws, ends
+		// none, and its error, `ErasedInstantiatorForwardedPropertiesMismatchError`, the only one construction throws but
+		// the `CancellationError` of a cancelled task, whose trees no one reads (`buildingRootTrees(of:)`), ends
 		// the whole mock pass where the root stands in type order, so no mock root after it is finished, and the roots of
 		// its wave built after it are dropped. A change that adds a construction error the mock pass catches owes a test
 		// that such a root, first, in the middle and last of a wave, and in a later wave, reports the same errors, and
@@ -685,6 +738,8 @@ extension ConstructionGraph {
 		// the place's `startLogIndex` on, which a later pass that reuses the place's generator collects again.
 		var startLog = [ScopeGenerator]()
 		while true {
+			// A tree built while its scopes are validated is dropped, and its task cancelled, when the validation throws.
+			try Task.checkCancellation()
 			let index = scopeGeneratorsUnderConstruction.count - 1
 			if let propertyToGenerate = scopeGeneratorsUnderConstruction[index].nextPropertyToGenerate() {
 				switch propertyToGenerate {

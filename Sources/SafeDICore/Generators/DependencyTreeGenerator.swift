@@ -3266,6 +3266,8 @@ public actor DependencyTreeGenerator {
 						typeDescriptionToScopeMap[typeDescription].map { (typeDescription: typeDescription, scope: $0) }
 					},
 				) : nil
+				// A validation that throws leaves the trees unread, so their task stops at the next place it builds.
+				defer { rootTreesBuiltDuringValidation?.cancel() }
 				var receivedPropertiesCache = ReceivedPropertiesCache()
 				try validatePropertiesAreFulfillable(
 					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
@@ -3300,8 +3302,10 @@ public actor DependencyTreeGenerator {
 					},
 				)
 				let rootTrees = try await rootTreesBuiltDuringValidation.value
+				// The trees are valid, so their code may start.
+				ConstructionGraph.startCode(of: rootTrees.codeStarts)
 				return rootScopesToGenerate.compactMap { typeDescription, scope in
-					rootTrees[typeDescription].map { scopeGenerator in
+					rootTrees.trees[typeDescription].map { scopeGenerator in
 						RootScopeInfo(
 							typeDescription: typeDescription,
 							instantiable: scope.instantiable,
@@ -3318,8 +3322,10 @@ public actor DependencyTreeGenerator {
 
 	/// Starts building, on a task of its own, the trees of the roots among `rootScopes` that this module generates
 	/// (`rootScopesThisModuleGenerates(from:)` keeps those declared in its own files), in order, sharing one construction
-	/// memo as the trees built one after another do. The task reads a snapshot of each root's scopes, taken now.
-	private func buildingRootTrees(of rootScopes: [(typeDescription: TypeDescription, scope: Scope)]) -> Task<[TypeDescription: ScopeGenerator], any Error> {
+	/// memo as the trees built one after another do. The task reads a snapshot of each root's scopes, taken now. It starts
+	/// none of the trees' code, which the caller starts once it knows the trees are valid (`codeStarts`), and a cancelled
+	/// task stops at the next place it builds.
+	private func buildingRootTrees(of rootScopes: [(typeDescription: TypeDescription, scope: Scope)]) -> Task<(trees: [TypeDescription: ScopeGenerator], codeStarts: [ScopeGenerator]), any Error> {
 		let isOwnFile = emittingModule.map { emittingModule in { (filePath: String) in emittingModule.isOwnFile(filePath) } }
 		let roots = rootScopes.compactMap { typeDescription, scope -> (TypeDescription, ConstructionGraph)? in
 			guard let isOwnFile else { return (typeDescription, ConstructionGraph(rootedAt: scope)) }
@@ -3331,6 +3337,7 @@ public actor DependencyTreeGenerator {
 		return Task {
 			var constructionMemo = ConstructionMemo()
 			var trees = [TypeDescription: ScopeGenerator]()
+			var codeStarts: [ScopeGenerator]? = []
 			for (typeDescription, graph) in roots {
 				trees[typeDescription] = try graph.createScopeGenerator(
 					for: nil,
@@ -3338,9 +3345,10 @@ public actor DependencyTreeGenerator {
 					erasedToConcreteExistential: false,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &constructionMemo,
+					codeStartsLeftToCaller: &codeStarts,
 				)
 			}
-			return trees
+			return (trees: trees, codeStarts: codeStarts ?? [])
 		}
 	}
 
@@ -6505,7 +6513,9 @@ public actor DependencyTreeGenerator {
 
 		/// The mock root's tree built with `builders`, which the memo oracle does not check: `checkWithMemoOracle` does.
 		func createdTree(builders: ShapedBuilders?, declaredTypeNames: DeclaredTypeNames, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
-			try graph.createdTree(
+			// A mock's tree starts no code early, so there is none to leave to this caller.
+			var codeStartsLeftToCaller: [ScopeGenerator]?
+			return try graph.createdTree(
 				for: nil,
 				nearestDeclarations: nearestDeclarations,
 				lazilyInstantiatedInstanceProperties: [],
@@ -6517,6 +6527,7 @@ public actor DependencyTreeGenerator {
 				validatesForwardedProperties: true,
 				declaredTypeNames: declaredTypeNames,
 				constructionMemo: &constructionMemo,
+				codeStartsLeftToCaller: &codeStartsLeftToCaller,
 			)
 		}
 
