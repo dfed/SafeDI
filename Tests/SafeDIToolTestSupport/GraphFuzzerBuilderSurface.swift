@@ -667,7 +667,7 @@ extension GraphFuzzerBuilderSurface {
 	/// whose places are all held in instantiators – its own and those of the seams it calls, whose builder structs its
 	/// struct's members return – takes the value they forward, `F`, which the structs' members read
 	/// (`forwardedValue(ofBuilderStruct:membersByStruct:)`): `make` is `@escaping (F) -> T`, the closure
-	/// `{ value in make(value) }`, or `{ make(()) }` where `F` is `()`, and where `F` is a labeled tuple, two more functions
+	/// `{ value in make(value) }`, and where `F` is a labeled tuple, two more functions
 	/// pass it a closure that destructures the tuple and one that reads it by label. Every other
 	/// parameter, a kept builder's closure over its scope enum included, is passed a value of the type the readable
 	/// initializer spells. As `GraphFuzzerOracle.addingSeamCallers` does, the calls in the seam's module call every tier, at
@@ -732,7 +732,7 @@ extension GraphFuzzerBuilderSurface {
 					let attributes = "@escaping \(builder.isSendable ? "@Sendable " : "")"
 					if let forwarded = forwardedValue(ofBuilderStruct: "\(seamTypeName).\(builder.structPath)", membersByStruct: membersByStruct) {
 						parameters.append("_ \(name): \(attributes)(\(forwarded)) -> \(builder.builtType)")
-						let closure = forwarded == "()" ? "\(label): { \(name)(()) }" : "\(label): { value in \(name)(value) }"
+						let closure = "\(label): { value in \(name)(value) }"
 						closureArguments.append(closure)
 						if let labels = tupleLabels(of: forwarded) {
 							forwardsLabeledTuple = true
@@ -844,8 +844,8 @@ extension GraphFuzzerBuilderSurface {
 	/// of that struct and of every struct it reaches in `membersByStruct`, as `DependencyTreeGenerator.builderForm(ofPlaces:)`
 	/// reads the places the builder reaches: the structs of the levels nested in it, of the seams its levels call, whose
 	/// places it hands up, and of the type a fill builds, never the filled seam's, whose places the fill fills. `nil` where a
-	/// place among them is plain or lazy, whose builder takes nothing; otherwise `()` where one forwards nothing, or else the
-	/// first place's forwarded value.
+	/// place among them is plain or lazy, or forwards nothing (`()`), whose builder takes nothing; otherwise the first
+	/// place's forwarded value.
 	static func forwardedValue(ofBuilderStruct structType: String, membersByStruct: [String: [String]]) -> String? {
 		var forwardedValues = [String]()
 		var visited = Set<String>()
@@ -866,8 +866,8 @@ extension GraphFuzzerBuilderSurface {
 				}
 			}
 		}
-		guard let firstValue = forwardedValues.first else { return nil }
-		return forwardedValues.contains { $0 == "()" || $0 == "Void" } ? "()" : firstValue
+		guard let firstValue = forwardedValues.first, !forwardedValues.contains(where: { $0 == "()" || $0 == "Void" }) else { return nil }
+		return firstValue
 	}
 
 	/// Each level's struct `type` spells, outermost first, as spelled before `.__safeDI_Builder<`: `Inner.SafeDIScope_Api`

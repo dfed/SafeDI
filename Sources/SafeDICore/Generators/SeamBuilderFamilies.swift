@@ -568,44 +568,37 @@ extension DependencyTreeGenerator {
 	/// What the builder a person writes for some places of one hole type, in one family, takes: its type follows from what
 	/// the places forward, and nothing else (`builderForm(ofPlaces:)`).
 	enum BuilderForm: Sendable {
-		/// Nothing: every place is a plain or lazy one, or an instantiator that forwards nothing, or `T.ForwardedProperties`
-		/// beside such a place. The builder is `() -> B`.
+		/// Nothing: every place is a plain or lazy one, or an instantiator that forwards nothing (`ErasedInstantiator<(), T>`),
+		/// or `T.ForwardedProperties` beside such a place. The builder is `() -> B` whether or not a plain place is among the
+		/// places, so a place that joins or leaves never flips it to a wrapper's `Builder` that takes `()`.
 		case value
-		/// Every place is an instantiator whose type, `wrapperType`, is spelled alike: the builder is that wrapper's `Builder`,
-		/// or its `Sendable` twin's in the `@Sendable` family.
+		/// Every place is an instantiator that forwards a value, whose type, `wrapperType`, is spelled alike: the builder is
+		/// that wrapper's `Builder`, or its `Sendable` twin's in the `@Sendable` family.
 		case wrapper(TypeDescription)
 		/// Every place is an instantiator that forwards `forwarded`, through wrappers or spellings that differ: the builder is
 		/// the erased wrapper's `Builder` over it.
 		case erased(forwarded: TypeDescription)
 
-		/// The value the builder takes, or `nil` for a builder that takes none: `()` where a place forwards nothing.
+		/// The value the builder takes, or `nil` for a builder that takes none.
 		var forwardedValue: TypeDescription? {
 			switch self {
 			case .value:
 				nil
 			case let .wrapper(wrapperType):
-				wrapperType.forwardedTypeOfWrapper?.strippingEscaping ?? .void(.tuple)
+				wrapperType.forwardedTypeOfWrapper?.strippingEscaping
 			case let .erased(forwarded):
 				forwarded
-			}
-		}
-
-		/// Whether the builder takes `()`: a place spelled as forwarding nothing is among the places.
-		var forwardsNothing: Bool {
-			if case .void = forwardedValue {
-				true
-			} else {
-				false
 			}
 		}
 	}
 
 	/// The form of the builder a person writes for `places`, places of one hole type reached by one family's builder or
-	/// level, whose forwarded values agree (`placesForwardingOtherValues(among:comparison:)` reports those that do not). The
-	/// value the erased form takes is `()` where a place forwards nothing, and otherwise the most explicit of the places'
-	/// spellings of it (`TypeDescription.mostExplicitSpelling(among:)`): chosen by the spellings' shapes, never by where the
-	/// places are, their names or the order of levels, so renaming a file or a type never respells it. Reads nothing but
-	/// the places, so a mock's builder can take the same type over its own places (`builderForm(ofPlaceProperties:)`).
+	/// level, whose forwarded values agree (`placesForwardingOtherValues(among:comparison:)` reports those that do not). A
+	/// builder of places that forward nothing takes nothing, as a plain place's does. The value the erased form takes is the
+	/// most explicit of the places' spellings of it (`TypeDescription.mostExplicitSpelling(among:)`): chosen by the
+	/// spellings' shapes, never by where the places are, their names or the order of levels, so renaming a file or a type
+	/// never respells it. Reads nothing but the places, so a mock's builder can take the same type over its own places
+	/// (`builderForm(ofPlaceProperties:)`).
 	static func builderForm(ofPlaces places: [SeamSignature.Hole]) -> BuilderForm {
 		builderForm(ofPlaceProperties: places.map(\.property))
 	}
@@ -613,13 +606,13 @@ extension DependencyTreeGenerator {
 	/// The form of the builder a person writes for places whose properties are `properties`, as `builderForm(ofPlaces:)`.
 	static func builderForm(ofPlaceProperties properties: [Property]) -> BuilderForm {
 		guard !properties.isEmpty, properties.allSatisfy(\.propertyType.isAnyInstantiator) else { return .value }
+		// A place that forwards nothing makes the builder take nothing: the places forward the same value, so each other place
+		// forwards nothing too, or `T.ForwardedProperties`, which beside it is nothing.
+		let forwardedTypes = properties.compactMap { $0.typeDescription.forwardedTypeOfWrapper?.strippingEscaping }
+		guard forwardedTypes.count == properties.count, let firstForwardedType = forwardedTypes.first else { return .value }
 		let wrapperTypes = properties.map(\.typeDescription.unwrapped.strippingEscaping)
 		if Set(wrapperTypes.map(\.asSource)).count == 1 {
 			return .wrapper(wrapperTypes[0])
-		}
-		let forwardedTypes = properties.compactMap { $0.typeDescription.forwardedTypeOfWrapper?.strippingEscaping }
-		guard forwardedTypes.count == properties.count, let firstForwardedType = forwardedTypes.first else {
-			return .erased(forwarded: .void(.tuple))
 		}
 		return .erased(forwarded: firstForwardedType.mostExplicitSpelling(among: forwardedTypes.dropFirst()))
 	}

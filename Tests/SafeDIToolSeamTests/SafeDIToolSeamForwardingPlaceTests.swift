@@ -1298,7 +1298,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesErasedBuilderTakingEmptyTuple_whenErasedPlacesSpellNothingTwoWays() async throws {
+	mutating func generate_takesBuilderThatTakesNothing_whenErasedPlacesSpellNothingTwoWays() async throws {
 		let hostDeclarations = [
 			"@Instantiated let analytics: Analytics",
 			#"@Instantiated(fulfilledByType: "DefaultGadget") public let tuple: ErasedInstantiator<(), any Gadget>"#,
@@ -1328,15 +1328,15 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		                self.void = void
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.tuple = { _ in __safeDI_builder }
-		                self.void = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.tuple = { _ in { _ in __safeDI_builder() } }
+		                self.void = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public convenience init(defaultGadget_GadgetBuilder: @escaping ErasedInstantiator<(), any Gadget>.Builder) {
+		    public convenience init(defaultGadget_GadgetBuilder: @escaping () -> any Gadget) {
 		        self.init(__safeDI_defaultGadget_GadgetBuilder: .init(__safeDI_noScope: defaultGadget_GadgetBuilder))
 		    }
 
@@ -1390,7 +1390,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsInstantiatorsMemberBuilderOfEmptyTuple_whenInstantiatorIsBesideErasedInstantiatorForwardingNothing() async throws {
+	mutating func generate_handsInstantiatorsMemberBuilderThatTakesNothing_whenInstantiatorIsBesideErasedInstantiatorForwardingNothing() async throws {
 		let hostDeclarations = [
 			"@Instantiated let analytics: Analytics",
 			"@Instantiated public let held: Instantiator<EmptyPanel>",
@@ -1420,15 +1420,15 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		                self.later = later
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.held = { _ in { _ in __safeDI_builder(()) } }
-		                self.later = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.held = { _ in { _ in __safeDI_builder() } }
+		                self.later = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public convenience init(emptyPanelBuilder: @escaping ErasedInstantiator<(), EmptyPanel>.Builder) {
+		    public convenience init(emptyPanelBuilder: @escaping () -> EmptyPanel) {
 		        self.init(__safeDI_emptyPanelBuilder: .init(__safeDI_noScope: emptyPanelBuilder))
 		    }
 
@@ -1970,8 +1970,8 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		                self.later = later
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.later = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.later = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
@@ -1987,14 +1987,14 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		                self.sendableLater = sendableLater
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.sendableLater = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.sendableLater = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public convenience init(analytics: Analytics, defaultGadget_GadgetBuilder: @escaping ErasedInstantiator<(), any Gadget>.Builder, defaultGadget_GadgetSendableBuilder: @escaping SendableErasedInstantiator<(), any Gadget>.Builder) {
+		    public convenience init(analytics: Analytics, defaultGadget_GadgetBuilder: @escaping () -> any Gadget, defaultGadget_GadgetSendableBuilder: @escaping @Sendable () -> any Gadget) {
 		        self.init(__safeDI_analytics: analytics, __safeDI_defaultGadget_GadgetBuilder: .init(__safeDI_noScope: defaultGadget_GadgetBuilder), __safeDI_defaultGadget_GadgetSendableBuilder: .init(__safeDI_noScope: defaultGadget_GadgetSendableBuilder))
 		    }
 
@@ -2023,7 +2023,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		                self.inner = inner
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
@@ -2040,14 +2040,14 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		                self.inner_Sendable = inner_Sendable
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<(), __safeDI_Built>.Builder) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		                self.inner_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public convenience init(analytics: Analytics, defaultGadget_GadgetBuilder: @escaping ErasedInstantiator<(), any Gadget>.Builder, defaultGadget_GadgetSendableBuilder: @escaping SendableErasedInstantiator<(), any Gadget>.Builder) {
+		    public convenience init(analytics: Analytics, defaultGadget_GadgetBuilder: @escaping () -> any Gadget, defaultGadget_GadgetSendableBuilder: @escaping @Sendable () -> any Gadget) {
 		        self.init(__safeDI_analytics: analytics, __safeDI_defaultGadget_GadgetBuilder: .init(__safeDI_noScope: defaultGadget_GadgetBuilder), __safeDI_defaultGadget_GadgetSendableBuilder: .init(__safeDI_noScope: defaultGadget_GadgetSendableBuilder))
 		    }
 
@@ -3071,8 +3071,8 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsPlacesOfForwardedPropertiesBuilderOfEmptyTuple_whenErasedPlaceForwardingNothingIsBesideThem() async throws {
-		// `StringPanel` declares that it forwards a `String`, and its fulfiller forwards nothing: the builder takes `()`, so
+	mutating func generate_handsPlacesOfForwardedPropertiesBuilderThatTakesNothing_whenErasedPlaceForwardingNothingIsBesideThem() async throws {
+		// `StringPanel` declares that it forwards a `String`, and its fulfiller forwards nothing: the builder takes nothing, so
 		// the places of `StringPanel.ForwardedProperties`, on its level and on the level beneath, are handed one that ignores
 		// what they forward. Inline builds no control here: `Instantiator<StringPanel>` of a function that takes nothing does
 		// not compile.
@@ -3125,16 +3125,16 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		                self.owner = owner
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.later = { _ in __safeDI_builder }
-		                self.same = { _ in { _ in __safeDI_builder(()) } }
-		                self.owner = { _ in .init(__safeDI_noScope: { _ in __safeDI_builder(()) }) }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.later = { _ in { _ in __safeDI_builder() } }
+		                self.same = { _ in { _ in __safeDI_builder() } }
+		                self.owner = { _ in .init(__safeDI_noScope: { _ in __safeDI_builder() }) }
 		            }
 		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public convenience init(stringPanelBuilder: @escaping ErasedInstantiator<(), StringPanel>.Builder) {
+		    public convenience init(stringPanelBuilder: @escaping () -> StringPanel) {
 		        self.init(__safeDI_stringPanelBuilder: .init(__safeDI_noScope: stringPanelBuilder))
 		    }
 
@@ -3207,7 +3207,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsSharedPlainLevelBuilderOfEmptyTuple_whenSendableErasedPlaceForwardingNothingIsAboveInstantiatorOfForwardedProperties() async throws {
+	mutating func generate_handsSharedPlainLevelBuilderThatTakesNothing_whenSendableErasedPlaceForwardingNothingIsAboveInstantiatorOfForwardedProperties() async throws {
 		let modules = Self.stringPanelModules(hostDeclarations: [
 			#"@Instantiated(fulfilledByType: "StringPanel") public let later: SendableErasedInstantiator<(), StringPanel>"#,
 			"@Instantiated public let ownerBuilder: SendableInstantiator<Owner>",
@@ -3249,15 +3249,15 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		                self.ownerBuilder = ownerBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.later = { _ in __safeDI_builder }
-		                self.ownerBuilder = { _ in .init(__safeDI_noScope: { _ in __safeDI_builder(()) }) }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.later = { _ in { _ in __safeDI_builder() } }
+		                self.ownerBuilder = { _ in .init(__safeDI_noScope: { _ in __safeDI_builder() }) }
 		            }
 		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public convenience init(stringPanelSendableBuilder: @escaping SendableErasedInstantiator<(), StringPanel>.Builder) {
+		    public convenience init(stringPanelSendableBuilder: @escaping @Sendable () -> StringPanel) {
 		        self.init(__safeDI_stringPanelSendableBuilder: .init(__safeDI_noScope: stringPanelSendableBuilder))
 		    }
 

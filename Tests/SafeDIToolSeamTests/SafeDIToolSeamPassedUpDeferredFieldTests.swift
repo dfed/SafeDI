@@ -861,8 +861,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.serviceBuilder = serviceBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.serviceBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.serviceBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
@@ -893,7 +893,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.inner = inner
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
@@ -995,8 +995,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.serviceBuilder = serviceBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.serviceBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.serviceBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
@@ -1028,7 +1028,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.inner = inner
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
@@ -1777,8 +1777,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.gadgetBuilder = gadgetBuilder
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                    self.gadgetBuilder = { _ in __safeDI_builder }
+		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                    self.gadgetBuilder = { _ in { _ in __safeDI_builder() } }
 		                }
 		            }
 		        }
@@ -1791,7 +1791,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder_Sendable = outer_holeServiceBuilder_Sendable
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<(), __safeDI_Built>.Builder) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		                self.outer_holeServiceBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
@@ -1820,8 +1820,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                    self.thingBuilder = thingBuilder
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                    self.thingBuilder = { _ in __safeDI_builder }
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.thingBuilder = { _ in { _ in __safeDI_builder() } }
 		                }
 		            }
 		        }
@@ -1834,7 +1834,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.outer_holeServiceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
 		            }
 		        }

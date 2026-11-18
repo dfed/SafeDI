@@ -1511,9 +1511,9 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesErasedInstantiatorsBuilderForPlace_whenPlaceIsErasedInstantiatorThatForwardsNothing() async throws {
+	mutating func generate_takesBuilderThatTakesNothingForPlace_whenPlaceIsErasedInstantiatorThatForwardsNothing() async throws {
 		// An erased instantiator that forwards nothing is built from the builder, which each instantiation calls; the mock
-		// takes the builder the seam's readable initializer takes, the erased instantiator's `Builder`.
+		// takes the builder the seam's readable initializer takes, `() -> any UserService`, as a plain place's.
 		let modules = Self.serviceModule(serviceDeclarations: ["@Instantiated(fulfilledByType: \"DefaultUserService\") public let userServiceBuilder: ErasedInstantiator<(), any UserService>"])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
@@ -1533,14 +1533,14 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		                self.userServiceBuilder = userServiceBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.userServiceBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.userServiceBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public convenience init(defaultUserService_UserServiceBuilder: @escaping ErasedInstantiator<(), any UserService>.Builder) {
+		    public convenience init(defaultUserService_UserServiceBuilder: @escaping () -> any UserService) {
 		        self.init(__safeDI_defaultUserService_UserServiceBuilder: .init(__safeDI_noScope: defaultUserService_UserServiceBuilder))
 		    }
 
@@ -1559,7 +1559,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Service {
 		    static func mock(
-		        defaultUserService_UserServiceBuilder: @escaping ErasedInstantiator<(), any UserService>.Builder
+		        defaultUserService_UserServiceBuilder: @escaping () -> any UserService
 		    ) -> Service {
 		        let userServiceBuilder = ErasedInstantiator<(), any UserService>(defaultUserService_UserServiceBuilder)
 		        return Service(userServiceBuilder: userServiceBuilder)

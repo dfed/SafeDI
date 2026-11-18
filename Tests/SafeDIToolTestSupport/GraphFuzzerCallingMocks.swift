@@ -304,6 +304,8 @@ struct GraphFuzzerCallingMockDraw {
 		// cannot build from the builder it is handed), a regression of the seam's builder structs that the calling mock
 		// shares, listed for a fix of its own (`fuzzer-calling-mocks.md`, "Not drawn yet").
 		reenteringFillInstantiatesWhatNothingFulfills = enclosingBuilder != nil && enclosingBuilder != .sendableInstantiator && random.element(of: [false, true])
+		// Drawn after everything else, and only for the control, so no other graph changes.
+		callsMixedFormMock = cell.shape == .noVisibleImplementation && random.element(of: [false, true])
 	}
 
 	static let callingMockRandomSeedMask: UInt64 = 0x63616C6C6D6F636B
@@ -433,6 +435,26 @@ struct GraphFuzzerCallingMockDraw {
 	static let beaconStub = "StubBeacon"
 	static let beaconBuilderLabel = "beaconBuilder"
 
+	/// For the control, whether the caller also calls a second public mock of the called type's module, `Echo`
+	/// (`mixedFormTypeName`), which holds the hole in another form that forwards the same value: a plain place's beside an
+	/// `ErasedInstantiator<(), any P>`, both filled by the fill type by name, and an `ErasedInstantiator<Int, any P>`'s
+	/// beside an `ErasedInstantiator<Swift.Int, any P>`. The twin takes one builder for both calls' places, so the calling
+	/// mock must too (`passesUpExactlyTheExpectedLabels`), whatever form each call passes it up in.
+	let callsMixedFormMock: Bool
+
+	/// The second public mock the control calls where `callsMixedFormMock`.
+	static let mixedFormTypeName = "Echo"
+
+	/// The place of the hole `mixedFormTypeName` holds, in the other form.
+	private var mixedFormPlace: (label: String, type: String, attribute: String) {
+		switch cell.place {
+		case .plain:
+			("\(names.hole.lowercasedFirst)Builder", "ErasedInstantiator<(), any \(names.hole)>", "@Instantiated(fulfilledByType: \"\(names.fill)\")")
+		case .deferred:
+			("\(names.hole.lowercasedFirst)Builder", "ErasedInstantiator<Swift.Int, any \(names.hole)>", "@Instantiated(fulfilledByType: \"\(names.fill)\")")
+		}
+	}
+
 	/// The build of the calling mock's module the tool is told of: one that compiles the generated mocks, but in the shape
 	/// whose fill the tool does not check where the mock condition is inactive.
 	let mockBuild: GraphFuzzerCallingMockGraph.MockBuild
@@ -503,7 +525,7 @@ struct GraphFuzzerCallingMockDraw {
 	var holeBuilderLabel: String {
 		let fillingType = switch cell.place {
 		case .plain:
-			names.hole
+			callsMixedFormMock ? names.fill : names.hole
 		case .deferred:
 			names.fill
 		}
@@ -1066,7 +1088,8 @@ struct GraphFuzzerCallingMockDraw {
 	private func holePlace(protocolName: String, fillName: String) -> (label: String, type: String, attribute: String) {
 		switch cell.place {
 		case .plain:
-			(protocolName.lowercasedFirst, "any \(protocolName)", "@Instantiated")
+			// Beside a place in another form, filled by the same type by name, as an erased instantiator's must be.
+			(protocolName.lowercasedFirst, "any \(protocolName)", callsMixedFormMock ? "@Instantiated(fulfilledByType: \"\(fillName)\")" : "@Instantiated")
 		case .deferred:
 			("\(protocolName.lowercasedFirst)Builder", "ErasedInstantiator<Int, any \(protocolName)>", "@Instantiated(fulfilledByType: \"\(fillName)\")")
 		}
@@ -1079,7 +1102,7 @@ struct GraphFuzzerCallingMockDraw {
 		let attribute = form == .mock && fillHoles?.calledTypeIsSeam == false && cell.shape != .seamCallerFillSharesBuilder
 			? "@Instantiable(generateMock: .public)"
 			: "@Instantiable(generateDependencyTree: true, generateMock: .public)"
-		return """
+		var content = """
 		import SafeDI
 
 		public protocol \(names.hole): AnyObject {}
@@ -1090,6 +1113,19 @@ struct GraphFuzzerCallingMockDraw {
 		    \(place.attribute) public let \(place.label): \(place.type)
 		}
 		"""
+		if callsMixedFormMock {
+			let mixedPlace = mixedFormPlace
+			content += """
+
+
+			\(attribute)
+			public final class \(Self.mixedFormTypeName): Instantiable {
+			    init(\(mixedPlace.label): \(mixedPlace.type)) { self.\(mixedPlace.label) = \(mixedPlace.label) }
+			    \(mixedPlace.attribute) public let \(mixedPlace.label): \(mixedPlace.type)
+			}
+			"""
+		}
+		return content
 	}
 
 	/// The inner module where only an inner public mock requires the value the fill receives: the hole's protocol, the value,
@@ -1361,7 +1397,11 @@ struct GraphFuzzerCallingMockDraw {
 			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: (names.value.lowercasedFirst, names.value), isPublic: callerIsPublic))
 			declarations.append(callerDeclaration(form, properties: [(names.value.lowercasedFirst, names.value), (names.outer.lowercasedFirst, names.outer)]))
 		case .noVisibleImplementation:
-			declarations.append(callerDeclaration(form, properties: [(names.value.lowercasedFirst, names.value), (names.inner.lowercasedFirst, names.inner)]))
+			var properties = [(label: names.value.lowercasedFirst, type: names.value), (label: names.inner.lowercasedFirst, type: names.inner)]
+			if callsMixedFormMock {
+				properties.append((label: Self.mixedFormTypeName.lowercasedFirst, type: Self.mixedFormTypeName))
+			}
+			declarations.append(callerDeclaration(form, properties: properties))
 		case .implementationReceivesWhatNothingProvides:
 			declarations.append("public struct \(names.token) {}")
 			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: (names.token.lowercasedFirst, names.token), isPublic: callerIsPublic))

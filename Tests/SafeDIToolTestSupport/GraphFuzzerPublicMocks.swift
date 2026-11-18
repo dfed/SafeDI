@@ -334,9 +334,9 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// consumer holds, which the override closure can be handed.
 	case overrideClosureCallFillReadsConsumersValue
 	/// `OverriddenDetail` holds its `OverriddenPlace1Api` place as `ErasedInstantiator<(), any OverriddenPlace1Api>`, filled
-	/// by `OverriddenPlace1Live`, so a call that can hand the override closure a builder hands it a type spelled as a name,
-	/// which the called `mock()` takes `@escaping`; the oracle compiles a closure that passes it on
-	/// (`GraphFuzzerOracle.addingOverrideClosureCallers(to:of:)`).
+	/// by `OverriddenPlace1Live`, so a call that can hand the override closure a builder hands it the builder of a place that
+	/// forwards nothing, `() -> any OverriddenPlace1Api`, as the called `mock()` takes it; the oracle compiles a closure that
+	/// passes it on (`GraphFuzzerOracle.addingOverrideClosureCallers(to:of:)`).
 	case overrideClosureCallPlaceIsErasedInstantiator
 	/// On a stream of its own (`publicMockPromotedHoleRandomSeedMask`), a place beneath a received dependency a public mock
 	/// promotes to its root lazily: `PromoteNode`, a `.public` type, builds `PromoteLeaf`, which receives `PromoteOther`, the
@@ -2538,10 +2538,10 @@ struct GraphFuzzerPublicMockDraw {
 		if buildsStore {
 			detail.properties.append(Property(attribute: "@Instantiated", label: "overriddenStore", type: "any \(storeName)"))
 		}
-		// Three in ten hold the place as an erased instantiator, whose builder the override closure is handed as a type spelled
-		// as a name, `ErasedInstantiator<(), any OverriddenPlace1Api>.Builder`, which the called `mock()` takes `@escaping`. Its
-		// fill is `OverriddenPlace1Live`, named by `fulfilledByType:` and so in the builder's label, sharing `OverriddenPlace1`
-		// with the places' types for the reason above.
+		// Three in ten hold the place as an erased instantiator that forwards nothing, whose builder the override closure is
+		// handed as the called `mock()` takes it, `() -> any OverriddenPlace1Api`, as a plain place's. Its fill is
+		// `OverriddenPlace1Live`, named by `fulfilledByType:` and so in the builder's label, sharing `OverriddenPlace1` with
+		// the places' types for the reason above.
 		let liveName = holdsApiAsErasedInstantiator ? name("OverriddenPlace1Live") : name("OverriddenLive")
 		detail.properties.append(holdsApiAsErasedInstantiator
 			? Property(attribute: "@Instantiated(fulfilledByType: \"\(liveName)\")", label: "overriddenApi", type: "ErasedInstantiator<(), any \(apiName)>")

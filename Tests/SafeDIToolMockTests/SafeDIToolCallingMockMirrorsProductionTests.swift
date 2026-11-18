@@ -1374,13 +1374,13 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		// As above, with `B` a level further down, the place an `ErasedInstantiator<(), any Api>`, `Z` receiving `log` only if
 		// available, or `B` instantiating a `log` of its own above `other`, whose fill then built `F` again with `B`’s wrapper,
 		// where inline’s re-entered `Live` holds it.
-		var builders = [PassedUpBuilder.api, .other]
+		// An erased instantiator that forwards nothing takes the builder a plain place takes, `() -> any Api`.
+		let builders = [PassedUpBuilder.api, .other]
 		let guards: PassedUpGuards
 		switch variation {
 		case .otherPlaceTwoLevelsDown:
 			guards = PassedUpGuards(calledType: "8616E1F4162A5020", root: "825F2EC2249B6A19")
 		case .erasedPlace:
-			builders = [.erasedApi, .other]
 			guards = PassedUpGuards(calledType: "A63197EE513E1FDE", root: "E06FFE68D7695345")
 		case .receivedOnlyIfAvailable:
 			guards = PassedUpGuards(calledType: "BF0F8CB2899FAE4B", root: "18A4A48F2983414C")
@@ -2951,7 +2951,6 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 		static let api = PassedUpBuilder(label: "apiBuilder", readableType: "() -> any Api", builtType: "any Api", enumName: "SafeDIMockScope_Api", noScopeClosureType: "() -> __safeDI_Built", isSendable: false, stubArgument: "{ StubApi() }")
 		static let sendableApi = PassedUpBuilder(label: "apiSendableBuilder", readableType: "@Sendable () -> any Api", builtType: "any Api", enumName: "SafeDISendableMockScope_Api", noScopeClosureType: "@Sendable () -> __safeDI_Built", isSendable: true, stubArgument: "{ StubApi() }")
-		static let erasedApi = PassedUpBuilder(label: "apiBuilder", readableType: "ErasedInstantiator<(), any Api>.Builder", builtType: "any Api", enumName: "SafeDIMockScope_Api", noScopeClosureType: "ErasedInstantiator<(), __safeDI_Built>.Builder", isSendable: false, stubArgument: "{ _ in StubApi() }")
 		static let liveApi = PassedUpBuilder(label: "live_ApiBuilder", readableType: "ErasedInstantiator<Int, any Api>.Builder", builtType: "any Api", enumName: "SafeDIMockScope_Live_Api", noScopeClosureType: "ErasedInstantiator<Int, __safeDI_Built>.Builder", isSendable: false, stubArgument: "{ _ in StubApi() }")
 		static let other = PassedUpBuilder(label: "otherBuilder", readableType: "() -> any Other", builtType: "any Other", enumName: "SafeDIMockScope_Other", noScopeClosureType: "() -> __safeDI_Built", isSendable: false, stubArgument: "{ StubOther() }")
 		static let gApi = PassedUpBuilder(label: "gApiBuilder", readableType: "() -> any GApi", builtType: "any GApi", enumName: "SafeDIMockScope_GApi", noScopeClosureType: "() -> __safeDI_Built", isSendable: false, stubArgument: "{ StubGApi() }")

@@ -2849,12 +2849,12 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		"""])
 	}
 
-	@Test(.enabled(if: compileVerificationIsEnabled, "This test compares only values, which the value comparator compiles only when compile verification is enabled"))
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsTheInlineValues_whenInternalCallerPassesUpAPlainPlaceBesideAnInstantiatorOfAHandConformingType() async throws {
-		// Values only: `Screen`'s mock takes a builder for each form the two calls pass up `HoleHanded`'s places in, a plain
-		// place's and an `Instantiator`'s, where its twin takes one builder for the family. That signature is a known gap
-		// (`seamMockBuilders`), which this test does not assert; the probe names the builders only to call the mock.
+	mutating func generate_takesOneBuilderForBothForms_whenInternalCallerPassesUpAPlainPlaceBesideAnInstantiatorOfAHandConformingType() async throws {
+		// `Screen`'s mock takes one builder for the places of `HoleHanded` its two calls pass up, a plain place's and an
+		// `Instantiator`'s, as its twin does: `() -> HoleHanded`, which it hands `Deck`'s call through an adapter that drops
+		// the value the `Instantiator` forwards.
 		let core = """
 		import SafeDI
 
@@ -2900,21 +2900,85 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			ModuleFixture(name: "App", packageName: "app", swiftFileContent: [app, Self.holeHandedOfEachPlace], dependencies: ["Core"]),
 		]
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		// Each place is handed a subclass of its own, so a builder handed to the other call's place is a difference.
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            panel: ((@escaping () -> HoleHanded) -> Panel)? = nil,
+		            deck: ((@escaping Instantiator<HoleHanded>.Builder) -> Deck)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                panel: panel,
+		                deck: deck
+		            )
+		        }
+
+		        var panel: ((@escaping () -> HoleHanded) -> Panel)? { __safeDI_storage.panel }
+		        var deck: ((@escaping Instantiator<HoleHanded>.Builder) -> Deck)? { __safeDI_storage.deck }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                panel: ((@escaping () -> HoleHanded) -> Panel)?,
+		                deck: ((@escaping Instantiator<HoleHanded>.Builder) -> Deck)?
+		            ) {
+		                self.panel = panel
+		                self.deck = deck
+		            }
+
+		            let panel: ((@escaping () -> HoleHanded) -> Panel)?
+		            let deck: ((@escaping Instantiator<HoleHanded>.Builder) -> Deck)?
+		        }
+		    }
+
+		    static func mock(
+		        holeHandedBuilder: @escaping () -> HoleHanded,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let __safeDI_holeHandedBuilder = holeHandedBuilder
+		        let __safeDI_holeHandedBuilder_: Instantiator<HoleHanded>.Builder = { _ in __safeDI_holeHandedBuilder() }
+		        _ = Panel.__safeDI_Panel_mock_920AE2F589261CB1.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_panel() -> Panel {
+		            let holeHandedBuilder: () -> HoleHanded = __safeDI_holeHandedBuilder
+		            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(holeHandedBuilder) } else { Panel.__safeDI_mock(holeHandedBuilder: .init(__safeDI_noScope: holeHandedBuilder)) }
+		        }
+		        let panel: Panel = __safeDI_panel()
+		        _ = Deck.__safeDI_Deck_mock_919F7F5998DF3519.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_deck() -> Deck {
+		            let holeHandedBuilder: Instantiator<HoleHanded>.Builder = __safeDI_holeHandedBuilder_
+		            return if let safeDIBuilder = safeDIOverrides.deck { safeDIBuilder(holeHandedBuilder) } else { Deck.__safeDI_mock(holeHandedBuilder: .init(__safeDI_noScope: holeHandedBuilder)) }
+		        }
+		        let deck: Deck = __safeDI_deck()
+		        return Screen(panel: panel, deck: deck)
+		    }
+		}
+		#endif
+		"""])
+		guard compileVerificationIsEnabled else { return }
+		// The one builder builds both places: the inline mock is handed the same subclass for each.
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe(
 			name: "Screen.mock(…)",
-			expression: "Screen.mock(holeHandedBuilder_Panel: { PanelHoleHanded() }, holeHandedBuilder_Deck: { DeckHoleHanded() })",
-			knownRightExpression: "Screen.mock(handed: PanelHoleHanded(), handedBuilder: Instantiator<HoleHanded> { DeckHoleHanded() })",
+			expression: "Screen.mock(holeHandedBuilder: { PanelHoleHanded() })",
+			knownRightExpression: "Screen.mock(handed: PanelHoleHanded(), handedBuilder: Instantiator<HoleHanded> { PanelHoleHanded() })",
 		)])
 	}
 
-	@Test(.enabled(if: compileVerificationIsEnabled, "This test compares only values, which the value comparator compiles only when compile verification is enabled"))
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsTheInlineValues_whenInternalCallerPassesUpAPlainPlaceInASendableFunctionBesideAnErasedInstantiator() async throws {
-		// Values only: `Screen`'s mock takes a builder for each form the two calls pass up `LiveService`'s places in, the
-		// plain place's, which the `@Sendable` builder function of `panel` captures, and the erased instantiator's, where
-		// its twin takes one `@Sendable` builder for the family. That signature is a known gap (`seamMockBuilders`), which
-		// this test does not assert; the probe names the builders only to call the mock.
+	mutating func generate_takesOneBuilderForBothForms_whenInternalCallerPassesUpAPlainPlaceInASendableFunctionBesideAnErasedInstantiator() async throws {
+		// `Screen`'s mock takes one `@Sendable` builder for the places of `LiveService` its two calls pass up, the plain
+		// place's, which the `@Sendable` builder function of `panel` captures, and the erased instantiator's, which forwards
+		// nothing, as its twin does.
 		let core = """
 		import SafeDI
 
@@ -2958,10 +3022,75 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			ModuleFixture(name: "App", packageName: "app", swiftFileContent: [app, Self.stubService], dependencies: ["Core"]),
 		]
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		// Each place is handed a `StubService` named for it, so a builder handed to the other call's place is a difference.
-		// The comparator does not call an erased instantiator, so a probe reads the value `deck`'s builds.
-		let builders = #"liveService_ServiceBuilder: { StubService(name: "panel") }, liveService_ServiceSendableBuilder: { StubService(name: "deck") }"#
-		let inlineArguments = #"service: StubService(name: "panel"), serviceBuilder: SendableErasedInstantiator<(), any Service> { StubService(name: "deck") }"#
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            panel: (@Sendable (@escaping () -> any Service) -> Panel)? = nil,
+		            deck: ((@escaping @Sendable () -> any Service) -> Deck)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                panel: panel,
+		                deck: deck
+		            )
+		        }
+
+		        var panel: (@Sendable (@escaping () -> any Service) -> Panel)? { __safeDI_storage.panel }
+		        var deck: ((@escaping @Sendable () -> any Service) -> Deck)? { __safeDI_storage.deck }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                panel: (@Sendable (@escaping () -> any Service) -> Panel)?,
+		                deck: ((@escaping @Sendable () -> any Service) -> Deck)?
+		            ) {
+		                self.panel = panel
+		                self.deck = deck
+		            }
+
+		            let panel: (@Sendable (@escaping () -> any Service) -> Panel)?
+		            let deck: ((@escaping @Sendable () -> any Service) -> Deck)?
+		        }
+		    }
+
+		    static func mock(
+		        liveService_ServiceSendableBuilder: @escaping @Sendable () -> any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let __safeDI_liveService_ServiceSendableBuilder = liveService_ServiceSendableBuilder
+		        _ = Panel.__safeDI_Panel_mock_2FE61C6EFD6704FC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let __safeDI_panel__safeDIBuilder = safeDIOverrides.panel
+		        @Sendable func __safeDI_panel() -> Panel {
+		            let liveService_ServiceBuilder: () -> any Service = __safeDI_liveService_ServiceSendableBuilder
+		            return if let safeDIBuilder = __safeDI_panel__safeDIBuilder { safeDIBuilder(liveService_ServiceBuilder) } else { Panel.__safeDI_mock(liveService_ServiceBuilder: .init(__safeDI_noScope: liveService_ServiceBuilder)) }
+		        }
+		        let panel = SendableInstantiator<Panel>(__safeDI_panel)
+		        _ = Deck.__safeDI_Deck_mock_6D0422E3966C2DF8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_deck() -> Deck {
+		            let liveService_ServiceSendableBuilder: @Sendable () -> any Service = __safeDI_liveService_ServiceSendableBuilder
+		            return if let safeDIBuilder = safeDIOverrides.deck { safeDIBuilder(liveService_ServiceSendableBuilder) } else { Deck.__safeDI_mock(liveService_ServiceSendableBuilder: .init(__safeDI_noScope: liveService_ServiceSendableBuilder)) }
+		        }
+		        let deck: Deck = __safeDI_deck()
+		        return Screen(panel: panel, deck: deck)
+		    }
+		}
+		#endif
+		"""])
+		guard compileVerificationIsEnabled else { return }
+		// The one builder builds both places. The comparator does not call an erased instantiator, so a probe reads the value
+		// `deck`'s builds.
+		let builders = #"liveService_ServiceSendableBuilder: { StubService(name: "service") }"#
+		let inlineArguments = #"service: StubService(name: "service"), serviceBuilder: SendableErasedInstantiator<(), any Service> { StubService(name: "service") }"#
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [
 			DifferentialValueProbe(
 				name: "Screen.mock(…)",
@@ -2976,14 +3105,12 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		])
 	}
 
-	@Test(.enabled(if: compileVerificationIsEnabled, "This test compares only values, which the value comparator compiles only when compile verification is enabled"))
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsTheInlineValues_whenSeamsOwnErasedInstantiatorPlaceIsBesideACallsPlainPlaceInASendableFunction() async throws {
-		// Values only: `Screen`'s mock takes a builder for its own erased instantiator's places of `LiveService` and another
-		// for the plain place that the call of `Panel`'s mock in `panel`'s `@Sendable` builder function passes up, where its
-		// twin, and its mock where every type is in one module, take one `@Sendable` builder for the family. That signature
-		// is a known gap (`seamMockBuilders`), which this test does not assert; the probe names the builders only to call
-		// the mock.
+	mutating func generate_takesOneBuilderForBothForms_whenSeamsOwnErasedInstantiatorPlaceIsBesideACallsPlainPlaceInASendableFunction() async throws {
+		// `Screen`'s mock takes one `@Sendable` builder for its own erased instantiator's places of `LiveService` and the plain
+		// place that the call of `Panel`'s mock in `panel`'s `@Sendable` builder function passes up, as its twin, and its mock
+		// where every type is in one module, do.
 		let core = """
 		import SafeDI
 
@@ -3027,8 +3154,101 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			ModuleFixture(name: "App", packageName: "app", swiftFileContent: [app, Self.stubService], dependencies: ["Core"]),
 		]
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Screen {
+		    nonisolated public enum SafeDISendableScope_LiveService_Service {
+		        nonisolated public struct panel_Values: Sendable {}
+
+		        nonisolated public struct serviceBuilder_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let panel: @Sendable (panel_Values) -> Panel.SafeDIScope_LiveService_Service.__safeDI_Builder<__safeDI_Built>
+		            public let serviceBuilder: @Sendable (serviceBuilder_Values) -> SendableErasedInstantiator<(), __safeDI_Built>.Builder
+
+		            public init(panel: @escaping @Sendable (panel_Values) -> Panel.SafeDIScope_LiveService_Service.__safeDI_Builder<__safeDI_Built>, serviceBuilder: @escaping @Sendable (serviceBuilder_Values) -> SendableErasedInstantiator<(), __safeDI_Built>.Builder) {
+		                self.panel = panel
+		                self.serviceBuilder = serviceBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.serviceBuilder = { _ in { _ in __safeDI_builder() } }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_liveService_ServiceSendableBuilder: SafeDISendableScope_LiveService_Service.__safeDI_Builder<any Service>) {
+		        @Sendable nonisolated func __safeDI_panel() -> Panel {
+		            _ = Panel.__safeDI_Panel_A401B5C5495507F9.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Panel(__safeDI_liveService_ServiceBuilder: __safeDI_liveService_ServiceSendableBuilder.panel(SafeDISendableScope_LiveService_Service.panel_Values()))
+		        }
+		        let panel = SendableInstantiator<Panel>(__safeDI_panel)
+		        let serviceBuilder = SendableErasedInstantiator<(), any Service>(__safeDI_liveService_ServiceSendableBuilder.serviceBuilder(SafeDISendableScope_LiveService_Service.serviceBuilder_Values()))
+		        self.init(panel: panel, serviceBuilder: serviceBuilder)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_8D49C16632871457 {}
+		}
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            panel: (@Sendable (@escaping () -> any Service) -> Panel)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                panel: panel
+		            )
+		        }
+
+		        var panel: (@Sendable (@escaping () -> any Service) -> Panel)? { __safeDI_storage.panel }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                panel: (@Sendable (@escaping () -> any Service) -> Panel)?
+		            ) {
+		                self.panel = panel
+		            }
+
+		            let panel: (@Sendable (@escaping () -> any Service) -> Panel)?
+		        }
+		    }
+
+		    static func mock(
+		        liveService_ServiceSendableBuilder: @escaping @Sendable () -> any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let serviceBuilder = SendableErasedInstantiator<(), any Service>(liveService_ServiceSendableBuilder)
+		        _ = Panel.__safeDI_Panel_mock_2FE61C6EFD6704FC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let __safeDI_panel__safeDIBuilder = safeDIOverrides.panel
+		        @Sendable func __safeDI_panel() -> Panel {
+		            let liveService_ServiceBuilder: () -> any Service = liveService_ServiceSendableBuilder
+		            return if let safeDIBuilder = __safeDI_panel__safeDIBuilder { safeDIBuilder(liveService_ServiceBuilder) } else { Panel.__safeDI_mock(liveService_ServiceBuilder: .init(__safeDI_noScope: liveService_ServiceBuilder)) }
+		        }
+		        let panel = SendableInstantiator<Panel>(__safeDI_panel)
+		        return Screen(panel: panel, serviceBuilder: serviceBuilder)
+		    }
+		}
+		#endif
+		"""])
+		guard compileVerificationIsEnabled else { return }
 		// The comparator does not call an erased instantiator, so a probe reads the value `Screen`'s own builds.
-		let builders = #"liveService_ServiceBuilder: { StubService(name: "service") }, liveService_ServiceSendableBuilder: { StubService(name: "service") }"#
+		let builders = #"liveService_ServiceSendableBuilder: { StubService(name: "service") }"#
 		let inlineBuilder = #"liveService_ServiceSendableBuilder: { StubService(name: "service") }"#
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [
 			DifferentialValueProbe(
@@ -3042,6 +3262,326 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 				knownRightExpression: "{ let screen = Screen.mock(\(inlineBuilder)); return [screen.panel.instantiate().service, screen.serviceBuilder.instantiate()] as [any Service] }()",
 			),
 		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesOneBuilderForBothForms_whenEachCallerKindCallsMocksHoldingThePlaceInTwoForms() async throws {
+		// `Panel` holds a plain place of `LiveService` and `Deck` an erased instantiator that forwards nothing, which
+		// `Deck`'s mock takes as `() -> any Service`, as a plain place's builder is. Every kind of mock that calls both takes
+		// that one builder, as its twin does, under the label `OnlyDeck`, which calls `Deck` alone, gives it, so a second call
+		// renames nothing.
+		let core = """
+		import SafeDI
+
+		public protocol Service: Sendable {}
+
+		@Instantiable(generateMock: .public)
+		public struct Panel: Instantiable {
+		    init(service: any Service) {
+		        self.service = service
+		    }
+
+		    @Instantiated(fulfilledByType: "LiveService") let service: any Service
+		}
+
+		@Instantiable(generateMock: .public)
+		public struct Deck: Instantiable {
+		    init(serviceBuilder: ErasedInstantiator<(), any Service>) {
+		        self.serviceBuilder = serviceBuilder
+		    }
+
+		    @Instantiated(fulfilledByType: "LiveService") let serviceBuilder: ErasedInstantiator<(), any Service>
+		}
+		"""
+		let app = """
+		import Core
+		import SafeDI
+
+		#SafeDIConfiguration(additionalMocksToGenerate: ["Listed"])
+
+		@Instantiable(generateMock: true)
+		public struct OnlyDeck: Instantiable {
+		    public init(deck: Deck) {
+		        self.deck = deck
+		    }
+
+		    @Instantiated let deck: Deck
+		}
+
+		@Instantiable(generateMock: true)
+		public struct Screen: Instantiable {
+		    public init(panel: Panel, deck: Deck) {
+		        self.panel = panel
+		        self.deck = deck
+		    }
+
+		    @Instantiated let panel: Panel
+		    @Instantiated let deck: Deck
+		}
+
+		@Instantiable
+		public struct Listed: Instantiable {
+		    public init(deck: Deck, panel: Panel) {
+		        self.deck = deck
+		        self.panel = panel
+		    }
+
+		    @Instantiated let deck: Deck
+		    @Instantiated let panel: Panel
+		}
+
+		@Instantiable(generateMock: .public)
+		public struct Board: Instantiable {
+		    public init(panel: Panel, deck: Deck) {
+		        self.panel = panel
+		        self.deck = deck
+		    }
+
+		    @Instantiated let panel: Panel
+		    @Instantiated let deck: Deck
+		}
+		"""
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "core", swiftFileContent: [core]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContent: [app, Self.stubService], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Board {
+		    nonisolated public enum SafeDIMockScope_LiveService_Service {
+		        nonisolated public struct panel_Values: Sendable {}
+
+		        nonisolated public struct deck_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let panel: (panel_Values) -> Panel.SafeDIMockScope_LiveService_Service.__safeDI_Builder<__safeDI_Built>
+		            public let deck: (deck_Values) -> Deck.SafeDIMockScope_LiveService_Service.__safeDI_Builder<__safeDI_Built>
+
+		            public init(panel: @escaping (panel_Values) -> Panel.SafeDIMockScope_LiveService_Service.__safeDI_Builder<__safeDI_Built>, deck: @escaping (deck_Values) -> Deck.SafeDIMockScope_LiveService_Service.__safeDI_Builder<__safeDI_Built>) {
+		                self.panel = panel
+		                self.deck = deck
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.deck = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init() {}
+		    }
+
+		    public static func mock(
+		        liveService_ServiceBuilder: @escaping () -> any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Board {
+		        Board.__safeDI_mock(liveService_ServiceBuilder: .init(__safeDI_noScope: liveService_ServiceBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        liveService_ServiceBuilder __safeDI_liveService_ServiceBuilder: Board.SafeDIMockScope_LiveService_Service.__safeDI_Builder<any Service>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Board {
+		        _ = Panel.__safeDI_Panel_mock_2FE61C6EFD6704FC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let panel = Panel.__safeDI_mock(liveService_ServiceBuilder: __safeDI_liveService_ServiceBuilder.panel(SafeDIMockScope_LiveService_Service.panel_Values()))
+		        _ = Deck.__safeDI_Deck_mock_D7499869CFDA1215.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let deck = Deck.__safeDI_mock(liveService_ServiceBuilder: __safeDI_liveService_ServiceBuilder.deck(SafeDIMockScope_LiveService_Service.deck_Values()))
+		        return Board(panel: panel, deck: deck)
+		    }
+		}
+
+		extension Board {
+		    public enum __safeDI_Board_mock_52CF18BC991361B0 {}
+		}
+		#endif
+
+		#if DEBUG
+		extension Listed {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            deck: ((@escaping () -> any Service) -> Deck)? = nil,
+		            panel: ((@escaping () -> any Service) -> Panel)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                deck: deck,
+		                panel: panel
+		            )
+		        }
+
+		        var deck: ((@escaping () -> any Service) -> Deck)? { __safeDI_storage.deck }
+		        var panel: ((@escaping () -> any Service) -> Panel)? { __safeDI_storage.panel }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                deck: ((@escaping () -> any Service) -> Deck)?,
+		                panel: ((@escaping () -> any Service) -> Panel)?
+		            ) {
+		                self.deck = deck
+		                self.panel = panel
+		            }
+
+		            let deck: ((@escaping () -> any Service) -> Deck)?
+		            let panel: ((@escaping () -> any Service) -> Panel)?
+		        }
+		    }
+
+		    static func mock(
+		        liveService_ServiceBuilder: @escaping () -> any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Listed {
+		        let __safeDI_liveService_ServiceBuilder = liveService_ServiceBuilder
+		        _ = Deck.__safeDI_Deck_mock_D7499869CFDA1215.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_deck() -> Deck {
+		            let liveService_ServiceBuilder: () -> any Service = __safeDI_liveService_ServiceBuilder
+		            return if let safeDIBuilder = safeDIOverrides.deck { safeDIBuilder(liveService_ServiceBuilder) } else { Deck.__safeDI_mock(liveService_ServiceBuilder: .init(__safeDI_noScope: liveService_ServiceBuilder)) }
+		        }
+		        let deck: Deck = __safeDI_deck()
+		        _ = Panel.__safeDI_Panel_mock_2FE61C6EFD6704FC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_panel() -> Panel {
+		            let liveService_ServiceBuilder: () -> any Service = __safeDI_liveService_ServiceBuilder
+		            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(liveService_ServiceBuilder) } else { Panel.__safeDI_mock(liveService_ServiceBuilder: .init(__safeDI_noScope: liveService_ServiceBuilder)) }
+		        }
+		        let panel: Panel = __safeDI_panel()
+		        return Listed(deck: deck, panel: panel)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension OnlyDeck {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            deck: ((@escaping () -> any Service) -> Deck)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                deck: deck
+		            )
+		        }
+
+		        var deck: ((@escaping () -> any Service) -> Deck)? { __safeDI_storage.deck }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                deck: ((@escaping () -> any Service) -> Deck)?
+		            ) {
+		                self.deck = deck
+		            }
+
+		            let deck: ((@escaping () -> any Service) -> Deck)?
+		        }
+		    }
+
+		    static func mock(
+		        liveService_ServiceBuilder: @escaping () -> any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> OnlyDeck {
+		        let __safeDI_liveService_ServiceBuilder = liveService_ServiceBuilder
+		        _ = Deck.__safeDI_Deck_mock_D7499869CFDA1215.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_deck() -> Deck {
+		            let liveService_ServiceBuilder: () -> any Service = __safeDI_liveService_ServiceBuilder
+		            return if let safeDIBuilder = safeDIOverrides.deck { safeDIBuilder(liveService_ServiceBuilder) } else { Deck.__safeDI_mock(liveService_ServiceBuilder: .init(__safeDI_noScope: liveService_ServiceBuilder)) }
+		        }
+		        let deck: Deck = __safeDI_deck()
+		        return OnlyDeck(deck: deck)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            panel: ((@escaping () -> any Service) -> Panel)? = nil,
+		            deck: ((@escaping () -> any Service) -> Deck)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                panel: panel,
+		                deck: deck
+		            )
+		        }
+
+		        var panel: ((@escaping () -> any Service) -> Panel)? { __safeDI_storage.panel }
+		        var deck: ((@escaping () -> any Service) -> Deck)? { __safeDI_storage.deck }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                panel: ((@escaping () -> any Service) -> Panel)?,
+		                deck: ((@escaping () -> any Service) -> Deck)?
+		            ) {
+		                self.panel = panel
+		                self.deck = deck
+		            }
+
+		            let panel: ((@escaping () -> any Service) -> Panel)?
+		            let deck: ((@escaping () -> any Service) -> Deck)?
+		        }
+		    }
+
+		    static func mock(
+		        liveService_ServiceBuilder: @escaping () -> any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let __safeDI_liveService_ServiceBuilder = liveService_ServiceBuilder
+		        _ = Panel.__safeDI_Panel_mock_2FE61C6EFD6704FC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_panel() -> Panel {
+		            let liveService_ServiceBuilder: () -> any Service = __safeDI_liveService_ServiceBuilder
+		            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(liveService_ServiceBuilder) } else { Panel.__safeDI_mock(liveService_ServiceBuilder: .init(__safeDI_noScope: liveService_ServiceBuilder)) }
+		        }
+		        let panel: Panel = __safeDI_panel()
+		        _ = Deck.__safeDI_Deck_mock_D7499869CFDA1215.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_deck() -> Deck {
+		            let liveService_ServiceBuilder: () -> any Service = __safeDI_liveService_ServiceBuilder
+		            return if let safeDIBuilder = safeDIOverrides.deck { safeDIBuilder(liveService_ServiceBuilder) } else { Deck.__safeDI_mock(liveService_ServiceBuilder: .init(__safeDI_noScope: liveService_ServiceBuilder)) }
+		        }
+		        let deck: Deck = __safeDI_deck()
+		        return Screen(panel: panel, deck: deck)
+		    }
+		}
+		#endif
+		"""])
+		guard compileVerificationIsEnabled else { return }
+		// The comparator does not call an erased instantiator, so a probe reads the value `deck`'s builds.
+		let builder = #"liveService_ServiceBuilder: { StubService(name: "service") }"#
+		// The inline mock takes each value in the order its tree first builds it: `Listed` builds `deck` first.
+		let service = #"service: StubService(name: "service")"#
+		let serviceBuilder = #"serviceBuilder: ErasedInstantiator<(), any Service> { StubService(name: "service") }"#
+		var probes = [DifferentialValueProbe]()
+		for (caller, inlineArguments) in [("Screen", "\(service), \(serviceBuilder)"), ("Listed", "\(serviceBuilder), \(service)"), ("Board", "\(service), \(serviceBuilder)")] {
+			probes.append(DifferentialValueProbe(
+				name: "\(caller).mock(…)'s places",
+				expression: "{ let caller = \(caller).mock(\(builder)); return [caller.panel.service, caller.deck.serviceBuilder.instantiate()] as [any Service] }()",
+				knownRightExpression: "{ let caller = \(caller).mock(\(inlineArguments)); return [caller.panel.service, caller.deck.serviceBuilder.instantiate()] as [any Service] }()",
+			))
+		}
+		probes.append(DifferentialValueProbe(
+			name: "OnlyDeck.mock(…)'s place",
+			expression: "OnlyDeck.mock(\(builder)).deck.serviceBuilder.instantiate()",
+			knownRightExpression: #"OnlyDeck.mock(serviceBuilder: ErasedInstantiator<(), any Service> { StubService(name: "service") }).deck.serviceBuilder.instantiate()"#,
+		))
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: probes)
 	}
 
 	@Test
