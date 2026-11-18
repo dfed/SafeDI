@@ -921,11 +921,11 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        func __safeDI_t0() -> T0Protocol {
+		        func __safeDI_t0() -> any T0Protocol {
 		            let t3 = if let safeDIBuilder = safeDIOverrides.t0.t3 { safeDIBuilder() } else { T3() }
 		            return T0.__safeDI_mock(t3: t3, analytics: analytics, safeDIBuilder: safeDIOverrides.t0.safeDIBuilder)
 		        }
-		        let t0: T0Protocol = __safeDI_t0()
+		        let t0: any T0Protocol = __safeDI_t0()
 		        return T8(t0: t0, analytics: analytics)
 		    }
 		}

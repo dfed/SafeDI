@@ -1696,10 +1696,10 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        func __safeDI_userService() -> UserService {
+		        func __safeDI_userService() -> any UserService {
 		            return if let safeDIBuilder = safeDIOverrides.userService.safeDIBuilder { safeDIBuilder(safeDIOverrides.userService.analytics) } else { FakeUserService.mock(analytics: safeDIOverrides.userService.analytics) }
 		        }
-		        let userService: UserService = __safeDI_userService()
+		        let userService: any UserService = __safeDI_userService()
 		        return Screen(analytics: analytics, userService: userService)
 		    }
 		}
@@ -1732,7 +1732,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            analytics: (() -> Analytics)? = nil,
-		            userService: ((Analytics) -> UserService)? = nil
+		            userService: ((Analytics) -> any UserService)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                analytics: analytics,
@@ -1741,21 +1741,21 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 		        }
 
 		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
-		        var userService: ((Analytics) -> UserService)? { __safeDI_storage.userService }
+		        var userService: ((Analytics) -> any UserService)? { __safeDI_storage.userService }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
 		                analytics: (() -> Analytics)?,
-		                userService: ((Analytics) -> UserService)?
+		                userService: ((Analytics) -> any UserService)?
 		            ) {
 		                self.analytics = analytics
 		                self.userService = userService
 		            }
 
 		            let analytics: (() -> Analytics)?
-		            let userService: ((Analytics) -> UserService)?
+		            let userService: ((Analytics) -> any UserService)?
 		        }
 		    }
 
@@ -1763,7 +1763,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        let userService: UserService = if let safeDIBuilder = safeDIOverrides.userService { safeDIBuilder(analytics) } else { FakeUserService.mock(analytics: analytics) }
+		        let userService: any UserService = if let safeDIBuilder = safeDIOverrides.userService { safeDIBuilder(analytics) } else { FakeUserService.mock(analytics: analytics) }
 		        return Screen(analytics: analytics, userService: userService)
 		    }
 		}

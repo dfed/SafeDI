@@ -1089,32 +1089,32 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: (() -> Consumer.ServiceProtocol)? = nil
+		            service: (() -> any Consumer.ServiceProtocol)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                service: service
 		            )
 		        }
 
-		        var service: (() -> Consumer.ServiceProtocol)? { __safeDI_storage.service }
+		        var service: (() -> any Consumer.ServiceProtocol)? { __safeDI_storage.service }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
-		                service: (() -> Consumer.ServiceProtocol)?
+		                service: (() -> any Consumer.ServiceProtocol)?
 		            ) {
 		                self.service = service
 		            }
 
-		            let service: (() -> Consumer.ServiceProtocol)?
+		            let service: (() -> any Consumer.ServiceProtocol)?
 		        }
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Consumer {
-		        let service: Consumer.ServiceProtocol = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
+		        let service: any Consumer.ServiceProtocol = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
 		        return Consumer.instantiate(service: service)
 		    }
 		}
