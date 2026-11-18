@@ -4899,11 +4899,13 @@ public actor DependencyTreeGenerator {
 		)
 		// A seam whose signature equals its own initializer's generates no code: its file holds the header alone.
 		var generatedSeams = [(seam: Instantiable, seamRoot: ScopeGenerator.SeamRoot, rootScope: Scope)]()
+		// Once for every seam: taken for each, it copied every scope's declaration once per seam.
+		let seamScopeInstantiables = seamScopeMap.mapValues(\.instantiable)
 		for seamType in generatedSeamTypes.sorted() {
 			guard let seam = typeDescriptionToFulfillingInstantiableMap[seamType],
 			      let seamRoot = seamRoots[seamType] ?? nil
 			else { continue }
-			generatedSeams.append((seam, seamRoot, Self.seamRootScope(of: seam, in: seamScopeMap, aliasDeclarationReferences: aliasDeclarationReferences)))
+			generatedSeams.append((seam, seamRoot, Self.seamRootScope(of: seam, in: seamScopeMap, instantiables: seamScopeInstantiables, aliasDeclarationReferences: aliasDeclarationReferences)))
 		}
 		// Creating a generator starts generating its code, so every construction must be known to compile first: a
 		// root's tree constructs a seam with the tier of its generated initializer the root's module can reach, and a
@@ -5141,11 +5143,12 @@ public actor DependencyTreeGenerator {
 					aliasDeclarationReferences: aliasDeclarationReferences,
 					checkingModule: checkingModule,
 				)
+				let scopeInstantiables = scopeMap.mapValues(\.instantiable)
 				var changed = false
 				var passErrors = [DependencyTreeGeneratorError]()
 				var passFailedSeams = Set<TypeDescription>()
 				for seam in componentSeams {
-					let rootScope = Self.seamRootScope(of: seam, in: scopeMap, aliasDeclarationReferences: aliasDeclarationReferences)
+					let rootScope = Self.seamRootScope(of: seam, in: scopeMap, instantiables: scopeInstantiables, aliasDeclarationReferences: aliasDeclarationReferences)
 					// A seam found to equal its own initializer is computed again from that initializer's parameters:
 					// a change to the trees of the module's other seams can make it a seam after all.
 					let previousSeamRoot = seamRoots[seam.concreteInstantiable] ?? nil
@@ -5575,13 +5578,14 @@ public actor DependencyTreeGenerator {
 	private static func seamRootScope(
 		of seam: Instantiable,
 		in typeDescriptionToScopeMap: [TypeDescription: Scope],
+		instantiables: [TypeDescription: Instantiable],
 		aliasDeclarationReferences: AliasDeclarationReferences,
 	) -> Scope {
 		let rootScope = Scope(instantiable: seam)
 		populatePropertiesToGenerate(
 			of: rootScope,
 			from: typeDescriptionToScopeMap,
-			instantiables: typeDescriptionToScopeMap.mapValues(\.instantiable),
+			instantiables: instantiables,
 			aliasDeclarationReferences: aliasDeclarationReferences,
 		)
 		return rootScope
@@ -9284,12 +9288,17 @@ public actor DependencyTreeGenerator {
 				throw DependencyTreeGeneratorError.holesInSeamsOfUnnamedModule(holes)
 			}
 		}
+		// Only hand-written code could build a type that cannot be a hole. Found once: looked up for each type a seam reaches,
+		// it scanned every declaration once per seam.
+		var typesInstantiatedAsNoHole = Set<TypeDescription>()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
+			for dependency in instantiable.dependencies where dependency.isInstantiated && !Self.canBeHole(dependency) {
+				typesInstantiatedAsNoHole.insert(dependency.asInstantiatedType)
+			}
+		}
 		for seamType in generatedSeamTypes {
 			for typeDescription in typesReached(from: [seamType]) where typeDescriptionToFulfillingInstantiableMap[typeDescription]?.mockOnly != false {
-				// Only hand-written code could build a type that cannot be a hole.
-				if typeDescriptionToFulfillingInstantiableMap.values.contains(where: { instantiable in
-					instantiable.dependencies.contains { $0.isInstantiated && $0.asInstantiatedType == typeDescription && !Self.canBeHole($0) }
-				}) {
+				if typesInstantiatedAsNoHole.contains(typeDescription) {
 					typesToReport.insert(typeDescription)
 				}
 			}
