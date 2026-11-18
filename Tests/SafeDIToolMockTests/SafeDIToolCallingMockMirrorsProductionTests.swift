@@ -729,6 +729,32 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		)
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlacesBelowCalledTypesRootWithCallersLazyValue_whenCalledTypeReceivingValueOnlyIfAvailableAlsoBuildsPlaceInSendableInstantiator(caller: CallingMockCallerKind) async throws {
+		// As above, with `Z` receiving `log` only if available, so `F`’s mock binds `log: Log?`, which no place carries inside
+		// the instantiator’s `@Sendable` function: both `Live`s hold `Root`’s wrapper, as inline.
+		try await expectValuesEqualInline(
+			mock: Self.sendableInstantiatorPlaceModules(caller: caller, receivesOnlyIfAvailable: true),
+			inline: Self.sendableInstantiatorPlaceInlineModules(receivesOnlyIfAvailable: true),
+			caller: caller.callingMockCaller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: [
+				DifferentialValueProbe(name: "Root", expression: "Root.mock()", knownRightExpression: "Root()"),
+				DifferentialValueProbe(
+					name: "Live’s log is Root’s",
+					expression: "{ let root = Root.mock(); return (root.f.a.api as! Live).log === root.log }()",
+					knownRightExpression: "{ let root = Root(); return (root.f.a.api as! Live).log === root.log }()",
+				),
+				DifferentialValueProbe(
+					name: "The instantiated Live’s log is Root’s",
+					expression: "{ let root = Root.mock(); return (root.f.aBuilder.instantiate().api as! Live).log === root.log }()",
+					knownRightExpression: "{ let root = Root(); return (root.f.aBuilder.instantiate().api as! Live).log === root.log }()",
+				),
+			],
+		)
+	}
+
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases, CallerLazyWrapper.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_fillsPlaceInsideReenteringCallWithCallersLazyValue_whenFillBuildsCalledTypeAgain(caller: CallingMockCaller, wrapper: CallerLazyWrapper) async throws {
@@ -794,6 +820,35 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			caller: caller,
 			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
 			probes: Self.reenteringCallProbes(place: .plain, rootInstance: rootLog == "Log" ? "root.log" : "root.log.instance", fillInstance: "log"),
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases, ReenteringWrapperPair.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceInsideReenteringCallWithCallersLazyValue_whenOtherPlacesFillBuildsCalledTypeAgain(caller: CallingMockCallerKind, pair: ReenteringWrapperPair) async throws {
+		// The adopter’s shape, with `F` also building `B`, whose place `other` `LiveOther` fills, and `LiveOther`, which reads
+		// no `log`, building `F` again, so the call of `F`’s mock inside that fill re-enters the call’s root level function,
+		// which takes `Root`’s wrapper. The `Live` of each `F` holds `Root`’s wrapper, as inline.
+		try await expectValuesEqualInline(
+			mock: Self.otherFillReentersModules(caller: caller, pair: pair, layout: .otherLevel),
+			inline: Self.otherFillReentersInlineModules(pair: pair, layout: .otherLevel),
+			caller: caller.callingMockCaller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.otherFillReentersProbes(layout: .otherLevel),
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases, [ReenteringOtherPlaceLayout.placesLevel, .childOfOtherFill])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceInsideReenteringCallWithCallersLazyValue_whenOtherPlaceBuildingCalledTypeAgainMoves(caller: CallingMockCallerKind, layout: ReenteringOtherPlaceLayout) async throws {
+		// As above, with `other` on `A`’s level beside `api`, or with `LiveOther`’s child building `F` again: the `Live` of
+		// each `F` holds `Root`’s wrapper, as inline.
+		try await expectValuesEqualInline(
+			mock: Self.otherFillReentersModules(caller: caller, pair: .lazilyInstantiatedInInstantiator, layout: layout),
+			inline: Self.otherFillReentersInlineModules(pair: .lazilyInstantiatedInInstantiator, layout: layout),
+			caller: caller.callingMockCaller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.otherFillReentersProbes(layout: layout),
 		)
 	}
 
@@ -2383,7 +2438,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	/// both in plain code and inside the instantiator’s `@Sendable` function, outside which `F`’s mock binds `log`. `Live`
 	/// fills both places and receives `Root`’s `log: SendableLazilyInstantiated<Log>`. `caller` decides `Root`’s attribute,
 	/// or that `App` lists it in `additionalMocksToGenerate`.
-	private static func sendableInstantiatorPlaceModules(caller: CallingMockCallerKind) -> [ModuleFixture] {
+	private static func sendableInstantiatorPlaceModules(caller: CallingMockCallerKind, receivesOnlyIfAvailable: Bool = false) -> [ModuleFixture] {
 		var appFiles = [
 			"AppTypes.swift": "import Feat\nimport SafeDI\n\n" + sendableInstantiatorPlaceAppTypes(rootAttribute: caller.attribute(listed: "@Instantiable(isRoot: true)")),
 		]
@@ -2391,22 +2446,30 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"])\n"
 		}
 		return [
-			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": sendableInstantiatorPlaceFeatureTypes(callee: twinCalledTypes)]),
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": sendableInstantiatorPlaceFeatureTypes(callee: twinCalledTypes, receivesOnlyIfAvailable: receivesOnlyIfAvailable)]),
 			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Feat"]),
 		]
 	}
 
 	/// `sendableInstantiatorPlaceModules`’ types in one module, `Root` a root: what inline builds.
 	private static var sendableInstantiatorPlaceInlineModules: [ModuleFixture] {
-		var types = sendableInstantiatorPlaceFeatureTypes(callee: "@Instantiable")
+		sendableInstantiatorPlaceInlineModules(receivesOnlyIfAvailable: false)
+	}
+
+	/// `sendableInstantiatorPlaceModules`’ types in one module, `Root` a root: what inline builds.
+	private static func sendableInstantiatorPlaceInlineModules(receivesOnlyIfAvailable: Bool) -> [ModuleFixture] {
+		var types = sendableInstantiatorPlaceFeatureTypes(callee: "@Instantiable", receivesOnlyIfAvailable: receivesOnlyIfAvailable)
 		types += "\n\n"
 		types += sendableInstantiatorPlaceAppTypes(rootAttribute: "@Instantiable(isRoot: true)")
 		return [ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": types])]
 	}
 
-	/// `F`, declared with `callee`, and the types its tree builds, of `sendableInstantiatorPlaceModules`.
-	private static func sendableInstantiatorPlaceFeatureTypes(callee: String) -> String {
-		"""
+	/// `F`, declared with `callee`, and the types its tree builds, of `sendableInstantiatorPlaceModules`. `Z` receives `log`
+	/// only if available, as `Log?`, where `receivesOnlyIfAvailable`.
+	private static func sendableInstantiatorPlaceFeatureTypes(callee: String, receivesOnlyIfAvailable: Bool = false) -> String {
+		let zLog = receivesOnlyIfAvailable ? "Log?" : "Log"
+		let zReceive = receivesOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received"
+		return """
 		public protocol Api: Sendable {}
 
 		@Instantiable
@@ -2425,11 +2488,11 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 		@Instantiable
 		public final class Z: Instantiable, Sendable {
-		    init(log: Log) {
+		    init(log: \(zLog)) {
 		        self.log = log
 		    }
 
-		    @Received public let log: Log
+		    \(zReceive) public let log: \(zLog)
 		}
 
 		\(callee)
@@ -2470,6 +2533,212 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		    @Instantiated public let f: F
 		}
 		"""
+	}
+
+	/// The adopter’s shape with a second place whose fill builds the called type again: `F` builds `A`, whose place `api`
+	/// `Live` fills, receiving `Root`’s `log` in `pair`’s wrapper, and `Z`, which receives `log`, so `F`’s mock binds `log` by
+	/// value. `LiveOther` fills the place `other`, which `B`, beside `A`, holds, or, where `layout` says so, `A` beside
+	/// `api`, and reads no `log`: it instantiates `fBuilder` in `pair`’s instantiator, or its child `OtherChild` does.
+	/// `caller` decides `Root`’s attribute, or that `App` lists it in `additionalMocksToGenerate`.
+	private static func otherFillReentersModules(caller: CallingMockCallerKind, pair: ReenteringWrapperPair, layout: ReenteringOtherPlaceLayout) -> [ModuleFixture] {
+		var appFiles = [
+			"AppTypes.swift": "import Feat\nimport SafeDI\n\n" + otherFillReentersAppTypes(rootAttribute: caller.attribute(listed: "@Instantiable(isRoot: true)"), pair: pair, layout: layout),
+		]
+		if caller == .listed {
+			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"])\n"
+		}
+		return [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": otherFillReentersFeatureTypes(callee: twinCalledTypes, layout: layout)]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Feat"]),
+		]
+	}
+
+	/// `otherFillReentersModules`’ types in one module, `Root` a root: what inline builds.
+	private static func otherFillReentersInlineModules(pair: ReenteringWrapperPair, layout: ReenteringOtherPlaceLayout) -> [ModuleFixture] {
+		var types = otherFillReentersFeatureTypes(callee: "@Instantiable", layout: layout)
+		types += "\n\n"
+		types += otherFillReentersAppTypes(rootAttribute: "@Instantiable(isRoot: true)", pair: pair, layout: layout)
+		return [ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": types])]
+	}
+
+	/// `F`, declared with `callee`, and the types its tree builds, of `otherFillReentersModules`.
+	private static func otherFillReentersFeatureTypes(callee: String, layout: ReenteringOtherPlaceLayout) -> String {
+		var types = """
+		import SafeDI
+
+		public protocol Api {}
+
+		public protocol Other {}
+
+		@Instantiable
+		public final class Log: Instantiable, Sendable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class Z: Instantiable {
+		    init(log: Log) {
+		        self.log = log
+		    }
+
+		    @Received public let log: Log
+		}
+
+
+		"""
+		switch layout {
+		case .otherLevel, .childOfOtherFill:
+			types += """
+			@Instantiable
+			public final class A: Instantiable {
+			    init(api: any Api) {
+			        self.api = api
+			    }
+
+			    @Instantiated public let api: any Api
+			}
+
+			@Instantiable
+			public final class B: Instantiable {
+			    init(other: any Other) {
+			        self.other = other
+			    }
+
+			    @Instantiated public let other: any Other
+			}
+
+			\(callee)
+			public final class F: Instantiable {
+			    public init(a: A, b: B, z: Z) {
+			        self.a = a
+			        self.b = b
+			        self.z = z
+			    }
+
+			    @Instantiated public let a: A
+			    @Instantiated public let b: B
+			    @Instantiated public let z: Z
+			}
+			"""
+		case .placesLevel:
+			types += """
+			@Instantiable
+			public final class A: Instantiable {
+			    init(api: any Api, other: any Other) {
+			        self.api = api
+			        self.other = other
+			    }
+
+			    @Instantiated public let api: any Api
+			    @Instantiated public let other: any Other
+			}
+
+			\(callee)
+			public final class F: Instantiable {
+			    public init(a: A, z: Z) {
+			        self.a = a
+			        self.z = z
+			    }
+
+			    @Instantiated public let a: A
+			    @Instantiated public let z: Z
+			}
+			"""
+		}
+		return types
+	}
+
+	/// `Live`, `LiveOther`, `OtherChild` where `layout` has it build `F` again, and `Root`, declared with `rootAttribute`, of
+	/// `otherFillReentersModules`.
+	private static func otherFillReentersAppTypes(rootAttribute: String, pair: ReenteringWrapperPair, layout: ReenteringOtherPlaceLayout) -> String {
+		let log = "\(pair.wrapper.name)<Log>"
+		let fBuilder = "\(pair.instantiator)<F>"
+		var types = """
+		@Instantiable(fulfillingAdditionalTypes: [Api.self])
+		public final class Live: Api, Instantiable {
+		    public init(log: \(log)) {
+		        self.log = log
+		    }
+
+		    @Received public let log: \(log)
+		}
+
+
+		"""
+		switch layout {
+		case .otherLevel, .placesLevel:
+			types += """
+			@Instantiable(fulfillingAdditionalTypes: [Other.self])
+			public final class LiveOther: Other, Instantiable {
+			    public init(fBuilder: \(fBuilder)) {
+			        self.fBuilder = fBuilder
+			    }
+
+			    @Instantiated public let fBuilder: \(fBuilder)
+			}
+			"""
+		case .childOfOtherFill:
+			types += """
+			@Instantiable(fulfillingAdditionalTypes: [Other.self])
+			public final class LiveOther: Other, Instantiable {
+			    public init(child: OtherChild) {
+			        self.child = child
+			    }
+
+			    @Instantiated public let child: OtherChild
+			}
+
+			@Instantiable
+			public final class OtherChild: Instantiable {
+			    public init(fBuilder: \(fBuilder)) {
+			        self.fBuilder = fBuilder
+			    }
+
+			    @Instantiated public let fBuilder: \(fBuilder)
+			}
+			"""
+		}
+		types += """
+
+
+		\(rootAttribute)
+		public final class Root: Instantiable {
+		    public init(log: \(log), f: F) {
+		        self.log = log
+		        self.f = f
+		    }
+
+		    @Instantiated public let log: \(log)
+		    @Instantiated public let f: F
+		}
+		"""
+		return types
+	}
+
+	/// What `Root`’s mock and inline `Root` build, whether the `Live` that fills `api` holds `Root`’s wrapper, and whether
+	/// the `Live` of the `F` that `LiveOther`, or its child, builds again holds it too.
+	private static func otherFillReentersProbes(layout: ReenteringOtherPlaceLayout) -> [DifferentialValueProbe] {
+		let reentered = switch layout {
+		case .otherLevel:
+			"(root.f.b.other as! LiveOther).fBuilder.instantiate()"
+		case .placesLevel:
+			"(root.f.a.other as! LiveOther).fBuilder.instantiate()"
+		case .childOfOtherFill:
+			"(root.f.b.other as! LiveOther).child.fBuilder.instantiate()"
+		}
+		return [
+			DifferentialValueProbe(name: "Root", expression: "Root.mock()", knownRightExpression: "Root()"),
+			DifferentialValueProbe(
+				name: "Live’s log is Root’s",
+				expression: "{ let root = Root.mock(); return (root.f.a.api as! Live).log === root.log }()",
+				knownRightExpression: "{ let root = Root(); return (root.f.a.api as! Live).log === root.log }()",
+			),
+			DifferentialValueProbe(
+				name: "the Live of F built again holds Root’s log",
+				expression: "{ let root = Root.mock(); return (\(reentered).a.api as! Live).log === root.log }()",
+				knownRightExpression: "{ let root = Root(); return (\(reentered).a.api as! Live).log === root.log }()",
+			),
+		]
 	}
 
 	/// `seamBuiltAgainModules`’ types in one module, `Root` a root: what inline builds.
@@ -4777,6 +5046,57 @@ enum LazyValueLayout: CustomTestStringConvertible, Sendable {
 			"place on the root level"
 		case let .redeclaredBelowRoot(wrapper):
 			"place below a level that declares a \(wrapper.name) again"
+		}
+	}
+}
+
+/// The lazy wrapper a calling mock’s caller holds a value in, and the instantiator a fill of the called public mock builds
+/// the called type again in: a `LazilyInstantiated` in an `Instantiator`, or a `SendableLazilyInstantiated` in either
+/// instantiator. A `LazilyInstantiated` read inside a `SendableInstantiator`’s `@Sendable` function is an error.
+enum ReenteringWrapperPair: CaseIterable, CustomTestStringConvertible, Sendable {
+	case lazilyInstantiatedInInstantiator
+	case sendableLazilyInstantiatedInInstantiator
+	case sendableLazilyInstantiatedInSendableInstantiator
+
+	var wrapper: CallerLazyWrapper {
+		switch self {
+		case .lazilyInstantiatedInInstantiator:
+			.lazilyInstantiated
+		case .sendableLazilyInstantiatedInInstantiator, .sendableLazilyInstantiatedInSendableInstantiator:
+			.sendableLazilyInstantiated
+		}
+	}
+
+	var instantiator: String {
+		switch self {
+		case .lazilyInstantiatedInInstantiator, .sendableLazilyInstantiatedInInstantiator:
+			"Instantiator"
+		case .sendableLazilyInstantiatedInSendableInstantiator:
+			"SendableInstantiator"
+		}
+	}
+
+	var testDescription: String {
+		"\(wrapper.name) in \(instantiator)"
+	}
+}
+
+/// Where a called public mock’s second place, `other`, whose fill builds the called type again, is, and what builds it
+/// again: on `B`’s level, beside `A`’s, where `api` is, its fill building it; on `A`’s level, beside `api`; or on `B`’s
+/// level, its fill’s child building it.
+enum ReenteringOtherPlaceLayout: CaseIterable, CustomTestStringConvertible, Sendable {
+	case otherLevel
+	case placesLevel
+	case childOfOtherFill
+
+	var testDescription: String {
+		switch self {
+		case .otherLevel:
+			"other place on another level"
+		case .placesLevel:
+			"other place beside the place"
+		case .childOfOtherFill:
+			"other fill’s child builds F again"
 		}
 	}
 }
