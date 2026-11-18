@@ -1234,8 +1234,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	/// receives the caller's lazily held value, which the called type's tree also receives, only if available. The caller
 	/// holds the value beside a mocked intermediate type, which receives the value too and calls the called type. Its twin
 	/// fills the place, handing the fill the caller's own wrapper, as the same types built inline do, so the mock must
-	/// build their values. Its module names a builder it does not take and does not compile, which
-	/// `callingMockKnownIssues` lists until the fix, which removes the entry.
+	/// build their values. It fails with the fill's reading of the caller's own value reverted, when the mock's module
+	/// names a builder it does not take and does not compile.
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func callingMock_buildsInlineValues_whenDrawnFillReceivesCallersLazyValueBelowCalledRoot() async throws {
@@ -1250,13 +1250,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
 		#expect(result.passUps.isEmpty)
 		#expect(result.comparedValues)
-		if let knownIssue = Self.callingMockKnownIssues.first(where: { $0.seeds.contains(730) }), let failure = result.failure, knownIssue.matches(failure) {
-			withKnownIssue("\(knownIssue.reason)") {
-				Issue.record("\(failure.kind.rawValue). \(failure.details)")
-			}
-		} else {
-			#expect(result.failure == nil, "\(result.failure?.details ?? "")")
-		}
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 	}
 
 	/// The graphs of the shape whose fill receives the caller's lazy value below the called type's root draw each wrapper,
@@ -1855,27 +1849,6 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		return seeds
 	}()
 
-	/// One entry per cell that fails, with the cell's seeds: only the cells of the fill that receives the caller's lazy value
-	/// below the called type's root, whose compared seeds' mocks do not compile until the fix of the adopter's report M1,
-	/// which removes these entries. Each entry lists every compared seed of its cell, whichever type calls the called type
-	/// and whether the fill calls it again (`CallerLazyValue.Call`).
-	static let callingMockKnownIssues: [GraphFuzzerKnownIssue] = [
-		callerLazyValueBelowCalledRootIssue(caller: "an internal", place: "a plain", seeds: [730, 736, 748, 754, 778]),
-		callerLazyValueBelowCalledRootIssue(caller: "an internal", place: "a deferred", seeds: [731, 737, 743, 749, 767, 785]),
-		callerLazyValueBelowCalledRootIssue(caller: "a public", place: "a plain", seeds: [732, 738, 750, 756, 762]),
-		callerLazyValueBelowCalledRootIssue(caller: "a public", place: "a deferred", seeds: [733, 739, 745, 751]),
-		callerLazyValueBelowCalledRootIssue(caller: "a listed", place: "a plain", seeds: [734, 740, 746, 752]),
-		callerLazyValueBelowCalledRootIssue(caller: "a listed", place: "a deferred", seeds: [735, 741, 747, 753, 765]),
-	]
-
-	/// The entry of one cell of the fill that receives the caller's lazy value below the called type's root, the adopter's
-	/// report M1, for `caller`'s mock and `place` place: the module of the mock, or of a mocked intermediate type's mock
-	/// between the caller and the call, names a builder of the place it does not take, so it does not compile.
-	private static func callerLazyValueBelowCalledRootIssue(caller: String, place: String, seeds: [UInt64]) -> GraphFuzzerKnownIssue {
-		GraphFuzzerKnownIssue(
-			reason: "M1: \(caller) calling mock whose call’s \(place) place below the called type’s root is filled by a type that receives the caller’s lazily held value names a builder of the place it does not take, in its own mock or a mocked intermediate type’s",
-			signatures: [.callingMockDoesNotCompile],
-			seeds: seeds,
-		)
-	}
+	/// One entry per cell that fails, with the cell's seeds: none fails.
+	static let callingMockKnownIssues: [GraphFuzzerKnownIssue] = []
 }
