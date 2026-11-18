@@ -1833,6 +1833,270 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: GraphFuzzerCallingMockCell.Caller.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reentersEnclosingCallsRootLevelFromLevelBeneathCalledMocksRoot_whenCalledMockBuildsTypeHoldingBuilderOfFilledType(caller: GraphFuzzerCallingMockCell.Caller) async throws {
+		// The first graph, with `Book` holding `Binder` in an `Instantiator`, and `Binder` holding `Page`’s: the call of `Book`
+		// inside the fill declares `Binder`’s level function beneath its root, whose case for `pageBuilder` re-enters the root
+		// level function of the call of `Page` that encloses it.
+		let graph = Self.graph(caller: caller, builder: "Instantiator", deferredPlace: false, calledMockHoldsBuilderBeneathRoot: true)
+		let modules = graph.modules(.mock)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		let spelling = Self.appSpelling(of: caller)
+
+		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Page {
+		    nonisolated public enum SafeDIMockScope_Service {
+		        nonisolated public struct service_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values) -> __safeDI_Built
+
+		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                self.service = service
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.service = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    public static func mock(
+		        serviceBuilder: @escaping () -> any Service
+		    ) -> Page {
+		        Page.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        serviceBuilder __safeDI_serviceBuilder: Page.SafeDIMockScope_Service.__safeDI_Builder<any Service>
+		    ) -> Page {
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.service_Values())
+		        return Page(service: service)
+		    }
+		}
+
+		extension Page {
+		    public enum __safeDI_Page_mock_4A57B09DFB8A9D2C {}
+		}
+		#endif
+		"""])
+		#expect(output.modules["Mid"]?.generatedFiles == ["Mid.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Book {
+		    nonisolated public enum SafeDIMockScope_Service {
+		        nonisolated public struct binderBuilder_Values {}
+
+		        nonisolated public enum Binder_Scope {
+		            nonisolated public struct pageBuilder_Values: Sendable {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let pageBuilder: (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+
+		                public init(pageBuilder: @escaping (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		                    self.pageBuilder = pageBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let binderBuilder: (binderBuilder_Values) -> SafeDIMockScope_Service.Binder_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(binderBuilder: @escaping (binderBuilder_Values) -> SafeDIMockScope_Service.Binder_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.binderBuilder = binderBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.binderBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            binderBuilder: __safeDI_Mid_Binder_MockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                binderBuilder: binderBuilder
+		            )
+		        }
+
+		        public var binderBuilder: __safeDI_Mid_Binder_MockConfiguration { __safeDI_storage.binderBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                binderBuilder: __safeDI_Mid_Binder_MockConfiguration
+		            ) {
+		                self.binderBuilder = binderBuilder
+		            }
+
+		            let binderBuilder: __safeDI_Mid_Binder_MockConfiguration
+		        }
+		    }
+
+		    public static func mock(
+		        serviceBuilder: @escaping () -> any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Book {
+		        Book.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        serviceBuilder __safeDI_serviceBuilder: Book.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Book {
+		        let __safeDI_serviceBuilder_binderBuilder = __safeDI_serviceBuilder.binderBuilder(SafeDIMockScope_Service.binderBuilder_Values())
+		        func __safeDI_binderBuilder() -> Binder {
+		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		            func __safeDI_pageBuilder() -> Page {
+		                Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_binderBuilder.pageBuilder(SafeDIMockScope_Service.Binder_Scope.pageBuilder_Values()))
+		            }
+		            let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
+		            return Binder.__safeDI_init(pageBuilder: pageBuilder, safeDIBuilder: safeDIOverrides.binderBuilder.safeDIBuilder)
+		        }
+		        let binderBuilder = Instantiator<Binder>(__safeDI_binderBuilder)
+		        return Book(binderBuilder: binderBuilder)
+		    }
+		}
+
+		extension Book {
+		    public enum __safeDI_Book_mock_5584FA8657679280 {}
+		}
+		#endif
+
+		#if DEBUG
+		/// Configuration for how `Binder` is constructed within the public mock trees of module `Mid`.
+		nonisolated public struct __safeDI_Mid_Binder_MockConfiguration {
+		    public init(
+		        _ safeDIBuilder: ((Instantiator<Page>) -> Binder)? = nil
+		    ) {
+		        __safeDI_storage = __safeDI_Storage(
+		            safeDIBuilder: safeDIBuilder
+		        )
+		    }
+
+		    /// Overrides how `Binder` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public var safeDIBuilder: ((Instantiator<Page>) -> Binder)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            safeDIBuilder: ((Instantiator<Page>) -> Binder)?
+		        ) {
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let safeDIBuilder: ((Instantiator<Page>) -> Binder)?
+		    }
+		}
+
+		extension Binder {
+		    static func __safeDI_init(pageBuilder: Instantiator<Page>, safeDIBuilder: ((Instantiator<Page>) -> Binder)?) -> Binder {
+		        if let safeDIBuilder { safeDIBuilder(pageBuilder) } else { Binder(pageBuilder: pageBuilder) }
+		    }
+		}
+		#endif
+
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Mid)
+		import Mid
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    \(spelling.overrides)struct SafeDIOverrides {
+		        \(spelling.member)init(
+		            page: ((@escaping () -> any Service) -> Page)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                page: page
+		            )
+		        }
+
+		        \(spelling.member)var page: ((@escaping () -> any Service) -> Page)? { __safeDI_storage.page }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                page: ((@escaping () -> any Service) -> Page)?
+		            ) {
+		                self.page = page
+		            }
+
+		            let page: ((@escaping () -> any Service) -> Page)?
+		        }
+		    }
+
+		    \(spelling.member)static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_page() -> Page {
+		            func __safeDI_serviceBuilder_Page_service() -> any Service {
+		                func __safeDI_service() -> DefaultService {
+		                    func __safeDI_book() -> Book {
+		                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                            .init(binderBuilder: { _ in __safeDI_serviceBuilder_Book_Binder_Scope() })
+		                        }
+		                        func __safeDI_serviceBuilder_Book_Binder_Scope() -> Book.SafeDIMockScope_Service.Binder_Scope.__safeDI_Builder<any Service> {
+		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+		                        }
+		                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
+		                    }
+		                    let book: Book = __safeDI_book()
+		                    return DefaultService(book: book)
+		                }
+		                let service: any Service = __safeDI_service()
+		                return service
+		            }
+		            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
+		            }
+		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+		        }
+		        let page: Page = __safeDI_page()
+		        return Screen(page: page)
+		    }
+		}
+		\(spelling.guardExtension)#endif
+		"""])
+		try await expectCompilesAndBuildsInlineValues(of: graph, output: output, modules: modules, probes: [Self.pageBinderBuildsProbe])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: GraphFuzzerCallingMockCell.Caller.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_createsReenteredTreeInInlineOrder_whenReenteringCallHandsLazyValue(caller: GraphFuzzerCallingMockCell.Caller) async throws {
 		// The first graph above with `token` a `LazilyInstantiated<Token>` and `Token` recording its creation: the call of
 		// `Book` hands the re-entered level function `Middle`’s wrapper, so building `Page` again creates no `Token`, and
@@ -2052,7 +2316,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let handed = declaringType == calledType ? "`\(calledType)`’s values" : "that value"
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):\(appLine):5: error: `DefaultService` receives `token: Token`, \(boundOnPath), but `\(calledType)` passes the builder for `Page`’s `service: any Service` (`service` of `serviceBuilder`) on from its own caller, which cannot hand it \(handed). Declare `@Received let token: Token` on `Page`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Service` in module `\(calledTypeModule)` or a module it lists among its SafeDI dependencies, so `\(calledType)` fills the builder itself.
+			\(fixtures["App"]!["AppTypes.swift"]):\(appLine):5: error: `DefaultService` receives `token: Token`, \(boundOnPath), but `\(calledType)` passes the builder for `Page`’s `service: any Service` (`service` of `serviceBuilder`) on from its own caller, which cannot hand it \(handed). Declare `@Received let token: Token` on `Page`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Service` in module `\(calledTypeModule)` or a module it lists among its SafeDI dependencies, so `\(calledType)` fills the builder itself.
 			\(fixtures[declaringModule]!["\(declaringModule)Types.swift"]):\(declarationLine):5: note: `\(declaringType)` declares `token: Token` here.
 			"""
 		}
@@ -2358,6 +2622,15 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		return DifferentialValueProbe(name: "the token the re-entered fill reads", expression: read("App.Screen.mock()"), knownRightExpression: read("App.Screen()"))
 	}()
 
+	/// What the cell whose `Book` holds `Page`’s builder inside `Binder` compares: `Screen`, and the `Page` that builder
+	/// builds, whose fill builds `Book` again.
+	private static let pageBinderBuildsProbe = {
+		let read = { (screen: String) in
+			"{ let screen = \(screen); let service = screen.page.service as! App.DefaultService; return (screen, service.book.binderBuilder.instantiate().pageBuilder.instantiate()) }()"
+		}
+		return DifferentialValueProbe(name: "(Screen, the Page Binder builds)", expression: read("App.Screen.mock()"), knownRightExpression: read("App.Screen()"))
+	}()
+
 	/// What a plain place’s cells compare: `Screen` against the same types built inline.
 	private static let screenProbe = DifferentialValueProbe(name: "Screen", expression: "App.Screen.mock()", knownRightExpression: "App.Screen()")
 
@@ -2376,7 +2649,9 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 	/// `Token.created`. Where `typeBetweenDeclaresToken`, the fill builds `Book` through `Middle`, which declares a `token` of
 	/// its own; where `enclosingCallIsOfHolder`, `Screen` builds `Shelf`, a public mock of `Mid` that holds `Page` in an
 	/// `Instantiator`, in place of `Page`; where `middleHoldsFilledType`, `Middle` holds `Page` in an `Instantiator` itself,
-	/// in place of `Book`. The called types’ initializers are internal, so `Screen`’s mock calls `Page`’s, or `Shelf`’s,
+	/// in place of `Book`; where `calledMockHoldsBuilderBeneathRoot`, `Book` holds, in an `Instantiator`, `Binder`, a plain
+	/// type of `Mid` that holds `Page` in the `builder`, so `Page`’s builder is on a level beneath `Book`’s root. The called
+	/// types’ initializers are internal, so `Screen`’s mock calls `Page`’s, or `Shelf`’s,
 	/// public mock, and the fill calls `Book`’s, or `Page`’s. The calling mock’s form declares the called types public
 	/// mocks only; the twin declares them seams that keep their public mocks.
 	private static func graph(
@@ -2388,6 +2663,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		typeBetweenDeclaresToken: Bool = false,
 		enclosingCallIsOfHolder: Bool = false,
 		middleHoldsFilledType: Bool = false,
+		calledMockHoldsBuilderBeneathRoot: Bool = false,
 	) -> GraphFuzzerCallingMockGraph {
 		func core(attribute: String) -> String {
 			let place = if deferredPlace {
@@ -2427,17 +2703,37 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			} else {
 				""
 			}
-			return """
-			import Core
-			import SafeDI
+			if calledMockHoldsBuilderBeneathRoot {
+				return """
+				import Core
+				import SafeDI
 
-			\(attribute)
-			public final class Book: Instantiable {
-			    init(pageBuilder: \(builder)<Page>) { self.pageBuilder = pageBuilder }
-			    @Instantiated public let pageBuilder: \(builder)<Page>
+				\(attribute)
+				public final class Book: Instantiable {
+				    init(binderBuilder: Instantiator<Binder>) { self.binderBuilder = binderBuilder }
+				    @Instantiated public let binderBuilder: Instantiator<Binder>
+				}
+
+				@Instantiable
+				public final class Binder: Instantiable {
+				    init(pageBuilder: \(builder)<Page>) { self.pageBuilder = pageBuilder }
+				    @Instantiated public let pageBuilder: \(builder)<Page>
+				}
+				\(shelf)
+				"""
+			} else {
+				return """
+				import Core
+				import SafeDI
+
+				\(attribute)
+				public final class Book: Instantiable {
+				    init(pageBuilder: \(builder)<Page>) { self.pageBuilder = pageBuilder }
+				    @Instantiated public let pageBuilder: \(builder)<Page>
+				}
+				\(shelf)
+				"""
 			}
-			\(shelf)
-			"""
 		}
 		func app(callerAttribute: String) -> String {
 			let access = caller == .public ? "public " : ""
