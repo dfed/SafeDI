@@ -1016,32 +1016,32 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            let __safeDI_gadgetBuilder_subA = __safeDI_gadgetBuilder_top.subA(SafeDIMockScope_Gadget.Top_Scope.subA_Values())
 		            func __safeDI_subA() -> SubA {
 		                let __safeDI_gadgetBuilder_first = __safeDI_gadgetBuilder_subA.first(SafeDIMockScope_Gadget.SubA_Scope.first_Values())
-		                func __safeDI_first() -> First {
+		                func __safeDI_first() -> any First {
 		                    let __safeDI_gadgetBuilder_subB = __safeDI_gadgetBuilder_first.subB(SafeDIMockScope_Gadget.DefaultFirst_Scope.subB_Values())
 		                    func __safeDI_subB() -> SubB {
 		                        let __safeDI_gadgetBuilder_second = __safeDI_gadgetBuilder_subB.second(SafeDIMockScope_Gadget.SubB_Scope.second_Values())
-		                        func __safeDI_second() -> Second {
+		                        func __safeDI_second() -> any Second {
 		                            let gadget: any Gadget = __safeDI_gadgetBuilder_second.gadget(SafeDIMockScope_Gadget.DefaultSecond_Scope.gadget_Values())
 		                            return if let safeDIBuilder = safeDIOverrides.top.subA.first.subB.second { safeDIBuilder(gadget) } else { DefaultSecond(gadget: gadget) }
 		                        }
-		                        let second: Second = __safeDI_second()
+		                        let second: any Second = __safeDI_second()
 		                        return SubB.__safeDI_init(second: second, safeDIBuilder: safeDIOverrides.top.subA.first.subB.safeDIBuilder)
 		                    }
 		                    let subB: SubB = __safeDI_subB()
 		                    return DefaultFirst.__safeDI_init(subB: subB, safeDIBuilder: safeDIOverrides.top.subA.first.safeDIBuilder)
 		                }
-		                let first: First = __safeDI_first()
+		                let first: any First = __safeDI_first()
 		                return SubA.__safeDI_init(first: first, safeDIBuilder: safeDIOverrides.top.subA.safeDIBuilder)
 		            }
 		            let subA: SubA = __safeDI_subA()
 		            let __safeDI_gadgetBuilder_subB = __safeDI_gadgetBuilder_top.subB(SafeDIMockScope_Gadget.Top_Scope.subB_Values(subA: subA))
 		            func __safeDI_subB() -> SubB {
 		                let __safeDI_gadgetBuilder_second = __safeDI_gadgetBuilder_subB.second(SafeDIMockScope_Gadget.SubB_Scope.second_Values())
-		                func __safeDI_second() -> Second {
+		                func __safeDI_second() -> any Second {
 		                    let gadget: any Gadget = __safeDI_gadgetBuilder_second.gadget(SafeDIMockScope_Gadget.DefaultSecond_Scope.gadget_Values())
 		                    return if let safeDIBuilder = safeDIOverrides.top.subB.second { safeDIBuilder(gadget) } else { DefaultSecond(gadget: gadget) }
 		                }
-		                let second: Second = __safeDI_second()
+		                let second: any Second = __safeDI_second()
 		                return SubB.__safeDI_init(second: second, safeDIBuilder: safeDIOverrides.top.subB.safeDIBuilder)
 		            }
 		            let subB: SubB = __safeDI_subB()
@@ -1061,7 +1061,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		/// Configuration for how `SubB` is constructed within the public mock trees of module `Middle`.
 		nonisolated public struct __safeDI_Middle_SubB_MockConfiguration {
 		    public init(
-		        second: ((any Gadget) -> Second)? = nil,
+		        second: ((any Gadget) -> any Second)? = nil,
 		        _ safeDIBuilder: ((any Second) -> SubB)? = nil
 		    ) {
 		        __safeDI_storage = __safeDI_Storage(
@@ -1070,7 +1070,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        )
 		    }
 
-		    public var second: ((any Gadget) -> Second)? { __safeDI_storage.second }
+		    public var second: ((any Gadget) -> any Second)? { __safeDI_storage.second }
 		    /// Overrides how `SubB` is constructed. Parameters match the type’s initializer or custom mock method.
 		    public var safeDIBuilder: ((any Second) -> SubB)? { __safeDI_storage.safeDIBuilder }
 
@@ -1078,14 +1078,14 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		    private final class __safeDI_Storage {
 		        init(
-		            second: ((any Gadget) -> Second)?,
+		            second: ((any Gadget) -> any Second)?,
 		            safeDIBuilder: ((any Second) -> SubB)?
 		        ) {
 		            self.second = second
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let second: ((any Gadget) -> Second)?
+		        let second: ((any Gadget) -> any Second)?
 		        let safeDIBuilder: ((any Second) -> SubB)?
 		    }
 		}
@@ -1499,32 +1499,32 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            let __safeDI_defaultGadget_GadgetBuilder_subA = __safeDI_defaultGadget_GadgetBuilder_top.subA(SafeDIMockScope_DefaultGadget_Gadget.Top_Scope.subA_Values())
 		            func __safeDI_subA() -> SubA {
 		                let __safeDI_defaultGadget_GadgetBuilder_first = __safeDI_defaultGadget_GadgetBuilder_subA.first(SafeDIMockScope_DefaultGadget_Gadget.SubA_Scope.first_Values())
-		                func __safeDI_first() -> First {
+		                func __safeDI_first() -> any First {
 		                    let __safeDI_defaultGadget_GadgetBuilder_subB = __safeDI_defaultGadget_GadgetBuilder_first.subB(SafeDIMockScope_DefaultGadget_Gadget.DefaultFirst_Scope.subB_Values())
 		                    func __safeDI_subB() -> SubB {
 		                        let __safeDI_defaultGadget_GadgetBuilder_second = __safeDI_defaultGadget_GadgetBuilder_subB.second(SafeDIMockScope_DefaultGadget_Gadget.SubB_Scope.second_Values())
-		                        func __safeDI_second() -> Second {
+		                        func __safeDI_second() -> any Second {
 		                            let gadgetBuilder = ErasedInstantiator<Int, any Gadget>(__safeDI_defaultGadget_GadgetBuilder_second.gadgetBuilder(SafeDIMockScope_DefaultGadget_Gadget.DefaultSecond_Scope.gadgetBuilder_Values()))
 		                            return if let safeDIBuilder = safeDIOverrides.top.subA.first.subB.second { safeDIBuilder(gadgetBuilder) } else { DefaultSecond(gadgetBuilder: gadgetBuilder) }
 		                        }
-		                        let second: Second = __safeDI_second()
+		                        let second: any Second = __safeDI_second()
 		                        return SubB.__safeDI_init(second: second, safeDIBuilder: safeDIOverrides.top.subA.first.subB.safeDIBuilder)
 		                    }
 		                    let subB: SubB = __safeDI_subB()
 		                    return DefaultFirst.__safeDI_init(subB: subB, safeDIBuilder: safeDIOverrides.top.subA.first.safeDIBuilder)
 		                }
-		                let first: First = __safeDI_first()
+		                let first: any First = __safeDI_first()
 		                return SubA.__safeDI_init(first: first, safeDIBuilder: safeDIOverrides.top.subA.safeDIBuilder)
 		            }
 		            let subA: SubA = __safeDI_subA()
 		            let __safeDI_defaultGadget_GadgetBuilder_subB = __safeDI_defaultGadget_GadgetBuilder_top.subB(SafeDIMockScope_DefaultGadget_Gadget.Top_Scope.subB_Values(subA: subA))
 		            func __safeDI_subB() -> SubB {
 		                let __safeDI_defaultGadget_GadgetBuilder_second = __safeDI_defaultGadget_GadgetBuilder_subB.second(SafeDIMockScope_DefaultGadget_Gadget.SubB_Scope.second_Values())
-		                func __safeDI_second() -> Second {
+		                func __safeDI_second() -> any Second {
 		                    let gadgetBuilder = ErasedInstantiator<Int, any Gadget>(__safeDI_defaultGadget_GadgetBuilder_second.gadgetBuilder(SafeDIMockScope_DefaultGadget_Gadget.DefaultSecond_Scope.gadgetBuilder_Values()))
 		                    return if let safeDIBuilder = safeDIOverrides.top.subB.second { safeDIBuilder(gadgetBuilder) } else { DefaultSecond(gadgetBuilder: gadgetBuilder) }
 		                }
-		                let second: Second = __safeDI_second()
+		                let second: any Second = __safeDI_second()
 		                return SubB.__safeDI_init(second: second, safeDIBuilder: safeDIOverrides.top.subB.safeDIBuilder)
 		            }
 		            let subB: SubB = __safeDI_subB()
@@ -1544,7 +1544,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		/// Configuration for how `SubB` is constructed within the public mock trees of module `Middle`.
 		nonisolated public struct __safeDI_Middle_SubB_MockConfiguration {
 		    public init(
-		        second: ((ErasedInstantiator<Int, any Gadget>) -> Second)? = nil,
+		        second: ((ErasedInstantiator<Int, any Gadget>) -> any Second)? = nil,
 		        _ safeDIBuilder: ((any Second) -> SubB)? = nil
 		    ) {
 		        __safeDI_storage = __safeDI_Storage(
@@ -1553,7 +1553,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        )
 		    }
 
-		    public var second: ((ErasedInstantiator<Int, any Gadget>) -> Second)? { __safeDI_storage.second }
+		    public var second: ((ErasedInstantiator<Int, any Gadget>) -> any Second)? { __safeDI_storage.second }
 		    /// Overrides how `SubB` is constructed. Parameters match the type’s initializer or custom mock method.
 		    public var safeDIBuilder: ((any Second) -> SubB)? { __safeDI_storage.safeDIBuilder }
 
@@ -1561,14 +1561,14 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		    private final class __safeDI_Storage {
 		        init(
-		            second: ((ErasedInstantiator<Int, any Gadget>) -> Second)?,
+		            second: ((ErasedInstantiator<Int, any Gadget>) -> any Second)?,
 		            safeDIBuilder: ((any Second) -> SubB)?
 		        ) {
 		            self.second = second
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let second: ((ErasedInstantiator<Int, any Gadget>) -> Second)?
+		        let second: ((ErasedInstantiator<Int, any Gadget>) -> any Second)?
 		        let safeDIBuilder: ((any Second) -> SubB)?
 		    }
 		}

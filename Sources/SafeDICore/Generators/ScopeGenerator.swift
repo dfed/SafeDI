@@ -8839,6 +8839,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Used for the builder closure's return type, disambiguation keys, and
 		/// cycle detection. Configuration struct nesting uses `concreteType` instead.
 		let instantiatedTypeDescription: TypeDescription
+		/// `instantiatedTypeDescription` as the property spells it, `any` kept, which code that declares a value of it spells.
+		var instantiatedTypeSpelledAsDeclared: TypeDescription {
+			typeDescription.asInstantiatedTypeSpelledAsDeclared
+		}
+
 		/// Whether this property is an Instantiator/ErasedInstantiator/Sendable variant.
 		let isInstantiator: Bool
 		/// Whether the concrete type uses extension-based `instantiate(...)` instead of `init(...)`.
@@ -9212,7 +9217,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let parameterTypes = builderParameterTypes
 				.map(\.asSource)
 				.joined(separator: ", ")
-			return "(\(parameterTypes)) -> \(instantiatedTypeDescription.asSource)"
+			return "(\(parameterTypes)) -> \(instantiatedTypeSpelledAsDeclared.asSource)"
 		}
 
 		/// What this node's construction reads from its `SafeDIMockConfiguration` struct. Every node of
@@ -9364,7 +9369,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if defaultBranchType == instantiatedTypeDescription {
 				return ""
 			} else {
-				return ": \(instantiatedTypeDescription.asSource)"
+				return ": \(instantiatedTypeSpelledAsDeclared.asSource)"
 			}
 		}
 
@@ -10030,7 +10035,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// as `@escaping` — matching the `rootDefaultParameters` and
 				// flat-received emission conventions. Idempotent for non-closures.
 				typeSources.append(property.propertyType.isConstant
-					? property.typeDescription.asInstantiatedType.asFunctionParameter.asSource
+					? property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asFunctionParameter.asSource
 					: property.typeDescription.asFunctionParameter.asSource)
 				instantiatedTypes.append(dependency.asInstantiatedType)
 			}
@@ -11286,7 +11291,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 						lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 					).joined(separator: ", ")
-					lines.append("\(indent)let \(outerBindingName): \(node.instantiatedTypeDescription.asSource) = \(functionName)(\(closerArguments))")
+					lines.append("\(indent)let \(outerBindingName): \(node.instantiatedTypeSpelledAsDeclared.asSource) = \(functionName)(\(closerArguments))")
 				} else if node.requiresFunctionWrapper
 					|| hasDisambiguatedReceiver(node, flatParameterDisambiguationMap: combinedDisambiguationMap)
 					|| !sendableAutoclosureBindings.isEmpty
@@ -11300,7 +11305,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// function scope keeps child bindings from colliding with siblings'
 					// child bindings that share the same property label and gives these
 					// receiver bindings a place to live.
-					let propertyTypeName = node.instantiatedTypeDescription.asSource
+					let propertyTypeName = node.instantiatedTypeSpelledAsDeclared.asSource
 					let innerIndent = "\(indent)\(standardIndent)"
 					// The node's own receives have labels of their own, which neither its declarations nor its uncovered
 					// dependencies share.
@@ -11824,7 +11829,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let callArguments = (forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments).joined(separator: ", ")
 				let functionIndent = String(indent.dropLast(ScopeGenerator.standardIndent.count))
 				let decorator = node.buildsInSendableFunction || node.property.propertyType.isSendable ? "@Sendable " : ""
-				var lines = ["\(functionIndent)\(decorator)func \(receivedFunctionName)(\(functionParameters)) -> \(node.instantiatedTypeDescription.asSource) {"]
+				var lines = ["\(functionIndent)\(decorator)func \(receivedFunctionName)(\(functionParameters)) -> \(node.instantiatedTypeSpelledAsDeclared.asSource) {"]
 				lines.append(contentsOf: memberLines)
 				lines.append("\(indent)\(memberLines.isEmpty ? "" : "return ")\(functionName)(\(callArguments))")
 				lines.append("\(functionIndent)}")
@@ -12159,7 +12164,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				functionConstructionArguments = arguments
 			}
 
-			let functionReturnType = node.instantiatedTypeDescription.asSource
+			let functionReturnType = node.instantiatedTypeSpelledAsDeclared.asSource
 			// The payloads of the cases on the routes to the places beneath this function, bound before it. A loop's members
 			// each bind theirs in a `let`, which every member's function captures, here and in the mock's fills
 			// (`SeamHoles.holdsLoopPayloadsInBoxes`), where a seam's tree holds a loop's in one box (`ScopeGenerator.boxedLoops`):

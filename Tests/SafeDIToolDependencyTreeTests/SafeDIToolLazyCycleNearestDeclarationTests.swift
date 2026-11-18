@@ -2510,7 +2510,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        let renamed: (any XProtocol)? = safeDIOverrides.renamed
 		        func __safeDI_aBuilder(renamed: (any XProtocol)?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
-		                let x: XProtocol = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
+		                let x: any XProtocol = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
 		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
 		                let renamed: (any XProtocol)? = x
 		                #sourceLocation()
