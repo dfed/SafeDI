@@ -6404,13 +6404,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				let argumentList = try instantiable.generateArgumentList()
 				guard let rootInitializer = RootInitializer(of: instantiable, argumentList: argumentList) else { return "" }
-				let children = try await generateProperties(
+				// The children's text is a temporary of the plan, which the spelling consumes (`RootInitializer.spelled(writing:)`).
+				return try await rootInitializer.spelled(writing: BuilderFunctionGraph(body: generateProperties(
 					propertiesGeneratedLater: propertiesGeneratedLater,
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 					leadingMemberWhitespace: "        ",
 					fillPlaceBindings: fillPlaceBindings,
-				)
-				return rootInitializer.spelled(writing: BuilderFunctionGraph(body: children.map(Statement.verbatim)))
+				).map(Statement.verbatim)))
 			case let .mock(context):
 				return try await generateMockRootCode(
 					instantiable: instantiable,
@@ -6588,7 +6588,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						body: BuilderBody(statements: generatedProperties),
 						value: construction,
 						lineEnd: constructionLineEnd,
-					)).spelled + "\n"
+					)).spelled
 				}
 
 				guard !isBuiltByFill else {
@@ -6707,10 +6707,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					"\(propertyDeclaration.spelled) = \(lazilyInstantiatedInstantiation)"
 				}
 
-				return """
-				\(valuesBindingLines)\(Statement.function(function).spelled)
-				\(lastLine)
-				"""
+				return function.spelled(after: valuesBindingLines, followedBy: lastLine)
 			case .constant:
 				let callArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
 				guard !isPropertyCycle else {
@@ -6760,7 +6757,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						body: body,
 						value: construction,
 						lineEnd: constructionLineEnd,
-					)).spelled + "\n"
+					)).spelled
 				}
 				let binding = if !hasGeneratedContent {
 					Statement.binding(propertyDeclaration, construction.erased(to: property.typeDescription, where: erasedToConcreteExistential), lineEnd: constructionLineEnd)
