@@ -340,6 +340,14 @@ struct GraphFuzzerCallingMockDraw {
 		/// Whether the called type also instantiates a `SendableInstantiator` of the level between, so it builds the place in
 		/// plain code and inside that instantiator's `@Sendable` function, outside which the called mock binds the value.
 		let buildsPlaceInSendableFunctionToo: Bool
+
+		/// Whether a fill calls the called type again: the fill that receives the wrapper, or the second place's. The fill
+		/// that receives the wrapper reads it beside its place's fields, since the called mock binds the value by value, so
+		/// the calling mock passes the place up whole, and the second place, whose fill calls the called type, which then
+		/// passes a builder up (`GraphFuzzerCallingMockGraph.fillGatePassesUp`).
+		var reentersCalledType: Bool {
+			call == .fillCallsAgain || secondPlaceCallsAgain
+		}
 	}
 
 	/// How the caller and the called type's tree hold the value, for the shape whose fill receives the caller's lazy value
@@ -368,6 +376,7 @@ struct GraphFuzzerCallingMockDraw {
 			mockBuild: mockBuild,
 			twinErrorIsCheckedOnlyWhereMocksCompile: twinErrorIsCheckedOnlyWhereMocksCompile,
 			comparesValuesWithInline: cell.shape.comparesValuesWithInline,
+			fillGatePassesUp: callerLazyValue?.reentersCalledType == true,
 		)
 	}
 
@@ -386,6 +395,13 @@ struct GraphFuzzerCallingMockDraw {
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot:
 			[]
 		}
+	}
+
+	/// Whether the calling mock's pass-ups must be exactly `expectedPassUpLabels`: the shape's
+	/// (`GraphFuzzerCallingMockShape.passesUpExactlyTheExpectedLabels`), and those the gate for a re-entered called type
+	/// passes up (`CallerLazyValue.reentersCalledType`).
+	var passesUpExactlyTheExpectedLabels: Bool {
+		cell.shape.passesUpExactlyTheExpectedLabels || callerLazyValue?.reentersCalledType == true
 	}
 
 	/// Whether a type that fulfills the hole is visible from the calling mock's module.
@@ -461,9 +477,24 @@ struct GraphFuzzerCallingMockDraw {
 
 	/// The places the calling mock may pass up: the hole's builder where its module sees no type that fulfills the hole, or
 	/// where the tool skips the twin's error in the mock, as a build that leaves the mock condition inactive skips a plain
-	/// implementation's, and the builders of what the fill instantiates that nothing fulfills, as the twin takes them.
+	/// implementation's, and the builders of what the fill instantiates that nothing fulfills, as the twin takes them; and,
+	/// where a fill calls the called type again and the fill that receives the caller's wrapper reads it beside its
+	/// place's fields, the place's builder and the second place's, in `mock()`'s order, by label
+	/// (`CallerLazyValue.reentersCalledType`).
 	var expectedPassUpLabels: [String] {
-		switch cell.shape {
+		if callerLazyValue?.reentersCalledType == true {
+			var labels = [holeBuilderLabel]
+			// A hole type is passed up whole: its `@Sendable` family's builder too, where the place is also built in a
+			// `@Sendable` function.
+			if callerLazyValue?.buildsPlaceInSendableFunctionToo == true {
+				labels.append(String(holeBuilderLabel.dropLast("Builder".count)) + "SendableBuilder")
+			}
+			if callerLazyValue?.secondPlaceCallsAgain == true {
+				labels.append(GraphFuzzerPublicMockDraw.builderLabel(ofTypeNamed: Self.secondPlaceProtocol))
+			}
+			return labels.sorted()
+		}
+		return switch cell.shape {
 		case .noVisibleImplementation:
 			[holeBuilderLabel]
 		case .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
@@ -483,6 +514,8 @@ struct GraphFuzzerCallingMockDraw {
 	/// rejects the graph otherwise or the mock passes the place up.
 	var valueProbes: [DifferentialValueProbe]? {
 		guard cell.shape != .seamBuiltAgain else { return seamBuiltAgainValueProbes }
+		// Where the mock passes the place up whole, `mock()` takes builders whose values only a test chooses.
+		guard callerLazyValue?.reentersCalledType != true else { return nil }
 		guard cell.shape != .fillReceivesCallersLazyValueBelowCalledRoot else { return callerLazyValueProbes }
 		// Qualified by its module: Foundation, which the probe executable imports, declares `Host` on macOS.
 		let caller = "\(names.callerModuleName).\(names.caller)"
@@ -1611,6 +1644,11 @@ struct GraphFuzzerCallingMockGraph {
 	/// is accepted, rather than the twin's seam initializer, so `valueProbes`' known-right expressions call the caller's
 	/// root initializer there.
 	let comparesValuesWithInline: Bool
+	/// Whether the called type is re-entered – a fill of one of its places calls it again – and a fill of one of its places
+	/// reads, beside the place's fields, a `LazilyInstantiated` or `SendableLazilyInstantiated` value, so the calling mock
+	/// passes `expectedPassUpLabels` up whole where the twin fills them: contract rule 7's listed difference
+	/// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`).
+	let fillGatePassesUp: Bool
 
 	/// Whether the tool skips the twin's error in the mock: the error is one it checks only where the generated mocks
 	/// compile, and `mockBuild` leaves the mock condition inactive. The mock must then be accepted, passing up
@@ -1725,6 +1763,7 @@ struct GraphFuzzerCallingMockGraph {
 		mockBuild: MockBuild = .compilesGeneratedMocks,
 		twinErrorIsCheckedOnlyWhereMocksCompile: Bool = false,
 		comparesValuesWithInline: Bool = false,
+		fillGatePassesUp: Bool = false,
 	) {
 		let twinFiles = mockFiles.enumerated().map { index, file in
 			guard index == mockFiles.count - 1 else { return file }
@@ -1752,6 +1791,7 @@ struct GraphFuzzerCallingMockGraph {
 			mockBuild: mockBuild,
 			twinErrorIsCheckedOnlyWhereMocksCompile: twinErrorIsCheckedOnlyWhereMocksCompile,
 			comparesValuesWithInline: comparesValuesWithInline,
+			fillGatePassesUp: fillGatePassesUp,
 		)
 	}
 
@@ -1771,6 +1811,7 @@ struct GraphFuzzerCallingMockGraph {
 		mockBuild: MockBuild = .compilesGeneratedMocks,
 		twinErrorIsCheckedOnlyWhereMocksCompile: Bool = false,
 		comparesValuesWithInline: Bool = false,
+		fillGatePassesUp: Bool = false,
 	) {
 		self.name = name
 		self.mockFiles = mockFiles
@@ -1787,6 +1828,7 @@ struct GraphFuzzerCallingMockGraph {
 		self.mockBuild = mockBuild
 		self.twinErrorIsCheckedOnlyWhereMocksCompile = twinErrorIsCheckedOnlyWhereMocksCompile
 		self.comparesValuesWithInline = comparesValuesWithInline
+		self.fillGatePassesUp = fillGatePassesUp
 	}
 }
 
@@ -1836,13 +1878,18 @@ struct GraphFuzzerDiagnosticSite: Hashable, CustomStringConvertible {
 /// permanent reason, a name the mock's tree hides, has no computable definition yet, so a pass-up this one does not
 /// explain is unclassified. A visible implementation that receives what nothing in the mock's tree builds is no reason:
 /// production fills that place from a parameter. Beside rule 7's, a build that leaves the mock condition inactive is one:
-/// the tool checks a fill production rejects only where the generated mocks compile.
+/// the tool checks a fill production rejects only where the generated mocks compile; and so is rule 7's listed
+/// difference for a re-entered called type whose fill reads a lazy value beside its place's fields.
 enum GraphFuzzerCallingMockPassUpReason: String, CaseIterable, Comparable {
 	/// No type that fulfills the place's type is visible from the mock's module.
 	case noVisibleImplementation
 	/// The build leaves the mock condition inactive (`GraphFuzzerCallingMockGraph.MockBuild`), so the tool does not check
 	/// the fill production rejects, and passes its place up (`GraphFuzzerCallingMockGraph.mockSkipsTwinsError`).
 	case mockConditionIsInactive
+	/// The called type is re-entered, and a fill of one of its places reads a lazy value beside the place's fields, so the
+	/// mock passes that place's hole type up whole, and every fill that calls the called type then, where the twin fills
+	/// them: contract rule 7's listed difference (`GraphFuzzerCallingMockGraph.fillGatePassesUp`).
+	case fillOfReenteredCallReadsLazyValue
 
 	static func < (lhs: Self, rhs: Self) -> Bool {
 		allCases.firstIndex(of: lhs) ?? 0 < allCases.firstIndex(of: rhs) ?? 0
@@ -2064,7 +2111,8 @@ enum GraphFuzzerCallingMockCheck {
 
 	/// Each parameter of the caller's `mock()` that is neither `safeDIOverrides` nor one of the graph's flat parameters: a
 	/// place the mock passes up. It is classified only when the graph lists it among the places its module sees no type
-	/// that fulfills; every other pass-up is unclassified. Throws when `generatedFile` declares no `mock()` in an extension of
+	/// that fulfills, the tool skips the twin's error for, or the gate for a re-entered called type passes up
+	/// (`fillGatePassesUp`); every other pass-up is unclassified. Throws when `generatedFile` declares no `mock()` in an extension of
 	/// the caller, which a generated mock always has, so that a mock the parser misses is never read as one that passes
 	/// nothing up.
 	static func passUpsOf(_ graph: GraphFuzzerCallingMockGraph, inGeneratedFile generatedFile: String) throws -> [(label: String, reason: GraphFuzzerCallingMockPassUpReason?)] {
@@ -2080,6 +2128,8 @@ enum GraphFuzzerCallingMockCheck {
 					.noVisibleImplementation
 				} else if graph.mockSkipsTwinsError {
 					.mockConditionIsInactive
+				} else if graph.fillGatePassesUp {
+					.fillOfReenteredCallReadsLazyValue
 				} else {
 					nil
 				}

@@ -869,7 +869,11 @@ private struct ScopeGeneratorUnderConstruction {
 			// Where the fill reads it in a form the called mock's copy does not provide, the caller's wrapper, a level whose
 			// payload holds that by-value copy hands the fill the root level function's own parameter, past the copy
 			// (`Fill.labelsHandedPastCalledMockCopy`); where the copy provides every form the fill reads, the levels hand the
-			// copy, which holds the same value.
+			// copy, which holds the same value. A fill of the case's own places that reads such a wrapper and whose tree calls the
+			// called type's public mock, or one whose builders reach its places, is passed up before any fill is built
+			// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`), so a wrapper is handed past the copy only where
+			// the re-entering call is inside a fill of another call's place, as where the called type's fill builds a second
+			// called type whose own fill builds the first again.
 			var labelsHandedPastCalledMockCopyByCaseKey = [String: Set<String>]()
 			if scope.publicMockCall != nil, let calledBuilders = scope.calledBuilders, Self.callsInsideFills(of: holeArguments, reenter: calledBuilders) {
 				for (caseKey, places) in placesByCaseKey {
