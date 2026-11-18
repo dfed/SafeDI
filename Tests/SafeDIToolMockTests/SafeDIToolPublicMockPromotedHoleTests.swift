@@ -4670,6 +4670,318 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsTheFillOfAPlaceInsideTheTypeOnlyValuesBoundBeforeIt_whenPublicMockBuildsWithACallTheTypeTheCalledMockPromotes() async throws {
+		// `Screen`'s mock builds the `Other` `D`'s mock promotes with a call of `Other`'s public mock, whose place `LiveApi`
+		// fills, and `LiveApi` holds a place of its own, so the fill's case is handed what `Screen`'s mock binds before
+		// `Other`: neither `Other` itself nor `screenD`, which it binds after.
+		try await expectOutput(
+			of: Self.modulesBelow(base: Self.publicMockWithAPlaceBelow, feat: Self.promotingPublicMockBelowByValue, app: Self.screenBindingValuesAroundTheCall + Self.liveApiWithAPlaceReceivingSession),
+			probes: [Self.stubInnerProbe],
+			expected: [
+				"Base": """
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Other {
+				    nonisolated public enum SafeDIMockScope_Api {
+				        nonisolated public struct api_Values {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let api: (api_Values) -> __safeDI_Built
+
+				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
+				                self.api = api
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.api = { _ in __safeDI_builder() }
+				            }
+				        }
+				    }
+
+				    public static func mock(
+				        apiBuilder: @escaping () -> any Api
+				    ) -> Other {
+				        Other.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder))
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        apiBuilder __safeDI_apiBuilder: Other.SafeDIMockScope_Api.__safeDI_Builder<any Api>
+				    ) -> Other {
+				        let api: any Api = __safeDI_apiBuilder.api(SafeDIMockScope_Api.api_Values())
+				        return Other(api: api)
+				    }
+				}
+
+				extension Other {
+				    public enum __safeDI_Other_mock_98F7041399DB6FFD {}
+				}
+				#endif
+				""",
+				"Feat": """
+				#if canImport(Base)
+				import Base
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension D {
+				    nonisolated public enum SafeDIMockScope_Api {
+				        nonisolated public struct other_Values: Sendable {}
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let other: (other_Values) -> Other.SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>
+
+				            public init(other: @escaping (other_Values) -> Other.SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>) {
+				                self.other = other
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.other = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				            }
+				        }
+				    }
+
+				    /// Overrides for the mock dependency tree.
+				    nonisolated public struct SafeDIOverrides {
+				        public init(
+				            leaf: ((Other) -> Leaf)? = nil
+				        ) {
+				            __safeDI_storage = __safeDI_Storage(
+				                leaf: leaf
+				            )
+				        }
+
+				        public var leaf: ((Other) -> Leaf)? { __safeDI_storage.leaf }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                leaf: ((Other) -> Leaf)?
+				            ) {
+				                self.leaf = leaf
+				            }
+
+				            let leaf: ((Other) -> Leaf)?
+				        }
+				    }
+
+				    public static func mock(
+				        apiBuilder: @escaping () -> any Api,
+				        other: Other? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> D {
+				        D.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), other: other, safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        apiBuilder __safeDI_apiBuilder: D.SafeDIMockScope_Api.__safeDI_Builder<any Api>,
+				        other: Other? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> D {
+				        _ = Other.__safeDI_Other_mock_98F7041399DB6FFD.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				        let other = if let other { other } else { Other.__safeDI_mock(apiBuilder: __safeDI_apiBuilder.other(SafeDIMockScope_Api.other_Values())) }
+				        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder(other) } else { Leaf(other: other) }
+				        return D(leaf: leaf)
+				    }
+				}
+
+				extension D {
+				    public enum __safeDI_D_mock_C6DE6D2ED52D206F {}
+				}
+				#endif
+				""",
+				"App": """
+				#if canImport(Base)
+				import Base
+				#endif
+				#if canImport(Feat)
+				import Feat
+				#endif
+				#if canImport(SafeDI)
+				import SafeDI
+				#endif
+
+				#if DEBUG
+				extension Screen {
+				    nonisolated public enum SafeDIMockScope_Inner {
+				        nonisolated public struct screenD_apiBuilder_Values {
+				            public let session: Session
+				            public let alpha: Alpha
+				            public let zed: Zed
+				            public let omega: Omega
+				            public let other: Other
+				        }
+
+				        nonisolated public struct other_apiBuilder_Values {
+				            public let session: Session
+				            public let alpha: Alpha
+				            public let zed: Zed
+				            public let omega: Omega
+				        }
+
+				        nonisolated public enum LiveApi_Scope {
+				            nonisolated public struct inner_Values {}
+
+				            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				                public let inner: (inner_Values) -> __safeDI_Built
+
+				                public init(inner: @escaping (inner_Values) -> __safeDI_Built) {
+				                    self.inner = inner
+				                }
+
+				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                    self.inner = { _ in __safeDI_builder() }
+				                }
+				            }
+				        }
+
+				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let screenD_apiBuilder: (screenD_apiBuilder_Values) -> D.SafeDIMockScope_Api.__safeDI_Builder<SafeDIMockScope_Inner.LiveApi_Scope.__safeDI_Builder<__safeDI_Built>>
+				            public let other_apiBuilder: (other_apiBuilder_Values) -> Other.SafeDIMockScope_Api.__safeDI_Builder<SafeDIMockScope_Inner.LiveApi_Scope.__safeDI_Builder<__safeDI_Built>>
+
+				            public init(screenD_apiBuilder: @escaping (screenD_apiBuilder_Values) -> D.SafeDIMockScope_Api.__safeDI_Builder<SafeDIMockScope_Inner.LiveApi_Scope.__safeDI_Builder<__safeDI_Built>>, other_apiBuilder: @escaping (other_apiBuilder_Values) -> Other.SafeDIMockScope_Api.__safeDI_Builder<SafeDIMockScope_Inner.LiveApi_Scope.__safeDI_Builder<__safeDI_Built>>) {
+				                self.screenD_apiBuilder = screenD_apiBuilder
+				                self.other_apiBuilder = other_apiBuilder
+				            }
+
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				                self.screenD_apiBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+				                self.other_apiBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+				            }
+				        }
+				    }
+
+				    /// Overrides for the mock dependency tree.
+				    nonisolated public struct SafeDIOverrides {
+				        public init(
+				            session: (() -> Session)? = nil,
+				            alpha: ((Session) -> Alpha)? = nil,
+				            zed: (() -> Zed)? = nil,
+				            omega: ((Zed) -> Omega)? = nil,
+				            screenD: D.SafeDIOverrides = .init()
+				        ) {
+				            __safeDI_storage = __safeDI_Storage(
+				                session: session,
+				                alpha: alpha,
+				                zed: zed,
+				                omega: omega,
+				                screenD: screenD
+				            )
+				        }
+
+				        public var session: (() -> Session)? { __safeDI_storage.session }
+				        public var alpha: ((Session) -> Alpha)? { __safeDI_storage.alpha }
+				        public var zed: (() -> Zed)? { __safeDI_storage.zed }
+				        public var omega: ((Zed) -> Omega)? { __safeDI_storage.omega }
+				        public var screenD: D.SafeDIOverrides { __safeDI_storage.screenD }
+
+				        private let __safeDI_storage: __safeDI_Storage
+
+				        private final class __safeDI_Storage {
+				            init(
+				                session: (() -> Session)?,
+				                alpha: ((Session) -> Alpha)?,
+				                zed: (() -> Zed)?,
+				                omega: ((Zed) -> Omega)?,
+				                screenD: D.SafeDIOverrides
+				            ) {
+				                self.session = session
+				                self.alpha = alpha
+				                self.zed = zed
+				                self.omega = omega
+				                self.screenD = screenD
+				            }
+
+				            let session: (() -> Session)?
+				            let alpha: ((Session) -> Alpha)?
+				            let zed: (() -> Zed)?
+				            let omega: ((Zed) -> Omega)?
+				            let screenD: D.SafeDIOverrides
+				        }
+				    }
+
+				    public static func mock(
+				        innerBuilder: @escaping () -> any Inner,
+				        other: Other? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Screen {
+				        Screen.__safeDI_mock(innerBuilder: .init(__safeDI_noScope: innerBuilder), other: other, safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        innerBuilder __safeDI_innerBuilder: Screen.SafeDIMockScope_Inner.__safeDI_Builder<any Inner>,
+				        other: Other? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Screen {
+				        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+				        let alpha = if let safeDIBuilder = safeDIOverrides.alpha { safeDIBuilder(session) } else { Alpha(session: session) }
+				        let zed = if let safeDIBuilder = safeDIOverrides.zed { safeDIBuilder() } else { Zed() }
+				        let omega = if let safeDIBuilder = safeDIOverrides.omega { safeDIBuilder(zed) } else { Omega(zed: zed) }
+				        let __safeDI_innerBuilder_other_apiBuilder = __safeDI_innerBuilder.other_apiBuilder(SafeDIMockScope_Inner.other_apiBuilder_Values(session: session, alpha: alpha, zed: zed, omega: omega))
+				        func __safeDI_other() -> Other {
+				            func __safeDI_apiBuilder_Other_api(_ scope: Other.SafeDIMockScope_Api.api_Values, __safeDI_other_apiBuilder: SafeDIMockScope_Inner.LiveApi_Scope.__safeDI_Builder<any Inner>) -> any Api {
+				                func __safeDI_api() -> LiveApi {
+				                    let inner: any Inner = __safeDI_other_apiBuilder.inner(SafeDIMockScope_Inner.LiveApi_Scope.inner_Values())
+				                    return LiveApi(inner: inner, session: session)
+				                }
+				                let api: any Api = __safeDI_api()
+				                return api
+				            }
+				            func __safeDI_apiBuilder_Other(up: Other.SafeDIMockScope_Api.__safeDI_Builder<SafeDIMockScope_Inner.LiveApi_Scope.__safeDI_Builder<any Inner>>) -> Other.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+				                .init(api: { scope in __safeDI_apiBuilder_Other_api(scope, __safeDI_other_apiBuilder: up.api(scope)) })
+				            }
+				            _ = Other.__safeDI_Other_mock_98F7041399DB6FFD.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            return Other.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Other(up: __safeDI_innerBuilder_other_apiBuilder))
+				        }
+				        let other: Other = if let other { other } else { __safeDI_other() }
+				        let __safeDI_innerBuilder_screenD_apiBuilder = __safeDI_innerBuilder.screenD_apiBuilder(SafeDIMockScope_Inner.screenD_apiBuilder_Values(session: session, alpha: alpha, zed: zed, omega: omega, other: other))
+				        func __safeDI_screenD() -> D {
+				            func __safeDI_apiBuilder_Other_api(_ scope: Other.SafeDIMockScope_Api.api_Values, __safeDI_screenD_apiBuilder: SafeDIMockScope_Inner.LiveApi_Scope.__safeDI_Builder<any Inner>) -> any Api {
+				                func __safeDI_api() -> LiveApi {
+				                    let inner: any Inner = __safeDI_screenD_apiBuilder.inner(SafeDIMockScope_Inner.LiveApi_Scope.inner_Values())
+				                    return LiveApi(inner: inner, session: session)
+				                }
+				                let api: any Api = __safeDI_api()
+				                return api
+				            }
+				            func __safeDI_apiBuilder_D(up: D.SafeDIMockScope_Api.__safeDI_Builder<SafeDIMockScope_Inner.LiveApi_Scope.__safeDI_Builder<any Inner>>) -> D.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+				                .init(other: { values in __safeDI_apiBuilder_Other(up: up.other(values)) })
+				            }
+				            func __safeDI_apiBuilder_Other(up: Other.SafeDIMockScope_Api.__safeDI_Builder<SafeDIMockScope_Inner.LiveApi_Scope.__safeDI_Builder<any Inner>>) -> Other.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+				                .init(api: { scope in __safeDI_apiBuilder_Other_api(scope, __safeDI_screenD_apiBuilder: up.api(scope)) })
+				            }
+				            _ = D.__safeDI_D_mock_C6DE6D2ED52D206F.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            return D.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_D(up: __safeDI_innerBuilder_screenD_apiBuilder), other: other, safeDIOverrides: safeDIOverrides.screenD)
+				        }
+				        let screenD: D = __safeDI_screenD()
+				        return Screen(alpha: alpha, screenD: screenD, session: session, zed: zed, omega: omega)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_mock_E30AD97DB342ACFA {}
+				}
+				#endif
+				""",
+			],
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "This test compares only values, which the value comparator compiles only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsTheInlineValues_whenInternalMockBuildsTheTypeTheCalledMockPromotes() async throws {
 		// Values only: an internal mock of a type that is not a seam takes a flat value for a place of its own tree, a
 		// deliberate gap from its twin (`seamMockBuilders`' call in `ScopeGenerator`), which no test pins.
@@ -4680,7 +4992,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 		)
 	}
 
-	@Test
+	@Test(.enabled(if: compileVerificationIsEnabled, "This test compares only values, which the value comparator compiles only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsTheInlineValues_whenListedMockBuildsTheTypeTheCalledMockPromotes() async throws {
 		// Values only: an internal mock of a type that is not a seam takes a flat value for a place of its own tree, a
@@ -5412,6 +5724,133 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 	    public init() {}
 	}
 	"""
+
+	/// A public mock in a module beneath `Feat`, `Other`, whose initializer is `internal`, so a mock in another module
+	/// builds it with a call of its public mock, with its place `api`, beside `Session` and `Zed`, which `App`'s `Screen`
+	/// instantiates.
+	private static let publicMockWithAPlaceBelow = """
+	import SafeDI
+
+	public protocol Api {}
+
+	@Instantiable(generateMock: .public)
+	public final class Other: Instantiable {
+	    init(api: any Api) {
+	        self.api = api
+	    }
+
+	    @Instantiated let api: any Api
+	}
+
+	@Instantiable
+	public final class Session: Instantiable {
+	    public init() {}
+	}
+
+	@Instantiable
+	public final class Zed: Instantiable {
+	    public init() {}
+	}
+	"""
+
+	/// `D`'s child `Leaf` receives `publicMockWithAPlaceBelow`'s `Other` by value, which `D`'s mock promotes and builds with
+	/// a call of `Other`'s public mock.
+	private static let promotingPublicMockBelowByValue = """
+	import Base
+	import SafeDI
+
+	@Instantiable(generateMock: .public)
+	public final class D: Instantiable {
+	    init(leaf: Leaf) {
+	        self.leaf = leaf
+	    }
+
+	    @Instantiated let leaf: Leaf
+	}
+
+	@Instantiable
+	public final class Leaf: Instantiable {
+	    public init(other: Other) {
+	        self.other = other
+	    }
+
+	    @Received let other: Other
+	}
+	"""
+
+	/// A public mock of `App` that instantiates values before and after `D`, so its mock binds some before the `Other` it
+	/// promotes for `D`'s tree and some after it.
+	private static let screenBindingValuesAroundTheCall = """
+	import Base
+	import Feat
+	import SafeDI
+
+	@Instantiable(generateMock: .public)
+	public final class Screen: Instantiable {
+	    public init(alpha: Alpha, screenD: D, session: Session, zed: Zed, omega: Omega) {
+	        self.alpha = alpha
+	        self.screenD = screenD
+	        self.session = session
+	        self.zed = zed
+	        self.omega = omega
+	    }
+
+	    @Instantiated let alpha: Alpha
+	    @Instantiated let screenD: D
+	    @Instantiated let session: Session
+	    @Instantiated let zed: Zed
+	    @Instantiated let omega: Omega
+	}
+
+	@Instantiable
+	public final class Alpha: Instantiable {
+	    public init(session: Session) {
+	        self.session = session
+	    }
+
+	    @Received let session: Session
+	}
+
+	@Instantiable
+	public final class Omega: Instantiable {
+	    public init(zed: Zed) {
+	        self.zed = zed
+	    }
+
+	    @Received let zed: Zed
+	}
+
+
+	"""
+
+	/// `App`'s fulfiller of `Base`'s `Api`, which receives `Session` and holds a place of `Inner`, which no declaration
+	/// SafeDI reads fulfills, and `StubInner`, which a call of `Screen`'s mock hands it.
+	private static let liveApiWithAPlaceReceivingSession = """
+	public protocol Inner {}
+
+	public final class StubInner: Inner, Sendable {
+	    public init() {}
+	}
+
+	@Instantiable(fulfillingAdditionalTypes: [Api.self])
+	public final class LiveApi: Api, Instantiable {
+	    public init(inner: any Inner, session: Session) {
+	        self.inner = inner
+	        self.session = session
+	    }
+
+	    @Instantiated let inner: any Inner
+	    @Received let session: Session
+	}
+	"""
+
+	/// `Screen`'s value, built with a `StubInner` for each place of `Inner`: through the builder `Screen`'s public mock takes
+	/// for it, and inline, where an internal mock of a type that is not a seam takes a flat value for a place of its own tree.
+	private static let stubInnerProbe = DifferentialValueProbe(
+		name: "Screen.mock(innerBuilder:)",
+		expression: "Screen.mock(innerBuilder: { StubInner() })",
+		knownRightExpression: "Screen.mock(inner: StubInner())",
+	)
 
 	/// `D` instantiates `shared` after `leaf`, whose received `Other` `D`'s mock promotes, and `Other` receives `shared`
 	/// beside its place, so the mock's root binds `shared` before the place's level and hands it to the place's builder.
