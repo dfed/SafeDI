@@ -571,9 +571,13 @@ struct DifferentialValueOracleError: Error, CustomStringConvertible {
 /// called so with a sample value of them that the graph registers (`DifferentialValueSample`), a fresh one each call
 /// (`instantiate(sample)`, `instantiate(sample) again`), whose class instances the describer shows as `<4> T (sample)`
 /// without what they hold, so that what each receiver beneath the call is handed, the sample or another instance, is
-/// compared. The instance of a
-/// `LazilyInstantiated` or `SendableLazilyInstantiated` is read after the rest of the probe's value (`<4>.instance:
-/// <8> C`), under the calls on the path where its wrapper was met. Where the probe's value stores a creation stamp,
+/// compared. A `LazilyInstantiated` or `SendableLazilyInstantiated` is SafeDI's storage, whose value is its instance,
+/// created once at first read, so it is compared by its instance: it takes no identity of its own, and never says
+/// `(seen)`, but every meeting of it takes a number of its own and reads its instance after the rest of the probe's
+/// value (`<4>.instance: <8> C`, then `<6>.instance: <8> C (seen)` where another meeting finds that instance again),
+/// under the calls on the path where the wrapper was met. So a wrapper shared by two holders and two wrappers around
+/// one instance describe alike, and two wrappers around two instances where the other path shares one differ at the
+/// second instance. A wrapper's state is the one its first meeting in the probe found. Where the probe's value stores a creation stamp,
 /// an instance read last that was built before that value, and that the value does not hold, says so (`<4>.instance:
 /// <8> C (built before the probe's value)`), so that one early read, or one instance a closure captures, is one
 /// difference at that line, whichever wrapper kind built it. Otherwise a `LazilyInstantiated` whose instance was
@@ -1401,6 +1405,8 @@ enum DifferentialValueOracle {
 			alarm(probeTimeLimitInSeconds)
 			probeName = name
 			numbersByIdentity.removeAll()
+			numbersGiven = 0
+			isInstantiatedAtFirstMeetingByWrapper.removeAll()
 			traversalsLeft = traversalsPerProbe
 			emit("probe \(Self.oneLine(name))")
 			let probeValue = value()
@@ -1592,6 +1598,10 @@ enum DifferentialValueOracle {
 		private var probeName = ""
 		/// Each object met in the current probe, numbered by first visit.
 		private var numbersByIdentity = [ObjectIdentifier: Int]()
+		/// How many numbers the current probe gave: to objects and to meetings of lazily instantiated wrappers.
+		private var numbersGiven = 0
+		/// Whether each lazily instantiated wrapper met in the current probe was instantiated when it was first met.
+		private var isInstantiatedAtFirstMeetingByWrapper = [ObjectIdentifier: Bool]()
 		/// Every object numbered in any probe, kept alive so that no later object takes its identifier.
 		private var numberedObjects = [AnyObject]()
 		/// The probe of the current graph whose value each object was first met in.
@@ -1629,18 +1639,23 @@ enum DifferentialValueOracle {
 		private func describe(wrapper: any DescribedWrapper, prefix: String, label: String, owner: String, indent: Int) {
 			// An optional wrapper casts to the wrapper it holds, whose type names it.
 			let typeName = typeName(of: wrapper)
-			let (number, isFirstVisit, annotation) = identity(of: wrapper)
 			let call = "\(owner).\(label)"
-			guard isFirstVisit else {
-				emit("\(prefix)<\(number)> \(typeName) (seen)")
-				return
-			}
-			guard !Self.isSample(wrapper) else {
-				emit("\(prefix)<\(number)> \(typeName)\(annotation) (sample)")
-				return
+			/// The wrapper's number and what its first visit adds, or `nil` once its line is written: a later visit, or a sample.
+			func identityOfInstantiatorOrUntraversedWrapper() -> (number: Int, annotation: String)? {
+				let (number, isFirstVisit, annotation) = identity(of: wrapper)
+				if !isFirstVisit {
+					emit("\(prefix)<\(number)> \(typeName) (seen)")
+					return nil
+				} else if Self.isSample(wrapper) {
+					emit("\(prefix)<\(number)> \(typeName)\(annotation) (sample)")
+					return nil
+				} else {
+					return (number, annotation)
+				}
 			}
 			switch wrapper.wrapperTraversal(samples: samples) {
 			case let .instantiate(instantiate, takesSample):
+				guard let (number, annotation) = identityOfInstantiatorOrUntraversedWrapper() else { return }
 				if let reason = reasonNotToTraverse(call, verb: "called") {
 					emit("\(prefix)<\(number)> \(typeName)\(annotation) (not called: \(reason))")
 				} else {
@@ -1656,18 +1671,30 @@ enum DifferentialValueOracle {
 					}
 					callsOnPath.removeLast()
 				}
-			case let .readInstanceLast(read, isInstantiated):
+			case let .readInstanceLast(read, isInstantiatedNow):
+				// A lazily instantiated wrapper is SafeDI's storage, whose value is its instance, created once at first read:
+				// it takes no identity of its own, and every meeting of it reads its instance last, which the instance's
+				// identity numbers, `(seen)` from the second meeting of one instance on, so another wrapper around the same
+				// instance describes as a shared one does, and two wrappers around two instances differ at the second
+				// instance. The wrapper's number names the meeting alone, which pairs the instance read last with the other
+				// path's. Its state is the one its first meeting found, before the describer read it.
+				let number = meetingNumber()
+				let wrapperIdentifier = ObjectIdentifier(wrapper)
+				let isInstantiated = isInstantiatedAtFirstMeetingByWrapper[wrapperIdentifier] ?? isInstantiatedNow
+				isInstantiatedAtFirstMeetingByWrapper[wrapperIdentifier] = isInstantiated
+				numberedObjects.append(wrapper)
 				// Where the probe's value is stamped, its instance's stamp tells whether it was built early, and the state
 				// is not written: the probe's own instantiator calls can have read the instance before the wrapper is met.
 				let state = isInstantiated && probeStamp == nil ? "already instantiated, " : ""
 				if let reason = reasonNotToTraverse(call, verb: "read") {
-					emit("\(prefix)<\(number)> \(typeName)\(annotation) (\(state)instance not read: \(reason))")
+					emit("\(prefix)<\(number)> \(typeName) (\(state)instance not read: \(reason))")
 				} else {
-					emit("\(prefix)<\(number)> \(typeName)\(annotation) (\(state)instance read last)")
+					emit("\(prefix)<\(number)> \(typeName) (\(state)instance read last)")
 					traversalsLeft -= 1
 					deferredInstances.append(DeferredInstance(number: number, read: read, callsOnPath: callsOnPath + [call], isInsideSecondCall: isInsideSecondCall))
 				}
 			case let .notTraversed(reason):
+				guard let (number, annotation) = identityOfInstantiatorOrUntraversedWrapper() else { return }
 				emit("\(prefix)<\(number)> \(typeName)\(annotation) (not traversed\(reason.map { ": \($0)" } ?? ""))")
 			}
 		}
@@ -1901,6 +1928,13 @@ enum DifferentialValueOracle {
 			deferredInstances.removeAll()
 		}
 
+		/// The next number of the current probe, which numbers each object at its first visit and each meeting of a lazily
+		/// instantiated wrapper.
+		private func meetingNumber() -> Int {
+			numbersGiven += 1
+			return numbersGiven
+		}
+
 		/// The number of `object` in the current probe, whether this visit is its first, and what a first visit adds:
 		/// the earlier probe of the graph whose value held it.
 		private func identity(of object: AnyObject) -> (number: Int, isFirstVisit: Bool, annotation: String) {
@@ -1908,7 +1942,7 @@ enum DifferentialValueOracle {
 			if let number = numbersByIdentity[identifier] {
 				return (number, false, "")
 			} else {
-				let number = numbersByIdentity.count + 1
+				let number = meetingNumber()
 				numbersByIdentity[identifier] = number
 				numberedObjects.append(object)
 				let earlierProbe = probeByIdentity[identifier]

@@ -9370,21 +9370,12 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		// M8.32's stated divergence: each call hands `Cache`'s mock the instance of the one wrapper, which the mock wraps
-		// again; the instance is the one the inline mock shares.
-		let probes = [DifferentialValueProbe("Screen.mock()"), Self.screenMockPassingFilterToBuildInstead]
+		// Each call hands `Cache`'s mock the instance of the one wrapper, which the mock wraps again (M8.32): the value
+		// comparator compares a lazily instantiated wrapper by its instance, the one the inline mock shares.
 		try await expectValuesAgreeWithInlineMocks(
 			of: modules,
 			output: output,
-			probes: probes,
-			exempting: probes.map { probe in
-				DifferentialValueDifference(
-					probe: probe.name,
-					path: ["<1> Screen", "board", "widget", "widget", "cache", "tokenCache", "filter"],
-					feature: "filter: <8> LazilyInstantiated<FilterProtocol> (instance read last)",
-					knownRight: "filter: <5> LazilyInstantiated<FilterProtocol> (seen, first at <1> Screen > service > userService > userService > cache > tokenCache > filter)",
-				)
-			},
+			probes: [DifferentialValueProbe("Screen.mock()"), Self.screenMockPassingFilterToBuildInstead],
 		)
 	}
 
@@ -11526,18 +11517,12 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			]))
 		}
 		guard integration == .moduleInfo else { return }
-		// M8.32, a stated divergence: the call hands `Service`'s mock the instance of `Screen`'s `analytics`, which the
-		// mock wraps again, reading it as it does; the instance is the one the inline mock shares.
+		// M8.32: the call hands `Service`'s mock the instance of `Screen`'s `analytics`, which the mock wraps again, reading
+		// it as it does; the value comparator compares the wrapper by its instance, the one the inline mock shares.
 		try await expectValuesAgreeWithInlineMocks(
 			of: Self.canonicalModules(appCaller: Self.canonicalScreen),
 			output: output,
 			probes: [DifferentialValueProbe("Screen.mock()")],
-			exempting: [DifferentialValueDifference(
-				probe: "Screen.mock()",
-				path: ["Screen", "service", "analytics"],
-				feature: "analytics: <2> LazilyInstantiated<Analytics> (already instantiated, instance read last)",
-				knownRight: "analytics: <1> LazilyInstantiated<Analytics> (seen, first at Screen > analytics)",
-			)],
 		)
 	}
 
@@ -11775,7 +11760,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		guard integration == .moduleInfo else { return }
 		// M8.32's stated divergence: the call reads the instance of `Screen`'s `analytics` when `Service`'s mock is built,
-		// and the mock wraps it again; the instance is the one the inline mock shares.
+		// and the mock wraps it again, which the value comparator compares by its instance, the one the inline mock shares.
 		try await expectValuesAgreeWithInlineMocks(
 			of: modules,
 			output: output,
@@ -11786,12 +11771,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 					path: ["Screen", "analytics"],
 					feature: "analytics: <1> LazilyInstantiated<Analytics> (already instantiated, instance read last)",
 					knownRight: "analytics: <1> LazilyInstantiated<Analytics> (instance read last)",
-				),
-				DifferentialValueDifference(
-					probe: "Screen.mock()",
-					path: ["Screen", "service", "analytics"],
-					feature: "analytics: <2> LazilyInstantiated<Analytics> (instance read last)",
-					knownRight: "analytics: <1> LazilyInstantiated<Analytics> (seen, first at Screen > analytics)",
 				),
 			],
 		)
