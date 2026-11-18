@@ -7581,26 +7581,33 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// hold whichever spelling a walk met first, often a receiver's deep in the tree, and a protocol the mocked type spells
 	/// with `any` would lose it in its own mock, which warns in a module that enables the `ExistentialAny` upcoming feature.
 	///
-	/// A deliberate gap, commented where the closure types are built (`MockParameterNode.init`): the override closure of a
-	/// type the mock builds takes that type's initializer's parameters as they are declared.
+	/// A deliberate gap, commented where the closure types are built (`MockParameterNode.init`) and where the arguments are
+	/// bound (`emitReceiverBindings`): the override closure of a type the mock builds, and the bindings of its arguments in
+	/// that type's builder function, take that type's initializer's parameters as they are declared.
 	struct MockedTypeSpellings {
 		init(of instantiable: Instantiable) {
+			// An alias spells the dependency as its property's type does, where that type is the one `ofType:` names, and never
+			// as `ofType:` does: `Service.self` is an expression, which the `ExistentialAny` upcoming feature does not flag.
+			// A direct receive decides over an alias, whichever the type declares first; of two of one kind, the first decides.
+			var aliasSpelledInstanceProperties = [Property: Property]()
 			for dependency in instantiable.dependencies {
-				let receivedProperty: Property
 				switch dependency.source {
 				case .received:
-					receivedProperty = dependency.property
+					let instanceProperty = Self.instanceProperty(of: dependency.property)
+					if spelledInstanceProperties[instanceProperty] == nil {
+						spelledInstanceProperties[instanceProperty] = instanceProperty
+					}
 				case let .aliased(fulfillingProperty, _, _):
-					receivedProperty = fulfillingProperty
+					let instanceProperty = Self.instanceProperty(of: fulfillingProperty)
+					let declaredInstanceProperty = Self.instanceProperty(of: Property(label: fulfillingProperty.label, typeDescription: dependency.property.typeDescription))
+					if declaredInstanceProperty == instanceProperty, aliasSpelledInstanceProperties[instanceProperty] == nil {
+						aliasSpelledInstanceProperties[instanceProperty] = declaredInstanceProperty
+					}
 				case .instantiated, .forwarded:
 					continue
 				}
-				// Of two declarations of one dependency, the first one the type declares decides.
-				let instanceProperty = Self.instanceProperty(of: receivedProperty)
-				if spelledInstanceProperties[instanceProperty] == nil {
-					spelledInstanceProperties[instanceProperty] = instanceProperty
-				}
 			}
+			spelledInstanceProperties.merge(aliasSpelledInstanceProperties) { directlyReceivedProperty, _ in directlyReceivedProperty }
 		}
 
 		/// `property` with the mocked type's spelling of the dependency it is a form of: its optional, its unwrapped form,
@@ -8764,6 +8771,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// A dependency whose label is in `bindingNamesPassedByName` is not rebound: its receiver is passed the binding by
 	/// name (`receivedBindingNamesPassedByName(to:flatParameterDisambiguationMap:lazilyInstantiatedBindingNames:)`).
+	///
+	/// A deliberate gap beside `MockedTypeSpellings`, as in `MockParameterNode.init`: each binding is spelled as the
+	/// receiving type declares the dependency, so a protocol it spells without `any`, which the mocked type spells with it,
+	/// warns here in a module that enables the `ExistentialAny` upcoming feature.
 	fileprivate static func emitReceiverBindings(
 		for dependencies: [Dependency],
 		unavailableProperties: Set<Property>,
@@ -9220,7 +9231,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// the closure takes each argument as the initializer declares it, so a protocol the type spells without `any`,
 			// which the mocked type spells with it, warns here in a module that enables the `ExistentialAny` upcoming
 			// feature. The argument reads whichever declaration of its label is nearest above the node, which a type between
-			// the node and the mock root can declare in a spelling of its own, and which the node is not told.
+			// the node and the mock root can declare in a spelling of its own, and which the node is not told. The bindings of
+			// the arguments in the type's builder function share the gap (`emitReceiverBindings`).
 			builderParameterTypes = callSiteArguments.map { argument in
 				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter(amongTypesDeclaredEscaping: builderTypesDeclaredEscaping).implicitlyUnwrappedOptionalSpelledAsOptional
 			}
