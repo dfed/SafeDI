@@ -3261,6 +3261,12 @@ public actor DependencyTreeGenerator {
 			let declaringType: TypeDescription
 			/// Whether `declaringType` is forwarded `property`, which the tree is then handed rather than builds.
 			let isForwarded: Bool
+
+			/// Whether a receive that resolves to any of `acceptedProperties` resolves to this declaration: the declaration is
+			/// one of them, or a lazily instantiated declaration whose instance is.
+			func fulfills(anyOf acceptedProperties: Set<Property>) -> Bool {
+				acceptedProperties.contains(property) || lazilyInstantiatedInstanceProperty.map(acceptedProperties.contains) ?? false
+			}
 		}
 
 		/// A received dependency the generated code cannot pass, because a closer ancestor declares another property
@@ -10454,9 +10460,7 @@ public actor DependencyTreeGenerator {
 					continue
 				}
 				guard let closestDeclaration = closestDeclarationByLabel[receivedProperty.label],
-				      !acceptedProperties.contains(closestDeclaration.property),
-				      // A lazily instantiated declaration also fulfills a by-value receive of its instance.
-				      closestDeclaration.lazilyInstantiatedInstanceProperty.map({ !acceptedProperties.contains($0) }) ?? true,
+				      !closestDeclaration.fulfills(anyOf: acceptedProperties),
 				      // An alias of a property this scope declares refers to that declaration.
 				      acceptedProperties.isDisjoint(with: scope.createdProperties),
 				      // Production passes `nil` for an `onlyIfAvailable` dependency no ancestor provides. A mock
@@ -11058,9 +11062,12 @@ public actor DependencyTreeGenerator {
 						instantiable: scope.instantiable,
 						parentStack: propertyStack.map(\.typeDescription),
 						root: root,
-						suggestedAlternatives: receivableProperties.filter {
-							receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
-								|| receivedProperty.label == $0.label
+						// A near-match that the closest declaration of its label, of another type, hides is left out: receiving it
+						// would be reported as hidden (`recordHiddenReceives`).
+						suggestedAlternatives: receivableProperties.filter { alternative in
+							(receivedProperty.typeDescription.leastQualifiedTypeDescription == alternative.typeDescription.leastQualifiedTypeDescription
+								|| receivedProperty.label == alternative.label)
+								&& closestDeclarationByLabel[alternative.label]?.fulfills(anyOf: [alternative, alternative.asUnwrappedProperty]) != false
 						}.sorted(),
 						instantiatedDeclaration: instantiatedDeclaration(of: receivedProperty),
 					))
