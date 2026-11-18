@@ -1392,6 +1392,12 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// Two erasures of `HoleGadgetImpl` on `HoleGadgetOwner`, two hole types of one instantiated type, whose builders are
 	/// each labeled by `HoleGadgetImpl` and the type it returns.
 	case holeSecondHoleTypeCollidingStem
+	/// `HoleStationImpl`, the fill of a place `HoleStation` builds in a `Sendable` wrapper, reads `holeStationId`, which
+	/// `HoleStation` forwards outside the `@Sendable` function that builds the place: rejected, its remedy judged.
+	case holeFillReadsForwardedValueOutsideSendableFunction
+	/// `HoleStationImpl` reads `holeStationUser`, which `HoleStation` instantiates outside that function, and which
+	/// receives `holeStationId` or nothing: rejected, its remedy judged.
+	case holeFillReadsDeclaredValueOutsideSendableFunction
 	/// `HoleSeam`'s erased instantiator of `any HoleTicketService`, which `HoleTicketImpl` fills: a place whose wrapper
 	/// forwards a value, `holeTicketId`, to its builder.
 	case holeForwardingPlace
@@ -5609,6 +5615,12 @@ enum GraphFuzzerGenerator {
 			// in most graphs whose fill calls the seam again, which few draw, and in more than half of the others.
 			let screenPlaceRoll = holeRolls.screenPlace.integer(in: 0...99)
 			let screenRoll = holeRolls.screenPlace.integer(in: 0...9)
+			// A value bound outside a `@Sendable` function that a fill inside it reads, on a generator of its own, made whatever
+			// the base draw: the place's wrapper, which function builds `HoleStation`, and what the fill reads.
+			let drawsValueOutsideSendableFunction = holeRolls.valueOutsideSendableFunction.percentChance(15)
+			let valueOutsideSendableFunctionPlaceWrapper = holeRolls.valueOutsideSendableFunction.element(of: ["SendableInstantiator", "SendableLazilyInstantiated"])
+			let valueOutsideSendableFunctionStationWrapper = holeRolls.valueOutsideSendableFunction.element(of: instantiators)
+			let valueOutsideSendableFunctionReadRoll = holeRolls.valueOutsideSendableFunction.integer(in: 0...2)
 			// The fillers and the root that reaches the seam are in another package than the seam's, unless the seam's module
 			// has no package, which this draw keeps apart from a caller in another package, as every other graph's draws were.
 			let fillsFromOtherPackage = drawsCrossPackage && !modulesOmittingPackageName.contains(.seamModule)
@@ -5921,6 +5933,39 @@ enum GraphFuzzerGenerator {
 				seamModuleDeclarations.append(gadgetOwner)
 				callerDeclarations.append(gadgetImpl)
 				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeGadgetOwner", type: gadgetOwner.name))
+			}
+			// A value bound outside a `@Sendable` function that a fill inside it reads, which the owner of `HoleService`'s place
+			// never is (it instantiates `holeAnalytics` inside such a function): the seam builds `HoleStation` through an
+			// instantiator, which forwards `holeStationId` and builds `HoleStationOwner`, the owner of a place of a hole type of
+			// its own, `HoleStationService`, in a `SendableInstantiator` or a `SendableLazilyInstantiated`. `HoleStationImpl`
+			// fills the place, reading, a third of the time each, `holeStationId`, or `holeStationUser`, which `HoleStation`
+			// instantiates and which receives `holeStationId` or nothing (`holeFillReadsForwardedValueOutsideSendableFunction`,
+			// `holeFillReadsDeclaredValueOutsideSendableFunction`). The tool rejects every such graph, since a place built inside a
+			// `@Sendable` function is handed only what that function binds, so the remedy oracle follows its error's advice:
+			// forward the value into the function too, or instantiate the declaration outside the seam. Only where the graph's
+			// types may be held in a `Sendable` wrapper.
+			if drawsValueOutsideSendableFunction, sendability != .nonSendable {
+				let stationServiceName = name("HoleStationService")
+				var stationOwner = instantiable("HoleStationOwner", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeStationService", type: "any \(stationServiceName)")])
+				stationOwner.additionalDeclarations.append("public protocol \(stationServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+				var station = instantiable("HoleStation", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Forwarded", label: "holeStationId", type: "Int")])
+				var stationImpl = instantiable("HoleStationImpl", module: fillerModule)
+				stationImpl.instantiableArguments = ["fulfillingAdditionalTypes: [\(stationServiceName).self]"]
+				stationImpl.additionalConformances.append(stationServiceName)
+				stationImpl.fillsHole = true
+				if valueOutsideSendableFunctionReadRoll == 0 {
+					stationImpl.properties.append(PropertyDeclaration(attribute: "@Received", label: "holeStationId", type: "Int"))
+				} else {
+					let userProperties = valueOutsideSendableFunctionReadRoll == 1 ? [PropertyDeclaration(attribute: "@Received", label: "holeStationId", type: "Int")] : []
+					let user = instantiable("HoleStationUser", module: .seamModule, properties: userProperties)
+					station.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeStationUser", type: user.name))
+					stationImpl.properties.append(PropertyDeclaration(attribute: "@Received", label: "holeStationUser", type: user.name))
+					seamModuleDeclarations.append(user)
+				}
+				station.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeStationOwner", type: "\(valueOutsideSendableFunctionPlaceWrapper)<\(stationOwner.name)>"))
+				seamModuleDeclarations += [station, stationOwner]
+				callerDeclarations.append(stationImpl)
+				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeStationBuilder", type: "\(valueOutsideSendableFunctionStationWrapper)<\(station.name)>"))
 			}
 			// A hole whose place forwards a value to its builder: the seam instantiates an erased instantiator of
 			// `any HoleTicketService`, a protocol of the seam's module that `HoleTicketImpl`, which forwards `holeTicketId`,
@@ -6631,6 +6676,7 @@ enum GraphFuzzerGenerator {
 				passedUpPlaceValue = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6550557056)
 				spelledPlaces = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553706C6C)
 				screenPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553637265)
+				valueOutsideSendableFunction = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553746174)
 			}
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
@@ -6682,6 +6728,9 @@ enum GraphFuzzerGenerator {
 			var spelledPlaces: GraphFuzzerRandomNumberGenerator
 			/// A place in a screen that forwards a value a fill reads, which a fill building the seam again would lose.
 			var screenPlace: GraphFuzzerRandomNumberGenerator
+			/// A value bound outside a `@Sendable` function that a fill inside it reads
+			/// (`holeFillReadsForwardedValueOutsideSendableFunction`, `holeFillReadsDeclaredValueOutsideSendableFunction`).
+			var valueOutsideSendableFunction: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -10884,6 +10933,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			features.insert(.holeSecondHoleTypeCollidingStem)
 		} else if declares("HoleGadgetOwner") {
 			features.insert(.holeSecondHoleType)
+		}
+		let stationImplProperties = properties(of: "HoleStationImpl")
+		if stationImplProperties.contains(where: { $0.label == "holeStationId" }) {
+			features.insert(.holeFillReadsForwardedValueOutsideSendableFunction)
+		} else if stationImplProperties.contains(where: { $0.label == "holeStationUser" }) {
+			features.insert(.holeFillReadsDeclaredValueOutsideSendableFunction)
 		}
 		if let ticketPlace = seamProperties.first(where: { $0.label == "holeTicketBuilder" }) {
 			features.insert(.holeForwardingPlace)
