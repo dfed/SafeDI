@@ -1611,12 +1611,12 @@ extension DependencyTreeGenerator {
 			// (`unreadableInsideFills(_:placeFields:fillingModule:)`), is nearer the place than every field of its label: each
 			// field is a level's above that fill, since a label the fill's hole carries or a scope beneath its root declares is
 			// never one. So it is tested before the field branch, as the visible build tests it, where the fill's hole carries no
-			// field of the label. Only a place of the seam's own tree joins such declarations; a passed-up place's fields are the
-			// inner seam's, nearer than anything a seam that passes it up binds.
-			let calledCopyDeclarations = hole.innerSeamType == nil ? hole.uncarriedDeclarations.filter { declaration in
+			// field of the label. A declaration that presents the place itself, as every seam that passes the place up presents it,
+			// is not one: the place's own fields are nearer than what that seam binds.
+			let calledCopyDeclarations = hole.uncarriedDeclarations.filter { declaration in
 				guard declaration.property.label == property.label, case let .boundByPassingUpSeam(_, _, place) = declaration.reason else { return false }
 				return !place.isPresentation(of: hole)
-			} : []
+			}
 			// A value a cycle in the seam's tree hands the site's owner when it builds it again is wrong at every level but the
 			// first, whether a field carries the label or the fill reads it from the caller's scope.
 			// This rejection keeps a builder struct's re-entry of a reopened level safe, which carries nothing bound above it (the

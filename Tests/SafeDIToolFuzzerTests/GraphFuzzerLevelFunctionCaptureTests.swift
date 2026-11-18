@@ -95,6 +95,41 @@ struct GraphFuzzerLevelFunctionCaptureTests: ~Copyable {
 	}
 
 	@Test
+	func captures_findNothing_whenNestedClosureReadsValuesInItsCaptureList() {
+		// A capture list is evaluated where its closure is made, so the memo the member makes keeps the field, not `values`.
+		let captures = GraphFuzzerLevelFunctionCaptures(generatedFiles: ["App.swift": """
+		func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
+		    .init(detailBuilder: { values in __safeDI_apiBuilder_Home_Leaf_Scope(logger: LazilyInstantiated<Logger>({ [handed = values.logger] in handed })) })
+		}
+		"""])
+
+		#expect(captures == GraphFuzzerLevelFunctionCaptures(
+			findings: [],
+			levelFunctionCount: 1,
+			namedMemberClosureCount: 1,
+			conversionFunctionCount: 0,
+			fillFunctionCount: 0,
+		))
+	}
+
+	@Test
+	func captures_reportNestedReference_whenNestedClosureWithCaptureListReadsValuesInItsBody() {
+		let captures = GraphFuzzerLevelFunctionCaptures(generatedFiles: ["App.swift": """
+		func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
+		    .init(detailBuilder: { values in __safeDI_apiBuilder_Home_Leaf_Scope(logger: LazilyInstantiated<Logger>({ [handed = values.logger] in values.logger })) })
+		}
+		"""])
+
+		#expect(captures == GraphFuzzerLevelFunctionCaptures(
+			findings: [.init(kind: .nestedReference, fileName: "App.swift", line: 2, function: "__safeDI_apiBuilder_Home", member: "detailBuilder", parameter: "values")],
+			levelFunctionCount: 1,
+			namedMemberClosureCount: 1,
+			conversionFunctionCount: 0,
+			fillFunctionCount: 0,
+		))
+	}
+
+	@Test
 	func captures_reportWholeUse_whenMemberClosureHandsValuesToNextLevelFunction() {
 		let captures = GraphFuzzerLevelFunctionCaptures(generatedFiles: ["App.swift": """
 		func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
