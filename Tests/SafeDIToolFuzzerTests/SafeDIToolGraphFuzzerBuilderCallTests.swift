@@ -123,17 +123,17 @@ struct SafeDIToolGraphFuzzerBuilderCallTests {
 		#expect(withCalls.keys.sorted() == ["FuzzFeature/Home+SafeDI.swift", "FuzzFeature/Home+SafeDIBuilderCall.swift"])
 		#expect(withCalls["FuzzFeature/Home+SafeDIBuilderCall.swift"] == """
 		public enum HomeBuilderCall {
-		    public static func callTier0WritingClosures(_ parameter0: @escaping () -> any Api, _ parameter1: @escaping (()) -> any Later, _ parameter2: @escaping ((id: Int, name: String)) -> any Pair, _ parameter3: @escaping (String) -> any Panel, _ parameter4: @escaping @Sendable (Int) -> any Ticket) -> Home {
-		        Home(liveApi_ApiBuilder: { parameter0() }, liveLater_LaterBuilder: { parameter1(()) }, livePair_PairBuilder: { value in parameter2(value) }, livePanel_PanelBuilder: { value in parameter3(value) }, liveTicket_TicketSendableBuilder: { value in parameter4(value) })
+		    public static func callTier0WritingClosures(_ parameter0: @escaping () -> any Api, _ parameter1: @escaping () -> any Later, _ parameter2: @escaping ((id: Int, name: String)) -> any Pair, _ parameter3: @escaping (String) -> any Panel, _ parameter4: @escaping @Sendable (Int) -> any Ticket) -> Home {
+		        Home(liveApi_ApiBuilder: { parameter0() }, liveLater_LaterBuilder: { parameter1() }, livePair_PairBuilder: { value in parameter2(value) }, livePanel_PanelBuilder: { value in parameter3(value) }, liveTicket_TicketSendableBuilder: { value in parameter4(value) })
 		    }
-		    public static func callTier0PassingStoredClosures(_ parameter0: @escaping () -> any Api, _ parameter1: @escaping (()) -> any Later, _ parameter2: @escaping ((id: Int, name: String)) -> any Pair, _ parameter3: @escaping (String) -> any Panel, _ parameter4: @escaping @Sendable (Int) -> any Ticket) -> Home {
+		    public static func callTier0PassingStoredClosures(_ parameter0: @escaping () -> any Api, _ parameter1: @escaping () -> any Later, _ parameter2: @escaping ((id: Int, name: String)) -> any Pair, _ parameter3: @escaping (String) -> any Panel, _ parameter4: @escaping @Sendable (Int) -> any Ticket) -> Home {
 		        Home(liveApi_ApiBuilder: parameter0, liveLater_LaterBuilder: parameter1, livePair_PairBuilder: parameter2, livePanel_PanelBuilder: parameter3, liveTicket_TicketSendableBuilder: parameter4)
 		    }
-		    public static func callTier0DestructuringTuples(_ parameter0: @escaping () -> any Api, _ parameter1: @escaping (()) -> any Later, _ parameter2: @escaping ((id: Int, name: String)) -> any Pair, _ parameter3: @escaping (String) -> any Panel, _ parameter4: @escaping @Sendable (Int) -> any Ticket) -> Home {
-		        Home(liveApi_ApiBuilder: { parameter0() }, liveLater_LaterBuilder: { parameter1(()) }, livePair_PairBuilder: { id, name in parameter2((id: id, name: name)) }, livePanel_PanelBuilder: { value in parameter3(value) }, liveTicket_TicketSendableBuilder: { value in parameter4(value) })
+		    public static func callTier0DestructuringTuples(_ parameter0: @escaping () -> any Api, _ parameter1: @escaping () -> any Later, _ parameter2: @escaping ((id: Int, name: String)) -> any Pair, _ parameter3: @escaping (String) -> any Panel, _ parameter4: @escaping @Sendable (Int) -> any Ticket) -> Home {
+		        Home(liveApi_ApiBuilder: { parameter0() }, liveLater_LaterBuilder: { parameter1() }, livePair_PairBuilder: { id, name in parameter2((id: id, name: name)) }, livePanel_PanelBuilder: { value in parameter3(value) }, liveTicket_TicketSendableBuilder: { value in parameter4(value) })
 		    }
-		    public static func callTier0ReadingTupleLabels(_ parameter0: @escaping () -> any Api, _ parameter1: @escaping (()) -> any Later, _ parameter2: @escaping ((id: Int, name: String)) -> any Pair, _ parameter3: @escaping (String) -> any Panel, _ parameter4: @escaping @Sendable (Int) -> any Ticket) -> Home {
-		        Home(liveApi_ApiBuilder: { parameter0() }, liveLater_LaterBuilder: { parameter1(()) }, livePair_PairBuilder: { parameter2((id: $0.id, name: $0.name)) }, livePanel_PanelBuilder: { value in parameter3(value) }, liveTicket_TicketSendableBuilder: { value in parameter4(value) })
+		    public static func callTier0ReadingTupleLabels(_ parameter0: @escaping () -> any Api, _ parameter1: @escaping () -> any Later, _ parameter2: @escaping ((id: Int, name: String)) -> any Pair, _ parameter3: @escaping (String) -> any Panel, _ parameter4: @escaping @Sendable (Int) -> any Ticket) -> Home {
+		        Home(liveApi_ApiBuilder: { parameter0() }, liveLater_LaterBuilder: { parameter1() }, livePair_PairBuilder: { parameter2((id: $0.id, name: $0.name)) }, livePanel_PanelBuilder: { value in parameter3(value) }, liveTicket_TicketSendableBuilder: { value in parameter4(value) })
 		    }
 		}
 
@@ -530,8 +530,8 @@ struct SafeDIToolGraphFuzzerBuilderCallTests {
 	                self.laterBuilder = laterBuilder
 	            }
 
-	            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-	                self.laterBuilder = { _ in __safeDI_builder }
+	            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+	                self.laterBuilder = { _ in { _ in __safeDI_builder() } }
 	            }
 	        }
 	    }
@@ -622,7 +622,7 @@ struct SafeDIToolGraphFuzzerBuilderCallTests {
 	    }
 
 	    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-	    public init(liveApi_ApiBuilder: @escaping () -> any Api, liveLater_LaterBuilder: @escaping ErasedInstantiator<(), any Later>.Builder, livePair_PairBuilder: @escaping ErasedInstantiator<(id: Int, name: String), any Pair>.Builder, livePanel_PanelBuilder: @escaping ErasedInstantiator<String, any Panel>.Builder, liveTicket_TicketSendableBuilder: @escaping SendableErasedInstantiator<Int, any Ticket>.Builder) {
+	    public init(liveApi_ApiBuilder: @escaping () -> any Api, liveLater_LaterBuilder: @escaping () -> any Later, livePair_PairBuilder: @escaping ErasedInstantiator<(id: Int, name: String), any Pair>.Builder, livePanel_PanelBuilder: @escaping ErasedInstantiator<String, any Panel>.Builder, liveTicket_TicketSendableBuilder: @escaping SendableErasedInstantiator<Int, any Ticket>.Builder) {
 	        self.init(__safeDI_liveApi_ApiBuilder: .init(__safeDI_noScope: liveApi_ApiBuilder), __safeDI_liveLater_LaterBuilder: .init(__safeDI_noScope: liveLater_LaterBuilder), __safeDI_livePair_PairBuilder: .init(__safeDI_noScope: livePair_PairBuilder), __safeDI_livePanel_PanelBuilder: .init(__safeDI_noScope: livePanel_PanelBuilder), __safeDI_liveTicket_TicketSendableBuilder: .init(__safeDI_noScope: liveTicket_TicketSendableBuilder))
 	    }
 

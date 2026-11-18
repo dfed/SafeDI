@@ -747,8 +747,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                self.part = part
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.part = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.part = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }

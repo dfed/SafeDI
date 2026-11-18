@@ -3867,9 +3867,9 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesErasedInstantiatorsBuilder_whenEveryPlaceOfHoleTypeIsErasedInstantiatorThatForwardsNothing() async throws {
-		// An erased instantiator of `()` forwards nothing, so its places take the builder struct; every place is one, so
-		// `mock()` takes the builder a seam's readable initializer takes for them, the erased instantiator's `Builder`.
+	mutating func generate_takesBuilderThatTakesNothing_whenEveryPlaceOfHoleTypeIsErasedInstantiatorThatForwardsNothing() async throws {
+		// An erased instantiator of `()` forwards nothing, so its places take the builder struct; every place is one, and
+		// `mock()` takes the builder a seam's readable initializer takes for them, `() -> any Gadget`, as a plain place's.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"public protocol Gadget {}\npublic struct AnyGadget: Gadget {\n    public init(_ gadget: any Gadget) {}\n}",
@@ -3921,8 +3921,8 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 			                    self.gadgetBuilder = gadgetBuilder
 			                }
 
-			                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-			                    self.gadgetBuilder = { _ in __safeDI_builder }
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.gadgetBuilder = { _ in { _ in __safeDI_builder() } }
 			                }
 			            }
 			        }
@@ -3937,8 +3937,8 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 			                self.row = row
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-			                self.gadgetBuilder = { _ in __safeDI_builder }
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.gadgetBuilder = { _ in { _ in __safeDI_builder() } }
 			                self.row = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 			            }
 			        }
@@ -3970,7 +3970,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 			    }
 
 			    public static func mock(
-			        liveGadget_AnyGadgetBuilder: @escaping ErasedInstantiator<(), AnyGadget>.Builder,
+			        liveGadget_AnyGadgetBuilder: @escaping () -> AnyGadget,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Panel {
 			        Panel.__safeDI_mock(liveGadget_AnyGadgetBuilder: .init(__safeDI_noScope: liveGadget_AnyGadgetBuilder), safeDIOverrides: safeDIOverrides)
