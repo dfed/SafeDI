@@ -36,6 +36,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///     though its root binds a form they read, as production always passes them `nil` (see
 	///     `NearestDeclarations.binding(_:passingNilTo:)`): among `unavailableOptionalProperties`, and received from no
 	///     scope above, so that the mock root binds and offers nothing that only they would read.
+	///   - enclosingLevelCalls: For a call of another module's public mock, the call of each level function an enclosing
+	///     call declares that a case of this call's level functions re-enters, by its dispatcher's key
+	///     (`PublicMockLevelFunctions.init`).
 	init(
 		instantiable: Instantiable,
 		property: Property?,
@@ -74,7 +77,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		callSiteLazilyInstantiatedInstanceProperties: Set<Property>? = nil,
 		reboundProperties: Set<Property> = [],
 		previousPassReceivedBuilderLoops: ReceivedBuilderLoops? = nil,
-		previousPassPublicMockRootLevelReentries: [String: PublicMockLevelFunctions.Reentry] = [:],
+		previousPassPublicMockLevelReentries: [String: PublicMockLevelFunctions.Reentry] = [:],
+		enclosingLevelCalls: [String: String] = [:],
 		namesBoundBySeam: Set<String> = [],
 		placeHoldingProperties: Set<Property>? = nil,
 	) {
@@ -170,12 +174,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillParametersByKey: fillParametersByKey,
 				roots: builderCallArguments.compactMap { builderCallArgument in
 					builderCallArgument.builderStruct.flatMap { builderStruct in
-						builderStruct.rootDispatcherKey.map { PublicMockLevelFunctions.Root(label: builderCallArgument.label, dispatcherKey: $0, up: builderStruct.upValue, carriedStructs: builderStruct.carriedStructs) }
+						builderStruct.rootDispatcherKey.map { PublicMockLevelFunctions.Root(label: builderCallArgument.label, dispatcherKey: $0, carriedStructs: builderStruct.carriedStructs) }
 					}
 				},
 				reservedNames: namesTakenByCall.union(fillNames),
 				callerReads: callerReads,
 				labelsHandedPastRootPayloads: labelsHandedPastCalledMockCopy,
+				enclosingLevelCalls: enclosingLevelCalls,
 			)
 		} else {
 			publicMockLevelFunctions = nil
@@ -285,12 +290,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			referencedFillNamesByKey.merge(child.referencedFillNamesByKey) { name, _ in name }
 			fillKeysReferencedFromSendableFunction.formUnion(child.fillKeysReferencedFromSendableFunction)
 		}
-		// A call inside a fill of this call that re-enters a root level function hands it the caller's struct where the function
-		// takes it, which the pass before found (`Scope.enclosingLevelReentriesOfThisCall`). Nearly no call holds such a call.
-		let publicMockRootLevelReentries = publicMockLevelFunctions?.rootLevelReentries(amongKeys: Set(referencedFillNamesByKey.keys)) ?? [:]
-		self.publicMockRootLevelReentries = publicMockRootLevelReentries
-		publicMockRootLevelReentriesChangedInTree = publicMockRootLevelReentries != previousPassPublicMockRootLevelReentries
-			|| propertiesToGenerate.contains(where: \.publicMockRootLevelReentriesChangedInTree)
+		// A call inside a fill of this call that re-enters a level function hands it what it takes of the caller's scope, which
+		// the pass before found (`Scope.enclosingLevelReentriesOfThisCall`). Nearly no call holds such a call.
+		let publicMockLevelReentries = publicMockLevelFunctions?.levelReentries(amongKeys: Set(referencedFillNamesByKey.keys)) ?? [:]
+		self.publicMockLevelReentries = publicMockLevelReentries
+		publicMockLevelReentriesChangedInTree = publicMockLevelReentries != previousPassPublicMockLevelReentries
+			|| propertiesToGenerate.contains(where: \.publicMockLevelReentriesChangedInTree)
 		let ownFills = propertiesToGenerate.compactMap { child -> SendableFillNode? in
 			child.fillKey.map { SendableFillNode(key: $0, references: Set(child.referencedFillNamesByKey.keys), startsSendable: child.fillHole?.isSendable == true) }
 		} + fillDispatchers.map { dispatcher in
@@ -835,8 +840,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		receivedBuilderLoopsChangedInTree = false
 		boxedLoops = [:]
 		loopLevelsTypesInTree = [:]
-		publicMockRootLevelReentries = [:]
-		publicMockRootLevelReentriesChangedInTree = false
+		publicMockLevelReentries = [:]
+		publicMockLevelReentriesChangedInTree = false
 		reboundProperties = []
 		description = property.asSource
 		propertiesToGenerate = []
@@ -939,8 +944,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		receivedBuilderLoopsChangedInTree = false
 		boxedLoops = [:]
 		loopLevelsTypesInTree = [:]
-		publicMockRootLevelReentries = [:]
-		publicMockRootLevelReentriesChangedInTree = false
+		publicMockLevelReentries = [:]
+		publicMockLevelReentriesChangedInTree = false
 		reboundProperties = []
 		description = holeProperty.asSource
 		propertiesToGenerate = []
@@ -1184,8 +1189,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		/// What a call passes a public mock's builder: the call of the root level function of the dispatcher of
-		/// `rootDispatcherKey` (`PublicMockLevelFunctions`), which takes `upValue` exactly where a route passes a place up
-		/// (`PublicMockLevelFunctions.Function.takesUp`), or, where the call fills no place of the builder, `upValue` itself.
+		/// `rootDispatcherKey` (`PublicMockLevelFunctions`), or, where the call fills no place of the builder, `upValue` itself.
 		struct PublicMockBuilderStruct: Sendable {
 			/// The key of the dispatcher whose level function the call passes, or `nil` where the call fills no place of the
 			/// builder.
@@ -1291,8 +1295,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// that value (`SeamHoles.innerScope(at:innerKey:)`): the dispatcher's parameter is named so, and every dispatcher and
 		/// fill it leads to takes the value under it.
 		var innerScopeName: String?
-		/// Whether the call is of a public mock, whose caller fills or passes up each place per route: a value a fill reads
-		/// that a route's types do not bind is `nil` there, and the place is passed up on that route.
+		/// Whether the call is of a public mock, whose caller declares a level function per level and per set of values its
+		/// routes bind (`PublicMockLevelFunctions`).
 		var decidesPerRoute = false
 		/// Whether the enum declares a builder struct the dispatcher returns, as one function per level of the seam's tree
 		/// (`structDeclaration`), rather than switching over the enum: where the called seam takes the builder struct and no
@@ -3506,14 +3510,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The declaration of each class of `boxedLoops` in this tree, by its name, which the seam whose tree it is declares
 	/// beside its initializers.
 	let loopLevelsTypesInTree: [String: String]
-	/// For a call of another module's public mock, the name each root level function a call inside one of its fills re-enters
-	/// takes the caller's struct under, by its dispatcher's key, where the function takes it
-	/// (`PublicMockLevelFunctions.rootLevelReentries(amongKeys:)`), which the next pass of `Scope.createScopeGenerator` hands
-	/// those calls. Empty for nearly every scope.
-	nonisolated let publicMockRootLevelReentries: [String: PublicMockLevelFunctions.Reentry]
-	/// Whether a call in this tree found other `publicMockRootLevelReentries` than the pass before handed the calls inside its
+	/// For a call of another module's public mock, what each level function a call inside one of its fills re-enters takes of
+	/// the caller's scope, by its dispatcher's key, where it takes anything (`PublicMockLevelFunctions.levelReentries(amongKeys:)`),
+	/// which the next pass of `Scope.createScopeGenerator` hands those calls. Empty for nearly every scope.
+	nonisolated let publicMockLevelReentries: [String: PublicMockLevelFunctions.Reentry]
+	/// Whether a call in this tree found other `publicMockLevelReentries` than the pass before handed the calls inside its
 	/// fills, so that `Scope.createScopeGenerator` creates the tree again.
-	let publicMockRootLevelReentriesChangedInTree: Bool
+	let publicMockLevelReentriesChangedInTree: Bool
 	/// The properties of the siblings this scope's builder function rebinds, as a member of a loop of its scope (see
 	/// `ReceivedBuilderLoops`), in the order its body first receives them. Empty for nearly every scope.
 	let reboundProperties: [Property]
