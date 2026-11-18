@@ -1275,6 +1275,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(draw.callerLazyValue?.secondPlaceCallsAgain == true)
 		#expect(draw.callerLazyValue?.buildsPlaceInSendableFunctionToo == false)
 		#expect(draw.callerLazyValue?.fillReadsInstanceCalledTypeDoesNotHold == false)
+		#expect(draw.callerLazyValue?.secondPlaceFillDeclaresValueAgain == false)
 		#expect(draw.graph.fillGatePassesUp)
 		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
 		#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels)
@@ -1304,6 +1305,31 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
 		#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels)
 		#expect(result.passUps.map(\.reason) == [.fillOfReenteredCallReadsLazyValue, .fillOfReenteredCallReadsLazyValue])
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// Seed 762 draws a graph of `fillReceivesCallersLazyValueBelowCalledRoot/public/plain` whose called type holds a second
+	/// place whose fill instantiates a value of its own under the value's label and builds the called type again, while
+	/// the place's fill reads the value's instance and the called type keeps its copy
+	/// (`CallerLazyValue.secondPlaceFillDeclaresValueAgain`): both places are filled, and the mock, compared with its twin,
+	/// builds what the twin builds, the second place's value in the called type built again. It fails with the twin's level
+	/// function of the place handing that build's fill the enclosing value rather than the memo of the build
+	/// (`ScopeGenerator.FillDispatcher`'s `structDeclaration`), when the twin builds other values.
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_buildsTwinsValues_whenDrawnSecondPlacesFillDeclaresValueAgainAndCallsCalledTypeAgain() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 762)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 762)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillReceivesCallersLazyValueBelowCalledRoot, caller: .public, place: .plain))
+		#expect(draw.callerLazyValue?.call == .callerCalls)
+		#expect(draw.callerLazyValue?.secondPlaceFillDeclaresValueAgain == true)
+		#expect(!draw.graph.fillGatePassesUp)
+		#expect(!draw.graph.comparesValuesWithInline)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.isEmpty)
+		#expect(result.comparedValues)
 		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 	}
 
@@ -1427,24 +1453,36 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			"secondPlaceCallsAgain listed": 6,
 			"secondPlaceCallsAgain plain": 12,
 			"secondPlaceCallsAgain public": 11,
-			"compared": 18,
-			"compared LazilyInstantiated byValue": 7,
-			"compared LazilyInstantiated onlyIfAvailable": 4,
-			"compared SendableLazilyInstantiated byValue": 4,
-			"compared SendableLazilyInstantiated onlyIfAvailable": 3,
+			"secondPlaceFillDeclaresValueAgain": 13,
+			"secondPlaceFillDeclaresValueAgain deferred": 7,
+			"secondPlaceFillDeclaresValueAgain internal": 4,
+			"secondPlaceFillDeclaresValueAgain listed": 6,
+			"secondPlaceFillDeclaresValueAgain plain": 6,
+			"secondPlaceFillDeclaresValueAgain public": 3,
+			"compared": 22,
+			"compared LazilyInstantiated byValue": 10,
+			"compared LazilyInstantiated onlyIfAvailable": 5,
+			"compared SendableLazilyInstantiated byValue": 5,
+			"compared SendableLazilyInstantiated onlyIfAvailable": 2,
 			"compared buildsPlaceInSendableFunctionToo": 4,
 			"compared buildsPlaceInSendableFunctionToo deferred": 1,
 			"compared buildsPlaceInSendableFunctionToo plain": 3,
-			"compared callerCalls": 7,
-			"compared callerCalls deferred": 3,
-			"compared callerCalls plain": 4,
+			"compared callerCalls": 9,
+			"compared callerCalls deferred": 4,
+			"compared callerCalls plain": 5,
 			"compared mockedIntermediateCalls": 3,
 			"compared mockedIntermediateCalls deferred": 1,
 			"compared mockedIntermediateCalls plain": 2,
-			"compared mockedIntermediateReceivingValueCalls": 8,
-			"compared mockedIntermediateReceivingValueCalls deferred": 3,
-			"compared mockedIntermediateReceivingValueCalls plain": 5,
-			"passesPlaceUpWhole": 36,
+			"compared mockedIntermediateReceivingValueCalls": 10,
+			"compared mockedIntermediateReceivingValueCalls deferred": 4,
+			"compared mockedIntermediateReceivingValueCalls plain": 6,
+			"compared secondPlaceCallsAgain": 5,
+			"compared secondPlaceCallsAgain deferred": 3,
+			"compared secondPlaceCallsAgain plain": 2,
+			"compared secondPlaceFillDeclaresValueAgain": 11,
+			"compared secondPlaceFillDeclaresValueAgain deferred": 5,
+			"compared secondPlaceFillDeclaresValueAgain plain": 6,
+			"passesPlaceUpWhole": 31,
 		])
 		#expect(GraphFuzzerCallingMockDraw(seed: 0).callerLazyValue == nil)
 	}
@@ -1992,6 +2030,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		}
 		if draw.callerLazyValue?.fillReadsInstanceCalledTypeDoesNotHold == true {
 			variations.append("fillReadsInstanceCalledTypeDoesNotHold")
+		}
+		if draw.callerLazyValue?.secondPlaceFillDeclaresValueAgain == true {
+			variations.append("secondPlaceFillDeclaresValueAgain")
 		}
 		return variations
 	}

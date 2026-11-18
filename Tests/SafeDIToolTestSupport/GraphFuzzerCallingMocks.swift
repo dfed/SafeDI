@@ -310,6 +310,12 @@ struct GraphFuzzerCallingMockDraw {
 			// Drawn after everything else, and only where the second place's fill, which reads nothing, calls the called type
 			// again: the shape the gate for a value held lazily that such a fill does not read is for.
 			fillReadsInstanceCalledTypeDoesNotHold = secondPlaceCallsAgain ? random.element(of: [false, true]) : false
+			// Drawn after everything else, in half the graphs where the called type holds a copy and the fill that reads the
+			// value does not call the called type itself: the shape in which the production twin's level of the place hands the
+			// fill of the called type built again the memo of that build. Not where the place is also built in a `@Sendable`
+			// function, which carries no field of the value: production rejects a fill there that reads a value a fill that
+			// builds the called type again declares again (`declarationBoundOnPathToReenteringCall`).
+			secondPlaceFillDeclaresValueAgain = !fillReadsInstanceCalledTypeDoesNotHold && call != .fillCallsAgain && !buildsPlaceInSendableFunctionToo ? random.element(of: [false, true]) : false
 		}
 
 		/// Which type of the caller's module calls the called type, and whether the fill calls it again.
@@ -349,14 +355,33 @@ struct GraphFuzzerCallingMockDraw {
 		/// so the calling mock passes both places up (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)`).
 		/// Drawn only where `secondPlaceCallsAgain`.
 		let fillReadsInstanceCalledTypeDoesNotHold: Bool
+		/// Whether the called type holds the second level, `Hub`, whose place's fill builds the called type again and also
+		/// instantiates a value of its own under the value's label, and the fill that reads the value reads its instance, by
+		/// value or, where the sibling receives it only if available, only if available, while the called type keeps its copy:
+		/// production then hands the called type built again the second place's value, whose memo the twin's level function
+		/// of the place hands that build's fill, and the check compares the mock with the twin. Drawn only without
+		/// `fillReadsInstanceCalledTypeDoesNotHold` and `buildsPlaceInSendableFunctionToo`, and where the fill that reads the
+		/// value does not call the called type.
+		let secondPlaceFillDeclaresValueAgain: Bool
 
-		/// Whether a fill calls the called type again: the fill that receives the wrapper, or the second place's. The fill
+		/// Whether the called type holds the second level, `Hub`, whose place's fill builds the called type again.
+		var holdsSecondPlace: Bool {
+			secondPlaceCallsAgain || secondPlaceFillDeclaresValueAgain
+		}
+
+		/// Whether a fill calls the called type again, the fill that receives the wrapper or the second place's, where a gate
+		/// passes the place up: not where `secondPlaceFillDeclaresValueAgain`, whose places are filled. The fill
 		/// that receives the wrapper reads it beside its place's fields, since the called mock binds the value by value, or,
 		/// where `fillReadsInstanceCalledTypeDoesNotHold`, reads the instance, which the second place's fill does not read,
 		/// so the calling mock passes the place up whole, and the second place, whose fill calls the called type, which then
 		/// passes a builder up (`GraphFuzzerCallingMockGraph.fillGatePassesUp`).
 		var reentersCalledType: Bool {
-			call == .fillCallsAgain || secondPlaceCallsAgain
+			(call == .fillCallsAgain || secondPlaceCallsAgain) && !secondPlaceFillDeclaresValueAgain
+		}
+
+		/// Whether the fill that reads the value reads its instance rather than the caller's wrapper.
+		var fillReadsInstance: Bool {
+			fillReadsInstanceCalledTypeDoesNotHold || secondPlaceFillDeclaresValueAgain
 		}
 	}
 
@@ -385,7 +410,9 @@ struct GraphFuzzerCallingMockDraw {
 			valueProbes: valueProbes,
 			mockBuild: mockBuild,
 			twinErrorIsCheckedOnlyWhereMocksCompile: twinErrorIsCheckedOnlyWhereMocksCompile,
-			comparesValuesWithInline: cell.shape.comparesValuesWithInline,
+			// The twin of a second place's fill that declares the value again is compared too: its level function hands the fill
+			// of the called type built again that build's memo, which only production code reads.
+			comparesValuesWithInline: cell.shape.comparesValuesWithInline && callerLazyValue?.secondPlaceFillDeclaresValueAgain != true,
 			fillGatePassesUp: callerLazyValue?.reentersCalledType == true,
 		)
 	}
@@ -652,8 +679,10 @@ struct GraphFuzzerCallingMockDraw {
 		case .deferred:
 			"(\(filled) as! \(fill)).\(reenteredCalledType).\(placeInCalledType).instantiate(7)"
 		}
+		// The instance the fill holds: its wrapper's, or the value itself where it reads the instance.
+		let fillsInstance = callerLazyValue?.fillReadsInstance == true ? value : "\(value).instance"
 		func holdsCallersInstance(_ call: String, fill filledExpression: String) -> String {
-			"{ let caller = \(call); return (\(filledExpression) as! \(fill)).\(value).instance === caller.\(value).instance }()"
+			"{ let caller = \(call); return (\(filledExpression) as! \(fill)).\(fillsInstance) === caller.\(value).instance }()"
 		}
 		var probes = [
 			valueProbe,
@@ -679,7 +708,25 @@ struct GraphFuzzerCallingMockDraw {
 		case .deferred:
 			".instantiate(7)"
 		}
-		if callerLazyValue?.secondPlaceCallsAgain == true {
+		if callerLazyValue?.secondPlaceFillDeclaresValueAgain == true {
+			// The called type the second place's fill builds again holds that fill's value, and so does the fill of its place.
+			let secondFill = "(caller.\(calledType).\(Self.secondLevelLabel).\(Self.secondPlaceLabel) as! \(names.callerModuleName).\(Self.secondFillName))"
+			func holdsSecondFillsValue(_ call: String, _ holder: String) -> String {
+				"{ let caller = \(call); let secondFill = \(secondFill); let reentered = secondFill.\(reenteredCalledType); return \(holder) === secondFill.\(value) }()"
+			}
+			let reenteredFill = "(reentered.\(placeInCalledType)\(instantiatedPlace) as! \(fill)).\(value)"
+			let reenteredCopy = "reentered.\(names.sibling.lowercasedFirst).\(value)"
+			probes.append(DifferentialValueProbe(
+				name: "\(names.fill) re-entered through \(Self.secondFillName) holds \(Self.secondFillName).\(value)",
+				expression: holdsSecondFillsValue("\(caller).mock()", reenteredFill),
+				knownRightExpression: holdsSecondFillsValue("\(caller)()", reenteredFill),
+			))
+			probes.append(DifferentialValueProbe(
+				name: "\(names.sibling) re-entered through \(Self.secondFillName) holds \(Self.secondFillName).\(value)",
+				expression: holdsSecondFillsValue("\(caller).mock()", reenteredCopy),
+				knownRightExpression: holdsSecondFillsValue("\(caller)()", reenteredCopy),
+			))
+		} else if callerLazyValue?.secondPlaceCallsAgain == true {
 			let reenteredThroughSecondPlace = "(caller.\(calledType).\(Self.secondLevelLabel).\(Self.secondPlaceLabel) as! \(names.callerModuleName).\(Self.secondFillName)).\(reenteredCalledType).\(placeInCalledType)\(instantiatedPlace)"
 			probes.append(DifferentialValueProbe(
 				name: "\(names.fill) re-entered through \(Self.secondFillName) holds \(names.caller).\(value)",
@@ -689,11 +736,19 @@ struct GraphFuzzerCallingMockDraw {
 		}
 		if callerLazyValue?.buildsPlaceInSendableFunctionToo == true {
 			let builtInSendableFunction = "caller.\(calledType).\(names.between.lowercasedFirst)Builder.instantiate().\(placeLabel)\(instantiatedPlace)"
-			probes.append(DifferentialValueProbe(
-				name: "\(names.fill) built in a @Sendable function holds \(names.caller).\(value)",
-				expression: holdsCallersWrapper("\(caller).mock()", fill: builtInSendableFunction),
-				knownRightExpression: holdsCallersWrapper("\(caller)()", fill: builtInSendableFunction),
-			))
+			if callerLazyValue?.fillReadsInstance == true {
+				probes.append(DifferentialValueProbe(
+					name: "\(names.fill) built in a @Sendable function holds \(names.caller).\(value).instance",
+					expression: holdsCallersInstance("\(caller).mock()", fill: builtInSendableFunction),
+					knownRightExpression: holdsCallersInstance("\(caller)()", fill: builtInSendableFunction),
+				))
+			} else {
+				probes.append(DifferentialValueProbe(
+					name: "\(names.fill) built in a @Sendable function holds \(names.caller).\(value)",
+					expression: holdsCallersWrapper("\(caller).mock()", fill: builtInSendableFunction),
+					knownRightExpression: holdsCallersWrapper("\(caller)()", fill: builtInSendableFunction),
+				))
+			}
 		}
 		return probes
 	}
@@ -1084,7 +1139,7 @@ struct GraphFuzzerCallingMockDraw {
 	/// The fill's declaration, receiving `received` (a label and type) when given, instantiating `instantiated` when given,
 	/// forwarding `id: Int` for a deferred place, and fulfilling `protocolName` by name or through
 	/// `fulfillingAdditionalTypes`.
-	private func fillDeclaration(named fillName: String, protocolName: String, received: (label: String, type: String)?, instantiated: (label: String, type: String)? = nil, isPublic: Bool) -> String {
+	private func fillDeclaration(named fillName: String, protocolName: String, received: (label: String, type: String)?, receivedOnlyIfAvailable: Bool = false, instantiated: (label: String, type: String)? = nil, isPublic: Bool) -> String {
 		var parameters = [String]()
 		var assignments = [String]()
 		var properties = [String]()
@@ -1096,7 +1151,7 @@ struct GraphFuzzerCallingMockDraw {
 		if let received {
 			parameters.append("\(received.label): \(received.type)")
 			assignments.append("self.\(received.label) = \(received.label)")
-			properties.append("@Received let \(received.label): \(received.type)")
+			properties.append("\(receivedOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received") let \(received.label): \(received.type)")
 		}
 		if let instantiated {
 			parameters.append("\(instantiated.label): \(instantiated.type)")
@@ -1442,7 +1497,7 @@ struct GraphFuzzerCallingMockDraw {
 		}
 		var innerProperties = [(label: between, type: names.between), (label: sibling, type: names.sibling)]
 		var secondLevel = ""
-		if callerLazyValue?.secondPlaceCallsAgain == true {
+		if callerLazyValue?.holdsSecondPlace == true {
 			innerProperties.append((label: Self.secondLevelLabel, type: "Hub"))
 			secondLevel = """
 
@@ -1502,17 +1557,27 @@ struct GraphFuzzerCallingMockDraw {
 		let inner = names.inner.lowercasedFirst
 		let wrapped = "\(callerLazyValue?.wrapper ?? "LazilyInstantiated")<\(names.value)>"
 		let instantiated: (label: String, type: String)? = callerLazyValue?.call == .fillCallsAgain ? ("\(inner)Builder", "Instantiator<\(names.inner)>") : nil
-		let fillReceived = callerLazyValue?.fillReadsInstanceCalledTypeDoesNotHold == true ? names.value : wrapped
+		var fillReceived = wrapped
+		// The fill reads the value only if available where the called type's copy holds it so, which a read by value could not
+		// be handed.
+		let fillReadsOnlyIfAvailable = callerLazyValue?.secondPlaceFillDeclaresValueAgain == true && callerLazyValue?.receivesOnlyIfAvailable == true
+		if callerLazyValue?.fillReadsInstance == true {
+			fillReceived = fillReadsOnlyIfAvailable ? "\(names.value)?" : names.value
+		}
 		var declarations = [
 			"import SafeDI\nimport \(names.innerModuleName)",
-			fillDeclaration(named: names.fill, protocolName: names.hole, received: (value, fillReceived), instantiated: instantiated, isPublic: callerIsPublic),
+			fillDeclaration(named: names.fill, protocolName: names.hole, received: (value, fillReceived), receivedOnlyIfAvailable: fillReadsOnlyIfAvailable, instantiated: instantiated, isPublic: callerIsPublic),
 		]
-		if callerLazyValue?.secondPlaceCallsAgain == true {
+		if callerLazyValue?.holdsSecondPlace == true {
+			var properties = [(label: "\(inner)Builder", type: "Instantiator<\(names.inner)>")]
+			if callerLazyValue?.secondPlaceFillDeclaresValueAgain == true {
+				properties.insert((label: value, type: names.value), at: 0)
+			}
 			declarations.append("""
 			@Instantiable(fulfillingAdditionalTypes: [(any \(Self.secondPlaceProtocol)).self])
 			\(callerAccess)final class \(Self.secondFillName): \(Self.secondPlaceProtocol), Instantiable {
-			    \(callerAccess)init(\(inner)Builder: Instantiator<\(names.inner)>) { self.\(inner)Builder = \(inner)Builder }
-			    @Instantiated let \(inner)Builder: Instantiator<\(names.inner)>
+			    \(callerAccess)init(\(properties.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) { \(properties.map { "self.\($0.label) = \($0.label)" }.joined(separator: "; ")) }
+			\(properties.map { "    @Instantiated let \($0.label): \($0.type)" }.joined(separator: "\n"))
 			}
 			""")
 		}
