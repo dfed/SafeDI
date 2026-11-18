@@ -957,7 +957,7 @@ private struct ScopeGeneratorUnderConstruction {
 			// call passed, which no declaration of the caller's is (`FillDispatcher.Case.carriesDeferredFields`). A fill some route
 			// hands such a memo takes a memo, so the value is created when its tree reads it on every route, as inline: its field
 			// is that parameter's, which it binds as the memo (`fillUnderConstruction`), and a route that hands another form makes
-			// the memo of what it hands (`FillDispatcher.memosHanded(toFillOf:labels:among:)`). A public mock's caller hands values.
+			// the memo of what it hands (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`). A public mock's caller hands values.
 			if scope.publicMockCall == nil, dispatchersOfThisCall.contains(where: { dispatcher in
 				dispatcher.cases.contains { $0.carriesDeferredFields && $0.values?.contains(where: \.isDeferredParameter) == true }
 			}) {
@@ -967,6 +967,7 @@ private struct ScopeGeneratorUnderConstruction {
 					let memoByLabel = ScopeGenerator.FillDispatcher.memosHanded(
 						toFillOf: fill.key,
 						labels: Set(fill.fields.filter { !$0.isDeferredParameter && !payloadLabels.contains($0.property.label) }.map(\.property.label)),
+						readingSendableWrapper: previousPassGenerator?.fillSendableWrapperReads[fill.key] ?? [:],
 						among: dispatchersOfThisCall,
 					)
 					fillsOfThisCall[index].fill.fields = fill.fields.map { field in
@@ -1095,7 +1096,7 @@ private struct ScopeGeneratorUnderConstruction {
 		/// than the value it builds (`ScopeGenerator.fillReturnsWrapperBuilder`).
 		var returnsWrapperBuilder = false
 		/// The labels of `fields` some route hands the fill as the memo of a deferred parameter that a level on a carried route
-		/// holds (`ScopeGenerator.FillDispatcher.memosHanded(toFillOf:labels:among:)`): each such field is a deferred
+		/// holds (`ScopeGenerator.FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`): each such field is a deferred
 		/// parameter's, which the fill binds from what it is handed, as its memo (see `fillUnderConstruction`).
 		var labelsHandedAsMemo = Set<String>()
 	}
@@ -1467,6 +1468,10 @@ private struct ScopeGeneratorUnderConstruction {
 			reads.argumentByLabel[label] = callerArgument(reading: parameter.property, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties)
 		}
 		reads.mockRootBindingByLabel = fill.mockRootBindingByLabel
+		for field in fill.fields where fill.labelsHandedAsMemo.contains(field.property.label) && field.bindsMemo && field.deferral == .deferred(isSendable: true) {
+			let memo = Property(label: field.property.label, typeDescription: field.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: []))
+			reads.memoArgumentByLabel[memo.label] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties)
+		}
 		return reads
 	}
 
@@ -1839,6 +1844,7 @@ private struct ScopeGeneratorUnderConstruction {
 			callSiteLazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties,
 			reboundProperties: reboundProperties,
 			previousPassReceivedBuilderLoops: previousPassGenerator?.receivedBuilderLoops,
+			previousPassFillSendableWrapperReads: previousPassGenerator?.fillSendableWrapperReads ?? [:],
 			previousPassPublicMockLevelReentries: previousPassGenerator?.publicMockLevelReentries ?? [:],
 			enclosingLevelCalls: scope.publicMockCall == nil ? [:] : enclosingLevelCalls,
 			namesBoundBySeam: GenerationWork.taking(seamHoles.namesBoundBySeam, by: .joiningNamesBoundBySeam),
