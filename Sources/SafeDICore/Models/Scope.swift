@@ -1265,7 +1265,7 @@ private struct ScopeGeneratorUnderConstruction {
 			fillNearestDeclarations.replace(property, providing: CycleParameter.forms(providedBy: property))
 			if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
 				// A wrapper the fill takes optionally offers its instance only as an optional, which a receive reads through the
-				// optional (`Set<Property>.lazilyInstantiatedInstanceRead(of:)`).
+				// optional (`Set<Property>.lazilyInstantiatedInstanceSource(of:boundAs:)`).
 				fieldInstanceProperties.insert(fill.optionalLazilyInstantiatedLabels.contains(property.label) ? instanceProperty.asOptionalProperty : instanceProperty)
 			}
 			// A field bound as its memo is read as the memo's instance wherever the tree reads its label, as the seam's own tree

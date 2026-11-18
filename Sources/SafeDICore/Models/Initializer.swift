@@ -269,29 +269,6 @@ public struct Initializer: Codable, Hashable, Sendable {
 			.map { (position: $0.offset, argument: $0.element) }
 	}
 
-	/// - Parameter lazilyInstantiatedInstanceProperties: The received properties that are in scope only as the
-	///   instance of a `LazilyInstantiated` property. Their arguments read that instance.
-	func createInitializerArgumentList(
-		given dependencies: [Dependency],
-		unavailableProperties: Set<Property>? = nil,
-		lazilyInstantiatedInstanceProperties: Set<Property> = [],
-	) throws(GenerationError) -> String {
-		try createDependencyAndArgumentBinding(given: dependencies)
-			.map {
-				if let unavailableProperties, unavailableProperties.contains($0.dependency.property) {
-					"\($0.argument.label.spelledAsArgumentLabel): nil"
-				} else if !lazilyInstantiatedInstanceProperties.isEmpty,
-				          $0.dependency.source.isReceived,
-				          let instanceRead = lazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceRead(of: $0.dependency.property)
-				{
-					"\($0.argument.label.spelledAsArgumentLabel): \($0.argument.innerLabel)\(instanceRead)"
-				} else {
-					"\($0.argument.label.spelledAsArgumentLabel): \($0.argument.innerLabel)"
-				}
-			}
-			.joined(separator: ", ")
-	}
-
 	/// Creates an argument list that includes ALL arguments — both dependency-matching
 	/// and default-valued non-dependency arguments. Used in mock generation where
 	/// default-valued parameters are bubbled up to the root mock method and
@@ -458,22 +435,6 @@ extension TypeDescription {
 		     .variadic,
 		     .void:
 			self
-		}
-	}
-}
-
-extension Set<Property> {
-	/// How a receive of `property` reads it, where this set holds the by-value properties in scope only as the instance of
-	/// a `LazilyInstantiated`: through the wrapper's instance, `.instance`; through an optional wrapper, `?.instance`, for a
-	/// receive of the optional form where the set holds that form, which only a fill that takes the wrapper optionally adds
-	/// (`Scope.Fill.optionalLazilyInstantiatedLabels`); or `nil` where it reads no instance.
-	func lazilyInstantiatedInstanceRead(of property: Property) -> String? {
-		if contains(property.asUnwrappedProperty) {
-			".\(Dependency.lazilyInstantiatedInstancePropertyName)"
-		} else if property.typeDescription.isOptional, contains(property) {
-			"?.\(Dependency.lazilyInstantiatedInstancePropertyName)"
-		} else {
-			nil
 		}
 	}
 }

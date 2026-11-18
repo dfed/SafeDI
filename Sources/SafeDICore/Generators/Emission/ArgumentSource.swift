@@ -1,0 +1,102 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+/// Where an argument generated code passes comes from, with one spelling for each.
+enum ArgumentSource: Hashable, Sendable {
+	/// The nearest declaration of `label`: a binding, or a parameter of the enclosing function.
+	case binding(label: String)
+	/// The instance of the `LazilyInstantiated` bound as `label`, read through the optional where the wrapper is optional.
+	case lazyInstance(label: String, throughOptional: Bool)
+	/// `nil`: the value is unavailable where the argument is passed.
+	case `nil`
+	/// A value a wrapper forwards, `spreadName`: the value itself where it is the only one, and otherwise its element named
+	/// `label`.
+	case forwardedSpread(label: String, isOnly: Bool, spreadName: String)
+
+	var spelled: String {
+		switch self {
+		case let .binding(label):
+			label
+		case let .lazyInstance(label, throughOptional):
+			"\(label)\(throughOptional ? "?." : ".")\(Dependency.lazilyInstantiatedInstancePropertyName)"
+		case .nil:
+			"nil"
+		case let .forwardedSpread(label, isOnly, spreadName):
+			isOnly ? spreadName : "\(spreadName).\(label)"
+		}
+	}
+}
+
+/// An argument of a call: its label, and where its value comes from.
+struct CallArgument: Hashable, Sendable {
+	let label: String
+	let source: ArgumentSource
+
+	/// `label: value`, with the label spelled as an argument label.
+	var spelled: String {
+		"\(label.spelledAsArgumentLabel): \(source.spelled)"
+	}
+}
+
+extension Set<Property> {
+	/// Where a receive of `property`, bound as `label`, reads it from, where this set holds the by-value properties in scope
+	/// only as the instance of a `LazilyInstantiated`: the wrapper's instance; the instance through an optional wrapper, for
+	/// a receive of the optional form where the set holds that form, which only a fill that takes the wrapper optionally adds
+	/// (`Scope.Fill.optionalLazilyInstantiatedLabels`); or `nil` where it reads no instance.
+	func lazilyInstantiatedInstanceSource(of property: Property, boundAs label: String) -> ArgumentSource? {
+		if contains(property.asUnwrappedProperty) {
+			.lazyInstance(label: label, throughOptional: false)
+		} else if property.typeDescription.isOptional, contains(property) {
+			.lazyInstance(label: label, throughOptional: true)
+		} else {
+			nil
+		}
+	}
+}
+
+extension Initializer {
+	/// The arguments a construction with this initializer passes, given `dependencies`: `nil` for an unavailable
+	/// property, the instance of a received property in scope only as a `LazilyInstantiated`'s, and otherwise the
+	/// argument's own label, each in the initializer's order. An argument with a default value that no dependency
+	/// fulfills is left out.
+	/// - Parameter lazilyInstantiatedInstanceProperties: The received properties that are in scope only as the
+	///   instance of a `LazilyInstantiated` property. Their arguments read that instance.
+	func createInitializerArgumentList(
+		given dependencies: [Dependency],
+		unavailableProperties: Set<Property>? = nil,
+		lazilyInstantiatedInstanceProperties: Set<Property> = [],
+	) throws(GenerationError) -> String {
+		try createDependencyAndArgumentBinding(given: dependencies)
+			.map {
+				let source: ArgumentSource = if let unavailableProperties, unavailableProperties.contains($0.dependency.property) {
+					.nil
+				} else if !lazilyInstantiatedInstanceProperties.isEmpty,
+				          $0.dependency.source.isReceived,
+				          let instanceSource = lazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceSource(of: $0.dependency.property, boundAs: $0.argument.innerLabel)
+				{
+					instanceSource
+				} else {
+					.binding(label: $0.argument.innerLabel)
+				}
+				return CallArgument(label: $0.argument.label, source: source).spelled
+			}
+			.joined(separator: ", ")
+	}
+}
