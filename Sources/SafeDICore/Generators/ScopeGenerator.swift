@@ -36,8 +36,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///     though its root binds a form they read, as production always passes them `nil` (see
 	///     `NearestDeclarations.binding(_:passingNilTo:)`): among `unavailableOptionalProperties`, and received from no
 	///     scope above, so that the mock root binds and offers nothing that only they would read.
-	///   - enclosingLevelCalls: For a call of another module's public mock, the call of each level function an enclosing
-	///     call declares that a case of this call's level functions re-enters, by its dispatcher's key
+	///   - enclosingLevelCalls: For a call of another module's public mock, each level function an enclosing call declares
+	///     that a case of this call's level functions re-enters, and the values the case hands it, by its dispatcher's key
 	///     (`PublicMockLevelFunctions.init`).
 	init(
 		instantiable: Instantiable,
@@ -78,7 +78,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		reboundProperties: Set<Property> = [],
 		previousPassReceivedBuilderLoops: ReceivedBuilderLoops? = nil,
 		previousPassPublicMockLevelReentries: [String: PublicMockLevelFunctions.Reentry] = [:],
-		enclosingLevelCalls: [String: String] = [:],
+		enclosingLevelCalls: [String: PublicMockLevelFunctions.EnclosingLevelCall] = [:],
 		namesBoundBySeam: Set<String> = [],
 		placeHoldingProperties: Set<Property>? = nil,
 	) {

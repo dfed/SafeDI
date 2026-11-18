@@ -1753,13 +1753,14 @@ private struct ScopeGeneratorUnderConstruction {
 	/// one of this call's own level functions leads to, by the function's dispatcher's key: a builder the called mock holds
 	/// of a type whose places the enclosing call fills (`.inner`). The case re-enters the enclosing function as a call of the
 	/// same builder does, handing it what it takes of the caller's scope read of this call's own
-	/// (`enclosingLevelReentryArguments(ofDispatcherKeyed:)`).
-	private var enclosingLevelCalls: [String: String] {
-		var calls = [String: String]()
+	/// (`enclosingLevelReentryArguments(ofDispatcherKeyed:)`), and the struct of each level of the caller's it takes, which
+	/// the member of the case of this call's own struct returns (`PublicMockLevelFunctions.Member.reentry`).
+	private var enclosingLevelCalls: [String: PublicMockLevelFunctions.EnclosingLevelCall] {
+		var calls = [String: PublicMockLevelFunctions.EnclosingLevelCall]()
 		for dispatcher in dispatchersOfThisCall {
 			for dispatcherCase in dispatcher.cases {
 				guard let target = dispatcherCase.target, calls[target.key] == nil, let enclosingName = enclosingFills[target.key] else { continue }
-				calls[target.key] = "\(enclosingName)(\(enclosingLevelReentryArguments(ofDispatcherKeyed: target.key).joined(separator: ", ")))"
+				calls[target.key] = .init(name: enclosingName, arguments: enclosingLevelReentryArguments(ofDispatcherKeyed: target.key))
 			}
 		}
 		return calls
