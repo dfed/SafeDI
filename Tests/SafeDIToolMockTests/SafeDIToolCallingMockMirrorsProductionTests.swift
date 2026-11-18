@@ -1652,21 +1652,36 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		}
 	}
 
-	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases, ReenteredThroughAnotherCallsFillLayout.allCases)
+	@Test(arguments: CallingMockCallerKind.allCases, ReenteredThroughAnotherCallsFillLayout.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_fillsPlaceAsInline_whenCallReadingCallersLazyValueIsReenteredOnlyThroughAnotherCallsFill(caller: CallingMockCallerKind, layout: ReenteredThroughAnotherCallsFillLayout) async throws {
+	mutating func generate_passesPlacesUpWhole_whenCallReadingCallersLazyValueIsReenteredThroughAnotherCallsFill(caller: CallingMockCallerKind, layout: ReenteredThroughAnotherCallsFillLayout) async throws {
 		// `F`’s place `api`, whose fill `Live` reads `Root`’s `LazilyInstantiated<Log>`, is inside a fill of `G`’s place, and
-		// `G` is built again inside `F`’s fills, through a third called type `H` where `layout` says so: no fill of `F`’s
-		// places calls `F`’s public mock, or one whose builders reach its places, so the gate that passes a re-entered call’s
-		// place up leaves `api` filled (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`). The fill that builds
-		// `G` again takes `Root`’s wrapper, which the re-entered call of `F` is handed past `F`’s by-value copy, so each `Live`
-		// holds `Root`’s wrapper, as inline, also where `api` is on `F`’s root level.
-		try await expectValuesEqualInline(
+		// `G` is built again inside `F`’s fills, through a third called type `H` where `layout` says so: `F` is re-entered
+		// through the fills of the calls its fills make, so `api` is passed up whole, and so is `G`’s place, whose fill builds
+		// `F`, which now passes a builder up (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`). `Root`’s mock
+		// takes `G`’s builder, whatever is between `G` and the call that re-enters `F`.
+		try await expectPassesPlacesUpWhole(
 			mock: Self.reenteredThroughAnotherCallsFillModules(caller: caller, layout: layout),
-			inline: Self.reenteredThroughAnotherCallsFillInlineModules(layout: layout),
-			caller: caller.callingMockCaller,
-			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
-			probes: Self.reenteredThroughAnotherCallsFillProbes(layout: layout),
+			caller: caller,
+			wrapper: .lazilyInstantiated,
+			builders: [.gApi],
+			guards: PassedUpGuards(calledType: "2C26D9DE7BF3486B", root: "71059A40DE3B930C"),
+			call: .g,
+		)
+	}
+
+	@Test(arguments: CallingMockCallerKind.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesPlaceOnCalledTypesRootUpWhole_whenFillReadingCallersLazyValueBuildsAnotherCalledTypeThatBuildsItAgain(caller: CallingMockCallerKind) async throws {
+		// The cell below, with `LiveG` building `F` again: `F` is re-entered through `G`’s fill, so `api`, on `F`’s root
+		// level, is passed up whole (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`), where filling it named a
+		// builder of `G`’s the mock does not take.
+		try await expectPassesPlacesUpWhole(
+			mock: Self.secondCallFromCalledTypesRootModules(caller: caller, secondCallBuildsFirstAgain: true),
+			caller: caller,
+			wrapper: .lazilyInstantiated,
+			builders: [.api],
+			guards: PassedUpGuards(calledType: "7D841B2EEDD2A0BB", root: "0C12B745593904E0"),
 		)
 	}
 
@@ -1674,8 +1689,8 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_fillsPlaceOnCalledTypesRootAsInline_whenFillReadingCallersLazyValueBuildsAnotherCalledType(caller: CallingMockCallerKind) async throws {
 		// `Root` builds `F`, whose place `api` is on its root level: `Live` fills it, reads `Root`’s `LazilyInstantiated<Log>`
-		// and builds `G`, a second called type, whose fill builds nothing called. `F`’s mock binds `log` by value, so the fill
-		// reads `Root`’s wrapper and hands its instance to `G`’s mock, as inline.
+		// and builds `G`, a second called type, whose fill builds nothing called, so no call is re-entered. `F`’s mock binds
+		// `log` by value, so the fill reads `Root`’s wrapper and hands its instance to `G`’s mock, as inline.
 		try await expectValuesEqualInline(
 			mock: Self.secondCallFromCalledTypesRootModules(caller: caller, secondCallBuildsFirstAgain: false),
 			inline: Self.secondCallFromCalledTypesRootInlineModules(secondCallBuildsFirstAgain: false),
@@ -2771,7 +2786,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	/// public mock, to pass `builders` up whole, as `passedUpRootMockSection` spells its mock, and to compile with a call of
 	/// its `mock()` that passes a stub for each builder. The whole generated file is compared, but for a listed caller,
 	/// whose file holds its production tree first, of which only the mock is compared. `calledMockTakesLog` says whether
-	/// `F`’s mock takes `log`.
+	/// `F`’s mock takes `log`. Where `call` says so, `Root` calls `G`’s public mock, which it builds as `g`, rather than `F`’s.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func expectPassesPlacesUpWhole(
 		mock: [ModuleFixture],
@@ -2780,11 +2795,15 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		builders: [PassedUpBuilder],
 		guards: PassedUpGuards,
 		calledMockTakesLog: Bool = true,
+		call: PassedUpCall = .f,
 		sourceLocation: SourceLocation = #_sourceLocation,
 	) async throws {
 		var stubs = ""
 		if builders.contains(where: { $0.builtType == "any Api" }) {
 			stubs += "final class StubApi: Api {}\n"
+		}
+		if builders.contains(where: { $0.builtType == "any GApi" }) {
+			stubs += "final class StubGApi: GApi {}\n"
 		}
 		if builders.contains(where: { $0.builtType == "any Other" }) {
 			stubs += "final class StubOther: Other {}\n"
@@ -2802,7 +2821,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			#expect(compilation.failure == nil, "\(compilation.failure.map { "\($0)" } ?? "")", sourceLocation: sourceLocation)
 		}
 		let generatedFile = try #require(output.modules["App"]?.generatedFiles["App.swift"], sourceLocation: sourceLocation)
-		let mockSection = Self.passedUpRootMockSection(caller: caller.callingMockCaller, wrapper: wrapper, builders: builders, guards: guards, calledMockTakesLog: calledMockTakesLog)
+		let mockSection = Self.passedUpRootMockSection(caller: caller.callingMockCaller, wrapper: wrapper, builders: builders, guards: guards, calledMockTakesLog: calledMockTakesLog, call: call)
 		switch caller {
 		case .internal, .public:
 			let expectedFile = generatedFileHeader + "#if canImport(Feat)\nimport Feat\n#endif\n#if canImport(SafeDI)\nimport SafeDI\n#endif\n\n" + mockSection
@@ -2830,11 +2849,21 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		static let erasedApi = PassedUpBuilder(label: "apiBuilder", readableType: "ErasedInstantiator<(), any Api>.Builder", builtType: "any Api", enumName: "SafeDIMockScope_Api", noScopeClosureType: "ErasedInstantiator<(), __safeDI_Built>.Builder", isSendable: false, stubArgument: "{ _ in StubApi() }")
 		static let liveApi = PassedUpBuilder(label: "live_ApiBuilder", readableType: "ErasedInstantiator<Int, any Api>.Builder", builtType: "any Api", enumName: "SafeDIMockScope_Live_Api", noScopeClosureType: "ErasedInstantiator<Int, __safeDI_Built>.Builder", isSendable: false, stubArgument: "{ _ in StubApi() }")
 		static let other = PassedUpBuilder(label: "otherBuilder", readableType: "() -> any Other", builtType: "any Other", enumName: "SafeDIMockScope_Other", noScopeClosureType: "() -> __safeDI_Built", isSendable: false, stubArgument: "{ StubOther() }")
+		static let gApi = PassedUpBuilder(label: "gApiBuilder", readableType: "() -> any GApi", builtType: "any GApi", enumName: "SafeDIMockScope_GApi", noScopeClosureType: "() -> __safeDI_Built", isSendable: false, stubArgument: "{ StubGApi() }")
 
-		/// The member of the builder struct the call of `F`’s mock reads.
-		var member: String {
-			isSendable ? "f_Sendable" : "f"
+		/// The member of the builder struct the call of `call`’s mock reads.
+		func member(of call: PassedUpCall) -> String {
+			isSendable ? "\(call.label)_Sendable" : call.label
 		}
+	}
+
+	/// The called type whose public mock `Root` calls, and the label `Root` builds it under.
+	struct PassedUpCall {
+		let label: String
+		let type: String
+
+		static let f = PassedUpCall(label: "f", type: "F")
+		static let g = PassedUpCall(label: "g", type: "G")
 	}
 
 	/// The hashes of the guard enums of `F`’s mock, which `Root`’s mock names, and of `Root`’s, which a `.public` mock
@@ -2844,16 +2873,17 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		let root: String?
 	}
 
-	/// The line before a call of `F`’s mock that names its guard enum.
-	private static func guardLine(calledType: String) -> String {
-		"_ = F.__safeDI_F_mock_\(calledType).self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
+	/// The line before a call of `call`’s mock that names its guard enum.
+	private static func guardLine(calledType: String, call: PassedUpCall = .f) -> String {
+		"_ = \(call.type).__safeDI_\(call.type)_mock_\(calledType).self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
 	}
 
 	/// The mock SafeDI generates for `Root`, which instantiates `log` in `wrapper` and `f: F`, where it passes `builders` up
 	/// whole: `mock()` takes each, and hands `F`’s mock each, with `log`’s instance, as main’s calling mock did for a place it
 	/// passes up. A `.public` mock declares each builder’s struct, which its caller fills or passes up. Where
-	/// `calledMockTakesLog` is `false`, `F`’s mock takes no `log`.
-	private static func passedUpRootMockSection(caller: CallingMockCaller, wrapper: CallerLazyWrapper, builders: [PassedUpBuilder], guards: PassedUpGuards, calledMockTakesLog: Bool = true) -> String {
+	/// `calledMockTakesLog` is `false`, `F`’s mock takes no `log`. Where `call` says so, `Root` builds `g: G` and calls `G`’s
+	/// mock instead.
+	private static func passedUpRootMockSection(caller: CallingMockCaller, wrapper: CallerLazyWrapper, builders: [PassedUpBuilder], guards: PassedUpGuards, calledMockTakesLog: Bool = true, call: PassedUpCall = .f) -> String {
 		let access = caller == .public ? "public " : ""
 		let logArgument = calledMockTakesLog ? "log: log.instance, " : ""
 		let sendable = wrapper == .sendableLazilyInstantiated ? "@Sendable " : ""
@@ -2862,22 +2892,24 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			logBinding = "        let __safeDI_log__safeDIBuilder = safeDIOverrides.log\n        @Sendable func __safeDI_log() -> Log {\n            if let safeDIBuilder = __safeDI_log__safeDIBuilder { safeDIBuilder() } else { Log() }\n        }\n"
 		}
 		logBinding += "        let log = \(wrapper.name)<Log>(__safeDI_log)\n"
+		let label = call.label
+		let type = call.type
 		var section = "#if DEBUG\nextension Root {\n"
 		if caller == .public {
 			for builder in builders {
-				let valuesType = builder.isSendable ? "f_Sendable_Values" : "f_Values"
+				let valuesType = "\(builder.member(of: call))_Values"
 				let closureAttributes = builder.isSendable ? "@Sendable " : ""
 				let builderConformance = builder.isSendable ? ": Sendable" : ""
 				section += "    nonisolated public enum \(builder.enumName) {\n"
 				section += "        nonisolated public struct \(valuesType): Sendable {}\n\n"
 				section += "        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.\n"
 				section += "        nonisolated public struct __safeDI_Builder<__safeDI_Built>\(builderConformance) {\n"
-				section += "            public let \(builder.member): \(closureAttributes)(\(valuesType)) -> F.\(builder.enumName).__safeDI_Builder<__safeDI_Built>\n\n"
-				section += "            public init(\(builder.member): @escaping \(closureAttributes)(\(valuesType)) -> F.\(builder.enumName).__safeDI_Builder<__safeDI_Built>) {\n"
-				section += "                self.\(builder.member) = \(builder.member)\n"
+				section += "            public let \(builder.member(of: call)): \(closureAttributes)(\(valuesType)) -> \(type).\(builder.enumName).__safeDI_Builder<__safeDI_Built>\n\n"
+				section += "            public init(\(builder.member(of: call)): @escaping \(closureAttributes)(\(valuesType)) -> \(type).\(builder.enumName).__safeDI_Builder<__safeDI_Built>) {\n"
+				section += "                self.\(builder.member(of: call)) = \(builder.member(of: call))\n"
 				section += "            }\n\n"
 				section += "            public init(__safeDI_noScope __safeDI_builder: @escaping \(builder.noScopeClosureType)) {\n"
-				section += "                self.\(builder.member) = { _ in .init(__safeDI_noScope: __safeDI_builder) }\n"
+				section += "                self.\(builder.member(of: call)) = { _ in .init(__safeDI_noScope: __safeDI_builder) }\n"
 				section += "            }\n"
 				section += "        }\n"
 				section += "    }\n\n"
@@ -2887,26 +2919,26 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		section += "    \(caller == .public ? "nonisolated public " : "")struct SafeDIOverrides {\n"
 		section += "        \(access)init(\n"
 		section += "            log: (\(sendable)() -> Log)? = nil,\n"
-		section += "            f: F.SafeDIOverrides = .init()\n"
+		section += "            \(label): \(type).SafeDIOverrides = .init()\n"
 		section += "        ) {\n"
 		section += "            __safeDI_storage = __safeDI_Storage(\n"
 		section += "                log: log,\n"
-		section += "                f: f\n"
+		section += "                \(label): \(label)\n"
 		section += "            )\n"
 		section += "        }\n\n"
 		section += "        \(access)var log: (\(sendable)() -> Log)? { __safeDI_storage.log }\n"
-		section += "        \(access)var f: F.SafeDIOverrides { __safeDI_storage.f }\n\n"
+		section += "        \(access)var \(label): \(type).SafeDIOverrides { __safeDI_storage.\(label) }\n\n"
 		section += "        private let __safeDI_storage: __safeDI_Storage\n\n"
 		section += "        private final class __safeDI_Storage {\n"
 		section += "            init(\n"
 		section += "                log: (\(sendable)() -> Log)?,\n"
-		section += "                f: F.SafeDIOverrides\n"
+		section += "                \(label): \(type).SafeDIOverrides\n"
 		section += "            ) {\n"
 		section += "                self.log = log\n"
-		section += "                self.f = f\n"
+		section += "                self.\(label) = \(label)\n"
 		section += "            }\n\n"
 		section += "            let log: (\(sendable)() -> Log)?\n"
-		section += "            let f: F.SafeDIOverrides\n"
+		section += "            let \(label): \(type).SafeDIOverrides\n"
 		section += "        }\n"
 		section += "    }\n\n"
 		section += "    \(access)static func mock(\n"
@@ -2921,16 +2953,16 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				section += "        let __safeDI_\(builder.label) = \(builder.label)\n"
 			}
 			section += logBinding
-			section += "        \(guardLine(calledType: guards.calledType))\n"
-			section += "        func __safeDI_f() -> F {\n"
+			section += "        \(guardLine(calledType: guards.calledType, call: call))\n"
+			section += "        func __safeDI_\(label)() -> \(type) {\n"
 			for builder in builders {
 				section += "            let \(builder.label): \(builder.readableType) = __safeDI_\(builder.label)\n"
 			}
 			let arguments = builders.map { "\($0.label): .init(__safeDI_noScope: \($0.label))" }.joined(separator: ", ")
-			section += "            return F.__safeDI_mock(\(arguments), \(logArgument)safeDIOverrides: safeDIOverrides.f)\n"
+			section += "            return \(type).__safeDI_mock(\(arguments), \(logArgument)safeDIOverrides: safeDIOverrides.\(label))\n"
 			section += "        }\n"
-			section += "        let f: F = __safeDI_f()\n"
-			section += "        return Root(log: log, f: f)\n"
+			section += "        let \(label): \(type) = __safeDI_\(label)()\n"
+			section += "        return Root(log: log, \(label): \(label))\n"
 			section += "    }\n"
 			section += "}\n"
 		case .public:
@@ -2945,12 +2977,12 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			section += "        safeDIOverrides: SafeDIOverrides = .init()\n"
 			section += "    ) -> Root {\n"
 			section += logBinding
-			section += "        \(guardLine(calledType: guards.calledType))\n"
+			section += "        \(guardLine(calledType: guards.calledType, call: call))\n"
 			let arguments = builders.map { builder in
-				"\(builder.label): __safeDI_\(builder.label).\(builder.member)(\(builder.enumName).\(builder.isSendable ? "f_Sendable_Values" : "f_Values")())"
+				"\(builder.label): __safeDI_\(builder.label).\(builder.member(of: call))(\(builder.enumName).\(builder.member(of: call))_Values())"
 			}.joined(separator: ", ")
-			section += "        let f = F.__safeDI_mock(\(arguments), \(logArgument)safeDIOverrides: safeDIOverrides.f)\n"
-			section += "        return Root(log: log, f: f)\n"
+			section += "        let \(label) = \(type).__safeDI_mock(\(arguments), \(logArgument)safeDIOverrides: safeDIOverrides.\(label))\n"
+			section += "        return Root(log: log, \(label): \(label))\n"
 			section += "    }\n"
 			section += "}\n\n"
 			section += "extension Root {\n"
