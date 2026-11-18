@@ -12145,6 +12145,62 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenConsumerInstantiatesValueMockCannotBuildThatReachedTierOmits() async {
+		// The neighbour of the error above whose `filter` `Screen` instantiates: the mock cannot build `[3 of Int]`, so
+		// `mock()` takes it, and the inline mock would hand it `TokenCache` as it would a forwarded `filter`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
+			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
+					import SafeDI
+
+					@Instantiable
+					package struct TokenCache: Instantiable {
+					    package init(filter: [3 of Int]?) {
+					        self.filter = filter
+					    }
+
+					    @Received(onlyIfAvailable: true) let filter: [3 of Int]?
+					}
+
+					@Instantiable(generateMock: .public)
+					public struct Service: Instantiable {
+					    package init(tokenCache: TokenCache) {
+					        self.tokenCache = tokenCache
+					    }
+
+					    @Instantiated let tokenCache: TokenCache
+					}
+					"""]),
+					ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
+					import Core
+					import SafeDI
+
+					@Instantiable(generateMock: true)
+					public struct Screen: Instantiable {
+					    public init(filter: [3 of Int], service: Service) {
+					        self.filter = filter
+					        self.service = service
+					    }
+
+					    @Instantiated let filter: [3 of Int]
+					    @Instantiated let service: Service
+					}
+					"""], dependencies: ["Core"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorWithoutOfferingToPassPackages_whenNeitherModuleIsToldItsPackageAndOmittedValueIsInternal() async {
 		// M8.35: neither module is told a package, so neither has one, nothing is `package`, and `App` reaches the public
 		// tier, which omits `filter`. Its tier is `internal`, which a `package` caller could not call either, so the error
