@@ -5951,18 +5951,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// closure that calls it. Empty for a scope that builds no instantiator, which no caller asks.
 	nonisolated private func instantiatorDeclaration(handing functionName: String, forwardedArguments: String) -> String {
 		guard case let .property(instantiable, property, _, _, _, _) = scopeData else { return "" }
-		let typeDescription = property.typeDescription.asSource
-		// A type constructed by annotation spells its generic arguments only in `propertyDeclaration`.
+		// A type constructed by annotation spells its generic arguments only in the declaration.
 		let unwrappedTypeDescription = property
 			.typeDescription
 			.unwrapped
 			.spelledForConstruction
-		let propertyDeclaration = if !instantiable.declarationType.isExtension, typeDescription == unwrappedTypeDescription {
-			"let \(property.label)"
-		} else {
-			"let \(property.asSource)"
-		}
-		return "\(propertyDeclaration) = \(instantiatorExpression(handing: functionName, forwardedArguments: forwardedArguments))"
+		let propertyDeclaration = BindingDeclaration(
+			property: property,
+			rule: .instantiator(isExtension: instantiable.declarationType.isExtension, constructionSpellsPropertyType: property.typeDescription.asSource == unwrappedTypeDescription),
+		)
+		return "\(propertyDeclaration.spelled) = \(instantiatorExpression(handing: functionName, forwardedArguments: forwardedArguments))"
 	}
 
 	/// The wrapper `instantiatorDeclaration(handing:forwardedArguments:)` declares.
@@ -6546,8 +6544,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 					"""
 				}
+				let propertyDeclaration = BindingDeclaration(property: property, rule: .lazilyInstantiated)
 				guard !isPropertyCycle else {
-					return "\(valuesBindingLines)let \(property.label) = \(lazilyInstantiatedInstantiation)"
+					return "\(valuesBindingLines)\(propertyDeclaration.spelled) = \(lazilyInstantiatedInstantiation)"
 				}
 				let generatedProperties = try await memberCallLines + seamGuardLines + fillPlaceBindingLines + generateProperties(
 					codeGeneration: codeGeneration,
@@ -6567,7 +6566,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let lastLine = if isBuiltByFill {
 					"return \(Expression.call(function: functionName, arguments: cycleArguments).erased(to: property.typeDescription.asInstantiatedType, where: erasedToConcreteExistential).spelled)"
 				} else {
-					"let \(property.label) = \(lazilyInstantiatedInstantiation)"
+					"\(propertyDeclaration.spelled) = \(lazilyInstantiatedInstantiation)"
 				}
 
 				return """
@@ -6608,15 +6607,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 				let nonEmptyGeneratedProperties = generatedProperties.filter { !$0.isEmpty }
 				let hasGeneratedContent = !nonEmptyGeneratedProperties.isEmpty
-				let propertyDeclaration = if erasedToConcreteExistential || (
-					concreteTypeName == property.typeDescription.asSource
-						&& !hasGeneratedContent
-						&& !instantiable.declarationType.isExtension
-				) {
-					"let \(property.label)"
-				} else {
-					"let \(property.asSource)"
-				}
+				let propertyDeclaration = BindingDeclaration(
+					property: property,
+					rule: .constant(
+						isErased: erasedToConcreteExistential,
+						constructedTypeIsPropertyType: concreteTypeName == property.typeDescription.asSource,
+						hasBuilderFunction: hasGeneratedContent,
+						isExtension: instantiable.declarationType.isExtension,
+					),
+				)
 
 				// Ideally we would be able to use an anonymous closure rather than a named function here.
 				// Unfortunately, there's a bug in Swift Concurrency that prevents us from doing this: https://github.com/swiftlang/swift/issues/75003
@@ -6639,7 +6638,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 
 				// The payloads a seam's tree binds before building a scope that leads to a place.
-				return "\(valuesBindingLines)\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
+				return "\(valuesBindingLines)\(functionDeclaration)\(propertyDeclaration.spelled) = \(initializer)\n"
 			}
 		case let .hole(property, _, site):
 			// A tree built only to compute the seam's signature has no site, and generates nothing.
