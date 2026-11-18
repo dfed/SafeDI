@@ -685,10 +685,10 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
 		}
 		let drawn: Set<GraphFuzzerPublicMockDrawFeature> = [.unbuildableValuePublicMockCall, .unbuildableValuePublicMockCallPublicTier, .unbuildableValuePublicMockCallTierOmits]
-		// Seed 5 passes a public class to the public tier; seed 2's consumer in another package reaches a public tier that
+		// Seed 5 passes a public class to the public tier; seed 155's consumer in another package reaches a public tier that
 		// omits `[3 of Int]`, the roll that fails with the omission walk's declarations reverted; seed 0 draws none.
 		#expect(features(ofSeed: 5).intersection(drawn) == [.unbuildableValuePublicMockCall, .unbuildableValuePublicMockCallPublicTier])
-		#expect(features(ofSeed: 2).intersection(drawn) == [.unbuildableValuePublicMockCall, .unbuildableValuePublicMockCallTierOmits])
+		#expect(features(ofSeed: 155).intersection(drawn) == [.unbuildableValuePublicMockCall, .unbuildableValuePublicMockCallTierOmits])
 		#expect(features(ofSeed: 0).isDisjoint(with: drawn))
 	}
 
@@ -697,12 +697,16 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		func features(ofSeed seed: UInt64) -> Set<GraphFuzzerPublicMockDrawFeature> {
 			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
 		}
-		let drawn: Set<GraphFuzzerPublicMockDrawFeature> = [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInInstantiator, .holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated]
+		let drawn: Set<GraphFuzzerPublicMockDrawFeature> = [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInInstantiator, .holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated, .holeLabelReceivedByPromotedSiblingFollowedByHole]
 		// Seed 0 holds the hole as itself, seed 31 in an `Instantiator`, seed 17 in a `LazilyInstantiated`; each fails to
-		// compile with a renamed hole site's hole reverted. Seed 1 draws none.
+		// compile with a renamed hole site's hole reverted. Seeds 67, 34 and 17 hold it as itself, in an `Instantiator` and
+		// in a `LazilyInstantiated`, before a second hole, whose payload reads it; each fails to compile with a payload's
+		// reading of a renamed value reverted. Seed 1 draws none.
 		#expect(features(ofSeed: 0).intersection(drawn) == [.holeLabelReceivedByPromotedSibling])
 		#expect(features(ofSeed: 31).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInInstantiator])
-		#expect(features(ofSeed: 17).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated])
+		#expect(features(ofSeed: 17).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated, .holeLabelReceivedByPromotedSiblingFollowedByHole])
+		#expect(features(ofSeed: 67).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingFollowedByHole])
+		#expect(features(ofSeed: 34).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInInstantiator, .holeLabelReceivedByPromotedSiblingFollowedByHole])
 		#expect(features(ofSeed: 1).isDisjoint(with: drawn))
 	}
 

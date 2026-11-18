@@ -334,6 +334,9 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case holeLabelReceivedByPromotedSibling
 	case holeLabelReceivedByPromotedSiblingHeldInInstantiator
 	case holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated
+	/// `LabelHome` instantiates a second hole, `labelSprocket`, after `labelGadget`, whose payload carries the renamed
+	/// `labelGadget`, which it reads under its new name.
+	case holeLabelReceivedByPromotedSiblingFollowedByHole
 
 	/// The shapes of `overrideClosureCall` whose call can hand an override closure no builder a person writes, so that the
 	/// consumer's overrides hold no member for it.
@@ -2449,7 +2452,7 @@ struct GraphFuzzerPublicMockDraw {
 	/// that its `mock()` takes it, and `UnbuildableService`, a `.public` type of the declaring module with an `internal`
 	/// initializer, so that its mock calls the public mock. Beneath `UnbuildableService`, `UnbuildableCache` receives the
 	/// value only if available. The value is of `UnbuildableFilter`, a public class beside `UnbuildableService`, which every
-	/// tier takes (`unbuildableValuePublicMockCallPublicTier`), unless the consumer is in another package and a roll of four
+	/// tier takes (`unbuildableValuePublicMockCallPublicTier`), unless the consumer is in another package and a roll of one
 	/// in ten says otherwise: then it is of `[3 of Int]`, whose spelling SafeDI cannot read, which only `UnbuildableCache`'s
 	/// `package` initializer mentions, so that SafeDI proves it `package`, the public tier the consumer calls omits it, and
 	/// the tool rejects the graph (`leafTierOmitsProvidedValue`) rather than pass `nil`
@@ -2461,7 +2464,7 @@ struct GraphFuzzerPublicMockDraw {
 	/// Every roll is made before any is read.
 	private mutating func drawUnbuildableValuePassedToPublicMock(random: inout GraphFuzzerRandomNumberGenerator) {
 		let drawsShape = random.percentChance(20)
-		let omitsValueRoll = random.percentChance(40)
+		let omitsValueRoll = random.percentChance(10)
 		let consumerModuleRoll = random.integer(in: 0...1)
 		let consumerModules = consumerModules
 		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
@@ -2503,15 +2506,19 @@ struct GraphFuzzerPublicMockDraw {
 	/// declaration fulfills it and its public mock takes a builder for the place – as itself, an `Instantiator`, or a
 	/// `LazilyInstantiated`, a third of the draws each – and receives `labelPanelBuilder: Instantiator<LabelPanel>`, which its
 	/// mock builds at its root, beside the hole. `LabelPanel` receives `labelGadget: Instantiator<LabelWidget>`, which
-	/// `mock()` takes, so that the mock binds the hole's value under a name of its own. `LabelWidget` conforms to
-	/// `Instantiable` by hand too. Every roll is made before any is read.
+	/// `mock()` takes, so that the mock binds the hole's value under a name of its own. In half the draws `LabelHome` also
+	/// instantiates `labelSprocket`, a second hole after it, whose payload carries the renamed `labelGadget`
+	/// (`holeLabelReceivedByPromotedSiblingFollowedByHole`). `LabelWidget` and `LabelSprocket` conform to `Instantiable` by
+	/// hand too. Every roll is made before any is read.
 	private mutating func drawHoleLabelReceivedByPromotedSibling(random: inout GraphFuzzerRandomNumberGenerator) {
 		let drawsShape = random.percentChance(20)
 		let holeKindRoll = random.integer(in: 0...2)
+		let followingHoleRoll = random.percentChance(50)
 		guard drawsShape, !hasDifferingMockCondition else { return }
 		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
 		let gadgetName = name("LabelGadget")
 		let widgetName = name("LabelWidget")
+		let sprocketName = name("LabelSprocket")
 		let holeType = switch holeKindRoll {
 		case 0: gadgetName
 		case 1: "Instantiator<\(gadgetName)>"
@@ -2525,8 +2532,13 @@ struct GraphFuzzerPublicMockDraw {
 			Property(attribute: "@Received", label: "labelPanelBuilder", type: "Instantiator<\(panel.name)>"),
 			Property(attribute: "@Instantiated", label: "labelGadget", type: holeType),
 		]
+		var handConformingTypeNames = [gadgetName, widgetName]
+		if followingHoleRoll {
+			home.properties.append(Property(attribute: "@Instantiated", label: "labelSprocket", type: sprocketName))
+			handConformingTypeNames.append(sprocketName)
+		}
 		// Each conforms to `Instantiable` by hand, so that no `@Instantiable` declaration fulfills it.
-		let handConformingClasses: [(Rendering) -> String] = [gadgetName, widgetName].map { typeName in
+		let handConformingClasses: [(Rendering) -> String] = handConformingTypeNames.map { typeName in
 			{ rendering in "\(rendering.modifier(.public))final class \(typeName): Instantiable, Sendable {\n\t\(rendering.modifier(.public))init() {}\n}" }
 		}
 		files.append(File(module: .seamModule, declarations: [Self.renderer(of: home), Self.renderer(of: panel)] + handConformingClasses))
@@ -3684,6 +3696,9 @@ extension GraphFuzzerPublicMockDraw {
 				features.insert(.holeLabelReceivedByPromotedSiblingHeldInInstantiator)
 			} else if hole.type.hasPrefix("LazilyInstantiated<") {
 				features.insert(.holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated)
+			}
+			if home.properties.contains(where: { $0.label == "labelSprocket" }) {
+				features.insert(.holeLabelReceivedByPromotedSiblingFollowedByHole)
 			}
 		}
 		return features

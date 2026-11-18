@@ -6470,16 +6470,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   - lazilyInstantiatedInstanceProperties: The by-value properties whose labels the site's owner holds only as a
 	///     `LazilyInstantiated` property, whose instance the payload reads, as the owner's receivers do
 	///     (`SeamHoles.valuesArguments(of:readingInstancesOf:)`).
+	///   - bindingNamesPassedByName: In a public mock, the bindings the site's owner is passed by name, under which the
+	///     payload reads the fields of their labels, as its owner's other payloads do
+	///     (`MockParameterNode.ValuesBinding.line(bindingNamesPassedByName:lazilyInstantiatedBindingNames:)`).
 	///   - lazilyInstantiatedBindingNames: In a public mock, the names the wrappers it binds apart from their instances' labels
 	///     have where the site is built, which the payload reads a field of such a wrapper by
 	///     (`SeamHoles.valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)`).
 	///   - isNonisolated: Whether the tree spells a `@Sendable` local function it declares `nonisolated` too.
-	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:], isNonisolated: Bool = false) -> String {
+	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [], bindingNamesPassedByName: [String: String] = [:], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:], isNonisolated: Bool = false) -> String {
 		// A place nested by type is handed what its owner binds before it; the cases that lead to it carry what each type on
 		// the way binds, which the tree bound before building the next. A place in a `@Sendable` enum held in a `Sendable`
 		// wrapper carries nothing.
 		let fields = site.enumPlace?.values ?? site.fields
-		let arguments = SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)
+		let arguments = SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)
 		// The expression that builds the value: the place's member, called on the struct the last case on its route returned,
 		// or on the builder itself. An instantiator's member returns the builder its wrapper keeps. Every place of a seam's or
 		// a public mock's tree has its enum's case, whose member takes a struct (`SeamBuilderFamilies`). The `""` is never
@@ -8190,6 +8193,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				rootDependenciesToRebind.append(dependency)
 			}
 		}
+		// The payloads the root's level binds carry the root's own values, which they read as the root is passed them: under
+		// the name of a binding the root is passed by name, such as a site of a hole bound apart from its label, which another
+		// value holds (`renamingAliases`), as a node's payloads read what the node is passed by name.
+		var rootBindingNamesPassedByName = [String: String]()
+		for dependency in instantiable.dependencies {
+			if let name = returnDisambiguationMap[dependency.property.label]?[dependency.property.typeDescription], name != dependency.property.label {
+				rootBindingNamesPassedByName[dependency.property.label] = name
+			}
+		}
 
 		// Emit the root's own `.received` disambiguation rebinds before the tree
 		// so any nested builder functions emitted within the tree can capture
@@ -8236,6 +8248,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						sendableConfigurationTypeNames: context.sendableConfigurationTypeNames,
 					)
 				},
+				enclosingBindingNamesPassedByName: rootBindingNamesPassedByName,
 			)
 			lines.append(contentsOf: bodyBindings)
 		} else {
@@ -10851,6 +10864,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					holeFunctionName: holeFunctionName,
 					flatParameterDisambiguationMap: combinedDisambiguationMap,
 					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+					// A site's payload reads its owner's values as the owner's other payloads read them.
+					bindingNamesPassedByName: enclosingBindingNamesPassedByName,
 					indent: indent,
 				)
 				if let loop = alias.loop {
@@ -11188,11 +11203,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		holeFunctionName: String?,
 		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
+		bindingNamesPassedByName: [String: String],
 		indent: String,
 	) -> String {
 		if let holeSite = alias.holeSite {
 			return GeneratedCodeText.indentingNonEmptyLines(
-				of: buildSiteCode(of: alias.property, at: holeSite, functionName: holeFunctionName, readingInstancesOf: alias.holeSiteLazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames),
+				of: buildSiteCode(
+					of: alias.property,
+					at: holeSite,
+					functionName: holeFunctionName,
+					readingInstancesOf: alias.holeSiteLazilyInstantiatedInstanceProperties,
+					bindingNamesPassedByName: bindingNamesPassedByName,
+					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+				),
 				by: indent,
 			)
 		}
