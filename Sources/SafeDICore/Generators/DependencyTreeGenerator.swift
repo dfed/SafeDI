@@ -1564,7 +1564,9 @@ public actor DependencyTreeGenerator {
 		/// inside the tree `instantiated` creates, or inside the tree of a sibling that the chain reaches. The
 		/// properties can be of any type, `Instantiator`s included. No notes; the chain is spelled out in the message.
 		/// `requiredOnlyIfAvailableAliases` are the `onlyIfAvailable` aliases a receive in the chain requires, in chain order.
-		case dependencyReceivedInSameChainItIsInstantiated(instantiated: Property, receivedPropertyChain: [Property], declarationLocation: Dependency.DeclarationLocation?, lazilyInstantiatedProperties: [Property], requiredOnlyIfAvailableAliases: [RequiredOnlyIfAvailableAlias])
+		/// `closedInSeamFill` is whether the receive is inside a fill of another module's seam and `instantiated` is declared
+		/// in that seam's tree outside the fill (`markingCyclesClosedInSeamFills(_:)`).
+		case dependencyReceivedInSameChainItIsInstantiated(instantiated: Property, receivedPropertyChain: [Property], declarationLocation: Dependency.DeclarationLocation?, lazilyInstantiatedProperties: [Property], requiredOnlyIfAvailableAliases: [RequiredOnlyIfAvailableAlias], closedInSeamFill: Bool = false)
 		/// Reported at the hand-written `mock` method of a type whose `mock()` this module also generates.
 		case handWrittenMockSharesGeneratedMockName(TypeDescription, declaredAt: [Dependency.DeclarationLocation?], isGeneratedForAdditionalMocksToGenerate: Bool)
 		/// Reported at a hand-written `mock` method this module sees for a type another module generates a public mock
@@ -1842,7 +1844,7 @@ public actor DependencyTreeGenerator {
 				violation.sourceDiagnostics
 			case let .constantDependencyCycleDetected(cycle, closingDependency):
 				cycle.sourceDiagnostics(summary: "Dependency cycle: \(cycle.asSource). \(closingDependency.remedy)\(Self.lazilyInstantiatedHint(for: cycle.lazilyInstantiatedProperties))")
-			case let .dependencyReceivedInSameChainItIsInstantiated(instantiated, receivedPropertyChain, declarationLocation, lazilyInstantiatedProperties, requiredOnlyIfAvailableAliases):
+			case let .dependencyReceivedInSameChainItIsInstantiated(instantiated, receivedPropertyChain, declarationLocation, lazilyInstantiatedProperties, requiredOnlyIfAvailableAliases, closedInSeamFill):
 				[
 					SourceDiagnostic(
 						severity: .error,
@@ -1854,9 +1856,7 @@ public actor DependencyTreeGenerator {
 							.joined(separator: " -> ")
 							+ ". `\(instantiated.asSource)` is received while it is still being instantiated. "
 							// An alias received only if available says how to break the cycle at that alias.
-							+ (requiredOnlyIfAvailableAliases.isEmpty
-								? Self.onlyIfAvailableRemedy
-								: requiredOnlyIfAvailableAliases.map(\.hint).joined(separator: " "))
+							+ Self.remedy(ofCycleClosedThrough: requiredOnlyIfAvailableAliases, closedInSeamFill: closedInSeamFill)
 							+ Self.lazilyInstantiatedHint(for: lazilyInstantiatedProperties),
 					),
 				]
@@ -1872,6 +1872,87 @@ public actor DependencyTreeGenerator {
 
 		/// How to break a cycle closed by a receive of a property that is still being built.
 		fileprivate static let onlyIfAvailableRemedy = "Remove this @\(Dependency.Source.receivedRawValue) property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
+
+		/// How to break a cycle that a receive closes through `requiredOnlyIfAvailableAliases`: at each alias, or, where the
+		/// receive requires none, as `onlyIfAvailableRemedy` says. A receive inside a fill of another module's seam that closes
+		/// a cycle on a property the seam's tree declares outside the fill is only removed: received only if available, the
+		/// fill would read a value the seam's tree binds only after it calls the fill's builder, which that builder's values
+		/// struct cannot carry, an error of its own (`SeamBuilderParameters`' `declarationBoundAfterSite` finding). Any other
+		/// cycle keeps both remedies, as the same graph built inline does.
+		private static func remedy(ofCycleClosedThrough requiredOnlyIfAvailableAliases: [RequiredOnlyIfAvailableAlias], closedInSeamFill: Bool) -> String {
+			if !requiredOnlyIfAvailableAliases.isEmpty {
+				requiredOnlyIfAvailableAliases.map(\.hint).joined(separator: " ")
+			} else if closedInSeamFill {
+				"Remove this @\(Dependency.Source.receivedRawValue) property."
+			} else {
+				onlyIfAvailableRemedy
+			}
+		}
+
+		/// What a fill of a hole of another module's seam declares: where each receive of a type the fill's tree builds is
+		/// declared, and the properties that tree instantiates, as declared and as cycle validation sees them.
+		struct SeamFillDeclarations {
+			let receiveLocations: Set<Dependency.DeclarationLocation>
+			let instantiatedProperties: Set<Property>
+
+			/// The declarations of the fill of each of `holes` that `typeDescriptionToScopeMap` builds: the tree of the scope
+			/// the hole's owner instantiates its property with. A hole the map does not fill has none.
+			static func ofFills(of holes: [SeamSignature.Hole], in typeDescriptionToScopeMap: [TypeDescription: Scope]) -> [SeamFillDeclarations] {
+				holes.compactMap { hole in
+					var fillScope: Scope?
+					for case let .instantiated(property, childScope, _) in typeDescriptionToScopeMap[hole.ownerType]?.propertiesToGenerate ?? [] where property == hole.property {
+						fillScope = childScope
+					}
+					guard let fillScope else { return nil }
+					var receiveLocations = Set<Dependency.DeclarationLocation>()
+					var instantiatedProperties = Set<Property>()
+					// A tree can be as deep as the module has types, so the walk keeps its own stack.
+					var reachedScopes: Set<Scope> = [fillScope]
+					var scopesToVisit = [fillScope]
+					while let scope = scopesToVisit.popLast() {
+						for dependency in scope.instantiable.dependencies {
+							switch dependency.source {
+							case .received, .aliased:
+								if let declarationLocation = dependency.declarationLocation {
+									receiveLocations.insert(declarationLocation)
+								}
+							case .instantiated, .forwarded:
+								break
+							}
+						}
+						for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
+							instantiatedProperties.insert(property)
+							instantiatedProperties.insert(property.asValidatedForDependencyCycles)
+							if reachedScopes.insert(childScope).inserted {
+								scopesToVisit.append(childScope)
+							}
+						}
+					}
+					return SeamFillDeclarations(receiveLocations: receiveLocations, instantiatedProperties: instantiatedProperties)
+				}
+			}
+		}
+
+		/// This error with each cycle that a receive inside one of `fills` closes, on a property that fill's tree does not
+		/// instantiate, marked `closedInSeamFill`, so that it states only the remedy that leads to no other error. A receive is
+		/// known by its declaration, so a type that fills a hole and is also built outside any fill loses the second remedy
+		/// for a cycle it closes there too, a deliberate loss the seam rules record.
+		func markingCyclesClosedInSeamFills(_ fills: [SeamFillDeclarations]) -> Self {
+			if case let .independentErrors(errors) = self {
+				.independentErrors(errors.map { $0.markingCyclesClosedInSeamFills(fills) })
+			} else if case let .dependencyReceivedInSameChainItIsInstantiated(instantiated, receivedPropertyChain, declarationLocation?, lazilyInstantiatedProperties, requiredOnlyIfAvailableAliases, _) = self {
+				.dependencyReceivedInSameChainItIsInstantiated(
+					instantiated: instantiated,
+					receivedPropertyChain: receivedPropertyChain,
+					declarationLocation: declarationLocation,
+					lazilyInstantiatedProperties: lazilyInstantiatedProperties,
+					requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases,
+					closedInSeamFill: fills.contains { $0.receiveLocations.contains(declarationLocation) && !$0.instantiatedProperties.contains(instantiated) },
+				)
+			} else {
+				self
+			}
+		}
 
 		/// A sentence to end a cycle diagnostic with when lazily instantiated properties are on the cycle, or an
 		/// empty string when none are. Cycle validation sees such a property as the constant it stands for, so the
@@ -1913,7 +1994,7 @@ public actor DependencyTreeGenerator {
 				return "No production @\(InstantiableVisitor.macroName) declaration fulfills \(reference). A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills `\(typeName)`."
 			} else {
 				// The usual cause, a declaration SafeDI reads that is not decorated, leads.
-				var message = "No @\(InstantiableVisitor.macroName) type or extension fulfills \(reference). Decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName), or list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it."
+				var message = "No @\(InstantiableVisitor.macroName) type or extension fulfills \(reference). \(fulfillingDeclarationRemedy(typeName: typeName))."
 				if let unreadImports {
 					// A file that imports only modules the run read names no type of a module the run could be given.
 					if unreadImports.importsModuleNotRead ?? true {
@@ -1924,6 +2005,12 @@ public actor DependencyTreeGenerator {
 				}
 				return message
 			}
+		}
+
+		/// The remedy for a type, named `typeName`, that no `@Instantiable` declaration fulfills: a declaration that fulfills
+		/// it, as a decorated type or extension, or as a type that lists it among the types it fulfills, which a protocol needs.
+		static func fulfillingDeclarationRemedy(typeName: String) -> String {
+			"Decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName), or list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it"
 		}
 
 		/// The sentences that say how `integration` gives the run the module that declares a type that fulfills the type
@@ -3075,13 +3162,14 @@ public actor DependencyTreeGenerator {
 					// only if available reads either, so for an optional receive the hint also has it received so.
 					let suggestedProperty = property.asUnwrappedProperty
 					let typeName = suggestedProperty.typeDescription.asSource
+					let fulfilledTypeName = suggestedProperty.typeDescription.asInstantiatedType.asSource
 					let instantiatedDeclarationEnd = if property.typeDescription.isOptional {
 						", and add `onlyIfAvailable: true` to this property’s `@\(Dependency.Source.receivedRawValue)`, which then accepts the non-optional form, to fix."
 					} else {
 						" to fix."
 					}
 					// A forwarded property can be optional, and fulfills a required receive of exactly its type.
-					let forwardingRemedy = "Declare `@\(Dependency.Source.forwardedRawValue) let \(property.asSource)` on a type below `\(root.asSource)` in the chain, and pass the value to the `Instantiator` that builds that type"
+					let forwardingRemedy = "`@\(Dependency.Source.forwardedRawValue) let \(property.asSource)` on a type below `\(root.asSource)` in the chain, and pass the value to the `Instantiator` that builds that type"
 					hint = if suggestedProperty.propertyType.isErasedInstantiator {
 						// The `@Instantiated` macro requires an erased instantiator to name the type it builds.
 						"Declare `@\(Dependency.Source.instantiatedRawValue)(fulfilledByType:) let \(suggestedProperty.asSource)`, naming the type it builds, on `\(root.asSource)` or on another type in the chain\(instantiatedDeclarationEnd)"
@@ -3093,13 +3181,11 @@ public actor DependencyTreeGenerator {
 							// The remedies of the cycle error a declaration would lead to.
 							"Declaring `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` would close a dependency cycle wherever it is declared, because the tree of `\(suggestedProperty.typeDescription.asInstantiatedType.asSource)` requires `\(suggestedProperty.label)`, which is still being built there. \(DependencyTreeGeneratorError.onlyIfAvailableRemedy)"
 						case .typeHasForwardedProperties:
-							"`\(typeName)` has @\(Dependency.Source.forwardedRawValue) properties, so SafeDI builds it only through an `Instantiator`, never as an @\(Dependency.Source.instantiatedRawValue) constant. \(forwardingRemedy), to fix."
+							"`\(typeName)` has @\(Dependency.Source.forwardedRawValue) properties, so SafeDI builds it only through an `Instantiator`, never as an @\(Dependency.Source.instantiatedRawValue) constant. Declare \(forwardingRemedy), to fix."
 						case .typeIsNotInstantiable:
-							if property.typeDescription.isOptional {
-								"No @\(InstantiableVisitor.macroName) declaration fulfills `\(typeName)`, so SafeDI cannot instantiate it. \(forwardingRemedy); or decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName), declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain\(instantiatedDeclarationEnd)"
-							} else {
-								"No @\(InstantiableVisitor.macroName) declaration fulfills `\(typeName)`, so SafeDI cannot instantiate it. \(forwardingRemedy); or decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName) and declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain, to fix."
-							}
+							// A declaration that fulfills the type leads, as for an `@Instantiated` property of a type no declaration
+							// fulfills, and names the type as a declaration fulfills it, which spells an existential without `any`.
+							"No @\(InstantiableVisitor.macroName) declaration fulfills `\(fulfilledTypeName)`, so SafeDI cannot instantiate it. \(DependencyTreeGeneratorError.fulfillingDeclarationRemedy(typeName: fulfilledTypeName)), and declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain\(instantiatedDeclarationEnd) Or declare \(forwardingRemedy)."
 						}
 					}
 					fixIts = []
@@ -3471,21 +3557,28 @@ public actor DependencyTreeGenerator {
 
 				let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
 				var receivedPropertiesCache = ReceivedPropertiesCache()
-				try validatePropertiesAreFulfillable(
-					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
-					receivedPropertiesCache: &receivedPropertiesCache,
-					cyclesOnly: false,
-				)
-				// The walk above does not follow a received `Instantiator` to the scope it builds,
-				// so it misses siblings that capture one another; report them now that it has passed.
-				// A root is enclosed by no scope.
-				var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
-				try Self.validateChildrenDoNotRequireEachOther(
-					inTreesRootedAt: validatedRootInstantiables.sorted().compactMap { typeDescriptionToScopeMap[$0] },
-					cache: &receivedPropertiesCache,
-					validation: &childrenRequiringEachOtherValidation,
-				)
-				try validateCyclesFromRootsOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, receivedPropertiesCache: &receivedPropertiesCache)
+				do {
+					try validatePropertiesAreFulfillable(
+						typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+						receivedPropertiesCache: &receivedPropertiesCache,
+						cyclesOnly: false,
+					)
+					// The walk above does not follow a received `Instantiator` to the scope it builds,
+					// so it misses siblings that capture one another; report them now that it has passed.
+					// A root is enclosed by no scope.
+					var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
+					try Self.validateChildrenDoNotRequireEachOther(
+						inTreesRootedAt: validatedRootInstantiables.sorted().compactMap { typeDescriptionToScopeMap[$0] },
+						cache: &receivedPropertiesCache,
+						validation: &childrenRequiringEachOtherValidation,
+					)
+					try validateCyclesFromRootsOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, receivedPropertiesCache: &receivedPropertiesCache)
+				} catch let error as DependencyTreeGeneratorError {
+					// The trees build each foreign seam inline with the fills of its holes, which the seam's module calls
+					// through its builders. Only membership in what each fill declares is read, so the seams' order is moot.
+					let foreignSeamHoles = try foreignSeamRoots.get().values.flatMap { $0?.signature.holes ?? [] }
+					throw error.markingCyclesClosedInSeamFills(DependencyTreeGeneratorError.SeamFillDeclarations.ofFills(of: foreignSeamHoles, in: typeDescriptionToScopeMap))
+				}
 				inlineForeignSeamTrees = try inlineTreesOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap)
 				self.validatedScopes = Set(typeDescriptionToScopeMap.values)
 				// A module whose declarations hold no seam generates from the validated scopes, as it always has.
@@ -9646,41 +9739,48 @@ public actor DependencyTreeGenerator {
 		// its own root with what its tree receives from outside it in scope (below), which a mock root's walk would report hidden
 		// beneath a declaration of the label in its tree.
 		let foreignPublicMockTypes = Set(seams.foreignPublicMocks.keys)
-		try validatePropertiesAreFulfillable(
-			typeDescriptionToScopeMap: inlineTypeDescriptionToScopeMap,
-			additionalMockRootScopes: additionalMockRootScopes,
-			receivedPropertiesCache: &receivedPropertiesCache,
-			cyclesOnly: true,
-			excludingMockRootsOf: foreignPublicMockTypes,
-			// A listed type's mock fills the places of its calls as a `generateMock` type's does, so a cycle its tree closes
-			// through a fill is real, and the mock would not compile: its tree, fills included, is walked for cycles as that
-			// type's is, and reports the cycle its production twin reports.
-			validatesAdditionalMockRootsForCycles: true,
-		)
-		// The walk above does not follow a received `Instantiator` to the scope it builds, which a fill's tree can close a
-		// cycle through, so siblings that capture one another are judged after it, as production judges them.
-		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
-		let mockRootScopes = typeDescriptionToFulfillingInstantiableMap.values
-			.filter { ($0.generatesMock || additionalMocksToGenerate.contains($0.concreteInstantiable.asSource)) && !foreignPublicMockTypes.contains($0.concreteInstantiable) }
-			.map(\.concreteInstantiable)
-			.sorted()
-			.compactMap { inlineTypeDescriptionToScopeMap[$0] }
-		try Self.validateChildrenDoNotRequireEachOther(
-			inTreesRootedAt: mockRootScopes.uniqued(),
-			cache: &receivedPropertiesCache,
-			validation: &childrenRequiringEachOtherValidation,
-		)
-		let rootScopes = calledTypesWithPlaces.compactMap { inlineTypeDescriptionToScopeMap[$0] }.map { scope in
-			var receivedFromOutside = Set<Property>()
-			for property in Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received {
-				receivedFromOutside.insert(property)
-				if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
-					receivedFromOutside.insert(instanceProperty)
+		do {
+			try validatePropertiesAreFulfillable(
+				typeDescriptionToScopeMap: inlineTypeDescriptionToScopeMap,
+				additionalMockRootScopes: additionalMockRootScopes,
+				receivedPropertiesCache: &receivedPropertiesCache,
+				cyclesOnly: true,
+				excludingMockRootsOf: foreignPublicMockTypes,
+				// A listed type's mock fills the places of its calls as a `generateMock` type's does, so a cycle its tree closes
+				// through a fill is real, and the mock would not compile: its tree, fills included, is walked for cycles as that
+				// type's is, and reports the cycle its production twin reports.
+				validatesAdditionalMockRootsForCycles: true,
+			)
+			// The walk above does not follow a received `Instantiator` to the scope it builds, which a fill's tree can close a
+			// cycle through, so siblings that capture one another are judged after it, as production judges them.
+			var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
+			let mockRootScopes = typeDescriptionToFulfillingInstantiableMap.values
+				.filter { ($0.generatesMock || additionalMocksToGenerate.contains($0.concreteInstantiable.asSource)) && !foreignPublicMockTypes.contains($0.concreteInstantiable) }
+				.map(\.concreteInstantiable)
+				.sorted()
+				.compactMap { inlineTypeDescriptionToScopeMap[$0] }
+			try Self.validateChildrenDoNotRequireEachOther(
+				inTreesRootedAt: mockRootScopes.uniqued(),
+				cache: &receivedPropertiesCache,
+				validation: &childrenRequiringEachOtherValidation,
+			)
+			let rootScopes = calledTypesWithPlaces.compactMap { inlineTypeDescriptionToScopeMap[$0] }.map { scope in
+				var receivedFromOutside = Set<Property>()
+				for property in Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received {
+					receivedFromOutside.insert(property)
+					if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
+						receivedFromOutside.insert(instanceProperty)
+					}
 				}
+				return ValidatedRootScope(scope: scope, boundProperties: [], isMock: false, receivedFromOutside: receivedFromOutside)
 			}
-			return ValidatedRootScope(scope: scope, boundProperties: [], isMock: false, receivedFromOutside: receivedFromOutside)
+			try validatePropertiesAreFulfillable(onRootScopes: rootScopes, typeDescriptionToScopeMap: inlineTypeDescriptionToScopeMap, cyclesOnly: true)
+		} catch let error as DependencyTreeGeneratorError {
+			// A called type with places is built inline with the fills of its places, which its own module calls through its
+			// builders, as production builds a foreign seam. Only membership in what each fill declares is read.
+			let places = calledTypesWithPlaces.flatMap { publicMockCalls[$0]?.holes ?? [] }
+			throw error.markingCyclesClosedInSeamFills(DependencyTreeGeneratorError.SeamFillDeclarations.ofFills(of: places, in: inlineTypeDescriptionToScopeMap))
 		}
-		try validatePropertiesAreFulfillable(onRootScopes: rootScopes, typeDescriptionToScopeMap: inlineTypeDescriptionToScopeMap, cyclesOnly: true)
 	}
 
 	/// The error for each place among `places`, the places of one builder of `seam`'s – a seam, or a mock in its place – that
@@ -10871,7 +10971,7 @@ public actor DependencyTreeGenerator {
 								// describe: every receive of a property being built there is judged as being built.
 								nearestDeclaration: { _ in nil },
 							)
-						} catch let DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(instantiated, receivedPropertyChain, declarationLocation, lazilyInstantiatedProperties, _) {
+						} catch let DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(instantiated, receivedPropertyChain, declarationLocation, lazilyInstantiatedProperties, _, _) {
 							// The chain starts with this receive, which closes it only because it requires the aliases.
 							throw DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(
 								instantiated: instantiated,

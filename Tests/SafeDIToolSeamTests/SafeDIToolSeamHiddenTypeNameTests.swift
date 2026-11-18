@@ -2136,7 +2136,7 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	"""
 
 	private static func missingDatabaseMessage(chain: String) -> String {
-		"error: @Received property `database: Database` is not @Instantiated or @Forwarded in chain: \(chain). No @Instantiable declaration fulfills `Database`, so SafeDI cannot instantiate it. Declare `@Forwarded let database: Database` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type; or decorate `Database`, or an extension of it, with @Instantiable and declare `@Instantiated let database: Database` on `Root` or on another type in the chain, to fix."
+		"error: @Received property `database: Database` is not @Instantiated or @Forwarded in chain: \(chain). No @Instantiable declaration fulfills `Database`, so SafeDI cannot instantiate it. Decorate `Database`, or an extension of it, with @Instantiable, or list `Database` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it, and declare `@Instantiated let database: Database` on `Root` or on another type in the chain to fix. Or declare `@Forwarded let database: Database` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type."
 	}
 
 	/// The error at a hidden `store` or its generated-mock reach, whose fix leads with what keeps it out of the app.
