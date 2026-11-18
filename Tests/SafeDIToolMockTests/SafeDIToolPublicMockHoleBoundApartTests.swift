@@ -1346,8 +1346,8 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			    }
 
 			    static func mock(
-			        gizmo_GizmoProtocol: GizmoProtocol,
-			        gadget: GadgetProtocol,
+			        gizmo_GizmoProtocol: any GizmoProtocol,
+			        gadget: any GadgetProtocol,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_gizmo() -> Widget {
