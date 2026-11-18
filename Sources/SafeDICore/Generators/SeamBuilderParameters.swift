@@ -1651,7 +1651,7 @@ extension DependencyTreeGenerator {
 			// `nil`, which the fill's tree passes it too, unless the property is an instantiator, which is handed a wrapper of
 			// its own (see `instantiatorBuildingSite`).
 			guard !onlyIfAvailable || ScopeGenerator.isBuilder(hole.property) || !isHolesOwnProperty(property) else { return }
-			let reader = DependencyTreeGeneratorError.FillFinding.Reader(property: property, type: instantiable.concreteInstantiable, declarationLocation: declarationLocation, passingCall: passingCall)
+			let reader = DependencyTreeGeneratorError.FillFinding.Reader(property: property, type: instantiable.concreteInstantiable, declarationLocation: declarationLocation, passingCall: passingCall, isOnlyIfAvailable: onlyIfAvailable)
 			let sameLabelFields = fields.filter { $0.property.label == property.label }
 			// A value a cycle in the seam's tree hands the site's owner when it builds it again is wrong at every level but the
 			// first, whether a field carries the label or the fill reads it from the caller's scope.
@@ -1961,6 +1961,8 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			/// For a receive of a seam's call, which passes it on to the seam's tree: the type that makes the call, the call's
 			/// property, and where that property is declared.
 			var passingCall: PassingCall?
+			/// Whether the type receives the value only if available, which a remedy that receives it again follows.
+			let isOnlyIfAvailable: Bool
 		}
 
 		/// A call of a seam, by `callingType`'s `property`, declared at `declarationLocation`.
@@ -2342,7 +2344,10 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 						message += " Instantiate `\(declaration.property.label)` outside `\(seam.asSource)` and declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on `\(seam.asSource)`, so the \(buildersPossessive) caller reads its own, or \(fulfillRemedy(of: sendablePlaces))."
 					}
 					if !plainPlaces.isEmpty {
-						message += " Declare `@\(Dependency.Source.receivedRawValue) let \(reader.property.asSource)` on \(listed(seamsInPlaceOrder(plainPlaces))), so the \(namesSeveralBuilders ? "builders’ values structs carry" : "builder’s values struct carries") it, or \(fulfillRemedy(of: plainPlaces))."
+						// The receive follows the reader's, as the error about a declaration on the path to a seam built again does: a
+						// reader only if available is handed `nil` inline on a route that binds no value.
+						let receive = reader.isOnlyIfAvailable ? "@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)" : "@\(Dependency.Source.receivedRawValue)"
+						message += " Declare `\(receive) let \(reader.property.asSource)` on \(listed(seamsInPlaceOrder(plainPlaces))), so the \(namesSeveralBuilders ? "builders’ values structs carry" : "builder’s values struct carries") it, or \(fulfillRemedy(of: plainPlaces))."
 					}
 					return message
 				}
