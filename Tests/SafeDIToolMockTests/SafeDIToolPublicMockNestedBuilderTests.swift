@@ -1176,10 +1176,10 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesEachPassedUpBuilderSendableOnce_whenInternalCallerBuildsAPublicCallerInASendableFunction() async throws {
+	mutating func generate_takesOneSendableBuilderForBothFamiliesItPassesUp_whenInternalCallerBuildsAPublicCallerInASendableFunction() async throws {
 		// `BoardScreen` builds `Board` in a `@Sendable` builder function, which captures both builders `Board`'s mock passes
-		// up: the plain family's, which `BoardScreen`'s mock takes `@Sendable`, and the `@Sendable` family's, which is
-		// `@Sendable` already.
+		// up: the plain family's, which `BoardScreen`'s mock takes `@Sendable`, and so in the `@Sendable` family, and the
+		// `@Sendable` family's, so `BoardScreen`'s mock takes one `@Sendable` builder, labeled for that family, for both.
 		let heldBoardScreen = """
 		import Core
 		import Mid
@@ -1234,14 +1234,16 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceBuilder: @escaping @Sendable () -> any Service,
 		        serviceSendableBuilder: @escaping @Sendable () -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> BoardScreen {
+		        let __safeDI_serviceSendableBuilder = serviceSendableBuilder
 		        _ = Board.__safeDI_Board_mock_A0691DACD6EAFFC3.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let __safeDI_board__safeDIBuilder = safeDIOverrides.board
 		        @Sendable func __safeDI_board() -> Board {
-		            Board.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), serviceSendableBuilder: .init(__safeDI_noScope: serviceSendableBuilder), safeDIOverrides: __safeDI_board__safeDIBuilder?() ?? .init())
+		            let serviceBuilder: () -> any Service = __safeDI_serviceSendableBuilder
+		            let serviceSendableBuilder: @Sendable () -> any Service = __safeDI_serviceSendableBuilder
+		            return Board.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder), serviceSendableBuilder: .init(__safeDI_noScope: serviceSendableBuilder), safeDIOverrides: __safeDI_board__safeDIBuilder?() ?? .init())
 		        }
 		        let board = SendableInstantiator<Board>(__safeDI_board)
 		        return BoardScreen(board: board)
