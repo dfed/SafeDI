@@ -6400,20 +6400,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					)
 				}
 				let argumentList = try instantiable.generateArgumentList()
-				if instantiable.dependencies.isEmpty {
-					return ""
-				} else {
-					// Attributes precede the initializer's modifiers on its line, as `mockAttributes` precede a mock's.
-					let attributesPrefix = instantiable.generatedInitializerAttributes.isEmpty ? "" : "\(instantiable.generatedInitializerAttributes) "
-					return try await """
-					extension \(instantiable.concreteInstantiable.asSource) {
-					    \(attributesPrefix)public \(instantiable.declarationType == .classType ? "convenience " : "")init() {
-					\(generateProperties(propertiesGeneratedLater: propertiesGeneratedLater, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames, leadingMemberWhitespace: "        ", fillPlaceBindings: fillPlaceBindings).joined(separator: "\n"))
-					        self.init(\(argumentList))
-					    }
-					}
-					"""
-				}
+				guard let rootInitializer = RootInitializer(of: instantiable, argumentList: argumentList) else { return "" }
+				return try await rootInitializer.spelled(writing: generateProperties(
+					propertiesGeneratedLater: propertiesGeneratedLater,
+					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
+					leadingMemberWhitespace: "        ",
+					fillPlaceBindings: fillPlaceBindings,
+				))
 			case let .mock(context):
 				return try await generateMockRootCode(
 					instantiable: instantiable,
