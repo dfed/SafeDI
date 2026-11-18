@@ -8115,7 +8115,7 @@ struct SafeDIToolGraphFuzzerTests {
 		1_329, 1_335, 1_352, 1_362, 1_369, 1_372, 1_432, 1_433, 1_436, 1_447, 1_464, 1_492, 1_504, 1_524, 1_525, 1_531,
 		1_556, 1_563, 1_567, 1_580, 1_602, 1_633, 1_646, 1_664, 1_724, 1_742, 1_784, 1_804, 1_830, 1_832, 1_857, 1_867,
 		1_896, 1_898, 1_915, 1_935, 1_970,
-	, 1_042, 1_072, 1_329, 1_492]
+	]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
