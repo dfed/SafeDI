@@ -351,8 +351,9 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case unbuildableValuePublicMockCallTierOmits
 	/// On a stream of its own (`publicMockHoleLabelRandomSeedMask`), a hole whose label a promoted sibling receives as another
 	/// type: `LabelHome`, a `.public` type, instantiates `labelGadget` of a type no declaration fulfills, and receives
-	/// `labelPanelBuilder`, whose `LabelPanel` receives `labelGadget: Instantiator<LabelWidget>`, so that the public mock binds
-	/// the hole's value under a name of its own. The hole is held as itself, or as one of the wrappers below.
+	/// `labelPanelBuilder`, whose `LabelPanel` receives `labelGadget: Instantiator<LabelWidget>`, so that the public mock would
+	/// bind the hole's value under a name of its own, which the tool rejects (`publicMockHoleSiteBoundApartFinding`), so no
+	/// graph of this shape is accepted. The hole is held as itself, or as one of the wrappers below.
 	case holeLabelReceivedByPromotedSibling
 	case holeLabelReceivedByPromotedSiblingHeldInInstantiator
 	case holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated
@@ -363,17 +364,17 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 
 	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,
 	/// `retentionPublicMockValueBeforeBuilder…`, `sharedConstructionPublicMock…`, `keywordLabeledPublicMock…`,
-	/// `overrideClosure…`, `promotedHolePublicMock…`, `unbuildableValuePublicMockCall…`, `holeLabelReceivedByPromotedSibling…`,
-	/// and `T6`'s mock isolated to the main actor or built with its hand-written mock in another public mock) draws this
-	/// shape, whose count in accepted graphs the public mock corpus pins too (`acceptedPublicMockDrawFeatureCounts`), at least
-	/// ten each. `unbuildableValuePublicMockCallTierOmits` is not one: the tool rejects every graph of it, which
-	/// `publicMockCorpusOmittedValueGraphCount` counts.
+	/// `overrideClosure…`, `promotedHolePublicMock…`, `unbuildableValuePublicMockCall…`, and `T6`'s mock isolated to the main
+	/// actor or built with its hand-written mock in another public mock) draws this shape, whose count in accepted graphs the
+	/// public mock corpus pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
+	/// `unbuildableValuePublicMockCallTierOmits` is not one: the tool rejects every graph of it, which
+	/// `publicMockCorpusOmittedValueGraphCount` counts. Nor is `holeLabelReceivedByPromotedSibling…`, whose every graph the
+	/// tool rejects too, with the first of `GraphFuzzerOracle.publicMockOnlyErrorMarkers`.
 	var isCountedWhenAccepted: Bool {
 		rawValue.hasPrefix("selfBuildingPublicMock") || rawValue.hasPrefix("placeInsidePublicMockFill") || isRetentionShape
 			|| rawValue.hasPrefix("sharedConstructionPublicMock") || rawValue.hasPrefix("keywordLabeledPublicMock")
 			|| rawValue.hasPrefix("overrideClosureCall") || rawValue.hasPrefix("promotedHolePublicMock")
 			|| rawValue.hasPrefix("unbuildableValuePublicMockCall") && self != .unbuildableValuePublicMockCallTierOmits
-			|| rawValue.hasPrefix("holeLabelReceivedByPromotedSibling")
 			|| self == .holeMockIsolatedToMainActor || self == .holeHandWrittenMockBuiltInPublicMock
 	}
 
@@ -2662,15 +2663,18 @@ struct GraphFuzzerPublicMockDraw {
 	/// `InlineArray`, whose spelling SafeDI cannot read.
 	static let unreadableUnbuildableValueType = "[3 of Int]"
 
-	/// A hole whose label a promoted sibling receives as another type, in one graph in five: `LabelHome`, a `.public` type of
-	/// the declaring module, instantiates `labelGadget` of `LabelGadget`, which conforms to `Instantiable` by hand, so that no
-	/// declaration fulfills it and its public mock takes a builder for the place – as itself, an `Instantiator`, or a
-	/// `LazilyInstantiated`, a third of the draws each – and receives `labelPanelBuilder: Instantiator<LabelPanel>`, which its
-	/// mock builds at its root, beside the hole. `LabelPanel` receives `labelGadget: Instantiator<LabelWidget>`, which
-	/// `mock()` takes, so that the mock binds the hole's value under a name of its own. `LabelWidget` conforms to
-	/// `Instantiable` by hand too. Every roll is made before any is read.
+	/// A hole whose label a promoted sibling receives as another type, in one graph in a hundred: `LabelHome`, a `.public`
+	/// type of the declaring module, instantiates `labelGadget` of `LabelGadget`, which conforms to `Instantiable` by hand, so
+	/// that no declaration fulfills it and its public mock would take a builder for the place – as itself, an `Instantiator`,
+	/// or a `LazilyInstantiated`, a third of the draws each – and receives `labelPanelBuilder: Instantiator<LabelPanel>`,
+	/// which its mock builds at its root, beside the hole. `LabelPanel` receives `labelGadget: Instantiator<LabelWidget>`,
+	/// which `mock()` takes, so that the mock would bind the hole's value under a name of its own and hand its builder
+	/// `LabelHome`'s values by label while it holds two under the hole's: the tool rejects the graph
+	/// (`publicMockHoleSiteBoundApartFinding`). The roll is rare, since each graph it draws is one the tool rejects, which no
+	/// oracle of an accepted graph judges. `LabelWidget` conforms to `Instantiable` by hand too. Every roll is made before any
+	/// is read.
 	private mutating func drawHoleLabelReceivedByPromotedSibling(random: inout GraphFuzzerRandomNumberGenerator) {
-		let drawsShape = random.percentChance(20)
+		let drawsShape = random.percentChance(1)
 		let holeKindRoll = random.integer(in: 0...2)
 		guard drawsShape, !hasDifferingMockCondition else { return }
 		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
