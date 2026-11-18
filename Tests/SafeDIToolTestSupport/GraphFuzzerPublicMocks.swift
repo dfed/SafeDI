@@ -335,6 +335,10 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case holeLabelReceivedByPromotedSibling
 	case holeLabelReceivedByPromotedSiblingHeldInInstantiator
 	case holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated
+	/// The hole is labeled `labelGadget_lazilyInstantiated`, the name SafeDI generates for the `LazilyInstantiated` it wraps
+	/// around the value `LabelPanel` receives as `labelGadget: LazilyInstantiated<LabelWidget>`, so that no type receives
+	/// the hole's label and the tool names the generated value instead.
+	case holeLabelReceivedByPromotedSiblingEqualsGeneratedName
 
 	/// The shapes of `overrideClosureCall` whose call can hand an override closure no builder a person writes, so that the
 	/// consumer's overrides hold no member for it.
@@ -2506,12 +2510,15 @@ struct GraphFuzzerPublicMockDraw {
 	/// which its mock builds at its root, beside the hole. `LabelPanel` receives `labelGadget: Instantiator<LabelWidget>`,
 	/// which `mock()` takes, so that the mock would bind the hole's value under a name of its own and hand its builder
 	/// `LabelHome`'s values by label while it holds two under the hole's: the tool rejects the graph
-	/// (`publicMockHoleSiteBoundApartFinding`). The roll is rare, since each graph it draws is one the tool rejects, which no
-	/// oracle of an accepted graph judges. `LabelWidget` conforms to `Instantiable` by hand too. Every roll is made before any
-	/// is read.
+	/// (`publicMockHoleSiteBoundApartFinding`). In half the draws the hole is labeled `labelGadget_lazilyInstantiated`
+	/// instead, and `LabelPanel` receives `labelGadget: LazilyInstantiated<LabelWidget>`, around whose value the mock binds a
+	/// `LazilyInstantiated` under that name: no type receives the hole's label, and the tool rejects the graph naming the
+	/// generated value. The roll is rare, since each graph it draws is one the tool rejects, which no oracle of an accepted
+	/// graph judges. `LabelWidget` conforms to `Instantiable` by hand too. Every roll is made before any is read.
 	private mutating func drawHoleLabelReceivedByPromotedSibling(random: inout GraphFuzzerRandomNumberGenerator) {
 		let drawsShape = random.percentChance(1)
 		let holeKindRoll = random.integer(in: 0...2)
+		let labelsHoleAsGeneratedName = random.percentChance(50)
 		guard drawsShape, !hasDifferingMockCondition else { return }
 		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
 		let gadgetName = name("LabelGadget")
@@ -2522,12 +2529,12 @@ struct GraphFuzzerPublicMockDraw {
 		default: "LazilyInstantiated<\(gadgetName)>"
 		}
 		var panel = InstantiableClass(name: name("LabelPanel"), conformances: conformances)
-		panel.properties = [Property(attribute: "@Received", label: "labelGadget", type: "Instantiator<\(widgetName)>")]
+		panel.properties = [Property(attribute: "@Received", label: "labelGadget", type: labelsHoleAsGeneratedName ? "LazilyInstantiated<\(widgetName)>" : "Instantiator<\(widgetName)>")]
 		var home = InstantiableClass(name: name("LabelHome"), conformances: conformances)
 		home.mockGeneration = ".public"
 		home.properties = [
 			Property(attribute: "@Received", label: "labelPanelBuilder", type: "Instantiator<\(panel.name)>"),
-			Property(attribute: "@Instantiated", label: "labelGadget", type: holeType),
+			Property(attribute: "@Instantiated", label: labelsHoleAsGeneratedName ? "labelGadget_lazilyInstantiated" : "labelGadget", type: holeType),
 		]
 		// Each conforms to `Instantiable` by hand, so that no `@Instantiable` declaration fulfills it.
 		let handConformingClasses: [(Rendering) -> String] = [gadgetName, widgetName].map { typeName in
@@ -3682,8 +3689,11 @@ extension GraphFuzzerPublicMockDraw {
 			features.insert(.unbuildableValuePublicMockCall)
 			features.insert(cache.properties.contains { $0.type == "\(unreadableUnbuildableValueType)?" } ? .unbuildableValuePublicMockCallTierOmits : .unbuildableValuePublicMockCallPublicTier)
 		}
-		if let home = types.declarations["\(prefix)LabelHome"], let hole = home.properties.first(where: { $0.label == "labelGadget" }) {
+		if let home = types.declarations["\(prefix)LabelHome"], let hole = home.properties.first(where: { $0.attribute == "@Instantiated" }) {
 			features.insert(.holeLabelReceivedByPromotedSibling)
+			if hole.label == "labelGadget_lazilyInstantiated" {
+				features.insert(.holeLabelReceivedByPromotedSiblingEqualsGeneratedName)
+			}
 			if hole.type.hasPrefix("Instantiator<") {
 				features.insert(.holeLabelReceivedByPromotedSiblingHeldInInstantiator)
 			} else if hole.type.hasPrefix("LazilyInstantiated<") {

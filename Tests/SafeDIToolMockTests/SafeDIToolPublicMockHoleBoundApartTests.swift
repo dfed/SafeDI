@@ -2644,6 +2644,276 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			    }
 			""",
 		),
+		HoleBoundApartShape(
+			testDescription: "hole labeled as a sibling SafeDI names apart",
+			files: [
+				"""
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    public init(settingsBuilder: Instantiator<Settings>, gizmo_Widget: Gizmo) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let settingsBuilder: Instantiator<Settings>
+				    @Instantiated public let gizmo_Widget: Gizmo
+				}
+				@Instantiable
+				public final class Settings: Instantiable {
+				    public init(gizmo: Widget, prefs: Prefs) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let gizmo: Widget
+				    @Received public let prefs: Prefs
+				}
+				@Instantiable
+				public final class Prefs: Instantiable {
+				    public init(gizmo: Knob) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let gizmo: Knob
+				}
+				@Instantiable
+				public final class Widget: Instantiable {
+				    public init() {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				}
+				@Instantiable
+				public final class Knob: Instantiable {
+				    public init() {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				}
+				public final class Gizmo: Instantiable { public init() {} }
+				""",
+			],
+			diagnostics: [
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo_Widget: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and cannot hand `gizmo_Widget` to the builder `mock()` is passed, because SafeDI names another value of the mock `gizmo_Widget`. Declare `gizmo_Widget: Gizmo` on `Screen` under another label to fix."),
+			],
+			internalMockBody: """
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            gizmo_Widget: (() -> Widget)? = nil,
+			            gizmo_Knob: (() -> Knob)? = nil,
+			            prefs: ((Knob) -> Prefs)? = nil,
+			            settingsBuilder: ((Widget, Prefs) -> Settings)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                gizmo_Widget: gizmo_Widget,
+			                gizmo_Knob: gizmo_Knob,
+			                prefs: prefs,
+			                settingsBuilder: settingsBuilder
+			            )
+			        }
+
+			        var gizmo_Widget: (() -> Widget)? { __safeDI_storage.gizmo_Widget }
+			        var gizmo_Knob: (() -> Knob)? { __safeDI_storage.gizmo_Knob }
+			        var prefs: ((Knob) -> Prefs)? { __safeDI_storage.prefs }
+			        var settingsBuilder: ((Widget, Prefs) -> Settings)? { __safeDI_storage.settingsBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                gizmo_Widget: (() -> Widget)?,
+			                gizmo_Knob: (() -> Knob)?,
+			                prefs: ((Knob) -> Prefs)?,
+			                settingsBuilder: ((Widget, Prefs) -> Settings)?
+			            ) {
+			                self.gizmo_Widget = gizmo_Widget
+			                self.gizmo_Knob = gizmo_Knob
+			                self.prefs = prefs
+			                self.settingsBuilder = settingsBuilder
+			            }
+
+			            let gizmo_Widget: (() -> Widget)?
+			            let gizmo_Knob: (() -> Knob)?
+			            let prefs: ((Knob) -> Prefs)?
+			            let settingsBuilder: ((Widget, Prefs) -> Settings)?
+			        }
+			    }
+
+			    static func mock(
+			        gizmo_Widget_Gizmo: Gizmo,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        let gizmo_Widget = if let safeDIBuilder = safeDIOverrides.gizmo_Widget { safeDIBuilder() } else { Widget() }
+			        let gizmo_Knob = if let safeDIBuilder = safeDIOverrides.gizmo_Knob { safeDIBuilder() } else { Knob() }
+			        func __safeDI_prefs() -> Prefs {
+			            let gizmo: Knob = gizmo_Knob
+			            return if let safeDIBuilder = safeDIOverrides.prefs { safeDIBuilder(gizmo) } else { Prefs(gizmo: gizmo) }
+			        }
+			        let prefs: Prefs = __safeDI_prefs()
+			        func __safeDI_settingsBuilder() -> Settings {
+			            let gizmo: Widget = gizmo_Widget
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo, prefs) } else { Settings(gizmo: gizmo, prefs: prefs) }
+			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			        return Screen(settingsBuilder: settingsBuilder, gizmo_Widget: gizmo_Widget_Gizmo)
+			    }
+			""",
+		),
+		HoleBoundApartShape(
+			testDescription: "hole labeled as a parameter SafeDI names apart",
+			files: [
+				"""
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    public init(settingsBuilder: Instantiator<Settings>, gizmo_Other: Gizmo) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let settingsBuilder: Instantiator<Settings>
+				    @Instantiated public let gizmo_Other: Gizmo
+				}
+				@Instantiable
+				public final class Settings: Instantiable {
+				    public init(gizmo: Other, prefs: Prefs) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let gizmo: Other
+				    @Received public let prefs: Prefs
+				}
+				@Instantiable
+				public final class Prefs: Instantiable {
+				    public init(gizmo: Another) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let gizmo: Another
+				}
+				public final class Gizmo: Instantiable { public init() {} }
+				public final class Other: Instantiable { public init() {} }
+				public final class Another: Instantiable { public init() {} }
+				""",
+			],
+			diagnostics: [
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo_Other: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and cannot hand `gizmo_Other` to the builder `mock()` is passed, because SafeDI names another value of the mock `gizmo_Other`. Declare `gizmo_Other: Gizmo` on `Screen` under another label to fix."),
+			],
+			internalMockBody: """
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            prefs: ((Another) -> Prefs)? = nil,
+			            settingsBuilder: ((Other, Prefs) -> Settings)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                prefs: prefs,
+			                settingsBuilder: settingsBuilder
+			            )
+			        }
+
+			        var prefs: ((Another) -> Prefs)? { __safeDI_storage.prefs }
+			        var settingsBuilder: ((Other, Prefs) -> Settings)? { __safeDI_storage.settingsBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                prefs: ((Another) -> Prefs)?,
+			                settingsBuilder: ((Other, Prefs) -> Settings)?
+			            ) {
+			                self.prefs = prefs
+			                self.settingsBuilder = settingsBuilder
+			            }
+
+			            let prefs: ((Another) -> Prefs)?
+			            let settingsBuilder: ((Other, Prefs) -> Settings)?
+			        }
+			    }
+
+			    static func mock(
+			        gizmo_Another: Another,
+			        gizmo_Other_: Other,
+			        gizmo_Other: Gizmo,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_prefs() -> Prefs {
+			            let gizmo: Another = gizmo_Another
+			            return if let safeDIBuilder = safeDIOverrides.prefs { safeDIBuilder(gizmo) } else { Prefs(gizmo: gizmo) }
+			        }
+			        let prefs: Prefs = __safeDI_prefs()
+			        func __safeDI_settingsBuilder() -> Settings {
+			            let gizmo: Other = gizmo_Other_
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo, prefs) } else { Settings(gizmo: gizmo, prefs: prefs) }
+			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			        return Screen(settingsBuilder: settingsBuilder, gizmo_Other: gizmo_Other)
+			    }
+			""",
+		),
+		HoleBoundApartShape(
+			testDescription: "hole labeled as a LazilyInstantiated SafeDI wraps",
+			files: [
+				"""
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    public init(settingsBuilder: Instantiator<Settings>, gizmo_lazilyInstantiated: Gizmo) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let settingsBuilder: Instantiator<Settings>
+				    @Instantiated public let gizmo_lazilyInstantiated: Gizmo
+				}
+				@Instantiable
+				public final class Settings: Instantiable {
+				    public init(gizmo: LazilyInstantiated<Other>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let gizmo: LazilyInstantiated<Other>
+				}
+				public final class Gizmo: Instantiable { public init() {} }
+				public final class Other: Instantiable { public init() {} }
+				""",
+			],
+			diagnostics: [
+				.init(fileName: "Screen.swift", line: 8, column: 5, severity: "error", message: "SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo_lazilyInstantiated: Gizmo`, which `Screen` instantiates, with a builder `mock()` is passed, and cannot hand `gizmo_lazilyInstantiated` to the builder `mock()` is passed, because SafeDI names another value of the mock `gizmo_lazilyInstantiated`. Declare `gizmo_lazilyInstantiated: Gizmo` on `Screen` under another label to fix."),
+			],
+			internalMockBody: """
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            settingsBuilder: ((LazilyInstantiated<Other>) -> Settings)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                settingsBuilder: settingsBuilder
+			            )
+			        }
+
+			        var settingsBuilder: ((LazilyInstantiated<Other>) -> Settings)? { __safeDI_storage.settingsBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                settingsBuilder: ((LazilyInstantiated<Other>) -> Settings)?
+			            ) {
+			                self.settingsBuilder = settingsBuilder
+			            }
+
+			            let settingsBuilder: ((LazilyInstantiated<Other>) -> Settings)?
+			        }
+			    }
+
+			    static func mock(
+			        gizmo: Other,
+			        gizmo_lazilyInstantiated: Gizmo,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        let gizmo_lazilyInstantiated_Other = LazilyInstantiated<Other> { gizmo }
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo_lazilyInstantiated_Other) } else { Settings(gizmo: gizmo_lazilyInstantiated_Other) }
+			        }
+			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			        return Screen(settingsBuilder: settingsBuilder, gizmo_lazilyInstantiated: gizmo_lazilyInstantiated)
+			    }
+			""",
+		),
 	]
 }
 
@@ -4551,6 +4821,407 @@ struct HoleBoundApartControl: CustomTestStringConvertible, Sendable {
 
 			extension Screen {
 			    public enum __safeDI_Screen_mock_E8B098CD58C7D48E {}
+			}
+			#endif
+			""" },
+		),
+		HoleBoundApartControl(
+			testDescription: "hole labeled as a sibling SafeDI names apart, renamed by the remedy, public caller",
+			files: [
+				"""
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    public init(settingsBuilder: Instantiator<Settings>, screenGizmo: Gizmo) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let settingsBuilder: Instantiator<Settings>
+				    @Instantiated public let screenGizmo: Gizmo
+				}
+				@Instantiable
+				public final class Settings: Instantiable {
+				    public init(gizmo: Widget, prefs: Prefs) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let gizmo: Widget
+				    @Received public let prefs: Prefs
+				}
+				@Instantiable
+				public final class Prefs: Instantiable {
+				    public init(gizmo: Knob) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let gizmo: Knob
+				}
+				@Instantiable
+				public final class Widget: Instantiable {
+				    public init() {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				}
+				@Instantiable
+				public final class Knob: Instantiable {
+				    public init() {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				}
+				public final class Gizmo: Instantiable { public init() {} }
+				""",
+			],
+			mock: { _ in """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Screen {
+			    nonisolated public enum SafeDIMockScope_Gizmo {
+			        nonisolated public struct screenGizmo_Values {
+			            public let prefs: Prefs
+			            public let settingsBuilder: Instantiator<Settings>
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let screenGizmo: (screenGizmo_Values) -> __safeDI_Built
+
+			            public init(screenGizmo: @escaping (screenGizmo_Values) -> __safeDI_Built) {
+			                self.screenGizmo = screenGizmo
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.screenGizmo = { _ in __safeDI_builder() }
+			            }
+			        }
+			    }
+
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            gizmo_Widget: (() -> Widget)? = nil,
+			            gizmo_Knob: (() -> Knob)? = nil,
+			            prefs: ((Knob) -> Prefs)? = nil,
+			            settingsBuilder: ((Widget, Prefs) -> Settings)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                gizmo_Widget: gizmo_Widget,
+			                gizmo_Knob: gizmo_Knob,
+			                prefs: prefs,
+			                settingsBuilder: settingsBuilder
+			            )
+			        }
+
+			        public var gizmo_Widget: (() -> Widget)? { __safeDI_storage.gizmo_Widget }
+			        public var gizmo_Knob: (() -> Knob)? { __safeDI_storage.gizmo_Knob }
+			        public var prefs: ((Knob) -> Prefs)? { __safeDI_storage.prefs }
+			        public var settingsBuilder: ((Widget, Prefs) -> Settings)? { __safeDI_storage.settingsBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                gizmo_Widget: (() -> Widget)?,
+			                gizmo_Knob: (() -> Knob)?,
+			                prefs: ((Knob) -> Prefs)?,
+			                settingsBuilder: ((Widget, Prefs) -> Settings)?
+			            ) {
+			                self.gizmo_Widget = gizmo_Widget
+			                self.gizmo_Knob = gizmo_Knob
+			                self.prefs = prefs
+			                self.settingsBuilder = settingsBuilder
+			            }
+
+			            let gizmo_Widget: (() -> Widget)?
+			            let gizmo_Knob: (() -> Knob)?
+			            let prefs: ((Knob) -> Prefs)?
+			            let settingsBuilder: ((Widget, Prefs) -> Settings)?
+			        }
+			    }
+
+			    public static func mock(
+			        gizmoBuilder: @escaping () -> Gizmo,
+			        gizmo_Knob: Knob? = nil,
+			        gizmo_Widget: Widget? = nil,
+			        prefs: Prefs? = nil,
+			        settingsBuilder: Instantiator<Settings>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder), gizmo_Knob: gizmo_Knob, gizmo_Widget: gizmo_Widget, prefs: prefs, settingsBuilder: settingsBuilder, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        gizmoBuilder __safeDI_gizmoBuilder: Screen.SafeDIMockScope_Gizmo.__safeDI_Builder<Gizmo>,
+			        gizmo_Knob: Knob? = nil,
+			        gizmo_Widget: Widget? = nil,
+			        prefs: Prefs? = nil,
+			        settingsBuilder: Instantiator<Settings>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        let gizmo_Widget = if let gizmo_Widget { gizmo_Widget } else if let safeDIBuilder = safeDIOverrides.gizmo_Widget { safeDIBuilder() } else { Widget() }
+			        let gizmo_Knob = if let gizmo_Knob { gizmo_Knob } else if let safeDIBuilder = safeDIOverrides.gizmo_Knob { safeDIBuilder() } else { Knob() }
+			        func __safeDI_prefs() -> Prefs {
+			            let gizmo: Knob = gizmo_Knob
+			            return if let safeDIBuilder = safeDIOverrides.prefs { safeDIBuilder(gizmo) } else { Prefs(gizmo: gizmo) }
+			        }
+			        let prefs: Prefs = if let prefs { prefs } else { __safeDI_prefs() }
+			        func __safeDI_settingsBuilder() -> Settings {
+			            let gizmo: Widget = gizmo_Widget
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo, prefs) } else { Settings(gizmo: gizmo, prefs: prefs) }
+			        }
+			        let settingsBuilder = if let settingsBuilder { settingsBuilder } else { Instantiator<Settings>(__safeDI_settingsBuilder) }
+			        let screenGizmo: Gizmo = __safeDI_gizmoBuilder.screenGizmo(SafeDIMockScope_Gizmo.screenGizmo_Values(prefs: prefs, settingsBuilder: settingsBuilder))
+			        return Screen(settingsBuilder: settingsBuilder, screenGizmo: screenGizmo)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_mock_E0D64BFAD6AFB10C {}
+			}
+			#endif
+			""" },
+		),
+		HoleBoundApartControl(
+			testDescription: "hole labeled as a parameter SafeDI names apart, renamed by the remedy, public caller",
+			files: [
+				"""
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    public init(settingsBuilder: Instantiator<Settings>, screenGizmo: Gizmo) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let settingsBuilder: Instantiator<Settings>
+				    @Instantiated public let screenGizmo: Gizmo
+				}
+				@Instantiable
+				public final class Settings: Instantiable {
+				    public init(gizmo: Other, prefs: Prefs) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let gizmo: Other
+				    @Received public let prefs: Prefs
+				}
+				@Instantiable
+				public final class Prefs: Instantiable {
+				    public init(gizmo: Another) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let gizmo: Another
+				}
+				public final class Gizmo: Instantiable { public init() {} }
+				public final class Other: Instantiable { public init() {} }
+				public final class Another: Instantiable { public init() {} }
+				""",
+			],
+			mock: { _ in """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Screen {
+			    nonisolated public enum SafeDIMockScope_Gizmo {
+			        nonisolated public struct screenGizmo_Values {
+			            public let prefs: Prefs
+			            public let settingsBuilder: Instantiator<Settings>
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let screenGizmo: (screenGizmo_Values) -> __safeDI_Built
+
+			            public init(screenGizmo: @escaping (screenGizmo_Values) -> __safeDI_Built) {
+			                self.screenGizmo = screenGizmo
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.screenGizmo = { _ in __safeDI_builder() }
+			            }
+			        }
+			    }
+
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            prefs: ((Another) -> Prefs)? = nil,
+			            settingsBuilder: ((Other, Prefs) -> Settings)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                prefs: prefs,
+			                settingsBuilder: settingsBuilder
+			            )
+			        }
+
+			        public var prefs: ((Another) -> Prefs)? { __safeDI_storage.prefs }
+			        public var settingsBuilder: ((Other, Prefs) -> Settings)? { __safeDI_storage.settingsBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                prefs: ((Another) -> Prefs)?,
+			                settingsBuilder: ((Other, Prefs) -> Settings)?
+			            ) {
+			                self.prefs = prefs
+			                self.settingsBuilder = settingsBuilder
+			            }
+
+			            let prefs: ((Another) -> Prefs)?
+			            let settingsBuilder: ((Other, Prefs) -> Settings)?
+			        }
+			    }
+
+			    public static func mock(
+			        gizmo_Another: Another,
+			        gizmo_Other: Other,
+			        gizmoBuilder: @escaping () -> Gizmo,
+			        prefs: Prefs? = nil,
+			        settingsBuilder: Instantiator<Settings>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(gizmo_Another: gizmo_Another, gizmo_Other: gizmo_Other, gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder), prefs: prefs, settingsBuilder: settingsBuilder, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        gizmo_Another: Another,
+			        gizmo_Other: Other,
+			        gizmoBuilder __safeDI_gizmoBuilder: Screen.SafeDIMockScope_Gizmo.__safeDI_Builder<Gizmo>,
+			        prefs: Prefs? = nil,
+			        settingsBuilder: Instantiator<Settings>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_prefs() -> Prefs {
+			            let gizmo: Another = gizmo_Another
+			            return if let safeDIBuilder = safeDIOverrides.prefs { safeDIBuilder(gizmo) } else { Prefs(gizmo: gizmo) }
+			        }
+			        let prefs: Prefs = if let prefs { prefs } else { __safeDI_prefs() }
+			        func __safeDI_settingsBuilder() -> Settings {
+			            let gizmo: Other = gizmo_Other
+			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo, prefs) } else { Settings(gizmo: gizmo, prefs: prefs) }
+			        }
+			        let settingsBuilder = if let settingsBuilder { settingsBuilder } else { Instantiator<Settings>(__safeDI_settingsBuilder) }
+			        let screenGizmo: Gizmo = __safeDI_gizmoBuilder.screenGizmo(SafeDIMockScope_Gizmo.screenGizmo_Values(prefs: prefs, settingsBuilder: settingsBuilder))
+			        return Screen(settingsBuilder: settingsBuilder, screenGizmo: screenGizmo)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_mock_3E18B53C797BB09C {}
+			}
+			#endif
+			""" },
+		),
+		HoleBoundApartControl(
+			testDescription: "hole labeled as a LazilyInstantiated SafeDI wraps, renamed by the remedy, public caller",
+			files: [
+				"""
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    public init(settingsBuilder: Instantiator<Settings>, screenGizmo: Gizmo) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let settingsBuilder: Instantiator<Settings>
+				    @Instantiated public let screenGizmo: Gizmo
+				}
+				@Instantiable
+				public final class Settings: Instantiable {
+				    public init(gizmo: LazilyInstantiated<Other>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received public let gizmo: LazilyInstantiated<Other>
+				}
+				public final class Gizmo: Instantiable { public init() {} }
+				public final class Other: Instantiable { public init() {} }
+				""",
+			],
+			mock: { _ in """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Screen {
+			    nonisolated public enum SafeDIMockScope_Gizmo {
+			        nonisolated public struct screenGizmo_Values {
+			            public let gizmo: LazilyInstantiated<Other>
+			            public let settingsBuilder: Instantiator<Settings>
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let screenGizmo: (screenGizmo_Values) -> __safeDI_Built
+
+			            public init(screenGizmo: @escaping (screenGizmo_Values) -> __safeDI_Built) {
+			                self.screenGizmo = screenGizmo
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.screenGizmo = { _ in __safeDI_builder() }
+			            }
+			        }
+			    }
+
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            settingsBuilder: ((LazilyInstantiated<Other>) -> Settings)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                settingsBuilder: settingsBuilder
+			            )
+			        }
+
+			        public var settingsBuilder: ((LazilyInstantiated<Other>) -> Settings)? { __safeDI_storage.settingsBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                settingsBuilder: ((LazilyInstantiated<Other>) -> Settings)?
+			            ) {
+			                self.settingsBuilder = settingsBuilder
+			            }
+
+			            let settingsBuilder: ((LazilyInstantiated<Other>) -> Settings)?
+			        }
+			    }
+
+			    public static func mock(
+			        gizmo: Other,
+			        gizmoBuilder: @escaping () -> Gizmo,
+			        settingsBuilder: Instantiator<Settings>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(gizmo: gizmo, gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder), settingsBuilder: settingsBuilder, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        gizmo: Other,
+			        gizmoBuilder __safeDI_gizmoBuilder: Screen.SafeDIMockScope_Gizmo.__safeDI_Builder<Gizmo>,
+			        settingsBuilder: Instantiator<Settings>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        let gizmo_lazilyInstantiated = LazilyInstantiated<Other> { gizmo }
+			        func __safeDI_settingsBuilder() -> Settings {
+			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo_lazilyInstantiated) } else { Settings(gizmo: gizmo_lazilyInstantiated) }
+			        }
+			        let settingsBuilder = if let settingsBuilder { settingsBuilder } else { Instantiator<Settings>(__safeDI_settingsBuilder) }
+			        let screenGizmo: Gizmo = __safeDI_gizmoBuilder.screenGizmo(SafeDIMockScope_Gizmo.screenGizmo_Values(gizmo: gizmo_lazilyInstantiated, settingsBuilder: settingsBuilder))
+			        return Screen(settingsBuilder: settingsBuilder, screenGizmo: screenGizmo)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_mock_100F7858ECAD73B9 {}
 			}
 			#endif
 			""" },

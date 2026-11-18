@@ -1393,6 +1393,22 @@ struct PublicMockFinding: Hashable, Sendable {
 		])
 	}
 
+	/// `holeDependency`, a hole of `instantiable` the mock builds with a builder `mock()` takes, has a label that no type in
+	/// the mock's tree receives but that equals a name SafeDI generates for another value of the mock (a sibling or a flat
+	/// parameter named apart, the binding of a `LazilyInstantiated` the mock wraps), which the mock binds beside it, so it
+	/// cannot hand the builders `mock()` is passed the hole's value under its label
+	/// (`ScopeGenerator.publicMockHoleSiteBoundApartFinding`). Reported at the hole's declaration, with no note, since no
+	/// declaration receives the label. The one remedy renames the hole, as `holeSiteBoundApart`'s does.
+	static func holeSiteBoundApartFromGeneratedName(_ holeDependency: Dependency, of instantiable: Instantiable) -> PublicMockFinding {
+		let typeName = "`\(instantiable.concreteInstantiable.asSource)`"
+		let hole = "`\(holeDependency.property.asSource)`"
+		let label = "`\(holeDependency.property.label)`"
+		let message = "SafeDI cannot generate the public mock of \(typeName): the mock builds \(hole), which \(typeName) instantiates, with a builder `mock()` is passed, and cannot hand \(label) to the builder `mock()` is passed, because SafeDI names another value of the mock \(label). Declare \(hole) on \(typeName) under another label to fix."
+		return PublicMockFinding(sourceDiagnostics: [
+			SourceDiagnostic(severity: .error, location: holeDependency.declarationLocation, message: message),
+		])
+	}
+
 	/// `publicTierOmitsRequiredParameter`: the `public` tier the mock requires cannot take `parameter`.
 	static func omittedRequiredParameter(_ parameter: OmittedRequiredParameter, of instantiable: Instantiable) -> PublicMockFinding {
 		let typeName = "`\(instantiable.concreteInstantiable.asSource)`"
@@ -1557,9 +1573,11 @@ extension ScopeGenerator {
 	/// hold two under this one, so it cannot hand the right one: to the builder of another place, or to the site's own
 	/// builder, whose values can hold one built from the site. Every such site is rejected, whatever else the mock holds and
 	/// in whichever order the mocked type declares it, so `renamingAliases` never binds a site apart. The sites bound apart
-	/// are the ones `generateMockRootCode` binds apart: both read `mockRootTopLevelNames`. The first such hole in the mocked
-	/// type's declaration order is reported, with a note at the first receive of its label the hole does not provide, in
-	/// the order the mock's tree first receives its dependencies.
+	/// are the ones `generateMockRootCode` binds apart: both read `mockRootTopLevelNames`, which decides it by names alone,
+	/// so the finding never depends on finding a receive of the label. The first such hole in the mocked type's declaration
+	/// order is reported, with a note at the first receive of its label the hole does not provide, in the order the mock's
+	/// tree first receives its dependencies; where no type receives the label, which then equals a name SafeDI generates for
+	/// another value of the mock, the error names that value instead, with no note.
 	///
 	/// A deliberate gap: an internal mock, and a listed type's, takes such a dependency as a parameter under its label and
 	/// has no site, so it accepts the shape (`renamingAliases` says so too).
@@ -1569,10 +1587,12 @@ extension ScopeGenerator {
 		for case let .alias(alias) in parameters.parameterTree where alias.holeSite != nil && Self.isBoundApart(alias, from: namesAliasesAreBoundApartFrom) {
 			boundApartHoleLabels.insert(alias.property.label)
 		}
-		guard let holeDependency = instantiable.dependencies.first(where: { boundApartHoleLabels.contains($0.property.label) }),
-		      let receive = firstReceive(ofLabelOf: holeDependency.property)
-		else { return nil }
-		return PublicMockFinding.holeSiteBoundApart(holeDependency, receive: receive, of: instantiable)
+		guard let holeDependency = instantiable.dependencies.first(where: { boundApartHoleLabels.contains($0.property.label) }) else { return nil }
+		if let receive = firstReceive(ofLabelOf: holeDependency.property) {
+			return PublicMockFinding.holeSiteBoundApart(holeDependency, receive: receive, of: instantiable)
+		} else {
+			return PublicMockFinding.holeSiteBoundApartFromGeneratedName(holeDependency, of: instantiable)
+		}
 	}
 
 	/// The first receive of `holeProperty`'s label in this mock root's tree that a declaration of `holeProperty` does not

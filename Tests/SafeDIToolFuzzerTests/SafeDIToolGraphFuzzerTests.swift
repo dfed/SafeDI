@@ -8602,6 +8602,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeLabelReceivedByPromotedSibling: 8,
 		.holeLabelReceivedByPromotedSiblingHeldInInstantiator: 2,
 		.holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated: 3,
+		.holeLabelReceivedByPromotedSiblingEqualsGeneratedName: 2,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,
