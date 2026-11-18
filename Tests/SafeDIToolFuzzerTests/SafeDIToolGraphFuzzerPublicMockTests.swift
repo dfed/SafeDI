@@ -384,6 +384,32 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["let overriddenDetailBuilder: ((@escaping () -> any S\(seed)_OverriddenPlace1Api) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure == nil)
 	}
 
+	@Test
+	func publicMockOverrideClosureFailure_reportsDroppedClosure_whenFillReadsSessionConsumerBuilds() {
+		// Seed 55's `OverriddenLive` reads `overriddenSession`, which `OverriddenDetail` does not receive: its `.public` consumer
+		// fills the place with the session it builds, as its production twin does (contract rule 7), so its overrides keep the
+		// closure, handed a function over that fill.
+		let seed: UInt64 = 55
+		let features = GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+		#expect(features.isSuperset(of: [.overrideClosureCallFillReadsConsumersValue, .overrideClosureCallCanHand]))
+		#expect(!features.contains(.overrideClosureCallPublicCallerPassesPlaceUp))
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: [])).publicMockOverrideClosureFailure?.kind == .publicMockDropsOverrideClosureItsCallCanHand)
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["public let overriddenDetailBuilder: ((@escaping () -> any S\(seed)_OverriddenPlace1Api) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure == nil)
+	}
+
+	@Test
+	func publicMockOverrideClosureFailure_reportsOfferedClosure_whenFillReadsOtherPlaceBesideSessionConsumerBuilds() {
+		// Seed 170's `OverriddenLive` reads `overriddenSession`, which `OverriddenDetail` does not receive, and the call's other
+		// place: its internal consumer fills the place, so the fill reads a value the called mock binds itself, and its
+		// overrides hold no closure.
+		let seed: UInt64 = 170
+		let features = GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+		#expect(features.isSuperset(of: [.overrideClosureCallFillReadsConsumersValue, .overrideClosureCallFillReadsCalledMocksOtherPlace]))
+		#expect(!features.contains(.overrideClosureCallCanHand))
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: [])).publicMockOverrideClosureFailure == nil)
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["let overriddenDetail: ((@escaping () -> any S\(seed)_OverriddenPlace1Api, @escaping () -> any S\(seed)_OverriddenPlace1Store) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure?.kind == .publicMockOffersOverrideClosureItsCallCannotHand)
+	}
+
 	/// The first public mock corpus seed whose call of `OverriddenDetail` can hand its override closure a builder a person
 	/// writes, with the place held as an erased instantiator.
 	private func overrideClosureCanHandErasedInstantiatorSeed() throws -> UInt64 {
