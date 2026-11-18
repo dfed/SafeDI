@@ -1494,12 +1494,12 @@ private struct ScopeGeneratorUnderConstruction {
 					reads.unavailableProperties.insert(form)
 				}
 			}
-			reads.argumentByLabel[label] = callerArgument(reading: parameter.property, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties)
+			reads.argumentByLabel[label] = callerArgument(reading: parameter.property, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties).spelled
 		}
 		reads.mockRootBindingByLabel = fill.mockRootBindingByLabel
 		for field in fill.fields where fill.labelsHandedAsMemo.contains(field.property.label) && field.bindsMemo && field.deferral == .deferred(isSendable: true) {
 			let memo = field.memoProperty
-			reads.memoArgumentByMemo[memo] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties)
+			reads.memoArgumentByMemo[memo] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties).spelled
 		}
 		return reads
 	}
@@ -1523,21 +1523,21 @@ private struct ScopeGeneratorUnderConstruction {
 	/// scope does not declare, where it declares the instance – a route of a seam's tree binds the wrapper and the caller
 	/// the value – is a wrapper the call makes of the caller's value, so the fill reads the instance where its tree reads
 	/// it on every route, as inline does; an optional one maps an optional value the scope declares.
-	private static func callerArgument(reading property: Property, of nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) -> String {
+	private static func callerArgument(reading property: Property, of nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) -> ArgumentSource {
 		guard let binding = nearestDeclarations.binding(of: property) else {
 			guard let instanceProperty = property.asLazilyInstantiatedInstanceProperty,
 			      let instanceBinding = nearestDeclarations.binding(of: instanceProperty)
-			else { return "nil" }
-			let wrapperType = property.typeDescription.unwrapped.asSource
+			else { return .nil }
+			let wrapperType = property.typeDescription.unwrapped
 			let instance = callerArgument(reading: instanceProperty, of: nearestDeclarations, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties)
 			return instanceBinding.typeDescription.isOptional
-				? "\(instance).map { value in \(wrapperType)({ value }) }"
-				: "\(wrapperType)({ \(instance) })"
+				? .optionalWrapper(of: instance, wrapperType: wrapperType)
+				: .wrapper(of: instance, wrapperType: wrapperType)
 		}
 		return !property.propertyType.isLazilyInstantiated
 			&& (binding.propertyType.isLazilyInstantiated || lazilyInstantiatedInstanceProperties.contains(property.asUnwrappedProperty))
-			? "\(property.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
-			: property.label
+			? .lazyInstance(label: property.label, throughOptional: false)
+			: .binding(label: property.label)
 	}
 
 	/// The field a public mock caller's fill of a case nested by type takes for one label, given `fields`, the case's places'
@@ -1779,7 +1779,7 @@ private struct ScopeGeneratorUnderConstruction {
 	/// the levels between the two calls bind is the one inline reads there, which the enclosing call's caller does not see.
 	private func enclosingLevelReentryArguments(ofDispatcherKeyed key: String) -> [String] {
 		(enclosingLevelReentries[key]?.parameters ?? []).map { property in
-			"\(property.label.spelledAsArgumentLabel): \(Self.callerArgument(reading: property, of: childNearestDeclarations, lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties))"
+			CallArgument(label: property.label, source: Self.callerArgument(reading: property, of: childNearestDeclarations, lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties)).spelled
 		}
 	}
 

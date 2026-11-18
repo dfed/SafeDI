@@ -19,7 +19,7 @@
 // SOFTWARE.
 
 /// Where an argument generated code passes comes from, with one spelling for each.
-enum ArgumentSource: Hashable, Sendable {
+indirect enum ArgumentSource: Hashable, Sendable {
 	/// The nearest declaration of `label`: a binding, or a parameter of the enclosing function.
 	case binding(label: String)
 	/// The instance of the `LazilyInstantiated` bound as `label`, read through the optional where the wrapper is optional.
@@ -29,6 +29,11 @@ enum ArgumentSource: Hashable, Sendable {
 	/// A value a wrapper forwards, `spreadName`: the value itself where it is the only one, and otherwise its element named
 	/// `label`.
 	case forwardedSpread(label: String, isOnly: Bool, spreadName: String)
+	/// A wrapper of type `wrapperType` made of `value`, which it returns: what a call hands a fill that reads a
+	/// `LazilyInstantiated` where the caller declares only its instance.
+	case wrapper(of: ArgumentSource, wrapperType: TypeDescription)
+	/// The optional `value` mapped into a wrapper of type `wrapperType`, as `wrapper(of:wrapperType:)` makes one.
+	case optionalWrapper(of: ArgumentSource, wrapperType: TypeDescription)
 
 	var spelled: String {
 		switch self {
@@ -40,6 +45,10 @@ enum ArgumentSource: Hashable, Sendable {
 			"nil"
 		case let .forwardedSpread(label, isOnly, spreadName):
 			isOnly ? spreadName : "\(spreadName).\(label)"
+		case let .wrapper(value, wrapperType):
+			"\(wrapperType.asSource)({ \(value.spelled) })"
+		case let .optionalWrapper(value, wrapperType):
+			"\(value.spelled).map { value in \(wrapperType.asSource)({ value }) }"
 		}
 	}
 }
