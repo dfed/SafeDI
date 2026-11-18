@@ -387,6 +387,8 @@ To build a value SafeDI cannot build, later or more than once, forward a closure
 
 Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. SafeDI fills a `@Received` property from the nearest type above it that instantiates, forwards, or [renames](#renaming-and-retyping-dependencies) a property with the same label. If no type above provides the property, the build fails.
 
+Do not declare a label again beneath a type that already declares it on the same path from a root: give the inner declaration its own label. Types on separate branches may share a label. SafeDI accepts some graphs that redeclare a label on one path today, but a future feature release may reject them.
+
 That property must have the received type, with two exceptions:
 
 - A receive [only if available](#conditionally-receiving-dependencies), `@Received(onlyIfAvailable: true) let user: User?`, also accepts a non-optional `user: User`.
