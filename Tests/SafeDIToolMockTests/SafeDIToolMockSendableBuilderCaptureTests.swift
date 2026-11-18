@@ -26,7 +26,7 @@ import Testing
 
 /// A mock is passed each `@Instantiated` wrapper it cannot build, and binds it where production declares it, so a `@Sendable`
 /// builder function beneath that declaration that reads the wrapper captures it, as production's does: the mock reports
-/// production's error at the same receive, for every kind of caller.
+/// production's error at the same receive, for every kind of caller and whether or not the build compiles the mocks.
 struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 	// MARK: Initialization
 
@@ -42,7 +42,7 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 
 	// MARK: Tests
 
-	@Test(arguments: MockCaptureCaller.allCases, [MockCaptureBuild.mockConditionActive])
+	@Test(arguments: MockCaptureCaller.allCases, MockCaptureBuild.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsProductionsError_whenSendableBuilderReceivesInstanceOfLazilyInstantiatedMockCannotBuild(caller: MockCaptureCaller, build: MockCaptureBuild) async {
 		// `Gizmo` is no `@Instantiable`, so `mock()` takes `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` declares: the
