@@ -446,6 +446,60 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["let overriddenDetail: ((@escaping () -> any S\(seed)_OverriddenPlace1Api, @escaping () -> any S\(seed)_OverriddenPlace1Store) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure?.kind == .publicMockOffersOverrideClosureItsCallCannotHand)
 	}
 
+	/// The runs of `seed`'s public mock graph, accepted with `generatedFile` as the declaring module's generated file.
+	private func carrierOrderRuns(seed: UInt64, generatedFile: String) -> GraphFuzzerToolRuns {
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic])
+		let accepted = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S\(seed)_CarrierHome+SafeDIMock.swift": generatedFile], warnings: [])
+		return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: accepted, secondOutcome: accepted, knownRightOutcome: accepted)
+	}
+
+	/// The first public mock corpus seed that draws `drawCarrierBeforeSiblingPublicMock`'s holder before a sibling, beneath
+	/// `CarrierShelf` or not, with the labels its declaring type declares.
+	private func carrierBeforeSiblingSeed(beneathConfiguredChild: Bool) throws -> (seed: UInt64, labels: [String]) {
+		let seed = try #require((UInt64(0)..<1_000).first { seed in
+			let features = GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+			return features.contains(.carrierBeforeSibling) && features.contains(.carrierBeforeSiblingBeneathConfiguredChild) == beneathConfiguredChild
+		})
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic])
+		let labels = try #require(GraphFuzzerPublicMockDraw.carrierBeforeSiblingDeclaredLabels(in: GraphFuzzerPublicMockDraw.DeclaredTypes(of: fixture), prefix: fixture.typeNamePrefix))
+		return (seed, labels)
+	}
+
+	/// `CarrierHome`'s generated mock, whose overrides' initializer takes `labels` in order, after a scope struct's initializer.
+	private func carrierHomeMock(seed: UInt64, labels: [String]) -> String {
+		"extension S\(seed)_CarrierHome {\n    nonisolated public struct carrierStore_Values {\n        public init(\n            carrierStore: S\(seed)_CarrierStore\n        ) {}\n    }\n\n    nonisolated public struct SafeDIOverrides {\n        public init(\n\(labels.map { "            \($0): (() -> Int)? = nil,\n" }.joined())        ) {}\n    }\n}\n"
+	}
+
+	@Test
+	func publicMockOverridesOrderFailure_reportsBuildOrder_whenHolderOfPlaceIsDeclaredBeforeSibling() throws {
+		// A graph that declares the holder of a place before a sibling fails when `CarrierHome`'s overrides take the holder after
+		// its siblings, as the mock builds them, and passes when they take the three in declaration order; a graph that does not
+		// draw the holder passes either way.
+		let (seed, labels) = try carrierBeforeSiblingSeed(beneathConfiguredChild: false)
+		let holderLabel = try #require(labels.first { $0 != "carrierStore" && $0 != "carrierCart" })
+		let buildOrder = labels.filter { $0 != holderLabel } + [holderLabel]
+		#expect(carrierOrderRuns(seed: seed, generatedFile: carrierHomeMock(seed: seed, labels: buildOrder)).publicMockOverridesOrderFailure?.kind == .publicMockOverridesFollowBuildOrder)
+		#expect(carrierOrderRuns(seed: seed, generatedFile: carrierHomeMock(seed: seed, labels: labels)).publicMockOverridesOrderFailure == nil)
+		let otherSeed = try #require((UInt64(0)..<1_000).first { !GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateMockPublic])).contains(.carrierBeforeSibling) })
+		#expect(carrierOrderRuns(seed: otherSeed, generatedFile: carrierHomeMock(seed: otherSeed, labels: buildOrder)).publicMockOverridesOrderFailure == nil)
+	}
+
+	@Test
+	func publicMockOverridesOrderFailure_reportsBuildOrder_whenConfiguredChildDeclaresHolderOfPlaceBeforeSibling() throws {
+		// Where `CarrierShelf` declares the three, its module-level configuration takes them in declaration order, beside the
+		// unlabeled builder; `CarrierHome`'s overrides, which take the configuration, are not read.
+		let (seed, labels) = try carrierBeforeSiblingSeed(beneathConfiguredChild: true)
+		let holderLabel = try #require(labels.first { $0 != "carrierStore" && $0 != "carrierCart" })
+		/// The configuration, whose initializer takes `labels` in order.
+		func configuration(labels: [String]) -> String {
+			"nonisolated public struct __safeDI_FuzzFeature_S\(seed)_CarrierShelf_MockConfiguration {\n    public init(\n\(labels.map { "        \($0): (() -> Int)? = nil,\n" }.joined())        _ safeDIBuilder: (() -> S\(seed)_CarrierShelf)? = nil\n    ) {}\n}\n"
+		}
+		let homeMock = carrierHomeMock(seed: seed, labels: ["carrierShelf"])
+		#expect(carrierOrderRuns(seed: seed, generatedFile: homeMock + configuration(labels: labels.filter { $0 != holderLabel } + [holderLabel])).publicMockOverridesOrderFailure?.kind == .publicMockOverridesFollowBuildOrder)
+		#expect(carrierOrderRuns(seed: seed, generatedFile: homeMock + configuration(labels: labels)).publicMockOverridesOrderFailure == nil)
+		#expect(carrierOrderRuns(seed: seed, generatedFile: homeMock).publicMockOverridesOrderFailure?.kind == .publicMockOverridesFollowBuildOrder)
+	}
+
 	/// The first public mock corpus seed whose call of `OverriddenDetail` can hand its override closure a builder a person
 	/// writes, with the place held as an erased instantiator.
 	private func overrideClosureCanHandErasedInstantiatorSeed() throws -> UInt64 {

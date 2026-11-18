@@ -629,21 +629,21 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            user_User: (() -> User)? = nil,
-			            user_Draft: (() -> Draft)? = nil,
 			            a: ((User, any Api) -> A)? = nil,
+			            user_Draft: (() -> Draft)? = nil,
 			            b: ((Draft, any Api) -> B)? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                user_User: user_User,
-			                user_Draft: user_Draft,
 			                a: a,
+			                user_Draft: user_Draft,
 			                b: b
 			            )
 			        }
 
 			        public var user_User: (() -> User)? { __safeDI_storage.user_User }
-			        public var user_Draft: (() -> Draft)? { __safeDI_storage.user_Draft }
 			        public var a: ((User, any Api) -> A)? { __safeDI_storage.a }
+			        public var user_Draft: (() -> Draft)? { __safeDI_storage.user_Draft }
 			        public var b: ((Draft, any Api) -> B)? { __safeDI_storage.b }
 
 			        private let __safeDI_storage: __safeDI_Storage
@@ -651,19 +651,19 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			        private final class __safeDI_Storage {
 			            init(
 			                user_User: (() -> User)?,
-			                user_Draft: (() -> Draft)?,
 			                a: ((User, any Api) -> A)?,
+			                user_Draft: (() -> Draft)?,
 			                b: ((Draft, any Api) -> B)?
 			            ) {
 			                self.user_User = user_User
-			                self.user_Draft = user_Draft
 			                self.a = a
+			                self.user_Draft = user_Draft
 			                self.b = b
 			            }
 
 			            let user_User: (() -> User)?
-			            let user_Draft: (() -> Draft)?
 			            let a: ((User, any Api) -> A)?
+			            let user_Draft: (() -> Draft)?
 			            let b: ((Draft, any Api) -> B)?
 			        }
 			    }
@@ -925,36 +925,36 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            user: (() -> User)? = nil,
-			            promoted: ((User) -> Promoted)? = nil,
-			            middle: __safeDI_Feature_Middle_MockConfiguration = .init()
+			            middle: __safeDI_Feature_Middle_MockConfiguration = .init(),
+			            promoted: ((User) -> Promoted)? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                user: user,
-			                promoted: promoted,
-			                middle: middle
+			                middle: middle,
+			                promoted: promoted
 			            )
 			        }
 
 			        public var user: (() -> User)? { __safeDI_storage.user }
-			        public var promoted: ((User) -> Promoted)? { __safeDI_storage.promoted }
 			        public var middle: __safeDI_Feature_Middle_MockConfiguration { __safeDI_storage.middle }
+			        public var promoted: ((User) -> Promoted)? { __safeDI_storage.promoted }
 
 			        private let __safeDI_storage: __safeDI_Storage
 
 			        private final class __safeDI_Storage {
 			            init(
 			                user: (() -> User)?,
-			                promoted: ((User) -> Promoted)?,
-			                middle: __safeDI_Feature_Middle_MockConfiguration
+			                middle: __safeDI_Feature_Middle_MockConfiguration,
+			                promoted: ((User) -> Promoted)?
 			            ) {
 			                self.user = user
-			                self.promoted = promoted
 			                self.middle = middle
+			                self.promoted = promoted
 			            }
 
 			            let user: (() -> User)?
-			            let promoted: ((User) -> Promoted)?
 			            let middle: __safeDI_Feature_Middle_MockConfiguration
+			            let promoted: ((User) -> Promoted)?
 			        }
 			    }
 
@@ -1119,36 +1119,36 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            user: (() -> User)? = nil,
-			            promoted: ((User) -> Promoted)? = nil,
-			            middleBuilder: __safeDI_Feature_Middle_MockConfiguration = .init()
+			            middleBuilder: __safeDI_Feature_Middle_MockConfiguration = .init(),
+			            promoted: ((User) -> Promoted)? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                user: user,
-			                promoted: promoted,
-			                middleBuilder: middleBuilder
+			                middleBuilder: middleBuilder,
+			                promoted: promoted
 			            )
 			        }
 
 			        public var user: (() -> User)? { __safeDI_storage.user }
-			        public var promoted: ((User) -> Promoted)? { __safeDI_storage.promoted }
 			        public var middleBuilder: __safeDI_Feature_Middle_MockConfiguration { __safeDI_storage.middleBuilder }
+			        public var promoted: ((User) -> Promoted)? { __safeDI_storage.promoted }
 
 			        private let __safeDI_storage: __safeDI_Storage
 
 			        private final class __safeDI_Storage {
 			            init(
 			                user: (() -> User)?,
-			                promoted: ((User) -> Promoted)?,
-			                middleBuilder: __safeDI_Feature_Middle_MockConfiguration
+			                middleBuilder: __safeDI_Feature_Middle_MockConfiguration,
+			                promoted: ((User) -> Promoted)?
 			            ) {
 			                self.user = user
-			                self.promoted = promoted
 			                self.middleBuilder = middleBuilder
+			                self.promoted = promoted
 			            }
 
 			            let user: (() -> User)?
-			            let promoted: ((User) -> Promoted)?
 			            let middleBuilder: __safeDI_Feature_Middle_MockConfiguration
+			            let promoted: ((User) -> Promoted)?
 			        }
 			    }
 

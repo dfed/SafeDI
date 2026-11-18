@@ -1923,7 +1923,7 @@ A hand-written call of a seam’s initializer creates every argument at the call
 
 A builder keeps alive no more than the same tree keeps when it is built inline in one module. A builder you write takes only what its place forwards, so it keeps alive only what its own closure captures. A builder SafeDI generates is handed each value where the seam binds it, and keeps only the values its implementation reads.
 
-A seam builds a property whose tree holds a place of a hole after the properties beside it whose trees hold none, unless one of their trees receives it, while inline builds them in the order [Conditionally receiving dependencies](#conditionally-receiving-dependencies) describes. A seam’s public mock builds in the seam’s order. Say a seam declares `@Instantiated let launch: any LaunchStep` and then `@Instantiated let db: Db`: the seam builds `db` first, so the app’s `LaunchStep` is created after `db`, where inline it is created first. To build `launch` first, have `Db` receive it, even only if available.
+A seam builds a property whose tree holds a place of a hole after the properties beside it whose trees hold none, unless one of their trees receives it, while inline builds them in the order [Conditionally receiving dependencies](#conditionally-receiving-dependencies) describes. A seam’s public mock creates its values in the seam’s order. Say a seam declares `@Instantiated let launch: any LaunchStep` and then `@Instantiated let db: Db`: the seam builds `db` first, so the app’s `LaunchStep` is created after `db`, where inline it is created first. To build `launch` first, have `Db` receive it, even only if available.
 
 ### Generated imports
 

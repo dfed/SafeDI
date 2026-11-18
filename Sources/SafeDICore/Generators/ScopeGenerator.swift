@@ -4608,7 +4608,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// `orderedPropertyToGenerateIndices`, computed afresh, which reads nothing but what the generator and its
 	/// children hold from their creation, so a walk of a seam's tree can order a scope's children without awaiting it.
-	nonisolated func computeOrderedPropertyToGenerateIndices() -> [Int] {
+	/// - Parameter startingCarriersLast: Whether a child that holds a place starts after its siblings that hold none
+	///   (`startsAsCarrier(_:)`), as the build does. `false` gives the inline build's order, declaration order with each
+	///   child after the siblings it depends upon, in which a mock's `SafeDIOverrides` and each configuration take their
+	///   members (`MockParameterNode.inlineOrderPosition`).
+	nonisolated func computeOrderedPropertyToGenerateIndices(startingCarriersLast: Bool = true) -> [Int] {
 		let siblingGraph = Self.siblingGraph(of: propertiesToGenerate, requiredOnlyIfAvailableAliasProperties: requiredOnlyIfAvailableAliasProperties)
 		// Each child is ordered as a unit of its own, but a loop of builders that receive one another, which is ordered as
 		// one unit (see `ReceivedBuilderLoops`): a receive inside a loop reads a rebinding in the receiving member's function,
@@ -4663,7 +4667,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// order. A sibling that depends on a carrier and is declared after a later carrier is built after that one, so a
 		// fill of the later carrier's site that reads it is reported, not supported
 		// (`FillFinding.Kind.declarationBoundAfterSite`): a deliberate gap, which a finer order could close later.
-		let startIndices: [Int] = if propertiesToGenerate.contains(where: startsAsCarrier) {
+		let startIndices: [Int] = if startingCarriersLast, propertiesToGenerate.contains(where: startsAsCarrier) {
 			{
 				let carrierIndices = propertiesToGenerate.indices.filter { startsAsCarrier(propertiesToGenerate[$0]) }.map { unitByIndex[$0] }
 				let reachesCarrier = propertiesToGenerate.indices.map { index in
@@ -9325,6 +9329,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	final class MockParameterNode: Sendable {
 		/// The property label on the parent type's init (e.g., "service", "childBuilder").
 		let propertyLabel: String
+		/// The position of this node among its siblings in the inline build's order: declaration order, each after the
+		/// siblings it depends upon. The mock builds a child that holds one of its places after its siblings that hold
+		/// none, but `SafeDIOverrides` and each configuration take their members in this order (`inInlineOrder(_:)`), so
+		/// the initializers a person calls follow the order of the same types' internal mock and inline build, and no
+		/// change to where the mock builds a child moves them.
+		let inlineOrderPosition: Int
 		/// The full type description of the property (e.g., `Instantiator<Child>`).
 		let typeDescription: TypeDescription
 		/// The instantiated type — `typeDescription.asInstantiatedType` (e.g., `Child`).
@@ -9483,6 +9493,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		init(
 			propertyLabel: String,
+			inlineOrderPosition: Int,
 			typeDescription: TypeDescription,
 			instantiatedTypeDescription: TypeDescription,
 			isInstantiator: Bool,
@@ -9526,6 +9537,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			isReadOutsideItsLoop: Bool,
 		) {
 			self.propertyLabel = propertyLabel
+			self.inlineOrderPosition = inlineOrderPosition
 			self.typeDescription = typeDescription
 			self.instantiatedTypeDescription = instantiatedTypeDescription
 			self.isInstantiator = isInstantiator
@@ -9600,6 +9612,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The property this node builds.
 		var property: Property {
 			Property(label: propertyLabel, typeDescription: typeDescription)
+		}
+
+		/// `siblings`, the property nodes of one scope, in the inline build's order (`inlineOrderPosition`), which
+		/// `SafeDIOverrides` and each configuration take their members in.
+		static func inInlineOrder(_ siblings: [MockParameterNode]) -> [MockParameterNode] {
+			siblings.sorted { $0.inlineOrderPosition < $1.inlineOrderPosition }
 		}
 
 		/// The property-typed children of this node (filters out alias items).
@@ -10378,9 +10396,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
+		// The position of each child in the inline build's order, by its index among `propertiesToGenerate`: the build's
+		// order without a child that holds a place starting after its siblings, which is the build's order itself where no
+		// child holds one.
+		let inlineOrderedIndices = propertiesToGenerate.contains(where: startsAsCarrier) ? computeOrderedPropertyToGenerateIndices(startingCarriersLast: false) : orderedPropertyToGenerateIndices
+		var inlineOrderPositionByIndex = [Int](repeating: 0, count: propertiesToGenerate.count)
+		for (position, index) in inlineOrderedIndices.enumerated() {
+			inlineOrderPositionByIndex[index] = position
+		}
+
 		// Roots only appear at the top level, never as children here — so the
 		// `.root` case is not part of the reachable pattern space and is omitted.
-		for child in orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater) {
+		for (childIndex, child) in zip(orderedPropertyToGenerateIndices, orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)) {
 			let childGenerator = child.generator
 			let childPropertiesGeneratedLater = child.propertiesGeneratedLater
 			let childUnavailableProperties = child.unavailableProperties
@@ -10459,6 +10486,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 				items.append(.property(MockParameterNode(
 					propertyLabel: childProperty.label,
+					inlineOrderPosition: inlineOrderPositionByIndex[childIndex],
 					typeDescription: childProperty.typeDescription,
 					instantiatedTypeDescription: childProperty.typeDescription.asInstantiatedType,
 					isInstantiator: isInstantiator,
@@ -11130,7 +11158,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A child whose call can hand its override closure no builder a person writes has no member
 		// (`MockParameterNode.offersOverrideClosure`); the struct stays, with an initializer that takes nothing where it has
 		// no other member.
-		let rootChildren = rootChildren.filter(\.offersOverrideClosure)
+		let rootChildren = MockParameterNode.inInlineOrder(rootChildren.filter(\.offersOverrideClosure))
 		guard !rootChildren.isEmpty || !onlyIfAvailableOverrides.isEmpty else {
 			lines.append("\(innerIndent)init() {}")
 			lines.append("\(indent)}")
@@ -11281,7 +11309,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
 		// A child whose call can hand its override closure no builder a person writes has no member
 		// (`MockParameterNode.offersOverrideClosure`).
-		for child in nonCycleChildren where child.offersOverrideClosure {
+		for child in MockParameterNode.inInlineOrder(nonCycleChildren) where child.offersOverrideClosure {
 			let (field, defaultValue) = configurationField(
 				of: child,
 				named: disambiguatedLabel(for: child, labelMap: childLabelMap),

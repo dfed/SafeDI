@@ -3302,36 +3302,36 @@ struct HoleBoundApartControl: CustomTestStringConvertible, Sendable {
 			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            store: (() -> Store)? = nil,
-			            settingsBuilder: ((Instantiator<Widget>) -> Settings)? = nil,
-			            panel: ((Gadget) -> Panel)? = nil
+			            panel: ((Gadget) -> Panel)? = nil,
+			            settingsBuilder: ((Instantiator<Widget>) -> Settings)? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                store: store,
-			                settingsBuilder: settingsBuilder,
-			                panel: panel
+			                panel: panel,
+			                settingsBuilder: settingsBuilder
 			            )
 			        }
 
 			        public var store: (() -> Store)? { __safeDI_storage.store }
-			        public var settingsBuilder: ((Instantiator<Widget>) -> Settings)? { __safeDI_storage.settingsBuilder }
 			        public var panel: ((Gadget) -> Panel)? { __safeDI_storage.panel }
+			        public var settingsBuilder: ((Instantiator<Widget>) -> Settings)? { __safeDI_storage.settingsBuilder }
 
 			        private let __safeDI_storage: __safeDI_Storage
 
 			        private final class __safeDI_Storage {
 			            init(
 			                store: (() -> Store)?,
-			                settingsBuilder: ((Instantiator<Widget>) -> Settings)?,
-			                panel: ((Gadget) -> Panel)?
+			                panel: ((Gadget) -> Panel)?,
+			                settingsBuilder: ((Instantiator<Widget>) -> Settings)?
 			            ) {
 			                self.store = store
-			                self.settingsBuilder = settingsBuilder
 			                self.panel = panel
+			                self.settingsBuilder = settingsBuilder
 			            }
 
 			            let store: (() -> Store)?
-			            let settingsBuilder: ((Instantiator<Widget>) -> Settings)?
 			            let panel: ((Gadget) -> Panel)?
+			            let settingsBuilder: ((Instantiator<Widget>) -> Settings)?
 			        }
 			    }
 
