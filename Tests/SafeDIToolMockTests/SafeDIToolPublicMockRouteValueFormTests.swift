@@ -1605,12 +1605,11 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_fillsPlaceInsideReenteringCallWithCallersLazyValue_whenCalledMockBindsValueByValueBelowItsRoot() async throws {
+	mutating func generate_passesPlaceUpWhole_whenFillReadingCallersLazyValueBuildsCalledMockAgainBelowItsRoot() async throws {
 		// `generate_fillsPlaceWithCallersLazyValue_whenCalledMockBindsValueByValueBelowItsRoot`, with `Live` also building
-		// `F` again, so the call of `F`’s mock inside the fill re-enters the root level function. That function takes `log` in the form the fill reads, which each call hands from the declaration
-		// nearest it: `Root`’s for the outer call, the fill’s own for the call inside it. The level beneath hands the fill
-		// the function’s `log`, past the by-value copy its payload carries, so every place is filled and the calling mock
-		// passes no builder up.
+		// `F` again, so `F` is re-entered, and `Live` reads `Root`’s `LazilyInstantiated` beside its place’s fields, which `F`’s
+		// mock binds by value: the calling mock passes the place up whole, and `mock()` takes its builder, where the twin
+		// fills it (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`).
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feat", packageName: "feat", swiftFileContent: [
@@ -1936,32 +1935,18 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        apiBuilder: @escaping () -> any Api,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        let __safeDI_apiBuilder = apiBuilder
 		        func __safeDI_log() -> Log {
 		            if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
 		        }
 		        let log = LazilyInstantiated<Log>(__safeDI_log)
+		        _ = F.__safeDI_F_mock_96D996AD6269EFC2.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_f() -> F {
-		            func __safeDI_apiBuilder_F_A_Scope_api(_ scope: F.SafeDIMockScope_Api.A_Scope.api_Values, log: LazilyInstantiated<Log>) -> any Api {
-		                func __safeDI_api() -> Live {
-		                    func __safeDI_fBuilder() -> F {
-		                        F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_F(log: log), log: log.instance)
-		                    }
-		                    let fBuilder = Instantiator<F>(__safeDI_fBuilder)
-		                    return Live(log: log, fBuilder: fBuilder)
-		                }
-		                let api: any Api = __safeDI_api()
-		                return api
-		            }
-		            func __safeDI_apiBuilder_F(log: LazilyInstantiated<Log>) -> F.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
-		                .init(a: { _ in __safeDI_apiBuilder_F_A_Scope(log: log) })
-		            }
-		            func __safeDI_apiBuilder_F_A_Scope(log: LazilyInstantiated<Log>) -> F.SafeDIMockScope_Api.A_Scope.__safeDI_Builder<any Api> {
-		                .init(api: { scope in __safeDI_apiBuilder_F_A_Scope_api(scope, log: log) })
-		            }
-		            _ = F.__safeDI_F_mock_96D996AD6269EFC2.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_F(log: log), log: log.instance, safeDIOverrides: safeDIOverrides.f)
+		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
+		            return F.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), log: log.instance, safeDIOverrides: safeDIOverrides.f)
 		        }
 		        let f: F = __safeDI_f()
 		        return Root(log: log, f: f)
