@@ -451,7 +451,7 @@ final class Scope: Hashable {
 					startOrderChanged = true
 				}
 			}
-		} while startOrderChanged || scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree || scopeGenerator.receivedBuilderLoopsChangedInTree || scopeGenerator.publicMockRootLevelReentriesChangedInTree
+		} while startOrderChanged || scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree || scopeGenerator.receivedBuilderLoopsChangedInTree || scopeGenerator.publicMockLevelReentriesChangedInTree
 		for generator in generatorsToStart ?? [] {
 			ScopeGeneratorUnderConstruction.startCodeGeneration(of: generator)
 		}
@@ -829,8 +829,8 @@ private struct ScopeGeneratorUnderConstruction {
 			}
 			// A public mock's caller decides per route, and a route whose nearest type binds another form of a value its fill
 			// reads converts it, so the fill takes each value its case's payload does not carry in the form it reads
-			// (`parameterField(of:reading:)`). It reads nothing of its own scope through the root dispatcher: a route on which
-			// no type binds the value passes the place up.
+			// (`parameterField(of:reading:)`). A route on which no type binds the value hands the fill the caller's, which the root
+			// level function takes (`PublicMockLevelFunctions`).
 			// But a value the call hands the called mock from the caller's scope, which the called mock's root binds as its copy,
 			// is the caller's own, as a seam's deferred parameter is (see `fillUnderConstruction`): a fill whose places' nearest
 			// declaration of its label is that copy, and whose case's payload does not carry it, reads the caller's declaration,
@@ -858,7 +858,7 @@ private struct ScopeGeneratorUnderConstruction {
 					caseFieldsByCaseKey[caseKey] = caseFields
 				}
 			}
-			// A call inside a fill of this call that re-enters its root level function hands that function what it reads of
+			// A call inside a fill of this call that re-enters one of its level functions hands that function what it reads of
 			// its own scope (`PublicMockLevelFunctions.Reentry`), so a value a fill reads of the caller's scope that no place of
 			// its case carries is the fill's to take too, rather than the declaration enclosing this call that the fill's
 			// function would capture: inline reads the declaration nearest the place, which for a place the re-entering call
@@ -1008,13 +1008,13 @@ private struct ScopeGeneratorUnderConstruction {
 			enclosingCarriedInnerScopesOfThisCall[dispatcher.key] = dispatcher.carriedInnerScopes
 		}
 		self.enclosingCarriedInnerScopesOfThisCall = enclosingCarriedInnerScopesOfThisCall
-		// A root level function of this call that takes nothing hides an enclosing call's of the same dispatcher; what each
-		// takes the pass before decided from the call's level functions (`ScopeGenerator.publicMockRootLevelReentries`).
+		// A level function of this call that takes nothing hides an enclosing call's of the same dispatcher; what each
+		// takes the pass before decided from the call's level functions (`ScopeGenerator.publicMockLevelReentries`).
 		var enclosingLevelReentriesOfThisCall = enclosingLevelReentries
 		if scope.publicMockCall != nil {
-			let rootLevelReentries = previousPassGenerator?.publicMockRootLevelReentries ?? [:]
+			let levelReentries = previousPassGenerator?.publicMockLevelReentries ?? [:]
 			for dispatcher in dispatchersOfThisCall {
-				enclosingLevelReentriesOfThisCall[dispatcher.key] = rootLevelReentries[dispatcher.key]
+				enclosingLevelReentriesOfThisCall[dispatcher.key] = levelReentries[dispatcher.key]
 			}
 		}
 		self.enclosingLevelReentriesOfThisCall = enclosingLevelReentriesOfThisCall
@@ -1028,10 +1028,12 @@ private struct ScopeGeneratorUnderConstruction {
 		childGenerators.reserveCapacity(propertiesToGenerate.count + fillsOfThisCall.count)
 	}
 
-	/// Whether a call inside the trees of `holeArguments`' fills calls one of `calledBuilders`' builders again, so that it
-	/// re-enters the root level function the call that passes those fills declares for it.
+	/// Whether a call inside the trees of `holeArguments`' fills reaches one of `calledBuilders`' enums again, so that it
+	/// re-enters a level function the call that passes those fills declares for it: a call of the same builder, which
+	/// re-enters its root level function, or of another module's public mock that holds a builder of a type whose places
+	/// the call fills (`.inner`), which re-enters the level function of that type's enum.
 	private static func callsInsideFills(of holeArguments: [Scope.HoleArgument], reenter calledBuilders: CalledBuilders) -> Bool {
-		let enumKeys = Set(calledBuilders.builders.map(\.enumKey))
+		let enumKeys = Set(calledBuilders.enumsByKey.keys)
 		var visited = Set<ObjectIdentifier>()
 		var scopesToVisit = holeArguments.compactMap { argument -> Scope? in
 			guard case let .fill(_, scope) = argument else { return nil }
@@ -1039,7 +1041,7 @@ private struct ScopeGeneratorUnderConstruction {
 		}
 		while let scope = scopesToVisit.popLast() {
 			guard visited.insert(ObjectIdentifier(scope)).inserted else { continue }
-			if let innerBuilders = scope.calledBuilders, innerBuilders.builders.contains(where: { enumKeys.contains($0.enumKey) }) {
+			if let innerBuilders = scope.calledBuilders, innerBuilders.enumsByKey.keys.contains(where: enumKeys.contains) {
 				return true
 			}
 			for case let .fill(_, fillScope) in scope.holeArguments {
@@ -1480,8 +1482,8 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The field a public mock caller's fill of a case nested by type takes for one label, given `fields`, the case's places'
 	/// fields of that label in place order, and `reads`, the forms of it the fill's tree receives: the form it reads that
 	/// provides every other (`CycleParameter.forms(providedBy:)`, the relation the per-place decision `holesFilled` fills
-	/// by), else the first place's field that provides every form it reads. So a route whose nearest type binds a form
-	/// that provides it fills the place, and every other route passes the place up, as the per-place decision does. `nil`
+	/// by), else the first place's field that provides every form it reads, so a route whose nearest type binds a form
+	/// that provides it fills the place, as the per-place decision does. `nil`
 	/// where the fill reads no form of the label, or no field provides every form it reads: no place of the case is then
 	/// filled through the label, and the fill keeps its first place's field.
 	private static func parameterField(of fields: [SeamSignature.Hole.Field], reading reads: Set<Property>) -> SeamSignature.Hole.Field? {
@@ -1621,28 +1623,18 @@ private struct ScopeGeneratorUnderConstruction {
 			let enclosingFill = enclosingFills[dispatcherKey] == nil ? nil : ScopeGenerator.BuilderCallArgument.EnclosingFill(key: dispatcherKey, name: dispatcher)
 			guard !isPublicMockCall else {
 				// A call inside a fill of an enclosing call of the same builder re-enters the enclosing call's root level function,
-				// handing it the struct this call passes up exactly where the function takes it (`Function.takesUp`, which
-				// `enclosingLevelReentries` holds the name of), for each struct of a level it takes, what the member of the call's
-				// own case of that struct's level returns, as a seam's call does, and each value it takes of the caller's scope,
-				// read of this call's own: a value the levels between the two calls bind is the one inline reads there, which the
-				// enclosing call's caller does not see.
+				// handing it, for each struct of a level it takes, what the member of the call's own case of that struct's level
+				// returns, as a seam's call does, and each value it takes of the caller's scope, read of this call's own
+				// (`enclosingLevelReentryArguments(ofDispatcherKeyed:)`).
 				if let enclosingName = enclosingFills[dispatcherKey] {
-					let reentry = enclosingLevelReentries[dispatcherKey]
-					var arguments = reentry?.upName.map { ["\($0.spelledAsArgumentLabel): \(publicMockUpValue)"] } ?? []
-					arguments += (enclosingCarriedInnerScopes[dispatcherKey] ?? []).compactMap { carriedInnerScope in
+					var arguments = (enclosingCarriedInnerScopes[dispatcherKey] ?? []).compactMap { carriedInnerScope in
 						seamHoles.carriedStruct(at: sitePath, innerKey: enumKey, carrying: carriedInnerScope.type).map { "\(carriedInnerScope.upName.spelledAsArgumentLabel): \($0)" }
 					}
-					for property in reentry?.parameters ?? [] {
-						let argument = Self.callerArgument(reading: property, of: childNearestDeclarations, lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties)
-						arguments.append("\(property.label.spelledAsArgumentLabel): \(argument)")
-					}
+					arguments += enclosingLevelReentryArguments(ofDispatcherKeyed: dispatcherKey)
 					return .init(label: label, value: "\(enclosingName)(\(arguments.joined(separator: ", ")))", enclosingFill: .init(key: dispatcherKey, name: enclosingName), isSendable: enumKey.isSendable)
 				}
-				// A public mock's caller passes the call of the builder's root level function, which decides per route which places
-				// it fills and passes the others up, and takes the struct the caller passes up exactly where a route does
-				// (`PublicMockLevelFunctions.Function.takesUp`): the call is handed that struct whether or not it passes it.
-				// One function a person writes cannot both fill some places of the builder and hand others the builder passed up.
-				// The root level function of a route to a place inside a fill is handed the struct the case of this mock's own struct
+				// A public mock's caller that fills some place of the builder fills every place its routes reach, so it passes the
+				// call of the builder's root level function (`PublicMockLevelFunctions`). The root level function of a route to a place inside a fill is handed the struct the case of this mock's own struct
 				// for the call returns, for each of its levels the fill is handed.
 				var carriedStructs = [String: String]()
 				for carriedInnerScope in dispatchersOfThisCall.first(where: { $0.key == dispatcherKey })?.carriedInnerScopes ?? [] {
@@ -1671,6 +1663,31 @@ private struct ScopeGeneratorUnderConstruction {
 			}
 			return .init(label: label, value: "\(dispatcher)(\(upArgument))", enclosingFill: enclosingFill, isSendable: enumKey.isSendable)
 		}
+	}
+
+	/// The values a call inside a fill hands the level function of the dispatcher keyed `key`, which an enclosing call
+	/// declares, when it re-enters it: each value the function takes of the caller's scope, read of this call's own. A value
+	/// the levels between the two calls bind is the one inline reads there, which the enclosing call's caller does not see.
+	private func enclosingLevelReentryArguments(ofDispatcherKeyed key: String) -> [String] {
+		(enclosingLevelReentries[key]?.parameters ?? []).map { property in
+			"\(property.label.spelledAsArgumentLabel): \(Self.callerArgument(reading: property, of: childNearestDeclarations, lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties))"
+		}
+	}
+
+	/// For a call of another module's public mock, the call of each level function an enclosing call declares that a case of
+	/// one of this call's own level functions leads to, by the function's dispatcher's key: a builder the called mock holds
+	/// of a type whose places the enclosing call fills (`.inner`). The case re-enters the enclosing function as a call of the
+	/// same builder does, handing it what it takes of the caller's scope read of this call's own
+	/// (`enclosingLevelReentryArguments(ofDispatcherKeyed:)`).
+	private var enclosingLevelCalls: [String: String] {
+		var calls = [String: String]()
+		for dispatcher in dispatchersOfThisCall {
+			for dispatcherCase in dispatcher.cases {
+				guard let target = dispatcherCase.target, calls[target.key] == nil, let enclosingName = enclosingFills[target.key] else { continue }
+				calls[target.key] = "\(enclosingName)(\(enclosingLevelReentryArguments(ofDispatcherKeyed: target.key).joined(separator: ", ")))"
+			}
+		}
+		return calls
 	}
 
 	/// Creates the scope's generator once `childGenerators` holds a generator for each of `propertiesToGenerate`, and starts
@@ -1747,7 +1764,8 @@ private struct ScopeGeneratorUnderConstruction {
 			callSiteLazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties,
 			reboundProperties: reboundProperties,
 			previousPassReceivedBuilderLoops: previousPassGenerator?.receivedBuilderLoops,
-			previousPassPublicMockRootLevelReentries: previousPassGenerator?.publicMockRootLevelReentries ?? [:],
+			previousPassPublicMockLevelReentries: previousPassGenerator?.publicMockLevelReentries ?? [:],
+			enclosingLevelCalls: scope.publicMockCall == nil ? [:] : enclosingLevelCalls,
 			namesBoundBySeam: GenerationWork.taking(seamHoles.namesBoundBySeam, by: .joiningNamesBoundBySeam),
 			placeHoldingProperties: placeHoldingPropertiesByType.map { $0[scope.instantiable.concreteInstantiable] ?? [] },
 		)
@@ -1902,11 +1920,11 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The structs the level functions a fill of this call can refer to take: those of enclosing calls, and this call's, by
 	/// the level function's key, gathered once for the call.
 	private let enclosingCarriedInnerScopesOfThisCall: [String: [ScopeGenerator.FillDispatcher.CarriedInnerScope]]
-	/// The name each root level function of `enclosingFills` of a public mock's call that takes the struct its caller passes up
-	/// takes it under (`PublicMockLevelFunctions.rootLevelReentries(amongKeys:)`), by its key: a call that re-enters it hands it
-	/// this call's, and a call that re-enters one it does not hold hands none.
+	/// What each level function of `enclosingFills` of a public mock's call takes of the caller's scope
+	/// (`PublicMockLevelFunctions.levelReentries(amongKeys:)`), by its key: a call that re-enters it hands it each value
+	/// read of this call's own scope, and a call that re-enters one it does not hold hands none.
 	private let enclosingLevelReentries: [String: PublicMockLevelFunctions.Reentry]
-	/// What a call inside a fill of this call that re-enters a root level function hands it beside the structs of the caller's
+	/// What a call inside a fill of this call that re-enters a level function hands it beside the structs of the caller's
 	/// levels: those of enclosing calls, and this call's, by the level function's key, gathered once for the call.
 	private let enclosingLevelReentriesOfThisCall: [String: PublicMockLevelFunctions.Reentry]
 	/// The index in `fillsOfThisCall` of the next fill to create a generator for.
