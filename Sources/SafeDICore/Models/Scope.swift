@@ -1503,7 +1503,9 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The labels of `fields`, the fields of a fill of `places` – the places of one case of a call of another module's public
 	/// mock – that are the caller's own values: the called mock's root binds each as its copy of the value the call hands it
 	/// from the caller's scope, a received parameter `call` passes, and that copy is the nearest declaration of the label at
-	/// every place of the case (`SeamSignature.Hole.Field.isBoundByPublicMockRoot`); and `callerDeclarations`, the
+	/// every place of the case (`SeamSignature.Hole.Field.isBoundByPublicMockRoot`), or, at a place inside a `@Sendable`
+	/// function, is bound outside it, so the place's fill reads the caller's declaration already
+	/// (`SeamSignature.Hole.UncarriedDeclaration.isBoundFromCallersArgument`); and `callerDeclarations`, the
 	/// declarations enclosing the call, bind every form of it the fill's tree reads (`reads`) under the label itself: a
 	/// scope of the caller's tree does, and so does the caller's mock root where it binds the value as the root's one
 	/// declaration of the label (`NearestDeclarations.markBoundUnderLabelByRoot`).
@@ -1526,11 +1528,18 @@ private struct ScopeGeneratorUnderConstruction {
 		let labelsHandedFromCaller = Set(call.passedParameters.compactMap { parameter in
 			parameter.builder == nil && parameter.dependency.source.isReceived ? parameter.dependency.property.label : nil
 		})
+		// Whether the nearest declaration of `label` at `place` is the called mock's copy: its field, or, at a place inside a
+		// `@Sendable` function, which carries no field of a value bound outside it, the copy its fill already reads as the
+		// caller's declaration (`isBoundFromCallersArgument`, dropped from the fill's hole in `fillUnderConstruction`).
+		func isCalledMocksCopy(of label: String, at place: SeamSignature.Hole) -> Bool {
+			place.fields.first { $0.property.label == label }?.isBoundByPublicMockRoot
+				?? place.uncarriedDeclarations.contains { $0.property.label == label && $0.isBoundFromCallersArgument }
+		}
 		return Set(fields.map(\.property.label).filter { label in
 			let formsRead = reads.filter { $0.label == label }
 			guard labelsHandedFromCaller.contains(label),
 			      !formsRead.isEmpty,
-			      places.allSatisfy({ place in place.fields.first { $0.property.label == label }?.isBoundByPublicMockRoot == true }),
+			      places.allSatisfy({ isCalledMocksCopy(of: label, at: $0) }),
 			      let callerDeclaration = callerDeclarations[label],
 			      !callerDeclaration.isBoundByMockRoot
 			else { return false }
