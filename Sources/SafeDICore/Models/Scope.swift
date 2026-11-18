@@ -744,6 +744,14 @@ private struct ScopeGeneratorUnderConstruction {
 				for (declaredProperty, forms) in declaredPropertyForms {
 					childNearestDeclarations.join(declaredProperty, providing: forms)
 				}
+				// A mock root binds a dependency it promotes, or one its type declares, as a child of the root, under the label
+				// (`let <label> = …`), unless another declaration of the root, or a parameter of `mock()` that keeps its label,
+				// has the label (`rootLabelMap`). Another declaration, such as a forwarded property, provides forms the first
+				// does not, which `markBoundUnderLabelByRoot` checks; a default-valued parameter is left out here.
+				let labelsMockParametersKeep = Set(ScopeGenerator.defaultValuedMockParameterArguments(of: scope.instantiable).map(\.argument.label))
+				for (declaredProperty, forms) in declaredPropertyForms where !labelsMockParametersKeep.contains(declaredProperty.label) {
+					childNearestDeclarations.markBoundUnderLabelByRoot(declaredProperty.label, providing: forms)
+				}
 			} else {
 				childNearestDeclarations.replaceLabels(of: declaredPropertyForms)
 			}
@@ -1435,12 +1443,19 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The labels of `fields`, the fields of a fill of `places` – the places of one case of a call of another module's public
 	/// mock – that are the caller's own values: the called mock's root binds each as its copy of the value the call hands it
 	/// from the caller's scope, a received parameter `call` passes, and that copy is the nearest declaration of the label at
-	/// every place that carries it (`SeamSignature.Hole.Field.isBoundByPublicMockRoot`); and `callerDeclarations`, the
-	/// declarations enclosing the call, bind every form of it the fill's tree reads (`reads`) under the label itself, in a
-	/// scope of the caller's tree. A level of the called mock that declares the label again keeps the field, since inline
-	/// reads that level's value; so does a label the caller binds a form of under a name apart, or not at all, or binds only
-	/// as its mock root's binding of a value its tree receives, which can be named apart from the label
-	/// (`NearestDeclaration.isBoundByMockRoot`): the fill reads it from the level.
+	/// every place of the case (`SeamSignature.Hole.Field.isBoundByPublicMockRoot`); and `callerDeclarations`, the
+	/// declarations enclosing the call, bind every form of it the fill's tree reads (`reads`) under the label itself: a
+	/// scope of the caller's tree does, and so does the caller's mock root where it binds the value as the root's one
+	/// declaration of the label (`NearestDeclarations.markBoundUnderLabelByRoot`).
+	///
+	/// Any other label keeps its field, which the levels on each route hand the fill. A level of the called mock that
+	/// declares the label again hands its own value, which inline reads there. Where no level on a route binds a form that
+	/// provides the one the fill reads, the route passes the place up, and the calling mock names a builder it does not
+	/// declare: a level that holds only the called mock's by-value copy cannot hand a fill that reads the caller's
+	/// `LazilyInstantiated`. That is a known defect (`public-mock-builders.md`, "The caller's own value") on a route to one
+	/// place of a case whose other place a level that declares the label again hides the copy from, and where the caller
+	/// binds the form the fill reads only as its mock root's binding of a value its tree receives, which the mock names apart
+	/// from the label (`NearestDeclaration.isBoundByMockRoot`).
 	private static func callersOwnLabels(
 		amongLabelsOf fields: [SeamSignature.Hole.Field],
 		at places: [SeamSignature.Hole],
@@ -1455,11 +1470,15 @@ private struct ScopeGeneratorUnderConstruction {
 			let formsRead = reads.filter { $0.label == label }
 			guard labelsHandedFromCaller.contains(label),
 			      !formsRead.isEmpty,
-			      places.allSatisfy({ place in place.fields.first { $0.property.label == label }?.isBoundByPublicMockRoot ?? true }),
+			      places.allSatisfy({ place in place.fields.first { $0.property.label == label }?.isBoundByPublicMockRoot == true }),
 			      let callerDeclaration = callerDeclarations[label],
 			      !callerDeclaration.isBoundByMockRoot
 			else { return false }
-			return formsRead.allSatisfy { callerDeclaration.bindings[$0]?.label == label && !callerDeclaration.formsBeingBuilt.contains($0) }
+			// The forms being built where the call is (`NearestDeclaration.formsBeingBuilt`) need no check: a fill that reads one,
+			// such as an `Instantiator` whose tree makes the call, is rejected for a calling mock as a dependency cycle
+			// (`dependencyReceivedInSameChainItIsInstantiated`). That is a known defect, since production and the inline mock
+			// accept it, and closing it decides how this fill reads an instantiator being built.
+			return formsRead.allSatisfy { callerDeclaration.bindings[$0]?.label == label }
 		})
 	}
 
@@ -2263,7 +2282,8 @@ struct NearestDeclaration: Sendable {
 	/// (see `NearestDeclarations.binding(_:passingNilTo:)`), so a declaration nearer the receive reads as production's.
 	var receivesPassedNil = [TypeDescription: Set<Property>]()
 	/// Whether a mock root binds the declaration, from a value its tree receives, which it can name apart from its label
-	/// (`NearestDeclarations.binding(_:passingNilTo:)`), rather than a scope of the tree.
+	/// (`NearestDeclarations.binding(_:passingNilTo:)`), rather than a scope of the tree: false where the mock binds it as
+	/// the root's one declaration of the label, under the label (`NearestDeclarations.markBoundUnderLabelByRoot`).
 	var isBoundByMockRoot = false
 }
 
@@ -2422,6 +2442,20 @@ extension NearestDeclarations {
 	private mutating func markBoundByMockRoot(_ label: String) {
 		var nearestDeclaration = self[label] ?? NearestDeclaration()
 		nearestDeclaration.isBoundByMockRoot = true
+		set(nearestDeclaration, for: label)
+	}
+
+	/// Records that a root's declaration of `label`, which provides `forms`, is bound under the label. Where a mock root binds
+	/// `label` from a value its tree receives and every form the nearest declaration binds is among `forms` – so no other
+	/// declaration of the root, nor a value `mock()` takes, has another form of the label – the mock binds them all as that
+	/// child of the root, and the nearest declaration is no longer one the mock can name apart
+	/// (`NearestDeclaration.isBoundByMockRoot`).
+	mutating func markBoundUnderLabelByRoot(_ label: String, providing forms: Set<Property>) {
+		guard var nearestDeclaration = self[label],
+		      nearestDeclaration.isBoundByMockRoot,
+		      nearestDeclaration.bindings.keys.allSatisfy(forms.contains)
+		else { return }
+		nearestDeclaration.isBoundByMockRoot = false
 		set(nearestDeclaration, for: label)
 	}
 

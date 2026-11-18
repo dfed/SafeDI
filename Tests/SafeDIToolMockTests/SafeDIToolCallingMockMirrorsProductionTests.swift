@@ -603,6 +603,69 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		)
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases, CallerLazyWrapper.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceBelowCalledTypesRootWithMockedTypesLazyValue_whenMockedTypeBuildsCallBesideNothing(caller: CallingMockCallerKind, wrapper: CallerLazyWrapper) async throws {
+		// `Mid`, between `Root`, which instantiates `log`, and `F`, builds `F` and declares nothing else, so `Mid.mock()` builds
+		// the `log` its tree receives at its root, under the label. `Live` fills `F`’s place below its root and holds that
+		// wrapper, whose instance `F`’s copy is, as inline `Live` holds `Root`’s.
+		try await expectValuesEqualInline(
+			mock: Self.lazyValueThroughMidModules(chain: .mockedMidBuildingCallBesideNothing, caller: caller, wrapper: wrapper),
+			inline: Self.lazyValueThroughMidInlineModules(chain: .mockedMidBuildingCallBesideNothing, wrapper: wrapper),
+			caller: caller.callingMockCaller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Mid.mock()\n}\n",
+			probes: Self.lazyValueThroughMidProbes(chain: .mockedMidBuildingCallBesideNothing),
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases, CallerLazyWrapper.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceBelowCalledTypesRootWithMockedTypesLazyValue_whenMockedTypeReceivesValue(caller: CallingMockCallerKind, wrapper: CallerLazyWrapper) async throws {
+		// As above, with `Mid` receiving `log` itself: `Live` holds the wrapper `Mid` holds, as inline.
+		try await expectValuesEqualInline(
+			mock: Self.lazyValueThroughMidModules(chain: .mockedMidReceivingValue, caller: caller, wrapper: wrapper),
+			inline: Self.lazyValueThroughMidInlineModules(chain: .mockedMidReceivingValue, wrapper: wrapper),
+			caller: caller.callingMockCaller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Mid.mock()\n}\n",
+			probes: Self.lazyValueThroughMidProbes(chain: .mockedMidReceivingValue),
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases, [LazyValueChain.unmockedMid, .unmockedMidReceivingValueUnderAlias])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceBelowCalledTypesRootWithCallersLazyValue_whenTypeWithoutMockBuildsCall(caller: CallingMockCallerKind, chain: LazyValueChain) async throws {
+		// `Root`’s mock is the calling mock, and `Mid`, which has no mock of its own, builds `F` between them, receiving
+		// `Root`’s `log`, or `Root`’s `appLog` under an alias: `Live` holds `Root`’s wrapper, as inline.
+		try await expectValuesEqualInline(
+			mock: Self.lazyValueThroughMidModules(chain: chain, caller: caller, wrapper: .lazilyInstantiated),
+			inline: Self.lazyValueThroughMidInlineModules(chain: chain, wrapper: .lazilyInstantiated),
+			caller: caller.callingMockCaller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.lazyValueThroughMidProbes(chain: chain),
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceBelowCalledTypesRootWithCallersLazyValue_whenCallIsInsideAnotherCallsFill(caller: CallingMockCallerKind) async throws {
+		// `Root` calls `G`’s public mock, whose place `LiveG` fills, and `LiveG` builds `F`, whose place below its root `Live`
+		// fills, reading `Root`’s `log`: `Live` holds `Root`’s wrapper, as inline.
+		try await expectValuesEqualInline(
+			mock: Self.callInsideFillModules(caller: caller),
+			inline: Self.callInsideFillInlineModules,
+			caller: caller.callingMockCaller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: [
+				DifferentialValueProbe(name: "Root", expression: "Root.mock()", knownRightExpression: "Root()"),
+				DifferentialValueProbe(
+					name: "Live’s log is Root’s",
+					expression: "{ let root = Root.mock(); return ((root.g.ga.gapi as! LiveG).f.a.api as! Live).log === root.log }()",
+					knownRightExpression: "{ let root = Root(); return ((root.g.ga.gapi as! LiveG).f.a.api as! Live).log === root.log }()",
+				),
+			],
+		)
+	}
+
 	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func generate_fillsPlaceFromCallersOwnValue_whenTwinFillsIt(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
@@ -1456,6 +1519,211 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				knownRightExpression: "{ let root = Root(); return \(live).log.instance === \(holderLog).instance }()",
 			),
 		]
+	}
+
+	/// `lazyValueBelowCalledRootModules`’ feature module, with `App`’s `Root` instantiating `log` in `wrapper`’s form and
+	/// `Mid`, which builds `F`, as `chain` says. `caller` decides the mocked type’s attribute, or that `App` lists it in
+	/// `additionalMocksToGenerate`.
+	private static func lazyValueThroughMidModules(chain: LazyValueChain, caller: CallingMockCallerKind, wrapper: CallerLazyWrapper) -> [ModuleFixture] {
+		let (mockedType, rootAttribute, midAttribute) = if chain.mocksMid {
+			("Mid", "@Instantiable(isRoot: true)", caller.attribute(listed: "@Instantiable"))
+		} else {
+			("Root", caller.attribute(listed: "@Instantiable(isRoot: true)"), "@Instantiable")
+		}
+		var appFiles = [
+			"AppTypes.swift": "import Feat\nimport SafeDI\n\n" + lazyValueThroughMidAppTypes(chain: chain, rootAttribute: rootAttribute, midAttribute: midAttribute, wrapper: wrapper),
+		]
+		if caller == .listed {
+			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"\(mockedType)\"])\n"
+		}
+		return [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: [
+				"FeatTypes.swift": lazyValueBelowCalledRootFeatureTypes(callee: twinCalledTypes, place: .plain, receivesOnlyIfAvailable: false, layout: .belowRoot),
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Feat"]),
+		]
+	}
+
+	/// `lazyValueThroughMidModules`’ types in one module, `Root` a root: what inline builds.
+	private static func lazyValueThroughMidInlineModules(chain: LazyValueChain, wrapper: CallerLazyWrapper) -> [ModuleFixture] {
+		var types = lazyValueBelowCalledRootFeatureTypes(callee: "@Instantiable", place: .plain, receivesOnlyIfAvailable: false, layout: .belowRoot)
+		types += "\n\n"
+		types += lazyValueThroughMidAppTypes(chain: chain, rootAttribute: "@Instantiable(isRoot: true)", midAttribute: "@Instantiable", wrapper: wrapper)
+		return [ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": types])]
+	}
+
+	/// `Live`, which fills `F`’s place and receives `log` in `wrapper`’s form; `Root`, which instantiates it, as `appLog`
+	/// where `Mid` receives it under an alias, and `Mid`; and `Mid`, which builds `F`, receiving `log` as `chain` says.
+	private static func lazyValueThroughMidAppTypes(chain: LazyValueChain, rootAttribute: String, midAttribute: String, wrapper: CallerLazyWrapper) -> String {
+		let rootLabel = chain == .unmockedMidReceivingValueUnderAlias ? "appLog" : "log"
+		let midReceive: String? = switch chain {
+		case .mockedMidBuildingCallBesideNothing, .unmockedMid:
+			nil
+		case .mockedMidReceivingValue:
+			"@Received public let log: \(wrapper.name)<Log>"
+		case .unmockedMidReceivingValueUnderAlias:
+			"@Received(fulfilledByDependencyNamed: \"appLog\", ofType: \(wrapper.name)<Log>.self) public let log: \(wrapper.name)<Log>"
+		}
+		let mid = if let midReceive {
+			"""
+			\(midAttribute)
+			public final class Mid: Instantiable {
+			    public init(log: \(wrapper.name)<Log>, f: F) {
+			        self.log = log
+			        self.f = f
+			    }
+
+			    \(midReceive)
+			    @Instantiated public let f: F
+			}
+			"""
+		} else {
+			"""
+			\(midAttribute)
+			public final class Mid: Instantiable {
+			    public init(f: F) {
+			        self.f = f
+			    }
+
+			    @Instantiated public let f: F
+			}
+			"""
+		}
+		return """
+		\(CalledMockPlace.plain.fill(receiving: "log: \(wrapper.name)<Log>"))
+
+		\(rootAttribute)
+		public final class Root: Instantiable {
+		    public init(\(rootLabel): \(wrapper.name)<Log>, mid: Mid) {
+		        self.\(rootLabel) = \(rootLabel)
+		        self.mid = mid
+		    }
+
+		    @Instantiated public let \(rootLabel): \(wrapper.name)<Log>
+		    @Instantiated public let mid: Mid
+		}
+
+		\(mid)
+		"""
+	}
+
+	/// What the mocked type’s mock and inline build; whether the `Live` that fills `F`’s place holds the instance `F`’s `Z`
+	/// holds; and, where the mocked type or `Mid` beneath it holds `log`, whether `Live` holds that wrapper.
+	private static func lazyValueThroughMidProbes(chain: LazyValueChain) -> [DifferentialValueProbe] {
+		let (name, mock, inline, mid) = if chain.mocksMid {
+			("Mid", "Mid.mock()", "Root().mid", "subject")
+		} else {
+			("Root", "Root.mock()", "Root()", "subject.mid")
+		}
+		let live = "(\(mid).f.a.api as! Live)"
+		var probes = [
+			DifferentialValueProbe(name: name, expression: mock, knownRightExpression: inline),
+			DifferentialValueProbe(
+				name: "Live’s log holds Z’s instance",
+				expression: "{ let subject = \(mock); return \(live).log.instance === \(mid).f.z.log }()",
+				knownRightExpression: "{ let subject = \(inline); return \(live).log.instance === \(mid).f.z.log }()",
+			),
+		]
+		let wrapperHolder: String? = switch chain {
+		case .mockedMidBuildingCallBesideNothing:
+			nil
+		case .mockedMidReceivingValue, .unmockedMid:
+			"subject.log"
+		case .unmockedMidReceivingValueUnderAlias:
+			"subject.appLog"
+		}
+		if let wrapperHolder {
+			probes.append(DifferentialValueProbe(
+				name: "Live’s log is \(wrapperHolder)",
+				expression: "{ let subject = \(mock); return \(live).log === \(wrapperHolder) }()",
+				knownRightExpression: "{ let subject = \(inline); return \(live).log === \(wrapperHolder) }()",
+			))
+		}
+		return probes
+	}
+
+	/// `F` in module `Feat`, as `lazyValueBelowCalledRootModules` declares it, and `G`, a seam and public mock there too,
+	/// whose place `gapi` is a level below its root, beneath `GA`. In `App`, `LiveG` fills `G`’s place and builds `F`, whose
+	/// place `Live` fills, receiving `Root`’s `log: LazilyInstantiated<Log>`. `caller` decides `Root`’s attribute, or that
+	/// `App` lists it in `additionalMocksToGenerate`.
+	private static func callInsideFillModules(caller: CallingMockCallerKind) -> [ModuleFixture] {
+		var appFiles = [
+			"AppTypes.swift": "import Feat\nimport SafeDI\n\n" + callInsideFillAppTypes(rootAttribute: caller.attribute(listed: "@Instantiable(isRoot: true)")),
+		]
+		if caller == .listed {
+			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"])\n"
+		}
+		var featureTypes = lazyValueBelowCalledRootFeatureTypes(callee: twinCalledTypes, place: .plain, receivesOnlyIfAvailable: false, layout: .belowRoot)
+		featureTypes += "\n\n"
+		featureTypes += callInsideFillOuterTypes(callee: twinCalledTypes)
+		return [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": featureTypes]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Feat"]),
+		]
+	}
+
+	/// `callInsideFillModules`’ types in one module, `Root` a root: what inline builds.
+	private static var callInsideFillInlineModules: [ModuleFixture] {
+		var types = lazyValueBelowCalledRootFeatureTypes(callee: "@Instantiable", place: .plain, receivesOnlyIfAvailable: false, layout: .belowRoot)
+		types += "\n\n"
+		types += callInsideFillOuterTypes(callee: "@Instantiable")
+		types += "\n\n"
+		types += callInsideFillAppTypes(rootAttribute: "@Instantiable(isRoot: true)")
+		return [ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": types])]
+	}
+
+	/// `G`, declared with `callee`, and the types its tree builds beside `Z`.
+	private static func callInsideFillOuterTypes(callee: String) -> String {
+		"""
+		public protocol GApi {}
+
+		@Instantiable
+		public final class GA: Instantiable {
+		    init(gapi: any GApi) {
+		        self.gapi = gapi
+		    }
+
+		    @Instantiated public let gapi: any GApi
+		}
+
+		\(callee)
+		public final class G: Instantiable {
+		    public init(ga: GA, z: Z) {
+		        self.ga = ga
+		        self.z = z
+		    }
+
+		    @Instantiated public let ga: GA
+		    @Instantiated public let z: Z
+		}
+		"""
+	}
+
+	/// `Live`, `LiveG` and `Root`, declared with `rootAttribute`, of `callInsideFillModules`.
+	private static func callInsideFillAppTypes(rootAttribute: String) -> String {
+		"""
+		\(CalledMockPlace.plain.fill(receiving: "log: LazilyInstantiated<Log>"))
+
+		@Instantiable(fulfillingAdditionalTypes: [GApi.self])
+		public final class LiveG: GApi, Instantiable {
+		    public init(f: F) {
+		        self.f = f
+		    }
+
+		    @Instantiated public let f: F
+		}
+
+		\(rootAttribute)
+		public final class Root: Instantiable {
+		    public init(log: LazilyInstantiated<Log>, g: G) {
+		        self.log = log
+		        self.g = g
+		    }
+
+		    @Instantiated public let log: LazilyInstantiated<Log>
+		    @Instantiated public let g: G
+		}
+		"""
 	}
 
 	/// `seamBuiltAgainModules`’ types in one module, `Root` a root: what inline builds.
@@ -3800,6 +4068,83 @@ enum CalledMockPlace: CaseIterable, CustomTestStringConvertible, Sendable {
 			"plain place"
 		case .deferred:
 			"deferred place"
+		}
+	}
+}
+
+/// The kind of a calling mock: `generateMock: true`, `generateMock: .public`, or a type its module lists in
+/// `additionalMocksToGenerate`, whose mock is internal.
+enum CallingMockCallerKind: CaseIterable, CustomTestStringConvertible, Sendable {
+	case `internal`
+	case `public`
+	case listed
+
+	/// The caller’s attribute line, or `listedAttribute` where its module lists it.
+	func attribute(listed listedAttribute: String) -> String {
+		switch self {
+		case .internal:
+			CallingMockCaller.internal.attribute
+		case .public:
+			CallingMockCaller.public.attribute
+		case .listed:
+			listedAttribute
+		}
+	}
+
+	/// The kind of the mock that calls: a listed type’s is internal.
+	var callingMockCaller: CallingMockCaller {
+		switch self {
+		case .internal, .listed:
+			.internal
+		case .public:
+			.public
+		}
+	}
+
+	var testDescription: String {
+		switch self {
+		case .internal:
+			"internal caller"
+		case .public:
+			"public caller"
+		case .listed:
+			"listed caller"
+		}
+	}
+}
+
+/// Which type of `App` is the calling mock, where `Root` instantiates `log` and `Mid`, beneath it, builds `F`, and how
+/// `Mid` holds `log`.
+enum LazyValueChain: CustomTestStringConvertible, Sendable {
+	/// `Mid.mock()`, where `Mid` declares nothing but `F`.
+	case mockedMidBuildingCallBesideNothing
+	/// `Mid.mock()`, where `Mid` receives `log`.
+	case mockedMidReceivingValue
+	/// `Root.mock()`, where `Mid` declares nothing but `F`.
+	case unmockedMid
+	/// `Root.mock()`, where `Root` instantiates `appLog` and `Mid` receives it as `log`.
+	case unmockedMidReceivingValueUnderAlias
+
+	/// Whether `Mid`’s mock is the calling mock, rather than `Root`’s.
+	var mocksMid: Bool {
+		switch self {
+		case .mockedMidBuildingCallBesideNothing, .mockedMidReceivingValue:
+			true
+		case .unmockedMid, .unmockedMidReceivingValueUnderAlias:
+			false
+		}
+	}
+
+	var testDescription: String {
+		switch self {
+		case .mockedMidBuildingCallBesideNothing:
+			"mocked Mid building F beside nothing"
+		case .mockedMidReceivingValue:
+			"mocked Mid receiving log"
+		case .unmockedMid:
+			"Mid without a mock"
+		case .unmockedMidReceivingValueUnderAlias:
+			"Mid without a mock receiving appLog as log"
 		}
 	}
 }
