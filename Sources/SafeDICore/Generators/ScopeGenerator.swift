@@ -2896,10 +2896,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if let fulfiller = FulfillerImports.Fulfiller(instantiable: instantiable) {
 			fulfillers.insert(fulfiller)
 		}
-		// The parameters are worked out again here only for a default that can need an import, which few mocks have.
-		let mockDefaults = mockDefaults.filter { !$0.value.fulfillers.isEmpty }
-		guard !mockDefaults.isEmpty else { return fulfillers }
-		let parameters = await mockRootParameters(instantiable: instantiable, mockDefaults: mockDefaults)
+		// The parameters are read here only for a default that can need an import, which few mocks have.
+		guard mockDefaults.values.contains(where: { !$0.fulfillers.isEmpty }) else { return fulfillers }
+		let parameters = await mockRootModel(instantiable: instantiable, mockDefaults: mockDefaults).parameters
 		for forwardedParameterDefault in parameters.forwardedParameterDefaults.values {
 			if case let .handWrittenMock(mockDefault) = forwardedParameterDefault {
 				fulfillers.formUnion(mockDefault.fulfillers)
@@ -3836,6 +3835,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The task that builds a mock root's parameter tree. Collecting configuration types, collecting
 	/// sendable configuration type names, and generating the mock each read the same tree.
 	private var rootMockParameterTreeTask: Task<[MockTreeItem], Never>?
+
+	/// The task that computes this mock root's model (`mockRootModel(instantiable:mockDefaults:)`), which the mock, its
+	/// imports, a public mock's findings and plan, and `query needs` each read.
+	private var mockRootModelTask: Task<MockRootModel, Never>?
+	/// This public mock root's plan (`publicMockPlan(of:mockDefaults:context:)`), once computed.
+	private var memoizedPublicMockPlan: PublicMockPlan?
 
 	/// The mock parameter tree of this scope as a mock root, built once.
 	private var rootMockParameterTree: [MockTreeItem] {
@@ -6844,6 +6849,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let localName: String
 	}
 
+	/// What a mock root's `mock()` takes and the names it takes it under (`mockRootModel(instantiable:mockDefaults:)`), which
+	/// the mock, its imports, a public mock's findings, root level and plan, and `query needs` share.
+	struct MockRootModel {
+		/// The parameters `mock()` takes.
+		let parameters: MockRootParameters
+		/// The names of `parameters`' flat parameters.
+		let parameterNames: MockRootParameterNames
+	}
+
 	/// The names of a mock root's flat parameters, which its `mock()` and a public mock's signature share. See
 	/// `mockRootParameterNames(of:)`.
 	struct MockRootParameterNames {
@@ -6954,9 +6968,45 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
+	/// The parameters this scope's `mock()` takes as a mock root and their names, computed once: every reader of one mock root
+	/// asks with the root's own instantiable and its module's `MockScopes.flatParameterMockDefaults`, since a mock root's
+	/// generator is created for one root by one `DependencyTreeGenerator`.
+	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to.
+	func mockRootModel(instantiable: Instantiable, mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> MockRootModel {
+		if let mockRootModelTask {
+			return await mockRootModelTask.value
+		} else {
+			let mockRootModelTask = Task {
+				let parameters = await mockRootParameters(instantiable: instantiable, mockDefaults: mockDefaults)
+				return MockRootModel(parameters: parameters, parameterNames: Self.mockRootParameterNames(of: parameters))
+			}
+			self.mockRootModelTask = mockRootModelTask
+			return await mockRootModelTask.value
+		}
+	}
+
+	/// The plan of the public mock of `instantiable`, this mock root, computed once from its model. Every reader asks with its
+	/// module's `PublicMockContext`, which a `DependencyTreeGenerator` makes once.
+	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to.
+	func publicMockPlan(of instantiable: Instantiable, mockDefaults: [TypeDescription: FlatParameterMockDefault], context: PublicMockContext) async -> PublicMockPlan {
+		let model = await mockRootModel(instantiable: instantiable, mockDefaults: mockDefaults)
+		if let memoizedPublicMockPlan {
+			return memoizedPublicMockPlan
+		} else {
+			let plan = Self.publicMockPlan(
+				of: instantiable,
+				parameters: model.parameters,
+				parameterNames: model.parameterNames,
+				context: context,
+			)
+			memoizedPublicMockPlan = plan
+			return plan
+		}
+	}
+
 	/// The parameters this scope's `mock()` takes as a mock root. See `MockRootParameters`.
 	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to.
-	func mockRootParameters(instantiable: Instantiable, mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> MockRootParameters {
+	private func mockRootParameters(instantiable: Instantiable, mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> MockRootParameters {
 		// 1. Build the parameter tree.
 		let parameterTree = await rootMockParameterTree
 		// A public mock another module generated builds what its call does not pass, so `mock()` takes no parameter or
@@ -7274,7 +7324,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let publicMock = instantiable.generateMock == .public ? context.publicMockContext : nil
 
 		// 1. Build the parameter tree and identify the flat parameters.
-		let parameters = await mockRootParameters(instantiable: instantiable, mockDefaults: context.flatParameterMockDefaults)
+		let model = await mockRootModel(instantiable: instantiable, mockDefaults: context.flatParameterMockDefaults)
+		let parameters = model.parameters
 		let parameterTree = parameters.parameterTree
 		let forwardedDependencies = parameters.forwardedDependencies
 		let rootDefaultParameters = parameters.rootDefaultParameters
@@ -7288,7 +7339,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// The names `mockRootParameters` named the uncovered dependencies apart from, which the rest of the mock
 		// is named apart from too.
-		let parameterNames = Self.mockRootParameterNames(of: parameters)
+		let parameterNames = model.parameterNames
 		let namesDeclaredInBuilderFunctions = parameterNames.namesDeclaredInBuilderFunctions
 		let rootLabelMap = parameters.rootLabelMap
 		let treeBindingNames = parameterNames.treeBindingNames
@@ -7395,13 +7446,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			|| !flatReceivedParameters.isEmpty
 			|| !flatUncoveredParameters.isEmpty
 			|| (publicMock != nil && !onlyIfAvailableOverrides.isEmpty)
-		let publicMockPlan = publicMock.map { publicMock in
-			Self.publicMockPlan(
-				of: instantiable,
-				parameters: parameters,
-				parameterNames: parameterNames,
-				context: publicMock,
-			)
+		let publicMockPlan: PublicMockPlan? = if let publicMock {
+			await self.publicMockPlan(of: instantiable, mockDefaults: context.flatParameterMockDefaults, context: publicMock)
+		} else {
+			nil
 		}
 
 		guard hasTree || hasFlatParameters else {

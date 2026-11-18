@@ -1435,7 +1435,7 @@ extension ScopeGenerator {
 		if let narrowerEnclosingType {
 			return [PublicMockFinding.narrowerEnclosingType(of: instantiable, enclosingTypeName: narrowerEnclosingType.type.asSource, enclosingLevel: narrowerEnclosingType.level)]
 		}
-		let parameters = await mockRootParameters(instantiable: instantiable, mockDefaults: mockDefaults)
+		let parameters = await mockRootModel(instantiable: instantiable, mockDefaults: mockDefaults).parameters
 		let ownModules: Set<String?> = [context.moduleName, instantiable.moduleName]
 		let receiverModulesByLabel = Self.receiverModules(in: parameters.parameterTree, context: context)
 		let treeReceivers = Self.treeReceivers(in: parameters.parameterTree, mockedType: instantiable)

@@ -780,7 +780,7 @@ public actor DependencyTreeGenerator {
 				throw DependencyTreeGeneratorError.publicMockCannotBeGenerated(findings)
 			}
 		}
-		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults)
+		let parameters = await mockRoot.mockRootModel(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults).parameters
 
 		// The declarations the mock calls, each once, in the order the mock reaches them.
 		var declarations = [TypeRequirements.Declaration]()
@@ -3934,15 +3934,10 @@ public actor DependencyTreeGenerator {
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
 		)
 		let context = publicMockContext
-		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults)
-		return OwnPublicMockPlan(
+		let parameters = await mockRoot.mockRootModel(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults).parameters
+		return await OwnPublicMockPlan(
 			instantiable: instantiable,
-			plan: ScopeGenerator.publicMockPlan(
-				of: instantiable,
-				parameters: parameters,
-				parameterNames: ScopeGenerator.mockRootParameterNames(of: parameters),
-				context: context,
-			),
+			plan: mockRoot.publicMockPlan(of: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults, context: context),
 			receiversByLabel: ScopeGenerator.receivers(in: parameters.parameterTree, mockedType: instantiable),
 			typesDeclaredEscaping: parameters.typesDeclaredEscaping,
 		)
@@ -6330,7 +6325,7 @@ public actor DependencyTreeGenerator {
 		// builders do not change what it binds, so the generator built without them gives it.
 		let rootLevel = await Self.publicMockRootLevel(
 			of: instantiable,
-			parameters: generator.mockRootParameters(instantiable: instantiable, mockDefaults: flatParameterMockDefaults),
+			model: generator.mockRootModel(instantiable: instantiable, mockDefaults: flatParameterMockDefaults),
 			generator: generator,
 			context: publicMockContext,
 		)
@@ -6367,11 +6362,9 @@ public actor DependencyTreeGenerator {
 		// The builders follow every other parameter, and each tier's are named apart from the parameters it takes as a seam's
 		// are. A builder's name changes no other parameter's, so the tree is built again only when a builder takes another
 		// name in some tier.
-		let parameters = await builtGenerator.mockRootParameters(instantiable: instantiable, mockDefaults: flatParameterMockDefaults)
-		let otherParameters = ScopeGenerator.publicMockPlan(
+		let otherParameters = await builtGenerator.publicMockPlan(
 			of: instantiable,
-			parameters: parameters,
-			parameterNames: ScopeGenerator.mockRootParameterNames(of: parameters),
+			mockDefaults: flatParameterMockDefaults,
 			context: publicMockContext,
 		).parameters.filter { $0.builder == nil }.map { (label: $0.name, access: $0.access) }
 		let buildersNamedApart = shapedBuilders(namedApartFrom: otherParameters)
@@ -6406,7 +6399,7 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
-	/// The root level of `instantiable`'s public mock, whose `mock()` takes `parameters` and whose tree is `generator`'s.
+	/// The root level of `instantiable`'s public mock, whose `mock()` is `model`'s and whose tree is `generator`'s.
 	///
 	/// A parameter `mock()` names apart has no field: the other holder of its label keeps the field, and a type beneath that
 	/// receives the named-apart form binds it again (`mockBindsAgain(receiving:beneath:)`), or, where no binding holds the
@@ -6415,11 +6408,12 @@ public actor DependencyTreeGenerator {
 	/// caller's builder can capture the value instead. `fields(of:)` and `receivesBoundAgainOfAnyBuild` say so too.
 	static func publicMockRootLevel(
 		of instantiable: Instantiable,
-		parameters: ScopeGenerator.MockRootParameters,
+		model: ScopeGenerator.MockRootModel,
 		generator: ScopeGenerator,
 		context: PublicMockContext,
 	) -> PublicMockRootLevel {
-		let parameterNames = ScopeGenerator.mockRootParameterNames(of: parameters)
+		let parameters = model.parameters
+		let parameterNames = model.parameterNames
 		let mockedTypeAccess = parameterAccess(instantiable.effectiveTypeAccess)
 		let receiverModulesByLabel = ScopeGenerator.receiverModules(in: parameters.parameterTree, context: context)
 		// The wrapper `mock()` binds around each instance it takes for a type that receives a `LazilyInstantiated`, by the
