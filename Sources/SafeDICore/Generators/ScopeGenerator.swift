@@ -12344,6 +12344,7 @@ extension SeamSignature.Hole.Field {
 			deferral: deferral,
 			bindsMemo: bindsMemo,
 			isSeamParameter: isSeamParameter,
+			isBoundByPublicMockRoot: isBoundByPublicMockRoot,
 		)
 	}
 
@@ -12364,6 +12365,7 @@ extension SeamSignature.Hole.Field {
 			deferral: deferral,
 			bindsMemo: true,
 			isSeamParameter: isSeamParameter,
+			isBoundByPublicMockRoot: isBoundByPublicMockRoot,
 		)
 	}
 
