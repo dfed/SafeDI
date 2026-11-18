@@ -1068,9 +1068,21 @@ extension ScopeGenerator {
 		// The received dependencies the mock builds and those received only if available, each `T? = nil`, by name.
 		var promotedParameterNames = [Property: String]()
 		var optionalReceivedParameters = [PublicMockParameter]()
+		// A promoted `LazilyInstantiated` is taken as its instance under its label, unless another parameter takes that name: a
+		// default-valued or forwarded parameter of the mocked type, or another promoted dependency, such as another
+		// `LazilyInstantiated` of the label, which takes its label too. It then takes the name its binding is named apart by.
+		let leadingParameterNames = Set(leadingParameters.map(\.name))
+		func labelOrName(of node: MockParameterNode, named name: String) -> String {
+			node.property.propertyType.isLazilyInstantiated ? node.propertyLabel : name
+		}
+		var promotedParameterCountByName = [String: Int]()
+		for (node, name) in promotedNodes {
+			promotedParameterCountByName[labelOrName(of: node, named: name), default: 0] += 1
+		}
 		for (node, name) in promotedNodes {
 			let parameterProperty = publicMockParameterProperty(of: node)
-			let parameterName = node.property.propertyType.isLazilyInstantiated ? node.propertyLabel : name
+			let preferredName = labelOrName(of: node, named: name)
+			let parameterName = leadingParameterNames.contains(preferredName) || promotedParameterCountByName[preferredName, default: 0] > 1 ? name : preferredName
 			promotedParameterNames[node.property] = parameterName
 			optionalReceivedParameters.append(PublicMockParameter(name: parameterName, type: parameterProperty.typeDescription, typeSource: parameterProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), accessCause: cause(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), role: .received(parameterProperty, isRequired: false), isBuiltWhenNil: true, builtWrapper: node.property.propertyType.isLazilyInstantiated ? node.property : nil))
 		}
