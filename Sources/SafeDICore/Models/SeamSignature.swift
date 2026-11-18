@@ -423,6 +423,9 @@ public struct SeamSignature: Sendable {
 			/// it, which is the passing type's own caller's where nothing on the path to the call declares the label, and a
 			/// declaration on that path is reported where the place is filled (`boundByPassingUpSeam`).
 			public let isBoundFromCallersArgument: Bool
+			/// Whether the seam's tree instantiates it with a tree that receives only labels the seam receives from its
+			/// caller, so that a type above the seam could build it and the seam receive it instead.
+			public internal(set) var isBuildableAboveSeam = false
 		}
 
 		/// A declaration a cycle in the seam's tree hands the site's owner when it builds it again: the site lies in the body

@@ -99,6 +99,95 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		)
 	}
 
+	// MARK: An instantiator the seam's tree builds after the place
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingOneHoleInPlaceOfBoth_whenFillReceivesInstantiatorWhoseTreeReceivesValuesTheSeamBinds() async {
+		// `A` receives the `user` `SignedIn` forwards and the `bBuilder` it instantiates, so no type above `SignedIn` can
+		// build `aBuilder`: one type of `App` that instantiates both, in place of both, puts `B` in the tree that builds it.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["B.swift"]):9:5: error: `B` receives `aBuilder: ErasedInstantiator<(), any AScreen>`, which `SignedIn`’s tree builds only after it calls the builder for `SignedIn`’s `bBuilder: ErasedInstantiator<(), any BScreen>` (`bBuilder` of `b_BScreenBuilder`), so SafeDI does not hand it to that builder. Declare `aBuilder` and `bBuilder` on one type of module `App` instead, and have `SignedIn` instantiate a protocol that type fulfills in their place, so that type’s tree builds both, or declare an @Instantiable type that fulfills `B` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["SignedIn.swift"]):10:5: note: `SignedIn` declares `aBuilder: ErasedInstantiator<(), any AScreen>` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.signedInModules(
+					signedInDeclarations: [
+						"@Forwarded public let user: User",
+						"@Instantiated(fulfilledByType: \"A\") public let aBuilder: ErasedInstantiator<(), any AScreen>",
+						"@Instantiated(fulfilledByType: \"B\") public let bBuilder: ErasedInstantiator<(), any BScreen>",
+					],
+					app: [],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenOneTypeOfTheFillingModuleInstantiatesBothInstantiatorsAsTheErrorSays() async throws {
+		// `SignedIn` instantiates `pair`, which `App`'s `LivePair` fills, and whose tree builds both `aBuilder` and
+		// `bBuilder`: `A` reads `SignedIn`'s `user`, and `B` the `aBuilder` beside it.
+		try await expectRemedyBuildsInlineValues(
+			Self.signedInModules(
+				signedInDeclarations: ["@Forwarded public let user: User", "@Instantiated public let pair: any Pair"],
+				app: [
+					SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LivePair", fulfilling: "Pair", declarations: [
+						"@Instantiated(fulfilledByType: \"A\") public let aBuilder: ErasedInstantiator<(), any AScreen>",
+						"@Instantiated(fulfilledByType: \"B\") public let bBuilder: ErasedInstantiator<(), any BScreen>",
+					]),
+				],
+			),
+			probe: DifferentialValueProbe(
+				name: "A's user and B's aBuilder",
+				expression: """
+				{ () -> [Bool] in
+				    let user = User()
+				    let signedIn = Root().signedInBuilder.instantiate(user)
+				    let pair = signedIn.pair as? LivePair
+				    let a = pair?.aBuilder.instantiate() as? A
+				    let b = a?.bBuilder.instantiate() as? B
+				    return [a?.user === user, b?.aBuilder.instantiate() is A]
+				}()
+				""",
+			),
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingOnlyToFulfillTheHole_whenFillReceivesInstantiatorOnThePathWhoseTreeReceivesValueTheSeamForwards() async {
+		// `Screen` receives the `user` `Home` forwards, so no type above `Home` can build `screenBuilder`, and it is on the
+		// place's path, so nothing is built before it that could move beside it.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `screenBuilder: Instantiator<Screen>`, which `Home`’s tree is building where it calls the builder for `Screen`’s `api: any Api` (`api` of `apiBuilder`). Inline, `LiveApi` can get an instantiator of its own, made from the function `Home`’s initializer declares for `screenBuilder`, which code generated outside module `Feature` cannot refer to. Declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Home.swift"]):9:5: note: `Home` instantiates `screenBuilder: Instantiator<Screen>` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						"public protocol Api {}",
+						seamFixtureType(named: "User", isFinalClass: true, declarations: []),
+						seamFixtureType(named: "Screen", declarations: ["@Received public let user: User", "@Instantiated public let api: any Api"]),
+						seamFixtureType(named: "Home", isSeam: true, declarations: ["@Forwarded public let user: User", "@Instantiated public let screenBuilder: Instantiator<Screen>"]),
+					]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+						"import Feature\n\n" + SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received public let screenBuilder: Instantiator<Screen>"]),
+						"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let homeBuilder: Instantiator<Home>"]),
+					], dependencies: ["Feature"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -133,6 +222,24 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 				"import Feature\n\n" + SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "Live", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let cache: Cache?"]),
 				"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let home: Home"]),
 			], dependencies: ["Feature"]),
+		]
+	}
+
+	/// `Feature`, whose seam `SignedIn` holds `signedInDeclarations`, and whose `A`, which fulfills `AScreen`, receives
+	/// `user` and `bBuilder`; and `App`, with `app`, whose `B` fulfills `BScreen` and receives `aBuilder`, and whose root
+	/// instantiates an instantiator of `SignedIn`.
+	private static func signedInModules(signedInDeclarations: [String], app: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol AScreen {}\npublic protocol BScreen {}\npublic protocol Pair {}",
+				seamFixtureType(named: "User", isFinalClass: true, declarations: []),
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "A", fulfilling: "AScreen", declarations: ["@Received public let user: User", "@Received public let bBuilder: ErasedInstantiator<(), any BScreen>"]),
+				seamFixtureType(named: "SignedIn", isSeam: true, declarations: signedInDeclarations),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: (app + [
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "B", fulfilling: "BScreen", declarations: ["@Received public let aBuilder: ErasedInstantiator<(), any AScreen>"]),
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let signedInBuilder: Instantiator<SignedIn>"]),
+			]).map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
 		]
 	}
 
