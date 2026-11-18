@@ -264,6 +264,7 @@ extension DependencyTreeGenerator {
 			let declarations = plainProperties.isEmpty && plainFills.isEmpty ? [] : levelDeclarations(
 				of: build,
 				isSeamRoot: type == seamType,
+				bindsReceivesAgain: bindsReceivesAgain,
 				labelsNamedApart: type == seamType ? labelsNoRootChildDeclares : [],
 				cycleParameters: cycleParametersOfAnyBuild[type, default: []],
 				reboundProperties: reboundPropertiesOfAnyBuild[type, default: []],
@@ -857,7 +858,9 @@ extension DependencyTreeGenerator {
 		var rootDeclarations = [String: Property]()
 		declaring(rootFields, in: &rootDeclarations)
 		let rootFieldLabels = Set(rootFields.map(\.label))
-		declaring(root.children.compactMap(\.property).filter { !namesApartAtRoot.labels.contains($0.label) && !rootFieldLabels.contains($0.label) }, in: &rootDeclarations)
+		// A child the mock promotes is declared as the non-optional value the root binds (`mockRootBinding(ofChild:of:)`).
+		let rootChildren = root.children.compactMap(\.property).filter { !namesApartAtRoot.labels.contains($0.label) && !rootFieldLabels.contains($0.label) }
+		declaring(root.builtInstantiable.map { mockedType in rootChildren.map { mockRootBinding(ofChild: $0, of: mockedType) } } ?? rootChildren, in: &rootDeclarations)
 		var generatorsToVisit = root.children.map { (generator: $0, nearestDeclarations: rootDeclarations) }
 		while let (generator, inheritedDeclarations) = generatorsToVisit.popLast() {
 			guard generator.fillHole == nil, generator.holeSite == nil, !generator.closesPropertyCycle, let instantiable = generator.builtInstantiable else { continue }
@@ -894,10 +897,12 @@ extension DependencyTreeGenerator {
 	/// (`PublicMockRootLevel`); for any other type, its `@Forwarded` properties, then the
 	/// `cycleParameters` of its builder function that any build of the type declares, which hide every other declaration
 	/// of their labels, then the `reboundProperties` and `receivesBoundAgain` of any build of the type, then its children. A
-	/// case's payload holds those its type binds before the case's property.
+	/// case's payload holds those its type binds before the case's property. A mock's root (`bindsReceivesAgain`) declares a
+	/// child it promotes as the non-optional value it binds (`mockRootBinding(ofChild:of:)`).
 	private static func levelDeclarations(
 		of build: ScopeGenerator,
 		isSeamRoot: Bool,
+		bindsReceivesAgain: Bool,
 		labelsNamedApart: Set<String>,
 		cycleParameters: [LevelCycleParameter],
 		reboundProperties: [Property],
@@ -962,7 +967,9 @@ extension DependencyTreeGenerator {
 			}
 		}
 		for child in build.orderedChildrenComputedAfresh(propertiesGeneratedLater: []) {
-			guard let property = child.generator.property, !labelsNamedApart.contains(property.label) else { continue }
+			guard let childProperty = child.generator.property, !labelsNamedApart.contains(childProperty.label) else { continue }
+			// A mock's root binds what it promotes as the non-optional value it builds.
+			let property = isSeamRoot && bindsReceivesAgain ? mockRootBinding(ofChild: childProperty, of: instantiable) : childProperty
 			// A declaration hides an earlier one of its label: the seam's own alias that keeps a deferred parameter's label.
 			fields.removeAll { $0.property.label == property.label }
 			fields.append(field(of: property))

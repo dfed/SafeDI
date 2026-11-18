@@ -6827,8 +6827,10 @@ public actor DependencyTreeGenerator {
 				labelsBoundApart.insert(property.label)
 			}
 		}
-		// A field received only if available is `T?`, which fills no fulfiller's required receive of `T`, though inline the
-		// caller's `T` would: the place is passed up, a written limit `public-mocks.md` states.
+		// A field received only if available is `T?`, which fills no fulfiller's required receive of `T`. Where a call beneath
+		// requires `T` that this module cannot build, the twin's seam requires it and fills such a receive, and a calling
+		// mock's fill is rejected, a breach `public-mocks.md` states. What a call requires that this module builds when passed
+		// `nil` is a child instead, held as the `T` it binds (`mockRootBinding(ofChild:of:)`).
 		for override in parameterNames.onlyIfAvailableOverrides {
 			if override.name == override.receivedProperty.label {
 				fields.append(field(takenBy: Property(label: override.name, typeDescription: override.typeDescription), receivedAs: override.name, isOnlyIfAvailable: true))

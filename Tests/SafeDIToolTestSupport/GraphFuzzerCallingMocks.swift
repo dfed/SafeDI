@@ -67,6 +67,12 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 	/// instantiates: the seam's own mock takes one builder for its own places and the fill's of one hole type and family,
 	/// as its twin's initializer does.
 	case seamCallerFillSharesBuilder
+	/// The fill receives a value the calling type builds that, in the called type's tree, only a call of a third module's
+	/// public mock requires, which builds it when passed `nil` (`Value`'s `Inner`, whose internal initializer the called
+	/// type's module cannot call), beside a type that receives it only if available: the called type's public mock takes the
+	/// value as `T? = nil` and binds the `T` it is passed or builds, and production, whose seam requires the value, fills
+	/// the place.
+	case fillReceivesValueOnlyInnerMockRequires
 
 	static func < (lhs: Self, rhs: Self) -> Bool {
 		allCases.firstIndex(of: lhs) ?? 0 < allCases.firstIndex(of: rhs) ?? 0
@@ -77,7 +83,7 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 		switch self {
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill:
 			true
-		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
+		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillReceivesValueOnlyInnerMockRequires:
 			false
 		}
 	}
@@ -88,7 +94,7 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 		switch self {
 		case .noVisibleImplementation, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
 			true
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillReceivesValueOnlyInnerMockRequires:
 			false
 		}
 	}
@@ -97,7 +103,7 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 		switch self {
 		case .noVisibleImplementation:
 			true
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillReceivesValueOnlyInnerMockRequires:
 			false
 		}
 	}
@@ -156,7 +162,9 @@ struct GraphFuzzerCallingMockCell: Hashable, Comparable, CustomStringConvertible
 
 	/// The draw's blocks of cells, each drawn `graphsPerCell` times in a range of seeds of its own after the blocks before
 	/// it, so a block added later draws no earlier seed anew: the internal and `.public` callers' cells; the listed
-	/// callers'; and the fill that receives the value building the call, for every caller, with a plain place.
+	/// callers'; the fill that receives the value building the call, for every caller, with a plain place; the fill that
+	/// instantiates what nothing fulfills, and a type no declaration can fulfill, for internal and `.public` callers; the
+	/// seam caller's; and the fill that receives the value only an inner public mock requires, for every caller.
 	static let blocks: [[Self]] = [
 		cells(of: firstShapes, callers: [.internal, .public]),
 		cells(of: firstShapes, callers: [.listed]),
@@ -164,6 +172,7 @@ struct GraphFuzzerCallingMockCell: Hashable, Comparable, CustomStringConvertible
 		cells(of: [.fillInstantiatesWhatNothingFulfills], callers: [.internal, .public]),
 		cells(of: [.fillInstantiatesTypeNoDeclarationCanFulfill], callers: [.internal, .public]),
 		cells(of: [.seamCallerFillSharesBuilder], callers: [.internal]),
+		cells(of: [.fillReceivesValueOnlyInnerMockRequires], callers: Caller.allCases),
 	]
 
 	/// Every cell, block by block.
@@ -220,7 +229,7 @@ struct GraphFuzzerCallingMockDraw {
 			FillHoles(random: &random, drawsSpellingNoHoleCanHave: false)
 		case .fillInstantiatesTypeNoDeclarationCanFulfill:
 			FillHoles(random: &random, drawsSpellingNoHoleCanHave: true)
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillReceivesValueOnlyInnerMockRequires:
 			nil
 		}
 	}
@@ -257,7 +266,7 @@ struct GraphFuzzerCallingMockDraw {
 		switch cell.shape {
 		case .implementationReceivesWhatNothingProvides:
 			[names.token.lowercasedFirst]
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillReceivesValueOnlyInnerMockRequires:
 			[]
 		}
 	}
@@ -267,7 +276,7 @@ struct GraphFuzzerCallingMockDraw {
 		switch cell.shape {
 		case .noVisibleImplementation, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
 			false
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillReceivesValueOnlyInnerMockRequires:
 			true
 		}
 	}
@@ -293,7 +302,7 @@ struct GraphFuzzerCallingMockDraw {
 		switch cell.shape {
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill:
 			nil
-		case .callersOwnValue:
+		case .callersOwnValue, .fillReceivesValueOnlyInnerMockRequires:
 			[]
 		case .implementationReceivesWhatNothingProvides:
 			[names.token.lowercasedFirst]
@@ -329,7 +338,7 @@ struct GraphFuzzerCallingMockDraw {
 			[holeBuilderLabel]
 		case .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
 			expectedBuilders.map(\.label)
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillReceivesValueOnlyInnerMockRequires:
 			[]
 		}
 	}
@@ -346,7 +355,7 @@ struct GraphFuzzerCallingMockDraw {
 		let caller = "\(names.callerModuleName).\(names.caller)"
 		let token = names.token.lowercasedFirst
 		let calls: (mock: String, twin: String)? = switch cell.shape {
-		case .callersOwnValue:
+		case .callersOwnValue, .fillReceivesValueOnlyInnerMockRequires:
 			("\(caller).mock()", "\(caller)()")
 		case .implementationReceivesWhatNothingProvides:
 			("\(caller).mock(\(token): \(names.token)())", "\(caller)(__safeDI_\(token): \(names.token)())")
@@ -366,7 +375,9 @@ struct GraphFuzzerCallingMockDraw {
 		case .plain:
 			return [DifferentialValueProbe(name: caller, expression: mockCall, knownRightExpression: twinCall)]
 		case .deferred:
-			let place = "\(names.inner.lowercasedFirst).\(holePlace(protocolName: names.hole, fillName: names.fill).label)"
+			// The called type holds the place where only an inner public mock requires the value the fill receives.
+			let placeHolder = cell.shape == .fillReceivesValueOnlyInnerMockRequires ? names.outer : names.inner
+			let place = "\(placeHolder.lowercasedFirst).\(holePlace(protocolName: names.hole, fillName: names.fill).label)"
 			return [DifferentialValueProbe(
 				name: "(\(caller), \(caller).\(place).instantiate(7))",
 				expression: Self.callerAndFill(of: mockCall, place: place),
@@ -424,7 +435,7 @@ struct GraphFuzzerCallingMockDraw {
 			return ("\(names.callerModuleName)/\(names.callerModuleName)Types.swift", "@Received let \(names.sibling.lowercasedFirst): \(names.sibling)")
 		case .fillInstantiatesTypeNoDeclarationCanFulfill:
 			return fillHoles?.spellingNoHoleCanHave.map { ("\(names.callerModuleName)/\(names.callerModuleName)Types.swift", "@Instantiated let \($0.label): \($0.type)") }
-		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
+		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillReceivesValueOnlyInnerMockRequires:
 			return nil
 		}
 	}
@@ -434,7 +445,7 @@ struct GraphFuzzerCallingMockDraw {
 	/// The draw's files, in dependency order, with each file's content by module and file name.
 	func files(_ form: Form) -> [File] {
 		switch cell.shape {
-		case .outerSeamValue, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill:
+		case .outerSeamValue, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillReceivesValueOnlyInnerMockRequires:
 			[
 				File(module: names.innerModuleName, dependencies: [], content: innerModuleContent(form)),
 				File(module: names.outerModuleName, dependencies: [names.innerModuleName], content: outerModuleContent),
@@ -640,6 +651,7 @@ struct GraphFuzzerCallingMockDraw {
 	}
 
 	private func innerModuleContent(_ form: Form) -> String {
+		guard cell.shape != .fillReceivesValueOnlyInnerMockRequires else { return valueRequiringInnerModuleContent }
 		let place = holePlace(protocolName: names.hole, fillName: names.fill)
 		// A seam caller's own production tree calls the called type's seam, so its graphs declare the called type a seam.
 		let attribute = form == .mock && fillHoles?.calledTypeIsSeam == false && cell.shape != .seamCallerFillSharesBuilder
@@ -654,6 +666,35 @@ struct GraphFuzzerCallingMockDraw {
 		public final class \(names.inner): Instantiable {
 		    init(\(place.label): \(place.type)) { self.\(place.label) = \(place.label) }
 		    \(place.attribute) public let \(place.label): \(place.type)
+		}
+		"""
+	}
+
+	/// The inner module where only an inner public mock requires the value the fill receives: the hole's protocol, the value,
+	/// and the inner type, whose internal initializer the called type's module cannot call, which requires the value and
+	/// instantiates a `Gauge`, so that it has a tree to build.
+	private var valueRequiringInnerModuleContent: String {
+		let value = names.value.lowercasedFirst
+		return """
+		import SafeDI
+
+		public protocol \(names.hole): AnyObject {}
+
+		@Instantiable
+		public final class \(names.value): Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class Gauge: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable(generateDependencyTree: true, generateMock: .public)
+		public final class \(names.inner): Instantiable {
+		    init(\(value): \(names.value), gauge: Gauge) { self.\(value) = \(value); self.gauge = gauge }
+		    @Received public let \(value): \(names.value)
+		    @Instantiated public let gauge: Gauge
 		}
 		"""
 	}
@@ -689,6 +730,31 @@ struct GraphFuzzerCallingMockDraw {
 			@Instantiable
 			public final class \(names.value): Instantiable {
 			    public init() {}
+			}
+			"""
+		case .fillReceivesValueOnlyInnerMockRequires:
+			// The called type holds the place, a type that receives the value only if available, and the inner type, which
+			// requires it.
+			let place = holePlace(protocolName: names.hole, fillName: names.fill)
+			let value = names.value.lowercasedFirst
+			let sibling = names.sibling.lowercasedFirst
+			let inner = names.inner.lowercasedFirst
+			return """
+			import SafeDI
+			import \(names.innerModuleName)
+
+			@Instantiable
+			public final class \(names.sibling): Instantiable {
+			    public init(\(value): \(names.value)?) { self.\(value) = \(value) }
+			    @Received(onlyIfAvailable: true) public let \(value): \(names.value)?
+			}
+
+			@Instantiable(generateDependencyTree: true, generateMock: .public)
+			public final class \(names.outer): Instantiable {
+			    init(\(place.label): \(place.type), \(sibling): \(names.sibling), \(inner): \(names.inner)) { self.\(place.label) = \(place.label); self.\(sibling) = \(sibling); self.\(inner) = \(inner) }
+			    \(place.attribute) public let \(place.label): \(place.type)
+			    @Instantiated public let \(sibling): \(names.sibling)
+			    @Instantiated public let \(inner): \(names.inner)
 			}
 			"""
 		case .outerSeamValue, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .appOnlyScreenInLoop, .seamBuiltAgain, .fillReceivesValueBuildingTheCall:
@@ -847,6 +913,9 @@ struct GraphFuzzerCallingMockDraw {
 		case .callersOwnValue:
 			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: (names.value.lowercasedFirst, names.value), isPublic: callerIsPublic))
 			declarations.append(callerDeclaration(form, properties: [(names.value.lowercasedFirst, names.value), (names.inner.lowercasedFirst, names.inner)]))
+		case .fillReceivesValueOnlyInnerMockRequires:
+			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: (names.value.lowercasedFirst, names.value), isPublic: callerIsPublic))
+			declarations.append(callerDeclaration(form, properties: [(names.value.lowercasedFirst, names.value), (names.outer.lowercasedFirst, names.outer)]))
 		case .noVisibleImplementation:
 			declarations.append(callerDeclaration(form, properties: [(names.value.lowercasedFirst, names.value), (names.inner.lowercasedFirst, names.inner)]))
 		case .implementationReceivesWhatNothingProvides:
