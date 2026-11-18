@@ -1488,7 +1488,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			} else {
 				var firstSeeds = Set<UInt64>()
 				for position in Set(draws.map { "\($0.tickerPosition)" }) {
-					if let first = draws.first(where: { "\($0.tickerPosition)" == position }) {
+					if let first = draws.first(where: { position == "\($0.tickerPosition)" }) {
 						firstSeeds.insert(first.seed)
 					}
 				}
