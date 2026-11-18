@@ -9223,10 +9223,11 @@ public actor DependencyTreeGenerator {
 	/// twin fills these places, but the calling mock cannot hand each route's fill the lazy value the twin hands it, so it
 	/// takes the builder, as it did before its fills read the caller's values:
 	/// - **Re-entry.** A called type is re-entered when the tree of a fill of one of its places calls its public mock again,
-	///   or calls a public mock whose builders reach its places. A hole type of a re-entered called type is passed up when a
-	///   fill of one of its places reads, beside the place's fields, a `LazilyInstantiated` or `SendableLazilyInstantiated`
-	///   value: the called mock binds the value by value, so no level of the re-entered call holds the wrapper the twin
-	///   hands that fill.
+	///   or calls a public mock whose builders reach its places, itself or through the fills of the calls it makes, as where
+	///   its fill calls a second called type whose own fill calls the first. A hole type of a re-entered called type is
+	///   passed up when a fill of one of its places reads, beside the place's fields, a `LazilyInstantiated` or
+	///   `SendableLazilyInstantiated` value: the called mock binds the value by value, so no level of the re-entered call
+	///   holds the wrapper the twin hands that fill.
 	/// - **A re-entering fill that instantiates what nothing fulfills.** A hole type of a called type is passed up when the
 	///   tree of a fill of one of its places calls a public mock whose builders reach its places, another than the called
 	///   type's own, and instantiates a type no declaration the module sees fulfills, which the mock binds from a builder its
@@ -9244,9 +9245,7 @@ public actor DependencyTreeGenerator {
 	/// - Then, as a fill never passes a place up, a fill whose tree calls a public mock that now passes a builder up is not
 	///   filled either, until none is: its hole type is passed up too.
 	/// A hole type is never passed up in part, so no builder is half filled. Every other place is filled as before: a fill
-	/// that reads only its place's fields, or values by value, whether or not its called type is re-entered, and a called
-	/// type re-entered only through another call's fill: its fill calls a second called type, whose own fill calls the first
-	/// again (`Scope`'s re-entering call hands that fill the caller's wrapper).
+	/// that reads only its place's fields, or values by value, whether or not its called type is re-entered.
 	private static func holeTypesTheFillGatesPassUp(of fills: [GatedFill], in publicMockCalls: [TypeDescription: PublicMockCall]) -> Set<HoleTypeOfCall> {
 		var calledTypesByCalledType = [TypeDescription: Set<TypeDescription>]()
 		for fill in fills {
@@ -9255,8 +9254,15 @@ public actor DependencyTreeGenerator {
 		var passedUp = Set<HoleTypeOfCall>()
 		for (calledType, calledTypesInFills) in calledTypesByCalledType {
 			let sites = Set(publicMockCalls[calledType]?.holes.map(\.site) ?? [])
-			let isReentered = calledTypesInFills.contains { calledTypeInFill in
-				calledTypeInFill == calledType || publicMockCalls[calledTypeInFill]?.holes.contains { sites.contains($0.site) } == true
+			// The called types the fills of `calledType` call, those their own fills call, and so on.
+			var reachedCalledTypes = Set<TypeDescription>()
+			var calledTypesToVisit = Array(calledTypesInFills)
+			while let reachedCalledType = calledTypesToVisit.popLast() {
+				guard reachedCalledTypes.insert(reachedCalledType).inserted else { continue }
+				calledTypesToVisit.append(contentsOf: calledTypesByCalledType[reachedCalledType] ?? [])
+			}
+			let isReentered = reachedCalledTypes.contains { reachedCalledType in
+				reachedCalledType == calledType || publicMockCalls[reachedCalledType]?.holes.contains { sites.contains($0.site) } == true
 			}
 			for fill in fills where fill.calledType == calledType && isReentered && !fill.lazyValuesReadBesideFields.isEmpty {
 				passedUp.insert(fill.key)
