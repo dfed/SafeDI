@@ -2043,8 +2043,7 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 	// The errors of a fill that reads a value its builder is not handed. Each remedy edits declarations besides the fill's
 	// receive, so its verdict also counts an error it introduces at a type it edits or whose declaration it moves. The
-	// graphs whose advice does not work are the shapes an adopter reported, each a known issue until the error's advice
-	// changes.
+	// shapes an adopter reported are each a graph here, and a graph whose advice does not work is a known issue.
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -2075,20 +2074,34 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func remedyRuns_leaveNoErrorAtTheReceive_whenTheFillReceivesTheValueTheSeamThatPassesTheBuilderUpDeclaresOnlyIfAvailable() async throws {
+	func remedyRuns_declareTheReadValueOnlyIfAvailableOnTheInnerSeamAndLeaveNoErrorAtTheReceive_whenTheFillReceivesTheValueTheSeamThatPassesTheBuilderUpDeclaresOnlyIfAvailable() async throws {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.passedUpBuilderGraph(receiveAttribute: "@Received(onlyIfAvailable: true)", receivedType: "S1_Logger?"))
 
 		let runs = try await Self.remedyRuns(of: fixture)
 
-		#expect(runs.map(\.remedy.description) == ["declares `@Received let logger: S1_Logger?` on `S1_Inner`"])
-		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedySeamFillReceiveSpelledRequiredReason)") {
-			#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(runs.map(\.remedy.kind) == [.receiveOnSeam])
+		#expect(runs.first?.remedy.fixture.swiftFileContent[1] == """
+		// module: FuzzFeature
+
+		@Instantiable(generateDependencyTree: true)
+		public final class S1_Inner: Instantiable {
+			public init(service: any S1_Service, logger: S1_Logger?) {
+				self.service = service
+				self.logger = logger
+			}
+
+			@Instantiated let service: any S1_Service
+			@Received(onlyIfAvailable: true) let logger: S1_Logger?
 		}
+
+		public protocol S1_Service {}
+		""")
+		#expect(runs.map(\.errorsAtSite) == [[]])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func remedyRuns_leaveNoErrorAtTheReceive_whenTheSeamsTreeBuildsTheSeamAgainBeneathTheValueTheFillReadsOnlyIfAvailable() async throws {
+	func remedyRuns_declareTheReadValueOnlyIfAvailableOnTheSeamAndLeaveNoErrorAtTheReceive_whenTheSeamsTreeBuildsTheSeamAgainBeneathTheValueTheFillReadsOnlyIfAvailable() async throws {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
 			"""
 			// module: FuzzFeature
@@ -2151,10 +2164,26 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 		let runs = try await Self.remedyRuns(of: fixture)
 
-		#expect(runs.map(\.remedy.description) == ["declares `@Received let cache: S1_Cache?` on `S1_Home`"])
-		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedySeamFillReceiveSpelledRequiredReason)") {
-			#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(runs.map(\.remedy.kind) == [.receiveOnSeam])
+		#expect(runs.first?.remedy.fixture.swiftFileContent[0] == """
+		// module: FuzzFeature
+
+		@Instantiable(generateDependencyTree: true)
+		public final class S1_Home: Instantiable {
+			public init(service: any S1_Service, stepBuilder: Instantiator<S1_Step>, cache: S1_Cache?) {
+				self.service = service
+				self.stepBuilder = stepBuilder
+				self.cache = cache
+			}
+
+			@Instantiated let service: any S1_Service
+			@Instantiated let stepBuilder: Instantiator<S1_Step>
+			@Received(onlyIfAvailable: true) let cache: S1_Cache?
 		}
+
+		public protocol S1_Service {}
+		""")
+		#expect(runs.map(\.errorsAtSite) == [[]])
 	}
 
 	@Test
@@ -2303,57 +2332,116 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func remedyRuns_leaveNoErrorAtTheReceive_whenASendableLazyWrapperBuildsThePlaceTheValueIsForwardedInto() async throws {
+	func remedyRuns_forwardTheValueIntoTheSendableFunctionAndDeclareTheWrapperAsAnInstantiatorAndLeaveNoErrorAtTheReceive_whenASendableLazyWrapperBuildsThePlace() async throws {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.stationGraph(placeWrapper: "SendableLazilyInstantiated", userReceivesId: nil))
 
 		let runs = try await Self.remedyRuns(of: fixture)
 
-		#expect(runs.map(\.remedy.kind) == [.forwardIntoSendableFunction])
-		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedySeamFillForwardedIntoLazyWrapperReason)") {
-			#expect(runs.map(\.errorsAtSite) == [[]])
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func remedyRuns_instantiateTheValueOutsideTheSeamAndLeaveNoErrorAtTheReceive_whenATypeOutsideTheSendableFunctionDeclaresIt() async throws {
-		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.stationGraph(placeWrapper: "SendableInstantiator", userReceivesId: false))
-
-		let runs = try await Self.remedyRuns(of: fixture)
-
-		#expect(runs.map(\.remedy.kind) == [.instantiateOutsideSeam])
-		#expect(runs.first.map { [$0.remedy.fixture.swiftFileContent[0], $0.remedy.fixture.swiftFileContent[1], $0.remedy.fixture.swiftFileContent[4]] } == [
-			"""
-			// module: FuzzFeature
-
-			@Instantiable(generateDependencyTree: true)
-			public final class S1_Home: Instantiable, Sendable {
-				public init(midBuilder: Instantiator<S1_Mid>, user: S1_User) {
-					self.midBuilder = midBuilder
-					self.user = user
-				}
-
-				@Instantiated let midBuilder: Instantiator<S1_Mid>
-				@Received let user: S1_User
-			}
-
-			public protocol S1_Service: Sendable {}
-			""",
+		#expect(runs.map(\.remedy.description) == ["declares `@Forwarded let id: Int` on `S1_Owner`, and `owner` on `S1_Mid` as `SendableInstantiator<S1_Owner>`"])
+		#expect(runs.first.map { [$0.remedy.fixture.swiftFileContent[1], $0.remedy.fixture.swiftFileContent[2]] } == [
 			"""
 			// module: FuzzFeature
 
 			@Instantiable
 			public final class S1_Mid: Instantiable, Sendable {
-				public init(id: Int, user: S1_User, owner: SendableInstantiator<S1_Owner>) {
+				public init(id: Int, owner: SendableInstantiator<S1_Owner>) {
 					self.id = id
-					self.user = user
 					self.owner = owner
 				}
 
 				@Forwarded let id: Int
-				@Received let user: S1_User
 				@Instantiated let owner: SendableInstantiator<S1_Owner>
 			}
+			""",
+			"""
+			// module: FuzzFeature
+
+			@Instantiable
+			public final class S1_Owner: Instantiable, Sendable {
+				public init(service: any S1_Service, id: Int) {
+					self.service = service
+					self.id = id
+				}
+
+				@Instantiated let service: any S1_Service
+				@Forwarded let id: Int
+			}
+			""",
+		])
+		#expect(runs.map(\.errorsAtSite) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_forwardTheDeclaredValueIntoTheSendableFunctionAndLeaveNoErrorAtTheReceive_whenATypeOutsideTheSendableFunctionDeclaresIt() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.stationGraph(placeWrapper: "SendableInstantiator", userReceivesId: false))
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.forwardIntoSendableFunction])
+		#expect(runs.first?.remedy.fixture.swiftFileContent[2] == """
+		// module: FuzzFeature
+
+		@Instantiable
+		public final class S1_Owner: Instantiable, Sendable {
+			public init(service: any S1_Service, user: S1_User) {
+				self.service = service
+				self.user = user
+			}
+
+			@Instantiated let service: any S1_Service
+			@Forwarded let user: S1_User
+		}
+		""")
+		#expect(runs.map(\.errorsAtSite) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_forwardTheDeclaredValueIntoTheSendableFunctionAndLeaveNoErrorAtTheReceive_whenAnOuterSeamBuildsTheSeam() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.stationGraph(placeWrapper: "SendableInstantiator", userReceivesId: false, rootBuildsOuterSeam: true))
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.description) == ["declares `@Forwarded let user: S1_User` on `S1_Owner`"])
+		#expect(runs.map(\.errorsAtSite) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_forwardTheDeclaredValueIntoTheSendableFunctionAndLeaveNoErrorAtTheReceive_whenTheDeclaredValueReceivesAValueForwardedOutsideTheFunction() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.stationGraph(placeWrapper: "SendableInstantiator", userReceivesId: true))
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.description) == ["declares `@Forwarded let user: S1_User` on `S1_Owner`"])
+		#expect(runs.map(\.errorsAtSite) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_instantiateTheValueOutsideTheSeamAndLeaveNoErrorAtTheReceive_whenTheSeamDeclaresItOutsideTheSendableFunction() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.stationGraph(placeWrapper: "SendableInstantiator", userReceivesId: false, seamDeclaresUser: true))
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.instantiateOutsideSeam])
+		#expect(runs.first.map { [$0.remedy.fixture.swiftFileContent[0], $0.remedy.fixture.swiftFileContent[4]] } == [
+			"""
+			// module: FuzzFeature
+
+			@Instantiable(generateDependencyTree: true)
+			public final class S1_Home: Instantiable, Sendable {
+				public init(user: S1_User, midBuilder: Instantiator<S1_Mid>) {
+					self.user = user
+					self.midBuilder = midBuilder
+				}
+
+				@Received let user: S1_User
+				@Instantiated let midBuilder: Instantiator<S1_Mid>
+			}
+
+			public protocol S1_Service: Sendable {}
 			""",
 			"""
 			// module: FuzzApp
@@ -2376,13 +2464,13 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func remedyRuns_instantiateTheValueOnTheCallerOfTheSeamThatPassesTheBuilderUpAndLeaveNoErrorAtTheReceive_whenAnOuterSeamBuildsTheSeam() async throws {
-		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.stationGraph(placeWrapper: "SendableInstantiator", userReceivesId: false, rootBuildsOuterSeam: true))
+	func remedyRuns_instantiateTheValueOnTheCallerOfTheSeamThatPassesTheBuilderUpAndLeaveNoErrorAtTheReceive_whenAnOuterSeamBuildsTheSeamThatDeclaresIt() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.stationGraph(placeWrapper: "SendableInstantiator", userReceivesId: false, seamDeclaresUser: true, rootBuildsOuterSeam: true))
 
 		let runs = try await Self.remedyRuns(of: fixture)
 
 		// `S1_Outer` builds `S1_Home` and passes its builder up, so the builder's caller is the root, which declares the value.
-		#expect(runs.map(\.remedy.kind) == [.instantiateOutsideSeam])
+		#expect(runs.map(\.remedy.description) == ["declares `@Instantiated let user: S1_User` on `S1_Root0`, and `@Received let user: S1_User` on `S1_Home` in place of `S1_Home`’s declaration"])
 		#expect(runs.first.map { [$0.remedy.fixture.swiftFileContent[0], $0.remedy.fixture.swiftFileContent[5]] } == [
 			fixture.swiftFileContent[0],
 			"""
@@ -2402,19 +2490,6 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 			""",
 		])
 		#expect(runs.map(\.errorsAtSite) == [[]])
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func remedyRuns_leaveNoErrorAtTheReceive_whenTheValueInstantiatedOutsideTheSeamReceivesAValueForwardedInsideIt() async throws {
-		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.stationGraph(placeWrapper: "SendableInstantiator", userReceivesId: true))
-
-		let runs = try await Self.remedyRuns(of: fixture)
-
-		#expect(runs.map(\.remedy.kind) == [.instantiateOutsideSeam])
-		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedySeamFillInstantiatedOutsideReceivesSeamValueReason)") {
-			#expect(runs.map(\.errorsAtSite) == [[]])
-		}
 	}
 
 	@Test
@@ -2507,7 +2582,107 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func remedyRuns_leaveNoErrorAtTheReceive_whenTheInstantiatorInstantiatedAboveTheSeamBuildsATypeThatReceivesTheSeamsValues() async throws {
+	func remedyRuns_instantiateTheInstantiatorAboveTheSeamAndLeaveNoErrorAtTheReceive_whenTheSeamsTreeBuildsItAfterTheBuilder() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			// module: FuzzFeature
+
+			@Instantiable(generateDependencyTree: true)
+			public final class S1_Seam: Instantiable {
+				public init(serviceBuilder: ErasedInstantiator<(), any S1_Service>, gadgetBuilder: ErasedInstantiator<(), any S1_Gadget>) {
+					self.serviceBuilder = serviceBuilder
+					self.gadgetBuilder = gadgetBuilder
+				}
+
+				@Instantiated(fulfilledByType: "S1_Impl") let serviceBuilder: ErasedInstantiator<(), any S1_Service>
+				@Instantiated(fulfilledByType: "S1_GadgetImpl") let gadgetBuilder: ErasedInstantiator<(), any S1_Gadget>
+			}
+
+			public protocol S1_Service {}
+
+			public protocol S1_Gadget {}
+			""",
+			"""
+			// module: FuzzApp
+			import FuzzFeature
+
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(seam: S1_Seam) {
+					self.seam = seam
+				}
+
+				@Instantiated let seam: S1_Seam
+			}
+			""",
+			"""
+			// module: FuzzApp, fills a hole
+			import FuzzFeature
+
+			@Instantiable(fulfillingAdditionalTypes: [S1_Gadget.self])
+			public final class S1_GadgetImpl: Instantiable, S1_Gadget {
+				public init() {}
+			}
+			""",
+			"""
+			// module: FuzzApp, fills a hole
+			import FuzzFeature
+
+			@Instantiable(fulfillingAdditionalTypes: [S1_Service.self])
+			public final class S1_Impl: Instantiable, S1_Service {
+				public init(gadgetBuilder: ErasedInstantiator<(), any S1_Gadget>) {
+					self.gadgetBuilder = gadgetBuilder
+				}
+
+				@Received let gadgetBuilder: ErasedInstantiator<(), any S1_Gadget>
+			}
+			""",
+		])
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.instantiateOutsideSeam])
+		#expect(runs.first.map { [$0.remedy.fixture.swiftFileContent[0], $0.remedy.fixture.swiftFileContent[1]] } == [
+			"""
+			// module: FuzzFeature
+
+			@Instantiable(generateDependencyTree: true)
+			public final class S1_Seam: Instantiable {
+				public init(serviceBuilder: ErasedInstantiator<(), any S1_Service>, gadgetBuilder: ErasedInstantiator<(), any S1_Gadget>) {
+					self.serviceBuilder = serviceBuilder
+					self.gadgetBuilder = gadgetBuilder
+				}
+
+				@Instantiated(fulfilledByType: "S1_Impl") let serviceBuilder: ErasedInstantiator<(), any S1_Service>
+				@Received let gadgetBuilder: ErasedInstantiator<(), any S1_Gadget>
+			}
+
+			public protocol S1_Service {}
+
+			public protocol S1_Gadget {}
+			""",
+			"""
+			// module: FuzzApp
+			import FuzzFeature
+
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(seam: S1_Seam, gadgetBuilder: ErasedInstantiator<(), any S1_Gadget>) {
+					self.seam = seam
+					self.gadgetBuilder = gadgetBuilder
+				}
+
+				@Instantiated let seam: S1_Seam
+				@Instantiated(fulfilledByType: "S1_GadgetImpl") let gadgetBuilder: ErasedInstantiator<(), any S1_Gadget>
+			}
+			""",
+		])
+		#expect(runs.map(\.errorsAtSite) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func unremediedSiteCount_countsASeamFillsError_whenItAdvisesDeclaringTheInstantiatorBesideTheOneThatLeadsToThePlaceOnANewTypeOfTheFillsModule() async throws {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
 			"""
 			// module: FuzzFeature
@@ -2572,34 +2747,36 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 			""",
 		])
 
-		let runs = try await Self.remedyRuns(of: fixture)
+		let (runs, unremediedSiteCount) = try await Self.remedyRunsAndUnremediedSiteCount(of: fixture)
 
-		#expect(runs.map(\.remedy.description) == ["declares `@Instantiated(fulfilledByType: \"S1_A\") let aBuilder: ErasedInstantiator<(), any S1_AScreen>` on `S1_Root0`, and `@Received let aBuilder: ErasedInstantiator<(), any S1_AScreen>` on `S1_SignedIn` in place of `S1_SignedIn`’s declaration"])
-		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedySeamFillInstantiatedAboveReceivesSeamValuesReason)") {
-			#expect(runs.map(\.errorsAtSite) == [[]])
-		}
+		// The error advises declaring `aBuilder` and `bBuilder` on one type of `FuzzApp` that `S1_SignedIn` builds through a
+		// protocol in their place: a type and a protocol the graph does not declare, which the oracle does not write.
+		#expect(runs.isEmpty)
+		#expect(unremediedSiteCount == 1)
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func remedyRuns_relabelTheDeclarationTheCycleRepeatsAndLeaveNoErrorAtTheReceive_whenTheRootDeclaresTheLabelToo() async throws {
+	func remedyRuns_receiveTheValueOnTheTypeTheCycleBuildsAgainAndLeaveNoErrorAtTheReceive_whenTheRootDeclaresTheLabelToo() async throws {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.cycleRedeclarationGraph(rootDeclaresCache: true))
 
 		let runs = try await Self.remedyRuns(of: fixture)
 
-		#expect(runs.map(\.remedy.kind) == [.relabelCycleDeclaration])
-		#expect(runs.first?.remedy.fixture.swiftFileContent[1] == """
+		#expect(runs.map(\.remedy.kind) == [.receiveOnTypeTheCycleBuilds])
+		#expect(runs.first?.remedy.fixture.swiftFileContent[2] == """
 		// module: FuzzFeature
 
 		@Instantiable
-		public final class S1_Screen: Instantiable {
-			public init(cacheRelabeled: S1_Cache, stepBuilder: Instantiator<S1_Step>) {
-				self.cacheRelabeled = cacheRelabeled
-				self.stepBuilder = stepBuilder
+		public final class S1_Step: Instantiable {
+			public init(service: any S1_Service, screenBuilder: Instantiator<S1_Screen>, cache: S1_Cache) {
+				self.service = service
+				self.screenBuilder = screenBuilder
+				self.cache = cache
 			}
 
-			@Instantiated let cacheRelabeled: S1_Cache
-			@Instantiated let stepBuilder: Instantiator<S1_Step>
+			@Instantiated let service: any S1_Service
+			@Instantiated let screenBuilder: Instantiator<S1_Screen>
+			@Received let cache: S1_Cache
 		}
 		""")
 		#expect(runs.map(\.errorsAtSite) == [[]])
@@ -2607,26 +2784,51 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func remedyRuns_leaveNoErrorAtTheReceive_whenOnlyTheDeclarationTheCycleRepeatsDeclaresTheLabel() async throws {
+	func remedyRuns_receiveTheValueOnTheTypeTheCycleBuildsAgainAndLeaveNoErrorAtTheReceive_whenOnlyTheDeclarationTheCycleRepeatsDeclaresTheLabel() async throws {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.cycleRedeclarationGraph(rootDeclaresCache: false))
 
 		let runs = try await Self.remedyRuns(of: fixture)
 
-		#expect(runs.map(\.remedy.kind) == [.relabelCycleDeclaration])
-		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedySeamFillRelabelsCycleDeclarationReason)") {
-			#expect(runs.map(\.errorsAtSite) == [[]])
-		}
+		#expect(runs.map(\.remedy.description) == ["declares `@Received let cache: S1_Cache` on `S1_Step`"])
+		#expect(runs.map(\.errorsAtSite) == [[]])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func remedyRuns_leaveNoErrorAtTheReceive_whenTheSeamDeclaresTheLabelOutsideTheSendableFunctionThatBuildsTheCycle() async throws {
+	func remedyRuns_receiveTheValueOnlyIfAvailableOnTheTypeTheCycleBuildsAgainAndLeaveNoErrorAtTheReceive_whenTheSeamDeclaresTheLabelOutsideTheSendableFunctionThatBuildsTheCycle() async throws {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.sendableCycleRedeclarationGraph())
 
 		let runs = try await Self.remedyRuns(of: fixture)
 
-		#expect(runs.map(\.remedy.description) == ["gives `cache: S1_Cache` on `S1_Step` the label `cacheRelabeled`"])
-		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedySeamFillRelabelsCycleDeclarationReason)") {
+		#expect(runs.map(\.remedy.kind) == [.receiveOnTypeTheCycleBuilds])
+		#expect(runs.first?.remedy.fixture.swiftFileContent[1] == """
+		// module: FuzzFeature
+
+		@Instantiable
+		public final class S1_Screen: Instantiable, Sendable {
+			public init(service: any S1_Service, stepBuilder: SendableInstantiator<S1_Step>, cache: S1_Cache?) {
+				self.service = service
+				self.stepBuilder = stepBuilder
+				self.cache = cache
+			}
+
+			@Instantiated let service: any S1_Service
+			@Instantiated let stepBuilder: SendableInstantiator<S1_Step>
+			@Received(onlyIfAvailable: true) let cache: S1_Cache?
+		}
+		""")
+		#expect(runs.map(\.errorsAtSite) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_leaveNoErrorAtTheReceive_whenTheTypeTheCycleBuildsAgainIsInsideASendableFunctionAndTheValueIsNotSendable() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: Self.sendableCycleRedeclarationGraph(cacheType: "Instantiator<S1_Cache>"))
+
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.description) == ["declares `@Received(onlyIfAvailable: true) let cache: Instantiator<S1_Cache>?` on `S1_Screen`"])
+		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedySeamFillCycleReceiveNotSendableReason)") {
 			#expect(runs.map(\.errorsAtSite) == [[]])
 		}
 	}
@@ -2940,18 +3142,22 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 	/// `S1_Owner`, the owner of a place of `S1_Service`, in a `@Sendable` function, with `placeWrapper`. `S1_Impl` fills the
 	/// place in `FuzzApp`, reading `id` where `userReceivesId` is `nil`, and otherwise `user: S1_User`, which `S1_Mid`
 	/// instantiates beside the place, and which receives `id` where `userReceivesId` is `true`: a value bound outside the
-	/// function that builds the place, which hands its fill only what it binds.
+	/// function that builds the place, which hands its fill only what it binds. Where `seamDeclaresUser` is `true`, `S1_Home`
+	/// instantiates `user` in place of `S1_Mid`.
 	///
 	/// Where `rootBuildsOuterSeam` is `true`, the root builds `S1_Outer`, a seam of `FuzzFeature` that builds `S1_Home` and
 	/// passes its builder up, in place of building `S1_Home` itself.
-	private static func stationGraph(placeWrapper: String, userReceivesId: Bool?, rootBuildsOuterSeam: Bool = false) -> [String] {
+	private static func stationGraph(placeWrapper: String, userReceivesId: Bool?, seamDeclaresUser: Bool = false, rootBuildsOuterSeam: Bool = false) -> [String] {
 		var midProperties = [(attribute: "@Forwarded", label: "id", type: "Int")]
+		var homeProperties = [(label: "midBuilder", type: "Instantiator<S1_Mid>")]
 		let implProperty = if userReceivesId == nil {
 			(attribute: "@Received", label: "id", type: "Int")
 		} else {
 			(attribute: "@Received", label: "user", type: "S1_User")
 		}
-		if userReceivesId != nil {
+		if seamDeclaresUser {
+			homeProperties.insert((label: "user", type: "S1_User"), at: 0)
+		} else if userReceivesId != nil {
 			midProperties.append((attribute: "@Instantiated", label: "user", type: "S1_User"))
 		}
 		midProperties.append((attribute: "@Instantiated", label: "owner", type: "\(placeWrapper)<S1_Owner>"))
@@ -2976,11 +3182,11 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 			@Instantiable(generateDependencyTree: true)
 			public final class S1_Home: Instantiable, Sendable {
-				public init(midBuilder: Instantiator<S1_Mid>) {
-					self.midBuilder = midBuilder
+				public init(\(homeProperties.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {
+			\(homeProperties.map { "\t\tself.\($0.label) = \($0.label)" }.joined(separator: "\n"))
 				}
 
-				@Instantiated let midBuilder: Instantiator<S1_Mid>
+			\(homeProperties.map { "\t@Instantiated let \($0.label): \($0.type)" }.joined(separator: "\n"))
 			}
 
 			public protocol S1_Service: Sendable {}
@@ -3143,24 +3349,24 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 		]
 	}
 
-	/// Seed 1916's cycle, made minimal: a seam of `FuzzFeature`, `S1_Home`, declares `cache: S1_Cache` and builds `S1_Screen`,
-	/// the owner of a place of `S1_Service`, in a `SendableInstantiator`; `S1_Screen` builds `S1_Step` in another, which
-	/// declares `cache` again and builds `S1_Screen` again. The fill, `S1_Impl` in `FuzzApp`, receives `cache` only if
-	/// available, from a scope that holds the same values at every level of the cycle; relabeling `S1_Step`'s `cache` leaves
-	/// it reading `S1_Home`'s, outside the `@Sendable` function that builds `S1_Screen`.
-	private static func sendableCycleRedeclarationGraph() -> [String] {
+	/// Seed 1916's cycle, made minimal: a seam of `FuzzFeature`, `S1_Home`, declares `cache: cacheType` and builds
+	/// `S1_Screen`, the owner of a place of `S1_Service`, in a `SendableInstantiator`; `S1_Screen` builds `S1_Step` in another,
+	/// which declares `cache` again and builds `S1_Screen` again. The fill, `S1_Impl` in `FuzzApp`, receives `cache` only if
+	/// available, from a scope that holds the same values at every level of the cycle, and `S1_Home`'s `cache` is outside the
+	/// `@Sendable` function that builds `S1_Screen`.
+	private static func sendableCycleRedeclarationGraph(cacheType: String = "S1_Cache") -> [String] {
 		[
 			"""
 			// module: FuzzFeature
 
 			@Instantiable(generateDependencyTree: true)
 			public final class S1_Home: Instantiable, Sendable {
-				public init(cache: S1_Cache, screenBuilder: SendableInstantiator<S1_Screen>) {
+				public init(cache: \(cacheType), screenBuilder: SendableInstantiator<S1_Screen>) {
 					self.cache = cache
 					self.screenBuilder = screenBuilder
 				}
 
-				@Instantiated let cache: S1_Cache
+				@Instantiated let cache: \(cacheType)
 				@Instantiated let screenBuilder: SendableInstantiator<S1_Screen>
 			}
 
@@ -3185,12 +3391,12 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 			@Instantiable
 			public final class S1_Step: Instantiable, Sendable {
-				public init(cache: S1_Cache, screenBuilder: SendableInstantiator<S1_Screen>) {
+				public init(cache: \(cacheType), screenBuilder: SendableInstantiator<S1_Screen>) {
 					self.cache = cache
 					self.screenBuilder = screenBuilder
 				}
 
-				@Instantiated let cache: S1_Cache
+				@Instantiated let cache: \(cacheType)
 				@Instantiated let screenBuilder: SendableInstantiator<S1_Screen>
 			}
 			""",
@@ -3221,11 +3427,11 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 			@Instantiable(fulfillingAdditionalTypes: [S1_Service.self])
 			public final class S1_Impl: Instantiable, Sendable, S1_Service {
-				public init(cache: S1_Cache?) {
+				public init(cache: \(cacheType)?) {
 					self.cache = cache
 				}
 
-				@Received(onlyIfAvailable: true) let cache: S1_Cache?
+				@Received(onlyIfAvailable: true) let cache: \(cacheType)?
 			}
 			""",
 		]
