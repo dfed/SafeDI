@@ -115,25 +115,15 @@ struct PublicMockLevelFunctions: Sendable {
 	/// hands the fill the caller's, so the place is filled there, as production fills it.
 	/// - Parameter callerReads: The field each value the call's fills read of the caller's scope is taken as, by label, and
 	///   what the call hands it (`ScopeGenerator.FillCallerReads`).
-	/// - Parameter labelsHandedPastRootPayloads: The labels of `callerReads` whose value a root level's payload carries
-	///   only as the called mock's by-value copy of the caller's own value, which does not provide the form a fill reads
-	///   (`Scope.Fill.labelsHandedPastCalledMockCopy`): a root level function hands the level beneath its own parameter of
-	///   such a label rather than the payload's copy.
 	init(
 		dispatchers: [ScopeGenerator.FillDispatcher],
 		fillParametersByKey: [String: [SeamSignature.Hole.Field]],
 		roots: [Root],
 		reservedNames: Set<String>,
 		callerReads: [String: (field: SeamSignature.Hole.Field, argument: String)],
-		labelsHandedPastRootPayloads: Set<String>,
 	) {
 		callerArgumentByLabel = callerReads.mapValues(\.argument)
 		let dispatchersByKey = Dictionary(dispatchers.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
-		// The labels a root level's payload does not hide, by the root dispatcher's key.
-		let rootDispatcherKeys = Set(roots.map(\.dispatcherKey))
-		func labelsPayloadHidesNot(of dispatcher: ScopeGenerator.FillDispatcher) -> Set<String> {
-			rootDispatcherKeys.contains(dispatcher.key) ? labelsHandedPastRootPayloads : []
-		}
 		// The labels each dispatcher's targets read that its cases' payloads do not carry and their types do not bind later.
 		var relevantLabelsByKey = [String: Set<String>]()
 		var changed = true
@@ -143,7 +133,7 @@ struct PublicMockLevelFunctions: Sendable {
 				for dispatcherCase in dispatcher.cases {
 					guard let target = dispatcherCase.target else { continue }
 					let read = fillParametersByKey[target.key].map { Set($0.map(\.property.label)) } ?? relevantLabelsByKey[target.key] ?? []
-					let carried = Set((dispatcherCase.values ?? []).map(\.property.label)).subtracting(labelsPayloadHidesNot(of: dispatcher))
+					let carried = Set((dispatcherCase.values ?? []).map(\.property.label))
 					for label in read.subtracting(carried).subtracting(dispatcherCase.labelsBoundLater) where relevantLabelsByKey[dispatcher.key, default: []].insert(label).inserted {
 						changed = true
 					}
@@ -171,17 +161,13 @@ struct PublicMockLevelFunctions: Sendable {
 			let carriedByName = Dictionary(relevantCarried.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
 			let ownEnvironment = Dictionary(parameters.map { ($0.property.label, $0) }, uniquingKeysWith: { first, _ in first })
 			var members = [Member]()
-			let payloadHidesNot = labelsPayloadHidesNot(of: dispatcher)
 			for dispatcherCase in dispatcher.cases {
 				// A case whose target is neither a fill nor a level is passed up.
 				guard let target = dispatcherCase.target, fillParametersByKey[target.key] != nil || dispatchersByKey[target.key] != nil else {
 					members.append(.passedUp(caseName: dispatcherCase.name))
 					continue
 				}
-				// A root level's payload carries the called mock's copy of a value the function takes of the caller's scope, which the
-				// function hands on in its own form instead where that is the form a fill reads.
 				let payloadFields = Dictionary((dispatcherCase.values ?? []).map { ($0.property.label, $0) }, uniquingKeysWith: { first, _ in first })
-					.filter { !payloadHidesNot.contains($0.key) || ownEnvironment[$0.key] == nil }
 				if let fillParameters = fillParametersByKey[target.key] {
 					// The fill takes each value it reads beside the payload from this function's own parameter, where the routes bind it in
 					// a form that provides the one read; otherwise the place is passed up on these routes.
