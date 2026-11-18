@@ -923,18 +923,17 @@ private struct ScopeGeneratorUnderConstruction {
 				)
 			}
 			// A level on a carried route binds a deferred parameter from a call the caller's seam makes, whose memo holds what that
-			// call passed, which no declaration of the caller's is (`FillDispatcher.Case.carriesDeferredFields`). A fill every
-			// route hands such a memo takes the memo, so the value is created when its tree reads it, as inline: its field is that
-			// parameter's, which it binds as the memo (`fillUnderConstruction`). A public mock's caller hands values. A deliberate
-			// gap: a fill another route hands the value takes the value, which a level function that takes the memo for another
-			// target hands it as the memo's instance, created where that level's member is called (`seam-builder-structs.md`).
+			// call passed, which no declaration of the caller's is (`FillDispatcher.Case.carriesDeferredFields`). A fill some route
+			// hands such a memo takes a memo, so the value is created when its tree reads it on every route, as inline: its field
+			// is that parameter's, which it binds as the memo (`fillUnderConstruction`), and a route that hands another form makes
+			// the memo of what it hands (`FillDispatcher.memosHanded(toFillOf:labels:among:)`). A public mock's caller hands values.
 			if scope.publicMockCall == nil, dispatchersOfThisCall.contains(where: { dispatcher in
 				dispatcher.cases.contains { $0.carriesDeferredFields && $0.values?.contains(where: \.isDeferredParameter) == true }
 			}) {
 				for index in fillsOfThisCall.indices where fillsOfThisCall[index].fill.emitsCode {
 					let fill = fillsOfThisCall[index].fill
 					let payloadLabels = Set(fill.hole.enumPlace?.values.map(\.property.label) ?? [])
-					let memoByLabel = ScopeGenerator.FillDispatcher.memosHandedOnEveryRoute(
+					let memoByLabel = ScopeGenerator.FillDispatcher.memosHanded(
 						toFillOf: fill.key,
 						labels: Set(fill.fields.filter { !$0.isDeferredParameter && !payloadLabels.contains($0.property.label) }.map(\.property.label)),
 						among: dispatchersOfThisCall,
@@ -1058,8 +1057,8 @@ private struct ScopeGeneratorUnderConstruction {
 		/// instantiator's place: it then returns the builder the wrapper keeps, which takes the forwarded value itself, rather
 		/// than the value it builds (`ScopeGenerator.fillReturnsWrapperBuilder`).
 		var returnsWrapperBuilder = false
-		/// The labels of `fields` every route hands the fill as the memo of a deferred parameter that a level on a carried route
-		/// holds (`ScopeGenerator.FillDispatcher.memosHandedOnEveryRoute(toFillOf:labels:among:)`): each such field is a deferred
+		/// The labels of `fields` some route hands the fill as the memo of a deferred parameter that a level on a carried route
+		/// holds (`ScopeGenerator.FillDispatcher.memosHanded(toFillOf:labels:among:)`): each such field is a deferred
 		/// parameter's, which the fill binds from what it is handed, as its memo (see `fillUnderConstruction`).
 		var labelsHandedAsMemo = Set<String>()
 	}
@@ -1156,7 +1155,7 @@ private struct ScopeGeneratorUnderConstruction {
 		// one function, reads the struct's field there, which the pass before found.
 		// A place a seam passes up from a seam it calls holds the memo of what that call passed, which no declaration of the
 		// caller's is: the fill reads the struct's field, as inline reads the passing-up seam's declaration. So does a fill
-		// every route hands such a memo through the levels on a carried route (`Fill.labelsHandedAsMemo`).
+		// some route hands such a memo through the levels on a carried route (`Fill.labelsHandedAsMemo`).
 		let deferredLabelsBoundFromStruct = previousPassGenerator?.fillDeferredLabelsHiddenByReenteringCalls[fill.key] ?? []
 		let readsDeferredFieldsFromStruct = hole.innerSeamType != nil && self.scope.publicMockCall == nil
 		// A deferred parameter's field it reads from the struct, it binds as the memo (`bindingItsMemo`), whose instance its tree
