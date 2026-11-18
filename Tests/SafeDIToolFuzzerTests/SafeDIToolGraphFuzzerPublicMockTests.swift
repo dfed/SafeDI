@@ -242,23 +242,39 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	}
 
 	@Test
-	func publicMockAcceptanceFailure_allowsSendableFunctionCarryError_onlyWhereGraphDrawsFillReadingFieldBeneathSendableWrapper() {
-		// Seed 157's fill reads `holeContext`, which `T6` instantiates outside the `@Sendable` function that builds the wrapper
-		// above its hole: the error its production twin reports (contract rule 7), which a public mock reports too. Seed 0 draws
-		// no hole beneath a `Sendable` wrapper. Only the first may report the error, and only about `holeContext` and `T6`.
-		func error(seed: UInt64, label: String, declaringType: String) -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "/F/S\(seed)_HoleFill.swift:7:33: error: `S\(seed)_Hole` receives `\(label): S\(seed)_HoleContext`, which `S\(seed)_\(declaringType)` declares outside the `@Sendable` function that builds `holeHost: SendableLazilyInstantiated<S\(seed)_HoleHost>`, and the values struct SafeDI hands the builder for `S\(seed)_HoleHost`’s `holeBuilder: Instantiator<S\(seed)_Hole>` (`holeBuilder` of `s\(seed)_HoleSendableBuilder`) carries only what that function binds. Instantiate `\(label)` outside `S\(seed)_\(declaringType)` and declare `@Received let \(label): S\(seed)_HoleContext` on `S\(seed)_\(declaringType)`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `S\(seed)_Hole` in module `FuzzFeature` or a module it lists among its SafeDI dependencies.\n/F/S\(seed)_T6.swift:15:2: note: `S\(seed)_\(declaringType)` declares `\(label): S\(seed)_HoleContext` here.")
+	func publicMockAcceptanceFailure_allowsSendableFunctionCarryError_onlyWhereFillOfCalledMockReadsContextBoundOutsideSendableFunction() {
+		// Seed 157's fill, in a module that cannot build `T6` inline and so calls its public mock, reads `holeContext`, which
+		// `T6` instantiates outside the `@Sendable` function that builds `holeHost: SendableLazilyInstantiated<HoleHost>`: the
+		// error its production twin reports (contract rule 7). Seed 978's fill makes the same read beneath the same wrapper, in
+		// a module that builds `T6` inline, which reads it as the known-right path does; seed 370's fill reads `holeExtra`
+		// beneath the wrapper, seed 59 draws the wrapper with no fill, and seed 0 draws no wrapper. Only the first may report
+		// the error, and only about `holeContext`, `T6` and that function.
+		func error(seed: UInt64, label: String = "holeContext", declaringType: String = "T6", function: String = "holeHost: SendableLazilyInstantiated") -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/F/S\(seed)_HoleFill.swift:7:33: error: `S\(seed)_Hole` receives `\(label): S\(seed)_HoleContext`, which `S\(seed)_\(declaringType)` declares outside the `@Sendable` function that builds `\(function)<S\(seed)_HoleHost>`, and the values struct SafeDI hands the builder for `S\(seed)_HoleHost`’s `holeBuilder: Instantiator<S\(seed)_Hole>` (`holeBuilder` of `s\(seed)_HoleSendableBuilder`) carries only what that function binds. Instantiate `\(label)` outside `S\(seed)_\(declaringType)` and declare `@Received let \(label): S\(seed)_HoleContext` on `S\(seed)_\(declaringType)`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `S\(seed)_Hole` in module `FuzzFeature` or a module it lists among its SafeDI dependencies.\n/F/S\(seed)_T6.swift:15:2: note: `S\(seed)_\(declaringType)` declares `\(label): S\(seed)_HoleContext` here.")
 		}
 		let accepted = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])
 		func runs(seed: UInt64, _ drawn: GraphFuzzerToolOutcome) -> GraphFuzzerToolRuns {
 			GraphFuzzerToolRuns(fixture: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]), firstOutcome: drawn, secondOutcome: drawn, knownRightOutcome: accepted)
 		}
-		#expect(GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: 157, features: [.generateMockPublic])).isSuperset(of: [.holeBeneathSendableWrapper, .holeFillReceivesField, .consumerReachesHoleTypeWithFill]))
-		#expect(!GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: 0, features: [.generateMockPublic])).contains(.holeBeneathSendableWrapper))
-		#expect(runs(seed: 157, error(seed: 157, label: "holeContext", declaringType: "T6")).publicMockAcceptanceFailure == nil)
-		#expect(runs(seed: 157, error(seed: 157, label: "holeExtra", declaringType: "T6")).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts)
-		#expect(runs(seed: 157, error(seed: 157, label: "holeContext", declaringType: "HoleHost")).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts)
-		#expect(runs(seed: 0, error(seed: 0, label: "holeContext", declaringType: "T6")).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts)
+		func features(seed: UInt64) -> Set<GraphFuzzerPublicMockDrawFeature> {
+			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+		}
+		#expect(features(seed: 157).contains(.holeFillReadsContextBoundOutsideSendableFunction))
+		#expect(features(seed: 978).isSuperset(of: [.holeBeneathSendableWrapper, .holeFillReceivesField, .consumerReachesHoleTypeWithFill]))
+		#expect(features(seed: 370).isSuperset(of: [.holeBeneathSendableWrapper, .holeFillReceivesNonField, .consumerReachesHoleTypeWithFill]))
+		#expect(features(seed: 59).contains(.holeBeneathSendableWrapper))
+		#expect(!features(seed: 59).contains(.consumerReachesHoleTypeWithFill))
+		#expect(!features(seed: 0).contains(.holeBeneathSendableWrapper))
+		for seed: UInt64 in [978, 370, 59, 0] {
+			#expect(!features(seed: seed).contains(.holeFillReadsContextBoundOutsideSendableFunction), "seed \(seed)")
+		}
+		#expect(runs(seed: 157, error(seed: 157)).publicMockAcceptanceFailure == nil)
+		#expect(runs(seed: 157, error(seed: 157, label: "holeExtra")).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts)
+		#expect(runs(seed: 157, error(seed: 157, declaringType: "HoleHost")).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts)
+		#expect(runs(seed: 157, error(seed: 157, function: "holeHostBuilder: SendableInstantiator")).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts)
+		for seed: UInt64 in [978, 370, 59, 0] {
+			#expect(runs(seed: seed, error(seed: seed)).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts, "seed \(seed)")
+		}
 	}
 
 	// MARK: Ground-truth access oracle
