@@ -2849,6 +2849,201 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		"""])
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "This test compares only values, which the value comparator compiles only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsTheInlineValues_whenInternalCallerPassesUpAPlainPlaceBesideAnInstantiatorOfAHandConformingType() async throws {
+		// Values only: `Screen`'s mock takes a builder for each form the two calls pass up `HoleHanded`'s places in, a plain
+		// place's and an `Instantiator`'s, where its twin takes one builder for the family. That signature is a known gap
+		// (`seamMockBuilders`), which this test does not assert; the probe names the builders only to call the mock.
+		let core = """
+		import SafeDI
+
+		open class HoleHanded: Instantiable, @unchecked Sendable {
+		    public init() {}
+		}
+
+		@Instantiable(generateMock: .public)
+		public struct Panel: Instantiable, Sendable {
+		    init(handed: HoleHanded) {
+		        self.handed = handed
+		    }
+
+		    @Instantiated let handed: HoleHanded
+		}
+
+		@Instantiable(generateMock: .public)
+		public struct Deck: Instantiable {
+		    init(handedBuilder: Instantiator<HoleHanded>) {
+		        self.handedBuilder = handedBuilder
+		    }
+
+		    @Instantiated let handedBuilder: Instantiator<HoleHanded>
+		}
+		"""
+		let app = """
+		import Core
+		import SafeDI
+
+		@Instantiable(generateMock: true)
+		public struct Screen: Instantiable {
+		    public init(panel: Panel, deck: Deck) {
+		        self.panel = panel
+		        self.deck = deck
+		    }
+
+		    @Instantiated let panel: Panel
+		    @Instantiated let deck: Deck
+		}
+		"""
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "core", swiftFileContent: [core]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContent: [app, Self.holeHandedOfEachPlace], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		// Each place is handed a subclass of its own, so a builder handed to the other call's place is a difference.
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe(
+			name: "Screen.mock(…)",
+			expression: "Screen.mock(holeHandedBuilder_Panel: { PanelHoleHanded() }, holeHandedBuilder_Deck: { DeckHoleHanded() })",
+			knownRightExpression: "Screen.mock(handed: PanelHoleHanded(), handedBuilder: Instantiator<HoleHanded> { DeckHoleHanded() })",
+		)])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "This test compares only values, which the value comparator compiles only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsTheInlineValues_whenInternalCallerPassesUpAPlainPlaceInASendableFunctionBesideAnErasedInstantiator() async throws {
+		// Values only: `Screen`'s mock takes a builder for each form the two calls pass up `LiveService`'s places in, the
+		// plain place's, which the `@Sendable` builder function of `panel` captures, and the erased instantiator's, where
+		// its twin takes one `@Sendable` builder for the family. That signature is a known gap (`seamMockBuilders`), which
+		// this test does not assert; the probe names the builders only to call the mock.
+		let core = """
+		import SafeDI
+
+		public protocol Service: Sendable {}
+
+		@Instantiable(generateMock: .public)
+		public struct Panel: Instantiable, Sendable {
+		    init(service: any Service) {
+		        self.service = service
+		    }
+
+		    @Instantiated(fulfilledByType: "LiveService") let service: any Service
+		}
+
+		@Instantiable(generateMock: .public)
+		public struct Deck: Instantiable, Sendable {
+		    init(serviceBuilder: SendableErasedInstantiator<(), any Service>) {
+		        self.serviceBuilder = serviceBuilder
+		    }
+
+		    @Instantiated(fulfilledByType: "LiveService") let serviceBuilder: SendableErasedInstantiator<(), any Service>
+		}
+		"""
+		let app = """
+		import Core
+		import SafeDI
+
+		@Instantiable(generateMock: true)
+		public struct Screen: Instantiable {
+		    public init(panel: SendableInstantiator<Panel>, deck: Deck) {
+		        self.panel = panel
+		        self.deck = deck
+		    }
+
+		    @Instantiated let panel: SendableInstantiator<Panel>
+		    @Instantiated let deck: Deck
+		}
+		"""
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "core", swiftFileContent: [core]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContent: [app, Self.stubService], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		// Each place is handed a `StubService` named for it, so a builder handed to the other call's place is a difference.
+		// The comparator does not call an erased instantiator, so a probe reads the value `deck`'s builds.
+		let builders = #"liveService_ServiceBuilder: { StubService(name: "panel") }, liveService_ServiceSendableBuilder: { StubService(name: "deck") }"#
+		let inlineArguments = #"service: StubService(name: "panel"), serviceBuilder: SendableErasedInstantiator<(), any Service> { StubService(name: "deck") }"#
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [
+			DifferentialValueProbe(
+				name: "Screen.mock(…)",
+				expression: "Screen.mock(\(builders))",
+				knownRightExpression: "Screen.mock(\(inlineArguments))",
+			),
+			DifferentialValueProbe(
+				name: "Screen.mock(…)'s places",
+				expression: "{ let screen = Screen.mock(\(builders)); return [screen.panel.instantiate().service, screen.deck.serviceBuilder.instantiate()] as [any Service] }()",
+				knownRightExpression: "{ let screen = Screen.mock(\(inlineArguments)); return [screen.panel.instantiate().service, screen.deck.serviceBuilder.instantiate()] as [any Service] }()",
+			),
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "This test compares only values, which the value comparator compiles only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsTheInlineValues_whenSeamsOwnErasedInstantiatorPlaceIsBesideACallsPlainPlaceInASendableFunction() async throws {
+		// Values only: `Screen`'s mock takes a builder for its own erased instantiator's places of `LiveService` and another
+		// for the plain place that the call of `Panel`'s mock in `panel`'s `@Sendable` builder function passes up, where its
+		// twin, and its mock where every type is in one module, take one `@Sendable` builder for the family. That signature
+		// is a known gap (`seamMockBuilders`), which this test does not assert; the probe names the builders only to call
+		// the mock.
+		let core = """
+		import SafeDI
+
+		public protocol Service: Sendable {}
+
+		@Instantiable(generateDependencyTree: true, generateMock: .public)
+		public struct Panel: Instantiable, Sendable {
+		    init(service: any Service) {
+		        self.service = service
+		    }
+
+		    @Instantiated(fulfilledByType: "LiveService") let service: any Service
+		}
+
+		@Instantiable(generateDependencyTree: true, generateMock: .public)
+		public struct Deck: Instantiable, Sendable {
+		    init(serviceBuilder: SendableErasedInstantiator<(), any Service>) {
+		        self.serviceBuilder = serviceBuilder
+		    }
+
+		    @Instantiated(fulfilledByType: "LiveService") let serviceBuilder: SendableErasedInstantiator<(), any Service>
+		}
+		"""
+		let app = """
+		import Core
+		import SafeDI
+
+		@Instantiable(generateDependencyTree: true, generateMock: true)
+		public struct Screen: Instantiable {
+		    public init(panel: SendableInstantiator<Panel>, serviceBuilder: SendableErasedInstantiator<(), any Service>) {
+		        self.panel = panel
+		        self.serviceBuilder = serviceBuilder
+		    }
+
+		    @Instantiated let panel: SendableInstantiator<Panel>
+		    @Instantiated(fulfilledByType: "LiveService") let serviceBuilder: SendableErasedInstantiator<(), any Service>
+		}
+		"""
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "core", swiftFileContent: [core]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContent: [app, Self.stubService], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		// The comparator does not call an erased instantiator, so a probe reads the value `Screen`'s own builds.
+		let builders = #"liveService_ServiceBuilder: { StubService(name: "service") }, liveService_ServiceSendableBuilder: { StubService(name: "service") }"#
+		let inlineBuilder = #"liveService_ServiceSendableBuilder: { StubService(name: "service") }"#
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [
+			DifferentialValueProbe(
+				name: "Screen.mock(…)",
+				expression: "Screen.mock(\(builders))",
+				knownRightExpression: "Screen.mock(\(inlineBuilder))",
+			),
+			DifferentialValueProbe(
+				name: "Screen.mock(…)'s places",
+				expression: "{ let screen = Screen.mock(\(builders)); return [screen.panel.instantiate().service, screen.serviceBuilder.instantiate()] as [any Service] }()",
+				knownRightExpression: "{ let screen = Screen.mock(\(inlineBuilder)); return [screen.panel.instantiate().service, screen.serviceBuilder.instantiate()] as [any Service] }()",
+			),
+		])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_handsTheCalledMockACaseOfItsOwnEnum_whenPublicCallerInstantiatesAPropertyUnderTheCalledMocksBuilderLabel() async throws {
@@ -6851,6 +7046,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		modules.append(ModuleFixture(name: "App", packageName: "app", swiftFileContent: app, dependencies: mid == nil ? ["Core"] : ["Core", "Mid"]))
 		return modules
 	}
+
+	/// `App`'s `StubService`, which no declaration SafeDI reads fulfills `Service` with, so that a probe can hand a mock a
+	/// `Service` of its own, named for what it stands for, for each place no declaration fulfills.
+	private static let stubService = """
+	import Core
+
+	public final class StubService: Service {
+	    public init(name: String) {
+	        self.name = name
+	    }
+
+	    let name: String
+	}
+	"""
+
+	/// `App`'s subclasses of `HoleHanded`, one for each place of it that no declaration fulfills, so that a probe can tell
+	/// which builder built a place.
+	private static let holeHandedOfEachPlace = """
+	import Core
+
+	final class PanelHoleHanded: HoleHanded {}
+
+	final class DeckHoleHanded: HoleHanded {}
+	"""
 
 	private static let panel = """
 	import SafeDI

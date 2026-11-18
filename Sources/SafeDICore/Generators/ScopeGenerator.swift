@@ -7743,9 +7743,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// parameters by label. A builder a call of another module's public mock passes up for a hole type and family the mock
 	/// builds places of, with the type of the mock's builder (`passedUpBuilderFamilies`), is that builder, and is no
 	/// parameter of its own (`passedUpProperties`). The builders the calls pass up for a hole type and family the mock
-	/// builds no place of are one builder, which every such call is handed, when the calls pass them up as one type; calls
-	/// that pass them up as different types forward different values, an error the mock root reports
-	/// (`DependencyTreeGenerator.placesForwardingOtherValuesErrors`), so they stay parameters of their own. Both comparisons
+	/// builds no place of are one builder, which every such call is handed, when the calls pass them up as one type. Calls
+	/// whose places forward different values are an error the mock root reports first
+	/// (`DependencyTreeGenerator.placesForwardingOtherValuesErrors`), so calls that pass them up as different types pass up
+	/// other forms of a builder that forwards the same value, such as a plain place's builder beside the builder of an erased
+	/// instantiator that forwards `()`, or of an `Instantiator` of a type that conforms to `Instantiable` by hand. They raise
+	/// no error and stay parameters of their own, one per form, as a builder a call passes up does beside the builder of a
+	/// seam's own places of the family in another form, where the twin takes one builder per family: a known gap
+	/// (`public-mock-builders.md`). Both comparisons
 	/// take a builder as the mock takes it: one a `@Sendable` builder function captures is of the `@Sendable` family and
 	/// taken `@Sendable`, so it is one builder with the `@Sendable` builder of its hole type, as an internal mock's own places
 	/// of a hole type built both directly and inside a `@Sendable` function share one `@Sendable` builder, where a seam's
