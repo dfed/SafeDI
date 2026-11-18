@@ -1524,8 +1524,18 @@ extension DependencyTreeGenerator {
 				if let hole = generator.fillHole, let child = generator.children.first {
 					findingsOfFill(of: hole, child: child, hidden: hidden ?? FillReentryHidings(), requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule).forEach(record)
 				}
-				// A seam call's children are its fills, which are judged against the calls inside any of them.
-				let hiddenByFillKey = generator.seamCall == nil ? [:] : hiddenByReenteringCalls(ofFillsOf: generator)
+				// A seam call's children are its fills, which are judged against the calls inside any of them. A public mock's call
+				// inside one of its fills that re-enters a level function the call declares hands it only what that call reads of its
+				// own scope (`PublicMockLevelFunctions.Reentry`), the nearest declaration inline reads, so the declarations on the path
+				// to it hide nothing; but the called mock's copy of the place leaves uncarried what that mock binds on its way to the
+				// place, which no scope of the caller holds, as the twin's seam call does.
+				let hiddenByFillKey: [String: FillReentryHidings] = if generator.seamCall != nil {
+					hiddenByReenteringCalls(ofFillsOf: generator)
+				} else if generator.publicMockCall != nil {
+					hiddenByReenteringCalls(ofFillsOf: generator).mapValues { FillReentryHidings(calledCopyDeclarations: $0.calledCopyDeclarations) }
+				} else {
+					[:]
+				}
 				if generator.seamCall != nil {
 					findingsOfCasesNestedByType(filledBy: generator.children, callerModule: callerModule).forEach(record)
 				}
