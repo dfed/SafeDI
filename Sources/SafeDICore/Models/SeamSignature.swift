@@ -1420,10 +1420,8 @@ public struct SeamCall: Sendable {
 		typesDeclaredEscaping: Set<TypeDescription> = [],
 		tier: AccessLevel = .internal,
 		requirement: AccessRequirement = .internal,
-		seamModuleName: String? = nil,
-		callerModuleName: String? = nil,
-		seamPackageName: String? = nil,
-		callerPackageName: String? = nil,
+		seamModule: ModuleIdentity = ModuleIdentity(moduleName: nil, packageName: nil),
+		callerModule: ModuleIdentity = ModuleIdentity(moduleName: nil, packageName: nil),
 	) {
 		self.parameters = parameters
 		self.holes = holes
@@ -1437,10 +1435,8 @@ public struct SeamCall: Sendable {
 		self.typesDeclaredEscaping = typesDeclaredEscaping
 		self.tier = tier
 		self.requirement = requirement
-		self.seamModuleName = seamModuleName
-		self.callerModuleName = callerModuleName
-		self.seamPackageName = seamPackageName
-		self.callerPackageName = callerPackageName
+		self.seamModule = seamModule
+		self.callerModule = callerModule
 	}
 
 	/// The parameters of the tier the call passes, each at the access it was received at inside the seam, which a
@@ -1467,14 +1463,10 @@ public struct SeamCall: Sendable {
 	public let tier: AccessLevel
 	/// What the calling module needs of the seam's declarations.
 	public let requirement: AccessRequirement
-	/// The module that declares the seam, as far as SafeDI knows it.
-	public let seamModuleName: String?
-	/// The module that makes the call, as far as SafeDI knows it.
-	public let callerModuleName: String?
-	/// The package of the module that declares the seam, as SafeDI is told it.
-	public let seamPackageName: String?
-	/// The package of the module that makes the call, as SafeDI is told it.
-	public let callerPackageName: String?
+	/// The module that declares the seam and its package, as far as SafeDI knows them.
+	public let seamModule: ModuleIdentity
+	/// The module that makes the call and its package, as far as SafeDI knows them.
+	public let callerModule: ModuleIdentity
 	/// Whether the caller's module reaches no tier of the call and the check of every construction is certain to
 	/// report the declaration whose widening makes a tier reachable: the seam's type, or a type enclosing it, which
 	/// every tier's access is capped at, fails the requirement the caller's module puts on it. A seam whose tree makes

@@ -1079,7 +1079,7 @@ extension ScopeGenerator {
 			let overridesType = TypeDescription.simple(name: "SafeDIOverrides")
 			parameters.append(PublicMockParameter(name: ReservedName.mockOverridesParameterName, type: overridesType, typeSource: overridesType.asSource, defaultSource: ".init()", defaultKind: .expression, access: .public, role: .overrides))
 		}
-		let tiers = [AccessLevel.public] + Set(parameters.map(\.access)).filter { $0 < .public }.sorted(by: >)
+		let tiers = AccessLevel.tiers(widest: .public, parameterAccesses: parameters.map(\.access))
 		// The narrowest tier's body binds each builder by the name that tier takes it under.
 		let narrowestTier = tiers[tiers.count - 1]
 		defaultResolutions.insert(contentsOf: builders.map { "\(bodyIndent)let \($0.internalName) = \($0.label(inTierAt: narrowestTier))" }, at: 0)

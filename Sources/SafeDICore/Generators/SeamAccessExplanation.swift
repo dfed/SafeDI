@@ -255,9 +255,9 @@ enum SeamAccessExplanation {
 			let nestedTakes = nestedSeamCall.parameterTierAccess.map { "takes \(label) only on its `\($0.spelledOnGeneratedDeclaration)` initializer" } ?? "takes \(label) on none of its initializers"
 			what = "no initializer SafeDI generated for \(seam) takes it: \(seam)’s dependency tree calls the `\(nestedSeamCall.tier.spelledOnGeneratedDeclaration)` initializer SafeDI generated for \(name(nestedSeamCall.seamType))\(inModule(nestedSeamCall.seamModuleName)), the narrowest one \(caller(moduleName: nestedSeamCall.callerModuleName, requirement: nestedSeamCall.requirement)) can call, which \(nestedTakes), so calling it would pass `nil` to \(nestedSeamCall.receivingTypes.map(name).joinedAsList), which the tree would hand \(label) were it built inline."
 		} else if !parameter.isPassThrough {
-			what = "the `\(seamCall.tier.spelledOnGeneratedDeclaration)` initializer SafeDI generated for \(seam)\(inModule(seamCall.seamModuleName)), the narrowest one \(caller(moduleName: seamCall.callerModuleName, requirement: seamCall.requirement)) can call, does not take it: \(seam) receives \(label) itself, only if available, on its `\(parameter.tierAccess.spelledOnGeneratedDeclaration)` initializer, so this call would pass `nil` to \(seam), which would be handed \(label) were its tree built inline."
+			what = "the `\(seamCall.tier.spelledOnGeneratedDeclaration)` initializer SafeDI generated for \(seam)\(inModule(seamCall.seamModule.moduleName)), the narrowest one \(caller(moduleName: seamCall.callerModule.moduleName, requirement: seamCall.requirement)) can call, does not take it: \(seam) receives \(label) itself, only if available, on its `\(parameter.tierAccess.spelledOnGeneratedDeclaration)` initializer, so this call would pass `nil` to \(seam), which would be handed \(label) were its tree built inline."
 		} else {
-			what = "the `\(seamCall.tier.spelledOnGeneratedDeclaration)` initializer SafeDI generated for \(seam)\(inModule(seamCall.seamModuleName)), the narrowest one \(caller(moduleName: seamCall.callerModuleName, requirement: seamCall.requirement)) can call, does not take it: \(seam) takes \(label) only on its `\(parameter.tierAccess.spelledOnGeneratedDeclaration)` initializer, so this call would pass `nil` to \(receiversText), which the tree would hand \(label) were it built inline."
+			what = "the `\(seamCall.tier.spelledOnGeneratedDeclaration)` initializer SafeDI generated for \(seam)\(inModule(seamCall.seamModule.moduleName)), the narrowest one \(caller(moduleName: seamCall.callerModule.moduleName, requirement: seamCall.requirement)) can call, does not take it: \(seam) takes \(label) only on its `\(parameter.tierAccess.spelledOnGeneratedDeclaration)` initializer, so this call would pass `nil` to \(receiversText), which the tree would hand \(label) were it built inline."
 		}
 		let neededLevel = neededLevel(for: omission)
 		let causeText = parameter.accessCause.map { " " + causeSentence($0, receivers: parameter.receivers.map { Receiver(declaringType: $0.declaringType, aliasProperty: $0.aliasProperty, isInstantiateMethodParameter: $0.isInstantiateMethodParameter) }) } ?? ""
@@ -267,8 +267,8 @@ enum SeamAccessExplanation {
 		// parameter's `package` tier makes the likelier fix, so that remedy comes first. A parameter on no tier is
 		// omitted by a nested call, whose modules this call does not decide.
 		if !omission.isNoTierParameter, let packageNameRemedy = ModuleIdentity.packageNameRemedy(
-			emitter: ModuleIdentity(moduleName: seamCall.callerModuleName, packageName: seamCall.callerPackageName),
-			declarer: ModuleIdentity(moduleName: seamCall.seamModuleName, packageName: seamCall.seamPackageName),
+			emitter: seamCall.callerModule,
+			declarer: seamCall.seamModule,
 			declaredLevel: parameter.tierAccess,
 		) {
 			remedies.append(packageNameRemedy)

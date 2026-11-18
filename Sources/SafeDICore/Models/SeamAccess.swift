@@ -22,6 +22,12 @@
 // whose helpers the access-enforcement work shares, so that file can be replaced whole.
 
 extension AccessLevel: Comparable {
+	/// The tiers of a seam or a public mock whose widest tier is `widest` and whose parameters take `parameterAccesses`,
+	/// widest first: `widest`, then each narrower level a parameter takes, once. Nothing wider than `widest` is a tier.
+	static func tiers(widest: AccessLevel, parameterAccesses: some Sequence<AccessLevel>) -> [AccessLevel] {
+		[widest] + Set(parameterAccesses).filter { $0 < widest }.sorted(by: >)
+	}
+
 	/// Orders the levels by how widely they expose a declaration: `private` least, `open` most, which is the order
 	/// `capped(by:)` chooses by.
 	public static func < (lhs: AccessLevel, rhs: AccessLevel) -> Bool {

@@ -734,7 +734,7 @@ extension DependencyTreeGenerator {
 		parameters: [(label: String, access: AccessLevel)],
 		widestTier: AccessLevel,
 	) -> BuilderNames {
-		let tiers = [widestTier] + Set(parameters.map(\.access)).filter { $0 < widestTier }.sorted(by: >)
+		let tiers = AccessLevel.tiers(widest: widestTier, parameterAccesses: parameters.map(\.access))
 		return BuilderNames(
 			stemByHoleType: stems(of: holeTypes),
 			tiers: tiers.map { tier in

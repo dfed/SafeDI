@@ -2509,14 +2509,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				))
 			}
 		}
-		let omissions = await seamTierOmissions(
-			of: instantiable,
+		let omissions = await tierOmissions(
+			of: .type(instantiable),
+			walking: .seamTiers(referenceLocation: instantiable.declarationLocation, isOwnFile: isOwnFile),
 			propertiesGeneratedLater: [],
 			declarationsByLabel: declarationsByLabel,
 			enclosingCycleFunctions: [:],
-			referenceLocation: instantiable.declarationLocation,
-			isOwnFile: isOwnFile,
-		).judged()
+		).judged().compactMap {
+			if case let .seam(omission) = $0 {
+				omission
+			} else {
+				nil
+			}
+		}
 		guard case let .root(_, seamRoot?) = scopeData else { return omissions }
 		// A provider that is a pass-through parameter of this seam is declared by no type: the receives in this seam's
 		// tree that make it one say why the seam takes it.
@@ -2527,108 +2532,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			return omission
 		}
-	}
-
-	/// - Parameter enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that
-	///   take parameters (see `CycleParameter`), by the declaration each builds.
-	private func seamTierOmissions(
-		of instantiable: Instantiable,
-		propertiesGeneratedLater: Set<Property>,
-		declarationsByLabel: [String: [VisibleDeclaration]],
-		enclosingCycleFunctions: [BuiltDeclaration: ObjectIdentifier],
-		referenceLocation: Dependency.DeclarationLocation?,
-		isOwnFile: @escaping @Sendable (String) -> Bool,
-	) async -> OmissionFindings<SeamTierOmission> {
-		let declaringType = instantiable.concreteInstantiable
-		var declarationLocationByProperty = [Property: Dependency.DeclarationLocation?]()
-		for dependency in instantiable.dependencies where !dependency.source.isReceived {
-			declarationLocationByProperty[dependency.property] = dependency.declarationLocation
-		}
-		// A child's construction is referred to by this type's dependency that builds it when this type is declared in
-		// one of the module's own files, and otherwise where this type's construction is.
-		let isDeclaredInOwnFile = instantiable.sourceFilePath.map(isOwnFile) ?? false
-		func childReferenceLocation(of property: Property?) -> Dependency.DeclarationLocation? {
-			guard isDeclaredInOwnFile, let property else { return referenceLocation }
-			return declarationLocationByProperty[property].flatMap(\.self) ?? referenceLocation
-		}
-		func visibleDeclaration(of property: Property, instanceProperty: Property?) -> VisibleDeclaration {
-			VisibleDeclaration(
-				property: property,
-				instanceProperty: instanceProperty,
-				declaringType: declaringType,
-				declarationLocation: declarationLocationByProperty[property] ?? instantiable.declarationLocation,
-				sendableBuilderDepth: 0,
-			)
-		}
-		var scopeDeclarationsByLabel = [String: [VisibleDeclaration]]()
-		for dependency in instantiable.dependencies where dependency.source == .forwarded {
-			scopeDeclarationsByLabel[dependency.property.label, default: []].append(visibleDeclaration(
-				of: dependency.property,
-				instanceProperty: dependency.lazilyInstantiatedInstanceProperty,
-			))
-		}
-		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
-		for child in orderedChildren {
-			if let property = child.generator.property {
-				scopeDeclarationsByLabel[property.label, default: []].append(visibleDeclaration(
-					of: property,
-					instanceProperty: child.generator.declaredLazilyInstantiatedInstanceProperty,
-				))
-			}
-		}
-		var childDeclarationsByLabel = declarationsByLabel
-		childDeclarationsByLabel.merge(scopeDeclarationsByLabel) { _, scopeDeclarations in scopeDeclarations }
-
-		var findings = OmissionFindings<SeamTierOmission>()
-		for child in orderedChildren {
-			guard case let .property(childInstantiable, _, _, _, isPropertyCycle, seamCall) = child.generator.scopeData else { continue }
-			if isPropertyCycle {
-				// A scope that closes a cycle constructs nothing: it calls the builder function of the declaration it repeats.
-				findings.recordCalls(by: child, of: child.generator.closedOnDeclaration.flatMap { enclosingCycleFunctions[$0] }, among: childDeclarationsByLabel)
-			} else if let seamCall {
-				let omittedParameters = seamCall.omittedParameters.map { ($0, false) } + seamCall.noTierParameters.map { ($0, true) }
-				for (parameter, isNoTierParameter) in omittedParameters {
-					// The leaf receives the parameter only if available, as its optional form: generation passes it
-					// `nil` exactly when it is among the leaf's unavailable properties.
-					guard let leafDependency = childInstantiable.dependencies.first(where: { $0.property.label == parameter.property.label }),
-					      !child.unavailableProperties.contains(leafDependency.property)
-					else { continue }
-					let unwrappedProperty = leafDependency.property.asUnwrappedProperty
-					guard let provider = childDeclarationsByLabel[parameter.property.label]?.first(where: { $0.provides(unwrappedProperty) }) else { continue }
-					// A function a lazy cycle closes on and every type between it and a scope closing the cycle on it lie in one
-					// module, since each builds the next and the last builds the first: the module refers to the call where it
-					// refers to the function, whichever call of the function passes the value.
-					let referenceLocation = childReferenceLocation(of: child.generator.property)
-					findings.append(reading: unwrappedProperty, from: provider) { provider in
-						SeamTierOmission(
-							seam: childInstantiable,
-							seamCall: seamCall,
-							parameter: parameter,
-							isNoTierParameter: isNoTierParameter,
-							providerProperty: provider.property,
-							providerDeclaringType: provider.declaringType,
-							providerDeclarationLocation: provider.declarationLocation,
-							referenceLocation: referenceLocation,
-						)
-					}
-				}
-			} else {
-				// This scope calls the child's builder function, which, when a lazy cycle closes on it and it takes parameters,
-				// it passes them as each cycle-closing scope does. The function's body reads its parameters, which hide every
-				// declaration of their labels where it is called, as generation's do.
-				let function = ObjectIdentifier(child.generator)
-				findings.recordCalls(by: child, of: function, among: childDeclarationsByLabel)
-				await findings.append(contentsOf: child.generator.seamTierOmissions(
-					of: childInstantiable,
-					propertiesGeneratedLater: child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater),
-					declarationsByLabel: child.generator.bodyDeclarations(function: function, enclosing: childDeclarationsByLabel),
-					enclosingCycleFunctions: child.generator.bodyEnclosingCycleFunctions(function: function, enclosing: enclosingCycleFunctions),
-					referenceLocation: childReferenceLocation(of: child.generator.property),
-					isOwnFile: isOwnFile,
-				))
-			}
-		}
-		return findings
 	}
 
 	/// A value a mock tree holds for a parameter that the tier of a public mock it calls omits, which the call passes
@@ -2658,29 +2561,57 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// a parameter of a builder function a lazy cycle closes on, the value is the one each call of the function passes
 	/// (see `OmissionFindings`).
 	func publicMockTierOmissions(ofTreeRootedAt instantiable: Instantiable) async -> [PublicMockTierOmission] {
-		await publicMockTierOmissions(of: .type(instantiable), propertiesGeneratedLater: [], declarationsByLabel: [:], enclosingCycleFunctions: [:], fillReferenceLocation: nil).judged()
+		await tierOmissions(of: .type(instantiable), walking: .publicMockTiers(fillReferenceLocation: nil), propertiesGeneratedLater: [], declarationsByLabel: [:], enclosingCycleFunctions: [:])
+			.judged()
+			.compactMap {
+				if case let .publicMock(omission) = $0 {
+					omission
+				} else {
+					nil
+				}
+			}
 	}
 
-	/// The scope a walk of `publicMockTierOmissions` visits: one that builds a type, or a fill of a builder that a call of
+	/// The scope a walk of omissions visits: one that builds a type, or, in a mock's tree, a fill of a builder that a call of
 	/// another module's public mock is passed, which builds its place's property and binds the fields of its struct.
-	private enum PublicMockTierOmissionScope {
+	private enum OmissionScope {
 		case type(Instantiable)
-		/// A fill passed to the call of `calledType`'s public mock.
-		case fill(calledType: TypeDescription)
+		/// A fill passed to the call of `calledType`'s public mock, which the dependency at `referenceLocation` leads to.
+		case fill(calledType: TypeDescription, referenceLocation: Dependency.DeclarationLocation?)
 	}
 
-	/// - Parameters:
-	///   - enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that take
-	///     parameters (see `CycleParameter`), by the declaration each builds.
-	///   - fillReferenceLocation: For a scope inside a fill, the dependency in the mock's tree that leads to the call the
-	///     outermost fill is passed to, where a value the fill binds, which no declaration in a file states, is located.
-	private func publicMockTierOmissions(
-		of omissionScope: PublicMockTierOmissionScope,
+	/// The calls a walk of omissions judges, the tiers of seams in a production tree or of other modules' public mocks in a
+	/// mock's tree, with where the walk locates what it reports.
+	private enum OmissionWalk: Sendable {
+		/// - Parameters:
+		///   - referenceLocation: Where this scope's construction is referred to, which locates a child's construction
+		///     when this scope's type is not declared in one of the module's own files.
+		///   - isOwnFile: Whether a file a declaration records is one of the module's own files.
+		case seamTiers(referenceLocation: Dependency.DeclarationLocation?, isOwnFile: @Sendable (String) -> Bool)
+		/// - Parameter fillReferenceLocation: For a scope inside a fill, the dependency in the mock's tree that leads to the
+		///   call the outermost fill is passed to, where a value the fill binds, which no declaration in a file states, is
+		///   located.
+		case publicMockTiers(fillReferenceLocation: Dependency.DeclarationLocation??)
+	}
+
+	/// What a walk of omissions reports, by the calls it judges (`OmissionWalk`).
+	private enum TierOmission: Sendable {
+		case seam(SeamTierOmission)
+		case publicMock(PublicMockTierOmission)
+	}
+
+	/// The omissions of the tree beneath this scope, as `seamTierOmissions(ofTreeRootedAt:isOwnFile:)` and
+	/// `publicMockTierOmissions(ofTreeRootedAt:)` describe them: one walk, since a seam's call and a public mock's are judged
+	/// alike, and only where each is made, what its leaf omits, and where a provider is located differ.
+	/// - Parameter enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that
+	///   take parameters (see `CycleParameter`), by the declaration each builds.
+	private func tierOmissions(
+		of omissionScope: OmissionScope,
+		walking walk: OmissionWalk,
 		propertiesGeneratedLater: Set<Property>,
 		declarationsByLabel: [String: [VisibleDeclaration]],
 		enclosingCycleFunctions: [BuiltDeclaration: ObjectIdentifier],
-		fillReferenceLocation: Dependency.DeclarationLocation??,
-	) async -> OmissionFindings<PublicMockTierOmission> {
+	) async -> OmissionFindings<TierOmission> {
 		let declaringType: TypeDescription
 		let dependencies: [Dependency]
 		let scopeDeclarationLocation: Dependency.DeclarationLocation?
@@ -2689,11 +2620,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			declaringType = instantiable.concreteInstantiable
 			dependencies = instantiable.dependencies
 			scopeDeclarationLocation = instantiable.declarationLocation
-		case let .fill(calledType):
+		case let .fill(calledType, referenceLocation):
 			// The called mock's tree builds what the fill binds, and hands it to the fill through the call.
 			declaringType = calledType
 			dependencies = []
-			scopeDeclarationLocation = fillReferenceLocation.flatMap(\.self)
+			scopeDeclarationLocation = referenceLocation
 		}
 		var declarationLocationByProperty = [Property: Dependency.DeclarationLocation?]()
 		for dependency in dependencies where !dependency.source.isReceived {
@@ -2703,13 +2634,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case .type: false
 		case .fill: true
 		}
+		// A child's construction is referred to by this type's dependency that builds it when this type is declared in
+		// one of the module's own files, and otherwise where this type's construction is.
+		let isDeclaredInOwnFile = switch (omissionScope, walk) {
+		case let (.type(instantiable), .seamTiers(_, isOwnFile)): instantiable.sourceFilePath.map(isOwnFile) ?? false
+		case (.type, .publicMockTiers), (.fill, _): false
+		}
+		func childReferenceLocation(of property: Property?, referenceLocation: Dependency.DeclarationLocation?) -> Dependency.DeclarationLocation? {
+			guard isDeclaredInOwnFile, let property else { return referenceLocation }
+			return declarationLocationByProperty[property].flatMap(\.self) ?? referenceLocation
+		}
+		let unrecordedDeclaringType: TypeDescription? = switch walk {
+		case .seamTiers:
+			declaringType
+		case .publicMockTiers:
+			// A property a mock root promotes is declared by no type of the tree.
+			isFill ? declaringType : nil
+		}
 		func visibleDeclaration(of property: Property, instanceProperty: Property?) -> VisibleDeclaration {
-			var declaration = VisibleDeclaration(
-				property: property,
+			var declaration = VisibleDeclaration.declared(
+				property,
 				instanceProperty: instanceProperty,
-				// A property a mock root promotes is declared by no type of the tree.
-				declaringType: declarationLocationByProperty[property] == nil && !isFill ? nil : declaringType,
-				declarationLocation: declarationLocationByProperty[property] ?? scopeDeclarationLocation,
+				by: declaringType,
+				recordedLocations: declarationLocationByProperty,
+				unrecorded: (declaringType: unrecordedDeclaringType, declarationLocation: scopeDeclarationLocation),
 				sendableBuilderDepth: 0,
 			)
 			declaration.isHandedToFill = isFill
@@ -2722,12 +2670,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				instanceProperty: dependency.lazilyInstantiatedInstanceProperty,
 			))
 		}
-		// A fill binds the fields of its struct, which hide every declaration of their labels where the call is made.
-		for field in fillBoundFields {
-			scopeDeclarationsByLabel[field.property.label, default: []].append(visibleDeclaration(
-				of: field.property,
-				instanceProperty: field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding,
-			))
+		if case .publicMockTiers = walk {
+			// A fill binds the fields of its struct, which hide every declaration of their labels where the call is made.
+			for field in fillBoundFields {
+				scopeDeclarationsByLabel[field.property.label, default: []].append(visibleDeclaration(
+					of: field.property,
+					instanceProperty: field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding,
+				))
+			}
 		}
 		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
 		for child in orderedChildren {
@@ -2741,13 +2691,53 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var childDeclarationsByLabel = declarationsByLabel
 		childDeclarationsByLabel.merge(scopeDeclarationsByLabel) { _, scopeDeclarations in scopeDeclarations }
 
-		var findings = OmissionFindings<PublicMockTierOmission>()
+		var findings = OmissionFindings<TierOmission>()
 		for child in orderedChildren {
-			guard case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, _) = child.generator.scopeData else { continue }
-			if isPropertyCycle {
+			guard case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, seamCall) = child.generator.scopeData else { continue }
+			guard !isPropertyCycle else {
 				// A scope that closes a cycle constructs nothing: it calls the builder function of the declaration it repeats.
 				findings.recordCalls(by: child, of: child.generator.closedOnDeclaration.flatMap { enclosingCycleFunctions[$0] }, among: childDeclarationsByLabel)
-			} else if let publicMockCall = child.generator.publicMockCall {
+				continue
+			}
+			let childWalk: OmissionWalk
+			switch walk {
+			case let .seamTiers(referenceLocation, isOwnFile):
+				// A function a lazy cycle closes on and every type between it and a scope closing the cycle on it lie in one
+				// module, since each builds the next and the last builds the first: the module refers to the call where it
+				// refers to the function, whichever call of the function passes the value.
+				let childReferenceLocation = childReferenceLocation(of: child.generator.property, referenceLocation: referenceLocation)
+				guard let seamCall else {
+					childWalk = .seamTiers(referenceLocation: childReferenceLocation, isOwnFile: isOwnFile)
+					break
+				}
+				let omittedParameters = seamCall.omittedParameters.map { ($0, false) } + seamCall.noTierParameters.map { ($0, true) }
+				for (parameter, isNoTierParameter) in omittedParameters {
+					// The leaf receives the parameter only if available, as its optional form: generation passes it
+					// `nil` exactly when it is among the leaf's unavailable properties.
+					guard let leafDependency = childInstantiable.dependencies.first(where: { $0.property.label == parameter.property.label }),
+					      !child.unavailableProperties.contains(leafDependency.property)
+					else { continue }
+					let unwrappedProperty = leafDependency.property.asUnwrappedProperty
+					guard let provider = childDeclarationsByLabel[parameter.property.label]?.first(where: { $0.provides(unwrappedProperty) }) else { continue }
+					findings.append(reading: unwrappedProperty, from: provider) { provider in
+						.seam(SeamTierOmission(
+							seam: childInstantiable,
+							seamCall: seamCall,
+							parameter: parameter,
+							isNoTierParameter: isNoTierParameter,
+							providerProperty: provider.property,
+							providerDeclaringType: provider.declaringType,
+							providerDeclarationLocation: provider.declarationLocation,
+							referenceLocation: childReferenceLocation,
+						))
+					}
+				}
+				continue
+			case let .publicMockTiers(fillReferenceLocation):
+				guard let publicMockCall = child.generator.publicMockCall else {
+					childWalk = walk
+					break
+				}
 				for parameter in publicMockCall.omittedParameters {
 					// The leaf receives the parameter only if available, as its optional form: generation would pass it
 					// `nil` exactly when it is among the leaf's unavailable properties.
@@ -2758,7 +2748,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let unwrappedProperty = leafDependency.property.asUnwrappedProperty
 					guard let provider = childDeclarationsByLabel[property.label]?.first(where: { $0.provides(unwrappedProperty) }) else { continue }
 					findings.append(reading: unwrappedProperty, from: provider) { provider in
-						PublicMockTierOmission(
+						.publicMock(PublicMockTierOmission(
 							publicMockCall: publicMockCall,
 							parameter: parameter,
 							receivedProperty: property,
@@ -2767,7 +2757,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							providerDeclaringType: provider.declaringType ?? declaringType,
 							providerDeclarationLocation: provider.declarationLocation,
 							providerIsHandedToFill: provider.isHandedToFill,
-						)
+						))
 					}
 				}
 				// The call's fills are its children, declared in the builder function that makes the call and generated with
@@ -2776,28 +2766,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let callReferenceLocation = fillReferenceLocation ?? .some(declarationLocationByProperty[childProperty].flatMap(\.self) ?? scopeDeclarationLocation)
 				let fillsPropertiesGeneratedLater = child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater)
 				for fill in child.generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: fillsPropertiesGeneratedLater) where fill.generator.fillHole != nil {
-					await findings.append(contentsOf: fill.generator.publicMockTierOmissions(
-						of: .fill(calledType: publicMockCall.type),
+					await findings.append(contentsOf: fill.generator.tierOmissions(
+						of: .fill(calledType: publicMockCall.type, referenceLocation: callReferenceLocation.flatMap(\.self)),
+						walking: .publicMockTiers(fillReferenceLocation: callReferenceLocation),
 						propertiesGeneratedLater: fill.propertiesGeneratedLater,
 						declarationsByLabel: childDeclarationsByLabel,
 						enclosingCycleFunctions: enclosingCycleFunctions,
-						fillReferenceLocation: callReferenceLocation,
 					))
 				}
-			} else {
-				// This scope calls the child's builder function, which, when a lazy cycle closes on it and it takes parameters,
-				// it passes them as each cycle-closing scope does. The function's body reads its parameters, which hide every
-				// declaration of their labels where it is called, as generation's do.
-				let function = ObjectIdentifier(child.generator)
-				findings.recordCalls(by: child, of: function, among: childDeclarationsByLabel)
-				await findings.append(contentsOf: child.generator.publicMockTierOmissions(
-					of: .type(childInstantiable),
-					propertiesGeneratedLater: child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater),
-					declarationsByLabel: child.generator.bodyDeclarations(function: function, enclosing: childDeclarationsByLabel),
-					enclosingCycleFunctions: child.generator.bodyEnclosingCycleFunctions(function: function, enclosing: enclosingCycleFunctions),
-					fillReferenceLocation: fillReferenceLocation,
-				))
+				continue
 			}
+			// This scope calls the child's builder function, which, when a lazy cycle closes on it and it takes parameters,
+			// it passes them as each cycle-closing scope does. The function's body reads its parameters, which hide every
+			// declaration of their labels where it is called, as generation's do.
+			let function = ObjectIdentifier(child.generator)
+			findings.recordCalls(by: child, of: function, among: childDeclarationsByLabel)
+			await findings.append(contentsOf: child.generator.tierOmissions(
+				of: .type(childInstantiable),
+				walking: childWalk,
+				propertiesGeneratedLater: child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater),
+				declarationsByLabel: child.generator.bodyDeclarations(function: function, enclosing: childDeclarationsByLabel),
+				enclosingCycleFunctions: child.generator.bodyEnclosingCycleFunctions(function: function, enclosing: enclosingCycleFunctions),
+			))
 		}
 		return findings
 	}
@@ -2931,6 +2921,37 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Whether the declaration is a field of the struct a public mock hands a fill of its place, which the fill binds:
 		/// `declaringType`'s mock hands it the value, which its tree built or its own `mock()` was handed.
 		var isHandedToFill = false
+
+		/// The declaration of `property` by a scope that builds `declaringType`, at the location `recordedLocations` records for
+		/// it, or, for a property the type does not declare (one a mock root promotes or is handed, a field a fill binds),
+		/// by the type and at the location `unrecorded` gives. The walks of seam and public mock omissions and of captures
+		/// each say which those are.
+		static func declared(
+			_ property: Property,
+			instanceProperty: Property?,
+			by declaringType: TypeDescription,
+			recordedLocations: [Property: Dependency.DeclarationLocation?],
+			unrecorded: (declaringType: TypeDescription?, declarationLocation: Dependency.DeclarationLocation?),
+			sendableBuilderDepth: Int,
+		) -> VisibleDeclaration {
+			if let recordedLocation = recordedLocations[property] {
+				VisibleDeclaration(
+					property: property,
+					instanceProperty: instanceProperty,
+					declaringType: declaringType,
+					declarationLocation: recordedLocation,
+					sendableBuilderDepth: sendableBuilderDepth,
+				)
+			} else {
+				VisibleDeclaration(
+					property: property,
+					instanceProperty: instanceProperty,
+					declaringType: unrecorded.declaringType,
+					declarationLocation: unrecorded.declarationLocation,
+					sendableBuilderDepth: sendableBuilderDepth,
+				)
+			}
+		}
 
 		/// Whether a receive of `unwrappedProperty`, or of its optional form, resolves to this declaration.
 		func provides(_ unwrappedProperty: Property) -> Bool {
@@ -3136,23 +3157,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			declarationLocationByProperty[dependency.property] = dependency.declarationLocation
 		}
 		func visibleDeclaration(of property: Property, instanceProperty: Property?) -> VisibleDeclaration {
-			if let declarationLocation = declarationLocationByProperty[property] {
-				VisibleDeclaration(
-					property: property,
-					instanceProperty: instanceProperty,
-					declaringType: declaringType,
-					declarationLocation: declarationLocation,
-					sendableBuilderDepth: sendableBuilderDepth,
-				)
-			} else {
-				VisibleDeclaration(
-					property: property,
-					instanceProperty: instanceProperty,
-					declaringType: nil,
-					declarationLocation: nil,
-					sendableBuilderDepth: sendableBuilderDepth,
-				)
-			}
+			.declared(
+				property,
+				instanceProperty: instanceProperty,
+				by: declaringType,
+				recordedLocations: declarationLocationByProperty,
+				unrecorded: (declaringType: nil, declarationLocation: nil),
+				sendableBuilderDepth: sendableBuilderDepth,
+			)
 		}
 		var scopeDeclarationsByLabel = [String: [VisibleDeclaration]]()
 		for dependency in instantiable.dependencies where dependency.source == .forwarded {

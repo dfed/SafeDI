@@ -4911,8 +4911,7 @@ public actor DependencyTreeGenerator {
 	/// parameter the next wider one omits, so no two take the same parameters; the seam's own initializer's level is
 	/// no tier, since the narrowest tier calls it whatever its level.
 	private static func tiers(of seam: Instantiable, parameters: [SeamSignature.Parameter]) -> [AccessLevel] {
-		let typeLevel = parameterAccess(seam.effectiveTypeAccess)
-		return [typeLevel] + Set(parameters.map(\.tierAccess)).filter { $0 < typeLevel }.sorted(by: >)
+		AccessLevel.tiers(widest: parameterAccess(seam.effectiveTypeAccess), parameterAccesses: parameters.map(\.tierAccess))
 	}
 
 	/// The access a seam parameter takes from `initializerAccess`, the effective access of the initializer that
@@ -5026,10 +5025,8 @@ public actor DependencyTreeGenerator {
 						typesDeclaredEscaping: signature.typesDeclaredEscaping,
 						tier: tier,
 						requirement: requirement,
-						seamModuleName: instantiable.moduleName,
-						callerModuleName: callerModule.moduleName,
-						seamPackageName: instantiable.packageName,
-						callerPackageName: callerModule.packageName,
+						seamModule: ModuleIdentity(moduleName: instantiable.moduleName, packageName: instantiable.packageName),
+						callerModule: callerModule,
 					),
 				)
 			} else {
@@ -5274,10 +5271,10 @@ public actor DependencyTreeGenerator {
 							let nestedSeamCall = visited.seamCall.map { seamCall in
 								SeamSignature.NestedSeamCall(
 									seamType: instantiable.concreteInstantiable,
-									seamModuleName: seamCall.seamModuleName,
+									seamModuleName: seamCall.seamModule.moduleName,
 									tier: seamCall.tier,
 									requirement: seamCall.requirement,
-									callerModuleName: seamCall.callerModuleName,
+									callerModuleName: seamCall.callerModule.moduleName,
 									parameterTierAccess: seamCall.omittedParameters.contains { $0.property.label == dependency.property.label } ? omitted.tierAccess : nil,
 									receivingTypes: noTierReceivers.map(\.declaringType).uniqued(),
 								)
