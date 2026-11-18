@@ -1294,6 +1294,36 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		)
 	}
 
+	// MARK: Tests – a place passed up whole where two places’ fills read different lazy values
+
+	@Test(arguments: CallingMockCaller.allCases, PlacesDisagreeVariation.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesPlaceUpWhole_whenPlacesOfOneHoleTypeReadDifferentLazyValuesBesideTheirFields(caller: CallingMockCaller, variation: PlacesDisagreeVariation) async throws {
+		// `F` holds `api` twice: on `A`’s level, which `F`’s by-value copy of `log` reaches, so `Live` reads `Root`’s wrapper
+		// beside that place’s fields, and beneath a level that instantiates a `log` of its own, `Live` reading that level’s
+		// field. One fill serves both places, so the hole type is passed up whole, where filling it named a builder the mock
+		// does not take. No call re-enters `F`.
+		var builders = [PassedUpBuilder.api]
+		var guards = PassedUpGuards(calledType: "F1E8D579CB81D9A6", root: "60281D4498053F73")
+		switch variation {
+		case .levelBesidePlace:
+			break
+		case .levelInSendableFunctionBesidePlace:
+			builders = [.api, .sendableApi]
+			guards = PassedUpGuards(calledType: "52604B0DC106621C", root: "1BDB61EC60CB728C")
+		case .levelInSendableFunctionBesidePlaceReceivedOnlyIfAvailable:
+			builders = [.api, .sendableApi]
+			guards = PassedUpGuards(calledType: "DB1816B406033BDF", root: "14D0C478E166B42F")
+		}
+		try await expectPassesPlacesUpWhole(
+			mock: Self.placesDisagreeModules(caller: caller, variation: variation),
+			caller: caller == .internal ? .internal : .public,
+			wrapper: variation.wrapper,
+			builders: builders,
+			guards: guards,
+		)
+	}
+
 	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func generate_fillsPlaceFromCallersOwnValue_whenTwinFillsIt(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async throws {
@@ -3732,6 +3762,96 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		]
 	}
 
+	/// The adopter’s shape with two places of `api`, where `F`’s mock binds `log` by value, `Z` receiving it: `A`’s, on `F`’s
+	/// level, which `F`’s copy reaches, and `A`’s beneath a level that instantiates a `log` of its own, `B`, or, where
+	/// `variation` says so, `B2`, built in `F`’s `SendableInstantiator`. `Live` fills both, reading the caller’s `log` in a
+	/// lazy wrapper at the first place and the level’s at the second.
+	private static func placesDisagreeModules(caller: CallingMockCaller, variation: PlacesDisagreeVariation) -> [ModuleFixture] {
+		let wrapper = variation.wrapper.name
+		let sendable = variation == .levelBesidePlace ? "" : ", Sendable"
+		let zLog = variation == .levelInSendableFunctionBesidePlaceReceivedOnlyIfAvailable ? "Log?" : "Log"
+		let zReceive = variation == .levelInSendableFunctionBesidePlaceReceivedOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received"
+		let level = variation == .levelBesidePlace ? (label: "b", type: "B", name: "B") : (label: "b2Builder", type: "SendableInstantiator<B2>", name: "B2")
+		return [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": """
+			import SafeDI
+
+			public protocol Api\(sendable.isEmpty ? "" : ": Sendable") {}
+
+			@Instantiable
+			public final class Log: Instantiable, Sendable {
+			    public init() {}
+			}
+
+			@Instantiable
+			public final class A: Instantiable\(sendable) {
+			    init(api: any Api) {
+			        self.api = api
+			    }
+
+			    @Instantiated public let api: any Api
+			}
+
+			@Instantiable
+			public final class Z: Instantiable\(sendable) {
+			    init(log: \(zLog)) {
+			        self.log = log
+			    }
+
+			    \(zReceive) public let log: \(zLog)
+			}
+
+			@Instantiable
+			public final class \(level.name): Instantiable\(sendable) {
+			    init(log: \(wrapper)<Log>, a: A) {
+			        self.log = log
+			        self.a = a
+			    }
+
+			    @Instantiated public let log: \(wrapper)<Log>
+			    @Instantiated public let a: A
+			}
+
+			\(twinCalledTypes)
+			public final class F: Instantiable\(sendable) {
+			    public init(a: A, \(level.label): \(level.type), z: Z) {
+			        self.a = a
+			        self.\(level.label) = \(level.label)
+			        self.z = z
+			    }
+
+			    @Instantiated public let a: A
+			    @Instantiated public let \(level.label): \(level.type)
+			    @Instantiated public let z: Z
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": """
+			import Feat
+			import SafeDI
+
+			@Instantiable(fulfillingAdditionalTypes: [Api.self])
+			public final class Live: Api, Instantiable\(sendable) {
+			    public init(log: \(wrapper)<Log>) {
+			        self.log = log
+			    }
+
+			    @Received public let log: \(wrapper)<Log>
+			}
+
+			\(caller.attribute)
+			public final class Root: Instantiable {
+			    public init(log: \(wrapper)<Log>, f: F) {
+			        self.log = log
+			        self.f = f
+			    }
+
+			    @Instantiated public let log: \(wrapper)<Log>
+			    @Instantiated public let f: F
+			}
+			"""], dependencies: ["Feat"]),
+		]
+	}
+
 	/// `seamBuiltAgainModules`’ types in one module, `Root` a root: what inline builds.
 	private static let seamBuiltAgainInlineModules = [
 		ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
@@ -6118,6 +6238,35 @@ enum RootLevelReaderVariation: CustomTestStringConvertible, Sendable {
 			"received only if available"
 		case .levelDeclaresValueAgainAboveOtherPlace:
 			"level declares log again above other place"
+		}
+	}
+}
+
+/// Where the level that instantiates a `log` of its own above the second place of `api` is (`placesDisagreeModules`): beside
+/// `A`, holding the `LazilyInstantiated` the fill reads, or built in a `SendableInstantiator`, holding a
+/// `SendableLazilyInstantiated`, with `Z` receiving `log` outright or only if available.
+enum PlacesDisagreeVariation: CaseIterable, CustomTestStringConvertible, Sendable {
+	case levelBesidePlace
+	case levelInSendableFunctionBesidePlace
+	case levelInSendableFunctionBesidePlaceReceivedOnlyIfAvailable
+
+	var wrapper: CallerLazyWrapper {
+		switch self {
+		case .levelBesidePlace:
+			.lazilyInstantiated
+		case .levelInSendableFunctionBesidePlace, .levelInSendableFunctionBesidePlaceReceivedOnlyIfAvailable:
+			.sendableLazilyInstantiated
+		}
+	}
+
+	var testDescription: String {
+		switch self {
+		case .levelBesidePlace:
+			"level beside the place"
+		case .levelInSendableFunctionBesidePlace:
+			"level in a @Sendable function beside the place"
+		case .levelInSendableFunctionBesidePlaceReceivedOnlyIfAvailable:
+			"level in a @Sendable function beside the place, Z receiving only if available"
 		}
 	}
 }
