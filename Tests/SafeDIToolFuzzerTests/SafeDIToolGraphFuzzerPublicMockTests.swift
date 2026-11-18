@@ -124,6 +124,34 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	}
 
 	@Test
+	func publicMockCorpus_drawsTenGraphsOfEachForm_whenHoleReceiverReceivesHoleHost() {
+		// The hole beneath `HoleHost` that `HoleReceiver` receives, which `T6`'s mock promotes to its root (the adopter's M2),
+		// is drawn as itself, through an `Instantiator`, and through a `SendableInstantiator`: at least ten graphs of each.
+		let forms: [GraphFuzzerPublicMockDrawFeature] = [.holeHostReceivedByValue, .holeHostReceivedThroughInstantiator, .holeHostReceivedThroughSendableInstantiator]
+		var counts = [GraphFuzzerPublicMockDrawFeature: Int]()
+		for seed in 0..<UInt64(SafeDIToolGraphFuzzerTests.publicMockCorpusSeedCount) {
+			let features = GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+			for form in forms where features.contains(form) {
+				counts[form, default: 0] += 1
+			}
+		}
+		for form in forms {
+			#expect(counts[form, default: 0] >= 10, "\(form.rawValue) drawn in \(counts[form, default: 0]) graphs")
+		}
+	}
+
+	@Test
+	func publicMockCorpus_drawsTenGraphsOfAdoptersShape_whenSelfBuildingPublicMockReceivesItsBuilder() {
+		// The shape #702 fixed with its builder received through a `SendableInstantiator` by `SelfPart`, which holds the
+		// place, as the adopter's screen receives its own builder (M2): at least ten graphs.
+		let adoptersShape: Set<GraphFuzzerPublicMockDrawFeature> = [.selfBuildingPublicMockReceivesBuilder, .selfBuildingPublicMockThroughSendableInstantiator, .selfBuildingPublicMockPlaceBeneath]
+		let count = (0..<UInt64(SafeDIToolGraphFuzzerTests.publicMockCorpusSeedCount)).filter { seed in
+			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic])).isSuperset(of: adoptersShape)
+		}.count
+		#expect(count >= 10, "\(count) graphs receive `SelfNode`’s `SendableInstantiator` in `SelfPart`")
+	}
+
+	@Test
 	func publicMockKnownIssues_listEachSeedOnceInIncreasingOrder_belowPublicMockCorpusSeedCount() {
 		#expect(SafeDIToolGraphFuzzerTests.knownIssueListProblems(SafeDIToolGraphFuzzerTests.publicMockKnownIssues, corpusSeedCount: SafeDIToolGraphFuzzerTests.publicMockCorpusSeedCount) == [])
 	}
