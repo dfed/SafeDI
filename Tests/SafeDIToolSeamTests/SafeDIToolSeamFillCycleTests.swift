@@ -382,6 +382,58 @@ struct SafeDIToolSeamFillCycleTests: ~Copyable {
 		)
 	}
 
+	// MARK: A cycle a fill closes on a value its caller declares
+
+	// `Root` instantiates `aBuilder` and `signedIn`, the fill of `SignedIn`’s `router` receives `aBuilder`, and `AScreen`,
+	// which `aBuilder` builds, receives `signedIn`. `SignedIn`’s tree declares no `aBuilder`, so the fill reads `Root`’s, as
+	// inline: received only if available, it is `nil` there as inline, and the cycle’s error keeps both remedies.
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCycleStatingBothRemedies_whenFillReceivesBuilderItsCallerDeclares() async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveRouter.swift"]):9:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<AScreen>` -> @Received `signedIn: SignedIn` -> @Received `aBuilder: Instantiator<AScreen>`. `aBuilder: Instantiator<AScreen>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: Self.signedInFeature,
+					app: [Self.fulfilling("LiveRouter", "Router", ["@Received public let aBuilder: Instantiator<AScreen>"]), Self.rootOfBuilderAndSignedIn],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFill_whenFillReceivesBuilderItsCallerDeclaresOnlyIfAvailableAsCycleErrorSays() async throws {
+		try await expectFillBuildsVisibleBuildsValues(
+			feature: Self.signedInFeature,
+			fulfillers: [Self.fulfilling("LiveRouter", "Router", ["@Received(onlyIfAvailable: true) public let aBuilder: Instantiator<AScreen>?"])],
+			root: Self.rootOfBuilderAndSignedIn,
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFill_whenFillNoLongerReceivesBuilderItsCallerDeclaresAsCycleErrorSays() async throws {
+		try await expectFillBuildsVisibleBuildsValues(
+			feature: Self.signedInFeature,
+			fulfillers: [Self.fulfilling("LiveRouter", "Router")],
+			root: Self.rootOfBuilderAndSignedIn,
+		)
+	}
+
+	private static let signedInFeature = [
+		"public protocol Router {}",
+		seamFixtureType(named: "AScreen", declarations: ["@Received public let signedIn: SignedIn"]),
+		seamFixtureType(named: "SignedIn", isSeam: true, declarations: ["@Instantiated public let router: any Router"]),
+	]
+	private static let rootOfBuilderAndSignedIn = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let aBuilder: Instantiator<AScreen>", "@Instantiated public let signedIn: SignedIn"])
+
 	private static let routerFeature = [
 		"public protocol Router {}",
 		seamFixtureType(named: "AScreen", declarations: ["@Received public let router: any Router"]),
