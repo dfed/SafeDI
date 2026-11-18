@@ -41,13 +41,13 @@ struct RootInitializer: Hashable, Sendable {
 		self.argumentList = argumentList
 	}
 
-	/// The extension declaring the initializer, whose body writes `statements` before it calls the root's own initializer.
-	func spelled(writing statements: [String]) -> String {
+	/// The extension declaring the initializer, whose body writes `body` before it calls the root's own initializer.
+	func spelled(writing body: BuilderFunctionGraph) -> String {
 		let attributesPrefix = attributes.isEmpty ? "" : "\(attributes) "
 		return """
 		extension \(extendedType.asSource) {
 		    \(attributesPrefix)public \(isConvenience ? "convenience " : "")init() {
-		\(statements.joined(separator: "\n"))
+		\(body.spelledStatements.joined(separator: "\n"))
 		        self.init(\(argumentList))
 		    }
 		}
