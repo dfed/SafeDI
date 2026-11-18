@@ -159,6 +159,8 @@ def build_products(build):
 
 def compile_modules(swiftc, build, modules, sources, generated, output, optimization, timeout):
     """Compiles each module with its generated file; returns each module's (wall seconds, CPU seconds), by name."""
+    # `output` is a new directory for every run: where an object file of the same code already exists, `swiftc` skips
+    # LLVM, and a repeated compile into one directory once took 14 s where the first took 26.
     os.makedirs(output, exist_ok=True)
     search_path, macros = build_products(build)
     times = {}
