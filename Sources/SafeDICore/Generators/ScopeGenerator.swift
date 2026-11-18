@@ -152,7 +152,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// What the root level functions read of the caller's scope, as a seam's root dispatcher reads it: each label in the
 			// form `FillDispatcher.dispatcherParameters(of:fillReads:)` types a dispatcher's parameter by, the form no fill
 			// reads optionally first, then in `Property` order, so neither the order of the fills nor of their cases decides it.
-			var callerReadFormsByLabel = [String: [Property: (field: SeamSignature.Hole.Field, arguments: Set<String>)]]()
+			var callerReadFormsByLabel = [String: [Property: (field: SeamSignature.Hole.Field, arguments: Set<ArgumentSource>)]]()
 			var labelsHandedPastCalledMockCopy = Set<String>()
 			for child in propertiesToGenerate {
 				if let key = child.fillKey, child.fillEmitsCode {
@@ -174,7 +174,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				      let form = forms[property]
 				else { continue }
 				// A value one fill finds in the caller's scope is handed as that fill reads it, as a seam's root dispatcher hands it.
-				callerReads[label] = (form.field, form.arguments.filter { $0 != "nil" }.min() ?? "nil")
+				callerReads[label] = (form.field, (ArgumentSource.preferredCallerArgument(among: form.arguments) ?? .nil).spelled)
 			}
 			publicMockLevelFunctions = PublicMockLevelFunctions(
 				dispatchers: fillDispatchers,
@@ -1399,11 +1399,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The parameter the fill takes for each such label.
 		var parameterByLabel = [String: SeamSignature.Hole.Field]()
 		/// What the root dispatcher passes the parameter of each such label, where the caller does not build it later.
-		var argumentByLabel = [String: String]()
+		var argumentByLabel = [String: ArgumentSource]()
 		/// What the root dispatcher hands of each label the fill takes as a `SendableLazilyInstantiated` memo some route hands
 		/// it (`Scope.Fill.labelsHandedAsMemo`): the caller's declaration of that wrapper, or one made of the caller's value, so
 		/// the fill's tree reads the caller's own wrapper where it reads the wrapper, as inline.
-		var memoArgumentByLabel = [String: String]()
+		var memoArgumentByLabel = [String: ArgumentSource]()
 		/// The scope value the inner seam handed the fill, which a place inside its tree, or a call there that passes one up,
 		/// carries (`SeamHoles.innerScope(at:innerKey:)`): the fill takes it as a parameter, and each dispatcher that leads to
 		/// it passes it on from the root dispatcher's own parameter.
@@ -5702,8 +5702,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// What the root dispatcher passes of each value it reads from this scope: the caller's declaration, or `nil` where a
 		// fill reads it only if available and this scope declares none, or builds it later. A value one fill reads where
 		// another reads it too is passed as the fill that finds it available reads it.
-		var callerArgumentsByLabel = [String: Set<String>]()
-		var callerMemoArgumentsByLabel = [String: Set<String>]()
+		var callerArgumentsByLabel = [String: Set<ArgumentSource>]()
+		var callerMemoArgumentsByLabel = [String: Set<ArgumentSource>]()
 		// The fills a level function's member hands each field of its payload they read, rather than the payload: those that
 		// return a wrapper's builder, and those an override closure of the call is handed a function over, which the closure
 		// calls with the caller's values.
@@ -5725,7 +5725,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let callerReads = child.generator.fillCallerReads
 					for (label, argument) in callerReads.argumentByLabel {
 						let forms = callerReads.dependencies.map(\.property).filter { $0.label == label }
-						callerArgumentsByLabel[label, default: []].insert(forms.allSatisfy(child.unavailableProperties.contains) ? "nil" : argument)
+						callerArgumentsByLabel[label, default: []].insert(forms.allSatisfy(child.unavailableProperties.contains) ? .nil : argument)
 					}
 					for (label, argument) in callerReads.memoArgumentByLabel {
 						callerMemoArgumentsByLabel[label, default: []].insert(argument)
@@ -5745,11 +5745,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 		}
-		let callerArgumentByLabel = callerArgumentsByLabel.compactMapValues { arguments in
-			arguments.filter { $0 != "nil" }.min() ?? arguments.min()
-		}
+		let callerArgumentByLabel = callerArgumentsByLabel.compactMapValues { ArgumentSource.preferredCallerArgument(among: $0)?.spelled }
 		// Every fill of the call reads the one declaration enclosing it, so each spells it alike.
-		let callerMemoArgumentByLabel = callerMemoArgumentsByLabel.compactMapValues { $0.min() }
+		let callerMemoArgumentByLabel = callerMemoArgumentsByLabel.compactMapValues { ArgumentSource.preferredCallerArgument(among: $0)?.spelled }
 		// A public mock's caller declares level functions of its own (`PublicMockLevelFunctions`); a seam's caller its
 		// dispatchers, each value handed on per label (`dispatcherParameters(of:fillReads:)`).
 		let callDispatchers = publicMockLevelFunctions == nil ? fillDispatchers : []
