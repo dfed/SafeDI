@@ -1255,7 +1255,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			/// For a place's case of a level on a carried route, whether the place is held in an instantiator, so the case's member
 			/// returns the builder the wrapper keeps over the struct of the fill's level, which takes the forwarded value.
 			var returnsWrapperBuilder = false
-			/// The fill or dispatcher the case is handed to, or `nil` when every place it reaches is passed up.
+			/// The fill or dispatcher the case is handed to, or `nil` when every place it reaches is passed up: in a seam's call,
+			/// whose dispatcher then hands the case to `passUp`. A call of another module's public mock passes no place up by
+			/// route: it declares level functions only for the builders it fills, every place of each (`PublicMockLevelFunctions`).
 			let target: Target?
 			/// What the case carries before the value it hands on, in an enum nested by type: the fields of its payload.
 			var values: [SeamSignature.Hole.Field]?
