@@ -47,7 +47,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		property: Property?,
 		propertiesToGenerate: [ScopeGenerator],
 		propertiesToDeclare: Set<Property>,
-		instantiatedDependenciesNotGenerated: [Dependency] = [],
+		instantiatedDependenciesNotGenerated: [Dependency],
 		unavailableOptionalProperties: Set<Property>,
 		receivesPassedNil: Set<Property> = [],
 		lazilyInstantiatedInstanceProperties: Set<Property>,
@@ -1069,6 +1069,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			property: nil,
 			propertiesToGenerate: [child],
 			propertiesToDeclare: Self.fieldForms(of: fields, boundLabels: boundLabels),
+			// A fill builds only `child`, so no dependency of its own is one a mock is passed instead.
+			instantiatedDependenciesNotGenerated: [],
 			unavailableOptionalProperties: callerReads.unavailableProperties,
 			lazilyInstantiatedInstanceProperties: [],
 			forwardedLazilyInstantiatedInstanceProperties: [],
@@ -2767,6 +2769,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				sendableBuilderDepth: 0,
 			)
 		}
+		// Only production trees are walked (`validateNoSeamTierOmitsProvidedValue`), which build every dependency they
+		// instantiate, so no scope here has `instantiatedDependenciesNotGenerated`, which `publicMockTierOmissions` enters.
 		var scopeDeclarationsByLabel = [String: [VisibleDeclaration]]()
 		for dependency in instantiable.dependencies where dependency.source == .forwarded {
 			scopeDeclarationsByLabel[dependency.property.label, default: []].append(visibleDeclaration(
@@ -2924,6 +2928,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		var scopeDeclarationsByLabel = [String: [VisibleDeclaration]]()
 		for dependency in dependencies where dependency.source == .forwarded {
+			scopeDeclarationsByLabel[dependency.property.label, default: []].append(visibleDeclaration(
+				of: dependency.property,
+				instanceProperty: dependency.lazilyInstantiatedInstanceProperty,
+			))
+		}
+		// A dependency the mock cannot build is the value `mock()` is passed for it, bound where this scope is built, which
+		// the scopes this scope builds read as they would read the property this scope generated, as
+		// `nonSendableWrapperCaptures` judges it.
+		for dependency in instantiatedDependenciesNotGenerated {
 			scopeDeclarationsByLabel[dependency.property.label, default: []].append(visibleDeclaration(
 				of: dependency.property,
 				instanceProperty: dependency.lazilyInstantiatedInstanceProperty,
@@ -3278,19 +3291,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let wrapperProperty: Property
 			let wrapperDeclaration: VisibleDeclaration?
 			let capturingBuilder: SendableBuilder
-			if let declarations = declarationsByLabel[receivedProperty.label] {
-				let unwrappedReceivedProperty = receivedProperty.asUnwrappedProperty
-				guard let declaration = declarations.first(where: {
-				      	$0.property.asUnwrappedProperty == unwrappedReceivedProperty || $0.instanceProperty?.asUnwrappedProperty == unwrappedReceivedProperty
-				      }),
-				      declaration.property.propertyType.isNonSendableWrapper,
+			let unwrappedReceivedProperty = receivedProperty.asUnwrappedProperty
+			if let declaration = declarationsByLabel[receivedProperty.label]?.first(where: {
+				$0.property.asUnwrappedProperty == unwrappedReceivedProperty || $0.instanceProperty?.asUnwrappedProperty == unwrappedReceivedProperty
+			}) {
+				guard declaration.property.propertyType.isNonSendableWrapper,
 				      declaration.sendableBuilderDepth < sendableBuilderDepth
 				else { return nil }
 				wrapperProperty = declaration.property
 				wrapperDeclaration = declaration
 				capturingBuilder = enclosingSendableBuilders[declaration.sendableBuilderDepth]
 			} else if receivedProperty.propertyType.isNonSendableWrapper {
-				// No scope in the tree declares the label, so this is a mock, which declares the property at its root.
+				// No declaration in the tree provides the receive, so this is a mock, which declares the property at its
+				// root. Production rejects a receive whose label a declaration of another type holds, but a promoted
+				// sibling of the mocked type may make one, and `mock()` takes it as a parameter of its own.
 				wrapperProperty = receivedProperty
 				wrapperDeclaration = nil
 				capturingBuilder = enclosingSendableBuilders[0]
