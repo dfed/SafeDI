@@ -728,6 +728,19 @@ extension DependencyTreeGenerator {
 		return declarations
 	}
 
+	/// The value a mock's root binds for its child `property`, as its root level declares it. The mock builds every dependency
+	/// it promotes to its root and binds the non-optional value it builds, even where it promotes the dependency for a
+	/// receive of its optional form (`db: Db?`, which a call of another module's public mock receives only if available and
+	/// builds when passed `nil`): the root level declares the non-optional form, so a fill that requires the value reads it,
+	/// as the production twin's fill reads the seam's required parameter. The mocked type's own dependencies are bound as
+	/// they are declared.
+	static func mockRootBinding(ofChild property: Property, of mockedType: Instantiable) -> Property {
+		guard case .optional = property.typeDescription,
+		      !mockedType.dependencies.contains(where: { $0.property == property })
+		else { return property }
+		return property.asUnwrappedProperty
+	}
+
 	/// Whether a mock binds `dependency`, a dependency of a scope beneath its root, again under its label at the top of that
 	/// scope, given `nearestDeclaration`, the nearest declaration of the label above the scope: the dependency is received,
 	/// and `nearestDeclaration` provides no form it reads. The mock then supplies it from a parameter or override of its own,
@@ -1049,7 +1062,9 @@ extension DependencyTreeGenerator {
 			let pathProperty = frame.orderedChildren[pathPosition].generator.property
 			let carrierProperties = frame.orderedChildren.compactMap { frame.generator.startsAsCarrier($0.generator) ? $0.generator.property : nil }
 			for (position, child) in frame.orderedChildren.enumerated() {
-				guard let property = child.generator.property, level > 0 || !labelsNoRootChildDeclares.contains(property.label) else { continue }
+				guard let childProperty = child.generator.property, level > 0 || !labelsNoRootChildDeclares.contains(childProperty.label) else { continue }
+				// A mock's root binds what it promotes as the non-optional value it builds.
+				let property = level == 0 && bindsReceivesAgain ? mockRootBinding(ofChild: childProperty, of: instantiable) : childProperty
 				// An `onlyIfAvailable` alias is bound, to `nil` where its fulfilling property is unavailable, as every other
 				// child is.
 				// A member of the loop of builders the scope on the path is on (`ScopeGenerator.ReceivedBuilderLoops`) is still
