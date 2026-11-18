@@ -1434,6 +1434,154 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 		], "Unexpected output \(output.generatedFiles ?? [:])")
 	}
 
+	@Test(arguments: ByValueAndLazilyInstantiatedSpellings.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsFlatReceivedParameterAsReceiverByValueDeclaresIt_whenAnotherReceiverInTreeReceivesLazilyInstantiatedProtocol(spellings: ByValueAndLazilyInstantiatedSpellings) async throws {
+		// Twenty labels, each received by value and as a `LazilyInstantiated` spelled apart, so that a spelling chosen by
+		// the order of a set, which Swift seeds per process, gives this output on almost no run. Two digits each, so that the
+		// mock's label order is the order of declaration.
+		let labels = (10..<30).map { "service\($0)" }
+		var lazyReceiver = """
+		@Instantiable
+		public final class LazyReceiver: Instantiable {
+		    public init(\(labels.map { "\($0): LazilyInstantiated<\(spellings.lazilyInstantiatedReceiver)>" }.joined(separator: ", "))) {
+		        fatalError("SafeDI doesn't inspect the initializer body")
+		    }
+
+		"""
+		var plainReceiver = """
+		@Instantiable
+		public final class PlainReceiver: Instantiable {
+		    public init(\(labels.map { "\($0): \(spellings.byValueReceiver)" }.joined(separator: ", "))) {
+		        fatalError("SafeDI doesn't inspect the initializer body")
+		    }
+
+		"""
+		for label in labels {
+			lazyReceiver.append("    @Received let \(label): LazilyInstantiated<\(spellings.lazilyInstantiatedReceiver)>\n")
+			plainReceiver.append("    @Received let \(label): \(spellings.byValueReceiver)\n")
+		}
+		lazyReceiver.append("}")
+		plainReceiver.append("}")
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				Self.protocolFixture,
+				lazyReceiver,
+				plainReceiver,
+				"""
+				@Instantiable(generateMock: true)
+				public final class Lone: Instantiable {
+				    public init(lazyReceiver: LazyReceiver, plainReceiver: PlainReceiver) {
+				        self.lazyReceiver = lazyReceiver
+				        self.plainReceiver = plainReceiver
+				    }
+
+				    @Instantiated let lazyReceiver: LazyReceiver
+				    @Instantiated let plainReceiver: PlainReceiver
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		let lazyReceiverClosure = "((\(labels.map { _ in "LazilyInstantiated<\(spellings.lazilyInstantiatedReceiver)>" }.joined(separator: ", "))) -> LazyReceiver)?"
+		let plainReceiverClosure = "((\(labels.map { _ in spellings.byValueReceiver }.joined(separator: ", "))) -> PlainReceiver)?"
+		var mockParameters = ""
+		var wrapperBindings = ""
+		for label in labels {
+			mockParameters.append("        \(label): \(spellings.byValueReceiver),\n")
+			wrapperBindings.append("        let \(label)_lazilyInstantiated = LazilyInstantiated<\(spellings.lazilyInstantiatedReceiver)> { \(label) }\n")
+		}
+		let wrapperArguments = labels.map { "\($0)_lazilyInstantiated" }.joined(separator: ", ")
+		let lazyReceiverArguments = labels.map { "\($0): \($0)_lazilyInstantiated" }.joined(separator: ", ")
+		let plainReceiverArguments = labels.map { "\($0): \($0)" }.joined(separator: ", ")
+		let expectedMockFile: String = generatedFileHeader + """
+		#if DEBUG
+		extension Lone {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            lazyReceiver: \(lazyReceiverClosure) = nil,
+		            plainReceiver: \(plainReceiverClosure) = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                lazyReceiver: lazyReceiver,
+		                plainReceiver: plainReceiver
+		            )
+		        }
+
+		        var lazyReceiver: \(lazyReceiverClosure) { __safeDI_storage.lazyReceiver }
+		        var plainReceiver: \(plainReceiverClosure) { __safeDI_storage.plainReceiver }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                lazyReceiver: \(lazyReceiverClosure),
+		                plainReceiver: \(plainReceiverClosure)
+		            ) {
+		                self.lazyReceiver = lazyReceiver
+		                self.plainReceiver = plainReceiver
+		            }
+
+		            let lazyReceiver: \(lazyReceiverClosure)
+		            let plainReceiver: \(plainReceiverClosure)
+		        }
+		    }
+
+		    static func mock(
+		\(mockParameters)        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Lone {
+		\(wrapperBindings)        let lazyReceiver = if let safeDIBuilder = safeDIOverrides.lazyReceiver { safeDIBuilder(\(wrapperArguments)) } else { LazyReceiver(\(lazyReceiverArguments)) }
+		        let plainReceiver = if let safeDIBuilder = safeDIOverrides.plainReceiver { safeDIBuilder(\(labels.joined(separator: ", "))) } else { PlainReceiver(\(plainReceiverArguments)) }
+		        return Lone(lazyReceiver: lazyReceiver, plainReceiver: plainReceiver)
+		    }
+		}
+		#endif
+		"""
+		#expect(output.generatedFiles == [
+			"Lone+SafeDIMock.swift": expectedMockFile,
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		], "Unexpected output \(output.generatedFiles ?? [:])")
+	}
+
+	/// How one type in a mocked type's tree spells a protocol it receives by value, and another a `LazilyInstantiated` of
+	/// it under the same label: one with `any`, the other without.
+	enum ByValueAndLazilyInstantiatedSpellings: CaseIterable, CustomTestStringConvertible {
+		case byValueReceiverSpellsAny
+		case lazilyInstantiatedReceiverSpellsAny
+
+		/// How the type that receives the protocol by value spells it.
+		var byValueReceiver: String {
+			switch self {
+			case .byValueReceiverSpellsAny:
+				"any Service"
+			case .lazilyInstantiatedReceiverSpellsAny:
+				"Service"
+			}
+		}
+
+		/// How the type that receives a `LazilyInstantiated` of the protocol spells it.
+		var lazilyInstantiatedReceiver: String {
+			switch self {
+			case .byValueReceiverSpellsAny:
+				"Service"
+			case .lazilyInstantiatedReceiverSpellsAny:
+				"any Service"
+			}
+		}
+
+		var testDescription: String {
+			switch self {
+			case .byValueReceiverSpellsAny:
+				"by-value receiver spells any"
+			case .lazilyInstantiatedReceiverSpellsAny:
+				"lazily instantiated receiver spells any"
+			}
+		}
+	}
+
 	/// How the mocked type and a type in its tree spell one protocol they receive: one with `any`, the other without.
 	enum ReceivedProtocolSpellings: CaseIterable, CustomTestStringConvertible {
 		case mockedTypeSpellsAny
