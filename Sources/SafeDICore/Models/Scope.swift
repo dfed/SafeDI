@@ -823,7 +823,13 @@ private struct ScopeGeneratorUnderConstruction {
 			// reads converts it, so the fill takes each value its case's payload does not carry in the form it reads
 			// (`parameterField(of:reading:)`). It reads nothing of its own scope through the root dispatcher: a route on which
 			// no type binds the value passes the place up.
-			if scope.publicMockCall != nil {
+			// But a value the call hands the called mock from the caller's scope, which the called mock's root binds as its copy,
+			// is the caller's own, as a seam's deferred parameter is (see `fillUnderConstruction`): a fill whose places' nearest
+			// declaration of its label is that copy, and whose case's payload does not carry it, reads the caller's declaration,
+			// so its tree reads the caller's wrapper, as inline and the twin do, and no level function takes the value
+			// (`callersOwnLabels(amongLabelsOf:at:reading:handedFrom:by:)`). A label the payload carries the fill binds from
+			// the payload, the called mock's copy, which holds the caller's value.
+			if let publicMockCall = scope.publicMockCall {
 				for (caseKey, places) in placesByCaseKey {
 					guard var caseFields = caseFieldsByCaseKey[caseKey] else { continue }
 					let carriedLabels = Set(places.flatMap { $0.enumPlace?.values.map(\.property.label) ?? [] })
@@ -836,6 +842,9 @@ private struct ScopeGeneratorUnderConstruction {
 						let fieldsOfLabel = places.flatMap { $0.fields.filter { $0.property.label == label } }
 						return Self.parameterField(of: fieldsOfLabel, reading: reads.filter { $0.label == label }) ?? field
 					}
+					let callersOwnLabels = Self.callersOwnLabels(amongLabelsOf: caseFields.fields.filter { !carriedLabels.contains($0.property.label) }, at: places, reading: reads, handedFrom: childNearestDeclarations, by: publicMockCall)
+					caseFields.fields.removeAll { callersOwnLabels.contains($0.property.label) }
+					caseFields.callerReadLabels.subtract(callersOwnLabels)
 					caseFieldsByCaseKey[caseKey] = caseFields
 				}
 			}
@@ -845,7 +854,10 @@ private struct ScopeGeneratorUnderConstruction {
 			// function would capture: inline reads the declaration nearest the place, which for a place the re-entering call
 			// reaches is the one nearest that call. Each such label is typed as `ScopeGenerator.FillDispatcher` types a
 			// dispatcher's parameter, by a form that is no optional, then in `Property` order. Without such a call the fill
-			// reads the same declaration either way, and keeps capturing it.
+			// reads the same declaration either way, and keeps capturing it. A caller's own value (above) is a field again here,
+			// which the levels hand the fill as before: a level whose payload holds the called mock's by-value copy cannot hand
+			// a fill that reads the caller's wrapper, so that place is passed up, a known defect (`public-mock-builders.md`,
+			// "The caller's own value").
 			if scope.publicMockCall != nil, let calledBuilders = scope.calledBuilders, Self.callsInsideFills(of: holeArguments, reenter: calledBuilders) {
 				for (caseKey, places) in placesByCaseKey {
 					guard var caseFields = caseFieldsByCaseKey[caseKey], let firstPlace = places.first else { continue }
@@ -1429,6 +1441,37 @@ private struct ScopeGeneratorUnderConstruction {
 			isReceivedOnlyIfAvailable: firstField.isReceivedOnlyIfAvailable,
 			deferral: firstField.deferral,
 		)
+	}
+
+	/// The labels of `fields`, the fields of a fill of `places` – the places of one case of a call of another module's public
+	/// mock – that are the caller's own values: the called mock's root binds each as its copy of the value the call hands it
+	/// from the caller's scope, a received parameter `call` passes, and that copy is the nearest declaration of the label at
+	/// every place that carries it (`SeamSignature.Hole.Field.isBoundByPublicMockRoot`); and `callerDeclarations`, the
+	/// declarations enclosing the call, bind every form of it the fill's tree reads (`reads`) under the label itself, in a
+	/// scope of the caller's tree. A level of the called mock that declares the label again keeps the field, since inline
+	/// reads that level's value; so does a label the caller binds a form of under a name apart, or not at all, or binds only
+	/// as its mock root's binding of a value its tree receives, which can be named apart from the label
+	/// (`NearestDeclaration.isBoundByMockRoot`): the fill reads it from the level.
+	private static func callersOwnLabels(
+		amongLabelsOf fields: [SeamSignature.Hole.Field],
+		at places: [SeamSignature.Hole],
+		reading reads: Set<Property>,
+		handedFrom callerDeclarations: NearestDeclarations,
+		by call: PublicMockCall,
+	) -> Set<String> {
+		let labelsHandedFromCaller = Set(call.passedParameters.compactMap { parameter in
+			parameter.builder == nil && parameter.dependency.source.isReceived ? parameter.dependency.property.label : nil
+		})
+		return Set(fields.map(\.property.label).filter { label in
+			let formsRead = reads.filter { $0.label == label }
+			guard labelsHandedFromCaller.contains(label),
+			      !formsRead.isEmpty,
+			      places.allSatisfy({ place in place.fields.first { $0.property.label == label }?.isBoundByPublicMockRoot ?? true }),
+			      let callerDeclaration = callerDeclarations[label],
+			      !callerDeclaration.isBoundByMockRoot
+			else { return false }
+			return formsRead.allSatisfy { callerDeclaration.bindings[$0]?.label == label && !callerDeclaration.formsBeingBuilt.contains($0) }
+		})
 	}
 
 	/// The sites of the places a call whose builders `holeArguments` are fills.
@@ -2230,6 +2273,9 @@ struct NearestDeclaration: Sendable {
 	/// declares each: the property each receives (an alias's fulfilling property). Only a mock root's bindings hold any
 	/// (see `NearestDeclarations.binding(_:passingNilTo:)`), so a declaration nearer the receive reads as production's.
 	var receivesPassedNil = [TypeDescription: Set<Property>]()
+	/// Whether a mock root binds the declaration, from a value its tree receives, which it can name apart from its label
+	/// (`NearestDeclarations.binding(_:passingNilTo:)`), rather than a scope of the tree.
+	var isBoundByMockRoot = false
 }
 
 /// The nearest declaration of each label on the path from a tree's root to a scope. A label absent here is declared
@@ -2321,6 +2367,7 @@ extension NearestDeclarations {
 		var nearestDeclarations = Self()
 		for boundProperty in boundProperties.sorted() {
 			nearestDeclarations.join(boundProperty, providing: CycleParameter.forms(providedBy: boundProperty))
+			nearestDeclarations.markBoundByMockRoot(boundProperty.label)
 		}
 		for (label, receivesPassedNilByType) in receivesPassedNil {
 			var nearestDeclaration = nearestDeclarations[label] ?? NearestDeclaration()
@@ -2386,6 +2433,13 @@ extension NearestDeclarations {
 			nearestDeclaration.bindings[form] = property
 		}
 		set(nearestDeclaration, for: property.label)
+	}
+
+	/// Records that the nearest declaration of `label` is a mock root's binding (`NearestDeclaration.isBoundByMockRoot`).
+	private mutating func markBoundByMockRoot(_ label: String) {
+		var nearestDeclaration = self[label] ?? NearestDeclaration()
+		nearestDeclaration.isBoundByMockRoot = true
+		set(nearestDeclaration, for: label)
 	}
 
 	/// Records that `property` is being built: every form it provides is unavailable until a nearer declaration of its
