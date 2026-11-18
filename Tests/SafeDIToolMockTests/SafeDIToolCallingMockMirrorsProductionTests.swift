@@ -710,6 +710,32 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		)
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlacesBelowCalledTypesRootWithCallersLazyValue_whenCalledTypeAlsoBuildsPlaceInSendableInstantiator(caller: CallingMockCallerKind) async throws {
+		// `F` builds `A`’s place below its root in plain code and inside `aBuilder: SendableInstantiator<A>`, whose function
+		// carries no field of the `log` `F`’s mock binds outside it: both `Live`s hold `Root`’s wrapper, as inline.
+		try await expectValuesEqualInline(
+			mock: Self.sendableInstantiatorPlaceModules(caller: caller),
+			inline: Self.sendableInstantiatorPlaceInlineModules,
+			caller: caller.callingMockCaller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: [
+				DifferentialValueProbe(name: "Root", expression: "Root.mock()", knownRightExpression: "Root()"),
+				DifferentialValueProbe(
+					name: "Live’s log is Root’s",
+					expression: "{ let root = Root.mock(); return (root.f.a.api as! Live).log === root.log }()",
+					knownRightExpression: "{ let root = Root(); return (root.f.a.api as! Live).log === root.log }()",
+				),
+				DifferentialValueProbe(
+					name: "The instantiated Live’s log is Root’s",
+					expression: "{ let root = Root.mock(); return (root.f.aBuilder.instantiate().api as! Live).log === root.log }()",
+					knownRightExpression: "{ let root = Root(); return (root.f.aBuilder.instantiate().api as! Live).log === root.log }()",
+				),
+			],
+		)
+	}
+
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases, CallerLazyWrapper.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_fillsPlaceInsideReenteringCallWithCallersLazyValue_whenFillBuildsCalledTypeAgain(caller: CallingMockCaller, wrapper: CallerLazyWrapper) async throws {
@@ -2356,6 +2382,99 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 		    @Instantiated public let log: LazilyInstantiated<Log>
 		    @Instantiated public let g: G
+		}
+		"""
+	}
+
+	/// The adopter’s shape with `F` also holding `aBuilder: SendableInstantiator<A>`, so `F` builds `A`’s place below its root
+	/// both in plain code and inside the instantiator’s `@Sendable` function, outside which `F`’s mock binds `log`. `Live`
+	/// fills both places and receives `Root`’s `log: SendableLazilyInstantiated<Log>`. `caller` decides `Root`’s attribute,
+	/// or that `App` lists it in `additionalMocksToGenerate`.
+	private static func sendableInstantiatorPlaceModules(caller: CallingMockCallerKind) -> [ModuleFixture] {
+		var appFiles = [
+			"AppTypes.swift": "import Feat\nimport SafeDI\n\n" + sendableInstantiatorPlaceAppTypes(rootAttribute: caller.attribute(listed: "@Instantiable(isRoot: true)")),
+		]
+		if caller == .listed {
+			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"])\n"
+		}
+		return [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": sendableInstantiatorPlaceFeatureTypes(callee: twinCalledTypes)]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Feat"]),
+		]
+	}
+
+	/// `sendableInstantiatorPlaceModules`’ types in one module, `Root` a root: what inline builds.
+	private static var sendableInstantiatorPlaceInlineModules: [ModuleFixture] {
+		var types = sendableInstantiatorPlaceFeatureTypes(callee: "@Instantiable")
+		types += "\n\n"
+		types += sendableInstantiatorPlaceAppTypes(rootAttribute: "@Instantiable(isRoot: true)")
+		return [ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": types])]
+	}
+
+	/// `F`, declared with `callee`, and the types its tree builds, of `sendableInstantiatorPlaceModules`.
+	private static func sendableInstantiatorPlaceFeatureTypes(callee: String) -> String {
+		"""
+		public protocol Api: Sendable {}
+
+		@Instantiable
+		public final class Log: Instantiable, Sendable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class A: Instantiable, Sendable {
+		    init(api: any Api) {
+		        self.api = api
+		    }
+
+		    @Instantiated public let api: any Api
+		}
+
+		@Instantiable
+		public final class Z: Instantiable, Sendable {
+		    init(log: Log) {
+		        self.log = log
+		    }
+
+		    @Received public let log: Log
+		}
+
+		\(callee)
+		public final class F: Instantiable, Sendable {
+		    public init(a: A, aBuilder: SendableInstantiator<A>, z: Z) {
+		        self.a = a
+		        self.aBuilder = aBuilder
+		        self.z = z
+		    }
+
+		    @Instantiated public let a: A
+		    @Instantiated public let aBuilder: SendableInstantiator<A>
+		    @Instantiated public let z: Z
+		}
+		"""
+	}
+
+	/// `Live` and `Root`, declared with `rootAttribute`, of `sendableInstantiatorPlaceModules`.
+	private static func sendableInstantiatorPlaceAppTypes(rootAttribute: String) -> String {
+		"""
+		@Instantiable(fulfillingAdditionalTypes: [Api.self])
+		public final class Live: Api, Sendable, Instantiable {
+		    public init(log: SendableLazilyInstantiated<Log>) {
+		        self.log = log
+		    }
+
+		    @Received public let log: SendableLazilyInstantiated<Log>
+		}
+
+		\(rootAttribute)
+		public final class Root: Instantiable {
+		    public init(log: SendableLazilyInstantiated<Log>, f: F) {
+		        self.log = log
+		        self.f = f
+		    }
+
+		    @Instantiated public let log: SendableLazilyInstantiated<Log>
+		    @Instantiated public let f: F
 		}
 		"""
 	}
