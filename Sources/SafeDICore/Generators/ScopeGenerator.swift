@@ -6445,7 +6445,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					"""
 					\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
 					\(generatedProperties.joined(separator: "\n"))
-					\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)\(constructionLineEnd)
+					\(Self.standardIndent)\(BuilderBody(statements: generatedProperties).returnKeyword)\(returnLineSansReturn)\(constructionLineEnd)
 					}
 
 					"""
@@ -6489,7 +6489,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let receivedFunctionDecorator = buildsInSendableFunction || property.propertyType.isSendable ? sendableFunctionDecorator : ""
 					let receivedFunctionDeclaration = """
 					\(receivedFunctionDecorator)func \(receivedFunctionName)(\(receivedFunctionParameters)) -> \(concreteTypeName) {
-					\((memberLines + ["\(Self.standardIndent)\(memberLines.isEmpty ? "" : "return ")\(functionName)(\(callArguments))"]).joined(separator: "\n"))
+					\((memberLines + ["\(Self.standardIndent)\(BuilderBody(statements: memberLines).returnKeyword)\(functionName)(\(callArguments))"]).joined(separator: "\n"))
 					}
 
 					"""
@@ -6566,7 +6566,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				return """
 				\(valuesBindingLines)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
 				\(generatedProperties.joined(separator: "\n"))
-				\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)\(constructionLineEnd)
+				\(Self.standardIndent)\(BuilderBody(statements: generatedProperties).returnKeyword)\(returnLineSansReturn)\(constructionLineEnd)
 				}
 				\(lastLine)
 				"""
@@ -6620,7 +6620,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					"""
 					\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
 					\(body.statements.joined(separator: "\n"))
-					\(Self.standardIndent)return \(returnLineSansReturn)\(constructionLineEnd)
+					\(Self.standardIndent)\(body.returnKeyword)\(returnLineSansReturn)\(constructionLineEnd)
 					}
 
 					"""
