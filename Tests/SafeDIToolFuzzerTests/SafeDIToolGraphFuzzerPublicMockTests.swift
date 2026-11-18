@@ -791,6 +791,17 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func leafCalls_readCallOfPromotingPublicMock_whenConsumerBuildsPromoteNode() {
+		// A consumer that builds `PromoteNode` calls its public mock, which promotes the `PromoteOther` its tree receives
+		// lazily, handing it the instance of the wrapper the consumer's mock binds.
+		let mock = "import FuzzFeature\n\nextension S1_PromoteScreen {\n    static func mock() -> S1_PromoteScreen {\n        let promoteOther = LazilyInstantiated<S1_PromoteOther>(__safeDI_promoteOther)\n        let promoteNode = S1_PromoteNode.__safeDI_mock(promoteApiBuilder: __safeDI_promoteApiBuilder_PromoteNode(), promoteOther: promoteOther.instance, safeDIOverrides: safeDIOverrides.promoteNode)\n        return S1_PromoteScreen(promoteNode: promoteNode)\n    }\n}\n"
+		#expect(GraphFuzzerOracle.leafCalls(ofMockedType: "S1_PromoteScreen", in: ["FuzzApp/S1_PromoteScreen+SafeDIMock.swift": mock], prefix: "S1_") == [
+			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "promoteNode", passedLabels: ["promoteApiBuilder", "promoteOther"], instanceLabels: ["promoteOther"]),
+		])
+	}
+
 	// MARK: Compiler oracle
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
@@ -850,7 +861,9 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		// (seed 902). M8.9b: two
 		// leaves each build the `session` their caller in another package cannot name (seed 903), or one builds it and the
 		// other, receiving it only if available, holds `nil` (seed 905) – but a caller that holds `session` itself and passes
-		// it to neither leaf still fails (seed 904).
+		// it to neither leaf still fails (seed 904). M8.32 through the call of a public mock that promotes the lazily received
+		// dependency, `PromoteNode`'s: the early read of the instance the call is handed is exempt (seed 907), but an early
+		// read in a call handed `nil` still fails (seed 908).
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
@@ -864,6 +877,8 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			Self.instancePerLeafCase(seed: 904, callerHoldsSession: true),
 			Self.instancePerLeafCase(seed: 905, callerHoldsSession: false, secondLeafReceivesOnlyIfAvailable: true),
 			Self.heldWrapperCase(seed: 906, leafWrapsHeldInstance: true, callsGeneratedOnlyFunction: true),
+			Self.promotedOtherCase(seed: 907, consumerBuildsOther: true),
+			Self.promotedOtherCase(seed: 908, consumerBuildsOther: false),
 		]
 		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: cases.map(\.graph), filesToDelete: &filesToDelete))
 		let remaining = try zip(cases, comparisons).map { testCase, comparison in
@@ -877,6 +892,8 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(remaining[2] == [])
 		#expect(remaining[4] == [])
 		#expect(remaining[5] == [])
+		#expect(remaining[6] == [])
+		#expect(remaining[7] == [DifferentialValueDifference(probe: "S908_PromoteScreen.mock()", path: ["<4>.instance"], feature: "<4>.instance: <5> S908_PromoteOther (built before the probe's value)", knownRight: "<4>.instance: <5> S908_PromoteOther")])
 		#expect(remaining[3] == [DifferentialValueDifference(probe: "S904_T7.mock()", path: ["<1> S904_T7", "t0", "session"], feature: "session: <4> S904_Session", knownRight: "session: <2> S904_Session (seen, first at <1> S904_T7 > session)"), DifferentialValueDifference(probe: "S904_T7.mock()", path: ["<1> S904_T7", "t1", "session"], feature: "session: <6> S904_Session", knownRight: "session: <2> S904_Session (seen, first at <1> S904_T7 > session)")])
 	}
 
@@ -1004,6 +1021,41 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 				"FuzzOther/\(p)T8+SafeDIMock.swift": "import FuzzFeature\n\nextension \(p)T8 {\n    static func mock() -> \(p)T8 {\n        let analytics = LazilyInstantiated<\(p)Analytics> { \(p)Analytics() }\n        return \(p)T8(t0: \(p)T0(analytics: analytics), analytics: analytics)\n    }\n}\n",
 			],
 			probe: "\(p)T8.mock()",
+		)
+	}
+
+	/// M8.32 through the call of a public mock that promotes a lazily received dependency (`drawPromotedHolePublicMock`):
+	/// `PromoteNode`, whose initializer is `internal`, builds `PromoteLeaf`, which receives `PromoteOther` lazily, and
+	/// `PromoteScreen`, in the same package, builds `PromoteNode` with a call of its public mock, which wraps what the call
+	/// hands it again. When `consumerBuildsOther`, `PromoteScreen`'s mock builds `PromoteOther`, filling its place with
+	/// `PromoteLive`, and hands the call its wrapper's `.instance`; otherwise `PromoteOther`'s initializer is `internal`, so
+	/// the call is handed `nil`, and the called mock reads its own wrapper's instance before it returns.
+	private static func promotedOtherCase(seed: UInt64, consumerBuildsOther: Bool) -> StatedDivergenceCase {
+		let p = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
+		let stamp = DifferentialValueCreationStamp.property(counterNamed: "\(p)Counter")
+		func files(nodeAccess: String, otherAccess: String) -> [String] {
+			[
+				"// module: FuzzFeature\n\npublic protocol \(p)PromoteApi {}\n\n@Instantiable(generateMock: .public)\npublic final class \(p)PromoteNode: Instantiable {\n\t\(stamp)\n\n\t\(nodeAccess) init(promoteLeaf: \(p)PromoteLeaf) {\n\t\tself.promoteLeaf = promoteLeaf\n\t}\n\n\t@Instantiated let promoteLeaf: \(p)PromoteLeaf\n}\n\n" + DifferentialValueCreationStamp.counterDeclaration(named: "\(p)Counter") + "\n",
+				"// module: FuzzFeature\n\n@Instantiable\npublic final class \(p)PromoteLeaf: Instantiable {\n\t\(stamp)\n\n\tpublic init(promoteOther: LazilyInstantiated<\(p)PromoteOther>) {\n\t\tself.promoteOther = promoteOther\n\t}\n\n\t@Received let promoteOther: LazilyInstantiated<\(p)PromoteOther>\n}\n",
+				"// module: FuzzFeature\n\n@Instantiable\npublic final class \(p)PromoteOther: Instantiable {\n\t\(stamp)\n\n\t\(otherAccess) init(promoteApi: any \(p)PromoteApi) {\n\t\tself.promoteApi = promoteApi\n\t}\n\n\t@Instantiated let promoteApi: any \(p)PromoteApi\n}\n",
+				"// module: FuzzApp\nimport FuzzFeature\n\n@Instantiable(generateMock: true)\npublic final class \(p)PromoteScreen: Instantiable {\n\t\(stamp)\n\n\tpublic init(promoteNode: \(p)PromoteNode) {\n\t\tself.promoteNode = promoteNode\n\t}\n\n\t@Instantiated let promoteNode: \(p)PromoteNode\n}\n\n@Instantiable(fulfillingAdditionalTypes: [\(p)PromoteApi.self])\npublic final class \(p)PromoteLive: \(p)PromoteApi, Instantiable {\n\t\(stamp)\n\n\tpublic init() {}\n}\n",
+			]
+		}
+		let handedOther = consumerBuildsOther ? "promoteOther.instance" : "nil"
+		let consumerWrapper = consumerBuildsOther ? "        let promoteOther = LazilyInstantiated<\(p)PromoteOther> { \(p)PromoteOther(promoteApi: \(p)PromoteLive()) }\n" : ""
+		let earlyRead = consumerBuildsOther ? "" : "        _ = __safeDI_promoteOther.instance\n"
+		return statedDivergenceCase(
+			seed: seed,
+			files: files(nodeAccess: "internal", otherAccess: consumerBuildsOther ? "package" : "internal"),
+			knownRightFiles: files(nodeAccess: "public", otherAccess: "public").map { $0.replacingOccurrences(of: "generateMock: .public", with: "generateMock: true") },
+			featureFiles: [
+				"FuzzFeature/\(p)PromoteNode+SafeDIMock.swift": "extension \(p)PromoteNode {\n    public static func __safeDI_mock(promoteApiBuilder: @escaping () -> any \(p)PromoteApi, promoteOther: \(p)PromoteOther? = nil) -> \(p)PromoteNode {\n        let __safeDI_promoteOther = LazilyInstantiated<\(p)PromoteOther> { promoteOther ?? \(p)PromoteOther(promoteApi: promoteApiBuilder()) }\n\(earlyRead)        return \(p)PromoteNode(promoteLeaf: \(p)PromoteLeaf(promoteOther: __safeDI_promoteOther))\n    }\n}\n",
+				"FuzzApp/\(p)PromoteScreen+SafeDIMock.swift": "import FuzzFeature\n\nextension \(p)PromoteScreen {\n    static func mock() -> \(p)PromoteScreen {\n\(consumerWrapper)        func __safeDI_promoteApiBuilder_PromoteNode() -> any \(p)PromoteApi {\n            \(p)PromoteLive()\n        }\n        let promoteNode = \(p)PromoteNode.__safeDI_mock(promoteApiBuilder: __safeDI_promoteApiBuilder_PromoteNode, promoteOther: \(handedOther))\n        return \(p)PromoteScreen(promoteNode: promoteNode)\n    }\n}\n",
+			],
+			knownRightGeneratedFiles: [
+				"FuzzApp/\(p)PromoteScreen+SafeDIMock.swift": "import FuzzFeature\n\nextension \(p)PromoteScreen {\n    static func mock() -> \(p)PromoteScreen {\n        let promoteOther = LazilyInstantiated<\(p)PromoteOther> { \(p)PromoteOther(promoteApi: \(p)PromoteLive()) }\n        return \(p)PromoteScreen(promoteNode: \(p)PromoteNode(promoteLeaf: \(p)PromoteLeaf(promoteOther: promoteOther)))\n    }\n}\n",
+			],
+			probe: "\(p)PromoteScreen.mock()",
 		)
 	}
 
