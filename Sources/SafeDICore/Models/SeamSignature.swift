@@ -536,6 +536,22 @@ public struct SeamSignature: Sendable {
 			public let fillingModule: ModuleIdentity
 		}
 
+		/// A declaration on the site's path that a fill's field of its label hides, where that field is a parameter of the seam
+		/// whose values struct carries it: a seam on the route to the place, or the seam whose tree holds the fill, declares the
+		/// label above its call of the seam that receives it, and the fill of the place the called seam passes up binds the
+		/// struct's field, nearer the place. Inline, a receive of the declaration's form beneath the place reads the declaration;
+		/// the struct carries only the field, so a fill of this place that reads that form finds no value of the declaration's
+		/// (`declarationHiddenByField`). Kept apart from `uncarriedDeclarations`, which a field of the same label lifts.
+		public struct DeclarationHiddenByField: Sendable {
+			public let property: Property
+			public let declaringType: TypeDescription
+			public let declarationLocation: Dependency.DeclarationLocation?
+			/// The seam `declaringType` calls on the route to the place, which the message names as written.
+			public let calledSeam: TypeDescription
+			/// The seam whose parameter the field that hides the declaration is.
+			public let receivingSeam: TypeDescription
+		}
+
 		/// A type on the way from the seam that takes a hole's builder to the hole's owner, with the module that declares it.
 		public struct PathType: Sendable {
 			public init(type: TypeDescription, moduleName: String?) {
@@ -682,6 +698,9 @@ public struct SeamSignature: Sendable {
 		/// The fields of places whose fills build the filled seam again that a fill of this place cannot read in their place
 		/// (see `ReenteringPlaceField`), every place's, in the order of their declarations. A copy a seam passes up keeps them all.
 		public internal(set) var reenteringPlaceFields = [ReenteringPlaceField]()
+		/// The declarations on the site's path that a fill's field of their label hides (see `DeclarationHiddenByField`), each
+		/// label once, the declaration the field hides. A copy a seam passes up keeps them.
+		public internal(set) var declarationsHiddenByFields = [DeclarationHiddenByField]()
 		/// The seam the tree calls that presented the hole first, when this one passes it up, or `nil` for a site of this
 		/// seam's own tree.
 		public let innerSeamType: TypeDescription?
