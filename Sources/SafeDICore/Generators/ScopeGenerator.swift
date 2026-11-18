@@ -1054,6 +1054,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The labels of `parameterByLabel` the level functions of a call of another module's public mock hand past the
 		/// called mock's by-value copy (`Scope.Fill.labelsHandedPastCalledMockCopy`).
 		var labelsHandedPastCalledMockCopy = Set<String>()
+		/// The property the caller's mock root binds for each caller's own value the fill reads from that binding, by label
+		/// (`Scope.Fill.mockRootBindingByLabel`): the fill binds the label to the name the mock spells for the property
+		/// (`FillPlaceBindings.rootBindingNames`).
+		var mockRootBindingByLabel = [String: Property]()
 	}
 
 	/// What one fill binds for every place of a case nested by type: `fields`, one per label some place's struct carries, in
@@ -6529,7 +6533,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			leadingMemberWhitespace: indent,
 			fillPlaceBindings: fillPlaceBindings,
 		)
-		var body = childCode.joined(separator: "\n").split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+		// A caller's own value the fill reads from its mock root's binding is bound under its label from the name the root binds
+		// it under, where that is not the label.
+		var body = fillCallerReads.mockRootBindingByLabel.keys.sorted().compactMap { label in
+			fillCallerReads.mockRootBindingByLabel[label].flatMap { fillPlaceBindings.rootBindingNames[label]?[$0.typeDescription] }.map { "\(indent)let \(label) = \($0)" }
+		}
+		body += childCode.joined(separator: "\n").split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 		guard !fillReturnsWrapperBuilder else {
 			// A level function's member hands the fill of an instantiator's place each field it reads, and the fill returns the
 			// builder the wrapper keeps, spelled as the wrapper's own `Builder`: a function type a value it forwards could not
@@ -7119,8 +7128,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The bindings of the places inside the fills an internal mock declares (`FillPlace`), by the generator of the type
 	/// that instantiates them, in the order the type declares them: each calls the builder `mock()` takes for the place's
 	/// hole type and family, once per build of the type.
+	/// Also the names a mock root binds received values under apart from their labels.
 	struct FillPlaceBindings: Hashable {
+		init(bindingsByGenerator: [ObjectIdentifier: [SendableAutoclosureParameter]], rootBindingNames: [String: [TypeDescription: String]] = [:]) {
+			self.bindingsByGenerator = bindingsByGenerator
+			self.rootBindingNames = rootBindingNames
+		}
+
 		let bindingsByGenerator: [ObjectIdentifier: [SendableAutoclosureParameter]]
+		/// The name the mock root binds each property it binds apart from its label under, by label and type: a flat
+		/// parameter, an override, a promoted dependency, or a `LazilyInstantiated` it wraps a parameter in. A fill that reads
+		/// the caller's own value from the root's binding binds the label to that name (`FillCallerReads.mockRootBindingByLabel`).
+		let rootBindingNames: [String: [TypeDescription: String]]
 
 		static let none = FillPlaceBindings(bindingsByGenerator: [:])
 	}
@@ -8191,8 +8210,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			lines.append(contentsOf: lazilyInstantiatedBindings)
 			lines.append(contentsOf: rootReceiverBindings)
+			// A fill that reads a caller's own value from the root's binding reads it under the name the root binds it under: a
+			// parameter, override or alias named apart (`treeDisambiguationMap`), a promoted dependency named apart
+			// (`siblingDisambiguationMap`), or the wrapper of a parameter's instance (`lazilyInstantiatedBindingNameMap`).
+			var rootBindingNames = treeDisambiguationMap
+			for (label, typeMap) in siblingDisambiguationMap {
+				rootBindingNames[label, default: [:]].merge(typeMap) { _, siblingName in siblingName }
+			}
+			for (label, typeMap) in lazilyInstantiatedBindingNameMap {
+				rootBindingNames[label, default: [:]].merge(typeMap) { _, wrapperName in wrapperName }
+			}
+			let fillBindings = FillPlaceBindings(bindingsByGenerator: fillPlaceBindings.bindingsByGenerator, rootBindingNames: rootBindingNames)
 			for (fillingGenerator, propertiesGeneratedLater) in rootItems.fillingGenerators {
-				try await fillingGenerator.prepareFillCode(propertiesGeneratedLater: propertiesGeneratedLater, fillPlaceBindings: fillPlaceBindings)
+				try await fillingGenerator.prepareFillCode(propertiesGeneratedLater: propertiesGeneratedLater, fillPlaceBindings: fillBindings)
 			}
 			let bodyBindings = await Self.generateMockBodyBindings(
 				items: rootItems,
