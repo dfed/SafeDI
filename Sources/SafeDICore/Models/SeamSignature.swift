@@ -396,6 +396,14 @@ public struct SeamSignature: Sendable {
 				public let caseName: String?
 				/// Whether a `@Sendable` function builds the place, which is then handed only what that function binds.
 				public let isBuiltBySendableBuilder: Bool
+
+				/// Whether this is `hole`'s own place as a call presents it, by whichever seam presents it (a seam's call of itself, or
+				/// of a seam that passes the place back, as in a cycle of seams), rather than another place a declaration reaches it
+				/// through, such as the hole of a fill on its path. Two places of one owner type and property count as one, so a
+				/// declaration that could be either is judged as the place's own.
+				func isPresentation(of hole: Hole) -> Bool {
+					ownerType == hole.ownerType && property == hole.property
+				}
 			}
 
 			public let property: Property

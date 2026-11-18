@@ -1607,6 +1607,16 @@ extension DependencyTreeGenerator {
 			guard !onlyIfAvailable || ScopeGenerator.isBuilder(hole.property) || !isHolesOwnProperty(property) else { return }
 			let reader = DependencyTreeGeneratorError.FillFinding.Reader(property: property, type: instantiable.concreteInstantiable, declarationLocation: declarationLocation, passingCall: passingCall, isOnlyIfAvailable: onlyIfAvailable)
 			let sameLabelFields = fields.filter { $0.property.label == property.label }
+			// A declaration a called copy of a fill on the place's path leaves uncarried, which the place joins to its own
+			// (`unreadableInsideFills(_:placeFields:fillingModule:)`), is nearer the place than every field of its label: each
+			// field is a level's above that fill, since a label the fill's hole carries or a scope beneath its root declares is
+			// never one. So it is tested before the field branch, as the visible build tests it, where the fill's hole carries no
+			// field of the label. Only a place of the seam's own tree joins such declarations; a passed-up place's fields are the
+			// inner seam's, nearer than anything a seam that passes it up binds.
+			let calledCopyDeclarations = hole.innerSeamType == nil ? hole.uncarriedDeclarations.filter { declaration in
+				guard declaration.property.label == property.label, case let .boundByPassingUpSeam(_, _, place) = declaration.reason else { return false }
+				return !place.isPresentation(of: hole)
+			} : []
 			// A value a cycle in the seam's tree hands the site's owner when it builds it again is wrong at every level but the
 			// first, whether a field carries the label or the fill reads it from the caller's scope.
 			// This rejection keeps a builder struct's re-entry of a reopened level safe, which carries nothing bound above it (the
@@ -1646,6 +1656,12 @@ extension DependencyTreeGenerator {
 				}
 				for (first, carried) in groups {
 					findings.append(.init(hole: hole, kind: .fieldOfReenteringPlace(reader: reader, isOnlyIfAvailable: onlyIfAvailable, carried: carried, reenteredPlace: first.reenteredPlace, fillingModule: first.fillingModule, seamModule: first.reenteredSeamModule)))
+				}
+			} else if !calledCopyDeclarations.isEmpty {
+				for declaration in calledCopyDeclarations {
+					if case let .boundByPassingUpSeam(_, passingUpSeamModule, _) = declaration.reason {
+						findings.append(.init(hole: hole, kind: .declarationBoundAfterSite(reader: reader, declaration: declaration, seamModule: passingUpSeamModule)))
+					}
 				}
 			} else if let field = sameLabelFields.first(where: { provides($0, property) }) {
 				if !field.access.satisfies(requirement) {
